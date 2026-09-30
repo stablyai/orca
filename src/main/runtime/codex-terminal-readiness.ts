@@ -23,7 +23,7 @@ function findCodexHeader(screen: string): { index: number; text: string } | null
   return { index, text }
 }
 
-/** Tier 1: the 0.150-0.157 header, which only a grid reassembles (see isKnownReadyPromptBody). */
+/** The 0.150-0.157 header, which only a grid reassembles (see isCodexScreenHeaderReady). */
 export function findCodexScreenReadyPromptIndex(screen: string): number | null {
   const header = findCodexHeader(screen)
   return header !== null &&

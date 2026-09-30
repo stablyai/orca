@@ -4,14 +4,13 @@ import type { CodexJournalTranslationAdmission } from './codex-structured-journa
 import * as codexRewind from './codex-structured-rewind'
 import type { CodexSession, CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { readCodexThreadId } from './codex-structured-thread-facts'
-import type { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 
 type EmitCodexEvent = (
   session: CodexSession,
   event: CodexStructuredSessionEvent
 ) => CodexJournalTranslationAdmission
 
-/** One live notification's journal entry: rewind bookkeeping, cancellation deferral, delivery. */
+/** One live notification's journal entry: rewind bookkeeping, delivery. */
 export function translateCodexNotification(input: {
   sessionId: string
   session: CodexSession
@@ -19,15 +18,11 @@ export function translateCodexNotification(input: {
   params: unknown
   observedAt?: number
   dispatchSequenceAtReceipt?: number
-  turnCancellation: Pick<CodexStructuredTurnCancellation, 'handleNotification'>
   emit: EmitCodexEvent
 }): CodexJournalTranslationAdmission {
   const { sessionId, session, method, params, observedAt, dispatchSequenceAtReceipt } = input
   codexRewind.observeCodexRewindActivity(session, method, params)
   session.turnOpenWaits.observe(session.threadId, method, params)
-  if (input.turnCancellation.handleNotification(sessionId, session, method, params, observedAt)) {
-    return { accepted: true }
-  }
   return deliverCodexNotification(
     sessionId,
     session,

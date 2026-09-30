@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane } from './agent-transcript-pane-test-harness'
+import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 import {
   readRuntimeFixture,
   replayTranscript,
@@ -8,7 +8,8 @@ import {
 import {
   isKnownReadyPromptBody,
   isKnownReadyPromptPreview,
-  isKnownReadyPromptSettled
+  isKnownReadyPromptSettled,
+  isQuietReadyScreenBody
 } from './terminal-wait-detection'
 
 vi.mock('electron', () => ({
@@ -76,14 +77,14 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
       for await (const frame of replayTranscript(readRuntimeFixture(name), 120, 40)) {
         if (screenShowsLoadingHeader(frame.screenLines)) {
           sawLoadingHeader = true
-          expect(isKnownReadyPromptBody('', 'codex', () => frame.screenLines)).toBe(false)
+          expect(isQuietReadyScreenBody('', 'codex', () => frame.screenLines)).toBe(false)
         }
         last = frame
       }
       // Presence precondition: a loading frame was actually exercised.
       expect(sawLoadingHeader).toBe(true)
       expect(last).not.toBeNull()
-      expect(isKnownReadyPromptBody(last!.waitText, 'codex', () => last!.screenLines)).toBe(true)
+      expect(isQuietReadyScreenBody(last!.waitText, 'codex', () => last!.screenLines)).toBe(true)
     }
   )
 
@@ -95,7 +96,10 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
       for await (const frame of replayTranscript(readRuntimeFixture(name), 120, 40)) {
         if (screenShowsProvisionalStartup(frame.screenLines)) {
           sawTextOnlyReadiness ||= isKnownReadyPromptPreview(frame.waitText)
-          expect(isKnownReadyPromptBody(frame.waitText, 'codex', () => frame.screenLines)).toBe(
+          expect(isQuietReadyScreenBody(frame.waitText, 'codex', () => frame.screenLines)).toBe(
+            false
+          )
+          expect(isKnownReadyPromptBody(frame.waitText, null, () => frame.screenLines, true)).toBe(
             false
           )
         }
@@ -120,7 +124,7 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
       for await (const frame of replayTranscript(readRuntimeFixture(name), cols, rows)) {
         if (isKnownReadyPromptSettled(frame.waitText)) {
           settledFrames += 1
-          expect(isKnownReadyPromptBody(frame.waitText, 'codex', () => frame.screenLines)).toBe(
+          expect(isQuietReadyScreenBody(frame.waitText, 'codex', () => frame.screenLines)).toBe(
             true
           )
         }
@@ -134,10 +138,10 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
 
   it('keeps the text rules when there is no live screen', async () => {
     const { waitText } = await finalFrame(PLAIN, 120, 40)
-    expect(isKnownReadyPromptBody(waitText, 'codex', () => null)).toBe(
+    expect(isQuietReadyScreenBody(waitText, 'codex', () => null)).toBe(
       isKnownReadyPromptPreview(waitText)
     )
-    expect(isKnownReadyPromptBody(waitText, 'codex', () => null)).toBe(true)
+    expect(isQuietReadyScreenBody(waitText, 'codex', () => null)).toBe(true)
   })
 
   it('does not read a mid-turn composer as ready', () => {
@@ -147,7 +151,7 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
       '› Ask Codex to do anything',
       '  GPT-6-Sol high · ~/repo/app'
     ]
-    expect(isKnownReadyPromptBody(screenLines.join('\n'), 'codex', () => screenLines)).toBe(false)
+    expect(isQuietReadyScreenBody(screenLines.join('\n'), 'codex', () => screenLines)).toBe(false)
   })
 
   it('does not settle when a blocking dialog is painted below the header', () => {
@@ -158,7 +162,7 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
       'Do you trust the contents of this directory?',
       'Press enter to continue'
     ]
-    expect(isKnownReadyPromptBody('', 'codex', () => screenLines)).toBe(false)
+    expect(isQuietReadyScreenBody('', 'codex', () => screenLines)).toBe(false)
   })
 
   it('reads only the header box, not chat below it that mentions Codex', () => {
@@ -170,25 +174,25 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
       '╰──────────────────────────────────────────────────────────╯',
       '› Why does OpenAI Codex print model: loading at startup?'
     ]
-    expect(isKnownReadyPromptBody('', 'codex', () => screenLines)).toBe(true)
+    expect(isQuietReadyScreenBody('', 'codex', () => screenLines)).toBe(true)
   })
 
-  it('leaves a non-codex pane on the text rules even when its screen shows the Codex header', () => {
+  it('never reads a non-codex screen, even one showing the Codex header', () => {
     const screenLines = [
       '│ >_ OpenAI Codex (v0.157.1)                               │',
       '│ model:       GPT-6-Sol high   /model to change           │',
       '│ directory:   ~/repo/app                                  │'
     ]
     const readScreenLines = vi.fn(() => screenLines)
-    expect(isKnownReadyPromptBody('', 'claude', readScreenLines)).toBe(false)
+    expect(isQuietReadyScreenBody('', 'claude', readScreenLines)).toBe(false)
     expect(readScreenLines).not.toHaveBeenCalled()
-    expect(isKnownReadyPromptBody('', 'codex', readScreenLines)).toBe(true)
+    expect(isQuietReadyScreenBody('', 'codex', readScreenLines)).toBe(true)
   })
 
   describe('at the 80x24 default grid the header garbles and today’s answer stands', () => {
     it.each(ALL_FIXTURES)('%s', async (name) => {
       const { screenLines, waitText } = await finalFrame(name, 80, 24)
-      expect(isKnownReadyPromptBody(waitText, 'codex', () => screenLines)).toBe(
+      expect(isQuietReadyScreenBody(waitText, 'codex', () => screenLines)).toBe(
         isKnownReadyPromptPreview(waitText)
       )
     })
@@ -209,9 +213,9 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
       '%s: a tui-idle wait settles from the live screen',
       async (name) => {
         const { runtime, handle } = await codexPane(name, { cols: 120, rows: 40 })
-        // Why 5s: the poll re-reads the grid every 2s once the queued emulator write lands.
+        // Why 8s: quiescence (3s) plus the 2s poll re-reading the grid.
         await expect(
-          runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 5_000 })
+          runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 8_000 })
         ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
       },
       15_000
@@ -231,8 +235,9 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
         data: provisional,
         size: { cols: 120, rows: 40 }
       })
+      // Why 6s: past the 3s quiescence, so the quiet lane's provisional veto is what holds.
       await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_500 })
+        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 6_000 })
       ).rejects.toThrow(/timeout/)
     }, 15_000)
 
@@ -269,10 +274,43 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
       expect(readVisibleScreen).toHaveBeenCalled()
     }, 15_000)
 
+    // Why: restored bytes set no lastOutputAt, so the quiet lane has no clock to wait out.
+    it('settles a restored Codex pane from its header, as main did', async () => {
+      const { runtime, handle } = await createTranscriptPane({
+        paneTitle: 'Terminal',
+        foregroundProcess: 'codex',
+        launchAgent: 'codex',
+        data: ''
+      })
+      runtime.seedTerminalRestoreTail(TRANSCRIPT_PANE_PTY_ID, {
+        text: [
+          '╭──────────────────────────────────────────╮',
+          '│ >_ OpenAI Codex (v0.157.1)               │',
+          '│ model:       gpt-6-sol high   /model to change │',
+          '│ directory:   ~/repo/app                  │',
+          '╰──────────────────────────────────────────╯',
+          '› Ask Codex to do anything',
+          '  gpt-6-sol high · ~/repo/app'
+        ].join('\r\n')
+      })
+      // Why no screen: the visible-screen probe must not be what settles the wait.
+      vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
+        handle,
+        status: 'running',
+        tail: [],
+        truncated: false,
+        nextCursor: null,
+        source: 'screen-unavailable'
+      })
+      await expect(
+        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_500 })
+      ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+    }, 15_000)
+
     it('keeps timing out on the garbled 80x24 default grid, as before', async () => {
       const { runtime, handle } = await codexPane(EFFORT_OVERRIDE)
       await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_500 })
+        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 6_000 })
       ).rejects.toThrow(/timeout/)
     }, 15_000)
   })

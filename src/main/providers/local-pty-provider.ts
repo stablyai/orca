@@ -14,6 +14,11 @@ import {
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import type { PtyProcessInspection } from './pty-process-inspection'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import {
+  _resetPtyOwnerHostColorsForTest,
+  setPtyOwnerHostColors
+} from '../../shared/pty-owner-color-query-colors'
 import {
   advanceLoadGeneration,
   clearPtyState,
@@ -123,6 +128,9 @@ export class LocalPtyProvider implements IPtyProvider {
   closeStartupQueryAuthority(id: string): number {
     return closeLocalPtyStartupQueryAuthority(id)
   }
+  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+    setPtyOwnerHostColors(colors)
+  }
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     /* no flow control for local */
   }
@@ -224,4 +232,5 @@ export function _resetLocalPtyProviderStateForTest(): void {
     clearPtyState(id)
   }
   resetLoadGeneration()
+  _resetPtyOwnerHostColorsForTest()
 }

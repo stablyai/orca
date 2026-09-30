@@ -6,7 +6,7 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
   encodeShellStartupFeatures,

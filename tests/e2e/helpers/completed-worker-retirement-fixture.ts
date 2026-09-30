@@ -53,6 +53,11 @@ if (args.includes('app-server')) {
   process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
   process.exit(2)
 }
+// Why: Orca probes codex --help before each launch; answer it without counting a spawn.
+if (args.includes('--help')) {
+  process.stdout.write('Usage: codex [OPTIONS] [PROMPT]\\n')
+  process.exit(0)
+}
 append({ event: 'spawn', args })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 ${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}

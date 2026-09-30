@@ -15,7 +15,6 @@ import {
 const scenario = (steps: RecordingScenario['steps']): RecordingScenario => ({
   id: 's',
   operation: 'o',
-  version: 1,
   family: 'f',
   sites: [],
   schedules: [],

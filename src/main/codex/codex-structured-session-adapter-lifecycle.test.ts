@@ -14,7 +14,6 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
-  type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
 
@@ -99,10 +98,7 @@ function fakeCodex(routes: Record<string, Route> = {}): {
 function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = [],
-  processControl: Partial<
-    Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
-  > = {}
+  events: CodexStructuredSessionEvent[] = []
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
   return new CodexStructuredSessionAdapter({
@@ -117,11 +113,8 @@ function adapterFor(
     onEvent: (event) => events.push(event),
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
-    terminateTurnProcesses: async () => true,
     now: () => 1_700_000_000_500,
-    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
-    ...processControl
+    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`
   })
 }
 

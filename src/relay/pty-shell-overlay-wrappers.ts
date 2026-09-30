@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
-import { getPosixCodexShellLaunchPreflight } from '../main/pty/codex-shell-launch-preflight'
+import { getPosixCodexShellLaunchPreflight } from '../shared/codex-shell-function'
 import {
   BASH_FEATURE_CHANNEL_BLOCK,
   BASH_PROMPT_COMMAND_COMPOSITION_BLOCK,

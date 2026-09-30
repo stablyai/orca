@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.provider-load",
   "family": "tasks.provider-load",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "c3f2ad0f3198d804e392db873ba88c98400c847bc0113da0ed7d369c1779451d",
-  "scenarioSha256": "e518040cbd40e3cc8c22e0b70b6de1087386936f75ed2f65f6e7b4fcdc344ba2",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "04b4b89cebf6": {
       "name": "github.listWorkItems#1",

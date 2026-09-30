@@ -733,6 +733,17 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
 
+/* Why: tabs only draw a right border, so a tab docked at the end has no seam against the tab it covers. */
+.terminal-tab-strip[data-active-tab-docked='end'] > [data-active-tab-dock]::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 1px;
+  background: var(--border);
+  z-index: 30;
+}
+
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
    SortableTab.tsx rather than via ::after here, so the drop-indicator
    ::before/::after pseudo-elements stay free for drag-and-drop feedback. See

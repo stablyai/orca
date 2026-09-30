@@ -118,10 +118,7 @@ function expectInOrder(...nodes: Element[]): void {
 const bar = (label: string | RegExp): Element =>
   screen.getByText(label).closest('[data-native-chat-turn-status]')!
 
-describe.each([
-  ['states each row’s turn', true],
-  ['states no scope', false]
-])(
+describe.each([['states each row’s turn', true]])(
   'a message the provider answered after the running turn, on a host that %s',
   (_host, statesScope) => {
     it("draws A's remaining rows and answer under A's bar, then B's bubble and turn", () => {

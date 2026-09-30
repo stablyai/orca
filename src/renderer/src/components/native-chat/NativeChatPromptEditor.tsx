@@ -134,6 +134,12 @@ export function NativeChatPromptEditor({
     () =>
       editor
         ? {
+            insertText: (text) => {
+              const content = editor.schema.nodeFromJSON(promptTextContent(text))
+              editor.view.dispatch(
+                editor.state.tr.replaceSelection(new Slice(content.content, 1, 1))
+              )
+            },
             get value() {
               return promptTextMap(editor.state.doc).text
             },

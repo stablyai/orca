@@ -144,7 +144,6 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({
         codexHomePath: wslCodexHome,
-        allowPtyFallback: false,
         signal: expect.any(AbortSignal)
       })
     )

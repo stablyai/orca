@@ -8,15 +8,22 @@ import type { NativeChatRole } from './native-chat-types'
 
 type NativeChatTurnRow = { id: string; role: NativeChatRole }
 
+/** Which rows can open a turn by themselves: in a conversation, its user rows. */
+export type NativeChatOpensTurn = (message: NativeChatTurnRow) => boolean
+
+export const nativeChatUserRowOpensTurn: NativeChatOpensTurn = (message) => message.role === 'user'
+
 /**
  * Resolve each row's turn key. The host's attribution (`turnKeysByItemId`) wins, so rows after a
  * mid-turn send stay with the turn that produced them. Rows it cannot name keep positional
  * grouping — an unmapped user row keys itself, anything else inherits the previous row's key —
- * which with no attribution is exactly preceding-user-message grouping.
+ * which with no attribution is exactly preceding-user-message grouping. `opensTurn` narrows which
+ * unmapped rows key themselves, for a sequence that interleaves rows no conversation turn starts at.
  */
 export function nativeChatRowTurnKeys(
   messages: readonly NativeChatTurnRow[],
-  turnKeysByItemId?: ReadonlyMap<string, string> | null
+  turnKeysByItemId?: ReadonlyMap<string, string> | null,
+  opensTurn: NativeChatOpensTurn = nativeChatUserRowOpensTurn
 ): (string | undefined)[] {
   let currentTurnKey: string | undefined
   return messages.map((message) => {
@@ -25,7 +32,7 @@ export function nativeChatRowTurnKeys(
       currentTurnKey = owned
       return owned
     }
-    if (message.role === 'user') {
+    if (opensTurn(message)) {
       currentTurnKey = message.id
     }
     return currentTurnKey

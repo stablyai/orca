@@ -39,9 +39,12 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
   // array-identity dep would reset the backoff forever while the agent is working.
   // A non-null `retryAfterUnknownSubmittedAt` means the user already retried, so
   // another request would repeat that explicit action. Only entries that have
-  // never been retried are safe to probe automatically.
+  // never been retried, and that no Stop outlived, are safe to probe automatically.
   const probeId =
-    blocker && blocker.sessionId === sessionId && blocker.retryAfterUnknownSubmittedAt === null
+    blocker &&
+    blocker.sessionId === sessionId &&
+    blocker.retryAfterUnknownSubmittedAt === null &&
+    blocker.outlivedStop !== true
       ? blocker.clientMessageId
       : null
   const probeSettled =

@@ -8,7 +8,7 @@ import { resolveLocalClaudeTrustConfig } from './claude/claude-folder-trust-file
 import type { ClaudeRuntimeAuthPreparation } from './claude-accounts/runtime-auth/runtime-auth-types'
 import type { AgentWorkspaceTrustSpawnRequest } from '../shared/agent-workspace-trust-spawn-request'
 import { parseWslUncPath } from '../shared/wsl-paths'
-import { applyWorkspaceTrustOnThisHost } from './execution-host-workspace-trust'
+import { applyWorkspaceTrustOnThisHost, launchedAgentHome } from './execution-host-workspace-trust'
 import { getLocalCodexTrustConfigFiles } from './codex/codex-home-paths'
 import { getCachedWslHome } from './wsl-home-cache'
 
@@ -62,19 +62,23 @@ export async function applyAgentWorkspaceTrust(
   if (preset !== 'claude' && isWslLaunch(workspacePath, context)) {
     return {}
   }
-  await applyWorkspaceTrustOnThisHost(preset, workspacePath, () => ({
-    homes: localHomePaths(workspacePath, context),
-    claudeConfig: () =>
-      resolveLocalClaudeTrustConfig({
-        workspacePath,
-        env: { ...process.env, ...context.env },
-        claudeAuth: context.claudeAuth,
-        wslDistro: context.wslDistro
-      }),
-    codexConfigFiles: getLocalCodexTrustConfigFiles,
-    // Why: Codex queues behind a config lane it shares with Orca's hook installs.
-    deadlineMs:
-      preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
-  }))
+  await applyWorkspaceTrustOnThisHost(preset, workspacePath, () => {
+    const agentHome = launchedAgentHome(context.env)
+    return {
+      homes: localHomePaths(workspacePath, context),
+      agentHome,
+      claudeConfig: () =>
+        resolveLocalClaudeTrustConfig({
+          workspacePath,
+          env: { ...process.env, ...context.env },
+          claudeAuth: context.claudeAuth,
+          wslDistro: context.wslDistro
+        }),
+      codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome),
+      // Why: Codex queues behind a config lane it shares with Orca's hook installs.
+      deadlineMs:
+        preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
+    }
+  })
   return {}
 }

@@ -1,5 +1,4 @@
 import { realpathSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isPlainObject, readHooksJson, writeHooksJson } from '../agent-hooks/installer-utils'
 
@@ -25,14 +24,14 @@ export function withQoderTrustedWorkspace(
   }
 }
 
-export function markQoderWorkspaceTrusted(workspacePath: string): void {
+export function markQoderWorkspaceTrusted(workspacePath: string, home: string): void {
   let canonicalPath = workspacePath
   try {
     canonicalPath = realpathSync.native(workspacePath)
   } catch {
     /* Keep the supplied path when absent. */
   }
-  const configPath = join(homedir(), '.qoder', 'settings.json')
+  const configPath = join(home, '.qoder', 'settings.json')
   const config = readHooksJson(configPath)
   if (!config) {
     return

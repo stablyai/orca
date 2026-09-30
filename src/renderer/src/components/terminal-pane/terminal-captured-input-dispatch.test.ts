@@ -13,23 +13,20 @@ function createTransport(ptyId: string | null, sendResult = true): PtyTransport 
 }
 
 describe('sendCapturedTerminalInput', () => {
-  it.each(['local IPC', 'SSH remote runtime'])(
-    'sends on the captured %s route while its PTY still owns the mounted pane',
-    () => {
-      const transport = createTransport('pty-original')
+  it('sends on the captured route while its PTY still owns the mounted pane', () => {
+    const transport = createTransport('pty-original')
 
-      expect(
-        sendCapturedTerminalInput({
-          targetPaneMounted: true,
-          currentTransport: transport,
-          capturedTransport: transport,
-          capturedPtyId: 'pty-original',
-          data: '\r'
-        })
-      ).toBe(true)
-      expect(transport.sendInput).toHaveBeenCalledWith('\r', 'driving')
-    }
-  )
+    expect(
+      sendCapturedTerminalInput({
+        targetPaneMounted: true,
+        currentTransport: transport,
+        capturedTransport: transport,
+        capturedPtyId: 'pty-original',
+        data: '\r'
+      })
+    ).toBe(true)
+    expect(transport.sendInput).toHaveBeenCalledWith('\r', 'driving')
+  })
 
   it('runs the accepted callback only after a successful captured send', () => {
     const transport = createTransport('pty-original')
@@ -67,28 +64,25 @@ describe('sendCapturedTerminalInput', () => {
     expect(onAccepted).not.toHaveBeenCalled()
   })
 
-  it.each(['local IPC', 'SSH remote runtime'])(
-    'does not deliver to a replacement %s transport for a reused pane',
-    () => {
-      const original = createTransport('pty-original')
-      const replacement = createTransport('pty-replacement')
-      const onAccepted = vi.fn()
+  it('does not deliver to a replacement transport for a reused pane', () => {
+    const original = createTransport('pty-original')
+    const replacement = createTransport('pty-replacement')
+    const onAccepted = vi.fn()
 
-      expect(
-        sendCapturedTerminalInput({
-          targetPaneMounted: true,
-          currentTransport: replacement,
-          capturedTransport: original,
-          capturedPtyId: 'pty-original',
-          data: '\r',
-          onAccepted
-        })
-      ).toBe(false)
-      expect(original.sendInput).not.toHaveBeenCalled()
-      expect(replacement.sendInput).not.toHaveBeenCalled()
-      expect(onAccepted).not.toHaveBeenCalled()
-    }
-  )
+    expect(
+      sendCapturedTerminalInput({
+        targetPaneMounted: true,
+        currentTransport: replacement,
+        capturedTransport: original,
+        capturedPtyId: 'pty-original',
+        data: '\r',
+        onAccepted
+      })
+    ).toBe(false)
+    expect(original.sendInput).not.toHaveBeenCalled()
+    expect(replacement.sendInput).not.toHaveBeenCalled()
+    expect(onAccepted).not.toHaveBeenCalled()
+  })
 
   it('does not deliver after the captured transport rebinds to another PTY', () => {
     const transport = createTransport('pty-replacement')

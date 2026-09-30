@@ -124,14 +124,6 @@ function submissionScope(state: JournalReducerState, clientMessageId: string) {
   return state.items.get(agentJournalSubmissionKey(clientMessageId))?.turnScope
 }
 
-function refold(built: readonly JournalRow[]) {
-  const state = createJournalReducerState('session-1', 'epoch-1')
-  for (const next of built) {
-    applyJournalRow(state, next)
-  }
-  return renderJournalState(state)
-}
-
 describe('stated turn scope', () => {
   it('keeps the scope of the write that created the row', () => {
     const { state, item } = rows()
@@ -231,8 +223,8 @@ describe('scope derived for rows stored without one', () => {
     expect(scopeOf(state, row('crash-window'))).toEqual(inTurn(TURN_1))
   })
 
-  it('derives the same scopes on replay as live', () => {
-    const { state, built, item, submission, handover } = rows()
+  it('places a queued message handed over without a stated scope in the live turn', () => {
+    const { state, item, submission, handover } = rows()
     item(TURN_1, turn('t1', 'running'))
     item(row('inside'), prose('inside'))
     submission('steer')
@@ -240,6 +232,5 @@ describe('scope derived for rows stored without one', () => {
     item(TURN_1, turn('t1', 'completed'))
     item(row('after'), prose('after'))
     expect(submissionScope(state, 'steer')).toEqual(inTurn(TURN_1))
-    expect(refold(built)).toEqual(renderJournalState(state))
   })
 })

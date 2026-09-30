@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { BellRing, FileAudio, Upload } from 'lucide-react'
+import { BellRing, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '@/components/ui/button'
@@ -26,16 +26,6 @@ type NotificationStepProps = {
 }
 
 const CHOOSE_CUSTOM_SOUND_VALUE = 'choose-custom-file'
-
-type NotificationSoundSelectValue =
-  | GlobalSettings['notifications']['customSoundId']
-  | typeof CHOOSE_CUSTOM_SOUND_VALUE
-
-function isNotificationSoundId(
-  value: NotificationSoundSelectValue
-): value is GlobalSettings['notifications']['customSoundId'] {
-  return value !== CHOOSE_CUSTOM_SOUND_VALUE
-}
 
 export function NotificationStep({
   settings,
@@ -123,13 +113,19 @@ export function NotificationStep({
     }
   }
 
-  const handleSoundSelect = async (value: NotificationSoundSelectValue): Promise<void> => {
-    if (!isNotificationSoundId(value)) {
+  const handleSoundSelect = async (value: string): Promise<void> => {
+    if (value === CHOOSE_CUSTOM_SOUND_VALUE) {
       await handleChooseCustomSound()
       return
     }
-    await updateNotificationSettings({ customSoundId: value })
-    await previewSound(value)
+    const option = getNotificationSoundOptions(
+      notificationSettingsRef.current?.customSoundPath
+    ).find((candidate) => candidate.id === value)
+    if (!option) {
+      return
+    }
+    await updateNotificationSettings({ customSoundId: option.id })
+    await previewSound(option.id)
   }
 
   const handleSendTestNotification = async (): Promise<void> => {
@@ -176,7 +172,7 @@ export function NotificationStep({
   const soundOptions = getNotificationSoundOptions(customPath)
 
   return (
-    <div ref={setSelectPortalHost} className="space-y-5">
+    <div ref={setSelectPortalHost} className="space-y-6">
       <MacNotificationPermissionCard state={macPermissionState} />
 
       <section className="space-y-3">
@@ -192,75 +188,64 @@ export function NotificationStep({
           </p>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <FileAudio className="size-4" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={selectedSoundId}
+            disabled={isPickingSound}
+            onValueChange={(value) => void handleSoundSelect(value)}
+          >
+            <SelectTrigger className="w-56 max-w-full" size="sm">
+              <SelectValue
+                placeholder={translate(
+                  'auto.components.onboarding.NotificationStep.dc897423e1',
+                  'Choose notification sound'
+                )}
+              />
+            </SelectTrigger>
+            <SelectContent
+              portalContainer={selectPortalRoot}
+              align="start"
+              className="w-[--radix-select-trigger-width]"
+            >
+              {soundOptions.map((option) => {
+                const OptionIcon = option.icon
+                return (
+                  <SelectItem key={option.id} value={option.id}>
+                    <OptionIcon className="size-4" />
+                    <span className="truncate">{option.title}</span>
+                  </SelectItem>
+                )
+              })}
+              <SelectSeparator />
+              <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
+                <Upload className="size-4" />
+                <span>
+                  {customPath
+                    ? translate(
+                        'auto.components.onboarding.NotificationStep.ac80d97e02',
+                        'Change custom file'
+                      )
+                    : translate(
+                        'auto.components.onboarding.NotificationStep.c0692baa52',
+                        'Choose custom file'
+                      )}
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => void handleSendTestNotification()}
+          >
+            <BellRing className="size-3.5" />
             {translate(
-              'auto.components.onboarding.NotificationStep.53aaffe49a',
-              'Notification Sound'
+              'auto.components.onboarding.NotificationStep.3bede04483',
+              'Send test notification'
             )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={selectedSoundId}
-              disabled={isPickingSound}
-              onValueChange={(value) =>
-                void handleSoundSelect(value as NotificationSoundSelectValue)
-              }
-            >
-              <SelectTrigger className="w-[360px] max-w-full" size="sm">
-                <SelectValue
-                  placeholder={translate(
-                    'auto.components.onboarding.NotificationStep.dc897423e1',
-                    'Choose notification sound'
-                  )}
-                />
-              </SelectTrigger>
-              <SelectContent
-                portalContainer={selectPortalRoot}
-                align="start"
-                className="w-[--radix-select-trigger-width]"
-              >
-                {soundOptions.map((option) => {
-                  const OptionIcon = option.icon
-                  return (
-                    <SelectItem key={option.id} value={option.id}>
-                      <OptionIcon className="size-4" />
-                      <span className="truncate">{option.title}</span>
-                    </SelectItem>
-                  )
-                })}
-                <SelectSeparator />
-                <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
-                  <Upload className="size-4" />
-                  <span>
-                    {customPath
-                      ? translate(
-                          'auto.components.onboarding.NotificationStep.ac80d97e02',
-                          'Change Custom File'
-                        )
-                      : translate(
-                          'auto.components.onboarding.NotificationStep.c0692baa52',
-                          'Choose Custom File'
-                        )}
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => void handleSendTestNotification()}
-            >
-              <BellRing className="size-3.5" />
-              {translate(
-                'auto.components.onboarding.NotificationStep.3bede04483',
-                'Send Test Notification'
-              )}
-            </Button>
-          </div>
+          </Button>
         </div>
       </section>
     </div>

@@ -62,7 +62,8 @@ export function readMountedStructuredAgentSessionOutbox(
   )
 }
 
-/** A send left dispatching when its owner changed goes out again, under the same id. */
+/** A send left dispatching when its owner changed goes out again, under the same id; one a Stop
+ *  outlived is held from there by its mark, until the user's Retry. */
 export function requeueInterruptedStructuredAgentSessionDispatches(
   entries: StructuredAgentSessionOutboxEntry[],
   fence: number | null

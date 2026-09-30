@@ -15,8 +15,7 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 // process starts. These are pip console-scripts, so the PTY foreground comm is
 // python/python3 — never the agent's own name.
 const INTERPRETER_WRAPPED_AGENTS = [
-  { agent: 'aider', expectedProcess: TUI_AGENT_CONFIG.aider.expectedProcess },
-  { agent: 'mistral-vibe', expectedProcess: TUI_AGENT_CONFIG['mistral-vibe'].expectedProcess }
+  { agent: 'aider', expectedProcess: TUI_AGENT_CONFIG.aider.expectedProcess }
 ] as const
 
 describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () => {
@@ -25,11 +24,6 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
     vi.stubGlobal('globalThis', globalThis)
     // Deliver the prompt write eagerly so the test does not depend on retries.
     vi.mocked(sendRuntimePtyInputVerified).mockResolvedValue(true)
-  })
-
-  it('sanity: config keeps aider/vibe as stdin-after-start with python-style expected process', () => {
-    expect(TUI_AGENT_CONFIG.aider.promptInjectionMode).toBe('stdin-after-start')
-    expect(TUI_AGENT_CONFIG['mistral-vibe'].promptInjectionMode).toBe('stdin-after-start')
   })
 
   for (const { agent, expectedProcess } of INTERPRETER_WRAPPED_AGENTS) {

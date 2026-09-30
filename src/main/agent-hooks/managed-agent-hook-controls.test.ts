@@ -346,16 +346,4 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
     expect(mocks.installClaude).not.toHaveBeenCalled()
     expect(mocks.installCodex).toHaveBeenCalledTimes(1)
   })
-
-  it('still removes through the explicit Settings toggle', async () => {
-    // Anchors the assertion above: the removers really are wired, so 'skip' is a behavioral
-    // difference rather than a vacuous constant.
-    mocks.removeClaude.mockResolvedValue(status('claude', 'not_installed'))
-    mocks.removeCodex.mockResolvedValue(status('codex', 'not_installed'))
-
-    await applyAgentStatusHooksEnabled(false, { agentStatusHooksEnabled: false })
-
-    expect(mocks.removeClaude).toHaveBeenCalledTimes(1)
-    expect(mocks.removeCodex).toHaveBeenCalledTimes(1)
-  })
 })

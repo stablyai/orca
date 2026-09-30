@@ -393,15 +393,4 @@ describe('a cwd that names the workspace root', () => {
     expect(at('/srv/notes/')).toBe(false)
     expect(at('/srv/notes/drafts')).toBe(true)
   })
-
-  it('keeps a cwd custom when the store holds no root for the workspace', () => {
-    // The existing "requires a terminal for a cwd" case above pins this against an empty store.
-    expect(
-      buildAgentLaunchRouteInput(store(), {
-        agent: 'codex',
-        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
-        tuiCustomization: { cwd: '/repo/app' }
-      }).requiresTuiLaunchCommand
-    ).toBe(true)
-  })
 })

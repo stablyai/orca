@@ -25,7 +25,7 @@ export type CodexAppServerInvocation = {
    *
    * Required, and `null` only for a guest-side launcher (wsl.exe) where the host
    * path means nothing. Optional would let a native builder omit it and silently
-   * fall back to pairing against a cmd.exe wrapper with no type error.
+   * skip the pairing with no type error.
    */
   cliPath: string | null
   /** Overlay applied on top of the inherited environment (e.g. CODEX_HOME). */

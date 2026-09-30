@@ -55,6 +55,8 @@ export type PtyIpcSessionOptions = {
   isRecoveryReloadInFlight?: (webContentsId: number) => boolean
   onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   onPtyExit?: (id: string, exitSequence: number) => void
+  /** The OS appearance, for a 'system' theme; absent on a host with no display. */
+  systemPrefersDark?: () => boolean
 }
 
 export type PtyRendererDelivery = Pick<

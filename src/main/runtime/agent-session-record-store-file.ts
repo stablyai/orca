@@ -28,6 +28,10 @@ import { serializeAgentSessionStoreState } from './agent-session-store-serializa
 
 export const AGENT_SESSION_STORE_SCHEMA_VERSION = 2 as const
 
+/** In a host's state directory, beside the journal database: one file adjudicates every session's
+ *  lease. */
+export const AGENT_SESSION_STORE_DIR_NAME = 'agent-sessions'
+
 export const AGENT_SESSION_STORE_FILE_NAME = 'agent-sessions.json'
 
 export type RetiredAgentSessionClaimKey = { keyId: string; retiredAt: number }

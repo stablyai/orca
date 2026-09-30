@@ -82,13 +82,17 @@ export function agentLaunchExistingParams(args: {
   operationId: string
   prompt?: AgentLaunchPrompt
   launchSource?: string
+  paneKey?: string
+  sessionId?: string
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
     operationId: args.operationId,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.prompt ? { prompt: args.prompt } : {}),
-    ...(args.launchSource ? { launchSource: args.launchSource } : {})
+    ...(args.launchSource ? { launchSource: args.launchSource } : {}),
+    ...(args.paneKey ? { paneKey: args.paneKey } : {}),
+    ...(args.sessionId ? { sessionId: args.sessionId } : {})
   }
 }
 

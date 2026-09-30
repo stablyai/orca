@@ -107,7 +107,6 @@ describe('subscription recordings', () => {
     const scenario = (reply: unknown): RecordingScenario => ({
       id: 'stream-crash',
       operation: 'op',
-      version: 1,
       family: 'op',
       sites: [],
       schedules: [],
@@ -149,7 +148,6 @@ describe('subscription recordings', () => {
           {
             id: 'registry-throws-undefined',
             operation: 'op',
-            version: 1,
             family: 'op',
             sites: [],
             schedules: [],
@@ -200,7 +198,6 @@ describe('subscription recordings', () => {
         {
           id: 'teardown-streams',
           operation: 'op',
-          version: 1,
           family: 'op',
           sites: [],
           schedules: [],
@@ -249,7 +246,6 @@ describe('subscription recordings', () => {
     const base: RecordingScenario = {
       id: 'stream',
       operation: 'op',
-      version: 1,
       family: 'op',
       sites: [],
       schedules: [],

@@ -35,7 +35,12 @@ import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instan
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup-diagnostics'
 import { startEventLoopStallProbe } from './event-loop-stall-probe'
-import { startMainThreadChurnProbe } from '../diagnostics/main-thread-churn-probe'
+import {
+  isMainThreadDiagnosticsEnabled,
+  recordSubprocessSpawn,
+  startMainThreadChurnProbe
+} from '../diagnostics/main-thread-churn-probe'
+import { setSpawnObserver } from '../../shared/child-process/spawn-observer'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { createServeDesktopActivationGate } from './serve-desktop-activation'
@@ -222,6 +227,11 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Self-gated on ORCA_MAIN_THREAD_DIAGNOSTICS; runs the whole session to catch steady-state churn (issue #7576).
   // Why the diff-cache counters ride along: a stamp the filesystem reports unstably makes the cache
   // look exactly like a cold start, and only the hit/miss/unprovable split tells the two apart.
+  if (isMainThreadDiagnosticsEnabled()) {
+    // Why here too: the probe's own call sites only cover src/main/git, so without
+    // this every spawnProcess/runProcess child (rg, ps, pty helpers) is invisible.
+    setSpawnObserver(recordSubprocessSpawn)
+  }
   startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
   // Why: acquire AFTER configureDevUserDataPath — Electron derives lock identity from `userData`, so dev/packaged lock in separate namespaces.
   // Why dev locks too: two processes on one profile corrupt its stores (PR #1326 / #1312); parallel `pnpm dev` needs ORCA_DEV_USER_DATA_PATH per copy.

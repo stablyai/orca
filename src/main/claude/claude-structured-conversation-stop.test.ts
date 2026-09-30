@@ -33,14 +33,14 @@ describe('Claude Stop that names no turn', () => {
     expect(interrupts(claude)).toBe(1)
   })
 
-  it('still refuses the placeholder a client used to name for that gap', async () => {
+  it('interrupts that gap the same way when the Stop names a turn that is not live', async () => {
     const claude = fakeClaude({ replayUuid: null })
     const adapter = await written(claude)
 
     await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-none', fence: 7 })
-    ).resolves.toEqual({ cancelled: false })
-    expect(interrupts(claude)).toBe(0)
+      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-ended', fence: 7 })
+    ).resolves.toEqual({ cancelled: true })
+    expect(interrupts(claude)).toBe(1)
   })
 
   it('interrupts a turn Claude opened on its own echo', async () => {

@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.workspace-ssh",
   "family": "tasks.workspace-ssh",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
-  "scenarioSha256": "495f51d9c2f7f3d71f53a53e88786b8d1f767a5bf66b8655c28222d2909a964c",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "0ba2cee4b538": {
       "status": "fulfilled",

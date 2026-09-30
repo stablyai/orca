@@ -98,14 +98,16 @@ function refusedRedelivery(
 }
 
 /** Whether the journal already answers a send still in flight, so its own reply adds nothing: the
- *  host holds the message, or rejected it — a later `pending` reply must not undo that. */
+ *  host holds the message, rejected it, or handed it off as a queued draft — a later `pending`
+ *  reply must not undo that. */
 export function journalAnswersInFlightSend(
   submissions: readonly AgentJournalSubmission[],
   clientMessageId: string | null
 ): boolean {
   return submissions.some(
     (submission) =>
-      submission.clientMessageId === clientMessageId && submission.dispatchState !== 'unknown'
+      (submission.clientMessageId === clientMessageId && submission.dispatchState !== 'unknown') ||
+      (clientMessageId !== null && submission.queuedMessageId === clientMessageId)
   )
 }
 
@@ -255,6 +257,15 @@ export function disposeStructuredAgentSessionSendResult(
     }
   }
   const submission = result.value.submission
+  // A replay of a send the host queued and then handed off answers with that hand-off, under its
+  // own id: the host owns the message, and the entry leaves as the reconcile drops it.
+  if (submission.queuedMessageId === input.entry.clientMessageId) {
+    return {
+      entries: dropEntry(input),
+      error: null,
+      blockedClientMessageId: input.blockedClientMessageId
+    }
+  }
   if (refusedRedelivery(input.entry, submission)) {
     return {
       entries: dropEntry(input),

@@ -92,38 +92,32 @@ describe('canonical MCP ownership during config mirroring', () => {
 })
 
 describe('MCP ownership migration', () => {
-  it.each([1, 2, 3])(
-    'keeps pre-ownership baseline version %s canonical for one pass',
-    (version) => {
-      writeFileSync(
-        join(runtimeHomePath, 'config.toml'),
-        '[mcp_servers.removed]\ncommand = "old"\n'
-      )
-      writeFileSync(join(systemHomePath, 'config.toml'), 'model = "system"\n')
-      writeFileSync(
-        join(runtimeHomePath, '.orca-config-settings-baseline.json'),
-        JSON.stringify({ version, settings: {} })
-      )
+  it('keeps a pre-ownership baseline canonical for one pass', () => {
+    writeFileSync(join(runtimeHomePath, 'config.toml'), '[mcp_servers.removed]\ncommand = "old"\n')
+    writeFileSync(join(systemHomePath, 'config.toml'), 'model = "system"\n')
+    writeFileSync(
+      join(runtimeHomePath, '.orca-config-settings-baseline.json'),
+      JSON.stringify({ version: 1, settings: {} })
+    )
 
-      syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
+    syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
 
-      expect(readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')).not.toContain(
-        '[mcp_servers.'
+    expect(readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')).not.toContain(
+      '[mcp_servers.'
+    )
+    expect(
+      JSON.parse(
+        readFileSync(join(runtimeHomePath, '.orca-config-settings-baseline.json'), 'utf-8')
       )
-      expect(
-        JSON.parse(
-          readFileSync(join(runtimeHomePath, '.orca-config-settings-baseline.json'), 'utf-8')
-        )
-      ).toMatchObject({ mcpServers: [] })
-      writeFileSync(join(runtimeHomePath, 'config.toml'), '[mcp_servers.added]\ncommand = "new"\n')
+    ).toMatchObject({ mcpServers: [] })
+    writeFileSync(join(runtimeHomePath, 'config.toml'), '[mcp_servers.added]\ncommand = "new"\n')
 
-      syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
+    syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
 
-      expect(readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')).toContain(
-        '[mcp_servers.added]'
-      )
-    }
-  )
+    expect(readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')).toContain(
+      '[mcp_servers.added]'
+    )
+  })
 
   it('keeps the retained shared home one-way without an ownership baseline', () => {
     writeFileSync(join(runtimeHomePath, 'config.toml'), '[mcp_servers.removed]\ncommand = "old"\n')

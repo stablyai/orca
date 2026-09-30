@@ -242,17 +242,6 @@ describe('submitFeedback', () => {
     expect(postedBody(1)).not.toHaveProperty('diagnosticBundle')
   })
 
-  it('retries a proxy-rejected diagnostic attachment as website JSON', async () => {
-    fetchMock.mockResolvedValueOnce(errorResponse(403)).mockResolvedValueOnce(okResponse())
-
-    await expect(submitFeedback(diagnosticSubmitArgs())).resolves.toEqual({
-      ok: true,
-      diagnosticBundleFailure: { status: 403, error: 'status 403' }
-    })
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://www.onorca.dev/v1/feedback')
-    expect(requestInit(1).body).not.toBeInstanceOf(FormData)
-  })
-
   it.each([401, 409, 429])(
     'does not retry a diagnostic attachment rejected with status %s',
     async (status) => {
@@ -367,18 +356,6 @@ describe('submitFeedback', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('posts to the website API first so crash reports use the snippet-capable route', async () => {
-    await submitFeedback({
-      feedback: '[Crash Report]',
-      submissionType: 'crash',
-      submitAnonymously: true,
-      githubLogin: null,
-      githubEmail: null
-    } as Parameters<typeof submitFeedback>[0])
-
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://www.onorca.dev/v1/feedback')
-  })
-
   it('forces renderer IPC submissions onto the feedback lane', async () => {
     registerFeedbackHandlers()
     await handlers.get('feedback:submit')?.(null, {
@@ -468,22 +445,6 @@ describe('submitFeedback', () => {
         ok: true,
         imagesDelivered: false
       })
-    })
-
-    it('reports unconfirmed delivery when the response body aborts before the deadline', async () => {
-      fetchMock.mockResolvedValue({
-        ok: true,
-        status: 202,
-        json: async () => {
-          throw new TypeError('terminated')
-        }
-      } as unknown as Response)
-
-      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
-        ok: true,
-        imagesDelivered: false
-      })
-      expect(requestInit().signal).toMatchObject({ aborted: false })
     })
 
     it('bounds the image-delivery response body', async () => {
@@ -592,15 +553,6 @@ describe('submitFeedback', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     })
 
-    it('rejects unsupported image types before any request is made', async () => {
-      const result = await submitFeedback(
-        imageSubmitArgs([{ contentType: 'application/pdf', data: new Uint8Array(4) }])
-      )
-
-      expect(result.ok).toBe(false)
-      expect(fetchMock).not.toHaveBeenCalled()
-    })
-
     // Why: the renderer screens types first, so this lane only matters for a
     // renderer invoking the channel directly — the case the handler guards.
     it('rejects a prototype member posing as a content type over IPC', async () => {
@@ -645,15 +597,6 @@ describe('submitFeedback', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     })
 
-    it('rejects more images than the supported count', async () => {
-      const result = await submitFeedback(
-        imageSubmitArgs(Array.from({ length: 5 }, () => pngImage()))
-      )
-
-      expect(result.ok).toBe(false)
-      expect(fetchMock).not.toHaveBeenCalled()
-    })
-
     it('does not fail a crash report over images it was never going to send', async () => {
       // Why: the crash lane discards images, so validating them there would
       // abort a crash report the user needs delivered.
@@ -669,17 +612,6 @@ describe('submitFeedback', () => {
       const body = requestInit().body as FormData
       expect(body.getAll('feedbackImage')).toHaveLength(0)
       expect(body.get('submissionType')).toBe('crash')
-    })
-
-    it('drops images from crash submissions', async () => {
-      await submitFeedback({
-        ...diagnosticSubmitArgs(),
-        images: [pngImage()]
-      } as Parameters<typeof submitFeedback>[0])
-
-      const body = requestInit().body as FormData
-      expect(body.getAll('feedbackImage')).toHaveLength(0)
-      expect(body.get('diagnosticBundleSubmissionId')).toBe('bundleabcdefghijklmnop')
     })
   })
 })

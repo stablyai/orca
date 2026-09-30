@@ -36,6 +36,8 @@ const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 
 type Props = {
+  /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
+  inputRef?: React.Ref<TextInput>
   structuredCommands?: readonly AgentSessionConversationCommand[]
   /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
@@ -71,6 +73,7 @@ type Props = {
 }
 
 export function MobileNativeChatComposer({
+  inputRef,
   value,
   onChangeText,
   onSend,
@@ -249,6 +252,7 @@ export function MobileNativeChatComposer({
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         <View style={styles.bar} testID="native-chat-composer">
           <TextInput
+            ref={inputRef}
             style={mobileNativeChatInputStyles.input}
             value={value}
             onChangeText={handleChange}

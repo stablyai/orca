@@ -363,6 +363,58 @@ describe('NativeChatMessageList turns from the turn record', () => {
     expect(follows(screen.getByText('Say DONE'), activity!)).toBe(true)
   })
 
+  it.each(['settled', 'running'] as const)(
+    "a queued card Steered into a %s turn joins it, under the opener's bar, with no bar of its own",
+    (phase) => {
+      // Steer hands the draft over under a fresh submission id, linked by `queuedMessageId`; the
+      // host scopes its row to the turn it joined.
+      const steer = agentJournalSubmissionKey('handed-off')
+      const running = phase === 'running'
+      const items = [
+        say('u1', 'user', 'List three fruits'),
+        running
+          ? item('t1', {
+              kind: 'turn',
+              turnId: 't1',
+              state: 'running',
+              userItemId: 'u1',
+              startedAt: 1_000
+            })
+          : settledTurn('t1', 'u1', 4, 1_000),
+        say('t1-narration', 'assistant', 'Thinking about fruit.', inTurn('t1')),
+        say(steer, 'user', 'Make it four', inTurn('t1')),
+        say('t1-answer', 'assistant', 'Apple, banana, cherry, date.', inTurn('t1'))
+      ]
+      const { container } = render(
+        journalList(
+          items,
+          [
+            {
+              clientMessageId: 'handed-off',
+              fence: 1,
+              payloadFingerprint: 'steer',
+              dispatchState: 'accepted',
+              providerItemId: null,
+              reason: null,
+              submittedAt: 2_000,
+              resolvedAt: 2_100,
+              queuedMessageId: 'draft-1'
+            }
+          ],
+          running ? { isWorking: true, workingStartedAt: 1_000 } : {}
+        )
+      )
+
+      const bars = container.querySelectorAll<HTMLElement>('[data-native-chat-turn-status]')
+      expect(bars).toHaveLength(1)
+      const opener = screen.getByText('List three fruits')
+      const steered = screen.getByText('Make it four')
+      expect(follows(bars[0]!, opener)).toBe(true)
+      expect(follows(steered, bars[0]!)).toBe(true)
+      expect(follows(screen.getByText('Apple, banana, cherry, date.'), steered)).toBe(true)
+    }
+  )
+
   it("keeps a steer on its way into an ordinary running turn above that turn's activity", () => {
     const steer = agentJournalSubmissionKey('steer')
     const items = [

@@ -22,7 +22,8 @@ import {
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
 } from '../../../shared/structured-agent-session-reducer'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -58,7 +59,7 @@ beforeEach(async () => {
   listed = undefined
   // Written, and the provider has neither opened a turn for it nor answered it.
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     store,
     adapter: {

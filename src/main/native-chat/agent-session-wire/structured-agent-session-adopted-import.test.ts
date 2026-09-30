@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   attachFingerprintFields,
@@ -119,7 +120,7 @@ async function attach(
   sessionAdapter: StructuredAgentSessionAdapter,
   onAttached: AttachFlowInput['onAttached'] = () => {}
 ) {
-  store ??= await AgentSessionRecordStore.open({ directory: join(root!, 'store'), hostId: 'local' })
+  store ??= await openTestAgentSessionRecordStore(root!)
   return performAttach({
     store,
     adapter: sessionAdapter,
@@ -230,7 +231,7 @@ describe('adopting a provider conversation on create', () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-host-failure-'))
     const transcriptPath = join(root, 'rollout.jsonl')
     await writeCodexRollout(transcriptPath, 'valid source')
-    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(root)
     const host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),

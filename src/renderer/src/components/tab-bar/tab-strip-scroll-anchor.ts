@@ -1,3 +1,5 @@
+import { isDockedTabStripElement } from './tab-strip-slot-geometry'
+
 /** A tab's on-screen x inside the strip viewport, recorded before tabs are inserted around it. */
 export type TabStripScrollAnchor = {
   tabId: string
@@ -12,7 +14,10 @@ function findTab(strip: HTMLElement, tabId: string): HTMLElement | undefined {
   return tabElements(strip).find((tab) => tab.dataset.tabId === tabId)
 }
 
-/** The active tab when it is on screen, else the first visible tab; null when nothing is visible. */
+/**
+ * The active tab when it is on screen, else the first visible tab; null when nothing is visible.
+ * A docked active tab never counts: it holds its x while the tabs around it move.
+ */
 export function captureTabStripScrollAnchor(
   strip: HTMLElement,
   activeTabId: string | null
@@ -20,7 +25,12 @@ export function captureTabStripScrollAnchor(
   const stripRect = strip.getBoundingClientRect()
   const isVisible = (tab: HTMLElement): boolean => {
     const rect = tab.getBoundingClientRect()
-    return rect.width > 0 && rect.right > stripRect.left && rect.left < stripRect.right
+    return (
+      rect.width > 0 &&
+      rect.right > stripRect.left &&
+      rect.left < stripRect.right &&
+      !isDockedTabStripElement(strip, tab)
+    )
   }
   const active = activeTabId ? findTab(strip, activeTabId) : undefined
   const anchor =

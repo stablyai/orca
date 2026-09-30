@@ -6,7 +6,8 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
 
 const NOW = 1_800_000_000_000
@@ -15,7 +16,7 @@ const roots: string[] = []
 async function liveStore(): Promise<AgentSessionRecordStore> {
   const root = await mkdtemp(join(tmpdir(), 'orca-lease-renewer-'))
   roots.push(root)
-  const store = await AgentSessionRecordStore.open({ directory: root, hostId: 'local' })
+  const store = await openTestAgentSessionRecordStore(root)
   const reserved = await store.reserveOwner({
     sessionId: 'session-renewal',
     location: {

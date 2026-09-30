@@ -11,7 +11,7 @@ import {
   type CodexPreparedAnswer
 } from './codex-structured-prompt-replies'
 import { requireLiveCodexSession, type CodexSession } from './codex-structured-session-state'
-import type { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
+import { interruptCodexTurn } from './codex-structured-turn-cancellation'
 
 type CancelInput = Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]
 type AnswerInput = Parameters<StructuredAgentSessionAdapter['answerPrompt']>[0]
@@ -21,8 +21,9 @@ function providerTurnId(session: CodexSession, turnId: string): string | undefin
   return session.translator ? session.translator.commandProviderTurnId(turnId) : turnId
 }
 
-/** How long a Stop waits for Codex to open the turn it answered a send into. Under the quit
- *  path's eviction budget, which a close or quit queued behind the Stop spends. */
+/** How long a Stop waits for Codex to open the turn it answered a send into. A close or quit queued
+ *  behind the Stop spends this out of the eviction budget, so a full wait plus a slow provider
+ *  close can overrun it; the next launch's recovery then settles the lease. */
 export const CODEX_STOP_TURN_OPEN_WAIT_MS = 5_000
 
 /**
@@ -34,27 +35,23 @@ async function cancelCodexConversation(
   input: Parameters<typeof cancelCodexStructuredTurn>[0],
   session: CodexSession
 ): Promise<AgentSessionCancelOutcome> {
-  const { request, sessions, cancellation } = input
+  const { request, sessions, requestTimeoutMs } = input
   const liveTurnId = request.resolveLiveTurnId?.() ?? null
   // A turn the journal shows that Codex has not started yet (a compaction's) has nothing to stop.
   const turnId =
     liveTurnId === null
       ? ([...(session.activeTurnIds ?? [])].at(-1) ?? (await openedAnsweredTurn(session)))
       : providerTurnId(session, liveTurnId)
-  if (!turnId) {
+  // The wait for the turn to open can outlive the session it began on.
+  if (
+    !turnId ||
+    sessions.get(request.sessionId) !== session ||
+    session.ended ||
+    session.fence !== request.fence
+  ) {
     return { cancelled: false }
   }
-  const acquisitionGeneration = session.acquisitionGeneration
-  return cancellation.cancel(
-    session,
-    session.threadId,
-    turnId,
-    () =>
-      sessions.get(request.sessionId) === session &&
-      !session.ended &&
-      session.fence === request.fence &&
-      session.acquisitionGeneration === acquisitionGeneration
-  )
+  return interruptCodexTurn({ session, threadId: session.threadId, turnId, requestTimeoutMs })
 }
 
 /** The turn Codex answered a send into and has not opened yet, once it opens; null when it ends,
@@ -73,9 +70,9 @@ async function openedAnsweredTurn(session: CodexSession): Promise<string | null>
 export async function cancelCodexStructuredTurn(input: {
   request: CancelInput
   sessions: Map<string, CodexSession>
-  cancellation: CodexStructuredTurnCancellation
+  requestTimeoutMs?: number
 }): Promise<AgentSessionCancelOutcome> {
-  const { request, sessions, cancellation } = input
+  const { request, sessions, requestTimeoutMs } = input
   const session = requireLiveCodexSession(sessions, request.sessionId)
   const prompt = request.prompt
   const requestedTurnId = request.turnId
@@ -87,12 +84,11 @@ export async function cancelCodexStructuredTurn(input: {
     return { cancelled: false }
   }
   if (!prompt) {
-    return cancellation.cancel(session, session.threadId, turnId)
+    return interruptCodexTurn({ session, threadId: session.threadId, turnId, requestTimeoutMs })
   }
   if (session.fence !== request.fence) {
     return { cancelled: false }
   }
-  const acquisitionGeneration = session.acquisitionGeneration
   const claim = session.prompts.claimBound(prompt.itemId)
   const promptTurnId = claim?.prompt.turnId
   if (!claim || !promptTurnId) {
@@ -101,25 +97,18 @@ export async function cancelCodexStructuredTurn(input: {
     }
     return { cancelled: false }
   }
-  const isCurrent = (): boolean =>
-    sessions.get(request.sessionId) === session &&
-    !session.ended &&
-    session.fence === request.fence &&
-    session.acquisitionGeneration === acquisitionGeneration &&
-    providerTurnId(session, requestedTurnId) === turnId &&
-    session.prompts.ownsBoundClaim(claim, prompt.itemId, claim.prompt.threadId, promptTurnId)
   let interruptConfirmed = false
   try {
-    const result = await cancellation.cancel(
+    const result = await interruptCodexTurn({
       session,
-      claim.prompt.threadId,
-      promptTurnId,
-      isCurrent,
-      () => {
+      threadId: claim.prompt.threadId,
+      turnId: promptTurnId,
+      requestTimeoutMs,
+      onConfirmed: () => {
         interruptConfirmed = true
         return session.translator?.cancelPrompt(prompt.itemId) ?? { accepted: true }
       }
-    )
+    })
     if (!result.cancelled) {
       session.prompts.releaseClaim(claim)
     }

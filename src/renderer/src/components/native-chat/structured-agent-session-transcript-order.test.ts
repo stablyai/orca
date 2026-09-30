@@ -44,7 +44,7 @@ function drawn(
 ): string[] {
   return createNativeChatMessageListProjection()(
     projectStructuredAgentSessionMessages(items, outbox, submissions)
-  ).map(({ id }) => id)
+  ).conversation.map(({ id }) => id)
 }
 
 function queued(clientMessageId: string, text: string, queuedAt: number) {

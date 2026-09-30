@@ -59,6 +59,7 @@ afterEach(() => {
 function thisHost(overrides: Partial<WorkspaceTrustHost> = {}): () => WorkspaceTrustHost {
   return () => ({
     homes: [state.home],
+    agentHome: state.home,
     claudeConfig: () => ({ configFile: join(state.home, '.claude.json'), keyStyle: 'posix' }),
     codexConfigFiles: () => [join(state.home, '.codex', 'config.toml')],
     deadlineMs: 1_500,
@@ -135,16 +136,7 @@ describe('applyWorkspaceTrustOnThisHost', () => {
     )
   })
 
-  it('trusts a Codex worktree whose main checkout is the home, as Codex would on "Yes"', async () => {
-    const worktree = join(root, 'worktrees', 'feature')
-    linkGitWorktree(state.home, worktree)
-    await applyWorkspaceTrustOnThisHost('codex', worktree, thisHost())
-    expect(readFileSync(join(state.home, '.codex', 'config.toml'), 'utf-8')).toContain(
-      `[projects."${state.home}"]`
-    )
-  })
-
-  it.each(PRESETS.filter((preset) => preset !== 'codex'))(
+  it.each(PRESETS)(
     'trusts a worktree whose main checkout is the home for %s, which stores the worktree path',
     async (preset) => {
       const worktree = join(root, 'worktrees', 'feature')
@@ -154,6 +146,15 @@ describe('applyWorkspaceTrustOnThisHost', () => {
     }
   )
 
+  it("stores a Codex worktree's own path, not its main checkout", async () => {
+    const worktree = join(root, 'worktrees', 'feature')
+    linkGitWorktree(state.home, worktree)
+    await applyWorkspaceTrustOnThisHost('codex', worktree, thisHost())
+    const written = readFileSync(join(state.home, '.codex', 'config.toml'), 'utf-8')
+    expect(written).toContain(`[projects."${worktree}"]`)
+    expect(written).not.toContain(`[projects."${state.home}"]`)
+  })
+
   it('trusts the exact subfolder Codex starts in, inside a folder that is not a repo', async () => {
     const subfolder = join(root, 'notes', 'sub')
     mkdirSync(subfolder, { recursive: true })
@@ -161,16 +162,6 @@ describe('applyWorkspaceTrustOnThisHost', () => {
     expect(readFileSync(join(state.home, '.codex', 'config.toml'), 'utf-8')).toContain(
       `[projects."${subfolder}"]`
     )
-  })
-
-  it("trusts a worktree's main checkout for Codex when that checkout is not a home", async () => {
-    const mainCheckout = join(root, 'repo')
-    const worktree = join(root, 'worktrees', 'feature')
-    linkGitWorktree(mainCheckout, worktree)
-    await applyWorkspaceTrustOnThisHost('codex', worktree, thisHost())
-    const written = readFileSync(join(state.home, '.codex', 'config.toml'), 'utf-8')
-    expect(written).toContain(`[projects."${mainCheckout}"]`)
-    expect(written).not.toContain(`[projects."${worktree}"]`)
   })
 
   it.each(INHERITING_PRESETS)('writes no %s trust when the host knows no home', async (preset) => {

@@ -196,13 +196,20 @@ function createMainBootstrapPlugin() {
   }
 }
 
+/**
+ * Diagnostic escape hatch: an unminified main bundle so a V8 CPU profile of the
+ * main process attributes self time to real function names. Release builds never
+ * set this, and `pnpm build` does not read it.
+ */
+const MAIN_MINIFY: 'oxc' | false = process.env.ORCA_UNMINIFIED_MAIN === '1' ? false : 'oxc'
+
 export const electronViteConfig: UserConfig = {
   main: {
     build: {
       // Why: 'esbuild' makes rolldown disable its own minifier and re-print every
       // chunk through esbuild, which is undeclared here and only resolves via
       // pnpm hoisting. 'oxc' is rolldown's in-process minifier.
-      minify: 'oxc',
+      minify: MAIN_MINIFY,
       // Why: 'hidden' emits .js.map with no sourceMappingURL, so the shipped
       // bundle never references maps that packaging strips out. Release CI
       // uploads them so minified crash traces stay decodable.

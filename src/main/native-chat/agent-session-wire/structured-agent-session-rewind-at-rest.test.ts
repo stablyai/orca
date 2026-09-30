@@ -8,7 +8,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -106,10 +107,7 @@ beforeEach(async () => {
     }
   }))
   directory = await mkdtemp(join(tmpdir(), 'orca-rewind-rest-'))
-  store = await AgentSessionRecordStore.open({
-    directory: join(directory, 'store'),
-    hostId: 'local'
-  })
+  store = await openTestAgentSessionRecordStore(directory)
   host = openHost()
 })
 
@@ -174,10 +172,7 @@ async function interruptedRewindAtRest(): Promise<void> {
   )
   expect(store.getRecord(SESSION)?.rewind).toMatchObject({ phase: 'prepared' })
   await host.flushAllStreamedEvents()
-  store = await AgentSessionRecordStore.open({
-    directory: join(directory, 'store'),
-    hostId: 'local'
-  })
+  store = await openTestAgentSessionRecordStore(directory)
   host = openHost()
 }
 
@@ -212,10 +207,7 @@ describe('a rewind asked of a chat at rest (P2-23)', () => {
     await host.flushStreamedEvents(SESSION)
     const epoch = (await host.journalSnapshot(SESSION)).cursor.epoch
     await host.flushAllStreamedEvents()
-    store = await AgentSessionRecordStore.open({
-      directory: join(directory, 'store'),
-      hostId: 'local'
-    })
+    store = await openTestAgentSessionRecordStore(directory)
     host = openHost()
     const before = acquires
     rewindSupport.mockReturnValue({ supported: false, reason: 'history-not-paginated' })

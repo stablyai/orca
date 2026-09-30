@@ -245,3 +245,87 @@ describe('performCancel', () => {
     expect(journal.snapshot().items).toEqual([])
   })
 })
+
+describe('what a conversation Stop reports when the provider stopped nothing', () => {
+  async function cancelWith(
+    outcome: Awaited<ReturnType<StructuredAgentSessionAdapter['cancelTurn']>>,
+    input: { turnId?: string; withdrewQueued?: boolean },
+    turnRow: 'none' | 'running' | 'lands-on-flush' = 'none'
+  ) {
+    root = await mkdtemp(join(tmpdir(), 'orca-turn-cancel-report-'))
+    const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
+    const openTurn = () =>
+      journal.appendItem(
+        {
+          provider: 'legacy',
+          agent: 'codex',
+          sessionId: 'session-1',
+          recordId: 'turn-lifecycle:turn-1'
+        },
+        {
+          kind: 'status',
+          text: 'Agent is working…',
+          turnLifecycle: { turnId: 'turn-1', state: 'running' }
+        },
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    if (turnRow === 'running') {
+      await openTurn()
+    }
+    const ctx: AgentSessionTurnContext = {
+      sessionId: 'session-1',
+      journal,
+      fence: 1,
+      adapter: {
+        acquire: vi.fn(),
+        dispatch: vi.fn(),
+        closeSession: vi.fn(),
+        cancelTurn: vi.fn(async () => outcome),
+        answerPrompt: vi.fn(),
+        setOption: vi.fn()
+      },
+      persistOptions: async () => undefined,
+      resolvedBy: 'client-1',
+      publish: vi.fn(),
+      flushStreamedEvents: async () => {
+        if (turnRow === 'lands-on-flush') {
+          await openTurn()
+        }
+      },
+      now: () => 1
+    }
+    const result = await performCancel(ctx, { clientOperationId: 'cancel-report-1', ...input })
+    const rows = journal
+      .snapshot()
+      .items.flatMap((item) =>
+        item.body.kind === 'status' && !item.body.turnLifecycle ? [item.body.text] : []
+      )
+    return { cancelled: result.ok && result.value.cancelled, rows }
+  }
+
+  it('reports a Stop naming no turn that withdrew what was queued, with nothing left working, as a success', async () => {
+    expect(await cancelWith({ cancelled: false }, { withdrewQueued: true })).toEqual({
+      cancelled: true,
+      rows: []
+    })
+  })
+
+  it('keeps a Stop naming no turn not cancelled while the journal still reads working', async () => {
+    const reported = await cancelWith({ cancelled: false }, { withdrewQueued: true }, 'running')
+    expect(reported.cancelled).toBe(false)
+    expect(reported.rows).toHaveLength(1)
+    expect(reported.rows).not.toContain('The provider had already finished this turn.')
+  })
+
+  it('reads the journal after its streamed rows land: a turn whose send was accepted first is still working', async () => {
+    const reported = await cancelWith(
+      { cancelled: false },
+      { turnId: 'turn-0', withdrewQueued: true },
+      'lands-on-flush'
+    )
+    expect(reported).toEqual({
+      cancelled: false,
+      rows: ['The provider had already finished this turn.']
+    })
+  })
+})

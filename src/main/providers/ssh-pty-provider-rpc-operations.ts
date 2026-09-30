@@ -2,6 +2,7 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
 type SshPtyProviderRpcContext = {
   mux: SshChannelMultiplexer
@@ -42,6 +43,10 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
         id: toRelayPtyId(id)
       })) as { appliedSeq?: number }
       return result.appliedSeq ?? 0
+    },
+    // A notification, because an older relay drops unknown ones instead of failing.
+    setColorQueryReplyColors: (colors: TerminalOscColorQueryReplyColors): void => {
+      mux.notify('pty.setColorQueryReplyColors', { colors })
     },
     acknowledgeDataEvent: (id: string, charCount: number): void => {
       mux.notify('pty.ackData', { id: toRelayPtyId(id), charCount })

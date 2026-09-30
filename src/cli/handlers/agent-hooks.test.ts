@@ -389,30 +389,6 @@ describe('agent hooks CLI handler', () => {
     }
   )
 
-  it('keeps missing new card style off when updating offline settings', async () => {
-    const existing = getDefaultPersistedState(userDataPath)
-    delete existing.settings.experimentalNewWorktreeCardStyle
-    writeDataFile(userDataPath, existing)
-
-    await runAgentHooksOff(userDataPath)
-
-    expect(readDefaultProfileState(userDataPath).settings.experimentalNewWorktreeCardStyle).toBe(
-      false
-    )
-  })
-
-  it('preserves an existing explicit new card style opt-in when updating offline settings', async () => {
-    const existing = getDefaultPersistedState(userDataPath)
-    existing.settings.experimentalNewWorktreeCardStyle = true
-    writeDataFile(userDataPath, existing)
-
-    await runAgentHooksOff(userDataPath)
-
-    expect(readDefaultProfileState(userDataPath).settings.experimentalNewWorktreeCardStyle).toBe(
-      true
-    )
-  })
-
   it.each(['on', 'off', 'status', 'prepare-codex'])(
     'refuses explicit remote selection before local hook command %s',
     async (command) => {

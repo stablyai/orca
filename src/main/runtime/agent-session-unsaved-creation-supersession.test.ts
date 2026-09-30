@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { codexProviderHandleLink } from '../codex/codex-structured-owner-identity'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -72,7 +73,7 @@ async function restart(store: AgentSessionRecordStore) {
     probe: { outcome: 'exit-observed' },
     now: NOW
   })
-  const reopened = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  const reopened = await openTestAgentSessionRecordStore(directory)
   await reopened.reconcileOnRestart({
     probe: async () => ({ outcome: 'reservation-unused' }),
     now: NOW
@@ -90,7 +91,7 @@ afterEach(async () => {
 
 describe('a Codex thread started in place of one Codex never saved', () => {
   it('becomes the session identity and survives the next restart', async () => {
-    const first = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    const first = await openTestAgentSessionRecordStore(directory)
     await prove(first, reserveRequest(), (fence) =>
       codexProviderHandleLink({
         threadId: 'thread-unsaved',
@@ -127,7 +128,7 @@ describe('a Codex thread started in place of one Codex never saved', () => {
   })
 
   it('is refused once a resume has proved the conversation Codex saved', async () => {
-    const first = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    const first = await openTestAgentSessionRecordStore(directory)
     await prove(first, reserveRequest(), (fence) =>
       codexProviderHandleLink({ threadId: 'thread-saved', resumed: false, fence, observedAt: NOW })
     )

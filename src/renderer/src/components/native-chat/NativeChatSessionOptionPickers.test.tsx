@@ -401,7 +401,7 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.queryByText(/not confirmed/)).toBeNull()
   })
 
-  it.each(['catalog', 'agent-session'] as const)(
+  it.each(['catalog'] as const)(
     'does not hedge a reported value on the %s transport',
     (transport) => {
       render(

@@ -174,6 +174,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return (await this.providerFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
 
+  setColorQueryReplyColors: IPtyProvider['setColorQueryReplyColors'] = (colors) =>
+    this.allProviders().forEach((provider) => provider.setColorQueryReplyColors?.(colors))
+
   acknowledgeDataEvent(id: string, charCount: number): void {
     this.providerFor(id).acknowledgeDataEvent(id, charCount)
   }

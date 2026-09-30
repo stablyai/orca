@@ -15,7 +15,7 @@ import {
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight,
   getPowerShellCodexShellLaunchPreflight
-} from './codex-shell-launch-preflight'
+} from '../../shared/codex-shell-function'
 import { resolveFishBinary } from '../../shared/fish-binary-requirement'
 
 const isWindows = process.platform === 'win32'

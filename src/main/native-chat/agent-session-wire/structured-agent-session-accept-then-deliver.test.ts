@@ -20,6 +20,7 @@ import {
   DISPATCH_REJECTED_CANCELLED
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
@@ -109,7 +110,7 @@ beforeEach(async () => {
       ordinal: dispatch.mock.calls.length
     }
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   await startHost()
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
 })

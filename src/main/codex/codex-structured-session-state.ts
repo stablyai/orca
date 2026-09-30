@@ -19,7 +19,6 @@ import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
-import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import type {
@@ -102,11 +101,6 @@ export type CodexStructuredSessionAdapterDeps = {
   mintAcquisitionGeneration?: () => string
   now?: () => number
   requestTimeoutMs?: number
-  captureTurnProcesses?: (rootPid: number) => Promise<CodexTurnProcessSnapshot | null>
-  terminateTurnProcesses?: (
-    rootPid: number,
-    baseline: CodexTurnProcessSnapshot | null
-  ) => Promise<boolean>
   /** Host model catalog; sessions write their listings through and read back. */
   modelCatalog?: AgentModelCatalogStore
 }

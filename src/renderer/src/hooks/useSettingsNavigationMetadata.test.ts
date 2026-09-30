@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/repo-types'
+import { getCodexTerminalServerIsolationTitle } from '../components/settings/codex-terminal-server-isolation-copy'
 
 const repo = {
   id: 'repo-1',
@@ -177,6 +178,21 @@ describe('settings navigation metadata', () => {
     expect(orchestration?.searchEntries.map((entry) => entry.title)).not.toContain(
       'Nested worker depth'
     )
+  })
+
+  it('lists the host-only Codex server setting in desktop Agents search only', () => {
+    const agentTitles = (isWebClient: boolean): string[] | undefined =>
+      buildSettingsNavigationMetadata({
+        isMac: false,
+        isWindows: false,
+        isWebClient,
+        repos: [repo]
+      })
+        .find((section) => section.id === 'agents')
+        ?.searchEntries.map((entry) => entry.title)
+
+    expect(agentTitles(false)).toContain(getCodexTerminalServerIsolationTitle())
+    expect(agentTitles(true)).not.toContain(getCodexTerminalServerIsolationTitle())
   })
 
   it('keeps the Browser shortcut searchable for a capable web runtime', () => {

@@ -1,5 +1,5 @@
-// Whether a real, signed-in Claude CLI is present — the gate every real-CLI
-// suite skips on. Probed once per test process.
+// Whether a real, signed-in Claude CLI may be used — the gate every real-CLI
+// suite skips on. Opt-in only; probed once per test process.
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -7,6 +7,7 @@ import { runProcessSync, type ProcessResult } from '../../shared/child-process/r
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { CLAUDE_AUTH_ENV_VARS } from '../claude-accounts/environment'
 import { resolveClaudeCommand } from '../codex-cli/command'
+import { resolveRealClaudeCliGate } from './claude-real-cli-test-gate'
 
 export const realClaudeCommand = resolveClaudeCommand()
 
@@ -25,24 +26,18 @@ function probeRealClaude(args: string[]): ProcessResult | null {
   }
 }
 
-export const realClaudeAvailable = probeRealClaude(['--version'])?.code === 0
+// Why the gate: an installed, signed-in CLI is not consent to spend turns on that account, so
+// nothing is probed unless the run opted in.
+export const realClaudeCliGate = resolveRealClaudeCliGate(process.env, (args) => {
+  const result = probeRealClaude([...args])
+  return { status: result?.code ?? null, stdout: result?.stdout ?? '' }
+})
+
+export const realClaudeAvailable = realClaudeCliGate.skipReason === null
 
 /** The CLI's own account report — the only source of truth for where it writes that
  *  is not derived from Orca's own path expressions. */
-export const realClaudeAuthStatus = (() => {
-  if (!realClaudeAvailable) {
-    return null
-  }
-  const result = probeRealClaude(['auth', 'status', '--json'])
-  if (!result || result.code !== 0) {
-    return null
-  }
-  try {
-    return JSON.parse(result.stdout) as { loggedIn?: boolean; projectsDirectory?: string }
-  } catch {
-    return null
-  }
-})()
+export const realClaudeAuthStatus = realClaudeCliGate.authStatus
 
 export const realClaudeAuthenticated = realClaudeAuthStatus?.loggedIn === true
 

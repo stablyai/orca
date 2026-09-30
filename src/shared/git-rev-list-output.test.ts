@@ -1,25 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   parseGitRevListAheadBehindCounts,
   parseGitRevListFirstParentOid
 } from './git-rev-list-output'
 
 describe('parseGitRevListAheadBehindCounts', () => {
-  it('parses rev-list counts without whitespace-regex splitting', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-    try {
-      expect(parseGitRevListAheadBehindCounts('  12\t3\r\n')).toEqual({
-        status: 'ok',
-        ahead: 12,
-        behind: 3
-      })
-      const usedWhitespaceSplit = splitSpy.mock.calls.some(
-        ([separator]) => separator instanceof RegExp && separator.source === '\\s+'
-      )
-      expect(usedWhitespaceSplit).toBe(false)
-    } finally {
-      splitSpy.mockRestore()
-    }
+  it('parses counts surrounded by mixed whitespace', () => {
+    expect(parseGitRevListAheadBehindCounts('  12\t3\r\n')).toEqual({
+      status: 'ok',
+      ahead: 12,
+      behind: 3
+    })
   })
 
   it('rejects missing or extra fields', () => {

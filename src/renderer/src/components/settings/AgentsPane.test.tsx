@@ -13,6 +13,7 @@ import {
   getAgentWorkspaceTrustTitle
 } from './agent-workspace-trust-copy'
 import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy'
+import { getCodexTerminalServerIsolationTitle } from './codex-terminal-server-isolation-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import type * as AgentRuntimeSettingModule from './AgentRuntimeSetting'
@@ -278,6 +279,17 @@ describe('AgentsPane', () => {
           getAgentsPaneSearchEntries({ includeAgentWorkspaceTrust: false })
         )
       ).toBe(false)
+    } finally {
+      Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
+    }
+  })
+
+  it('keeps the host-only Codex server row out of paired web clients', () => {
+    Reflect.set(globalThis, '__ORCA_WEB_CLIENT__', true)
+    try {
+      expect(renderPane(getDefaultSettings('/tmp'))).not.toContain(
+        getCodexTerminalServerIsolationTitle()
+      )
     } finally {
       Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
     }

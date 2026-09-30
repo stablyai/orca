@@ -894,6 +894,12 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "文字太大，无法复制。"
+      },
+      "dropSkipReason": {
+        "missing": "该文件已不在原始路径。",
+        "symlink": "无法附加符号链接。",
+        "permissionDenied": "没有访问权限。",
+        "unsupported": "不支持的文件类型。"
       }
     },
     "hooks": {
@@ -916,11 +922,7 @@
         "5f3d2c8a1b": "解析 MR 基础分支失败",
         "dropPartiallyAttached": "无法附加 {{count}} 项中的 {{failureCount}} 项。",
         "dropPartiallyAttached_one": "无法附加 {{count}} 项目的 {{failureCount}}。",
-        "dropPartiallyAttached_other": "无法附加 {{count}} 项中的 {{failureCount}} 项。",
-        "attachSkipMissing": "不再走原来的路。",
-        "attachSkipSymlink": "无法附加符号链接。",
-        "attachSkipPermissionDenied": "没有权限。",
-        "attachSkipUnsupported": "不支持的文件类型。"
+        "dropPartiallyAttached_other": "无法附加 {{count}} 项中的 {{failureCount}} 项。"
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "无法上传删除的文件。",
@@ -5926,13 +5928,11 @@
           }
         },
         "LinearAgentSkillSetupPrompt": {
-          "missingCliAndSkill": "缺少 Orca CLI 和 Linear 智能体技能。",
           "modalTitle": "启用 Linear ticket 访问",
           "modalDescription": "从终端安装 Linear 技能。",
           "modalPrompt": "允许智能体读取和编辑已附加的 Linear ticket。",
           "dontShowAgain": "不再显示",
           "missingBoth": "缺少 Orca CLI 和 Linear 智能体技能。",
-          "missingCli": "缺少 Orca CLI。",
           "missingSkill": "缺少 Linear 智能体技能。",
           "title": "设置 Linear 智能体技能",
           "remoteCopy": "这会安装主机设置；远程智能体环境可能需要单独设置。",
@@ -5944,7 +5944,6 @@
           "panelDescription": "安装主机智能体技能，用于已链接 Linear 任务交接。",
           "terminalTitle": "安装 Linear 智能体技能",
           "terminalAria": "Linear 智能体技能安装终端",
-          "install": "安装 CLI 和技能",
           "successTitle": "Linear 议题访问已就绪",
           "successDescription": "智能体现在可以从此工作区读取和更新已链接的 Linear 议题。",
           "successDescriptionWsl": "WSL 智能体现在可以从此工作区使用已链接的 Linear 议题。",
@@ -5953,11 +5952,7 @@
           "done": "完成",
           "wslCopy": "为已链接 Linear 工作的 WSL 智能体交接安装此项。",
           "wslLabel": "WSL 默认值",
-          "toastMissingCliAndSkill": "缺少 Orca CLI 和 Linear 技能",
-          "toastMissingCli": "缺少 Orca CLI",
           "toastMissingSkill": "缺少 Linear 技能",
-          "toastInstallCliAndSkillDescription": "安装 Orca CLI 和 Linear 技能，让智能体可以读取并编辑 Linear 任务。",
-          "toastInstallCliDescription": "安装 Orca CLI，让智能体可以读取并编辑 Linear 任务。",
           "toastInstallSkillDescription": "安装 Linear 技能，让智能体可以通过 Orca CLI 读取并编辑 Linear 任务。",
           "toastRemoteDescription": "{{value0}} 远程智能体环境可能仍需要自己的设置。",
           "toastWslDescription": "{{value0}} 此设置会在所选 WSL 智能体运行时中执行。"
@@ -6358,7 +6353,6 @@
           "SetupGuideModal": {
             "3598a3ca0c": "完成使 Orca 对于并行智能体工作有用的核心工作流程。",
             "48a9e5ef2d": "入门",
-            "28cf59fcb4": "这将从侧边栏隐藏清单",
             "f3b5ffb2a6": "从侧边栏隐藏清单"
           },
           "SetupGuideProgressRing": {
@@ -6832,24 +6826,15 @@
           "af8c83ed61": "从 Chrome、Edge 或其他浏览器导入 cookie，以便智能体可以重复使用您的登录信息。",
           "68ea76eb71": "安装浏览器使用技能，以便智能体可以操作 Orca 的浏览器。",
           "2d6ead9ab2": "安装浏览器使用技能",
-          "e9f3f3b488": "安装于",
-          "9fca1f7f5d": "注册 Orca CLI 命令，以便智能体可以从其 shell 编排浏览器。",
-          "c6065d205d": "启用 Orca CLI",
-          "c79eff0213": "注册 Orca CLI，以便智能体可以驱动浏览器。",
-          "702488a5f7": "让编码智能体通过您的登录来驱动此浏览器。完成以下三个步骤。",
           "b8a1f2d84d": "智能体浏览器使用",
           "96b91c6349": "让编码智能体通过您的登录来驱动此浏览器。",
           "2ea4617e3a": "从 {{value1}}{{value2}} 导入 {{value0}} cookie。",
-          "721aee31b4": "在 PATH 中注册 Orca CLI。",
-          "180a9abf3a": "无法加载 CLI 状态。",
           "2ccfc9cff8": "导入",
           "0462565413": "重新导入",
           "de9b2f32f3": "启用",
-          "ad8cb0ee22": "修复路径",
-          "0289434ed6": "启用",
-          "8b3054dac7": "注册...",
           "8f2675c2f3": "已从文件导入 {{value0}} 个 Cookie。",
-          "5301857d88": "从 {{value0}}"
+          "5301857d88": "从 {{value0}}",
+          "finishSteps": "让编程智能体使用你的登录状态操作此浏览器。请完成以下步骤。"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "使智能体能够在 Orca 浏览器中导航和验证页面。",
@@ -6870,7 +6855,6 @@
           "5dae812f50": "刷新",
           "52e640f3a0": "刷新 CLI 状态",
           "38edbb5721": "Shell 命令",
-          "6930feda9e": "从终端使用 Orca 打开应用程序、管理工作树并与 Orca 终端交互。",
           "c5c0f2641d": "Orca CLI",
           "d77352f2df": "无法从 PATH 中删除 `{{value0}}`。",
           "af5540930c": "从路径中删除了“{{value0}}”。",
@@ -6894,7 +6878,8 @@
           "cbe55e4d48": "在资源管理器中显示",
           "9fd4023db0": "在文件管理器中显示",
           "installFailureUnknownReason": "Orca 无法完成 CLI 注册，且未报告任何原因。",
-          "installFailureConflictRemedy": "删除 {{value0}} 并在不再需要时重新注册。"
+          "installFailureConflictRemedy": "删除 {{value0}} 并在不再需要时重新注册。",
+          "outsideOrcaDescription": "Orca 终端已内置 `orca`。开启后可在 Orca 以外的其他终端中使用 `orca`。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -7480,15 +7465,9 @@
           "c7f3fe0a6e": "常用模拟器命令",
           "d94ca6a623": "使智能体能够使用 Orca CLI 命令，包括手机模拟器控制。",
           "67e19ee03c": "Orca CLI 技能",
-          "aaf62a3dd2": "安装于",
-          "2fef055608": "注册 Orca CLI 命令，以便智能体可以从其 shell 控制活动模拟器。",
-          "4f2205f3b6": "启用 Orca CLI",
           "ff4b7e65d6": "让编码智能体使用 Orca CLI 命令控制活动手机模拟器。",
           "2a674aa810": "智能体手机模拟器控制",
-          "cdeaed9e37": "在 PATH 中注册 Orca CLI。",
-          "3d34423e88": "正在注册 Orca CLI",
-          "3be27641c9": "以便智能体 shell 可以运行模拟器命令。",
-          "3941719a56": "打开技能设置前正在检查 Orca CLI。"
+          "cdeaed9e37": "在 PATH 中注册 Orca CLI。"
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "复制",
@@ -9315,16 +9294,7 @@
               "9d97446873": "智能体",
               "a2d489263e": "技能",
               "a7e82445fa": "安装浏览器使用技能，以便智能体可以操作 Orca 的浏览器。",
-              "a1414dcefb": "安装浏览器使用技能",
-              "e56c7b55c9": "设置",
-              "034c5e8d7f": "启用",
-              "7e0dcb257a": "Shell",
-              "3ffafc9b95": "命令",
-              "30c74aaa1f": "路径",
-              "ff05cbc344": "orca",
-              "85fab5e12c": "CLI",
-              "890ddf943d": "注册 Orca CLI，以便智能体可以驱动浏览器。",
-              "50f0860e18": "启用 Orca CLI"
+              "a1414dcefb": "安装浏览器使用技能"
             }
           }
         },
@@ -9500,7 +9470,8 @@
               "openclaude": "开放克劳德",
               "omp": "奥普",
               "terminal": "终端",
-              "agent": "代理"
+              "agent": "代理",
+              "queue": "队列"
             },
             "agentDashboard": {
               "title": "智能体仪表盘",
@@ -13645,9 +13616,8 @@
           "1eee1c7bd8": "PATH 中未检测到智能体。可选择一个稍后安装，或使用空白终端继续。",
           "hideAgents": "隐藏智能体",
           "showMoreAgents": "显示另外 {{value0}} 个智能体→",
-          "yoloPermissionsLabel": "Yolo / 危险地跳过权限检查",
-          "yoloPermissionsInfo": "智能体权限信息",
-          "yoloPermissionsTooltip": "跳过智能体权限检查，减少打断"
+          "yoloModeLabel": "Yolo 模式",
+          "yoloPermissionsDescription": "智能体会在不询问的情况下运行命令和编辑文件，部分智能体还会绕过沙箱。仅在你信任的项目中使用。"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "按 Enter 运行命令并在询问时确认 npx。您也可以稍后在“设置”中进行设置。",
@@ -13682,7 +13652,6 @@
         "NotificationStep": {
           "3bede04483": "发送测试通知",
           "dc897423e1": "选择通知声音",
-          "53aaffe49a": "通知声音",
           "0fe570690c": "选择发送桌面通知后 Orca 播放的警报。",
           "0af746e41f": "选择声音",
           "8124d085a6": "打开 Mac 设置",
@@ -14206,7 +14175,8 @@
             "3a59452a67": "技能命令已复制并插入到下方以供评审。",
             "c605f51f2b": "能力设置就绪",
             "1aa657d8f4": "一些能力设置需要注意",
-            "c89534cbe9": "安装 CLI 和技能"
+            "allInstalled": "所有技能均已安装",
+            "installSkills": "安装技能"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如llama 运行 llama3.1 {{value0}}",
@@ -14299,7 +14269,6 @@
             "1a6a7d6c80": "设置",
             "713cc529a5": "里程碑",
             "b1f1981c5e": "查看任务",
-            "0235b268b2": "还没有完成",
             "13294d3405": "完成"
           },
           "FeatureWallSetupWorkflowActions": {
@@ -14410,13 +14379,13 @@
               "setup": {
                 "status": {
                   "8eccfcb314": "已安装",
-                  "21d4f79c93": "单击安装 CLI 和技能以打开 macOS 访问设置",
                   "5c9293e51a": "检查应用程序访问权限",
-                  "aae94eeb52": "单击安装 CLI 和技能",
                   "aa8e143a2f": "无法检查安装",
                   "9b33e7fb13": "检查安装",
-                  "4c8e1f92a7": "在此 Mac 上打开 Orca Desktop",
-                  "6d2b0a84e1": "此版本不可用"
+                  "6d2b0a84e1": "此版本不可用",
+                  "needsMacAccess": "需要 macOS 访问权限",
+                  "notInstalled": "未安装",
+                  "requiresOrcaDesktop": "需要 Orca Desktop"
                 }
               }
             }
@@ -14434,7 +14403,6 @@
                 "checklist": {
                   "localized": {
                     "copy": {
-                      "ec0a363633": "多任务",
                       "62bac8f43c": "同时在 2 个不同的工作树中工作。每个项目都是独立的（即使在同一个项目中）。非常适合同时处理 2 个功能。",
                       "908898c3ee": "使用 Orca 浏览器",
                       "43781563c3": "无需离开 Orca 即可浏览您的网络应用程序。抓取任何元素，然后一键将其确切的来源和样式发送给代理。",
@@ -14442,14 +14410,15 @@
                       "71bd9a8c95": "了解代理完成、需要关注或被阻止的时刻。",
                       "46db810da8": "选择您的默认代理",
                       "b8e5bae17f": "通过已选择的首选代理，更快地开始新工作。",
-                      "fee5557b02": "启用 Orca CLI",
-                      "7bcb4097fa": "注册 Orca shell 命令并安装浏览器、计算机和编排工作流程的代理技能。",
                       "ad342dd4c6": "连接集成",
                       "06fe30fdb0": "一键从任务启动代理并查看 PR 状态。",
                       "eddc532e58": "自动化工作区设置",
                       "56049b74c2": "自动运行安装和设置命令，以便每个新工作树都为代理做好准备。",
                       "2cf795433b": "在多个存储库中开始工作",
-                      "42525ba8a4": "将您的关键存储库带入 Orca，这样您就可以开始代理工作，而无需寻找文件夹。"
+                      "42525ba8a4": "将您的关键存储库带入 Orca，这样您就可以开始代理工作，而无需寻找文件夹。",
+                      "workOnTwoTasks": "同时处理两项任务",
+                      "agentSkillsName": "为智能体提供 Orca 技能",
+                      "agentSkillsDescription": "安装智能体用于操作 Orca 浏览器、控制你的电脑以及协调多步骤工作的技能。"
                     }
                   }
                 }
@@ -14562,8 +14531,7 @@
             "d6d15077df": "技能命令已复制并插入到下方供查看。",
             "78e65f19d9": "浏览器设置失败",
             "b7345c18db": "发生了意外错误。",
-            "5f97caf76b": "正在安装…",
-            "c2df599513": "安装 CLI 和技能"
+            "5f97caf76b": "正在安装…"
           },
           "ConnectIntegrationsList": {
             "3dddb2d565": "已连接，可用于任务",
@@ -14705,17 +14673,9 @@
                 "agent": {
                   "setup": {
                     "state": {
-                      "fdcca1ec75": "正在注册...",
-                      "69fb2c2289": "已启用",
-                      "c6705092ba": "修复 PATH",
-                      "7c1b6bdb1e": "启用",
-                      "51074ccb05": "无法加载 CLI 状态。",
                       "35dea1ae12": "智能体控制已就绪。",
-                      "9dff3a6338": "技能已安装。启用 Orca CLI 以完成设置。",
-                      "15986a1080": "Orca CLI 已就绪。安装技能以完成设置。",
-                      "4c26913def": "尚未设置完成。请完成两个步骤以启用智能体控制。",
                       "c94ff11e91": "无法重新检查设置状态。",
-                      "2b519eed94": "已在 PATH 中注册 Orca CLI。"
+                      "skillNotInstalled": "Orca CLI 技能尚未安装。"
                     }
                   }
                 },
@@ -14733,23 +14693,18 @@
             "2fda9ff015": "设置智能体控制",
             "0ac0fef514": "智能体控制已就绪。",
             "2bdfff8763": "智能体控制（可选）。",
-            "72736b051f": "当您希望智能体控制此模拟器时，设置 Orca CLI + 技能。",
             "d10ae98046": "完成",
             "3756cbeca7": "暂不",
             "6d950431d2": "隐藏",
             "ebceac65a4": "设置",
-            "3f003507f4": "在设置中打开完整设置"
+            "3f003507f4": "在设置中打开完整设置",
+            "installSkillPrompt": "如需让智能体操作此模拟器，请安装 Orca CLI 技能。"
           },
           "MobileEmulatorAgentSetupGuideSteps": {
-            "9b49d892e3": "启用 Orca CLI",
-            "3d8dc52c93": "在智能体 shell 中注册用于模拟器控制的 orca 命令。",
             "21f5687c07": "Orca CLI 技能",
             "64fb057667": "教授智能体此工作区的 orca 模拟器命令。",
             "5c59ea96ca": "移动端模拟器 Orca CLI 技能设置",
-            "bff5341ac3": "移动端模拟器 Orca CLI 技能安装终端",
-            "3d34423e88": "正在注册 Orca CLI",
-            "3be27641c9": "以便智能体 shell 可以运行模拟器命令。",
-            "3941719a56": "打开技能设置前正在检查 Orca CLI。"
+            "bff5341ac3": "移动端模拟器 Orca CLI 技能安装终端"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "关闭",
@@ -17392,6 +17347,7 @@
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
+        "pasteUnavailable": "无法粘贴 — 此聊天当前不接受输入。",
         "uploadingAttachments": "正在将 {{value0}} 个文件上传到远端…",
         "model": "模型",
         "effort": "推理强度",
@@ -17685,8 +17641,7 @@
         "ranOne": "Ran 1 子代理",
         "ranN": "Ran {{value0}} 子代理",
         "tokens": "{{value0}} 代币",
-        "unnamed": "子代理",
-        "writtenBy": "由子代理 {{value0}} 输出"
+        "unnamed": "子代理"
       },
       "conversationCommand": {
         "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。",
@@ -17722,6 +17677,32 @@
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
         "title": "上下文",
         "estimated": "根据上一次响应的估算值。"
+      },
+      "dismissDeliveryNotice": "关闭",
+      "messageNotSent": "消息未发送",
+      "deliveryUnconfirmed": "无法确认送达 — 重试前请检查聊天",
+      "queuedMessages": {
+        "alreadySent": "此消息已发送。",
+        "editAlreadySent": "已发送 — 你的文本仍在输入框中。",
+        "listLabel": "排队的消息",
+        "behindReturnedHold": "等待中 — 前面有一条消息需要处理",
+        "awaitingAnswerHold": "等待你的回答",
+        "steer": "立即发送",
+        "send": "发送",
+        "steerHint": "提交且不中断模型",
+        "sendHint": "立即发送此消息",
+        "delete": "删除",
+        "moreActions": "更多操作",
+        "editMessage": "编辑消息",
+        "turnOffQueueing": "关闭排队",
+        "withdrawnHold": "在发送前已停止",
+        "pausedSendFailed": "无法发送。点按发送以重试。",
+        "paused": "已暂停",
+        "queuePausedStopped": "因你中断了操作，队列已暂停",
+        "queuePausedRestarted": "因 Orca 重新启动，队列已暂停",
+        "queuePausedCleared": "清除对话后，队列已暂停",
+        "queuePaused": "队列已暂停",
+        "resume": "继续"
       }
     },
     "tab": {
@@ -18084,6 +18065,11 @@
             "spaces": "空间"
           }
         }
+      },
+      "nativeChat": {
+        "queueFollowUpsTitle": "将后续消息加入队列",
+        "queueFollowUpsCopy": "Agent 工作时发送的消息会以卡片形式等待，你可以立即发送、编辑或删除。带图片的消息会立即发送。",
+        "queueFollowUpsToggleLabel": "切换后续消息队列"
       }
     },
     "agentChildRow": {

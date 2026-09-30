@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
-import { agentJournalItemSubagentId } from '../../../shared/agent-session-journal-producer'
 import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
 import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
 
@@ -110,24 +109,11 @@ function boundMessage(
     markClipped(state, 'Some transcript blocks were omitted from oversized messages.')
   }
   // The journal position only orders a live list; a worker read is already in order.
-  // Of the producer linkage only the agent's id is served, so a reader can say whose
-  // line it is; the rest is provenance.
-  const {
-    journalPosition: _journalPosition,
-    agentId: _agentId,
-    parentAgentId: _parentAgentId,
-    providerParentRef: _providerParentRef,
-    producerKind: _producerKind,
-    attempt: _attempt,
-    ...served
-  } = message
-  const subagentId = agentJournalItemSubagentId(message)
+  const { journalPosition: _journalPosition, ...served } = message
   return {
     ...served,
     id: boundIdentifier(message.id, transcriptPath, state),
     ...(message.turnId ? { turnId: boundIdentifier(message.turnId, transcriptPath, state) } : {}),
-    // Same key as the roster entry that names it, so it is bounded the same way.
-    ...(subagentId === null ? {} : { agentId: boundEntryId(subagentId, state) }),
     blocks: blocks.map((block) => boundBlock(block, state))
   }
 }

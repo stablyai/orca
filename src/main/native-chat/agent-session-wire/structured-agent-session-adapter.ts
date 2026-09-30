@@ -236,12 +236,10 @@ export type StructuredAgentSessionSetOptionInput = {
   fence: number
 }
 
-/** `refusal`: the provider answered the Stop and declined it, in its own words when it gave any.
- *  `unconfirmed`: the provider took the Stop, but Orca could not confirm the turn's work ended. */
+/** `refusal`: the provider answered the Stop and declined it, in its own words when it gave any. */
 export type AgentSessionCancelOutcome = {
   cancelled: boolean
   refusal?: { detail?: ProviderDiagnostic }
-  unconfirmed?: true
 }
 
 export type StructuredAgentSessionAdapter = {
@@ -309,8 +307,8 @@ export type StructuredAgentSessionAdapter = {
     /** Latest journal submission for this fence, when the host has one. */
     dispatchStatus?: { state: AgentJournalDispatchState; recovered: boolean } | null
     /** Re-reads the turn the published journal says is running — the only turn a client
-     *  could have named. A function, not a value, because the guard re-checks after the
-     *  delivery fence may have waited. Absent for direct callers with no journal. */
+     *  could have named. A function, not a value, because the guard reads it when the
+     *  interrupt is issued. Absent for direct callers with no journal. */
     resolveLiveTurnId?: () => string | null
   }): Promise<AgentSessionCancelOutcome>
   /** Changes the provider thread's goal. `rejected` is the provider refusing the

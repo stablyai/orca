@@ -57,40 +57,6 @@ describe('NativeChatSessionGate', () => {
     clearNativeChatDraftCacheForTests()
   })
 
-  it.each(['codex', 'claude'] as const)(
-    'opens the resolved native chat session from a %s title fallback',
-    (resolvedAgent) => {
-      renderResolution({
-        paneKey: 'tab-1:leaf-1',
-        launchAgent: null,
-        resolvedAgent,
-        ptyId: 'pty-1'
-      })
-
-      expect(screen.getByTestId('native-chat-resolution')).toHaveTextContent(
-        `${resolvedAgent}:no-session:tab-1:leaf-1`
-      )
-    }
-  )
-
-  it('keeps live hook identity ahead of a stale title fallback', () => {
-    renderResolution({
-      paneKey: 'tab-1:leaf-1',
-      launchAgent: null,
-      agentStatusEntry: entry({
-        paneKey: 'tab-1:leaf-1',
-        agentType: 'claude',
-        providerSession: { key: 'session_id', id: 'claude-session' }
-      }),
-      resolvedAgent: 'codex',
-      ptyId: 'pty-1'
-    })
-
-    expect(screen.getByTestId('native-chat-resolution')).toHaveTextContent(
-      'claude:claude-session:tab-1:leaf-1'
-    )
-  })
-
   it('preserves the open composer, session, and draft through disconnect and reconnect', () => {
     const paneKey = 'tab-1:leaf-1'
     const connectedEntry = entry({

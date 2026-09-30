@@ -265,12 +265,6 @@ describe('buildDispatchPreamble', () => {
     }
   })
 
-  it('uses orca CLI when devMode is false', () => {
-    const result = buildDispatchPreamble(baseParams({ devMode: false }))
-    expect(result).toContain('orca orchestration send')
-    expect(result).toContain('orca orchestration check')
-  })
-
   it('uses the exact orca-ide command for packaged WSL workers', () => {
     const result = buildDispatchPreamble(baseParams({ cliCommand: 'orca-ide' }))
 

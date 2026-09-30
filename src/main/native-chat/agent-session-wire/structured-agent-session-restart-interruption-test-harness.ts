@@ -9,7 +9,8 @@ import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from '../../runtime/agent-session-recovery-capsule'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -115,10 +116,7 @@ export async function interruptedRestart(
   }
   await previous.host.flushStreamedEvents(SESSION)
   await previous.host.flushAllStreamedEvents()
-  const store = await AgentSessionRecordStore.open({
-    directory: join(previous.root, 'store'),
-    hostId: 'local'
-  })
+  const store = await openTestAgentSessionRecordStore(previous.root)
   const closeSession = vi.fn(async () => true)
   // The relaunch comes after the quit that recorded the offer.
   const clock = { now: NOW + 1 }

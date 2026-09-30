@@ -211,48 +211,6 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(screen.getByText('Working for 5s')).toBeInTheDocument()
   })
 
-  it('keeps the live row up after a tool settles', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'assistant-completed-tool',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'pnpm test' },
-                  state: 'completed'
-                },
-                { type: 'tool-result', output: 'passed' }
-              ],
-              timestamp: 1,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        expandSignal={false}
-        fontScale={1}
-      />
-    )
-
-    // The settled run heads with the command it ran; the live row is separate.
-    const settledTool = screen.getByText('pnpm test')
-    const activity = screen.getByText('Working…')
-    expect(activity.textContent).not.toBe(settledTool.textContent)
-    expect(activity).not.toHaveTextContent('shell')
-    expect(activity).not.toHaveTextContent('pnpm test')
-    expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
-    expect(activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')).toHaveClass(
-      'animate-spin'
-    )
-  })
-
   // The run is the turn's trailing one, so it stays live between calls and only
   // settles with the turn. Its motion is its own — the tail's spinner never
   // migrates onto it — and both are gone once the turn is.

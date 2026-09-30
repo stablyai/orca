@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import type * as DurableFileWrite from '../../durable-file-write'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -109,7 +110,7 @@ beforeEach(async () => {
   }))
   releaseAcquisition = vi.fn(async () => true)
   dispatch = vi.fn(async () => accepted())
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     store,
     adapter: adapter(),
@@ -267,7 +268,7 @@ describe('settled attach retry', () => {
     })
 
     await host.flushAllStreamedEvents()
-    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(root)
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
@@ -324,7 +325,7 @@ describe('settled attach retry', () => {
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
 
     await host.flushAllStreamedEvents()
-    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(root)
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),

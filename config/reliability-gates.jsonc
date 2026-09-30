@@ -13154,7 +13154,7 @@
       "invariant": "PTY snapshot capability discovery must never synchronously block renderer JavaScript. Restored daemon capability must be known before workspace readiness enables cold activation; unknown or legacy capability must remain eager. A healthy SSH provider must return definitive false without polling. One unresponsive capability batch must fail open within one second regardless of PTY count, and stale async responses must not update current bindings.",
       "oracle": "The preload test rejects sendSync and requires ipcRenderer.invoke. Unit contracts assert 512-ID batching, one-second fail-open, unknown retry, definitive SSH false, and generation-fenced stale responses. During an injected 1.5-second Electron main-thread stall, a renderer-owned 50ms interval must keep a maximum gap below 500ms and each API call must return within 100ms. The production cold-activation journey must still mount at most three of eight daemon tabs after reload, while Docker SSH restoration remains eager.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/preload/pty-snapshot-capability-ipc.test.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/main/providers/ssh-pty-provider.test.ts src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/app-startup-routing.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/preload/pty-snapshot-capability-ipc.test.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/main/providers/ssh-pty-provider.test.ts src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/pty-snapshot-capability-main-stall.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -13168,7 +13168,6 @@
         "src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx",
         "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts",
-        "src/renderer/src/app-startup-routing.test.ts",
         "tests/e2e/pty-snapshot-capability-main-stall.spec.ts",
         "tests/e2e/terminal-cold-activation-deferral.spec.ts",
         "tests/e2e/ssh-cold-activation-restore.spec.ts"

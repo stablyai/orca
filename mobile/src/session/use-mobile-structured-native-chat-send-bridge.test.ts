@@ -76,6 +76,19 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
   })
 
+  it('never echoes a queued send as an optimistic transcript bubble', async () => {
+    // The host holds the draft and publishes it as a card above the composer;
+    // a `pending-N` bubble here would show the message twice and retire never.
+    sendStructured.mockResolvedValue('queued')
+    mount('claude')
+
+    await expect(sendWithOutcome('queue me')).resolves.toBe('queued')
+
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(holdUnconfirmedSend).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+  })
+
   it('keeps host-command reconciliation for Codex', async () => {
     sendStructured.mockResolvedValue('unknown')
     mount('codex')

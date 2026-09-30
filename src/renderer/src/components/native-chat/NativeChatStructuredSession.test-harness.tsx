@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react'
 import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
@@ -112,7 +113,12 @@ export function createStructuredSessionMocks() {
     hasOlder: false,
     loadingOlder: false,
     olderHistoryGeneration: 0,
-    loadOlder: vi.fn<() => Promise<NativeChatOlderPageResult>>()
+    loadOlder: vi.fn<() => Promise<NativeChatOlderPageResult>>(),
+    queuedCards: Array.of<QueuedMessageCard>(),
+    queuedSteer: vi.fn<(messageId: string) => Promise<void>>(async () => {}),
+    queuedRemove: vi.fn<(messageId: string) => Promise<void>>(async () => {}),
+    queuedEdit: vi.fn<(messageId: string) => Promise<void>>(async () => {}),
+    queuedSteerNewest: vi.fn<() => boolean>(() => false)
   }
 
   const moduleFactories = {
@@ -184,6 +190,13 @@ export function createStructuredSessionMocks() {
             turnId: mocks.turnId,
             canStop: mocks.canStop ?? mocks.turnId !== null,
             stop: mocks.stop,
+            queuedMessages: {
+              cards: mocks.queuedCards,
+              steer: mocks.queuedSteer,
+              remove: mocks.queuedRemove,
+              edit: mocks.queuedEdit,
+              steerNewest: mocks.queuedSteerNewest
+            },
             threadGoal: mocks.threadGoal,
             cancel: mocks.cancel,
             stopBackgroundTask: (taskId?: string) =>
@@ -255,7 +268,8 @@ export function createStructuredSessionMocks() {
           },
           insertTypedText: () => true,
           handlePasteEvent: mocks.handlePasteEvent,
-          pasteFromClipboard: mocks.pasteFromClipboard
+          pasteFromClipboard: mocks.pasteFromClipboard,
+          contains: (node: Node | null) => fieldRef.current?.contains(node) === true
         }))
         return <textarea ref={fieldRef} data-testid="structured-composer" />
       })

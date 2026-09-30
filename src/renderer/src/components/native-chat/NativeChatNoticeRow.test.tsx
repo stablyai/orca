@@ -2,7 +2,6 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AgentJournalItemBodySchema } from '../../../../shared/agent-session-journal-schemas'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
 import { MessageRow } from './NativeChatMessageRow'
@@ -82,29 +81,5 @@ describe('notice rows', () => {
       'text-foreground'
     )
     expect(screen.getByText('Future readable text').parentElement?.querySelector('svg')).toBeNull()
-  })
-})
-
-describe('old-reader compatibility', () => {
-  // Derive the prior status shape without its new optional hints.
-  const statusSchema = AgentJournalItemBodySchema.options.find(
-    (schema): schema is (typeof AgentJournalItemBodySchema.options)[5] =>
-      schema.shape.kind.value === 'status'
-  )!
-  const oldStatusSchema = statusSchema.omit({ tone: true, presentation: true })
-  it.each([
-    { presentation: 'compaction' },
-    { presentation: 'plan-document' },
-    { tone: 'warning' },
-    { tone: 'error' },
-    { tone: 'notice' },
-    { tone: 'future-tone', presentation: 'future-presentation' }
-  ])('accepts new metadata and still renders text with an old reader: %j', (metadata) => {
-    const body = { kind: 'status', text: 'Text survives version skew', ...metadata }
-    expect(AgentJournalItemBodySchema.safeParse(body).success).toBe(true)
-    const oldBody = oldStatusSchema.parse(body) as AgentJournalStatusItem
-    expect(oldBody).toEqual({ kind: 'status', text: body.text })
-    renderStatus(oldBody)
-    expect(screen.getByText(body.text)).toBeInTheDocument()
   })
 })

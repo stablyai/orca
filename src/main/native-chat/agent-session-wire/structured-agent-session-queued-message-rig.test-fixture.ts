@@ -10,7 +10,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -52,10 +52,7 @@ export async function createQueuedMessageTestRig() {
     providerIdentity: null
   }))
   let events: StructuredAgentSessionEventSink | undefined
-  const store = await AgentSessionRecordStore.open({
-    directory: join(root, 'store'),
-    hostId: 'local'
-  })
+  const store = await openTestAgentSessionRecordStore(root)
   const host = new StructuredAgentSessionHost({
     store,
     adapter: {

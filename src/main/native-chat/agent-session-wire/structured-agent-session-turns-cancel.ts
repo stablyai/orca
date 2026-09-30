@@ -10,7 +10,25 @@ import {
   structuredAgentSessionStopNoteIdentity
 } from './structured-agent-session-command-turn'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+
+/** Claude's echo accepts a send one sink write before its turn row lands, so read after the drain.
+ *  A failed drain reads working: bookkeeping never talks a Stop out of stopping. */
+export async function isMainAgentWorkingOnceFlushed(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'flushStreamedEvents'>
+): Promise<boolean> {
+  try {
+    await ctx.flushStreamedEvents()
+  } catch {
+    return true
+  }
+  return isStructuredAgentSessionMainAgentWorking(
+    ctx.journal.activeTurnId(),
+    ctx.journal.submissions(),
+    ctx.fence
+  )
+}
 
 export async function performCancel(
   ctx: AgentSessionTurnContext,
@@ -23,6 +41,8 @@ export async function performCancel(
     prompt?: { itemId: string; expectedRevision: number }
     /** Ends the provider child, for a running command the provider did not take the Stop on. */
     stopChild?: () => Promise<void>
+    /** The host already withdrew queued messages for this Stop. */
+    withdrewQueued?: boolean
   }
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
   if (input.prompt) {
@@ -71,17 +91,15 @@ export async function performCancel(
             ...(input.prompt ? { prompt: { itemId: input.prompt.itemId } } : {})
           })
     cancelled = outcome.cancelled
-    if (!cancelled && input.turnId !== undefined) {
+    if (!cancelled && input.withdrewQueued && !(await isMainAgentWorkingOnceFlushed(ctx))) {
+      // A Stop that withdrew what was queued and left nothing working ended what it was sent for,
+      // named or not. The journal judges it: providers differ on refusing a turn that has ended.
+      cancelled = true
+      note = null
+    } else if (!cancelled && input.turnId !== undefined) {
       note = { kind: 'status', text: 'The provider had already finished this turn.' }
     } else if (!cancelled && input.prompt) {
       note = null
-    } else if (!cancelled && outcome.unconfirmed) {
-      note = {
-        kind: 'status',
-        ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
-          surface: 'row'
-        })
-      }
     } else if (!cancelled) {
       // Sent only while the chat reads working, so a Stop that ended nothing must say why.
       const detail = outcome.refusal?.detail

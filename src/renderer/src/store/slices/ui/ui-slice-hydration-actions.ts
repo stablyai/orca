@@ -242,6 +242,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ui.usagePercentageDisplayChangeNoticeDismissed === true,
           // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
           usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+          codexTerminalServerIsolationNoticeSeen:
+            ui.codexTerminalServerIsolationNoticeSeen === true,
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals

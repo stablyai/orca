@@ -60,8 +60,15 @@ export function useStructuredAgentSessionWithdrawnRestore(
   return useMemo(
     () => ({
       byHost: (entries, submissions) => {
+        // A hand-off of a queued draft is never restored: the Stop that withdrew it put the draft
+        // back as a card, which carries the text.
         const withdrawn = new Set(
-          submissions.filter(dispatchWasWithdrawn).map((submission) => submission.clientMessageId)
+          submissions
+            .filter(
+              (submission) =>
+                dispatchWasWithdrawn(submission) && submission.queuedMessageId === undefined
+            )
+            .map((submission) => submission.clientMessageId)
         )
         restoreWithdrawnMessages(
           sessionId,

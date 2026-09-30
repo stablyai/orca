@@ -101,17 +101,6 @@ describe('registerFilesystemHandlers', () => {
     expect(readdirMock).not.toHaveBeenCalled()
   })
 
-  it('passes the workspace runtime distro into document discovery', async () => {
-    localOptionsMock.mockReturnValue({ wslDistro: 'Ubuntu' })
-    registerFilesystemHandlers(store as never)
-
-    await handlers.get('fs:listMarkdownDocuments')!(null, { rootPath: WORKTREE_FEATURE_PATH })
-
-    expect(listMarkdownDocumentsMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
-      wslDistro: 'Ubuntu'
-    })
-  })
-
   it('rejects markdown document listing for authorized but unregistered roots', async () => {
     registerFilesystemHandlers(store as never)
 

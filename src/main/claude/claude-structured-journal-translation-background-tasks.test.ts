@@ -9,7 +9,8 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget,
-  type StructuredAgentSessionLifecycleJournal
+  type StructuredAgentSessionLifecycleJournal,
+  type StructuredAgentSessionLinkageJournal
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
@@ -155,6 +156,10 @@ function persistedTarget(
           visit(itemId, 0, body)
         }
       },
+      // This double keeps no producer linkage, so every row reads as the session's own.
+      visitItemsWithLinkage: ((visit) => {
+        persisted.forEach((body, itemId) => visit(itemId, 0, body, {}))
+      }) satisfies StructuredAgentSessionLinkageJournal['visitItemsWithLinkage'],
       itemBody: (itemId: string) => persisted.get(itemId) ?? null,
       epoch: 'test'
     } as unknown as AgentSessionJournal

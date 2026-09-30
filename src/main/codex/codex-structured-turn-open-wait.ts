@@ -34,6 +34,8 @@ export function createCodexTurnOpenWaits(): CodexTurnOpenWaits {
           resolve()
         }
         const bound = setTimeout(endWait, withinMs)
+        // A Stop's wait must never be what keeps the process alive at quit.
+        bound.unref?.()
         waits.set(endWait, turnId)
       }),
     observe: (threadId, method, params) => {

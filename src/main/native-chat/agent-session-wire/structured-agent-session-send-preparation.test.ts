@@ -10,7 +10,8 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { CodexAppServerRequestError } from '../../codex/codex-app-server-request-error'
@@ -68,7 +69,7 @@ beforeEach(async () => {
       ordinal: dispatch.mock.calls.length
     }
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     store,
     adapter: {

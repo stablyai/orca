@@ -4,7 +4,6 @@ import {
   FLUSH_CARD_MIN_CONTENT_INSET,
   NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   LINEAGE_CHILDREN_INLINE_OFFSET,
-  LINEAGE_IMMEDIATE_PARENT_STEP,
   LINEAGE_NESTED_ROW_SURFACE_INSET,
   WORKTREE_CARD_SURFACE_MARGIN,
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
@@ -231,12 +230,6 @@ describe('worktree list indentation', () => {
   it('keeps flush card content off the sidebar edge without indentation', () => {
     expect(getFlushWorktreeCardPaddingLeft(0)).toBe('2px')
     expect(getFlushWorktreeCardPaddingLeft(0, true)).toBe('2px')
-  })
-
-  it('derives the lineage parent-child step from the pre-refactor grouped-card anchor', () => {
-    expect(LINEAGE_CHILDREN_INLINE_OFFSET).toBe(
-      LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
-    )
   })
 
   it('keeps experimental lineage nested rows from accumulating global depth', () => {

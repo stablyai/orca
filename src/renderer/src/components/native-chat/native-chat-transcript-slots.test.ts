@@ -15,7 +15,8 @@ import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import {
   buildNativeChatTranscriptSlots,
-  nativeChatSlotIndexOf
+  nativeChatSlotIndexOf,
+  type NativeChatMessageSlot
 } from './native-chat-transcript-slots'
 
 const NO_STATUSES = { active: null, completedByTurn: {} }
@@ -33,7 +34,7 @@ function text(id: string, body: string, role: NativeChatMessage['role'] = 'assis
 function build(
   messages: NativeChatMessage[],
   overrides: Partial<Parameters<typeof buildNativeChatTranscriptSlots>[0]> = {}
-) {
+): NativeChatMessageSlot[] {
   let turn: string | undefined
   const turnKeys = messages.map((message) => {
     if (message.role === 'user') {
@@ -52,7 +53,7 @@ function build(
     isWorking: false,
     lifecycleWorking: false,
     ...overrides
-  })
+  }).filter((slot): slot is NativeChatMessageSlot => slot.kind === 'message')
 }
 
 function toolRun(id: string): NativeChatMessage {
@@ -540,74 +541,5 @@ describe('turn-owned grouping', () => {
       ['t1', true],
       ['C', false]
     ])
-  })
-})
-
-describe("a subagent's rows speak as that subagent", () => {
-  const settled: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 5 }
-  const roster: NativeChatMessage = {
-    id: 'roster',
-    role: 'system',
-    blocks: [
-      {
-        type: 'subagent-group',
-        groupId: 'group-1',
-        agents: [{ id: 'task-1', label: 'explore the lane', state: 'working' }]
-      }
-    ],
-    timestamp: 1,
-    source: 'transcript'
-  }
-  const child = (id: string, body: string, agentId = 'task-1'): NativeChatMessage => ({
-    ...text(id, body),
-    agentId
-  })
-  const messages = [
-    text('ask', 'summarise the repo', 'user'),
-    text('answer', 'Delegated; the summary follows.'),
-    roster,
-    child('child-said', 'The PR is CLEAN.')
-  ]
-
-  it("keeps the parent's answer on a settled turn and folds the subagent's later words", () => {
-    const slots = build(messages, {
-      turnStatuses: { active: null, completedByTurn: { ask: settled } },
-      subagentLabels: new Map([['task-1', 'explore the lane']])
-    })
-    const drawn = slots.filter((slot) => !slot.folded).map((slot) => slot.message.id)
-    expect(drawn).toContain('answer')
-    expect(drawn).not.toContain('child-said')
-  })
-
-  it("names the subagent on its row from the roster, and only on a subagent's row", () => {
-    const slots = build(messages, {
-      subagentLabels: new Map([['task-1', 'explore the lane']])
-    })
-    const labelOf = (id: string) => slots.find((slot) => slot.message.id === id)?.subagentLabel
-    expect(labelOf('child-said')).toBe('explore the lane')
-    expect(labelOf('answer')).toBeUndefined()
-  })
-
-  it("keeps the parent's run live while its subagent works below it", () => {
-    const trailing = (rows: NativeChatMessage[]) =>
-      build(rows)
-        .filter((slot) => slot.trailingRun)
-        .map((slot) => slot.message.id)
-    const childRun: NativeChatMessage = { ...toolRun('child-run'), agentId: 'task-1' }
-    // The parent is still inside its spawn call; the child's work does not move it past.
-    expect(trailing([text('ask', 'go', 'user'), toolRun('spawn'), childRun])).toEqual([
-      'spawn',
-      'child-run'
-    ])
-    // The parent answering does move it past its own run, whatever the child does.
-    expect(
-      trailing([text('ask', 'go', 'user'), toolRun('spawn'), text('said', 'Done.'), childRun])
-    ).toEqual(['said', 'child-run'])
-  })
-
-  it('reserves room for the caption on a subagent row', () => {
-    const [parentSlot] = build([text('mine', 'same words')])
-    const [childSlot] = build([child('theirs', 'same words')])
-    expect(childSlot!.estimatedHeight).toBeGreaterThan(parentSlot!.estimatedHeight)
   })
 })

@@ -8,7 +8,8 @@ import {
   readPersistedLease,
   writeOlderBuildLease
 } from '../../runtime/agent-session-older-build-lease.test-fixture'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { supervisedPosixLaunch } from '../../codex/codex-app-server-posix-supervisor'
 import {
   resolveStructuredSessionRecovery,
@@ -32,10 +33,7 @@ async function newStoreDirectory(): Promise<string> {
 }
 
 async function openStore(directory?: string): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({
-    directory: directory ?? (await newStoreDirectory()),
-    hostId: 'local'
-  })
+  return openTestAgentSessionRecordStore(directory ?? (await newStoreDirectory()))
 }
 
 async function reserve(store: AgentSessionRecordStore) {

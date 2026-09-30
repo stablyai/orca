@@ -198,11 +198,6 @@ describe('resolveGroupAddress', () => {
         expect(resolveGroupAddress('@all', 'sender', terminals, noStatus)).toEqual(['other'])
       })
     })
-
-    it('returns no recipients for an unknown group', () => {
-      const terminals = [makeSummary('sender'), makeSummary('target', { agentIdentity: 'claude' })]
-      expect(resolveGroupAddress('@nonsense', 'sender', terminals, noStatus)).toEqual([])
-    })
   })
 
   describe('unknown groups', () => {

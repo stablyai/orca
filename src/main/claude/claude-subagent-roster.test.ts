@@ -40,12 +40,13 @@ function harness(groupKey: string | null = TURN_1) {
     publish: vi.fn()
   }
   let clock = 1_000
+  let pinnedClock: number | null = null
   let key = groupKey
   const roster = new ClaudeSubagentRoster({
     sink,
     currentGroupKey: () => key,
     currentTurnScope: () => AGENT_JOURNAL_THREAD_SCOPE,
-    now: () => (clock += 1)
+    now: () => pinnedClock ?? (clock += 1)
   })
   const roles = (): NativeChatSubagentEntry[] => agentsOf(items.at(-1)?.body)
   /** The last row written for one group, so a test can read a row that is no
@@ -60,6 +61,9 @@ function harness(groupKey: string | null = TURN_1) {
     rolesIn,
     setGroupKey: (next: string | null) => {
       key = next
+    },
+    pinClock: (at: number) => {
+      pinnedClock = at
     }
   }
 }
@@ -523,14 +527,21 @@ describe('ClaudeSubagentRoster — authoritative outcomes and retained budgets',
 
 describe('ClaudeSubagentRoster — resumed invocation', () => {
   it('reopens one canonical child on a new announcement without replaying old results', () => {
-    const { roster, roles } = harness()
+    const { roster, roles, pinClock } = harness()
     roster.observeSystemFrame(started({ task_id: 'task-1', tool_use_id: 'first' }))
     roster.observeToolResult('first', false)
+    // Resumed long after its first run: the new run starts its own clock.
+    pinClock(900_000)
     roster.observeSystemFrame(
       started({ task_id: 'task-1', tool_use_id: 'resumed', is_backgrounded: true })
     )
-    expect(roles()).toEqual([expect.objectContaining({ id: 'task-1', state: 'working' })])
+    expect(roles()).toEqual([
+      expect.objectContaining({ id: 'task-1', state: 'working', startedAt: 900_000 })
+    ])
     expect(roles()[0].settledAt).toBeUndefined()
+    expect(roster.linkage.settledLinkageFor('resumed')).toMatchObject({
+      linkage: { agentId: 'task-1', attempt: 2 }
+    })
     roster.observeSystemFrame(
       system('task_notification', { task_id: 'task-1', tool_use_id: 'first', status: 'completed' })
     )

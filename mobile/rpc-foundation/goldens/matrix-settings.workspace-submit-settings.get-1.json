@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "settings.workspace-submit",
   "family": "settings.workspace-submit",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "c2eed306311a844cd6f2f84b6513c0a1182f86a5e3cace434385b8287c80d7c5",
-  "scenarioSha256": "a89bdf93df71a958810aba72c80e42f663644781a29e934898e2ddf86c5dd5d5",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "003c16e56b1f": {
       "name": "settings.get#1",

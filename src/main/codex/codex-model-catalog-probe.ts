@@ -1,4 +1,3 @@
-import { getSpawnArgsForWindows } from '../win32-utils'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { runCodexAppServerSession } from './codex-app-server-session'
 import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
@@ -44,14 +43,11 @@ export function createCodexModelCatalogProbe(
 ): AgentModelCatalogProbe {
   return async (accountHomePath: string): Promise<AgentModelCatalogSuccess> => {
     const { command, environment } = await resolveCodexStructuredInvocation(deps)
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, [
-      ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
-    ])
     const run = deps.runSession ?? runCodexAppServerSession
     const listing = await run(
       {
-        command: spawnCmd,
-        args: spawnArgs,
+        command,
+        args: [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS],
         cliPath: command,
         env: { ...definedEnv(environment), CODEX_HOME: accountHomePath },
         timeoutMs: CODEX_MODEL_CATALOG_PROBE_TIMEOUT_MS

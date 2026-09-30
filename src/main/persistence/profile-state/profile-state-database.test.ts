@@ -330,10 +330,3 @@ describe('profile state database', () => {
     }
   })
 })
-
-describe('profile state database does not reuse orchestration state', () => {
-  it('uses a profile-local filename', () => {
-    const directory = createDirectory()
-    expect(profileStateDatabaseFile(directory)).not.toBe(join(directory, 'orchestration.db'))
-  })
-})

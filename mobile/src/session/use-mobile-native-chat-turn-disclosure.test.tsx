@@ -6,6 +6,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalTurnScope
 } from '../../../src/shared/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
@@ -331,6 +332,48 @@ describe('useMobileNativeChatTurnDisclosure', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it("a queued card's Steer joins the running turn: no bar of its own, and live with it", () => {
+      const t1 = { kind: 'turn', turnItemId: 't1' } as const
+      const thread = { kind: 'thread' } as const
+      // Steer hands the draft over under a fresh submission id while A's turn runs, so the host
+      // scopes the row to that turn; the submission names the card it came from.
+      const steerId = agentJournalSubmissionKey('hand-off-1')
+      const steered = [userMessage('A'), tool, userMessage(steerId)]
+      render({
+        messages: steered,
+        enabled: true,
+        workingStartedAt: 5_000,
+        turnJournal: {
+          items: [
+            user('A', 1, thread),
+            turn('t1', 2, 'running', 'A', thread),
+            toolItem(3, t1),
+            user(steerId, 4, t1)
+          ],
+          submissions: [
+            {
+              clientMessageId: 'hand-off-1',
+              queuedMessageId: 'draft-1',
+              fence: 1,
+              payloadFingerprint: 'fp',
+              dispatchState: 'pending',
+              providerItemId: null,
+              reason: null,
+              submittedAt: 4,
+              resolvedAt: null
+            }
+          ]
+        }
+      })
+      const disclosure = renderer!.root.findByType('result').props.disclosure
+      const [rowA, , rowSteer] = steered.map((message, index) =>
+        disclosure.resolveRow(index, message)
+      )
+      expect(rowA.turnStatus).not.toBeNull()
+      expect(rowSteer.turnStatus).toBeNull()
+      expect(rowSteer.activeTurnIsWorking).toBe(true)
     })
 
     it('on a host that states no turn, the bar and liveness follow the running record by journal order', () => {

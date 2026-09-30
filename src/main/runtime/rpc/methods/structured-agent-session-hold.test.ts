@@ -19,7 +19,8 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -75,7 +76,7 @@ beforeEach(async () => {
       observedAt: NOW
     }
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     store,
     adapter: {

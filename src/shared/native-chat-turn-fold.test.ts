@@ -57,11 +57,6 @@ describe('nativeChatTurnAnswerRows', () => {
     expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(2)
   })
 
-  it("keeps the session's own answer when a subagent's failure comes after it", () => {
-    const rows = [row({ role: 'user' }), row(), row({ ...FAILURE, agentId: 'sub-1' })]
-    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(1)
-  })
-
   it('reports no answer for a turn that only ran tools', () => {
     const rows = [row({ role: 'user' }), row({ rendersProse: false })]
     expect(nativeChatTurnAnswerRows(rows).has('turn-1')).toBe(false)
@@ -214,35 +209,5 @@ describe('nativeChatTurnFold', () => {
     })
     expect([...foldedRows]).toEqual([1])
     expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(3)
-  })
-})
-
-describe("a subagent's words are never the turn's answer", () => {
-  // The reported shape: the parent replies, then a subagent it launched keeps
-  // narrating into the same journal after the parent's last word.
-  const rows: NativeChatTurnFoldRow[] = [
-    row({ role: 'user' }),
-    row(),
-    row({ agentId: 'task-1' }),
-    row({ agentId: 'task-1', rendersProse: false })
-  ]
-
-  it("names the session's own last prose, not a subagent's later prose", () => {
-    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(1)
-  })
-
-  it("folds the subagent's prose behind a settled turn and keeps the parent's answer", () => {
-    const { foldedRows } = nativeChatTurnFold({
-      rows,
-      settledTurnKeys: SETTLED,
-      expandedTurnKeys: NONE
-    })
-    expect(foldedRows.has(1)).toBe(false)
-    expect(foldedRows.has(2)).toBe(true)
-  })
-
-  it('reports no answer for a turn in which only subagents spoke', () => {
-    const onlyChildren = [row({ role: 'user' }), row({ agentId: 'task-1' })]
-    expect(nativeChatTurnAnswerRows(onlyChildren).has('turn-1')).toBe(false)
   })
 })

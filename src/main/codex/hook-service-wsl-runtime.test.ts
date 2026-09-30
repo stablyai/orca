@@ -31,7 +31,15 @@ type HooksConfig = {
 
 let tempRoots: string[] = []
 
+beforeEach(() => {
+  // Why: the trust-grant ledger lives in Orca's userData, which otherwise resolves to the live one.
+  const userData = mkdtempSync(join(tmpdir(), 'orca-codex-wsl-hooks-userdata-'))
+  tempRoots.push(userData)
+  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+})
+
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true })
   }

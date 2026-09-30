@@ -9,7 +9,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CODEX_SPAWN_TOKEN_ENV } from '../codex/codex-structured-owner-identity'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 import { createStructuredAgentSessionOwnerProbe } from './structured-agent-session-owner-probe'
 import {
@@ -89,8 +90,7 @@ afterEach(async () => {
 })
 
 function openStore(): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({
-    directory: join(stateDirectory, 'agent-sessions'),
+  return openTestAgentSessionRecordStore(stateDirectory, {
     hostId: HOST_ID
   })
 }

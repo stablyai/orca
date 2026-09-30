@@ -1151,6 +1151,7 @@
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}."
         },
         "BrowserUsePane": {
+          "de9b2f32f3": "Enable",
           "e44c5d681e": "From"
         },
         "CliSection": {
@@ -1588,14 +1589,12 @@
             "042c551bc5": "config",
             "0d1c334987": "lid",
             "0d752916f8": "hooks",
-            "agent-trust-trust": "trust",
-            "agent-trust-folder": "folder",
-            "agent-trust-worktree": "worktree",
             "13b20636a6": "waiting",
             "167daeb5e9": "command",
             "2afd3b5858": "enable",
             "2e188c771c": "hide",
             "32836788b0": "generated title",
+            "34337ed5c7": "isolate",
             "48f84d10f1": "running",
             "52115d0d7c": "auto",
             "5784ae8c43": "rename",
@@ -1605,16 +1604,22 @@
             "66b6b82eb4": "awake",
             "6956646a1e": "title",
             "6984d4291a": "status",
+            "7e15b89f6e": "server",
             "845ad9128a": "power",
             "848dcae8d3": "generated",
             "8599603496": "done",
             "87fffe6c20": "show",
             "8a17fd6026": "stable",
             "966890236d": "name",
+            "9a84e65118": "agents overview",
+            "9f3becc4e8": "shared",
             "a6d594c17d": "install",
             "a79d266f71": "session",
             "afbf35be68": "stable session",
             "affbf130f6": "working",
+            "agent-trust-folder": "folder",
+            "agent-trust-trust": "trust",
+            "agent-trust-worktree": "worktree",
             "be59907510": "override",
             "be7ea3553b": "tab",
             "c1317fe641": "restore",
@@ -1627,6 +1632,7 @@
             "ef804b7337": "Agent Location",
             "f2932bf22b": "detected",
             "f412abbba5": "claude",
+            "ff457e1e7b": "daemon",
             "ff8de8a2ad": "display"
           }
         },
@@ -2606,10 +2612,6 @@
     },
     "hooks": {
       "useComposerState": {
-        "attachSkipMissing": "No longer at its original path.",
-        "attachSkipPermissionDenied": "Permission denied.",
-        "attachSkipSymlink": "Symbolic links cannot be attached.",
-        "attachSkipUnsupported": "Unsupported file type.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
       },
@@ -2630,6 +2632,12 @@
             }
           }
         }
+      },
+      "dropSkipReason": {
+        "missing": "No longer at its original path.",
+        "permissionDenied": "Permission denied.",
+        "symlink": "Symbolic links cannot be attached.",
+        "unsupported": "Unsupported file type."
       },
       "terminal": {
         "shortcut": {
@@ -2736,8 +2744,7 @@
         "workingFor": "Working for {{value0}}"
       },
       "subagents": {
-        "unnamed": "Subagent",
-        "writtenBy": "Written by subagent {{value0}}"
+        "unnamed": "Subagent"
       },
       "tool": {
         "countN": "{{value0}} tool calls",

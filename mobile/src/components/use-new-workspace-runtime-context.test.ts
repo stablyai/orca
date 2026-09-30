@@ -109,12 +109,4 @@ describe('useNewWorkspaceRuntimeContext', () => {
     )
     expect((await answer({ settings: SETTINGS }, null)).trustedOrcaHooks).toEqual({})
   })
-
-  it('publishes the settings and trust a host does send', async () => {
-    expect(await answer({ settings: SETTINGS }, UI_WITH_TRUST)).toEqual({
-      runtimeSettings: SETTINGS,
-      trustedOrcaHooks: TRUSTED_HOOKS,
-      availableProviders: ['github']
-    })
-  })
 })

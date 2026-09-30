@@ -1,6 +1,6 @@
 import type { BridgeRpcClientDiagnostic } from '../../mobile-web-shell/bridge/bridge-rpc-client'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
-import { firstDifference } from '../rpc-recording/golden-recording'
+import { firstDifference } from '../rpc-recording/golden-difference'
 import { canonicalJson, OBSERVATION_FIELDS } from '../rpc-recording/golden-value-pool'
 import type { Observation, Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
 import { captureValue, type RecordedValue } from '../rpc-recording/recording-values'
@@ -10,7 +10,7 @@ import type { ParamsMismatchEvidence } from './divergence-classes'
  * The facts a divergence is named from, each read off the run rather than off its message.
  *
  * Outside the recorder's directory for the reason `divergence-classes.ts` gives: none of this can
- * change what a recording records, so none of it belongs in the digest that says what can.
+ * change what a recording records.
  */
 
 /** Frames the shell posted that the page's own reader drops. Read back through that same reader. */

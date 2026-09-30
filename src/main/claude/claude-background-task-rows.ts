@@ -43,6 +43,10 @@ export type ClaudeBackgroundTaskRowsDeps = {
    *  reached the transcript is a nested child, and a top-level row minted for it
    *  would claim an invocation the user never saw. */
   isForwardedParentTool: (toolUseId: string) => boolean
+  /** Whether an earlier provider run of this session rostered this task as a
+   *  subagent. Its announcement is not repeated, so this is the only route from
+   *  a later frame for it — Claude's restart notice above all — to the roster. */
+  rosteredByEarlierRun?: (taskId: string) => boolean
   /** Opens a turn for the frame being journaled. A typed row is provider
    *  output, so writing one must reopen a turn the provider resumed itself —
    *  otherwise the session renders the row while reporting idle. */
@@ -135,6 +139,10 @@ export class ClaudeBackgroundTaskRows {
       })
     }
     if (this.ledgers.foreign.has(id)) {
+      return true
+    }
+    if (!this.rows.has(id) && this.deps.rosteredByEarlierRun?.(id) === true) {
+      this.ledgers.rememberForeign(id, 'roster')
       return true
     }
     if (message.subtype === 'task_notification') {

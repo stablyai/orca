@@ -154,20 +154,6 @@ describe('folder repo upgrade poll lifetime', () => {
     expect(fake.invalidate).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps active upgrade preparation, cache invalidation and notifications', async () => {
-    const { store, window } = begin()
-    await vi.advanceTimersByTimeAsync(25)
-    expect(store.updateRepo).toHaveBeenCalledWith(root, {
-      kind: 'git',
-      folderUpgradeGitRootPath: root,
-      externalWorktreeVisibility: 'hide'
-    })
-    expect(fake.prepare).toHaveBeenCalledTimes(1)
-    expect(fake.invalidate).toHaveBeenCalledTimes(1)
-    expect(fake.reposChanged).toHaveBeenCalledWith(window)
-    expect(fake.worktreesChanged).toHaveBeenCalledWith(window, root)
-  })
-
   it('retries a missing marker and dedupes stable rejected markers', async () => {
     fake.stat.mockRejectedValueOnce(new Error('ENOENT'))
     fake.git.mockReturnValue(false)

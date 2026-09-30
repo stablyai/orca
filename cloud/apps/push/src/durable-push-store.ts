@@ -2,13 +2,14 @@ import { isDismissedAlert, reconcileQueuedDismissal } from './push-queued-dismis
 import { parsePushDeliveryPayload } from './push-delivery-payload.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { PUSH_LIMITS, type PushNotification } from '@orca-cloud/push-contract'
+import { WORKER_DRAINS } from './push-worker-concurrency.js'
 import type { PushDatabase, SqlRow } from './push-database.js'
 
 const RETENTION_MS = 24 * 60 * 60_000
 // accept() caps expires_at at due_at + TTL, so older due_at is expired: scans skip an unpruned backlog.
 const TTL_MS = PUSH_LIMITS.notificationTtlSeconds * 1000
-// Covers one claimer per worker drain skipping a device another drain holds.
-const CLAIM_CANDIDATE_ATTEMPTS = 4
+// One winner plus every other drain holding a device head, so a full set of peers cannot exhaust it.
+const CLAIM_CANDIDATE_ATTEMPTS = WORKER_DRAINS
 export const PRUNE_BATCH_ROWS = 2_000
 export const PRUNE_MAX_BATCHES = 50
 export const DELIVERY_LEASE_MS = 30_000

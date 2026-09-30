@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from '../agent-session-journal/journal-payload-bounds'
-import { CODEX_APP_SERVER_NOTIFICATION_METHODS } from '../../codex/codex-app-server-notification-schema'
-import { CLAUDE_STREAM_JSON_FRAME_KINDS } from './claude-stream-json-frame-schema'
 import {
   classifyProviderFrame,
   isDeltaProviderFrameKind,
@@ -10,18 +8,6 @@ import {
 import { unhandledProviderFrameJournalItem } from './unhandled-provider-frame'
 
 describe('provider frame classification catalog', () => {
-  it('classifies every pinned Codex app-server notification method', () => {
-    expect(Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.codex)).toEqual([
-      ...CODEX_APP_SERVER_NOTIFICATION_METHODS
-    ])
-  })
-
-  it('classifies every pinned Claude stream-json frame kind', () => {
-    expect(Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.claude)).toEqual([
-      ...CLAUDE_STREAM_JSON_FRAME_KINDS
-    ])
-  })
-
   it('classifies every pinned delta kind as stream-into-item', () => {
     const deltaKinds = [
       ...Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.codex),

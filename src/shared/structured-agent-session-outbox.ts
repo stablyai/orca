@@ -12,6 +12,7 @@ import {
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import { parseStructuredAgentSessionOutboxQueueFields } from './structured-agent-session-outbox-delivery'
 
 /** `rejected`: the host settled the send as not delivered. The drain never sends it again on its
  *  own and nothing queues behind it; only the user's Retry does. */
@@ -31,6 +32,13 @@ export type StructuredAgentSessionOutboxEntry = {
   lastAttemptAt: number | null
   retryAfterUnknownSubmittedAt: number | null
   source?: 'launch'
+  /** A Stop landed after this queue send went out: only the user's Retry sends it again, never the
+   *  drain, the unconfirmed probe or an owner change, which would start a turn the user stopped. */
+  outlivedStop?: true
+  /** Whether the first attempt asked the host to hold it as a draft (`null`: plain); every replay
+   *  of this id asks the same (structured-agent-session-outbox-delivery). On a request's own copy,
+   *  what that request carries. */
+  sentDelivery?: 'queue-if-active' | null
   /** Why the last attempt did not go through. Lives on the message so it goes when the message
    *  is sent again or delivered, instead of outliving it as a separate error. */
   lastFailure?: StructuredAgentSessionAttemptFailure
@@ -255,8 +263,9 @@ export function admitStructuredAgentSessionOutboxEntry(
     if (entry.state === 'unconfirmed' || entry.clientMessageId === blockedClientMessageId) {
       return { state: 'blocked', entry }
     }
+    // A queue send a Stop outlived goes again only on the user's Retry.
     if (entry.state === 'queued') {
-      return { state: 'dispatch', entry }
+      return { state: entry.outlivedStop === true ? 'blocked' : 'dispatch', entry }
     }
   }
   return { state: 'idle', entry: null }
@@ -300,6 +309,7 @@ export function parseStructuredAgentSessionOutboxEntry(
         ? entry.retryAfterUnknownSubmittedAt
         : null,
     ...(entry.source === 'launch' ? { source: 'launch' as const } : {}),
+    ...parseStructuredAgentSessionOutboxQueueFields(entry),
     ...(lastFailure ? { lastFailure } : {})
   }
 }
@@ -307,6 +317,7 @@ export function parseStructuredAgentSessionOutboxEntry(
 export type StructuredAgentSessionSendMutation = {
   envelope: AgentSessionMutationEnvelope
   body: AgentJournalMessageItem
+  delivery?: 'queue-if-active'
 }
 
 /** The `agentSession.send` arguments an entry stands for. Typed rather than wire-shaped so a host
@@ -315,7 +326,9 @@ export function structuredAgentSessionSendMutation(
   entry: StructuredAgentSessionOutboxEntry,
   expectedRuntimeFence: number
 ): StructuredAgentSessionSendMutation {
-  const fields = { body: entry.body }
+  // `delivery` joins the OPERATION fingerprint exactly as the host digests it; never the body's.
+  const delivery = entry.sentDelivery ?? undefined
+  const fields = { body: entry.body, ...(delivery ? { delivery } : {}) }
   return {
     envelope: {
       sessionId: entry.sessionId,

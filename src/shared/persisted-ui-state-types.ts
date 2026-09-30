@@ -170,6 +170,8 @@ export type PersistedUIState = {
   usagePercentageDisplayChangeNoticeDismissed?: boolean
   /** User-hidden empty-state usage CTA; permanently hides the "Connect AI accounts" prompt even if providers are later disconnected. */
   usageEmptyStateDismissed?: boolean
+  /** One-shot toast announcing per-terminal Codex servers; set when shown, so absent means not yet seen. */
+  codexTerminalServerIsolationNoticeSeen?: boolean
   /** URL for new browser tabs; null = blank tab. */
   browserDefaultUrl?: string | null
   browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null

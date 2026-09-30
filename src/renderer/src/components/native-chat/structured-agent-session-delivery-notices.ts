@@ -72,7 +72,10 @@ function deliveryNoticeText(
   recorded: AgentJournalSubmission | undefined,
   startFailures: readonly AgentSessionFailureFact[]
 ): string {
-  if (entry.state === 'unconfirmed') {
+  // A send attempted before a Stop and then interrupted may already be with the host.
+  const attemptedAcrossStop =
+    entry.outlivedStop === true && entry.lastAttemptAt !== null && !entry.lastFailure
+  if (entry.state === 'unconfirmed' || attemptedAcrossStop) {
     return translate(
       'auto.components.native.chat.NativeChatStructuredSession.1f772bb5d0',
       'Message delivery is unconfirmed.'

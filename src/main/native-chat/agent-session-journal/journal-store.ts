@@ -49,6 +49,7 @@ import type {
   AgentSessionJournalOptions,
   JournalAppendResult,
   JournalItemAppendOptions,
+  JournalItemLinkageVisitor,
   JournalLifecycleBatchInput,
   JournalReadSince,
   JournalSubmissionConsume,
@@ -217,6 +218,14 @@ export class AgentSessionJournal {
   /** One reduced item's body by its journal key, for a writer revising a row it can name. */
   itemBody = (itemId: string): AgentJournalItemBody | null =>
     this.state.items.get(itemId)?.body ?? null
+
+  /** Visits reduced items with the producer that wrote each, for a producer re-deriving what an
+   *  earlier run of this session left. */
+  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void => {
+    for (const item of this.state.items.values()) {
+      visit(item.itemId, item.sequence, item.body, item)
+    }
+  }
 
   /** The turn this journal has published as running — the same read a client's snapshot gives,
    *  without materialising one. */

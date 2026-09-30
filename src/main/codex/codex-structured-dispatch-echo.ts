@@ -43,7 +43,8 @@ export type CodexDispatchEchoes = {
   answeredUnopenedTurn: (threadId: string, openTurnIds: ReadonlySet<string>) => string | null
   /**
    * Records a turn's end and returns the sends bound to it that it settles: all of them unless it
-   * completed, which echoes its pending input first, so one it never echoed waits for recovery.
+   * completed, which echoes its pending input first, so one it never echoed waits for recovery. An
+   * interrupt withdraws an un-echoed send, steered or the turn's own input: neither reached history.
    */
   endTurn: (threadId: string, turnId: string, end: CodexTurnEnd) => string[]
   /** Submission origin for this exact send, retained until its echo settles it. */

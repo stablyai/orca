@@ -224,13 +224,6 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     expect(server.getStatusSnapshot()).toEqual([])
   })
 
-  it('drops the row when the host stops holding the session', () => {
-    const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary(), SUBJECT)
-    server.dropStructuredStatus(SUBJECT)
-    expect(server.getStatusSnapshot()).toEqual([])
-  })
-
   // The resume-identity remnant a dismissed PTY pane keeps exists so the agent can be resumed in
   // that pane. A structured session has no pane, and the record store owns its resume identity —
   // so a remnant here would be an unclearable row that every null-status publish re-minted.
@@ -266,27 +259,6 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     expect(server.getStatusSnapshot()).toEqual([])
     expect(cleared).toEqual([])
     expect(dropped).toEqual([STRUCTURED_PANE])
-  })
-
-  it('schedules no persist for a structured row, while a hook row still does', () => {
-    const server = new AgentHookServer()
-    const persists: number[] = []
-    const scheduled = server as unknown as { scheduleStatusPersist: () => void }
-    const original = scheduled.scheduleStatusPersist.bind(server)
-    scheduled.scheduleStatusPersist = () => {
-      persists.push(1)
-      original()
-    }
-
-    server.ingestStructuredStatus(summary(), SUBJECT)
-    expect(persists).toHaveLength(0)
-
-    server.ingestTerminalStatus({
-      paneKey: PANE,
-      connectionId: null,
-      payload: { state: 'working', prompt: 'watch the build', agentType: 'claude' }
-    })
-    expect(persists).toHaveLength(1)
   })
 
   it('leaves a hook-reported pane alone', () => {

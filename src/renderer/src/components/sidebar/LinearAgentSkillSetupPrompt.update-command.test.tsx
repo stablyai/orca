@@ -3,7 +3,7 @@
 import { join } from 'node:path'
 import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   },
   useInstalledAgentSkillNames: vi.fn(),
   getCliStatus: vi.fn(),
+  getWslCliStatus: vi.fn(),
   panelProps: [] as Record<string, unknown>[]
 }))
 
@@ -29,17 +30,8 @@ vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
   useInstalledAgentSkillNames: mocks.useInstalledAgentSkillNames
 }))
 
-vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE: 'CLI registration notice',
-  ensureOrcaCliAvailableForAgentSkillTerminal: vi.fn(async () => null),
-  isOrcaCliAvailableOnPath: (status: CliInstallStatus | null | undefined) =>
-    status?.state === 'installed' && status.pathConfigured
-}))
-
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (command: string) => command,
-  ensureWslCliAvailableForAgentSkillTerminal: vi.fn(async () => null),
-  getWslCliDistroRequest: () => undefined
+  buildSkillCommandForRuntime: (command: string) => command
 }))
 
 vi.mock('../settings/AgentSkillSetupPanel', () => ({
@@ -49,25 +41,22 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
   }
 }))
 
-let root: Root | null = null
-let container: HTMLDivElement | null = null
-
-function cliStatus(): CliInstallStatus {
-  return {
-    platform: 'darwin',
-    commandName: 'orca',
-    commandPath: null,
-    pathDirectory: null,
-    pathConfigured: false,
-    launcherPath: '/Applications/Orca.app/Contents/MacOS/Orca',
-    installMethod: null,
-    supported: true,
-    state: 'not_installed',
-    currentTarget: null,
-    unsupportedReason: null,
-    detail: null
+// Why: host terminals need no CLI registration, so an installed skill only still
+// shows the prompt (and its update command) on a WSL runtime with the CLI missing.
+const projectWslRuntime: ProjectExecutionRuntimeResolution = {
+  status: 'resolved',
+  runtime: {
+    kind: 'wsl',
+    hostPlatform: 'wsl',
+    projectId: 'repo-1',
+    distro: 'Ubuntu',
+    reason: 'project-override',
+    cacheKey: 'repo-1:wsl:Ubuntu'
   }
 }
+
+let root: Root | null = null
+let container: HTMLDivElement | null = null
 
 function discoveredSkill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   return {
@@ -103,7 +92,14 @@ async function renderPrompt(
   root = createRoot(container)
   await act(async () => {
     root?.render(
-      <LinearAgentSkillSetupPrompt linked={true} remote={false} surface="modal" {...props} />
+      <LinearAgentSkillSetupPrompt
+        linked={true}
+        remote={false}
+        surface="modal"
+        currentPlatform="win32"
+        projectRuntime={projectWslRuntime}
+        {...props}
+      />
     )
   })
   await import('./LinearAgentSkillSetupDialog')
@@ -120,11 +116,13 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
     mocks.useInstalledAgentSkillNames.mockReset()
     mocks.useInstalledAgentSkillNames.mockReturnValue(mocks.skillState)
     mocks.getCliStatus.mockReset()
-    mocks.getCliStatus.mockResolvedValue(cliStatus())
+    mocks.getWslCliStatus.mockReset()
     mocks.panelProps.length = 0
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { cli: { getInstallStatus: mocks.getCliStatus } }
+      value: {
+        cli: { getInstallStatus: mocks.getCliStatus, getWslInstallStatus: mocks.getWslCliStatus }
+      }
     })
     Object.defineProperty(window, 'localStorage', {
       configurable: true,
@@ -150,33 +148,30 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
     _linearAgentSkillSetupPromptInternalsForTests.resetSessionReminders()
   })
 
-  it('uses the canonical update command when the canonical Linear skill is installed', async () => {
+  it('does not request setup when the canonical Linear skill is installed', async () => {
     mocks.skillState.skills = [discoveredSkill({ name: 'orca-linear' })]
 
     await renderPrompt()
 
-    expect(mocks.panelProps.at(-1)).toEqual(
-      expect.objectContaining({ installedCommand: 'npx skills update orca-linear --global' })
-    )
+    expect(mocks.panelProps).toHaveLength(0)
+    expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
   })
 
-  it('uses the legacy update command when only the legacy Linear skill is installed', async () => {
+  it('does not request setup when the legacy Linear skill is installed', async () => {
     mocks.skillState.skills = [legacyLinearSkillPath()]
 
     await renderPrompt()
 
-    expect(mocks.panelProps.at(-1)).toEqual(
-      expect.objectContaining({ installedCommand: 'npx skills update linear-tickets --global' })
-    )
+    expect(mocks.panelProps).toHaveLength(0)
+    expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
   })
 
-  it('prefers the canonical update command when both Linear skill names are installed', async () => {
+  it('does not request setup when both Linear skill names are installed', async () => {
     mocks.skillState.skills = [discoveredSkill({ name: 'orca-linear' }), legacyLinearSkillPath()]
 
     await renderPrompt()
 
-    expect(mocks.panelProps.at(-1)).toEqual(
-      expect.objectContaining({ installedCommand: 'npx skills update orca-linear --global' })
-    )
+    expect(mocks.panelProps).toHaveLength(0)
+    expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
   })
 })

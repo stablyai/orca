@@ -393,6 +393,36 @@ describe('handleTerminalFileDrop', () => {
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
   })
 
+  it('pastes a spaced image from a Windows-path project forced to WSL with POSIX escaping', async () => {
+    mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
+    mocks.storeState.projects = [
+      { id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
+    ]
+    mocks.storeState.repos = [
+      { id: 'repo1', connectionId: null, path: 'C:\\Users\\alice\\repo', executionHostId: 'local' }
+    ]
+    mocks.storeState.worktreesByRepo = {
+      repo1: [{ id: 'wt-1', repoId: 'repo1', path: 'C:\\Users\\alice\\repo' }]
+    }
+    const sendInput = vi.fn(() => true)
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+
+    await handleTerminalFileDrop({
+      manager: { getActivePane: () => pane, getPanes: () => [pane] } as never,
+      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      data: { paths: ['C:\\Users\\alice\\Desktop\\Screenshot 1.png'], target: 'terminal' }
+    })
+
+    // Why: the agent runs in Linux, so a Windows-style quote would reach it as a literal.
+    expect(sendInput).toHaveBeenCalledWith(
+      wrapTerminalBracketedPasteText('/mnt/c/Users/alice/Desktop/Screenshot\\ 1.png'),
+      'driving'
+    )
+  })
+
   it('uses acknowledged PTY writes for native local drops when available', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
     mocks.storeState.repos = [
@@ -617,6 +647,46 @@ describe('handleTerminalFileDrop', () => {
     expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ', 'driving')
     expect(focus).toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
+  })
+
+  it('pastes a spaced image dropped on a Windows SSH host with Windows quoting', async () => {
+    mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
+    mocks.storeState.repos = [
+      {
+        id: 'repo1',
+        connectionId: 'ssh-win',
+        path: 'C:\\Remote Repo',
+        executionHostId: 'ssh:ssh-win'
+      }
+    ]
+    mocks.storeState.worktreesByRepo = {
+      repo1: [{ id: 'wt-1', repoId: 'repo1', path: 'C:\\Remote Repo' }]
+    }
+    mocks.storeState.sshConnectionStates = new Map([
+      ['ssh-win', { remotePlatform: 'win32', connectionGeneration: 4 }]
+    ])
+    mocks.resolveDroppedPathsForAgent.mockResolvedValue({
+      failed: [],
+      resolvedPaths: ['C:\\Remote Repo\\.orca\\drops\\Screenshot 1.png'],
+      skipped: []
+    })
+    const sendInput = vi.fn(() => true)
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+
+    await handleTerminalFileDrop({
+      manager: { getActivePane: () => pane, getPanes: () => [pane] } as never,
+      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      data: { paths: ['/Users/me/Screenshot 1.png'], target: 'terminal' }
+    })
+
+    // Why: agents on Windows keep backslashes, so POSIX escaping would corrupt the path.
+    expect(sendInput).toHaveBeenCalledWith(
+      wrapTerminalBracketedPasteText('"C:\\Remote Repo\\.orca\\drops\\Screenshot 1.png"'),
+      'driving'
+    )
   })
 
   it('surfaces stale SSH owner capture failures without rejecting the native drop', async () => {

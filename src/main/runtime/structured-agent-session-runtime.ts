@@ -42,7 +42,10 @@ import {
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
-import { agentSessionStorePath } from './agent-session-record-store-file'
+import {
+  AGENT_SESSION_STORE_DIR_NAME,
+  agentSessionStorePath
+} from './agent-session-record-store-file'
 import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
@@ -58,14 +61,11 @@ import {
   type RuntimeAgentAccountHomeResolver
 } from './structured-agent-model-catalog-wiring'
 
-/** Beside the journal database: one file adjudicates every session's lease. */
-const RECORD_STORE_DIR_NAME = 'agent-sessions'
-
 export function hasPersistedStructuredAgentSessionStore(
   stateDirectory: string,
   fileExists: (path: string) => boolean = existsSync
 ): boolean {
-  const filePath = agentSessionStorePath(join(stateDirectory, RECORD_STORE_DIR_NAME))
+  const filePath = agentSessionStorePath(join(stateDirectory, AGENT_SESSION_STORE_DIR_NAME))
   return fileExists(filePath) || fileExists(`${filePath}.bak`)
 }
 
@@ -211,7 +211,7 @@ async function installOnJournal(
   const envResolvers = createStructuredAgentEnvironmentResolvers(deps)
   const { resolveCodexEnvironment, resolveClaudeInheritedEnv } = envResolvers
   const store = await AgentSessionRecordStore.open({
-    directory: join(deps.stateDirectory, RECORD_STORE_DIR_NAME),
+    directory: join(deps.stateDirectory, AGENT_SESSION_STORE_DIR_NAME),
     hostId: deps.hostId
   })
   let host: StructuredAgentSessionHost | null = null

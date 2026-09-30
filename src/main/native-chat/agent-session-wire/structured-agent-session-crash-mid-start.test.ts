@@ -13,7 +13,8 @@ import {
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { openCodexAppServerConnection } from '../../codex/codex-app-server-connection'
 import { adapterFor, fakeCodex } from '../../codex/codex-structured-session-adapter-fixture'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -58,10 +59,7 @@ async function crash(dying: AgentSessionRecordStore): Promise<void> {
 }
 
 function openStore(generation: HostGeneration): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({
-    directory: join(generationRoot(generation), 'store'),
-    hostId: 'local'
-  })
+  return openTestAgentSessionRecordStore(generationRoot(generation))
 }
 
 /** A Codex adapter whose child spawns, reports its pid the way the real connection does, and then

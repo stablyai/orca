@@ -8,7 +8,8 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
@@ -147,7 +148,7 @@ beforeEach(async () => {
   cancelTurn = vi.fn(async () => ({ cancelled: true }))
   answerPrompt = vi.fn(async ({ commit }) => commit())
   setOption = vi.fn(async () => undefined)
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     store,
     adapter: adapter(),

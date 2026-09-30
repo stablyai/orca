@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "check:tests-typecheck": "node scripts/check-tests-typecheck-ratchet.mjs",
+    "rpc:record": "tsx scripts/rpc-recording.mts",
+    "rpc:diff": "tsx scripts/rpc-diff.mts",
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",

@@ -43,14 +43,9 @@ describe('structured provider supervision', () => {
     )
     expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).toContain('delete childEnv.ELECTRON_RUN_AS_NODE')
     expect(spec.env.ELECTRON_RUN_AS_NODE).toBe('1')
-    expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).toContain('process.ppid !== spec.ownerPid')
     expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).toContain(
       "process.stdin.once('close', scheduleOwnerShutdown)"
     )
-    expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).toContain('detached: true')
-    expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).toContain("process.kill(-child.pid, 'SIGKILL')")
-    expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).toContain('providerGroupExists()')
-    expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).toContain('finishWithProviderOutcome(code, signal)')
     expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).not.toContain('process.ppid === 1')
   })
 

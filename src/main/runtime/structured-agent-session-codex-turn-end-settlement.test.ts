@@ -33,12 +33,6 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 
-// A Stop must never reach for real processes on this machine under a made-up pid.
-vi.mock('../codex/codex-structured-turn-processes', () => ({
-  captureCodexTurnProcesses: async () => null,
-  terminateCodexTurnProcesses: async () => true
-}))
-
 const CALLER = { callerKey: 'codex-turn-end-test' }
 const MODEL = {
   model: 'gpt-test',

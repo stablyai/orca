@@ -13,7 +13,8 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -126,10 +127,7 @@ export async function createRestTestRig(
   const clock = { now: HOST_TEST_NOW }
   const statusEvents: AgentSessionStatusEvent[] = []
   const sink = { publish: vi.fn(), forget: vi.fn() }
-  let store = await AgentSessionRecordStore.open({
-    directory: join(root, 'store'),
-    hostId: 'local'
-  })
+  let store = await openTestAgentSessionRecordStore(root)
   const adapter: RestTestAdapter = {
     acquire: vi.fn(async ({ fence, spawnToken }) => ({
       acquisitionGeneration: `generation-${++generations}`,
@@ -180,10 +178,7 @@ export async function createRestTestRig(
     sink,
     restart: async (overrides = {}) => {
       await rig.host.flushAllStreamedEvents().catch(() => undefined)
-      store = await AgentSessionRecordStore.open({
-        directory: join(root, 'store'),
-        hostId: 'local'
-      })
+      store = await openTestAgentSessionRecordStore(root)
       rig.store = store
       rig.host = hostFor(overrides)
       rig.host.subscribeStatus({ id: 'status', emit: (event) => statusEvents.push(event) })

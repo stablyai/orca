@@ -127,7 +127,6 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       try {
         fresh = await fetchCodexRateLimits({
           codexHomePath,
-          allowPtyFallback: this.shouldAllowCodexPtyFallback(),
           signal: controller.signal
         })
       } catch (error) {
@@ -170,11 +169,6 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     // Why: the caller must receive the redeemed target even if the global UI
     // switched targets while the provider mutation was in flight.
     return { ...stateBeforeReset, codex: scopedCodex, codexTarget: target }
-  }
-
-  protected shouldAllowCodexPtyFallback(): boolean {
-    // Why: hidden PTY fallback can crash inside ConPTY on Windows; prefer RPC-only degradation there for background quota refresh.
-    return process.platform !== 'win32'
   }
 
   protected shouldAllowClaudePtyFallback(

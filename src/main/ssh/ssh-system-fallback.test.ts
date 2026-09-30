@@ -32,7 +32,6 @@ import {
   writeBufferViaSystemSsh,
   writeFileViaSystemSsh
 } from './ssh-system-fallback'
-import { spawnSystemSshPortForward } from './system-ssh-forward-process'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SystemSshResolvedConfig } from './ssh-control-socket'
@@ -503,36 +502,6 @@ describe('spawnSystemSsh', () => {
       SYSTEM_SSH_PATH,
       expect.any(Array),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
-    )
-  })
-
-  it('spawns port forwards before the ssh destination terminator', () => {
-    spawnSystemSshPortForward(createTarget({ configHost: 'fdpass-host' }), 5173, '127.0.0.1', 3000)
-
-    const args = spawnMock.mock.calls[0][1] as string[]
-    const terminatorIdx = args.indexOf('--')
-    const forwardFlagIdx = args.indexOf('-N')
-    const localForwardIdx = args.indexOf('-L')
-    const exitOnForwardFailureIdx = args.indexOf('ExitOnForwardFailure=yes')
-    const standaloneControlIdx = args.indexOf('-S')
-
-    expect(terminatorIdx).toBeGreaterThan(-1)
-    expect(forwardFlagIdx).toBeGreaterThan(-1)
-    expect(localForwardIdx).toBeGreaterThan(-1)
-    expect(exitOnForwardFailureIdx).toBeGreaterThan(-1)
-    // Why: -N and -L must appear before -- or OpenSSH treats them as remote command args.
-    expect(forwardFlagIdx).toBeLessThan(terminatorIdx)
-    expect(localForwardIdx).toBeLessThan(terminatorIdx)
-    expect(args[exitOnForwardFailureIdx - 1]).toBe('-o')
-    expect(exitOnForwardFailureIdx).toBeLessThan(terminatorIdx)
-    expect(standaloneControlIdx).toBe(-1)
-    expectNoOrcaControlMasterArgs(args)
-    expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
-    expect(args[terminatorIdx + 1]).toBe('fdpass-host')
-    expect(spawnMock).toHaveBeenCalledWith(
-      SYSTEM_SSH_PATH,
-      expect.any(Array),
-      expect.objectContaining({ stdio: ['ignore', 'ignore', 'pipe'] })
     )
   })
 

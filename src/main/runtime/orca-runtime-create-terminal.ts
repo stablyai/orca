@@ -14,6 +14,12 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
     if (opts.startupAgent && worktreeSelector === undefined) {
       throw new Error(`startupAgent ${opts.startupAgent} requires a workspace selector.`)
     }
+    const callerColors = dependencies.normalizeColorQueryReplyColors(opts.terminalColorQueryReplies)
+    // Why: only a paired client sends colours here; a client that predates
+    // terminal.setViewerColors reports its theme to a headless host only this way.
+    if (callerColors) {
+      dependencies.setPairedViewerColors(callerColors)
+    }
     const presentation = dependencies.resolveTerminalPresentation(opts)
     const requiresRendererFocus = opts.presentation === 'focused' || opts.focus === true
     const availableAuthoritativeWindow = this.getAvailableAuthoritativeWindow()
@@ -116,9 +122,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           tabId,
           agentTeamsPlan?.env
         )
-        const terminalColorQueryReplies =
-          launchOpts.terminalColorQueryReplies ??
-          dependencies.getTerminalViewColorQueryReplyColors()
+        const terminalColorQueryReplies = dependencies.getTerminalViewerColors()
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }

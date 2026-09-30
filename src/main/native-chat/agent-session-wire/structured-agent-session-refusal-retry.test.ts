@@ -16,7 +16,8 @@ import {
   agentSessionRefusalOperationState,
   type AgentSessionRefusalOperationState
 } from '../../../shared/agent-session-refusal-retry'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
@@ -58,10 +59,7 @@ function operationId(timestamp = NOW): string {
 
 async function createHarness(options: { attached?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'orca-refusal-oracle-'))
-  const store = await AgentSessionRecordStore.open({
-    directory: join(root, 'store'),
-    hostId: 'local'
-  })
+  const store = await openTestAgentSessionRecordStore(root)
   const setOption = vi.fn<StructuredAgentSessionAdapter['setOption']>(async () => undefined)
   const adapter: StructuredAgentSessionAdapter = {
     acquire: async ({ fence }) => ({

@@ -3,10 +3,8 @@ import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { agentJournalItemPosition } from './agent-session-journal-position'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
 import type { NativeChatMessage } from './native-chat-types'
-import {
-  reconcileStructuredAgentSessionOutbox,
-  type StructuredAgentSessionOutboxEntry
-} from './structured-agent-session-outbox'
+import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
+import { reconcileStructuredAgentSessionOutboxWithQueue } from './structured-agent-session-draft-hand-off'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 
 export function projectStructuredAgentSessionMessages(
@@ -15,7 +13,7 @@ export function projectStructuredAgentSessionMessages(
   submissions: readonly AgentJournalSubmission[],
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
-  const optimistic = reconcileStructuredAgentSessionOutbox(outbox, submissions)
+  const optimistic = reconcileStructuredAgentSessionOutboxWithQueue(outbox, submissions)
   // Refused sends are ledger evidence, not conversation history; local drafts remain in the outbox.
   const rejected = new Set(
     submissions

@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.project-row-comments-pr",
   "family": "tasks.project-row-comments-pr",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
-  "scenarioSha256": "e5ff558593fd32d66e6ba1722ebf54d50992c9c2b6db41ef2435b47972fbd0fd",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "25607177ea9a": {
       "name": "github.project.updatePullRequestBySlug#1",

@@ -10,7 +10,7 @@ import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../worktree-create-preparation'
 import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
-import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import { invalidateAuthorizedRootsCacheForRepo } from '../ipc/filesystem-auth'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
 
 export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
@@ -211,7 +211,11 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     // to authorize paths. Without invalidating it here, CLI-created worktrees
     // are not recognized and all git operations fail with "Access denied:
     // unknown repository or worktree path".
-    invalidateAuthorizedRootsCache()
+    // Scoped to this repo: the global form dirties every owner, so the next
+    // authorization-requiring IPC relists EVERY registered repo — ~58 `git worktree
+    // list` spawns, ~10s of git wall-clock through an admission budget of 4, to
+    // rediscover roots only this repo changed.
+    invalidateAuthorizedRootsCacheForRepo(this.store, repo)
 
     this.notifyWorktreesChanged(repo.id)
     const {

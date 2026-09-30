@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
@@ -37,13 +36,13 @@ export type AgentTrustPreset = NonNullable<TuiAgentConfig['preflightTrust']>
  * (versions/2026.04.17-787b533/index.ts: `_=".workspace-trusted"`, slug
  * derived via the same util that resolves `~/.cursor/projects/<slug>`).
  */
-export function markCursorWorkspaceTrusted(workspacePath: string): void {
+export function markCursorWorkspaceTrusted(workspacePath: string, home: string): void {
   const absPath = canonicalize(workspacePath)
   const slug = cursorWorkspaceSlug(absPath)
   if (!slug) {
     return
   }
-  const trustDir = join(homedir(), '.cursor', 'projects', slug)
+  const trustDir = join(home, '.cursor', 'projects', slug)
   const trustFile = join(trustDir, '.workspace-trusted')
   if (existsSync(trustFile)) {
     return
@@ -67,9 +66,9 @@ export function markCursorWorkspaceTrusted(workspacePath: string): void {
  * We append to the array in-place so unrelated config keys (loggedInUsers,
  * copilotTokens, etc.) survive untouched.
  */
-export function markCopilotFolderTrusted(workspacePath: string): void {
+export function markCopilotFolderTrusted(workspacePath: string, home: string): void {
   const absPath = canonicalize(workspacePath)
-  const configDir = join(homedir(), '.copilot')
+  const configDir = join(home, '.copilot')
   const configPath = join(configDir, 'config.json')
   let config: Record<string, unknown> = {}
   try {
@@ -121,9 +120,9 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
  * We append in-place so the sibling keys in the same file (model, permissions,
  * toolPermission, agentMode, …) survive untouched.
  */
-export function markAntigravityWorkspaceTrusted(workspacePath: string): void {
+export function markAntigravityWorkspaceTrusted(workspacePath: string, home: string): void {
   const absPath = canonicalize(workspacePath)
-  const configDir = join(homedir(), '.gemini', 'antigravity-cli')
+  const configDir = join(home, '.gemini', 'antigravity-cli')
   const configPath = join(configDir, 'settings.json')
   let config: Record<string, unknown> = {}
   try {
@@ -169,7 +168,8 @@ export function markCodexProjectTrusted(
   workspacePath: string,
   configFiles: readonly string[]
 ): Promise<void> {
-  const absPath = resolveCodexProjectTrustRoot(workspacePath)
+  // Why: Codex checks the cwd's own entry before the repo root, so no git-layout logic is needed.
+  const absPath = canonicalize(workspacePath)
   // Why (#16441): hook installs now await a codex app-server grant, so an
   // unqueued write here can land inside their capture->restore window and be
   // reverted. Same runtime-before-system lock order the installer takes.
@@ -182,43 +182,6 @@ export function markCodexProjectTrusted(
     }
   )
   return write()
-}
-
-/** The folder Codex looks trust up under: a linked worktree's main checkout, else the realpath. */
-export function resolveCodexProjectTrustRoot(workspacePath: string): string {
-  const absPath = canonicalize(workspacePath)
-  try {
-    const gitDirReference = readFileSync(join(absPath, '.git'), 'utf-8').trim()
-    if (!gitDirReference.startsWith('gitdir:')) {
-      return absPath
-    }
-    const gitDirPath = gitDirReference.slice('gitdir:'.length).trim()
-    if (!gitDirPath) {
-      return absPath
-    }
-    const gitDir = resolve(absPath, gitDirPath)
-    const worktreesDir = dirname(gitDir)
-    if (basename(worktreesDir) !== 'worktrees') {
-      return absPath
-    }
-    // Why: workspace-controlled .git metadata must not broaden trust without Git's reciprocal link.
-    const gitDirBacklink = readFileSync(join(gitDir, 'gitdir'), 'utf-8').trim()
-    if (!gitDirBacklink) {
-      return absPath
-    }
-    const resolvedBacklink = resolve(gitDir, gitDirBacklink)
-    const workspaceGitFile = join(absPath, '.git')
-    if (
-      resolvedBacklink !== workspaceGitFile &&
-      canonicalize(resolvedBacklink) !== canonicalize(workspaceGitFile)
-    ) {
-      return absPath
-    }
-    // Why: mirror Codex's validated .git/worktrees/<name> traversal instead of trusting arbitrary commondir contents.
-    return canonicalize(dirname(dirname(worktreesDir)))
-  } catch {
-    return absPath
-  }
 }
 
 function canonicalize(p: string): string {

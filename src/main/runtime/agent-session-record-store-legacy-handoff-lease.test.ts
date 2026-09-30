@@ -12,8 +12,11 @@ import {
   readPersistedLease,
   writeOlderBuildLease
 } from './agent-session-older-build-lease.test-fixture'
-import { AgentSessionRecordStore } from './agent-session-record-store'
-import { agentSessionStorePath } from './agent-session-record-store-file'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import {
+  openTestAgentSessionRecordStore,
+  testAgentSessionStoreFilePath
+} from './agent-session-record-store-test-harness'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -29,8 +32,7 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-const open = (): Promise<AgentSessionRecordStore> =>
-  AgentSessionRecordStore.open({ directory, hostId: 'local' })
+const open = (): Promise<AgentSessionRecordStore> => openTestAgentSessionRecordStore(directory)
 
 async function persistLiveOwner(): Promise<void> {
   const store = await open()
@@ -89,7 +91,7 @@ describe('a lease the removed terminal handoff wrote', () => {
       handoffStage: 'old-owner-stopped',
       handoffOperationId: 'op-handoff'
     })
-    const legacy = await readFile(agentSessionStorePath(directory), 'utf-8')
+    const legacy = await readFile(testAgentSessionStoreFilePath(directory), 'utf-8')
 
     const store = await open()
     expect(store.isSessionUnreadable(SESSION)).toBe(false)
@@ -100,7 +102,7 @@ describe('a lease the removed terminal handoff wrote', () => {
       claimStatus: 'conflicted'
     })
     // An open does not write: another holder of the file mid-restart would read it as a change.
-    expect(await readFile(agentSessionStorePath(directory), 'utf-8')).toBe(legacy)
+    expect(await readFile(testAgentSessionStoreFilePath(directory), 'utf-8')).toBe(legacy)
 
     // A transaction that changes nothing still writes it. Had the open's revision been taken over
     // anything but the normalized state, this would read the file as externally changed and
@@ -127,8 +129,8 @@ describe('a lease the removed terminal handoff wrote', () => {
       claimStatus: 'conflicted',
       handoffStage: 'recovering'
     })
-    const settled = await readFile(agentSessionStorePath(directory), 'utf-8')
+    const settled = await readFile(testAgentSessionStoreFilePath(directory), 'utf-8')
     await open()
-    expect(await readFile(agentSessionStorePath(directory), 'utf-8')).toBe(settled)
+    expect(await readFile(testAgentSessionStoreFilePath(directory), 'utf-8')).toBe(settled)
   })
 })

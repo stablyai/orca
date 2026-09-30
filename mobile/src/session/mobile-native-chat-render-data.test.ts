@@ -430,3 +430,32 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
     expect(data.map((message) => message.id)).toEqual(['a1', 'prompt', 'p1', 'a2'])
   })
 })
+
+describe("mobile shows the conversation, never a subagent's rows", () => {
+  it("keeps the spawn's one line and drops what the subagent said and did", () => {
+    const child = { agentId: 'task-1', producerKind: 'agent' as const }
+    const folded = foldMobileNativeChatMessages([
+      user('ask', 'review the PR'),
+      {
+        id: 'spawn',
+        role: 'system',
+        blocks: [{ type: 'text', text: 'Kicked off 1 subagent' }],
+        timestamp: 0,
+        source: 'transcript'
+      },
+      { ...assistant('child-said', 'The PR is CLEAN.'), ...child },
+      {
+        id: 'child-grep',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', name: 'Grep', input: {} }],
+        timestamp: 0,
+        source: 'transcript',
+        ...child
+      },
+      assistant('answer', 'Delegated; nothing to fix.')
+    ])
+
+    expect(folded.map((message) => message.id)).toEqual(['ask', 'spawn', 'answer'])
+    expect(folded[2]?.blocks).toEqual([{ type: 'text', text: 'Delegated; nothing to fix.' }])
+  })
+})

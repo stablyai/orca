@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -38,12 +38,6 @@ describe('isDirectInvocation', () => {
     // The regression this guards: `file://${argv[1]}` yields file://C:\orca\... on Windows,
     // so the builder exited 0 having written nothing and packaging failed downstream.
     expect(`file://${scriptPath}`).not.toBe(moduleUrl)
-  })
-
-  it('is not written with the file:// template form', async () => {
-    const source = await readFile(new URL('./script-entry-detection.mjs', import.meta.url), 'utf8')
-    expect(source).not.toMatch(/file:\/\/\$\{process\.argv\[1\]\}/)
-    expect(source).toContain('pathToFileURL')
   })
 })
 

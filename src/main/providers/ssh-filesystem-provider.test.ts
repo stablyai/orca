@@ -59,10 +59,6 @@ describe('SshFilesystemProvider', () => {
     provider = new SshFilesystemProvider('conn-1', mux as never)
   })
 
-  it('returns the connectionId', () => {
-    expect(provider.getConnectionId()).toBe('conn-1')
-  })
-
   describe('readDir', () => {
     it('sends fs.readDir request', async () => {
       const entries = [

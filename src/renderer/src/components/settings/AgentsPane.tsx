@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
+import { CodexTerminalServerIsolationSetting } from './CodexTerminalServerIsolationSetting'
 import { buildCodexSessionSourceHomeControl } from './codex-session-source-home-control'
 import {
   getAgentGeneratedTabTitlesDescription,
@@ -260,7 +261,13 @@ export function AgentsPane({
       />
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
       {!isPairedWebClientWindow() ? (
-        <AgentWorkspaceTrustSetting settings={settings} updateSettings={updateSettings} />
+        <>
+          <AgentWorkspaceTrustSetting settings={settings} updateSettings={updateSettings} />
+          <CodexTerminalServerIsolationSetting
+            settings={settings}
+            updateSettings={updateSettings}
+          />
+        </>
       ) : null}
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
       {!isPairedWebClientWindow() ? (

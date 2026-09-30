@@ -9,7 +9,8 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   AgentSessionDispatchOutcome,
@@ -92,7 +93,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   dispatch = vi.fn(async () => accepted())
   closeSession = vi.fn(async () => true)
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     store,
     adapter: {

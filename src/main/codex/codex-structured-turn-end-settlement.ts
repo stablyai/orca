@@ -1,6 +1,8 @@
-// A send Codex answered into a turn that then ended without echoing it. Codex clears
-// a turn's pending input when it is interrupted, so that send never reached the model
-// and is withdrawn, as a Stop's host-side withdrawal is. Any other end records pending
+// A send Codex answered into a turn that then ended without echoing it. On an interrupt, a
+// steered send waits in Codex's pending input, which the interrupt clears; a send that opened the
+// turn is saved as the turn cancels, but Codex hard-aborts that save after 100 ms, so it is lost
+// or reaches only the model's context, and the thread history shows no user message either way.
+// So it is withdrawn, as a Stop's host-side withdrawal is. Any other end records pending
 // input before `turn/completed`, a failed turn after its `error` frame, so only that
 // frame settles: a failed turn that never echoed the send refused it, in Codex's words,
 // and a completed one leaves it pending for the journal's recovery on exit.

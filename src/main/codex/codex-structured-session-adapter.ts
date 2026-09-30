@@ -33,7 +33,6 @@ import {
   deliverCodexUnhandledFrame,
   translateCodexNotification
 } from './codex-structured-provider-events'
-import { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import {
   codexDispatchRejection,
   settleCodexSendsInEndedTurn
@@ -55,7 +54,6 @@ export type {
 export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
-  private readonly turnCancellation: CodexStructuredTurnCancellation
   private readonly notificationRetries: ReturnType<typeof createCodexStructuredNotificationRetry>
   private readonly teardown: CodexStructuredSessionTeardown
 
@@ -70,7 +68,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
           params,
           observedAt,
           dispatchSequenceAtReceipt,
-          turnCancellation: this.turnCancellation,
           emit: (current, event) => this.emit(current, event)
         })
     })
@@ -83,25 +80,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         : {}),
       forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null)
     })
-    this.turnCancellation = new CodexStructuredTurnCancellation({
-      captureTurnProcesses: deps.captureTurnProcesses,
-      terminateTurnProcesses: deps.terminateTurnProcesses,
-      requestTimeoutMs: deps.requestTimeoutMs,
-      emit: (session, event) => {
-        const admission = this.emit(session, event)
-        if (!admission.accepted && event.type === 'notification') {
-          const { sessionId, method, params, observedAt, dispatchSequenceAtReceipt } = event
-          this.notificationRetries.handle(
-            sessionId,
-            method,
-            params,
-            observedAt,
-            dispatchSequenceAtReceipt
-          )
-        }
-        return admission
-      }
-    })
   }
 
   supportsLocation = (location: Parameters<typeof supportsCodexStructuredLocation>[0]): boolean =>
@@ -113,7 +91,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       deps: this.deps,
       sessions: this.sessions,
       acquisitions: this.acquisitions,
-      turnCancellation: this.turnCancellation,
       notificationRetries: this.notificationRetries,
       deliver: (acquisition, sessionId, event, retainedBytes) =>
         this.deliver(acquisition, sessionId, event, retainedBytes),
@@ -222,7 +199,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     const session = this.session(input.sessionId)
     session.dispatchPending = true
     try {
-      await this.turnCancellation.captureBaseline(session)
       await input.beforeDispatch?.()
       return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
     } finally {
@@ -234,7 +210,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     cancelCodexStructuredTurn({
       request,
       sessions: this.sessions,
-      cancellation: this.turnCancellation
+      requestTimeoutMs: this.deps.requestTimeoutMs
     })
 
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
@@ -253,7 +229,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     const session = this.session(input.sessionId)
     session.translator?.beginCommand(input.command)
     try {
-      await this.turnCancellation.captureBaseline(session)
       await session.connection.request(
         'thread/compact/start',
         { threadId: session.threadId },

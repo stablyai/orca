@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
 import {
   AgentSessionPreSpawnError,
@@ -66,10 +66,7 @@ function createParams(): AgentSessionAttachParams {
 /** The thrown first answer as the wire sends it, and the ledger's replay of the same operation. */
 async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
   root = await mkdtemp(join(tmpdir(), 'orca-pre-spawn-first-answer-'))
-  const store = await AgentSessionRecordStore.open({
-    directory: join(root, 'store'),
-    hostId: 'local'
-  })
+  const store = await openTestAgentSessionRecordStore(root)
   const unused = async (): Promise<never> => {
     throw new Error('not reached before a spawn')
   }

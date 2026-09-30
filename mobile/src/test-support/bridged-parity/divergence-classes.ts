@@ -1,10 +1,8 @@
 /**
  * What a bridged-replay divergence is called, decided by a rule rather than by reading a message.
  *
- * Beside the recorder rather than inside it. Reading a failure cannot change what a recording
- * records, so `recorderSha256` must not cover this: a tightened rule would otherwise re-record 792
- * headers to say nothing. The recorder's own directory is digested whole, which is why this lives
- * one level up in `test-support`.
+ * Beside the recorder rather than inside it: reading a failure cannot change what a recording
+ * records, and nothing on the recording path loads this.
  */
 
 /**
@@ -165,7 +163,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 }
 
 /**
- * What this tree measures, per class, over all 792 goldens.
+ * What this tree measures, per class, over all 796 goldens.
  *
  * A pin, not a description: `bridgedParityTallyDrift` holds every number below to itself exactly,
  * in both directions, and this module's test pins their sum to the size of the corpus. A class that
@@ -179,7 +177,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
  * same story — both numbers move, and both moves are edits here rather than a quiet pass.
  */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 397,
+  identical: 401,
   // Closed by the `_meta` widening: the page's reader is `isRpcResponse` itself.
   'reply-meta-required': 0,
   // Settling a refused reply moved three goldens here out of `write-ordinal`: a rejection that

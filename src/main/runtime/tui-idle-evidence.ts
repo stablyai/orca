@@ -53,7 +53,11 @@ export type TuiIdleEvidenceRecord = {
   lastOscTitle?: string | null
 }
 
-export type FirstPartyAgentStatus = { state: AgentStatusState; updatedAt: number } | null
+export type FirstPartyAgentStatus = {
+  state: AgentStatusState
+  updatedAt: number
+  sessionBoundary?: boolean
+} | null
 
 /** Tier 1: an idle marker the agent put in a title itself. */
 export function hasExplicitIdleTitle(
@@ -88,13 +92,18 @@ export function hasExplicitIdleTitle(
  * Scoped rather than general: for agents whose hooks do report child turns, a `done` row
  * can arrive mid-turn, and settling on it is exactly the #6011 class this file exists to
  * prevent.
+ *
+ * The second lane is narrower and agent-agnostic: a `sessionBoundary` row does not claim a
+ * turn ended, it claims a NEW SESSION owns the pane and is waiting for its first input. That
+ * cannot arrive mid-turn by construction — the producers only set it for a startup/resume/
+ * reset boundary — so it carries no #6011 risk for any agent that emits it.
  */
 export function hasFreshDoneFirstPartyStatus(
   agent: TuiAgent | null | undefined,
   status: FirstPartyAgentStatus,
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  if (agent !== 'dsh' || status?.state !== 'done') {
+  if (status?.state !== 'done' || (agent !== 'dsh' && status.sessionBoundary !== true)) {
     return false
   }
   return Date.now() - status.updatedAt <= staleAfterMs
@@ -329,7 +338,12 @@ export function leafTuiIdleEvidence(
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
     rendererTitle: leaf.paneTitle ?? source.getTabTitle(leaf.tabId),
     readPositiveBodyEvidence: () =>
-      isKnownReadyPromptBody(waitText(), agent, () => source.readScreenLines(leaf.ptyId)),
+      isKnownReadyPromptBody(
+        waitText(),
+        agent,
+        () => source.readScreenLines(leaf.ptyId),
+        leaf.lastOutputAt !== null
+      ),
     readQuietReadyBodyEvidence: () =>
       isQuietReadyScreenBody(waitText(), agent, () => source.readScreenLines(leaf.ptyId)),
     agent,
@@ -350,7 +364,12 @@ export function ptyTuiIdleEvidence(
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
     readPositiveBodyEvidence: () =>
       (agent !== 'qoder' && source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
-      isKnownReadyPromptBody(waitText(), agent, () => source.readScreenLines(pty.ptyId)),
+      isKnownReadyPromptBody(
+        waitText(),
+        agent,
+        () => source.readScreenLines(pty.ptyId),
+        pty.lastOutputAt !== null
+      ),
     readQuietReadyBodyEvidence: () =>
       isQuietReadyScreenBody(waitText(), agent, () => source.readScreenLines(pty.ptyId)),
     agent,

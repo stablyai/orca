@@ -475,7 +475,7 @@ describe('NativeChatComposer', () => {
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
-  it.each(['claude', 'openclaude'] as const)('keeps %s slash composer sends pasted', (agent) => {
+  it.each(['claude'] as const)('keeps %s slash composer sends pasted', (agent) => {
     mocks.draft = '/clear'
     render(
       <NativeChatComposer

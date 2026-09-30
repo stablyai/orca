@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.tab-activation",
   "family": "session.tab-activation",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
-  "scenarioSha256": "d25fc19d4e3e9b12f2a60a076ea10741e13fc45dcd9a76bd3a9d88432c3e6fbe",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "1ddcf41b827c": {
       "name": "session.tabs.activate#1",

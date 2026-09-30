@@ -2,7 +2,6 @@ import { dirname, join } from 'node:path'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import { getCodexSessionBackfillStateDirPath } from './codex-home-paths'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
 import {
@@ -291,14 +290,11 @@ export function buildNativeHealInvocation(
   timeoutMs: number
 ): CodexAppServerInvocation {
   const command = resolveCodexCommand()
-  // Why: each session is torn down after one batch, so plugin startup could
-  // leave marketplace clones running; indexing needs neither plugins nor tools.
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, [
-    ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
-  ])
   return {
-    command: spawnCmd,
-    args: spawnArgs,
+    command,
+    // Why: each session is torn down after one batch, so plugin startup could
+    // leave marketplace clones running; indexing needs neither plugins nor tools.
+    args: [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS],
     cliPath: command,
     // Why: pin the home explicitly — nested Orca launches can inherit a managed
     // CODEX_HOME from the daemon environment, which would index the wrong sqlite DB.

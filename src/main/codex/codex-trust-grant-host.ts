@@ -1,6 +1,5 @@
 import { runProcess } from '../../shared/child-process/run-process'
 import { resolveCodexCommand } from '../codex-cli/command'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import {
   buildWslCodexAppServerArgs,
   buildWslCodexIdentityProbe,
@@ -73,12 +72,11 @@ export function resolveNativeCodexTrustGrantHost(): ResolvedCodexTrustGrantHost 
   return {
     binaryStamp: command === 'codex' ? null : buildNativeCodexBinaryStamp(command),
     buildRequest: (input) => {
-      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, ['app-server'])
       const useDefaultCodexHome = input.useDefaultCodexHome === true
       return {
         invocation: {
-          command: spawnCmd,
-          args: spawnArgs,
+          command,
+          args: ['app-server'],
           cliPath: command,
           ...(useDefaultCodexHome
             ? { envToDelete: ['CODEX_HOME'] }

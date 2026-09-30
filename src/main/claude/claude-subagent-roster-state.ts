@@ -20,6 +20,12 @@ export type TrackedEntry = {
   /** Which run of this child. Identity survives a resume by design, so without
    *  this the retained rows of two runs read as one uninterrupted timeline. */
   attempt: number
+  /** Inherited from a row an earlier provider run journaled, and not announced in
+   *  this run yet. That run's calls are unknown here, so any announcement is a new
+   *  invocation, and only an announcement reopens what that run settled. Any other
+   *  frame can still give that run's outcome, such as Claude's "didn't finish before
+   *  the previous session ended". */
+  invokedInEarlierRun: boolean
 }
 
 export type RosterGroup = {
@@ -46,6 +52,18 @@ export function applyClaudeSubagentInvocation(
   if (tracked.invocationIds === null) {
     return false
   }
+  if (tracked.invokedInEarlierRun) {
+    if (!frame.announcement) {
+      // A verdict on that run, not an invocation of this one; the latch still guards it.
+      return true
+    }
+    reopen(tracked, frame, now)
+    if (frame.toolUseId) {
+      tracked.invocationIds.add(frame.toolUseId)
+      tracked.toolUseId = frame.toolUseId
+    }
+    return true
+  }
   const newInvocation =
     frame.announcement && frame.toolUseId !== null && !tracked.invocationIds.has(frame.toolUseId)
   if (newInvocation && frame.toolUseId) {
@@ -56,12 +74,10 @@ export function applyClaudeSubagentInvocation(
     }
     tracked.invocationIds.add(frame.toolUseId)
     if (tracked.toolUseId !== null && tracked.toolUseId !== frame.toolUseId) {
-      // THE reactivation: a new spawn alias reopening this entry. The one place
-      // the attempt moves, and it is gated on the observed alias change rather
-      // than on the counter, so a late duplicate cannot advance a settled run.
-      tracked.attempt += 1
-      tracked.backgrounded = frame.backgrounded ?? false
-      tracked.entry = { ...tracked.entry, state: frame.state ?? 'working', settledAt: undefined }
+      // THE reactivation: a new spawn alias reopening this entry. Gated on the
+      // observed alias change rather than on the counter, so a late duplicate
+      // cannot advance a settled run.
+      reopen(tracked, frame, now)
     }
     tracked.toolUseId = frame.toolUseId
   } else if (tracked.toolUseId && frame.toolUseId && tracked.toolUseId !== frame.toolUseId) {
@@ -71,6 +87,20 @@ export function applyClaudeSubagentInvocation(
     tracked.toolUseId = frame.toolUseId
   }
   return true
+}
+
+/** The one place the attempt moves. A new run starts its own clock, so the
+ *  idle time since the last run never reads as run time. */
+function reopen(tracked: TrackedEntry, frame: ClaudeSubagentTaskFrame, now: () => number): void {
+  tracked.invokedInEarlierRun = false
+  tracked.attempt += 1
+  tracked.backgrounded = frame.backgrounded ?? false
+  tracked.entry = {
+    ...tracked.entry,
+    state: frame.state ?? 'working',
+    startedAt: now(),
+    settledAt: undefined
+  }
 }
 
 /** Two children can share a description; the ordinal keeps their rows apart

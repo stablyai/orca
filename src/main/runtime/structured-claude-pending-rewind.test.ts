@@ -20,7 +20,8 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
@@ -106,10 +107,7 @@ async function reattach() {
 beforeEach(async () => {
   resetHostTestOperationIds()
   directory = await mkdtemp(join(tmpdir(), 'orca-claude-pending-rewind-'))
-  store = await AgentSessionRecordStore.open({
-    directory: join(directory, 'store'),
-    hostId: 'local'
-  })
+  store = await openTestAgentSessionRecordStore(directory)
   claude = fakeClaude({ initSessionId: PROVIDER_SESSION_ID })
   adapter = createStructuredClaudeRuntimeAdapter({
     store,

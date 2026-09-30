@@ -85,21 +85,6 @@ describe('recordBrowserClientPagePublishedUrl', () => {
     expect(pages.get(PAGE_ID)?.inventory.currentUrl).toBe('https://remote.example/opened-at')
   })
 
-  it('overwrites the recorded url when a newer navigation arrives', () => {
-    const pages = tracked(inventory({ currentUrl: 'https://remote.example/opened-at' }))
-
-    recordBrowserClientPagePublishedUrl(
-      pages,
-      metadata({ revision: 2, url: 'https://a.example/1' })
-    )
-    recordBrowserClientPagePublishedUrl(
-      pages,
-      metadata({ revision: 3, url: 'https://a.example/2' })
-    )
-
-    expect(pages.get(PAGE_ID)?.inventory.currentUrl).toBe('https://a.example/2')
-  })
-
   it('stores a url exactly at the inventory url cap', () => {
     const pages = tracked()
     const url = `https://remote.example/${'a'.repeat(

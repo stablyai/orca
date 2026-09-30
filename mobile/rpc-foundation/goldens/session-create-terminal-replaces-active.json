@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.create-terminal",
   "family": "session.create-terminal",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "fa7d9fd6428e89282f08e04fefba4289000eb3aed1462489a2f11efed374382c",
-  "scenarioSha256": "726e19307f1e82f0c8ae9a555ec9c27c8eea7f8f40fa700dc0b71c54ecc9ca11",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "2977cbddd89f": {
       "name": "session.tabs.createTerminal#1",
@@ -58,21 +49,6 @@
         }
       }
     },
-    "4c528a84c114": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "",
-      "creating": true,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
     "4d318de3b635": {
       "name": "unsubscribe-terminal",
       "ordinal": 3,
@@ -80,10 +56,36 @@
         "handle": "terminal-0"
       }
     },
+    "4e377b1c4bf7": {
+      "activeHandle": "terminal-1",
+      "activeSessionTabId": "tab-1",
+      "createError": "",
+      "creating": false,
+      "initializedHandles": [],
+      "pendingSelection": {
+        "handle": "terminal-1",
+        "kind": "terminal",
+        "tabId": "tab-1"
+      },
+      "sessionTabs": ["tab-1"],
+      "terminals": ["terminal-1"]
+    },
     "59de30d666ef": {
       "name": "fetch-session-tabs",
       "ordinal": 7,
       "value": {}
+    },
+    "6275ace50da2": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": true,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
     },
     "8b5144e3301d": {
       "name": "schedule-delayed-action",
@@ -147,17 +149,6 @@
         "$rpc": "undefined"
       }
     },
-    "f30a8fc69921": {
-      "activeHandle": "terminal-1",
-      "activeSessionTabId": "tab-1",
-      "createError": "",
-      "creating": false,
-      "initializedHandles": [],
-      "pendingActiveSessionTabId": "tab-1",
-      "pendingActiveTerminalHandle": "terminal-1",
-      "sessionTabs": ["tab-1"],
-      "terminals": ["terminal-1"]
-    },
     "fb6329365e0b": {
       "name": "default-live-input",
       "ordinal": 4,
@@ -178,7 +169,7 @@
             "mount": "eb79a9b3682a",
             "create": "9270aeb7d9c6"
           },
-          "state": "4c528a84c114",
+          "state": "6275ace50da2",
           "effects": []
         }
       },
@@ -191,7 +182,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": ["4d318de3b635", "fb6329365e0b", "c13357779299", "8b5144e3301d"]
         }
       },
@@ -204,7 +195,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",

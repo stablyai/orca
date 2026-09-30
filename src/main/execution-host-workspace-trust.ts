@@ -1,4 +1,5 @@
 import { realpathSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { markQoderWorkspaceTrusted } from './qoder/workspace-trust'
 import {
@@ -6,8 +7,7 @@ import {
   markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted,
-  resolveCodexProjectTrustRoot
+  markCursorWorkspaceTrusted
 } from './agent-trust-presets'
 import { awaitAgentTrustWriteWithinDeadline } from './agent-trust-write-deadline'
 import {
@@ -23,11 +23,20 @@ import { isTooBroadToPreTrust } from '../shared/home-or-filesystem-root'
 export type WorkspaceTrustHost = {
   /** Homes the agent may read trust under; with none known, an agent that inherits trust writes nothing. */
   homes: readonly (string | null | undefined)[]
+  /** The home the launched agent resolves `~` to, where the per-user trust files live. */
+  agentHome: string
   /** The config Claude reads on this host, or null when this host cannot tell. */
   claudeConfig: () => ClaudeTrustConfigTarget | null
   /** Every config.toml the launched Codex may read, in the hook installer's lock order. */
   codexConfigFiles: () => readonly string[]
   deadlineMs: number
+}
+
+/** The home an agent launched with `launchEnv` on this host resolves `~` to. */
+export function launchedAgentHome(
+  launchEnv: Record<string, string | undefined> | undefined
+): string {
+  return (process.platform === 'win32' ? launchEnv?.USERPROFILE : launchEnv?.HOME) || homedir()
 }
 
 /**
@@ -69,11 +78,6 @@ function withResolvedForm(path: string): string[] {
   }
 }
 
-/** The path the preset's writer stores: Codex trusts a linked worktree's main checkout. */
-function storedTrustPath(preset: AgentTrustPreset, workspacePath: string): string {
-  return preset === 'codex' ? resolveCodexProjectTrustRoot(workspacePath) : workspacePath
-}
-
 /**
  * Whether trust stored for `storedPath` would cover a home: it is a root, a home or a folder
  * above one. Both sides are compared given and resolved, since the writers store the realpath.
@@ -99,13 +103,13 @@ async function writePreset(
     case 'codex':
       return markCodexProjectTrusted(storedPath, host.codexConfigFiles())
     case 'cursor':
-      return markCursorWorkspaceTrusted(storedPath)
+      return markCursorWorkspaceTrusted(storedPath, host.agentHome)
     case 'copilot':
-      return markCopilotFolderTrusted(storedPath)
+      return markCopilotFolderTrusted(storedPath, host.agentHome)
     case 'qoder':
-      return markQoderWorkspaceTrusted(storedPath)
+      return markQoderWorkspaceTrusted(storedPath, host.agentHome)
     case 'antigravity':
-      return markAntigravityWorkspaceTrusted(storedPath)
+      return markAntigravityWorkspaceTrusted(storedPath, host.agentHome)
   }
 }
 
@@ -121,14 +125,13 @@ export async function applyWorkspaceTrustOnThisHost(
 ): Promise<void> {
   try {
     const host = describeHost()
-    const storedPath = storedTrustPath(preset, workspacePath)
     if (AGENT_TRUST_INHERITS_FROM_A_HOME[preset]) {
       const homes = host.homes.filter((home): home is string => Boolean(home))
-      if (homes.length === 0 || wouldTrustAHome(storedPath, homes)) {
+      if (homes.length === 0 || wouldTrustAHome(workspacePath, homes)) {
         return
       }
     }
-    await awaitAgentTrustWriteWithinDeadline(writePreset(preset, storedPath, host), {
+    await awaitAgentTrustWriteWithinDeadline(writePreset(preset, workspacePath, host), {
       preset,
       workspacePath,
       deadlineMs: host.deadlineMs

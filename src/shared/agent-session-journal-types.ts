@@ -339,7 +339,9 @@ export type AgentJournalProducerLinkage = {
   /** The producing agent's own parent. Absent ⇒ its parent is the session root. */
   parentAgentId?: string
   /** The provider's own parent reference for this row. Provenance only: it names
-   *  the tool CALL, which is re-minted on every resume, so it is never a join key. */
+   *  the tool CALL, not the agent, and a resumed agent is re-announced under a new
+   *  call, so no reader joins on it. Only its producer reads it back, to recall
+   *  the ids an earlier run of the session resolved. */
   providerParentRef?: string
   producerKind?: AgentJournalProducerKind
   /** Which run of the agent, when past the first. Identity answers "which agent";

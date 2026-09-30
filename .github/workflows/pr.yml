@@ -485,6 +485,18 @@ jobs:
             pnpm exec vitest run --config config/vitest.config.ts \
             src/main/pty/codex-no-daemon-binary-contract.test.ts
 
+      # Why the no-daemon install: it is the newest pinned Codex, and its project
+      # lookup decides whether a worktree launch stops at the trust prompt.
+      - name: Verify Codex project-trust contract
+        env:
+          ORCA_CODEX_TRUST_CONTRACT_REQUIRED: '1'
+          ORCA_CODEX_TRUST_CONTRACT_VERSION: ${{ env.CODEX_NO_DAEMON_CLI_VERSION }}
+        run: |
+          set -euo pipefail
+          ORCA_CODEX_TRUST_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
+            pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/agent-trust-presets.test.ts
+
   xterm_patch_sync:
     name: xterm patch sync
     needs: [code_paths]

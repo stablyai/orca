@@ -1,11 +1,9 @@
 {
   "schemaVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
   "scenarios": [
     {
       "id": "b1",
       "operation": "workspace.file-inventory",
-      "version": 1,
       "family": "legacy-inventory",
       "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
       "schedules": ["a-b-a", "stale-inflight-cleanup"],
@@ -154,7 +152,6 @@
     {
       "id": "b2",
       "operation": "project.update-metadata",
-      "version": 1,
       "family": "project-explicit-false",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx"],
       "schedules": [],
@@ -194,7 +191,6 @@
     {
       "id": "b3",
       "operation": "linear.issue-detail",
-      "version": 1,
       "family": "linear-detail-barrier",
       "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": ["issue-first", "peer-pending"],
@@ -242,7 +238,6 @@
     {
       "id": "settings-new-tab-ssh",
       "operation": "settings.new-tab-agents",
-      "version": 1,
       "family": "settings-agent-read",
       "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
       "schedules": ["settings-first"],
@@ -304,7 +299,6 @@
     {
       "id": "settings-task-write",
       "operation": "settings.task-preferences",
-      "version": 1,
       "family": "settings-best-effort",
       "sites": ["mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx"],
       "schedules": [],
@@ -317,7 +311,7 @@
           "action": "write",
           "id": "write",
           "args": {
-            "preset": "assigned"
+            "preset": "my-issues"
           }
         },
         {
@@ -326,7 +320,7 @@
         {
           "complete": "settings.update#1",
           "params": {
-            "defaultTaskViewPreset": "assigned"
+            "defaultTaskViewPreset": "my-issues"
           },
           "reject": {
             "message": "write disconnected",
@@ -341,7 +335,6 @@
     {
       "id": "settings-bot-overrides-fulfilled",
       "operation": "settings.bot-overrides",
-      "version": 1,
       "family": "settings.bot-overrides",
       "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
       "schedules": ["settings-first"],
@@ -379,7 +372,6 @@
     {
       "id": "settings-bot-overrides-refused",
       "operation": "settings.bot-overrides",
-      "version": 1,
       "family": "settings.bot-overrides",
       "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
       "schedules": ["settings-first"],
@@ -412,7 +404,6 @@
     {
       "id": "settings-bot-overrides-transport-error",
       "operation": "settings.bot-overrides",
-      "version": 1,
       "family": "settings.bot-overrides",
       "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
       "schedules": ["settings-first"],
@@ -442,7 +433,6 @@
     {
       "id": "settings-workspace-context-fulfilled",
       "operation": "settings.workspace-context",
-      "version": 1,
       "family": "settings.workspace-context",
       "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
       "schedules": ["settings-first"],
@@ -531,7 +521,6 @@
     {
       "id": "settings-workspace-context-refused",
       "operation": "settings.workspace-context",
-      "version": 1,
       "family": "settings.workspace-context",
       "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
       "schedules": ["settings-first"],
@@ -615,7 +604,6 @@
     {
       "id": "settings-workspace-context-transport-error",
       "operation": "settings.workspace-context",
-      "version": 1,
       "family": "settings.workspace-context",
       "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
       "schedules": ["settings-first"],
@@ -696,7 +684,6 @@
     {
       "id": "settings-home-providers-fulfilled",
       "operation": "settings.home-providers",
-      "version": 1,
       "family": "settings.home-providers",
       "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
       "schedules": ["settings-first"],
@@ -760,7 +747,6 @@
     {
       "id": "settings-home-providers-refused",
       "operation": "settings.home-providers",
-      "version": 1,
       "family": "settings.home-providers",
       "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
       "schedules": ["settings-first"],
@@ -819,7 +805,6 @@
     {
       "id": "settings-home-providers-transport-error",
       "operation": "settings.home-providers",
-      "version": 1,
       "family": "settings.home-providers",
       "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
       "schedules": ["settings-first"],
@@ -875,7 +860,6 @@
     {
       "id": "settings-resume-metadata-fulfilled",
       "operation": "settings.resume-metadata",
-      "version": 1,
       "family": "settings.resume-metadata",
       "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
       "schedules": ["settings-first"],
@@ -962,7 +946,6 @@
     {
       "id": "settings-resume-metadata-refused",
       "operation": "settings.resume-metadata",
-      "version": 1,
       "family": "settings.resume-metadata",
       "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
       "schedules": ["settings-first"],
@@ -1044,7 +1027,6 @@
     {
       "id": "settings-resume-metadata-transport-error",
       "operation": "settings.resume-metadata",
-      "version": 1,
       "family": "settings.resume-metadata",
       "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
       "schedules": ["settings-first"],
@@ -1123,7 +1105,6 @@
     {
       "id": "settings-repo-metadata-fulfilled",
       "operation": "settings.repo-metadata",
-      "version": 1,
       "family": "settings.repo-metadata",
       "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
       "schedules": ["settings-first"],
@@ -1217,7 +1198,6 @@
     {
       "id": "settings-repo-metadata-icons",
       "operation": "settings.repo-metadata",
-      "version": 1,
       "family": "settings.repo-metadata",
       "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
       "schedules": ["settings-first"],
@@ -1329,7 +1309,6 @@
     {
       "id": "settings-repo-metadata-refused",
       "operation": "settings.repo-metadata",
-      "version": 1,
       "family": "settings.repo-metadata",
       "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
       "schedules": ["settings-first"],
@@ -1418,7 +1397,6 @@
     {
       "id": "settings-repo-metadata-transport-error",
       "operation": "settings.repo-metadata",
-      "version": 1,
       "family": "settings.repo-metadata",
       "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
       "schedules": ["settings-first"],
@@ -1504,7 +1482,6 @@
     {
       "id": "settings-task-hydration-fulfilled",
       "operation": "settings.task-hydration",
-      "version": 1,
       "family": "settings.task-hydration",
       "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
       "schedules": ["settings-first"],
@@ -1604,7 +1581,6 @@
     {
       "id": "settings-task-hydration-refused",
       "operation": "settings.task-hydration",
-      "version": 1,
       "family": "settings.task-hydration",
       "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
       "schedules": ["settings-first"],
@@ -1699,7 +1675,6 @@
     {
       "id": "settings-task-hydration-transport-error",
       "operation": "settings.task-hydration",
-      "version": 1,
       "family": "settings.task-hydration",
       "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
       "schedules": ["settings-first"],
@@ -1791,7 +1766,6 @@
     {
       "id": "settings-workspace-submit-fulfilled",
       "operation": "settings.workspace-submit",
-      "version": 1,
       "family": "settings.workspace-submit",
       "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
       "schedules": ["settings-first"],
@@ -1833,7 +1807,6 @@
     {
       "id": "settings-workspace-submit-refused",
       "operation": "settings.workspace-submit",
-      "version": 1,
       "family": "settings.workspace-submit",
       "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
       "schedules": ["settings-first"],
@@ -1870,7 +1843,6 @@
     {
       "id": "settings-workspace-submit-transport-error",
       "operation": "settings.workspace-submit",
-      "version": 1,
       "family": "settings.workspace-submit",
       "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
       "schedules": ["settings-first"],
@@ -1904,7 +1876,6 @@
     {
       "id": "settings-task-workspace-fulfilled",
       "operation": "settings.task-workspace",
-      "version": 1,
       "family": "settings.task-workspace",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
       "schedules": ["settings-first"],
@@ -1946,7 +1917,6 @@
     {
       "id": "settings-task-workspace-refused",
       "operation": "settings.task-workspace",
-      "version": 1,
       "family": "settings.task-workspace",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
       "schedules": ["settings-first"],
@@ -1983,7 +1953,6 @@
     {
       "id": "settings-task-workspace-transport-error",
       "operation": "settings.task-workspace",
-      "version": 1,
       "family": "settings.task-workspace",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
       "schedules": ["settings-first"],
@@ -2017,7 +1986,6 @@
     {
       "id": "settings-task-workspace-create-linear",
       "operation": "settings.task-workspace-create",
-      "version": 1,
       "family": "settings.task-workspace-create",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
       "schedules": [],
@@ -2091,7 +2059,6 @@
     {
       "id": "settings-task-workspace-create-pr-start-point",
       "operation": "settings.task-workspace-create",
-      "version": 1,
       "family": "settings.task-workspace-create",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
       "schedules": [],
@@ -2184,7 +2151,6 @@
     {
       "id": "settings-new-tab-refused",
       "operation": "settings.new-tab-agents",
-      "version": 1,
       "family": "settings-agent-read",
       "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
       "schedules": ["settings-first"],
@@ -2244,7 +2210,6 @@
     {
       "id": "settings-new-tab-transport-error",
       "operation": "settings.new-tab-agents",
-      "version": 1,
       "family": "settings-agent-read",
       "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
       "schedules": ["settings-first"],
@@ -2301,7 +2266,6 @@
     {
       "id": "settings-home-coalesced",
       "operation": "settings.home-providers",
-      "version": 1,
       "family": "settings.home-providers",
       "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
       "schedules": ["stale-inflight-cleanup", "follow-up-cache-observation"],
@@ -2423,7 +2387,6 @@
     {
       "id": "settings-repo-cache-expiry",
       "operation": "settings.repo-metadata",
-      "version": 1,
       "family": "settings.repo-metadata",
       "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
       "schedules": ["follow-up-cache-observation", "timer-expiry"],
@@ -2544,7 +2507,6 @@
     {
       "id": "inventory-lifecycle",
       "operation": "workspace.file-inventory",
-      "version": 1,
       "family": "legacy-inventory",
       "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
       "schedules": ["reset", "unmount-remount", "blur-retained-route"],
@@ -2609,7 +2571,6 @@
     {
       "id": "inventory-repeat-query",
       "operation": "workspace.file-inventory",
-      "version": 1,
       "family": "legacy-inventory",
       "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
       "schedules": ["normalized-repeat", "cache-cancels-debounce", "cache-stales-inflight"],
@@ -2749,7 +2710,6 @@
     {
       "id": "settings-repo-metadata-single-host",
       "operation": "settings.repo-metadata",
-      "version": 1,
       "family": "settings.repo-metadata",
       "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
       "schedules": ["single-ssh-host"],
@@ -2793,7 +2753,6 @@
     {
       "id": "settings-bot-overrides-refresh-refused",
       "operation": "settings.bot-overrides",
-      "version": 1,
       "family": "settings.bot-overrides",
       "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
       "schedules": ["success-then-refused"],
@@ -2854,7 +2813,6 @@
     {
       "id": "settings-workspace-context-refuse-after-data",
       "operation": "settings.workspace-context",
-      "version": 1,
       "family": "settings.workspace-context",
       "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
       "schedules": ["success-then-refused"],
@@ -3022,7 +2980,6 @@
     {
       "id": "settings-home-providers-refuse-after-data",
       "operation": "settings.home-providers",
-      "version": 1,
       "family": "settings.home-providers",
       "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
       "schedules": ["success-then-refused"],
@@ -3138,7 +3095,6 @@
     {
       "id": "settings-resume-metadata-refuse-after-data",
       "operation": "settings.resume-metadata",
-      "version": 1,
       "family": "settings.resume-metadata",
       "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
       "schedules": ["success-then-refused"],
@@ -3300,7 +3256,6 @@
     {
       "id": "settings-repo-metadata-refuse-after-data",
       "operation": "settings.repo-metadata",
-      "version": 1,
       "family": "settings.repo-metadata",
       "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
       "schedules": ["success-then-refused"],
@@ -3472,7 +3427,6 @@
     {
       "id": "settings-task-hydration-refuse-after-data",
       "operation": "settings.task-hydration",
-      "version": 1,
       "family": "settings.task-hydration",
       "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
       "schedules": ["success-then-refused"],
@@ -3660,7 +3614,6 @@
     {
       "id": "probe-new-tab-both-refused",
       "operation": "settings.new-tab-agents",
-      "version": 1,
       "family": "settings-agent-read",
       "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
       "schedules": ["both-refused"],
@@ -3723,7 +3676,6 @@
     {
       "id": "probe-new-tab-refused-sibling-rejects",
       "operation": "settings.new-tab-agents",
-      "version": 1,
       "family": "settings-agent-read",
       "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
       "schedules": ["refused-sibling-rejects"],
@@ -3783,7 +3735,6 @@
     {
       "id": "probe-new-tab-rejects-sibling-refused",
       "operation": "settings.new-tab-agents",
-      "version": 1,
       "family": "settings-agent-read",
       "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
       "schedules": ["rejects-sibling-refused"],
@@ -3843,7 +3794,6 @@
     {
       "id": "probe-new-tab-null-sibling-refused",
       "operation": "settings.new-tab-agents",
-      "version": 1,
       "family": "settings-agent-read",
       "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
       "schedules": ["null-sibling-refused"],
@@ -3903,7 +3853,6 @@
     {
       "id": "sc-base-ref-default",
       "operation": "source-control.branch-base-ref",
-      "version": 1,
       "family": "git.base-ref-chain",
       "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
       "schedules": [],
@@ -3969,7 +3918,6 @@
     {
       "id": "sc-base-ref-worktree-hit",
       "operation": "source-control.branch-base-ref",
-      "version": 1,
       "family": "git.base-ref-chain",
       "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
       "schedules": [],
@@ -4015,7 +3963,6 @@
     {
       "id": "sc-base-ref-repo-fallback",
       "operation": "source-control.branch-base-ref",
-      "version": 1,
       "family": "git.base-ref-chain",
       "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
       "schedules": [],
@@ -4062,7 +4009,6 @@
     {
       "id": "sc-base-ref-unavailable",
       "operation": "source-control.branch-base-ref",
-      "version": 1,
       "family": "git.base-ref-chain",
       "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
       "schedules": [],
@@ -4118,7 +4064,6 @@
     {
       "id": "sc-history-loaded",
       "operation": "source-control.git-history",
-      "version": 1,
       "family": "git.history-read",
       "sites": ["mobile/src/source-control/mobile-git-history.ts"],
       "schedules": [],
@@ -4166,7 +4111,6 @@
     {
       "id": "sc-commit-message-generated",
       "operation": "source-control.commit-message",
-      "version": 1,
       "family": "git.commit-message-ai",
       "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
       "schedules": [],
@@ -4199,7 +4143,6 @@
     {
       "id": "sc-commit-message-canceled",
       "operation": "source-control.commit-message",
-      "version": 1,
       "family": "git.commit-message-ai",
       "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
       "schedules": [],
@@ -4250,7 +4193,6 @@
     {
       "id": "sc-commit-message-cancel-rejected",
       "operation": "source-control.commit-message",
-      "version": 1,
       "family": "git.commit-message-ai",
       "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
       "schedules": [],
@@ -4277,7 +4219,6 @@
     {
       "id": "sc-pr-link-set",
       "operation": "source-control.pr-link",
-      "version": 1,
       "family": "worktree.review-link",
       "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
       "schedules": [],
@@ -4310,7 +4251,6 @@
     {
       "id": "sc-pr-link-hosted-review",
       "operation": "source-control.pr-link",
-      "version": 1,
       "family": "worktree.review-link",
       "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
       "schedules": [],
@@ -4358,7 +4298,6 @@
     {
       "id": "sc-pr-link-read",
       "operation": "source-control.pr-link",
-      "version": 1,
       "family": "worktree.review-link",
       "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
       "schedules": [],
@@ -4406,7 +4345,6 @@
     {
       "id": "sc-reveal-first-poll",
       "operation": "source-control.session-diff-reveal",
-      "version": 1,
       "family": "session.tab-reveal",
       "sites": ["mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"],
       "schedules": [],
@@ -4475,7 +4413,6 @@
     {
       "id": "sc-reveal-timeout",
       "operation": "source-control.session-diff-reveal",
-      "version": 1,
       "family": "session.tab-reveal",
       "sites": ["mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"],
       "schedules": [],
@@ -4555,7 +4492,6 @@
     {
       "id": "sc-review-status-normalized",
       "operation": "source-control.review-git-preparation",
-      "version": 1,
       "family": "git.review-preparation",
       "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
@@ -4605,7 +4541,6 @@
     {
       "id": "sc-review-status-entries-not-array",
       "operation": "source-control.review-git-preparation",
-      "version": 1,
       "family": "git.review-preparation",
       "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
@@ -4635,7 +4570,6 @@
     {
       "id": "sc-review-commit",
       "operation": "source-control.review-git-preparation",
-      "version": 1,
       "family": "git.review-preparation",
       "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
@@ -4666,7 +4600,6 @@
     {
       "id": "sc-review-commit-inner-failure",
       "operation": "source-control.review-git-preparation",
-      "version": 1,
       "family": "git.review-preparation",
       "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
@@ -4697,7 +4630,6 @@
     {
       "id": "sc-review-commit-refused-empty-message",
       "operation": "source-control.review-git-preparation",
-      "version": 1,
       "family": "git.review-preparation",
       "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
@@ -4728,7 +4660,6 @@
     {
       "id": "sc-review-commit-rejected",
       "operation": "source-control.review-git-preparation",
-      "version": 1,
       "family": "git.review-preparation",
       "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
       "schedules": [],
@@ -4756,7 +4687,6 @@
     {
       "id": "sc-prerequisite-push",
       "operation": "source-control.remote-prerequisite",
-      "version": 1,
       "family": "git.remote-prerequisite",
       "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
       "schedules": [],
@@ -4791,7 +4721,6 @@
     {
       "id": "sc-prerequisite-publish",
       "operation": "source-control.remote-prerequisite",
-      "version": 1,
       "family": "git.remote-prerequisite",
       "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
       "schedules": [],
@@ -4824,7 +4753,6 @@
     {
       "id": "sc-prerequisite-force-with-lease",
       "operation": "source-control.remote-prerequisite",
-      "version": 1,
       "family": "git.remote-prerequisite",
       "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
       "schedules": [],
@@ -4858,7 +4786,6 @@
     {
       "id": "sc-prerequisite-skipped",
       "operation": "source-control.remote-prerequisite",
-      "version": 1,
       "family": "git.remote-prerequisite",
       "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
       "schedules": [],
@@ -4878,7 +4805,6 @@
     {
       "id": "sc-eligibility-fetched",
       "operation": "source-control.hosted-review-eligibility",
-      "version": 1,
       "family": "hostedReview.eligibility",
       "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
       "schedules": [],
@@ -4922,7 +4848,6 @@
     {
       "id": "sc-prefill-unavailable-on-refusal",
       "operation": "source-control.hosted-review-eligibility",
-      "version": 1,
       "family": "hostedReview.eligibility",
       "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
       "schedules": [],
@@ -4957,7 +4882,6 @@
     {
       "id": "sc-prefill-unavailable-on-rejection",
       "operation": "source-control.hosted-review-eligibility",
-      "version": 1,
       "family": "hostedReview.eligibility",
       "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
       "schedules": [],
@@ -4989,7 +4913,6 @@
     {
       "id": "sc-create-pushes-then-creates",
       "operation": "source-control.hosted-review-create",
-      "version": 1,
       "family": "hostedReview.create-chain",
       "sites": [
         "mobile/src/source-control/mobile-hosted-review-service.ts",
@@ -5068,7 +4991,6 @@
     {
       "id": "sc-create-link-failure-is-non-fatal",
       "operation": "source-control.hosted-review-create",
-      "version": 1,
       "family": "hostedReview.create-chain",
       "sites": [
         "mobile/src/source-control/mobile-hosted-review-service.ts",
@@ -5125,7 +5047,6 @@
     {
       "id": "sc-create-existing-review",
       "operation": "source-control.hosted-review-create",
-      "version": 1,
       "family": "hostedReview.create-chain",
       "sites": [
         "mobile/src/source-control/mobile-hosted-review-service.ts",
@@ -5184,7 +5105,6 @@
     {
       "id": "sc-create-refused-empty-message",
       "operation": "source-control.hosted-review-create",
-      "version": 1,
       "family": "hostedReview.create-chain",
       "sites": [
         "mobile/src/source-control/mobile-hosted-review-service.ts",
@@ -5225,7 +5145,6 @@
     {
       "id": "sc-create-rejected-empty-message",
       "operation": "source-control.hosted-review-create",
-      "version": 1,
       "family": "hostedReview.create-chain",
       "sites": [
         "mobile/src/source-control/mobile-hosted-review-service.ts",
@@ -5263,7 +5182,6 @@
     {
       "id": "sc-create-intent-stage-commit-push-create",
       "operation": "source-control.create-intent",
-      "version": 1,
       "family": "hostedReview.create-intent",
       "sites": [
         "mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts",
@@ -5540,7 +5458,6 @@
     {
       "id": "sc-create-intent-unlisted-provider",
       "operation": "source-control.create-intent",
-      "version": 1,
       "family": "hostedReview.create-intent",
       "sites": [
         "mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts",
@@ -5816,7 +5733,6 @@
     {
       "id": "tw-create-retry-created",
       "operation": "tasks.worktree-create-retry",
-      "version": 1,
       "family": "worktree.create-retry",
       "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
@@ -5850,7 +5766,6 @@
     {
       "id": "tw-create-retry-warning-kept",
       "operation": "tasks.worktree-create-retry",
-      "version": 1,
       "family": "worktree.create-retry",
       "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
@@ -5884,7 +5799,6 @@
     {
       "id": "tw-create-retry-name-collision",
       "operation": "tasks.worktree-create-retry",
-      "version": 1,
       "family": "worktree.create-retry",
       "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
@@ -5936,7 +5850,6 @@
     {
       "id": "tw-create-retry-unretryable-refusal",
       "operation": "tasks.worktree-create-retry",
-      "version": 1,
       "family": "worktree.create-retry",
       "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
@@ -5968,7 +5881,6 @@
     {
       "id": "tw-create-retry-ambiguous-while-connected",
       "operation": "tasks.worktree-create-retry",
-      "version": 1,
       "family": "worktree.create-retry",
       "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
@@ -5997,7 +5909,6 @@
     {
       "id": "tw-create-retry-ambiguous-after-drop",
       "operation": "tasks.worktree-create-retry",
-      "version": 1,
       "family": "worktree.create-retry",
       "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
@@ -6024,7 +5935,6 @@
     {
       "id": "tw-create-retry-ambiguous-without-idempotency",
       "operation": "tasks.worktree-create-retry",
-      "version": 1,
       "family": "worktree.create-retry",
       "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
       "schedules": [],
@@ -6055,7 +5965,6 @@
     {
       "id": "tw-create-retry-agent-launched",
       "operation": "tasks.worktree-create-retry",
-      "version": 1,
       "family": "worktree.agent-launch-create",
       "sites": [
         "mobile/src/tasks/worktree-create-retry.ts",
@@ -6113,7 +6022,6 @@
     {
       "id": "tw-capabilities-advertised",
       "operation": "tasks.worktree-capabilities",
-      "version": 1,
       "family": "worktree.runtime-capabilities",
       "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
       "schedules": [],
@@ -6146,7 +6054,6 @@
     {
       "id": "tw-capabilities-legacy-idempotency",
       "operation": "tasks.worktree-capabilities",
-      "version": 1,
       "family": "worktree.runtime-capabilities",
       "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
       "schedules": [],
@@ -6175,7 +6082,6 @@
     {
       "id": "tw-capabilities-cutover-retried",
       "operation": "tasks.worktree-capabilities",
-      "version": 1,
       "family": "worktree.runtime-capabilities",
       "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
       "schedules": [],
@@ -6218,7 +6124,6 @@
     {
       "id": "tw-hosted-base-resolved",
       "operation": "tasks.composer-hosted-base",
-      "version": 1,
       "family": "worktree.hosted-base",
       "sites": ["mobile/src/tasks/composer-source-base-resolve.ts"],
       "schedules": [],
@@ -6271,7 +6176,6 @@
     {
       "id": "tw-hosted-base-soft-error",
       "operation": "tasks.composer-hosted-base",
-      "version": 1,
       "family": "worktree.hosted-base",
       "sites": ["mobile/src/tasks/composer-source-base-resolve.ts"],
       "schedules": [],
@@ -6323,7 +6227,6 @@
     {
       "id": "tw-setup-hook-trust-approved",
       "operation": "tasks.setup-hook-trust",
-      "version": 1,
       "family": "worktree.setup-hook-trust",
       "sites": ["mobile/src/tasks/setup-hook-trust.ts"],
       "schedules": [],
@@ -6359,7 +6262,6 @@
     {
       "id": "tw-setup-hook-trust-always",
       "operation": "tasks.setup-hook-trust",
-      "version": 1,
       "family": "worktree.setup-hook-trust",
       "sites": ["mobile/src/tasks/setup-hook-trust.ts"],
       "schedules": [],
@@ -6398,7 +6300,6 @@
     {
       "id": "tw-smart-search-all-providers",
       "operation": "tasks.smart-source-search",
-      "version": 1,
       "family": "tasks.smart-source-search",
       "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
       "schedules": [],
@@ -6589,7 +6490,6 @@
     {
       "id": "tw-smart-search-linear-listed",
       "operation": "tasks.smart-source-search",
-      "version": 1,
       "family": "tasks.smart-source-search",
       "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
       "schedules": [],
@@ -6645,7 +6545,6 @@
     {
       "id": "tw-smart-search-gitlab-provider-error",
       "operation": "tasks.smart-source-search",
-      "version": 1,
       "family": "tasks.smart-source-search",
       "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
       "schedules": [],
@@ -6711,7 +6610,6 @@
     {
       "id": "tw-paste-lookup-resolved",
       "operation": "tasks.paste-lookup",
-      "version": 1,
       "family": "tasks.paste-lookup",
       "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
       "schedules": [],
@@ -6831,7 +6729,6 @@
     {
       "id": "tw-paste-lookup-slug-unsupported",
       "operation": "tasks.paste-lookup",
-      "version": 1,
       "family": "tasks.paste-lookup",
       "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
       "schedules": [],
@@ -6868,7 +6765,6 @@
     {
       "id": "tw-paste-lookup-slug-refused",
       "operation": "tasks.paste-lookup",
-      "version": 1,
       "family": "tasks.paste-lookup",
       "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
       "schedules": [],
@@ -6908,7 +6804,6 @@
     {
       "id": "tw-workspace-source-presets",
       "operation": "tasks.workspace-source",
-      "version": 1,
       "family": "tasks.workspace-source",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"],
       "schedules": [],
@@ -6964,7 +6859,6 @@
     {
       "id": "tw-workspace-source-presets-refused",
       "operation": "tasks.workspace-source",
-      "version": 1,
       "family": "tasks.workspace-source",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"],
       "schedules": [],
@@ -6994,7 +6888,6 @@
     {
       "id": "tw-workspace-sparse-saved",
       "operation": "tasks.workspace-sparse",
-      "version": 1,
       "family": "tasks.workspace-sparse",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"],
       "schedules": [],
@@ -7053,7 +6946,6 @@
     {
       "id": "tw-workspace-sparse-missing-preset",
       "operation": "tasks.workspace-sparse",
-      "version": 1,
       "family": "tasks.workspace-sparse",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"],
       "schedules": [],
@@ -7099,7 +6991,6 @@
     {
       "id": "tw-workspace-ssh-connected",
       "operation": "tasks.workspace-ssh",
-      "version": 1,
       "family": "tasks.workspace-ssh",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
       "schedules": [],
@@ -7179,7 +7070,6 @@
     {
       "id": "tw-workspace-ssh-not-ready",
       "operation": "tasks.workspace-ssh",
-      "version": 1,
       "family": "tasks.workspace-ssh",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
       "schedules": [],
@@ -7251,7 +7141,6 @@
     {
       "id": "tw-workspace-ssh-connect-refused",
       "operation": "tasks.workspace-ssh",
-      "version": 1,
       "family": "tasks.workspace-ssh",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
       "schedules": [],
@@ -7319,7 +7208,6 @@
     {
       "id": "tw-workspace-ssh-local-agents",
       "operation": "tasks.workspace-ssh-local",
-      "version": 1,
       "family": "tasks.workspace-ssh-local",
       "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
       "schedules": [],
@@ -7346,7 +7234,6 @@
     {
       "id": "tw-task-preferences-resume-write",
       "operation": "settings.task-preferences",
-      "version": 1,
       "family": "settings-best-effort",
       "sites": ["mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx"],
       "schedules": [],
@@ -7409,7 +7296,6 @@
     {
       "id": "files-ownership-ssh",
       "operation": "files.mutation-ownership",
-      "version": 1,
       "family": "files.mutation-ownership",
       "sites": ["mobile/src/files/mobile-file-mutation-ownership.ts"],
       "schedules": [],
@@ -7473,7 +7359,6 @@
     {
       "id": "files-ownership-local",
       "operation": "files.mutation-ownership",
-      "version": 1,
       "family": "files.mutation-ownership",
       "sites": ["mobile/src/files/mobile-file-mutation-ownership.ts"],
       "schedules": [],
@@ -7516,7 +7401,6 @@
     {
       "id": "files-preview-grant-refresh",
       "operation": "files.preview-load",
-      "version": 1,
       "family": "files.preview-load",
       "sites": [
         "mobile/src/files/mobile-file-preview-request.ts",
@@ -7591,7 +7475,6 @@
     {
       "id": "files-preview-artifact-direct",
       "operation": "files.preview-load",
-      "version": 1,
       "family": "files.preview-load",
       "sites": [
         "mobile/src/files/mobile-file-preview-request.ts",
@@ -7627,7 +7510,6 @@
     {
       "id": "files-preview-worktree",
       "operation": "files.preview-load",
-      "version": 1,
       "family": "files.preview-load",
       "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
@@ -7659,7 +7541,6 @@
     {
       "id": "files-preview-worktree-image",
       "operation": "files.preview-load",
-      "version": 1,
       "family": "files.preview-load",
       "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
@@ -7695,7 +7576,6 @@
     {
       "id": "files-preview-artifact-image",
       "operation": "files.preview-load",
-      "version": 1,
       "family": "files.preview-load",
       "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
@@ -7732,7 +7612,6 @@
     {
       "id": "files-save-verified",
       "operation": "files.preview-save",
-      "version": 1,
       "family": "files.preview-save",
       "sites": [
         "mobile/src/files/mobile-file-preview-request.ts",
@@ -7786,7 +7665,6 @@
     {
       "id": "files-save-blind",
       "operation": "files.preview-save",
-      "version": 1,
       "family": "files.preview-save",
       "sites": [
         "mobile/src/files/mobile-file-preview-request.ts",
@@ -7821,7 +7699,6 @@
     {
       "id": "files-tab-doc-shapes",
       "operation": "files.tab-doc",
-      "version": 1,
       "family": "files.tab-doc",
       "sites": ["mobile/src/files/mobile-file-tab-doc.ts"],
       "schedules": [],
@@ -7892,7 +7769,6 @@
     {
       "id": "components-target-ssh",
       "operation": "components.execution-target",
-      "version": 1,
       "family": "components.execution-target",
       "sites": ["mobile/src/components/use-new-workspace-execution-target.ts"],
       "schedules": [],
@@ -7960,7 +7836,6 @@
     {
       "id": "components-target-local",
       "operation": "components.execution-target-local",
-      "version": 1,
       "family": "components.execution-target-local",
       "sites": ["mobile/src/components/use-new-workspace-execution-target.ts"],
       "schedules": [],
@@ -7990,7 +7865,6 @@
     {
       "id": "components-setup-ask",
       "operation": "components.setup-script",
-      "version": 1,
       "family": "components.setup-script",
       "sites": ["mobile/src/components/use-new-workspace-setup-script.ts"],
       "schedules": [],
@@ -8029,7 +7903,6 @@
     {
       "id": "components-codex-capability",
       "operation": "components.codex-reset-capability",
-      "version": 1,
       "family": "components.codex-reset-capability",
       "sites": ["mobile/src/components/codex-reset-credit-capability.ts"],
       "schedules": [],
@@ -8058,7 +7931,6 @@
     {
       "id": "host-view-settings-sync",
       "operation": "host.view-settings",
-      "version": 1,
       "family": "host.view-settings",
       "sites": ["mobile/src/host-screen/use-host-view-settings.ts"],
       "schedules": [],
@@ -8114,7 +7986,6 @@
     {
       "id": "home-host-stats",
       "operation": "home.host-stats",
-      "version": 1,
       "family": "home.host-stats",
       "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
       "schedules": [],
@@ -8147,7 +8018,6 @@
     {
       "id": "worktree-home-catalog",
       "operation": "worktree.home-catalog",
-      "version": 1,
       "family": "worktree.home-catalog",
       "sites": ["mobile/src/worktree/home-host-worktree-fetch.ts"],
       "schedules": [],
@@ -8193,7 +8063,6 @@
     {
       "id": "worktree-catalog-snapshot",
       "operation": "worktree.catalog-snapshot",
-      "version": 1,
       "family": "worktree.catalog-snapshot",
       "sites": ["mobile/src/worktree/worktree-catalog-snapshot-client.ts"],
       "schedules": [],
@@ -8234,7 +8103,6 @@
     {
       "id": "worktree-catalog-snapshot-unreadable",
       "operation": "worktree.catalog-snapshot",
-      "version": 1,
       "family": "worktree.catalog-snapshot",
       "sites": ["mobile/src/worktree/worktree-catalog-snapshot-client.ts"],
       "schedules": [],
@@ -8265,7 +8133,6 @@
     {
       "id": "worktree-retired-names",
       "operation": "worktree.retired-names",
-      "version": 1,
       "family": "worktree.retired-names",
       "sites": ["mobile/src/worktree/use-retired-worktree-names.ts"],
       "schedules": [],
@@ -8302,7 +8169,6 @@
     {
       "id": "host-worktree-actions-pin-open-delete",
       "operation": "host.worktree-actions",
-      "version": 1,
       "family": "host.worktree-actions",
       "sites": ["mobile/src/host-screen/use-host-worktree-actions.ts"],
       "schedules": [],
@@ -8377,7 +8243,6 @@
     {
       "id": "host-worktree-delete-refused",
       "operation": "host.worktree-actions",
-      "version": 1,
       "family": "host.worktree-actions",
       "sites": ["mobile/src/host-screen/use-host-worktree-actions.ts"],
       "schedules": [],
@@ -8415,7 +8280,6 @@
     {
       "id": "pr-read-surface",
       "operation": "session.pr-reads",
-      "version": 1,
       "family": "github.pr-read",
       "sites": ["mobile/src/session/github-pr-rpc.ts"],
       "schedules": [],
@@ -8612,7 +8476,6 @@
     {
       "id": "pr-read-fork-routing",
       "operation": "session.pr-reads",
-      "version": 1,
       "family": "github.pr-read",
       "sites": ["mobile/src/session/github-pr-rpc.ts"],
       "schedules": [],
@@ -8718,7 +8581,6 @@
     {
       "id": "pr-read-upstream-error",
       "operation": "session.pr-reads",
-      "version": 1,
       "family": "github.pr-read",
       "sites": ["mobile/src/session/github-pr-rpc.ts"],
       "schedules": [],
@@ -8795,7 +8657,6 @@
     {
       "id": "pr-sidebar-load",
       "operation": "session.pr-sidebar",
-      "version": 1,
       "family": "session.pr-sidebar",
       "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
       "schedules": [],
@@ -8895,7 +8756,6 @@
     {
       "id": "pr-sidebar-checks-refused",
       "operation": "session.pr-sidebar",
-      "version": 1,
       "family": "session.pr-sidebar",
       "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
       "schedules": [],
@@ -8990,7 +8850,6 @@
     {
       "id": "pr-mutation-status",
       "operation": "session.pr-mutations",
-      "version": 1,
       "family": "github.pr-mutation",
       "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
@@ -9132,7 +8991,6 @@
     {
       "id": "pr-mutation-in-band-failure",
       "operation": "session.pr-mutations",
-      "version": 1,
       "family": "github.pr-mutation",
       "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
@@ -9234,7 +9092,6 @@
     {
       "id": "pr-comment-mutation",
       "operation": "session.pr-mutations",
-      "version": 1,
       "family": "github.pr-comment-mutation",
       "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
@@ -9362,7 +9219,6 @@
     {
       "id": "pr-comment-resolve-unconfirmed",
       "operation": "session.pr-mutations",
-      "version": 1,
       "family": "github.pr-comment-mutation",
       "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
@@ -9409,7 +9265,6 @@
     {
       "id": "pr-title-mutation",
       "operation": "session.pr-mutations",
-      "version": 1,
       "family": "github.pr-title-mutation",
       "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
@@ -9438,7 +9293,6 @@
     {
       "id": "pr-title-unconfirmed",
       "operation": "session.pr-mutations",
-      "version": 1,
       "family": "github.pr-title-mutation",
       "sites": ["mobile/src/session/github-pr-mutations.ts"],
       "schedules": [],
@@ -9489,7 +9343,6 @@
     {
       "id": "pr-triage-launch",
       "operation": "session.pr-triage-launch",
-      "version": 1,
       "family": "session.pr-triage",
       "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
       "schedules": [],
@@ -9586,7 +9439,6 @@
     {
       "id": "pr-triage-prompt-not-delivered",
       "operation": "session.pr-triage-launch",
-      "version": 1,
       "family": "session.pr-triage",
       "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
       "schedules": [],
@@ -9680,7 +9532,6 @@
     {
       "id": "pr-triage-launch-unconfirmed",
       "operation": "session.pr-triage-launch",
-      "version": 1,
       "family": "session.pr-triage",
       "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
       "schedules": [],
@@ -9761,7 +9612,6 @@
     {
       "id": "pr-triage-update-required",
       "operation": "session.pr-triage-launch",
-      "version": 1,
       "family": "session.pr-triage",
       "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
       "schedules": [],
@@ -9781,7 +9631,6 @@
     {
       "id": "pr-branch-identity",
       "operation": "session.pr-branch-context",
-      "version": 1,
       "family": "session.pr-branch-context",
       "sites": ["mobile/src/session/use-mobile-pr-branch-context.ts"],
       "schedules": [],
@@ -9863,10 +9712,10 @@
             "result": {
               "summary": {
                 "baseRef": "origin/main",
-                "baseOid": "base-oid",
+                "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
                 "compareRef": "feature",
-                "headOid": "head-oid",
-                "mergeBase": "merge-base",
+                "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+                "mergeBase": "0123456789abcdef0123456789abcdef01234567",
                 "changedFiles": 1,
                 "status": "ready"
               },
@@ -9889,7 +9738,6 @@
     {
       "id": "pr-branch-repo-context",
       "operation": "session.pr-branch-context",
-      "version": 1,
       "family": "session.pr-branch-context",
       "sites": ["mobile/src/session/use-mobile-pr-branch-context.ts"],
       "schedules": [],
@@ -9920,7 +9768,6 @@
     {
       "id": "diff-review-snapshot",
       "operation": "session.diff-review-load",
-      "version": 1,
       "family": "session.diff-review",
       "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
@@ -10033,10 +9880,10 @@
             "result": {
               "summary": {
                 "baseRef": "origin/main",
-                "baseOid": "base-oid",
+                "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
                 "compareRef": "feature",
-                "headOid": "head-oid",
-                "mergeBase": "merge-base",
+                "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+                "mergeBase": "0123456789abcdef0123456789abcdef01234567",
                 "changedFiles": 1,
                 "status": "ready"
               },
@@ -10059,7 +9906,6 @@
     {
       "id": "diff-review-status-unavailable",
       "operation": "session.diff-review-load",
-      "version": 1,
       "family": "session.diff-review",
       "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
@@ -10089,7 +9935,6 @@
     {
       "id": "diff-review-worktree-file-diff",
       "operation": "session.diff-review-load",
-      "version": 1,
       "family": "session.diff-review",
       "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
@@ -10172,7 +10017,6 @@
     {
       "id": "diff-review-refused-file-diff",
       "operation": "session.diff-review-load",
-      "version": 1,
       "family": "session.diff-review",
       "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
@@ -10258,7 +10102,6 @@
     {
       "id": "diff-review-branch-file-diff",
       "operation": "session.diff-review-load",
-      "version": 1,
       "family": "session.diff-review",
       "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
@@ -10277,9 +10120,9 @@
             "filePath": "src/app.ts",
             "compare": {
               "baseRef": "origin/main",
-              "baseOid": "base-oid",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567"
             }
           },
           "reply": {
@@ -10308,7 +10151,6 @@
     {
       "id": "diff-review-branch-compare",
       "operation": "session.diff-review-load",
-      "version": 1,
       "family": "session.diff-review",
       "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
@@ -10424,7 +10266,6 @@
     {
       "id": "diff-review-notes-refused-before-compare",
       "operation": "session.diff-review-load",
-      "version": 1,
       "family": "session.diff-review",
       "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
@@ -10533,10 +10374,10 @@
             "result": {
               "summary": {
                 "baseRef": "origin/main",
-                "baseOid": "base-oid",
+                "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
                 "compareRef": "feature",
-                "headOid": "head-oid",
-                "mergeBase": "merge-base",
+                "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+                "mergeBase": "0123456789abcdef0123456789abcdef01234567",
                 "changedFiles": 1,
                 "status": "ready"
               },
@@ -10559,7 +10400,6 @@
     {
       "id": "transport-host-status-gates-ready",
       "operation": "transport.host-status-gates",
-      "version": 1,
       "family": "transport.host-status-gates",
       "sites": ["mobile/src/transport/host-status-gates.ts"],
       "schedules": [],
@@ -10592,7 +10432,6 @@
     {
       "id": "transport-host-status-gates-refused-degrades",
       "operation": "transport.host-status-gates",
-      "version": 1,
       "family": "transport.host-status-gates",
       "sites": ["mobile/src/transport/host-status-gates.ts"],
       "schedules": [],
@@ -10622,7 +10461,6 @@
     {
       "id": "transport-host-status-gates-drop-keeps-capabilities",
       "operation": "transport.host-status-gates",
-      "version": 1,
       "family": "transport.host-status-gates",
       "sites": ["mobile/src/transport/host-status-gates.ts"],
       "schedules": [],
@@ -10665,7 +10503,6 @@
     {
       "id": "transport-capability-probe-publishes",
       "operation": "transport.capability-probe",
-      "version": 1,
       "family": "transport.capability-probe",
       "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
       "schedules": [],
@@ -10694,7 +10531,6 @@
     {
       "id": "transport-capability-probe-refused-backs-off",
       "operation": "transport.capability-probe",
-      "version": 1,
       "family": "transport.capability-probe",
       "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
       "schedules": [],
@@ -10742,7 +10578,6 @@
     {
       "id": "transport-capability-probe-non-string-capabilities-drop",
       "operation": "transport.capability-probe",
-      "version": 1,
       "family": "transport.capability-probe",
       "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
       "schedules": [],
@@ -10778,7 +10613,6 @@
     {
       "id": "transport-pairing-race-relay-completes-first",
       "operation": "transport.pairing-race",
-      "version": 1,
       "family": "transport.pairing-race",
       "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
       "schedules": [],
@@ -10833,7 +10667,6 @@
     {
       "id": "transport-pairing-race-direct-completes-first",
       "operation": "transport.pairing-race",
-      "version": 1,
       "family": "transport.pairing-race",
       "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
       "schedules": [],
@@ -10888,7 +10721,6 @@
     {
       "id": "transport-pairing-race-relay-wins-when-direct-refused",
       "operation": "transport.pairing-race",
-      "version": 1,
       "family": "transport.pairing-race",
       "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
       "schedules": [],
@@ -10944,7 +10776,6 @@
     {
       "id": "transport-pairing-race-both-refused",
       "operation": "transport.pairing-race",
-      "version": 1,
       "family": "transport.pairing-race",
       "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
       "schedules": [],
@@ -11001,7 +10832,6 @@
     {
       "id": "relay-rotation-installs-and-commits",
       "operation": "relay.credential-rotation",
-      "version": 1,
       "family": "relay.credential-rotation",
       "sites": ["mobile/src/transport/mobile-relay-credential-rotation.ts"],
       "schedules": [],
@@ -11093,7 +10923,6 @@
     {
       "id": "relay-rotation-resumes-committed-pending",
       "operation": "relay.credential-rotation",
-      "version": 1,
       "family": "relay.credential-rotation",
       "sites": ["mobile/src/transport/mobile-relay-credential-rotation.ts"],
       "schedules": [],
@@ -11146,7 +10975,6 @@
     {
       "id": "relay-direct-upgrade-commits",
       "operation": "relay.direct-upgrade",
-      "version": 1,
       "family": "relay.direct-upgrade",
       "sites": ["mobile/src/transport/mobile-relay-direct-upgrade.ts"],
       "schedules": [],
@@ -11240,7 +11068,6 @@
     {
       "id": "relay-direct-upgrade-unsupported-host-declines",
       "operation": "relay.direct-upgrade",
-      "version": 1,
       "family": "relay.direct-upgrade",
       "sites": ["mobile/src/transport/mobile-relay-direct-upgrade.ts"],
       "schedules": [],
@@ -11273,7 +11100,6 @@
     {
       "id": "relay-pairing-recovery-resume-committed",
       "operation": "relay.pairing-recovery",
-      "version": 1,
       "family": "relay.pairing-recovery",
       "sites": ["mobile/src/transport/mobile-relay-pairing-recovery.ts"],
       "schedules": [],
@@ -11323,7 +11149,6 @@
     {
       "id": "relay-pairing-recovery-invite-authorizes",
       "operation": "relay.pairing-recovery",
-      "version": 1,
       "family": "relay.pairing-recovery",
       "sites": ["mobile/src/transport/mobile-relay-pairing-recovery.ts"],
       "schedules": [],
@@ -11440,7 +11265,6 @@
     {
       "id": "pairing-pre-profile-direct-wins-and-provisions",
       "operation": "pairing.pre-profile",
-      "version": 1,
       "family": "pairing.pre-profile",
       "sites": [
         "mobile/src/transport/pre-profile-pairing-coordinator.ts",
@@ -11547,7 +11371,6 @@
     {
       "id": "pairing-pre-profile-provision-unsupported-saves-direct-host",
       "operation": "pairing.pre-profile",
-      "version": 1,
       "family": "pairing.pre-profile",
       "sites": [
         "mobile/src/transport/pre-profile-pairing-coordinator.ts",
@@ -11619,7 +11442,6 @@
     {
       "id": "pairing-pre-profile-times-out",
       "operation": "pairing.pre-profile",
-      "version": 1,
       "family": "pairing.pre-profile",
       "sites": [
         "mobile/src/transport/pre-profile-pairing-coordinator.ts",
@@ -11648,7 +11470,6 @@
     {
       "id": "transport-capability-probe-cutover-reasks-fast",
       "operation": "transport.capability-probe",
-      "version": 1,
       "family": "transport.capability-probe",
       "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
       "schedules": [],
@@ -11694,7 +11515,6 @@
     {
       "id": "tk-item-detail-github",
       "operation": "tasks.item-detail-github",
-      "version": 1,
       "family": "tasks.item-detail-github",
       "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
@@ -11738,7 +11558,6 @@
     {
       "id": "tk-item-detail-github-reactions",
       "operation": "tasks.item-detail-github",
-      "version": 1,
       "family": "tasks.item-detail-github",
       "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
@@ -11801,7 +11620,6 @@
     {
       "id": "tk-item-detail-gitlab",
       "operation": "tasks.item-detail-gitlab",
-      "version": 1,
       "family": "tasks.item-detail-gitlab",
       "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
@@ -11814,7 +11632,7 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": "group/project",
+            "projectRef": { "host": "gitlab.com", "path": "group/project" },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -11845,7 +11663,6 @@
     {
       "id": "tk-item-detail-gitlab-reactions",
       "operation": "tasks.item-detail-gitlab",
-      "version": 1,
       "family": "tasks.item-detail-gitlab",
       "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
@@ -11858,7 +11675,7 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": "group/project",
+            "projectRef": { "host": "gitlab.com", "path": "group/project" },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -11904,7 +11721,6 @@
     {
       "id": "tk-item-detail-linear",
       "operation": "tasks.item-detail-linear",
-      "version": 1,
       "family": "tasks.item-detail-linear",
       "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
       "schedules": [],
@@ -11973,7 +11789,6 @@
     {
       "id": "tk-item-detail-metadata",
       "operation": "tasks.item-detail-metadata",
-      "version": 1,
       "family": "tasks.item-detail-metadata",
       "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-metadata-effects.tsx"],
       "schedules": [],
@@ -12016,7 +11831,6 @@
     {
       "id": "tk-linear-team-context",
       "operation": "tasks.linear-team-context",
-      "version": 1,
       "family": "tasks.linear-team-context",
       "sites": ["mobile/src/tasks/use-mobile-tasks-list-and-detail-effects.tsx"],
       "schedules": [],
@@ -12079,7 +11893,6 @@
     {
       "id": "tk-provider-load",
       "operation": "tasks.provider-load",
-      "version": 1,
       "family": "tasks.provider-load",
       "sites": ["mobile/src/tasks/use-mobile-tasks-provider-load-actions.tsx"],
       "schedules": [],
@@ -12212,7 +12025,6 @@
     {
       "id": "tk-list-gitlab-todos",
       "operation": "tasks.task-list-gitlab-todos",
-      "version": 1,
       "family": "tasks.task-list-gitlab-todos",
       "sites": ["mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"],
       "schedules": [],
@@ -12257,7 +12069,6 @@
     {
       "id": "tk-list-gitlab-items",
       "operation": "tasks.task-list-gitlab-items",
-      "version": 1,
       "family": "tasks.task-list-gitlab-items",
       "sites": ["mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"],
       "schedules": [],
@@ -12308,7 +12119,6 @@
     {
       "id": "tk-list-linear",
       "operation": "tasks.task-list-linear",
-      "version": 1,
       "family": "tasks.task-list-linear",
       "sites": ["mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"],
       "schedules": [],
@@ -12416,7 +12226,6 @@
     {
       "id": "tk-linear-connect",
       "operation": "tasks.linear-connect",
-      "version": 1,
       "family": "tasks.linear-connect",
       "sites": ["mobile/src/tasks/use-mobile-tasks-task-pagination-actions.tsx"],
       "schedules": [],
@@ -12449,7 +12258,6 @@
     {
       "id": "tk-create-github",
       "operation": "tasks.task-create-github",
-      "version": 1,
       "family": "tasks.task-create-github",
       "sites": ["mobile/src/tasks/use-mobile-tasks-task-create-actions.tsx"],
       "schedules": [],
@@ -12508,7 +12316,6 @@
     {
       "id": "tk-create-gitlab",
       "operation": "tasks.task-create-gitlab",
-      "version": 1,
       "family": "tasks.task-create-gitlab",
       "sites": ["mobile/src/tasks/use-mobile-tasks-task-create-actions.tsx"],
       "schedules": [],
@@ -12545,7 +12352,6 @@
     {
       "id": "tk-create-linear",
       "operation": "tasks.task-create-linear",
-      "version": 1,
       "family": "tasks.task-create-linear",
       "sites": ["mobile/src/tasks/use-mobile-tasks-task-create-actions.tsx"],
       "schedules": [],
@@ -12585,7 +12391,6 @@
     {
       "id": "tk-item-comment-github",
       "operation": "tasks.item-comment-github",
-      "version": 1,
       "family": "tasks.item-comment-github",
       "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"],
       "schedules": [],
@@ -12627,7 +12432,6 @@
     {
       "id": "tk-item-review-github",
       "operation": "tasks.item-review-github",
-      "version": 1,
       "family": "tasks.item-review-github",
       "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"],
       "schedules": [],
@@ -12689,7 +12493,6 @@
     {
       "id": "tk-item-comment-gitlab",
       "operation": "tasks.item-comment-gitlab",
-      "version": 1,
       "family": "tasks.item-comment-gitlab",
       "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"],
       "schedules": [],
@@ -12707,7 +12510,7 @@
           "params": {
             "body": "a comment",
             "number": 4,
-            "projectRef": "group/project",
+            "projectRef": { "host": "gitlab.com", "path": "group/project" },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12731,7 +12534,6 @@
     {
       "id": "tk-item-comment-gitlab-mr",
       "operation": "tasks.item-comment-gitlab-mr",
-      "version": 1,
       "family": "tasks.item-comment-gitlab-mr",
       "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx"],
       "schedules": [],
@@ -12749,7 +12551,7 @@
           "params": {
             "body": "a comment",
             "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": { "host": "gitlab.com", "path": "group/project" },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12773,7 +12575,6 @@
     {
       "id": "tk-item-checks-files",
       "operation": "tasks.item-checks-files-github",
-      "version": 1,
       "family": "tasks.item-checks-files",
       "sites": ["mobile/src/tasks/use-mobile-tasks-github-check-file-actions.tsx"],
       "schedules": [],
@@ -12910,7 +12711,6 @@
     {
       "id": "tk-item-reply-merge",
       "operation": "tasks.item-reply-merge-github",
-      "version": 1,
       "family": "tasks.item-reply-merge",
       "sites": ["mobile/src/tasks/use-mobile-tasks-github-reply-merge-actions.tsx"],
       "schedules": [],
@@ -13030,7 +12830,6 @@
     {
       "id": "tk-item-merge-gitlab",
       "operation": "tasks.item-merge-gitlab",
-      "version": 1,
       "family": "tasks.item-merge-gitlab",
       "sites": ["mobile/src/tasks/use-mobile-tasks-github-reply-merge-actions.tsx"],
       "schedules": [],
@@ -13048,7 +12847,7 @@
           "params": {
             "iid": 7,
             "method": "squash",
-            "projectRef": "group/project",
+            "projectRef": { "host": "gitlab.com", "path": "group/project" },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -13066,7 +12865,6 @@
     {
       "id": "tk-item-status-gitlab",
       "operation": "tasks.item-status-gitlab",
-      "version": 1,
       "family": "tasks.item-status-gitlab",
       "sites": ["mobile/src/tasks/use-mobile-tasks-gitlab-github-status-actions.tsx"],
       "schedules": [],
@@ -13083,7 +12881,7 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": "group/project",
+            "projectRef": { "host": "gitlab.com", "path": "group/project" },
             "repo": "id:repo-1",
             "updates": {
               "state": "closed"
@@ -13129,7 +12927,6 @@
     {
       "id": "tk-item-status-gitlab-mr",
       "operation": "tasks.item-status-gitlab-mr",
-      "version": 1,
       "family": "tasks.item-status-gitlab-mr",
       "sites": ["mobile/src/tasks/use-mobile-tasks-gitlab-github-status-actions.tsx"],
       "schedules": [],
@@ -13146,7 +12943,7 @@
           "complete": "gitlab.updateMRState#1",
           "params": {
             "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": { "host": "gitlab.com", "path": "group/project" },
             "repo": "id:repo-1",
             "state": "closed"
           },
@@ -13165,7 +12962,6 @@
     {
       "id": "tk-item-metadata-github",
       "operation": "tasks.item-metadata-github",
-      "version": 1,
       "family": "tasks.item-metadata-github",
       "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx"],
       "schedules": [],
@@ -13203,7 +12999,6 @@
     {
       "id": "tk-item-metadata-gitlab",
       "operation": "tasks.item-metadata-gitlab",
-      "version": 1,
       "family": "tasks.item-metadata-gitlab",
       "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx"],
       "schedules": [],
@@ -13220,7 +13015,7 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": "group/project",
+            "projectRef": { "host": "gitlab.com", "path": "group/project" },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -13242,7 +13037,6 @@
     {
       "id": "tk-item-metadata-gitlab-mr",
       "operation": "tasks.item-metadata-gitlab-mr",
-      "version": 1,
       "family": "tasks.item-metadata-gitlab-mr",
       "sites": ["mobile/src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx"],
       "schedules": [],
@@ -13259,7 +13053,7 @@
           "complete": "gitlab.updateMR#1",
           "params": {
             "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": { "host": "gitlab.com", "path": "group/project" },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -13287,7 +13081,6 @@
     {
       "id": "tk-linear-item",
       "operation": "tasks.linear-item-actions",
-      "version": 1,
       "family": "tasks.linear-item",
       "sites": ["mobile/src/tasks/use-mobile-tasks-linear-item-actions.tsx"],
       "schedules": [],
@@ -13389,7 +13182,6 @@
     {
       "id": "tk-project-repo-slugs",
       "operation": "tasks.project-repo-slugs",
-      "version": 1,
       "family": "tasks.project-repo-slugs",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-repository-resolution.tsx"],
       "schedules": [],
@@ -13420,7 +13212,6 @@
     {
       "id": "tk-project-board-load",
       "operation": "tasks.project-board-load",
-      "version": 1,
       "family": "tasks.project-board-load",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-loading-actions.tsx"],
       "schedules": [],
@@ -13581,7 +13372,6 @@
     {
       "id": "tk-project-row-detail",
       "operation": "tasks.project-row-detail",
-      "version": 1,
       "family": "tasks.project-row-detail",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-detail-loading.tsx"],
       "schedules": [],
@@ -13627,7 +13417,6 @@
     {
       "id": "tk-project-row-metadata-load",
       "operation": "tasks.project-row-metadata-load",
-      "version": 1,
       "family": "tasks.project-row-metadata-load",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-metadata-loading.tsx"],
       "schedules": [],
@@ -13700,7 +13489,6 @@
     {
       "id": "tk-project-row-fields",
       "operation": "tasks.project-row-fields",
-      "version": 1,
       "family": "tasks.project-row-fields",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx"],
       "schedules": [],
@@ -13785,7 +13573,6 @@
     {
       "id": "tk-project-row-review-checks",
       "operation": "tasks.project-row-review-checks",
-      "version": 1,
       "family": "tasks.project-row-review-checks",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-review-check-actions.tsx"],
       "schedules": [],
@@ -13909,7 +13696,6 @@
     {
       "id": "tk-project-row-threads",
       "operation": "tasks.project-row-threads",
-      "version": 1,
       "family": "tasks.project-row-threads",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-thread-reply-actions.tsx"],
       "schedules": [],
@@ -14041,7 +13827,6 @@
     {
       "id": "tk-project-row-comments-issue",
       "operation": "tasks.project-row-comments-issue",
-      "version": 1,
       "family": "tasks.project-row-comments-issue",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-workspace-comment-actions.tsx"],
       "schedules": [],
@@ -14132,7 +13917,6 @@
     {
       "id": "tk-project-row-comments-pr",
       "operation": "tasks.project-row-comments-pr",
-      "version": 1,
       "family": "tasks.project-row-comments-pr",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-workspace-comment-actions.tsx"],
       "schedules": [],
@@ -14171,7 +13955,6 @@
     {
       "id": "tk-project-row-files-merge",
       "operation": "tasks.project-row-files-merge",
-      "version": 1,
       "family": "tasks.project-row-files-merge",
       "sites": ["mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.tsx"],
       "schedules": [],
@@ -14329,7 +14112,6 @@
     {
       "id": "speech-setup-sheet-fulfilled",
       "operation": "speech.setup-sheet",
-      "version": 1,
       "family": "speech.setup-sheet",
       "sites": ["mobile/src/dictation/mobile-dictation-setup.ts"],
       "schedules": [],
@@ -14423,7 +14205,6 @@
     {
       "id": "speech-setup-sheet-model-vocabulary",
       "operation": "speech.setup-sheet",
-      "version": 1,
       "family": "speech.setup-sheet",
       "sites": ["mobile/src/dictation/mobile-dictation-setup.ts"],
       "schedules": [],
@@ -14472,7 +14253,6 @@
     {
       "id": "speech-setup-sheet-legacy-desktop",
       "operation": "speech.setup-sheet",
-      "version": 1,
       "family": "speech.setup-sheet",
       "sites": ["mobile/src/dictation/mobile-dictation-setup.ts"],
       "schedules": [],
@@ -14500,7 +14280,6 @@
     {
       "id": "speech-setup-sheet-denied-to-mobile",
       "operation": "speech.setup-sheet",
-      "version": 1,
       "family": "speech.setup-sheet",
       "sites": ["mobile/src/dictation/mobile-dictation-setup.ts"],
       "schedules": [],
@@ -14528,7 +14307,6 @@
     {
       "id": "speech-desktop-start-superseded",
       "operation": "speech.desktop-start",
-      "version": 1,
       "family": "speech.dictation-start",
       "sites": ["mobile/src/hooks/mobile-dictation-desktop-start.ts"],
       "schedules": [],
@@ -14573,7 +14351,6 @@
     {
       "id": "speech-desktop-start-fulfilled",
       "operation": "speech.desktop-start",
-      "version": 1,
       "family": "speech.dictation-start",
       "sites": ["mobile/src/hooks/mobile-dictation-desktop-start.ts"],
       "schedules": [],
@@ -14602,7 +14379,6 @@
     {
       "id": "speech-desktop-start-recording-failed",
       "operation": "speech.desktop-start",
-      "version": 1,
       "family": "speech.dictation-start",
       "sites": ["mobile/src/hooks/mobile-dictation-desktop-start.ts"],
       "schedules": [],
@@ -14646,7 +14422,6 @@
     {
       "id": "speech-audio-chunk-acknowledged",
       "operation": "speech.audio-chunk",
-      "version": 1,
       "family": "speech.dictation-chunk",
       "sites": ["mobile/src/hooks/mobile-dictation-audio-chunk.ts"],
       "schedules": [],
@@ -14677,7 +14452,6 @@
     {
       "id": "speech-dictation-session-transcript",
       "operation": "speech.dictation-session",
-      "version": 1,
       "family": "speech.dictation-session",
       "sites": ["mobile/src/hooks/use-mobile-dictation.ts"],
       "schedules": [],
@@ -14726,7 +14500,6 @@
     {
       "id": "speech-dictation-session-cancelled",
       "operation": "speech.dictation-session",
-      "version": 1,
       "family": "speech.dictation-session",
       "sites": ["mobile/src/hooks/use-mobile-dictation.ts"],
       "schedules": [],
@@ -14775,7 +14548,6 @@
     {
       "id": "aivault-history-scan-fulfilled",
       "operation": "aiVault.history-scan",
-      "version": 1,
       "family": "aiVault.history",
       "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
       "schedules": [],
@@ -14825,7 +14597,6 @@
     {
       "id": "aivault-history-scan-unsupported",
       "operation": "aiVault.history-scan",
-      "version": 1,
       "family": "aiVault.history",
       "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
       "schedules": [],
@@ -14854,7 +14625,6 @@
     {
       "id": "aivault-history-scan-worktrees-late",
       "operation": "aiVault.history-scan",
-      "version": 1,
       "family": "aiVault.history",
       "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
       "schedules": [],
@@ -14926,7 +14696,6 @@
     {
       "id": "terminal-query-reply-accepted",
       "operation": "terminal.query-reply",
-      "version": 1,
       "family": "terminal.query-reply",
       "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
       "schedules": [],
@@ -14964,7 +14733,6 @@
     {
       "id": "terminal-query-reply-unsubscribed",
       "operation": "terminal.query-reply",
-      "version": 1,
       "family": "terminal.query-reply",
       "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
       "schedules": [],
@@ -14984,7 +14752,6 @@
     {
       "id": "terminal-raw-input-reported",
       "operation": "terminal.accessory-raw-send",
-      "version": 1,
       "family": "terminal.raw-input",
       "sites": [
         "mobile/src/terminal/terminal-live-accessory-raw-send.ts",
@@ -15036,7 +14803,6 @@
     {
       "id": "terminal-raw-input-refused",
       "operation": "terminal.accessory-raw-send",
-      "version": 1,
       "family": "terminal.raw-input",
       "sites": [
         "mobile/src/terminal/terminal-live-accessory-raw-send.ts",
@@ -15076,7 +14842,6 @@
     {
       "id": "terminal-takeover-report-retried",
       "operation": "terminal.takeover-report",
-      "version": 1,
       "family": "terminal.takeover-report",
       "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
       "schedules": [],
@@ -15121,7 +14886,6 @@
     {
       "id": "terminal-takeover-report-accepted",
       "operation": "terminal.takeover-report",
-      "version": 1,
       "family": "terminal.takeover-report",
       "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
       "schedules": [],
@@ -15150,7 +14914,6 @@
     {
       "id": "terminal-viewport-refit-applied",
       "operation": "terminal.viewport-refit",
-      "version": 1,
       "family": "terminal.viewport-refit",
       "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
       "schedules": [],
@@ -15195,7 +14958,6 @@
     {
       "id": "terminal-viewport-refit-legacy-desktop",
       "operation": "terminal.viewport-refit",
-      "version": 1,
       "family": "terminal.viewport-refit",
       "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
       "schedules": [],
@@ -15240,7 +15002,6 @@
     {
       "id": "notifications-push-registered",
       "operation": "notifications.push-registration",
-      "version": 1,
       "family": "notifications.push-registration",
       "sites": ["mobile/src/notifications/push-registration.ts"],
       "schedules": [],
@@ -15256,6 +15017,7 @@
               "onlyWhenDesktopAway": true,
               "sound": true
             },
+            "apnsEnvironment": "production",
             "platform": "ios",
             "token": "apns-token-1"
           },
@@ -15289,7 +15051,6 @@
     {
       "id": "notifications-push-gateway-rejected",
       "operation": "notifications.push-registration",
-      "version": 1,
       "family": "notifications.push-registration",
       "sites": ["mobile/src/notifications/push-registration.ts"],
       "schedules": [],
@@ -15305,6 +15066,7 @@
               "onlyWhenDesktopAway": true,
               "sound": true
             },
+            "apnsEnvironment": "production",
             "platform": "ios",
             "token": "apns-token-1"
           },
@@ -15324,7 +15086,6 @@
     {
       "id": "browser-pointer-click-fallback",
       "operation": "browser.page-commands",
-      "version": 1,
       "family": "browser.pointer-click",
       "sites": [
         "mobile/src/browser/use-mobile-browser-request.ts",
@@ -15410,7 +15171,6 @@
     {
       "id": "browser-pointer-click-accepted",
       "operation": "browser.page-commands",
-      "version": 1,
       "family": "browser.pointer-click",
       "sites": [
         "mobile/src/browser/use-mobile-browser-request.ts",
@@ -15452,7 +15212,6 @@
     {
       "id": "browser-wheel-scrolled",
       "operation": "browser.page-commands",
-      "version": 1,
       "family": "browser.wheel",
       "sites": [
         "mobile/src/browser/use-mobile-browser-request.ts",
@@ -15506,7 +15265,6 @@
     {
       "id": "browser-keyboard-input",
       "operation": "browser.page-commands",
-      "version": 1,
       "family": "browser.keyboard",
       "sites": [
         "mobile/src/browser/use-mobile-browser-request.ts",
@@ -15562,7 +15320,6 @@
     {
       "id": "browser-dialog-accepted",
       "operation": "browser.page-commands",
-      "version": 1,
       "family": "browser.dialog",
       "sites": [
         "mobile/src/browser/use-mobile-browser-request.ts",
@@ -15599,7 +15356,6 @@
     {
       "id": "browser-dialog-dismissed",
       "operation": "browser.page-commands",
-      "version": 1,
       "family": "browser.dialog",
       "sites": [
         "mobile/src/browser/use-mobile-browser-request.ts",
@@ -15639,7 +15395,6 @@
     {
       "id": "aivault-resume-prepare-repin",
       "operation": "aiVault.resume-preparation",
-      "version": 1,
       "family": "aiVault.resume-preparation",
       "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
       "schedules": [],
@@ -15672,7 +15427,6 @@
     {
       "id": "aivault-resume-prepare-unavailable",
       "operation": "aiVault.resume-preparation",
-      "version": 1,
       "family": "aiVault.resume-preparation",
       "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
       "schedules": [],
@@ -15705,7 +15459,6 @@
     {
       "id": "aivault-resume-prepare-refused",
       "operation": "aiVault.resume-preparation",
-      "version": 1,
       "family": "aiVault.resume-preparation",
       "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
       "schedules": [],
@@ -15738,7 +15491,6 @@
     {
       "id": "aivault-resume-prepare-skipped",
       "operation": "aiVault.resume-preparation",
-      "version": 1,
       "family": "aiVault.resume-preparation",
       "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
       "schedules": [],
@@ -15755,7 +15507,6 @@
     {
       "id": "aivault-resume-launch-sent",
       "operation": "aiVault.resume-launch",
-      "version": 1,
       "family": "aiVault.resume-launch",
       "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
       "schedules": [],
@@ -15814,7 +15565,6 @@
     {
       "id": "aivault-resume-launch-locked",
       "operation": "aiVault.resume-launch",
-      "version": 1,
       "family": "aiVault.resume-launch",
       "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
       "schedules": [],
@@ -15873,7 +15623,6 @@
     {
       "id": "aivault-resume-launch-create-refused",
       "operation": "aiVault.resume-launch",
-      "version": 1,
       "family": "aiVault.resume-launch",
       "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
       "schedules": [],
@@ -15906,7 +15655,6 @@
     {
       "id": "aivault-resume-launch-invalid-tab",
       "operation": "aiVault.resume-launch",
-      "version": 1,
       "family": "aiVault.resume-launch",
       "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
       "schedules": [],
@@ -15946,7 +15694,6 @@
     {
       "id": "clipboard-image-upload-single-frame-fallback",
       "operation": "clipboard.image-upload",
-      "version": 1,
       "family": "clipboard.image-upload",
       "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
       "schedules": [],
@@ -15988,7 +15735,6 @@
     {
       "id": "clipboard-image-upload-chunked",
       "operation": "clipboard.image-upload",
-      "version": 1,
       "family": "clipboard.image-upload",
       "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
       "schedules": [],
@@ -16042,7 +15788,6 @@
     {
       "id": "clipboard-image-upload-aborts-on-chunk-failure",
       "operation": "clipboard.image-upload",
-      "version": 1,
       "family": "clipboard.image-upload",
       "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
       "schedules": [],
@@ -16099,7 +15844,6 @@
     {
       "id": "clipboard-image-upload-start-refused",
       "operation": "clipboard.image-upload",
-      "version": 1,
       "family": "clipboard.image-upload",
       "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
       "schedules": [],
@@ -16130,7 +15874,6 @@
     {
       "id": "clipboard-image-attachment-upload-refused",
       "operation": "clipboard.image-terminal-attachment",
-      "version": 1,
       "family": "clipboard.image-attachment",
       "sites": [
         "mobile/src/session/mobile-image-attachment.ts",
@@ -16164,7 +15907,6 @@
     {
       "id": "clipboard-image-attachment-pasted",
       "operation": "clipboard.image-terminal-attachment",
-      "version": 1,
       "family": "clipboard.image-attachment",
       "sites": [
         "mobile/src/session/mobile-image-attachment.ts",
@@ -16241,7 +15983,6 @@
     {
       "id": "clipboard-image-attachment-cancelled",
       "operation": "clipboard.image-terminal-attachment",
-      "version": 1,
       "family": "clipboard.image-attachment",
       "sites": [
         "mobile/src/session/mobile-image-attachment.ts",
@@ -16261,7 +16002,6 @@
     {
       "id": "clipboard-image-attachment-blocked-before-send",
       "operation": "clipboard.image-terminal-attachment",
-      "version": 1,
       "family": "clipboard.image-attachment",
       "sites": [
         "mobile/src/session/mobile-image-attachment.ts",
@@ -16318,7 +16058,6 @@
     {
       "id": "clipboard-image-attachment-anonymous",
       "operation": "clipboard.image-terminal-attachment",
-      "version": 1,
       "family": "clipboard.image-attachment",
       "sites": [
         "mobile/src/session/mobile-image-attachment.ts",
@@ -16391,7 +16130,6 @@
     {
       "id": "native-chat-image-paste-single",
       "operation": "nativeChat.image-paste",
-      "version": 1,
       "family": "nativeChat.image-paste",
       "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
       "schedules": [],
@@ -16448,7 +16186,6 @@
     {
       "id": "native-chat-image-paste-two-images",
       "operation": "nativeChat.image-paste",
-      "version": 1,
       "family": "nativeChat.image-paste",
       "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
       "schedules": [],
@@ -16525,7 +16262,6 @@
     {
       "id": "native-chat-image-paste-stops-on-rejection",
       "operation": "nativeChat.image-paste",
-      "version": 1,
       "family": "nativeChat.image-paste",
       "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
       "schedules": [],
@@ -16582,7 +16318,6 @@
     {
       "id": "native-chat-image-paste-trailing-image",
       "operation": "nativeChat.image-paste",
-      "version": 1,
       "family": "nativeChat.image-paste",
       "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
       "schedules": [],
@@ -16639,7 +16374,6 @@
     {
       "id": "native-chat-write-accepted",
       "operation": "nativeChat.terminal-write",
-      "version": 1,
       "family": "nativeChat.terminal-write",
       "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
@@ -16688,7 +16422,6 @@
     {
       "id": "native-chat-write-rejected",
       "operation": "nativeChat.terminal-write",
-      "version": 1,
       "family": "nativeChat.terminal-write",
       "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
@@ -16725,7 +16458,6 @@
     {
       "id": "native-chat-write-delivery-unknown",
       "operation": "nativeChat.terminal-write",
-      "version": 1,
       "family": "nativeChat.terminal-write",
       "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
@@ -16758,7 +16490,6 @@
     {
       "id": "native-chat-write-clear-line",
       "operation": "nativeChat.terminal-write",
-      "version": 1,
       "family": "nativeChat.terminal-write",
       "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
@@ -16795,7 +16526,6 @@
     {
       "id": "native-chat-write-typed-command",
       "operation": "nativeChat.terminal-write",
-      "version": 1,
       "family": "nativeChat.terminal-write",
       "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
       "schedules": [],
@@ -16913,7 +16643,6 @@
     {
       "id": "native-chat-session-option-pick-written",
       "operation": "nativeChat.session-option-pick",
-      "version": 1,
       "family": "nativeChat.session-option-pick",
       "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
       "schedules": [],
@@ -16950,7 +16679,6 @@
     {
       "id": "native-chat-session-option-pick-refused",
       "operation": "nativeChat.session-option-pick",
-      "version": 1,
       "family": "nativeChat.session-option-pick",
       "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
       "schedules": [],
@@ -16988,7 +16716,6 @@
     {
       "id": "native-chat-session-option-pick-empty",
       "operation": "nativeChat.session-option-pick",
-      "version": 1,
       "family": "nativeChat.session-option-pick",
       "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
       "schedules": [],
@@ -17005,7 +16732,6 @@
     {
       "id": "session-tab-activation-focus-and-activate",
       "operation": "session.tab-activation",
-      "version": 1,
       "family": "session.tab-activation",
       "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
       "schedules": [],
@@ -17055,7 +16781,6 @@
     {
       "id": "session-tab-activation-refused",
       "operation": "session.tab-activation",
-      "version": 1,
       "family": "session.tab-activation",
       "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
       "schedules": [],
@@ -17089,7 +16814,6 @@
     {
       "id": "session-tab-activation-transport-error",
       "operation": "session.tab-activation",
-      "version": 1,
       "family": "session.tab-activation",
       "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
       "schedules": [],
@@ -17116,7 +16840,6 @@
     {
       "id": "session-tabs-health-reconciled",
       "operation": "session.tabs-stream-health",
-      "version": 1,
       "family": "session.tabs-stream-health",
       "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
@@ -17153,7 +16876,6 @@
     {
       "id": "session-tabs-health-refused",
       "operation": "session.tabs-stream-health",
-      "version": 1,
       "family": "session.tabs-stream-health",
       "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
@@ -17187,7 +16909,6 @@
     {
       "id": "session-tabs-health-stale-application-revision",
       "operation": "session.tabs-stream-health",
-      "version": 1,
       "family": "session.tabs-stream-health",
       "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
@@ -17228,7 +16949,6 @@
     {
       "id": "session-tabs-health-errored",
       "operation": "session.tabs-stream-health",
-      "version": 1,
       "family": "session.tabs-stream-health",
       "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
@@ -17259,7 +16979,6 @@
     {
       "id": "file-tap-opens-worktree-file",
       "operation": "files.terminal-path-tap",
-      "version": 1,
       "family": "files.terminal-path-tap",
       "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
@@ -17326,7 +17045,6 @@
     {
       "id": "file-tap-resolve-miss",
       "operation": "files.terminal-path-tap",
-      "version": 1,
       "family": "files.terminal-path-tap",
       "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
@@ -17360,7 +17078,6 @@
     {
       "id": "file-tap-resolve-refused",
       "operation": "files.terminal-path-tap",
-      "version": 1,
       "family": "files.terminal-path-tap",
       "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
@@ -17394,7 +17111,6 @@
     {
       "id": "file-tap-open-refused",
       "operation": "files.terminal-path-tap",
-      "version": 1,
       "family": "files.terminal-path-tap",
       "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
@@ -17449,7 +17165,6 @@
     {
       "id": "file-tap-previews-absolute-artifact",
       "operation": "files.terminal-path-tap",
-      "version": 1,
       "family": "files.terminal-path-tap",
       "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
       "schedules": [],
@@ -17488,7 +17203,6 @@
     {
       "id": "structured-launch-unsupported",
       "operation": "agentSession.structured-launch",
-      "version": 1,
       "family": "agentSession.structured-launch",
       "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
@@ -17519,7 +17233,6 @@
     {
       "id": "structured-launch-support-refused",
       "operation": "agentSession.structured-launch",
-      "version": 1,
       "family": "agentSession.structured-launch",
       "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
@@ -17550,7 +17263,6 @@
     {
       "id": "structured-launch-created",
       "operation": "agentSession.structured-launch",
-      "version": 1,
       "family": "agentSession.structured-launch",
       "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
@@ -17602,7 +17314,6 @@
     {
       "id": "structured-launch-definitive-refusal",
       "operation": "agentSession.structured-launch",
-      "version": 1,
       "family": "agentSession.structured-launch",
       "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
@@ -17655,7 +17366,6 @@
     {
       "id": "structured-launch-replays-dropped-create",
       "operation": "agentSession.structured-launch",
-      "version": 1,
       "family": "agentSession.structured-launch",
       "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
@@ -17724,7 +17434,6 @@
     {
       "id": "session-markdown-tab-read",
       "operation": "session.tab-documents",
-      "version": 1,
       "family": "session.tab-documents",
       "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
@@ -17757,7 +17466,6 @@
     {
       "id": "session-markdown-tab-disk-fallback",
       "operation": "session.tab-documents",
-      "version": 1,
       "family": "session.tab-documents",
       "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
@@ -17803,7 +17511,6 @@
     {
       "id": "session-markdown-tab-refused",
       "operation": "session.tab-documents",
-      "version": 1,
       "family": "session.tab-documents",
       "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
@@ -17834,7 +17541,6 @@
     {
       "id": "session-file-tab-read",
       "operation": "session.tab-documents",
-      "version": 1,
       "family": "session.tab-documents",
       "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
@@ -17866,7 +17572,6 @@
     {
       "id": "session-terminal-list-merged",
       "operation": "session.terminal-inventory",
-      "version": 1,
       "family": "session.terminal-inventory",
       "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
@@ -17905,7 +17610,6 @@
     {
       "id": "session-terminal-list-dedupes-handles",
       "operation": "session.terminal-inventory",
-      "version": 1,
       "family": "session.terminal-inventory",
       "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
@@ -17944,7 +17648,6 @@
     {
       "id": "session-terminal-list-refused",
       "operation": "session.terminal-inventory",
-      "version": 1,
       "family": "session.terminal-inventory",
       "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
@@ -17975,7 +17678,6 @@
     {
       "id": "session-terminal-list-empty-guarded",
       "operation": "session.terminal-inventory",
-      "version": 1,
       "family": "session.terminal-inventory",
       "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
@@ -18005,7 +17707,6 @@
     {
       "id": "native-chat-readability-local-repo",
       "operation": "session.native-chat-readability",
-      "version": 1,
       "family": "session.native-chat-readability",
       "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
       "schedules": [],
@@ -18039,7 +17740,6 @@
     {
       "id": "native-chat-readability-remote-repo",
       "operation": "session.native-chat-readability",
-      "version": 1,
       "family": "session.native-chat-readability",
       "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
       "schedules": [],
@@ -18073,7 +17773,6 @@
     {
       "id": "native-chat-readability-refused",
       "operation": "session.native-chat-readability",
-      "version": 1,
       "family": "session.native-chat-readability",
       "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
       "schedules": [],
@@ -18103,7 +17802,6 @@
     {
       "id": "native-chat-stop-accepted",
       "operation": "session.native-chat-stop",
-      "version": 1,
       "family": "session.native-chat-stop",
       "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
       "schedules": [],
@@ -18177,7 +17875,6 @@
     {
       "id": "native-chat-stop-both-rejected",
       "operation": "session.native-chat-stop",
-      "version": 1,
       "family": "session.native-chat-stop",
       "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
       "schedules": [],
@@ -18236,7 +17933,6 @@
     {
       "id": "native-chat-stop-delivery-unknown",
       "operation": "session.native-chat-stop",
-      "version": 1,
       "family": "session.native-chat-stop",
       "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
       "schedules": [],
@@ -18287,7 +17983,6 @@
     {
       "id": "session-create-markdown-note",
       "operation": "session.content-create",
-      "version": 1,
       "family": "session.content-create",
       "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
@@ -18360,7 +18055,6 @@
     {
       "id": "session-create-markdown-name-collision",
       "operation": "session.content-create",
-      "version": 1,
       "family": "session.content-create",
       "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
@@ -18448,7 +18142,6 @@
     {
       "id": "session-create-browser-tab",
       "operation": "session.content-create",
-      "version": 1,
       "family": "session.content-create",
       "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
@@ -18482,7 +18175,6 @@
     {
       "id": "session-create-browser-refused",
       "operation": "session.content-create",
-      "version": 1,
       "family": "session.content-create",
       "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
@@ -18514,7 +18206,6 @@
     {
       "id": "session-tab-close-terminal",
       "operation": "session.tab-close",
-      "version": 1,
       "family": "session.tab-close",
       "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
@@ -18543,7 +18234,6 @@
     {
       "id": "session-tab-close-refused-keeps-tab",
       "operation": "session.tab-close",
-      "version": 1,
       "family": "session.tab-close",
       "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
@@ -18573,7 +18263,6 @@
     {
       "id": "session-tab-rename",
       "operation": "session.tab-close",
-      "version": 1,
       "family": "session.tab-close",
       "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
@@ -18609,7 +18298,6 @@
     {
       "id": "session-tab-close-session-tab",
       "operation": "session.tab-close",
-      "version": 1,
       "family": "session.tab-close",
       "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
@@ -18640,7 +18328,6 @@
     {
       "id": "review-mark-reviewed-persists",
       "operation": "session.diff-review-actions",
-      "version": 1,
       "family": "session.diff-review-actions",
       "sites": [
         "mobile/src/session/use-mobile-diff-review-interactions.ts",
@@ -18707,7 +18394,6 @@
     {
       "id": "review-mark-reviewed-rolls-back",
       "operation": "session.diff-review-actions",
-      "version": 1,
       "family": "session.diff-review-actions",
       "sites": [
         "mobile/src/session/use-mobile-diff-review-interactions.ts",
@@ -18775,7 +18461,6 @@
     {
       "id": "review-stage-file",
       "operation": "session.diff-review-actions",
-      "version": 1,
       "family": "session.diff-review-actions",
       "sites": [
         "mobile/src/session/use-mobile-diff-review-interactions.ts",
@@ -18811,7 +18496,6 @@
     {
       "id": "review-stage-refused",
       "operation": "session.diff-review-actions",
-      "version": 1,
       "family": "session.diff-review-actions",
       "sites": [
         "mobile/src/session/use-mobile-diff-review-interactions.ts",
@@ -18848,7 +18532,6 @@
     {
       "id": "review-open-in-session",
       "operation": "session.diff-review-actions",
-      "version": 1,
       "family": "session.diff-review-actions",
       "sites": [
         "mobile/src/session/use-mobile-diff-review-interactions.ts",
@@ -18885,7 +18568,6 @@
     {
       "id": "review-send-notes-heals-stale-input",
       "operation": "session.diff-review-actions",
-      "version": 1,
       "family": "session.diff-review-actions",
       "sites": [
         "mobile/src/session/use-mobile-diff-review-interactions.ts",
@@ -18928,7 +18610,6 @@
     {
       "id": "review-create-agent-refused",
       "operation": "session.diff-review-actions",
-      "version": 1,
       "family": "session.diff-review-actions",
       "sites": [
         "mobile/src/session/use-mobile-diff-review-interactions.ts",
@@ -19015,7 +18696,6 @@
     {
       "id": "session-diff-notes-loaded",
       "operation": "session.diff-notes",
-      "version": 1,
       "family": "session.diff-notes",
       "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
       "schedules": [],
@@ -19055,7 +18735,6 @@
     {
       "id": "session-diff-notes-load-refused",
       "operation": "session.diff-notes",
-      "version": 1,
       "family": "session.diff-notes",
       "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
       "schedules": [],
@@ -19085,7 +18764,6 @@
     {
       "id": "session-markdown-saved",
       "operation": "session.markdown-save",
-      "version": 1,
       "family": "session.markdown-save",
       "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
       "schedules": [],
@@ -19119,7 +18797,6 @@
     {
       "id": "session-markdown-save-conflict",
       "operation": "session.markdown-save",
-      "version": 1,
       "family": "session.markdown-save",
       "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
       "schedules": [],
@@ -19152,7 +18829,6 @@
     {
       "id": "quick-commands-loaded-and-saved",
       "operation": "settings.quick-commands",
-      "version": 1,
       "family": "settings.quick-commands",
       "sites": ["mobile/src/session/use-quick-commands.ts"],
       "schedules": [],
@@ -19212,7 +18888,6 @@
     {
       "id": "quick-commands-save-refused-rolls-back",
       "operation": "settings.quick-commands",
-      "version": 1,
       "family": "settings.quick-commands",
       "sites": ["mobile/src/session/use-quick-commands.ts"],
       "schedules": [],
@@ -19266,7 +18941,6 @@
     {
       "id": "quick-commands-load-refused",
       "operation": "settings.quick-commands",
-      "version": 1,
       "family": "settings.quick-commands",
       "sites": ["mobile/src/session/use-quick-commands.ts"],
       "schedules": [],
@@ -19296,7 +18970,6 @@
     {
       "id": "native-chat-image-upload-start-refused",
       "operation": "nativeChat.image-upload",
-      "version": 1,
       "family": "nativeChat.image-upload",
       "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
@@ -19327,7 +19000,6 @@
     {
       "id": "native-chat-image-upload-single",
       "operation": "nativeChat.image-upload",
-      "version": 1,
       "family": "nativeChat.image-upload",
       "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
@@ -19381,7 +19053,6 @@
     {
       "id": "native-chat-image-upload-two",
       "operation": "nativeChat.image-upload",
-      "version": 1,
       "family": "nativeChat.image-upload",
       "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
@@ -19472,7 +19143,6 @@
     {
       "id": "native-chat-image-upload-second-fails",
       "operation": "nativeChat.image-upload",
-      "version": 1,
       "family": "nativeChat.image-upload",
       "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
@@ -19540,7 +19210,6 @@
     {
       "id": "native-chat-image-upload-cancelled",
       "operation": "nativeChat.image-upload",
-      "version": 1,
       "family": "nativeChat.image-upload",
       "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
@@ -19557,7 +19226,6 @@
     {
       "id": "files-explorer-legacy-fallback",
       "operation": "files.explorer-screen",
-      "version": 1,
       "family": "files.explorer-screen",
       "sites": ["mobile/src/files/MobileFileExplorerPanel.tsx"],
       "schedules": [],
@@ -19616,7 +19284,6 @@
     {
       "id": "files-explorer-readdir",
       "operation": "files.explorer-screen",
-      "version": 1,
       "family": "files.explorer-screen",
       "sites": ["mobile/src/files/MobileFileExplorerPanel.tsx"],
       "schedules": [],
@@ -19656,7 +19323,6 @@
     {
       "id": "new-workspace-repositories-fulfilled",
       "operation": "workspace.repositories",
-      "version": 1,
       "family": "components.new-workspace-repositories",
       "sites": ["mobile/src/components/use-new-workspace-repositories.ts"],
       "schedules": [],
@@ -19702,7 +19368,6 @@
     {
       "id": "codex-reset-credit-consumed",
       "operation": "accounts.codex-reset-credit",
-      "version": 1,
       "family": "components.codex-reset-credit",
       "sites": [
         "mobile/src/components/codex-reset-credit.ts",
@@ -19792,7 +19457,6 @@
     {
       "id": "codex-reset-credit-resumed",
       "operation": "accounts.codex-reset-credit",
-      "version": 1,
       "family": "components.codex-reset-credit",
       "sites": ["mobile/src/storage/codex-reset-attempt-journal.ts"],
       "schedules": [],
@@ -19881,7 +19545,6 @@
     {
       "id": "push-dismissal-tray-reconciled",
       "operation": "notifications.push-dismissal",
-      "version": 1,
       "family": "notifications.push-dismissal",
       "sites": ["mobile/src/notifications/push-dismissal-reconciliation.ts"],
       "schedules": [],
@@ -19947,7 +19610,6 @@
     {
       "id": "terminal-paste-accepted",
       "operation": "session.terminal-clipboard",
-      "version": 1,
       "family": "session.terminal-paste",
       "sites": [
         "mobile/src/session/use-mobile-terminal-paste.ts",
@@ -20028,7 +19690,6 @@
     {
       "id": "terminal-paste-refused",
       "operation": "session.terminal-clipboard",
-      "version": 1,
       "family": "session.terminal-paste",
       "sites": ["mobile/src/session/use-mobile-terminal-paste.ts"],
       "schedules": [],
@@ -20090,7 +19751,6 @@
     {
       "id": "terminal-worktree-connection-resolved",
       "operation": "session.terminal-clipboard",
-      "version": 1,
       "family": "session.worktree-connection",
       "sites": ["mobile/src/session/use-mobile-session-accessory-selection.ts"],
       "schedules": [],
@@ -20148,7 +19808,6 @@
     {
       "id": "terminal-input-send-accepted",
       "operation": "session.terminal-input-send",
-      "version": 1,
       "family": "session.terminal-input-send",
       "sites": [
         "mobile/src/session/use-mobile-session-terminal-send-actions.ts",
@@ -20214,7 +19873,6 @@
     {
       "id": "terminal-input-send-refused",
       "operation": "session.terminal-input-send",
-      "version": 1,
       "family": "session.terminal-input-send",
       "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
       "schedules": [],
@@ -20262,7 +19920,6 @@
     {
       "id": "terminal-live-input-accepted",
       "operation": "session.terminal-input-send",
-      "version": 1,
       "family": "session.terminal-input-send",
       "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
       "schedules": [],
@@ -20318,7 +19975,6 @@
     {
       "id": "home-host-accounts",
       "operation": "home.host-accounts",
-      "version": 1,
       "family": "home.host-accounts",
       "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
       "schedules": [],
@@ -20369,7 +20025,6 @@
     {
       "id": "notifications-display-test-accepted",
       "operation": "notifications.display-test-screen",
-      "version": 1,
       "family": "notifications.display-test-screen",
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
@@ -20409,7 +20064,6 @@
     {
       "id": "notifications-display-test-not-registered",
       "operation": "notifications.display-test-screen",
-      "version": 1,
       "family": "notifications.display-test-screen",
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
@@ -20450,7 +20104,6 @@
     {
       "id": "notifications-display-test-rate-limited",
       "operation": "notifications.display-test-screen",
-      "version": 1,
       "family": "notifications.display-test-screen",
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
@@ -20491,7 +20144,6 @@
     {
       "id": "notifications-display-test-unknown-reason",
       "operation": "notifications.display-test-screen",
-      "version": 1,
       "family": "notifications.display-test-screen",
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
@@ -20532,7 +20184,6 @@
     {
       "id": "aivault-history-screen-worktrees",
       "operation": "aiVault.history-screen",
-      "version": 1,
       "family": "aiVault.history-screen",
       "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
       "schedules": [],
@@ -20607,7 +20258,6 @@
     {
       "id": "aivault-history-screen-listed",
       "operation": "aiVault.history-screen",
-      "version": 1,
       "family": "aiVault.history-screen",
       "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
       "schedules": [],
@@ -20725,7 +20375,6 @@
     {
       "id": "tasks-route-repo-list",
       "operation": "tasks.route-repo-list",
-      "version": 1,
       "family": "tasks.route-repo-list",
       "sites": ["mobile/src/tasks/use-mobile-tasks-route-and-item-state.tsx"],
       "schedules": [],
@@ -20773,7 +20422,6 @@
     {
       "id": "linear-select-workspace",
       "operation": "linear.select-workspace-picker",
-      "version": 1,
       "family": "linear.select-workspace-picker",
       "sites": ["mobile/src/tasks/mobile-tasks-filter-pickers.tsx"],
       "schedules": [],
@@ -20808,7 +20456,6 @@
     {
       "id": "live-worktree-name-stream",
       "operation": "session.live-worktree-name",
-      "version": 1,
       "family": "live-worktree-name",
       "sites": ["mobile/src/session/use-live-worktree-name.ts"],
       "schedules": [],
@@ -20932,7 +20579,6 @@
     {
       "id": "host-worktree-refresh-stream",
       "operation": "worktree.host-refresh",
-      "version": 1,
       "family": "host-worktree-refresh",
       "sites": ["mobile/src/worktree/host-worktree-refresh.ts"],
       "schedules": [],
@@ -21028,7 +20674,6 @@
     {
       "id": "sc-changes-loaded",
       "operation": "source-control.changes-load",
-      "version": 1,
       "family": "git.changes-load",
       "sites": ["mobile/src/source-control/use-mobile-source-control-loaders.ts"],
       "schedules": [],
@@ -21114,10 +20759,10 @@
             "result": {
               "summary": {
                 "baseRef": "origin/dev",
-                "baseOid": "base-oid",
+                "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
                 "compareRef": "feature",
-                "headOid": "head-oid",
-                "mergeBase": "merge-base",
+                "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+                "mergeBase": "0123456789abcdef0123456789abcdef01234567",
                 "changedFiles": 1,
                 "status": "ready"
               },
@@ -21140,7 +20785,6 @@
     {
       "id": "sc-history-commit-files",
       "operation": "source-control.history-commit-files",
-      "version": 1,
       "family": "git.history-commit-files",
       "sites": ["mobile/src/source-control/MobileGitHistoryList.tsx"],
       "schedules": [],
@@ -21214,7 +20858,6 @@
     {
       "id": "sc-branch-diff-previewed",
       "operation": "source-control.branch-diff-preview",
-      "version": 1,
       "family": "git.branch-diff-preview",
       "sites": ["mobile/src/source-control/use-mobile-source-control-openers.ts"],
       "schedules": [],
@@ -21237,9 +20880,9 @@
             "filePath": "src/app.ts",
             "compare": {
               "baseRef": "origin/main",
-              "baseOid": "base-oid",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567"
             }
           },
           "reply": {
@@ -21259,7 +20902,6 @@
     {
       "id": "notifications-desktop-stream",
       "operation": "notifications.desktop-stream",
-      "version": 1,
       "family": "notifications.desktop-stream",
       "sites": ["mobile/src/notifications/mobile-notifications.ts"],
       "schedules": [],
@@ -21402,7 +21044,6 @@
     {
       "id": "notifications-desktop-stream-replayed",
       "operation": "notifications.desktop-stream",
-      "version": 1,
       "family": "notifications.desktop-stream",
       "sites": ["mobile/src/notifications/mobile-notifications.ts"],
       "schedules": [],
@@ -21565,7 +21206,6 @@
     {
       "id": "native-chat-page-earlier",
       "operation": "session.native-chat-page",
-      "version": 1,
       "family": "session.native-chat-page",
       "sites": ["mobile/src/session/use-mobile-native-chat-session.ts"],
       "schedules": [],
@@ -21763,7 +21403,6 @@
     {
       "id": "terminal-gesture-flush-and-clear",
       "operation": "session.terminal-gesture-input",
-      "version": 1,
       "family": "session.terminal-gesture-input",
       "sites": ["mobile/src/session/use-mobile-session-terminal-input.ts"],
       "schedules": [],
@@ -21850,7 +21489,6 @@
     {
       "id": "session-startup-both-activation-sites",
       "operation": "session.startup",
-      "version": 1,
       "family": "session.startup",
       "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
       "schedules": [],
@@ -21929,7 +21567,6 @@
     {
       "id": "session-startup-floating-route-skips-activation",
       "operation": "session.startup",
-      "version": 1,
       "family": "session.startup",
       "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
       "schedules": [],
@@ -21956,7 +21593,6 @@
     {
       "id": "session-startup-keeps-terminals-visible-on-reconnect",
       "operation": "session.startup",
-      "version": 1,
       "family": "session.startup",
       "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
       "schedules": [],
@@ -22001,7 +21637,6 @@
     {
       "id": "session-startup-refused-tab-load-still-loads-terminals",
       "operation": "session.startup",
-      "version": 1,
       "family": "session.startup",
       "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
       "schedules": [],
@@ -22039,7 +21674,6 @@
     {
       "id": "session-create-terminal-with-prompt",
       "operation": "session.create-terminal",
-      "version": 1,
       "family": "session.create-terminal",
       "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
@@ -22125,7 +21759,6 @@
     {
       "id": "session-create-terminal-replaces-active",
       "operation": "session.create-terminal",
-      "version": 1,
       "family": "session.create-terminal",
       "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
@@ -22182,7 +21815,6 @@
     {
       "id": "session-create-terminal-refused",
       "operation": "session.create-terminal",
-      "version": 1,
       "family": "session.create-terminal",
       "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
@@ -22231,7 +21863,6 @@
     {
       "id": "session-create-terminal-without-handle",
       "operation": "session.create-terminal",
-      "version": 1,
       "family": "session.create-terminal",
       "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
@@ -22288,7 +21919,6 @@
     {
       "id": "session-create-terminal-without-active-tab",
       "operation": "session.create-terminal",
-      "version": 1,
       "family": "session.create-terminal",
       "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
@@ -22346,7 +21976,6 @@
     {
       "id": "session-create-terminal-runs-a-quick-command",
       "operation": "session.create-terminal",
-      "version": 1,
       "family": "session.create-terminal",
       "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
@@ -22410,7 +22039,6 @@
     {
       "id": "session-create-terminal-launches-an-agent-quick-command",
       "operation": "session.create-terminal",
-      "version": 1,
       "family": "session.create-terminal",
       "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
@@ -22474,7 +22102,6 @@
     {
       "id": "session-create-terminal-ignores-a-second-create-in-flight",
       "operation": "session.create-terminal",
-      "version": 1,
       "family": "session.create-terminal",
       "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
@@ -22545,9 +22172,299 @@
       ]
     },
     {
+      "id": "session-create-terminal-agent-launched",
+      "operation": "session.create-terminal",
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1",
+            "agentLaunch": true
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "claude"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "claude",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            },
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "claude_00000000_0000_4000_8000_000000000003"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "terminal",
+                "handle": "terminal-1"
+              },
+              "worktreeId": "wt-1",
+              "receipt": {
+                "mode": "terminal",
+                "preferred": "terminal",
+                "reason": "user_default",
+                "detail": "Started a terminal agent."
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "launched"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-agent-launched-as-chat",
+      "operation": "session.create-terminal",
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1",
+            "agentLaunch": true
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "claude"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "claude",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            },
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "claude_00000000_0000_4000_8000_000000000003"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "structured",
+                "sessionId": "claude_s1",
+                "handle": "h-1"
+              },
+              "worktreeId": "wt-1",
+              "receipt": {
+                "mode": "structured",
+                "preferred": "structured",
+                "reason": "user_default",
+                "detail": "Started a terminal agent."
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "launched"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-diff-notes-launched",
+      "operation": "session.create-terminal",
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1",
+            "agentLaunch": true
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "codex",
+            "initialPrompt": "review these notes",
+            "successToast": "Notes sent"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "codex",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            },
+            "prompt": {
+              "text": "review these notes",
+              "delivery": "submit"
+            },
+            "launchSource": "diff_notes_send",
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "codex_00000000_0000_4000_8000_000000000003"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "terminal",
+                "handle": "terminal-1"
+              },
+              "worktreeId": "wt-1",
+              "receipt": {
+                "mode": "terminal",
+                "preferred": "terminal",
+                "reason": "user_default",
+                "detail": "Started a terminal agent."
+              },
+              "prompt": {
+                "delivery": "submit",
+                "outcome": "handed-to-terminal"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "notes-sent"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-diff-notes-not-delivered",
+      "operation": "session.create-terminal",
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1",
+            "agentLaunch": true
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "codex",
+            "initialPrompt": "review these notes",
+            "successToast": "Notes sent"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "codex",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            },
+            "prompt": {
+              "text": "review these notes",
+              "delivery": "submit"
+            },
+            "launchSource": "diff_notes_send",
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "codex_00000000_0000_4000_8000_000000000003"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "terminal",
+                "handle": "terminal-1"
+              },
+              "worktreeId": "wt-1",
+              "receipt": {
+                "mode": "terminal",
+                "preferred": "terminal",
+                "reason": "user_default",
+                "detail": "Started a terminal agent."
+              },
+              "prompt": {
+                "delivery": "submit",
+                "outcome": "not-delivered"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "notes-kept"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
       "id": "session-terminal-display-mode-auto-take-floor",
       "operation": "session.terminal-display-mode",
-      "version": 1,
       "family": "session.terminal-display-mode",
       "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
@@ -22605,7 +22522,6 @@
     {
       "id": "session-terminal-display-mode-to-desktop",
       "operation": "session.terminal-display-mode",
-      "version": 1,
       "family": "session.terminal-display-mode",
       "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
@@ -22656,7 +22572,6 @@
     {
       "id": "session-terminal-display-mode-drops-second-toggle",
       "operation": "session.terminal-display-mode",
-      "version": 1,
       "family": "session.terminal-display-mode",
       "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
@@ -22727,7 +22642,6 @@
     {
       "id": "session-terminal-display-mode-auto-without-viewport",
       "operation": "session.terminal-display-mode",
-      "version": 1,
       "family": "session.terminal-display-mode",
       "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
@@ -22777,7 +22691,6 @@
     {
       "id": "session-terminal-display-mode-auto-without-device-token",
       "operation": "session.terminal-display-mode",
-      "version": 1,
       "family": "session.terminal-display-mode",
       "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
@@ -22830,7 +22743,6 @@
     {
       "id": "notifications-desktop-stream-closed",
       "operation": "notifications.desktop-stream",
-      "version": 1,
       "family": "notifications.desktop-stream",
       "sites": ["mobile/src/notifications/mobile-notifications.ts"],
       "schedules": [],
@@ -22946,7 +22858,6 @@
     {
       "id": "review-file-diff-shapes",
       "operation": "session.diff-review-load",
-      "version": 1,
       "family": "session.review-file-diff",
       "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
@@ -23029,7 +22940,6 @@
     {
       "id": "review-branch-diff-shapes",
       "operation": "session.diff-review-load",
-      "version": 1,
       "family": "session.review-branch-diff",
       "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
       "schedules": [],
@@ -23048,9 +22958,9 @@
             "filePath": "src/app.ts",
             "compare": {
               "baseRef": "origin/main",
-              "baseOid": "base-oid",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567"
             }
           },
           "reply": {
@@ -23079,7 +22989,6 @@
     {
       "id": "review-git-mutations-run",
       "operation": "session.diff-review-actions",
-      "version": 1,
       "family": "session.review-git-mutations",
       "sites": [
         "mobile/src/session/use-mobile-diff-review-interactions.ts",
@@ -23155,7 +23064,6 @@
     {
       "id": "review-send-sheet-lists-terminals",
       "operation": "session.diff-review-actions",
-      "version": 1,
       "family": "session.review-send-sheet",
       "sites": [
         "mobile/src/session/use-mobile-diff-review-interactions.ts",
@@ -23202,7 +23110,6 @@
     {
       "id": "session-browser-tab-created",
       "operation": "session.content-create",
-      "version": 1,
       "family": "session.browser-tab-create",
       "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
       "schedules": [],
@@ -23236,7 +23143,6 @@
     {
       "id": "structured-agent-session-created",
       "operation": "agentSession.structured-launch",
-      "version": 1,
       "family": "agentSession.structured-create",
       "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
       "schedules": [],
@@ -23288,7 +23194,6 @@
     {
       "id": "session-tab-renamed",
       "operation": "session.tab-close",
-      "version": 1,
       "family": "session.tab-rename",
       "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
@@ -23324,7 +23229,6 @@
     {
       "id": "session-tab-closed",
       "operation": "session.tab-close",
-      "version": 1,
       "family": "session.tab-close-session",
       "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
       "schedules": [],
@@ -23355,7 +23259,6 @@
     {
       "id": "new-tab-local-agents",
       "operation": "settings.new-tab-agents",
-      "version": 1,
       "family": "settings.new-tab-local-agents",
       "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
       "schedules": [],
@@ -23417,7 +23320,6 @@
     {
       "id": "files-preview-worktree-text-read",
       "operation": "files.preview-load",
-      "version": 1,
       "family": "files.preview-worktree-text",
       "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
@@ -23449,7 +23351,6 @@
     {
       "id": "files-preview-worktree-image-read",
       "operation": "files.preview-load",
-      "version": 1,
       "family": "files.preview-worktree-image",
       "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
@@ -23485,7 +23386,6 @@
     {
       "id": "files-preview-artifact-image-read",
       "operation": "files.preview-load",
-      "version": 1,
       "family": "files.preview-artifact-image",
       "sites": ["mobile/src/files/mobile-file-preview-request.ts"],
       "schedules": [],
@@ -23522,7 +23422,6 @@
     {
       "id": "session-markdown-disk-read",
       "operation": "session.tab-documents",
-      "version": 1,
       "family": "session.markdown-disk-fallback",
       "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
@@ -23568,7 +23467,6 @@
     {
       "id": "session-markdown-disk-served",
       "operation": "session.tab-documents",
-      "version": 1,
       "family": "session.markdown-disk-fallback",
       "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
       "schedules": [],
@@ -23601,7 +23499,6 @@
     {
       "id": "mobile-web-bundle-manifest-read",
       "operation": "mobileWeb.bundle-manifest",
-      "version": 1,
       "family": "mobileWeb.bundle-manifest",
       "sites": ["mobile/src/transport/mobile-web-bundle-operations.ts"],
       "schedules": [],
@@ -23651,7 +23548,6 @@
     {
       "id": "mobile-web-bundle-fetch-paged",
       "operation": "mobileWeb.bundle-fetch",
-      "version": 1,
       "family": "mobileWeb.bundle-fetch",
       "sites": [
         "mobile/src/transport/mobile-web-bundle-fetch.ts",
@@ -23791,7 +23687,6 @@
     {
       "id": "mobile-web-bundle-unavailable",
       "operation": "mobileWeb.bundle-fetch",
-      "version": 1,
       "family": "mobileWeb.bundle-fetch",
       "sites": [
         "mobile/src/transport/mobile-web-bundle-fetch.ts",
@@ -23822,7 +23717,6 @@
     {
       "id": "mobile-web-bundle-build-changed",
       "operation": "mobileWeb.bundle-fetch",
-      "version": 1,
       "family": "mobileWeb.bundle-fetch",
       "sites": [
         "mobile/src/transport/mobile-web-bundle-fetch.ts",

@@ -67,11 +67,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
   [
     'claude',
     {
-      local: (path) =>
-        [true, false].map(
-          (gitBashAvailable) =>
-            getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS, { gitBashAvailable }).command
-        ),
+      local: (path) => [getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS).command],
       remote: (path) => [getClaudeRemoteCommand(path)]
     }
   ],

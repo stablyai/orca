@@ -6,7 +6,6 @@
 // derived rather than read — last candidate wins. So a failed turn ends on its
 // error, and an error the agent recovered from folds behind the answer after it.
 
-import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import type { NativeChatRole } from './native-chat-types'
 
 /** What the fold needs to know about one transcript row. Deliberately not a
@@ -28,8 +27,6 @@ export type NativeChatTurnFoldRow = {
   /** Whether the row reports a compaction's result. It never folds: hiding it
    *  would leave the turn's status as the only trace the context was rewritten. */
   reportsCompaction: boolean
-  /** The subagent that produced the row. Absent ⇒ the session's own agent. */
-  agentId?: string
 }
 
 export type NativeChatTurnFold = {
@@ -45,10 +42,9 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** The index of each turn's answer: the last prose the session's own agent
- *  wrote, or its last system row reporting a failure. A subagent that is still
- *  narrating after its parent's last word would otherwise stand as the turn's
- *  only visible reply. A turn with neither has no answer, and folds whole. */
+/** The index of each turn's answer: its last assistant row that renders prose,
+ *  or its last system row reporting a failure. A turn with neither has no answer,
+ *  and folds whole. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
 ): ReadonlyMap<string, number> {
@@ -56,7 +52,6 @@ export function nativeChatTurnAnswerRows(
   for (const [index, row] of rows.entries()) {
     const isCandidate =
       row.rendersProse &&
-      isRootAgentJournalItem(row) &&
       (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
     if (row.turnKey !== undefined && isCandidate) {
       answers.set(row.turnKey, index)

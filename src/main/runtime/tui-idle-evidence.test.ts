@@ -196,10 +196,15 @@ describe('rest signal agrees with the lanes that can settle a wait', () => {
     const hookDone = hasFreshDoneFirstPartyStatus(agent, { state: 'done', updatedAt: Date.now() })
     expect(hookDone).toBe(signal === 'hook-done')
     let screenRead = false
-    isKnownReadyPromptBody('', agent, () => {
-      screenRead = true
-      return null
-    })
+    isKnownReadyPromptBody(
+      '',
+      agent,
+      () => {
+        screenRead = true
+        return null
+      },
+      false
+    )
     const quietScreenBody = hasQuietReadyScreen(record(), agent, () => true, QUIESCENCE_MS)
     // Why not only ready-body: Codex keeps its stronger hook-driven title beside this lane.
     if (quietScreenBody) {

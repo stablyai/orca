@@ -2,7 +2,8 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   POST_REPLAY_MODE_RESET,
-  RESET_GRAPHIC_RENDITION
+  RESET_GRAPHIC_RENDITION,
+  RELEASE_SYNCHRONIZED_OUTPUT
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { Terminal } from '@xterm/headless'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
@@ -296,7 +297,7 @@ describe('connectPanePty', () => {
     const recoveredRows = 3
     const coldScrollback = '\x1b[1;1HCOLD\x1b[1;15HEND\r\nCOLD_SOURCE_ROW_02'
     const groundedColdScrollback = `${RESET_GRAPHIC_RENDITION}${coldScrollback}`
-    const viewportClear = `${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`
+    const viewportClear = `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
       if (sessionId) {
         return {

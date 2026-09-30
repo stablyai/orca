@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
+import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import type {
+  AgentSessionHistoryPage,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
 } from '../../../src/shared/agent-session-wire'
@@ -17,10 +20,21 @@ import {
   agentSessionReadFailureText,
   callAgentSession
 } from './mobile-structured-agent-session-rpc'
+import {
+  reduceMobileQueuePause,
+  reduceMobileQueuedMessageFeed,
+  type MobileQueuedMessageFeed,
+  type MobileQueuePause
+} from './mobile-structured-queued-message-feed'
+
+type QueuedFeed = { messages: MobileQueuedMessageFeed; pause: MobileQueuePause }
+const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
 
 const MAX_RETAINED_SESSION_STATES = 32
 /** Bounded so a busy stream cannot turn one Load-earlier tap into an endless read chain. */
 const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
+/** Bounds the pages one Load-earlier reads past that hold only subagent rows. */
+const OLDER_PAGES_PER_LOAD = 8
 
 /**
  * Opens the transcript stream once the hold settles, either way: a refused hold is an older host
@@ -68,6 +82,10 @@ export function useMobileStructuredAgentState(args: {
 }): {
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
+  /** Host-held queued drafts from the live stream; null until the host claims any. */
+  queuedMessages: MobileQueuedMessageFeed
+  /** The whole queue's pause, published with the drafts. */
+  queuePause: MobileQueuePause
   loadingOlder: boolean
   loadEarlier: () => void
 } {
@@ -77,10 +95,14 @@ export function useMobileStructuredAgentState(args: {
   const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
     () => new Map()
   )
+  const [queuedBySession, setQueuedBySession] = useState<Map<string, QueuedFeed>>(() => new Map())
   const state =
     enabled && sessionKey
       ? (sessionStates.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION)
       : EMPTY_STRUCTURED_AGENT_SESSION
+  const queued =
+    (enabled && sessionKey ? queuedBySession.get(sessionKey) : undefined) ?? NO_QUEUED_FEED
+  const queuedMessages = queued.messages
   const [loadingOlder, setLoadingOlder] = useState(false)
   const stateRef = useRef(state)
   const sessionKeyRef = useRef(sessionKey)
@@ -104,6 +126,34 @@ export function useMobileStructuredAgentState(args: {
         const updated = new Map(current)
         updated.delete(sessionKey)
         updated.set(sessionKey, next)
+        while (updated.size > MAX_RETAINED_SESSION_STATES) {
+          const oldest = updated.keys().next().value
+          if (oldest === undefined) {
+            break
+          }
+          updated.delete(oldest)
+        }
+        return updated
+      })
+    },
+    [sessionKey]
+  )
+
+  const applyQueued = useCallback(
+    (event: AgentSessionSubscribeEvent) => {
+      if (!sessionKey) {
+        return
+      }
+      setQueuedBySession((current) => {
+        const previous = current.get(sessionKey) ?? NO_QUEUED_FEED
+        const messages = reduceMobileQueuedMessageFeed(previous.messages, event)
+        const pause = reduceMobileQueuePause(previous.pause, event)
+        if (messages === previous.messages && pause === previous.pause) {
+          return current
+        }
+        const updated = new Map(current)
+        updated.delete(sessionKey)
+        updated.set(sessionKey, { messages, pause })
         while (updated.size > MAX_RETAINED_SESSION_STATES) {
           const oldest = updated.keys().next().value
           if (oldest === undefined) {
@@ -142,6 +192,7 @@ export function useMobileStructuredAgentState(args: {
       }
       if (isSubscribeEvent(raw)) {
         apply({ type: 'event', event: raw })
+        applyQueued(raw)
       }
     })
     return () => {
@@ -161,7 +212,7 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, client, connected, enabled, sessionId, sessionKey])
+  }, [apply, applyQueued, client, connected, enabled, sessionId, sessionKey])
 
   const loadEarlier = useCallback(() => {
     const current = stateRef.current
@@ -185,17 +236,44 @@ export function useMobileStructuredAgentState(args: {
         if (!cursor || !isCurrentRead()) {
           return
         }
-        const result = await callAgentSession<AgentSessionHistoryResult>(
-          client,
-          'agentSession.history',
-          { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
-        )
-        if (!result.ok || !isCurrentRead()) {
+        // Mobile draws only the session's own rows, so a page of a subagent's rows alone
+        // would land as nothing; read on until a page adds a row the reader can see. Older
+        // hosts send one for any burst; current ones when the page's byte bound cuts it short.
+        const pages: { requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }[] = []
+        let requestedCursor = cursor
+        while (pages.length < OLDER_PAGES_PER_LOAD) {
+          const result = await callAgentSession<AgentSessionHistoryResult>(
+            client,
+            'agentSession.history',
+            {
+              sessionId,
+              direction: 'before',
+              cursor: requestedCursor,
+              limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+            }
+          )
+          if (!result.ok || !isCurrentRead()) {
+            break
+          }
+          pages.push({ requestedCursor, page: result.page })
+          if (
+            !result.page.hasOlder ||
+            result.page.items.length === 0 ||
+            result.page.items.some(isRootAgentJournalItem)
+          ) {
+            break
+          }
+          requestedCursor = result.page.window.nextCursor
+        }
+        if (pages.length === 0 || !isCurrentRead()) {
           return
         }
-        // The reducer drops a page whose anchor slid, so only an intact anchor lands.
+        // The reducer drops a page whose anchor slid, so only an intact anchor lands;
+        // each later page abuts the one before it.
         if (oldestStructuredAgentSessionCursor(stateRef.current)?.sequence === cursor.sequence) {
-          apply({ type: 'older-page', requestedCursor: cursor, page: result.page })
+          for (const { requestedCursor: pageCursor, page } of pages) {
+            apply({ type: 'older-page', requestedCursor: pageCursor, page })
+          }
           return
         }
       }
@@ -212,5 +290,21 @@ export function useMobileStructuredAgentState(args: {
       })
   }, [apply, client, loadingOlder, sessionId, sessionKey])
 
-  return { state, stateRef, loadingOlder, loadEarlier }
+  // A window of only a subagent's rows draws nothing, and an empty list cannot be scrolled
+  // to ask for more, so it reads back once from each such head. A first page can be one: an
+  // older host's for any burst, a current host's when a burst fills its byte bound.
+  const drawsNothingFrom =
+    state.status === 'ready' && state.hasOlder && !state.items.some(isRootAgentJournalItem)
+      ? `${sessionKey}:${state.epoch}:${state.items[0]?.sequence}`
+      : null
+  const readBackFromRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (drawsNothingFrom === null || loadingOlder || readBackFromRef.current === drawsNothingFrom) {
+      return
+    }
+    readBackFromRef.current = drawsNothingFrom
+    loadEarlier()
+  }, [drawsNothingFrom, loadEarlier, loadingOlder])
+
+  return { state, stateRef, queuedMessages, queuePause: queued.pause, loadingOlder, loadEarlier }
 }

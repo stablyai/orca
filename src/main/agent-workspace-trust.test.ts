@@ -16,22 +16,22 @@ const CODEX_CONFIG_FILES = ['/orca/codex-home/config.toml', '/home/u/.codex/conf
 
 const mocks = vi.hoisted(() => ({
   codex: vi.fn<(path: string, configFiles: readonly string[]) => Promise<void>>(async () => {}),
-  cursor: vi.fn<(path: string) => void>(),
-  copilot: vi.fn<(path: string) => void>(),
-  antigravity: vi.fn<(path: string) => void>(),
-  qoder: vi.fn<(path: string) => void>(),
+  cursor: vi.fn<(path: string, home: string) => void>(),
+  copilot: vi.fn<(path: string, home: string) => void>(),
+  antigravity: vi.fn<(path: string, home: string) => void>(),
+  qoder: vi.fn<(path: string, home: string) => void>(),
+  codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
 
 vi.mock('./agent-trust-presets', () => ({
-  resolveCodexProjectTrustRoot: (path: string) => path,
   markCodexProjectTrusted: mocks.codex,
   markCursorWorkspaceTrusted: mocks.cursor,
   markCopilotFolderTrusted: mocks.copilot,
   markAntigravityWorkspaceTrusted: mocks.antigravity
 }))
 vi.mock('./codex/codex-home-paths', () => ({
-  getLocalCodexTrustConfigFiles: () => CODEX_CONFIG_FILES
+  getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
 }))
 vi.mock('./qoder/workspace-trust', () => ({ markQoderWorkspaceTrusted: mocks.qoder }))
 vi.mock('./claude/claude-folder-trust-file', async (importOriginal) => {
@@ -83,8 +83,19 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     await expect(applyAgentWorkspaceTrust(preset, WORKSPACE, local)).resolves.toEqual({})
     expect(writer).toHaveBeenCalledWith(
       WORKSPACE,
-      ...(preset === 'codex' ? [CODEX_CONFIG_FILES] : [])
+      preset === 'codex' ? CODEX_CONFIG_FILES : homedir()
     )
+  })
+
+  it('writes per-user trust under the home the launch env names, where the agent reads it', async () => {
+    const context = { ...local, env: { HOME: '/home/agent', USERPROFILE: '/home/agent' } }
+    for (const preset of ['codex', 'cursor', 'copilot', 'qoder', 'antigravity'] as const) {
+      await applyAgentWorkspaceTrust(preset, WORKSPACE, context)
+    }
+    expect(mocks.codexConfigFiles).toHaveBeenCalledWith('/home/agent')
+    for (const writer of [mocks.cursor, mocks.copilot, mocks.qoder, mocks.antigravity]) {
+      expect(writer).toHaveBeenCalledWith(WORKSPACE, '/home/agent')
+    }
   })
 
   it('contains a rejected or throwing write so the launch proceeds', async () => {
@@ -145,8 +156,8 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
       await applyAgentWorkspaceTrust(preset, homedir(), noConfig)
     }
     expect(mocks.codex).toHaveBeenCalledWith(homedir(), CODEX_CONFIG_FILES)
-    expect(mocks.cursor).toHaveBeenCalledWith(homedir())
-    expect(mocks.antigravity).toHaveBeenCalledWith(homedir())
+    expect(mocks.cursor).toHaveBeenCalledWith(homedir(), homedir())
+    expect(mocks.antigravity).toHaveBeenCalledWith(homedir(), homedir())
   })
 
   it('never pre-trusts a home reached through a symlink, since the writers store the realpath', async () => {

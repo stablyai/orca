@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.pr-branch-context",
   "family": "session.pr-branch-context",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "5f65c5b318f4764b0f58a5e7b593333759a9cfa799db45b11190ac26f4083335",
-  "scenarioSha256": "bd715681a856254e0c374b504cece07e5df4c9a75fa2b97c35498df12210fbab",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "191e3c96ad53": {
       "name": "github.repoSlug#1",

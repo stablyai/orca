@@ -23,6 +23,8 @@ import { ptySizes } from '../delivery/visibility-state'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
 import { resolveConfiguredTerminalShellArgs } from '../configured-terminal-shell-args'
+import { withCodexTerminalServerIsolationEnv } from '../../../../shared/codex-terminal-server-isolation'
+import { planCodexNoDaemonLaunch } from '../../../pty/codex-no-daemon-launch-command'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
 
@@ -31,9 +33,11 @@ export async function buildPtyIpcSpawnOptions(
   ctx: PtyIpcSpawnState
 ): Promise<{ isReattach: true } | null> {
   const args = ctx.args
-  ctx.spawnEnv = ctx.preAllocatedHandle
-    ? { ...ctx.env, ORCA_TERMINAL_HANDLE: ctx.preAllocatedHandle }
-    : ctx.env
+  // Why here: every provider (local, daemon, SSH relay, WSL) spawns from this env.
+  ctx.spawnEnv = withCodexTerminalServerIsolationEnv(
+    ctx.preAllocatedHandle ? { ...ctx.env, ORCA_TERMINAL_HANDLE: ctx.preAllocatedHandle } : ctx.env,
+    ctx.deps.getSettings?.()
+  )
   const envToDelete = ctx.claudeAuth?.stripAuthEnv
     ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
     : undefined
@@ -78,8 +82,17 @@ export async function buildPtyIpcSpawnOptions(
   if (ctx.combinedEnvToDelete) {
     ctx.spawnOptions.envToDelete = ctx.combinedEnvToDelete
   }
-  if (ctx.launchCommand !== undefined) {
-    ctx.spawnOptions.command = ctx.launchCommand
+  const noDaemonLaunch = planCodexNoDaemonLaunch({
+    command: ctx.launchCommand,
+    executesOnThisHost: !args.connectionId && ctx.codexSelectionTarget.runtime !== 'wsl',
+    shellOverride: ctx.effectiveShellOverride,
+    env: ctx.spawnEnv,
+    envToDelete: ctx.combinedEnvToDelete,
+    cwd: ctx.cwd
+  })
+  const launchCommand = noDaemonLaunch ? await noDaemonLaunch : ctx.launchCommand
+  if (launchCommand !== undefined) {
+    ctx.spawnOptions.command = launchCommand
   }
   if (args.commandDelivery !== undefined) {
     ctx.spawnOptions.commandDelivery = args.commandDelivery

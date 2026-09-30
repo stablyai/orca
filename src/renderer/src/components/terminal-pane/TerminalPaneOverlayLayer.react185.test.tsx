@@ -130,20 +130,6 @@ describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', ()
     expect(markUnverifiedPtyLoss).toHaveBeenCalledWith(TAB_ID)
   })
 
-  it('does not re-render on ResizeObserver ticks with an unchanged rect', () => {
-    renderSlot()
-    expect(capturedResizeCallback).toBeTypeOf('function')
-
-    const rendersAfterMount = terminalPaneRenderCount
-    for (let i = 0; i < 50; i += 1) {
-      act(() => {
-        capturedResizeCallback?.()
-      })
-    }
-
-    expect(terminalPaneRenderCount - rendersAfterMount).toBe(0)
-  })
-
   it('settles sub-pixel jitter across an integer boundary without losing precision', () => {
     bodyRect = createRect({ top: 32.1, left: 0.1, width: 799.1, height: 567.1 })
     renderSlot()

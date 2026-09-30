@@ -8,7 +8,6 @@ import {
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from './native-chat-types'
-import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import { isNoiseMessage } from './native-chat-noise'
 
@@ -79,23 +78,21 @@ function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMe
   return blocks.length > 0 ? { ...message, blocks } : null
 }
 
-/** Fold consecutive tool-only messages into their preceding assistant turn.
- *  Only into a run the same agent wrote: a subagent's calls interleave with its
- *  parent's in one journal, and absorbing one into the other would present one
- *  agent's work as the other's. */
+/** A run drawn at its assistant row can hold calls newer than rows drawn below it. */
+function recordFoldedPosition(target: NativeChatMessage, folded: NativeChatMessage): void {
+  if (folded.journalPosition) {
+    target.foldedJournalPosition = folded.journalPosition
+  }
+}
+
+/** Fold consecutive tool-only messages into their preceding assistant turn. */
 export function foldToolMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
   const output: NativeChatMessage[] = []
   let mutableAssistantIndex = -1
   let clonedAssistantIndex = -1
   for (const message of messages) {
-    const foldTarget =
-      mutableAssistantIndex >= 0 &&
-      agentJournalItemSubagentId(output[mutableAssistantIndex]) ===
-        agentJournalItemSubagentId(message)
-        ? mutableAssistantIndex
-        : -1
-    if (isHarnessSidecarToolMessage(message) && foldTarget >= 0) {
-      const index = foldTarget
+    if (isHarnessSidecarToolMessage(message) && mutableAssistantIndex >= 0) {
+      const index = mutableAssistantIndex
       const assistant = output[index]
       if (assistant?.role === 'assistant') {
         if (clonedAssistantIndex !== index) {
@@ -103,6 +100,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
           clonedAssistantIndex = index
         }
         output[index].blocks.push(...message.blocks.filter(isToolResultBlock))
+        recordFoldedPosition(output[index], message)
         output.push({
           ...message,
           blocks: message.blocks.filter((block) => !isToolResultBlock(block))
@@ -110,8 +108,8 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
         continue
       }
     }
-    if (isToolOnlyMessage(message) && foldTarget >= 0) {
-      const index = foldTarget
+    if (isToolOnlyMessage(message) && mutableAssistantIndex >= 0) {
+      const index = mutableAssistantIndex
       const assistant = output[index]
       if (assistant?.role !== 'assistant') {
         output.push(message)
@@ -123,6 +121,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
         clonedAssistantIndex = index
       }
       output[index]!.blocks.push(...message.blocks)
+      recordFoldedPosition(output[index]!, message)
       continue
     }
     output.push(message)

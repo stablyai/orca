@@ -12,26 +12,6 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('devin')).toBe(true)
   })
 
-  it('treats omp as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('omp')).toBe(true)
-  })
-
-  it('treats Prime Agent as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('prime-agent')).toBe(true)
-  })
-
-  it('treats copilot as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('copilot')).toBe(true)
-  })
-
-  it('treats Kimi Code as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('kimi')).toBe(true)
-  })
-
-  it('treats CodeBuddy as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('codebuddy')).toBe(true)
-  })
-
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],

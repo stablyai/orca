@@ -213,8 +213,6 @@ export function getWorktreeCardPropertyOptions({
   ]
 }
 
-export const WORKTREE_CARD_PROPERTY_OPTIONS = getWorktreeCardPropertyOptions()
-
 export const SORT_OPTIONS = [
   {
     id: 'name',

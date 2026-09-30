@@ -194,25 +194,22 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.loadOlder).toHaveBeenCalledOnce()
   })
 
-  // Transcript image previews shipped Codex-first. Every structured session
-  // renders through the same list, so they are not agent-gated.
-  it.each(['codex', 'claude'] as const)(
-    'renders the same structured transcript chrome for %s',
-    (agent) => {
-      render(
-        <NativeChatStructuredSession
-          isVisible
-          isFocusedGroup
-          tabId="structured-tab-parity"
-          sessionId="session-parity"
-          target={{ kind: 'local' }}
-          agent={agent}
-        />
-      )
+  // Transcript image previews shipped Codex-first, and the runtime context they
+  // need comes from the tab rather than the agent, so it is never agent-gated.
+  it('hands the transcript the image runtime context', () => {
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-parity"
+        sessionId="session-parity"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
 
-      expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
-    }
-  )
+    expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
+  })
 
   it('suppresses live turn activity for a pending question without ending the turn', () => {
     mocks.isWorking = true

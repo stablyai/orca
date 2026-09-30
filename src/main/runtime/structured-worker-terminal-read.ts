@@ -29,7 +29,7 @@
  */
 
 import type { RuntimeTerminalRead } from '../../shared/runtime-types'
-import { formatWorkerTranscriptMessages } from '../../shared/worker-transcript-text'
+import { formatWorkerTranscriptMessage } from '../../shared/worker-transcript-text'
 import { AGENT_SESSION_NOT_ATTACHED } from '../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import type { OrchestrationDb } from './orchestration/db'
 import { boundStructuredJournalTail } from './orchestration/structured-worker-journal-archive'
@@ -84,7 +84,9 @@ export async function readStructuredWorkerTerminal(args: {
   }
   // Redacts dispatch capabilities and clips oversized blocks under the archive path's byte bound.
   const bounded = boundStructuredJournalTail(page.items)
-  const lines = formatWorkerTranscriptMessages(bounded.messages).flatMap((text) => text.split('\n'))
+  const lines = bounded.messages.flatMap((message) =>
+    formatWorkerTranscriptMessage(message).split('\n')
+  )
   const read = readTerminalTail({
     handle: args.handle,
     status: structuredWorkerTerminalState(observeStructuredWorker(identity).status),

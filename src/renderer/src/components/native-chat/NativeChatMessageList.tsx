@@ -3,13 +3,11 @@ import { ArrowDown } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
+import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
 import { structuredQuestionTranscript } from './structured-agent-question-projection'
 import { nativeChatTaskListState } from './native-chat-task-list-state'
 import { nativeChatTaskListPredecessors } from './native-chat-task-list-history'
 import { NativeChatTaskList } from './NativeChatTaskList'
-import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
-import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
@@ -31,6 +29,9 @@ import {
   nativeChatSlotIndexOf
 } from './native-chat-transcript-slots'
 import { useNativeChatTranscriptWindow } from './use-native-chat-transcript-window'
+import { nativeChatRowsInTranscriptOrder } from './native-chat-subagent-sections'
+import { useNativeChatSubagentSections } from './use-native-chat-subagent-sections'
+import { toggleNativeChatExpandedKey } from './native-chat-expanded-keys'
 import { useNativeChatTurnMembership } from './use-native-chat-turn-membership'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
 import { useNativeChatOlderHistoryAutoload } from './use-native-chat-older-history-autoload'
@@ -49,7 +50,6 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
 import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
-import { nativeChatSubagentLabels } from '../../../../shared/native-chat-subagent-attribution'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
   nativeChatTurnDiffs,
@@ -57,10 +57,6 @@ import {
   type NativeChatDiffTarget,
   type NativeChatTurnDiff
 } from './native-chat-turn-diffs'
-
-export { ProviderFrameRow } from './NativeChatTranscriptChrome'
-
-const MAX_EXPANDED_TURNS = 128
 
 /** The turn is blocked on the reader. `shown`: the pane draws the prompt itself, as a card;
  *  `unshown`: it cannot (the prompt is only in the agent's terminal). */
@@ -74,6 +70,7 @@ export function NativeChatMessageList({
   session,
   journalItems,
   journalSubmissions,
+  subagentRoster,
   railOutline = null,
   isVisible = true,
   isWorking,
@@ -92,6 +89,8 @@ export function NativeChatMessageList({
   journalItems?: readonly AgentJournalRenderItem[]
   /** With the items, what places each row in its turn (structured lane). */
   journalSubmissions?: readonly AgentJournalSubmission[]
+  /** Every subagent the session's rosters named, whether or not its roster row is loaded. */
+  subagentRoster?: Parameters<typeof useNativeChatSubagentSections>[2]
   /** User messages older than the loaded window, from the host's outline. */
   railOutline?: readonly NativeChatRailOutlineEntry[] | null
   isVisible?: boolean
@@ -127,21 +126,7 @@ export function NativeChatMessageList({
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(new Set())
   const disclosures = useNativeChatDisclosures()
   const toggleExpandedTurn = useCallback((turnKey: string) => {
-    setExpandedTurnIds((current) => {
-      const next = new Set(current)
-      if (next.has(turnKey)) {
-        next.delete(turnKey)
-      } else {
-        if (next.size >= MAX_EXPANDED_TURNS) {
-          const oldest = next.values().next().value
-          if (oldest) {
-            next.delete(oldest)
-          }
-        }
-        next.add(turnKey)
-      }
-      return next
-    })
+    setExpandedTurnIds((current) => toggleNativeChatExpandedKey(current, turnKey))
   }, [])
 
   const { hasMore, loadingEarlier, loadEarlier } = session
@@ -149,18 +134,18 @@ export function NativeChatMessageList({
   // remounts the row, which re-checks the range.
   const showOlderHistory = hasMore && session.readPhase === 'ready'
 
-  const projectMessages = useMemo(
-    () => createNativeChatMessageListProjection(),
-    // Rebound sessions must release the previous transcript's cached rows.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session.agent, session.sessionId]
+  const { messages, subagentRows } = useNativeChatTranscriptProjection(
+    session,
+    journalItems,
+    journalSubmissions
   )
-  const messages = useMemo(() => {
-    const projected = projectNativeChatTaskListFrames(projectMessages(session.messages))
-    // Structured sessions show goal state in the banner above the composer.
-    return journalItems ? omitNativeChatThreadGoalRows(projected) : projected
-  }, [journalItems, projectMessages, session.messages])
-  const subagentLabels = useMemo(() => nativeChatSubagentLabels(messages), [messages])
+  const {
+    sections: subagentSections,
+    subagentRowsInOrder,
+    subagentChoices,
+    subagentDisclosure,
+    openSubagentSections
+  } = useNativeChatSubagentSections(messages, subagentRows, subagentRoster)
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(messages), [messages])
   const taskListState = useMemo(() => nativeChatTaskListState(messages), [messages])
   // Each row's turn, which turn is live, and the order the rows draw in, resolved once.
@@ -169,11 +154,13 @@ export function NativeChatMessageList({
     turnKeys,
     liveTurnKey
   } = useNativeChatTurnMembership(messages, journalItems, journalSubmissions)
-  const turnDiffs = useMemo(
-    () =>
-      journalItems ? nativeChatTurnDiffs(rows, turnKeys) : new Map<string, NativeChatTurnDiff>(),
-    [journalItems, rows, turnKeys]
-  )
+  const turnDiffs = useMemo(() => {
+    if (!journalItems) {
+      return new Map<string, NativeChatTurnDiff>()
+    }
+    const merged = nativeChatRowsInTranscriptOrder(rows, turnKeys, subagentRowsInOrder)
+    return nativeChatTurnDiffs(merged.messages, merged.turnKeys, subagentSections.pathOf)
+  }, [journalItems, rows, subagentRowsInOrder, subagentSections.pathOf, turnKeys])
   // "Thinking" is real reasoning content at the tail of the turn, not the absence
   // of output — the latter reports thinking while the request is merely in flight.
   const thinking = useMemo(
@@ -209,7 +196,8 @@ export function NativeChatMessageList({
         expandedTurnKeys: expandedTurnIds,
         isWorking,
         lifecycleWorking,
-        subagentLabels
+        subagentSections,
+        subagentChoices
       }),
     [
       liveTurnKey,
@@ -218,7 +206,8 @@ export function NativeChatMessageList({
       lifecycleWorking,
       receipts,
       rows,
-      subagentLabels,
+      subagentChoices,
+      subagentSections,
       turnDiffs,
       turnKeys,
       turnStatuses
@@ -296,13 +285,17 @@ export function NativeChatMessageList({
   const revealDiff = useCallback(
     (target: NativeChatDiffTarget) => {
       beginNavigation()
+      // A subagent's edit is revealed inside its section.
+      if (target.subagentSections) {
+        openSubagentSections(target.subagentSections)
+      }
       navigationSequence.current += 1
       setNavigationRequest({
         kind: 'diff',
         target: { ...target, requestId: navigationSequence.current }
       })
     },
-    [beginNavigation]
+    [beginNavigation, openSubagentSections]
   )
   const jumpToLatest = useCallback(() => {
     beginNavigation()
@@ -345,6 +338,7 @@ export function NativeChatMessageList({
       runtimeContext,
       onLinkClick,
       onToggleExpandedTurn: toggleExpandedTurn,
+      subagentDisclosure,
       onScrollMessageToTop: scrollMessageToTop,
       onRevealDiff: revealDiff
     }),
@@ -359,6 +353,7 @@ export function NativeChatMessageList({
       runtimeContext,
       scrollMessageToTop,
       taskListPredecessors,
+      subagentDisclosure,
       toggleExpandedTurn
     ]
   )

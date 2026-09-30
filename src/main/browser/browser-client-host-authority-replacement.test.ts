@@ -32,12 +32,6 @@ describe('browser client host authority replacement', () => {
     expect(isBrowserClientHostAuthorityReplaced(unrelated)).toBe(false)
   })
 
-  it('rejects a codeless host error with an unrelated message', () => {
-    expect(isBrowserClientHostAuthorityReplaced(new Error('browser host process exited'))).toBe(
-      false
-    )
-  })
-
   it('rejects non-Error rejections, including a bare object carrying the mismatch code', () => {
     expect(isBrowserClientHostAuthorityReplaced(undefined)).toBe(false)
     expect(isBrowserClientHostAuthorityReplaced(null)).toBe(false)
@@ -150,15 +144,5 @@ describe('BrowserClientHostAuthorityReplacementWait', () => {
     wait.arm(afterExpiry)
     vi.advanceTimersByTime(1_000)
     expect(afterExpiry).toHaveBeenCalledOnce()
-  })
-
-  it('tolerates cancelling when nothing is armed', () => {
-    const wait = new BrowserClientHostAuthorityReplacementWait(1_000)
-
-    expect(() => {
-      wait.cancel()
-      wait.cancel()
-    }).not.toThrow()
-    expect(wait.armed).toBe(false)
   })
 })

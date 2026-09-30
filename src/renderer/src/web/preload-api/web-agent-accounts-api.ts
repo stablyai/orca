@@ -4,7 +4,15 @@ import type { PreloadApi } from '../../../../preload/api-types'
 export function createMiniMaxCredentialsApi(): NonNullable<
   Partial<PreloadApi>['minimaxCredentials']
 > {
-  const notConfigured = { configured: false, cookieConfigured: false, apiKeyConfigured: false }
+  // Nulls, not 'sealed': MiniMax credentials live on the desktop host, so this bridge
+  // stores nothing and has no protection to claim either way.
+  const notConfigured = {
+    configured: false,
+    cookieConfigured: false,
+    apiKeyConfigured: false,
+    cookieProtection: null,
+    apiKeyProtection: null
+  }
   const unsupportedError = new Error('MiniMax cookie storage is only available in the desktop app.')
   return {
     getStatus: () => Promise.resolve(notConfigured),

@@ -90,6 +90,13 @@ vi.mock('./use-structured-agent-session', async () => {
         backgroundTasks: mocks.backgroundTasks,
         turnId: null,
         cancel: vi.fn(),
+        queuedMessages: {
+          cards: [],
+          steer: vi.fn(async () => {}),
+          remove: vi.fn(async () => {}),
+          edit: vi.fn(async () => {}),
+          steerNewest: () => false
+        },
         stopBackgroundTask: (taskId?: string) => mocks.stopBackgroundTask(props.sessionId, taskId),
         respond: mocks.respond,
         optionSnapshot: [
@@ -160,7 +167,8 @@ vi.mock('./NativeChatComposer', () => ({
       },
       insertTypedText: () => true,
       handlePasteEvent: mocks.handlePasteEvent,
-      pasteFromClipboard: mocks.pasteFromClipboard
+      pasteFromClipboard: mocks.pasteFromClipboard,
+      contains: (node: Node | null) => fieldRef.current?.contains(node) === true
     }))
     return <textarea ref={fieldRef} data-testid="structured-composer" />
   })

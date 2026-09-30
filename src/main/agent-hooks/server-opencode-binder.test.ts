@@ -3,13 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
 import { lookupOpenCodeSessionPane } from '../../shared/agent-hook-listener/opencode-session-registry'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import SyncDatabase from '../sqlite/sync-database'
 import { AgentHookServer } from './server'
 import type { OpenCodeBinderLoopDeps } from './server/server-opencode-binder'
-import { defaultOpenCodeDbPath, listOpenCodeDbSessions } from '../opencode/opencode-session-binder'
+import { listOpenCodeDbSessions } from '../opencode/opencode-session-binder'
 
 const LEAF_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const LEAF_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -236,16 +235,5 @@ describe('listOpenCodeDbSessions', () => {
 
   it('returns [] for a missing database instead of throwing', () => {
     expect(listOpenCodeDbSessions(join(dir, 'absent.db'), { ms: 0, id: '' })).toEqual([])
-  })
-
-  it('the default path points at the local opencode store', () => {
-    expect(defaultOpenCodeDbPath()).toMatch(/opencode\.db$/)
-  })
-})
-
-describe('binder registry isolation', () => {
-  it('a fresh listener state starts unbound', () => {
-    const state = createHookListenerState()
-    expect(lookupOpenCodeSessionPane(state, 'ses_live')).toBeUndefined()
   })
 })

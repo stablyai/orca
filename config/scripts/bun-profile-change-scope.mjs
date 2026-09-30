@@ -19,7 +19,8 @@ const BUILD_SCRIPTS = [
   'config/vitest.config.ts',
   'config/scripts/happy-dom-offscreen-canvas.ts',
   'config/scripts/happy-dom-mutation-observer-retention.ts',
-  'config/scripts/vitest-host-ports-setup.ts'
+  'config/scripts/vitest-host-ports-setup.ts',
+  'config/scripts/vitest-real-agent-home-write-guard.ts'
 ]
 const ALWAYS_FILES = new Set([
   'package.json',

@@ -10,6 +10,7 @@ import {
   realClaudeAuthenticated,
   realClaudeAuthStatus,
   realClaudeAvailable,
+  realClaudeCliGate,
   realClaudeCommand
 } from './claude-real-cli-availability-test-support'
 import {
@@ -19,6 +20,7 @@ import {
 import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
 
 const command = realClaudeCommand
+const suiteTitle = `Claude structured real CLI handshake${realClaudeCliGate.skipReason ? ` (skipped: ${realClaudeCliGate.skipReason})` : ''}`
 
 function realAdapter(
   providerSessionId: string,
@@ -79,7 +81,7 @@ async function waitForResolvedTranscript(
   }
 }
 
-describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', () => {
+describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
   it.skipIf(!realClaudeAuthenticated)(
     'proves a pre-minted session before the first user message',
     async () => {

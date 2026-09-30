@@ -6,7 +6,10 @@ import { TUI_AGENT_CONFIG } from '../shared/tui-agent-config'
 import type { TuiAgent } from '../shared/tui-agent'
 import { resolveClaudeGlobalConfigFile } from '../main/claude/claude-folder-trust-file'
 import { SHORT_AGENT_TRUST_WRITE_DEADLINE_MS } from '../main/agent-trust-write-deadline'
-import { applyWorkspaceTrustOnThisHost } from '../main/execution-host-workspace-trust'
+import {
+  applyWorkspaceTrustOnThisHost,
+  launchedAgentHome
+} from '../main/execution-host-workspace-trust'
 
 /**
  * Why here: this host owns the files the agent reads, so each writer's lock, re-read, atomic
@@ -27,9 +30,10 @@ export async function applyRelayAgentWorkspaceTrust(
   }
   await applyWorkspaceTrustOnThisHost(preset, request.workspacePath, () => {
     const keyStyle = process.platform === 'win32' ? 'win32' : 'posix'
-    const homeDir = (keyStyle === 'win32' ? spawnEnv.USERPROFILE : spawnEnv.HOME) || homedir()
+    const homeDir = launchedAgentHome(spawnEnv)
     return {
       homes: [homeDir, homedir()],
+      agentHome: homeDir,
       claudeConfig: () => ({
         configFile: resolveClaudeGlobalConfigFile({
           env: spawnEnv,

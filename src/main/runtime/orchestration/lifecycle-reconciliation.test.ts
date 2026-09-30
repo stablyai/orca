@@ -472,30 +472,6 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(task.id)?.result).toBe(result)
   })
 
-  it('surfaces worker_done sent from a different pane as rejected', () => {
-    db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
-    const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_w1:${LEAF_A}`)
-    const logs: string[] = []
-    const message = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'term_other_worker',
-      to: 'term_coordinator',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' }),
-      senderPaneKey: `tab_w2:${LEAF_B}`
-    })
-
-    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toMatchObject({
-      action: 'rejected',
-      code: 'sender_not_assignee'
-    })
-    expect(db.getTask(task.id)?.status).toBe('dispatched')
-    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
-    expect(logs.some((line) => line.includes('worker_done rejected'))).toBe(true)
-  })
-
   it('surfaces a heartbeat sent from a different pane without recording liveness', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })

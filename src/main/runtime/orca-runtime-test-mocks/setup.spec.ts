@@ -413,12 +413,14 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
 vi.mock('../../ipc/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue),
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock,
   isENOENT: (error: unknown) =>
     Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
 }))
 
 vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
 
 // Why: the real check also matches relay-rebuilt errors, which carry only the ENOENT message.

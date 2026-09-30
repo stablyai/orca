@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "components.execution-target",
   "family": "components.execution-target",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
-  "scenarioSha256": "8b8f7fe7227d44330e216e0bf5d366c41b54d9bf76acfb24df2c1770984b9f27",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "0355054e5e71": {
       "name": "ssh.connect#1",

@@ -1,3 +1,4 @@
+import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../shared/terminal-mode-reset-profiles'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -118,7 +119,11 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       // dropping the scrollback first spares a reflow of history the very next
       // sequence discards (see use-terminal-container-fit-sync.ts on its cost).
       if (clearBeforeReplay) {
-        await session.writeReplayDataAsync('\x1b[2J\x1b[3J\x1b[H')
+        // RELEASE_SYNCHRONIZED_OUTPUT: a reconnect is exactly the event that severs a
+        // frame mid-flight, so this xterm may hold an open 2026 latch — and \x1b[2J does
+        // not clear it, so the pane would stay frozen on its last painted frame and the
+        // whole replay would go unseen until xterm's 1s timeout.
+        await session.writeReplayDataAsync(`${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H`)
         if (!isCurrentPayload()) {
           continue
         }

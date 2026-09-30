@@ -251,15 +251,6 @@ describe('Droid hook normalization', () => {
     expect(nextTool?.payload.toolInput).toBe('pwd')
   })
 
-  it('SubagentStop does not close the primary session row', () => {
-    const result = _internals.normalizeHookPayload(
-      'droid',
-      buildBody({ hook_event_name: 'SubagentStop' }),
-      'production'
-    )
-    expect(result).toBeNull()
-  })
-
   it('Stop maps to done and preserves the cached prompt', () => {
     _internals.normalizeHookPayload(
       'droid',

@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "settings.resume-metadata",
   "family": "settings.resume-metadata",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "1cae30b028e6b967575d65f18e8a0e868583e993",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
-  "scenarioSha256": "5988fa5ce0bf6b8585f7ec66918123ee086d5cdf1185a4eeff2e88904985064c",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "03251bdb225e": {
       "name": "settings.get#1",

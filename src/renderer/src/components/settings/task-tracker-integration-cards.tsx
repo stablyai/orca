@@ -1,3 +1,4 @@
+import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
 import { useState } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
@@ -124,6 +125,13 @@ export function LinearIntegrationCard(): React.JSX.Element {
     >
       <IntegrationCardDetails>
         <ProviderAccountScopeRow scope={accountScope} />
+        <UnsealedCredentialNotice
+          protection={linearStatus.credentialProtection ?? null}
+          credentialName={translate(
+            'auto.components.settings.task.tracker.integration.cards.linearTokenName',
+            'Your Linear API token'
+          )}
+        />
         {connected ? (
           <div className="space-y-2">
             {workspaces.map((workspace) => {

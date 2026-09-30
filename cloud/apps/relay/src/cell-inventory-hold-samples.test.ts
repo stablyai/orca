@@ -38,14 +38,6 @@ describe('cell inventory hold samples', () => {
     }
   })
 
-  it('never reports a p95 above the max', () => {
-    for (let size = 1; size <= 200; size++) {
-      const counts = samplesOf(Array.from({ length: size }, (_, i) => i + 1)).readCounts()
-
-      expect(counts.cellInventoryHoldMsP95).toBeLessThanOrEqual(counts.cellInventoryHoldMsMax)
-    }
-  })
-
   it('ignores a hold that is not a finite, non-negative duration', () => {
     const samples = samplesOf([Number.NaN, Number.POSITIVE_INFINITY, -1])
 

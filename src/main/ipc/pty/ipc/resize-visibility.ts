@@ -5,8 +5,7 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../../../../shared/pty-renderer-delivery-health'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
-import { setTerminalViewAttributes } from '../../../runtime/terminal-view-attribute-store'
-import { validateTerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import { installTerminalViewAttributesIpc } from './terminal-view-attributes-ipc'
 import {
   recordHiddenRendererPtyDataDrop,
   setRendererPtyDeliveryInterest,
@@ -284,14 +283,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     }
   })
 
-  ipcMain.removeAllListeners('pty:terminalViewAttributes')
-  ipcMain.on('pty:terminalViewAttributes', (_event, args: unknown) => {
-    // Why validate-or-drop: a malformed palette gives a wrong color reply that breaks TUI theme detection worse than the silent-until-first-push default.
-    const attributes = validateTerminalViewAttributes(args)
-    if (attributes) {
-      setTerminalViewAttributes(attributes)
-    }
-  })
+  installTerminalViewAttributesIpc(session)
 
   ipcMain.removeAllListeners('pty:setPtyDeliveryInterest')
   ipcMain.on('pty:setPtyDeliveryInterest', (_event, args: { id: string; interested: boolean }) => {

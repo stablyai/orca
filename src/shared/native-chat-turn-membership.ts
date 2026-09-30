@@ -20,7 +20,9 @@ import { readAgentJournalTurn } from './agent-session-turn-record'
 import {
   nativeChatJournalOrderTurnKeys,
   nativeChatRowTurnKeys,
-  nativeChatTurnDrawOrder
+  nativeChatTurnDrawOrder,
+  nativeChatUserRowOpensTurn,
+  type NativeChatOpensTurn
 } from './native-chat-turn-grouping'
 import type { NativeChatRole } from './native-chat-types'
 import { isStructuredAgentSessionCommandTurn } from './structured-agent-session-command-entry'
@@ -126,14 +128,16 @@ export type NativeChatTurnMembership = {
 /**
  * Places each row in its turn. A user entry that anchors a turn, or is scoped to none, keys
  * itself; one delivered into a running turn (a steer) takes that turn's key. A host that states no
- * scope is read by journal order instead (`nativeChatJournalOrderTurnKeys`).
+ * scope is read by journal order instead (`nativeChatJournalOrderTurnKeys`). `opensTurn` narrows
+ * which rows may key themselves, for rows that interleave a subagent's with the conversation's.
  */
 export function nativeChatTurnMembership(
   messages: readonly { id: string; role: NativeChatRole }[],
-  journal?: NativeChatTurnJournal | null
+  journal?: NativeChatTurnJournal | null,
+  opensTurn: NativeChatOpensTurn = nativeChatUserRowOpensTurn
 ): NativeChatTurnMembership {
   if (!journal) {
-    const turnKeys = nativeChatRowTurnKeys(messages)
+    const turnKeys = nativeChatRowTurnKeys(messages, null, opensTurn)
     return { turnKeys, liveTurnKey: newestUserTurnKey(messages, turnKeys), drawOrder: null }
   }
   const anchors = structuredAgentTurnAnchors(journal.items, journal.submissions)
@@ -142,7 +146,8 @@ export function nativeChatTurnMembership(
     const recordKeys = namedRecordKeys(journal.items, anchors)
     const turnKeys = nativeChatRowTurnKeys(
       messages,
-      nativeChatJournalOrderTurnKeys(journal.items, recordKeys)
+      nativeChatJournalOrderTurnKeys(journal.items, recordKeys),
+      opensTurn
     )
     const runningNamed = running.kind === 'turn' ? recordKeys.get(running.turnItemId) : null
     return {
@@ -158,7 +163,7 @@ export function nativeChatTurnMembership(
     const scope = scopes.get(message.id)
     const turnKey =
       scope?.kind === 'turn' && scope.turnItemId ? anchors.get(scope.turnItemId) : undefined
-    if (message.role !== 'user') {
+    if (!opensTurn(message)) {
       return turnKey
     }
     return anchoring.has(message.id) ? message.id : (turnKey ?? message.id)

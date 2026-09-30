@@ -2,7 +2,7 @@ import {
   NativeChatTranscriptRow,
   type NativeChatTranscriptRowContext
 } from './NativeChatTranscriptRow'
-import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
 
 /** Windowed transcript rows, absolutely positioned inside a full-height spacer. */
@@ -60,7 +60,7 @@ export function NativeChatWaitingTranscriptItems({
   return (
     <>
       {slots.map((slot) => (
-        <NativeChatTranscriptRow key={slot.message.id} slot={slot} context={context} />
+        <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
       ))}
     </>
   )

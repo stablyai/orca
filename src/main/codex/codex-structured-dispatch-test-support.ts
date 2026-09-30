@@ -84,7 +84,6 @@ export async function acquiredCodexAdapter(input: {
   codex: ReturnType<typeof fakeCodexAppServer>
   settlements: LateSettlement[]
   sink?: StructuredAgentSessionEventSink
-  captureTurnProcesses?: CodexStructuredSessionAdapterDeps['captureTurnProcesses']
   requestTimeoutMs?: number
 }): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
@@ -97,9 +96,6 @@ export async function acquiredCodexAdapter(input: {
     }),
     openConnection: input.codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    captureTurnProcesses: input.captureTurnProcesses ?? (async () => null),
-    // A Stop must never reach for real processes on this machine under the fake pid.
-    terminateTurnProcesses: async () => true,
     now: () => 1_700_000_000_500,
     onDispatchSettledLate: (settlement) => input.settlements.push(settlement),
     ...(input.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: input.requestTimeoutMs })

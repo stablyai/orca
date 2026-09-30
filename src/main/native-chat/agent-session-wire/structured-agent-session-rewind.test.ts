@@ -10,7 +10,8 @@ import {
 } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type {
   StructuredAgentSessionAdapter,
@@ -53,10 +54,7 @@ beforeEach(async () => {
   })
   acquires = []
   directory = await mkdtemp(join(tmpdir(), 'orca-rewind-'))
-  store = await AgentSessionRecordStore.open({
-    directory: join(directory, 'store'),
-    hostId: 'local'
-  })
+  store = await openTestAgentSessionRecordStore(directory)
   adapter = {
     supportsCreate: (_location, agent) => agent === 'codex',
     supportsLocation: () => true,

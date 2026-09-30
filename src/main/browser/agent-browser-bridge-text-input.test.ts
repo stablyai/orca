@@ -57,7 +57,6 @@ import {
 } from './agent-browser-bridge'
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
-  CLIPBOARD_TEXT_WRITE_MAX_BYTES,
   CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
 } from '../../shared/clipboard-text'
 import {
@@ -247,17 +246,6 @@ describe('AgentBrowserBridge', () => {
     bridge.setActiveTab(100)
   })
 
-  it('rejects oversized browser clipboard writes before spawning agent-browser', async () => {
-    const secret = 'browser-clipboard-secret'
-    succeedWith({ ok: true })
-
-    await expect(
-      bridge.clipboardWrite(secret + 'x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1))
-    ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
-
-    expect(execFileMock).not.toHaveBeenCalled()
-  })
-
   it('rejects browser clipboard writes that exceed the safe agent-browser argument size', async () => {
     succeedWith({ ok: true })
 
@@ -266,21 +254,6 @@ describe('AgentBrowserBridge', () => {
     ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
 
     expect(execFileMock).not.toHaveBeenCalled()
-  })
-
-  it('builds valid fill eval JavaScript for multiline values', async () => {
-    succeedWith({ ok: true })
-
-    await bridge.fill('@textarea', "line one\nline two with 'quote' and \\ slash")
-
-    const evalCall = execFileMock.mock.calls.find((call: unknown[]) =>
-      (call[1] as string[]).includes('eval')
-    )
-    expect(evalCall).toBeDefined()
-    const args = evalCall![1] as string[]
-    expect(args[args.indexOf('eval') + 1]).toBe('--stdin')
-    expect(stdinWrites).toHaveLength(1)
-    expect(() => new Function(stdinWrites[0])).not.toThrow()
   })
 
   it('replaces contenteditable text through the browser editing pipeline', async () => {

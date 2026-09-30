@@ -22,7 +22,8 @@ import {
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { ensureStructuredAgentSessionAgent } from './structured-agent-session-agent-start'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -115,7 +116,7 @@ beforeEach(async () => {
       ordinal: dispatch.mock.calls.length
     }
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   startHost()
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   await host.close(SESSION)

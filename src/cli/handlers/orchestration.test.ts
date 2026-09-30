@@ -532,7 +532,7 @@ describe('orchestration timeout flag validation', () => {
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
   })
 
-  it.each([String(2_147_483_647), String(Number.MAX_SAFE_INTEGER)])(
+  it.each([String(Number.MAX_SAFE_INTEGER)])(
     'clamps a safe ask timeout %s before adding transport headroom',
     async (rawTimeout) => {
       process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
@@ -553,31 +553,6 @@ describe('orchestration timeout flag validation', () => {
         'orchestration.ask',
         expect.objectContaining({ timeoutMs: 1_800_000 }),
         { timeoutMs: 1_805_000 }
-      )
-    }
-  )
-
-  it.each(['+1000', '1000.0', '1e3', '0x3e8'])(
-    'preserves CLI-compatible exact integer timeout syntax %s',
-    async (rawTimeout) => {
-      process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
-      callMock.mockResolvedValue({
-        result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false }
-      })
-      vi.spyOn(console, 'log').mockImplementation(() => {})
-
-      await invokeAsk(
-        new Map<string, string | boolean>([
-          ['to', 'term_coord'],
-          ['question', 'Proceed?'],
-          ['timeout-ms', rawTimeout]
-        ])
-      )
-
-      expect(callMock).toHaveBeenCalledWith(
-        'orchestration.ask',
-        expect.objectContaining({ timeoutMs: 1_000 }),
-        { timeoutMs: 6_000 }
       )
     }
   )

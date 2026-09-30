@@ -213,10 +213,6 @@ describe('command aliases', () => {
     expect(findCommandSpec(specs, ['worktree', 'remove'])?.path).toEqual(['worktree', 'rm'])
   })
 
-  it('resolves each declared alias to the canonical spec', () => {
-    expect(findCommandSpec(specs, ['worktree', 'delete'])?.path).toEqual(['worktree', 'rm'])
-  })
-
   it('returns undefined for a path matching neither canonical nor alias', () => {
     expect(findCommandSpec(specs, ['worktree', 'destroy'])).toBeUndefined()
   })

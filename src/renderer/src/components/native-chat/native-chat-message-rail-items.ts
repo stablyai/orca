@@ -39,7 +39,7 @@ export function buildNativeChatRailItems(
 ): readonly NativeChatRailItem[] {
   const items: NativeChatRailItem[] = []
   for (const [slotIndex, slot] of slots.entries()) {
-    if (slot.message.role !== 'user') {
+    if (slot.kind !== 'message' || slot.message.role !== 'user') {
       continue
     }
     const preview = nativeChatUserMessagePreview(slot.message.blocks)

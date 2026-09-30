@@ -13,12 +13,12 @@ import { tmpdir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
+import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-preflight'
 import {
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight,
-  getPowerShellCodexShellLaunchPreflight,
-  resolveCodexShellLaunchPreflightCommand
-} from './codex-shell-launch-preflight'
+  getPowerShellCodexShellLaunchPreflight
+} from '../../shared/codex-shell-function'
 import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
 
 const roots: string[] = []

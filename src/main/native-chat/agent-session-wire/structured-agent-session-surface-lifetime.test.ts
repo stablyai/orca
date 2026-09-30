@@ -18,7 +18,8 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   AgentSessionAcquisitionRootExitObservedError,
   type StructuredAgentSessionAdapter
@@ -91,7 +92,7 @@ function openHost(
 /** A fresh app generation over the same durable store, with its owner proven gone. */
 async function reboot(): Promise<void> {
   await host.flushAllStreamedEvents()
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   openHost(async () => ({ outcome: 'pid-absent' }))
   acquire.mockClear()
   closeSession.mockClear()
@@ -231,7 +232,7 @@ beforeEach(async () => {
       surface: 'rejection'
     })
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   openHost()
 })
 
@@ -400,7 +401,7 @@ describe('startup', () => {
     const beforeRestart = store.getRecord(SESSION)
     await abandonStructuredAgentSessionHost(host)
 
-    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(root)
     openHost(async () => ({ outcome: 'pid-absent' }))
     await host.restoreReadableSessions()
 

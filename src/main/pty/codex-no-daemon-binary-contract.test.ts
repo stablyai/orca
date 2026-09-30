@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { CODEX_SHARED_SERVER_ARGS } from './codex-shell-launch-preflight'
+import { CODEX_SHARED_SERVER_ARGS } from '../../shared/codex-shell-function'
 
 // Why: Orca's codex shell wrapper puts --no-daemon first for every subcommand but
-// agents/queue (codex-shell-launch-preflight.ts). Its tests use a fake codex, so
+// agents/queue (src/shared/codex-shell-function.ts). Its tests use a fake codex, so
 // only the real binary can catch a renamed flag or a new subcommand rejecting it.
 
 const execFileAsync = promisify(execFile)

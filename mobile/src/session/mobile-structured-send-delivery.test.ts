@@ -39,8 +39,10 @@ describe('mobileStructuredSendDelivery', () => {
     }
   })
 
-  it('classifies a queued draft answer as accepted and spends its id, replays included', () => {
+  it('classifies a queued draft answer as spent, card-rendered, never a bubble', () => {
     // The host holds the message now; a later identical send is a new message.
+    // A dispatched draft answers as `queued` only when the host lost its
+    // submission, so no echo would retire a bubble: it too shows nothing.
     for (const state of ['waiting', 'dispatched', 'returned', 'withdrawn'] as const) {
       const queued: StructuredAgentSessionMutationCallResult<AgentSessionSendResult> = {
         status: 'accepted',
@@ -49,17 +51,55 @@ describe('mobileStructuredSendDelivery', () => {
           queued: { messageId: 'client-1', position: 1, state }
         }
       }
+      const outcome = 'queued'
       expect(mobileStructuredSendDelivery(queued)).toEqual({
-        outcome: 'accepted',
+        outcome,
         operationIdSpent: true,
         error: null
       })
       expect(mobileStructuredSendDelivery(queued, true)).toEqual({
-        outcome: 'accepted',
+        outcome,
         operationIdSpent: true,
         error: null
       })
     }
+  })
+
+  it("reads a replay answered by its draft's hand-off as unconfirmed, and spends the id", () => {
+    // The hand-off names the replayed id as its draft: the host's answer states the link, so the
+    // id is spent without waiting for a stream that may never carry the hand-off.
+    const handedOff = structuredSendResultFixture('accepted')
+    if (!('submission' in handedOff)) {
+      throw new Error('expected a submission answer')
+    }
+    const replay: StructuredAgentSessionMutationCallResult<AgentSessionSendResult> = {
+      status: 'accepted',
+      value: {
+        clientMessageId: 'retained-draft-id',
+        submission: {
+          ...handedOff.submission,
+          clientMessageId: 'fresh-id',
+          queuedMessageId: 'retained-draft-id'
+        }
+      }
+    }
+    expect(mobileStructuredSendDelivery(replay, true)).toEqual({
+      outcome: 'unknown',
+      operationIdSpent: true,
+      error: null
+    })
+  })
+
+  it('never spends a retained id on a malformed answer with no submission and no id', () => {
+    const malformed: StructuredAgentSessionMutationCallResult<AgentSessionSendResult> = {
+      status: 'accepted',
+      value: JSON.parse('{}')
+    }
+    expect(mobileStructuredSendDelivery(malformed, true)).toEqual({
+      outcome: 'unknown',
+      operationIdSpent: false,
+      error: null
+    })
   })
 
   it('does not report a retained payload replay as a new accepted send', () => {
@@ -150,6 +190,33 @@ describe('mobileStructuredSendDelivery', () => {
       operationIdSpent: false,
       error: 'Your message was not sent. Send it again.'
     })
+  })
+
+  it('releases a replay only when the host refuses its request shape itself', () => {
+    // An older host's strict schema refuses `delivery` before it runs anything:
+    // that replay can never be accepted, so keeping the id refuses the text forever.
+    expect(
+      mobileStructuredSendDelivery(
+        {
+          status: 'failed',
+          message: 'Your message was not sent. Send it again.',
+          hostRejectedByRequestSchema: true
+        },
+        true
+      )
+    ).toEqual({
+      outcome: 'rejected',
+      operationIdSpent: true,
+      error: 'Your message was not sent. Send it again.'
+    })
+    // Any other refusal (an auth failure, a host without the method) proves nothing
+    // about an earlier delivery of this id.
+    expect(
+      mobileStructuredSendDelivery(
+        { status: 'failed', message: 'Your message was not sent.' },
+        true
+      )
+    ).toMatchObject({ operationIdSpent: false })
   })
 
   it('fails closed when an invalid host response omits the required submission', () => {

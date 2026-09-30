@@ -7,7 +7,8 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import { encodeAgentSessionQuestionAnswers } from '../../../shared/agent-session-question-answer'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -130,7 +131,7 @@ beforeEach(async () => {
     }
   }))
   answerPrompt = vi.fn(async ({ commit }) => commit())
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     store,
     adapter: adapter(),

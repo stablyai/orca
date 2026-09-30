@@ -49,16 +49,6 @@ function renderStatus(startupPhase: 'starting' | 'ready' | null) {
 }
 
 describe('NativeChatStructuredSessionStatus', () => {
-  it('stays quiet through a normal startup', () => {
-    vi.useFakeTimers()
-    const view = renderStatus('starting')
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS - 1))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    view.rerender(statusElement('ready'))
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-  })
-
   it('says the agent is still starting once startup runs long', () => {
     vi.useFakeTimers()
     renderStatus('starting')
@@ -82,40 +72,11 @@ describe('NativeChatStructuredSessionStatus', () => {
     expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
   })
 
-  it('hides an old notice and gives a replacement child its full grace period', () => {
-    vi.useFakeTimers()
-    const view = render(statusElement('starting', 'session-1', 'child-1'))
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS))
-    expect(screen.getByText(/still starting/)).toBeInTheDocument()
-    view.rerender(statusElement('ready', 'session-1', 'child-1'))
-    act(() => vi.advanceTimersByTime(100))
-    view.rerender(statusElement('starting', 'session-1', 'child-2'))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    act(() => vi.advanceTimersByTime(STATUS_MIN_VISIBLE_MS))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS - STATUS_MIN_VISIBLE_MS))
-    expect(screen.getByText(/still starting/)).toBeInTheDocument()
-  })
-
   it('resets for a replacement child even when no intermediate phase reaches the view', () => {
     vi.useFakeTimers()
     const view = render(statusElement('starting', 'session-1', 'child-1'))
     act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS))
     view.rerender(statusElement('starting', 'session-1', 'child-2'))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS - 1))
-    expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
-    act(() => vi.advanceTimersByTime(1))
-    expect(screen.getByText(/still starting/)).toBeInTheDocument()
-  })
-
-  it('resets on an observed restart when an older host has no child identity', () => {
-    vi.useFakeTimers()
-    const view = renderStatus('starting')
-    act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS))
-    view.rerender(statusElement('ready'))
-    act(() => vi.advanceTimersByTime(100))
-    view.rerender(statusElement('starting'))
     expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()
     act(() => vi.advanceTimersByTime(SLOW_STARTUP_NOTICE_DELAY_MS - 1))
     expect(screen.queryByText(/still starting/)).not.toBeInTheDocument()

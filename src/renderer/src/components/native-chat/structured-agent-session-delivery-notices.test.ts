@@ -141,6 +141,17 @@ describe('the notice on each message that did not go through', () => {
     })
   })
 
+  it('never says a send attempted before a Stop was not sent: the host may hold it', () => {
+    const interrupted = entry('stopped', { state: 'queued', lastAttemptAt: 5, outlivedStop: true })
+    expect(texts([interrupted], 'stopped')).toEqual({
+      [agentJournalSubmissionKey('stopped')]: 'Message delivery is unconfirmed.'
+    })
+    const neverSent = entry('unsent', { state: 'queued', outlivedStop: true })
+    expect(texts([neverSent], 'unsent')).toEqual({
+      [agentJournalSubmissionKey('unsent')]: 'Message was not sent.'
+    })
+  })
+
   // The drain's own rule: a message behind the one the queue stopped on is only waiting, so it says
   // nothing. A rejected message holds nothing up and keeps its words.
   it('says why on the message the queue stopped on and on every rejected one', () => {

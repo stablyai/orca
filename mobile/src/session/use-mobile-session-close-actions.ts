@@ -1,3 +1,4 @@
+import { pendingSelectionTabId, withoutPendingHandle } from './pending-session-selection'
 import {
   sessionTabClose,
   sessionTerminalClose,
@@ -28,7 +29,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     initializedHandlesRef,
     activeHandleRef,
     activeSessionTabTypeRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     pendingBrowserFocusPageIdRef,
     scheduleDelayedAction,
     unsubscribeTerminal,
@@ -84,7 +85,13 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         if (activeHandleRef.current === target.handle) {
           const replacement = next[0] ?? null
           activeHandleRef.current = replacement?.handle ?? null
-          pendingActiveTerminalHandleRef.current = replacement?.handle ?? null
+          pendingSelectionRef.current = replacement
+            ? {
+                kind: 'terminal',
+                handle: replacement.handle,
+                tabId: pendingSelectionTabId(pendingSelectionRef.current)
+              }
+            : withoutPendingHandle(pendingSelectionRef.current)
           setActiveHandle(replacement?.handle ?? null)
           if (replacement) {
             subscribeToTerminal(replacement.handle)

@@ -444,4 +444,5 @@ push_gateway_enabled = true
 push_base_url        = "https://push.onorca.dev"
 # Dedicated push pools allow three revision resources during validation and recovery.
 push_max_instances         = 2
+push_database_pool_max     = 6
 manage_push_domain_mapping = true

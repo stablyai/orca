@@ -316,8 +316,8 @@ export class StructuredAgentSessionHost {
   handoffStatus = (sessionId: string): SessionWire.AgentSessionHandoffStatus =>
     structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
-  history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request) =>
-    this.backgroundTasks.history(request)
+  history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request, scope) =>
+    this.backgroundTasks.history(request, scope)
 
   /** The fully reduced timeline, for readers that cannot tolerate a page's ambiguity — rows are
    *  revised or tombstoned in place, so an item's ABSENCE from a bounded page proves nothing. */
