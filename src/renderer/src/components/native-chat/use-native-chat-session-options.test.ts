@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
 import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
+import { nativeChatModelPillLabel } from './native-chat-session-option-labels'
 
 const discoverModels = vi.fn<() => Promise<readonly CatalogModel[] | null>>()
 
@@ -36,6 +37,8 @@ import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 // host's discovered catalog names the alias.
 const CLAUDE_SCREEN =
   'Claude Code v2.1.220\r\nOpus 5 (1M context) with high effort · API Usage Billing\r\n~/repo'
+const CODEX_SCREEN =
+  '>_ OpenAI Codex (v0.158.0)\n› Ask Codex to do anything\nGPT-6-Sol xhigh · ~/repo\n? for shortcuts'
 
 const DISCOVERED: CatalogModel[] = [
   { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
@@ -208,6 +211,27 @@ describe('useNativeChatSessionOptions model reporting', () => {
       expect(modelDescriptor(result.current.snapshot).choices.length).toBeGreaterThan(0)
     )
     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
+  })
+
+  it('names a Codex session from its live terminal footer', async () => {
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'codex',
+        terminalTabId: 'tab-codex',
+        targetPtyId: 'pty-codex',
+        dispatchCommand: vi.fn(),
+        readTerminalScreen: () => CODEX_SCREEN
+      })
+    )
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('GPT-6-Sol')
+    )
+    expect(result.current.snapshot[0]).toMatchObject({ valueSource: 'reported' })
+    expect(modelDescriptor(result.current.snapshot).choices).toContainEqual({
+      value: 'GPT-6-Sol',
+      label: 'GPT-6-Sol'
+    })
+    expect(nativeChatModelPillLabel(result.current.snapshot[0]!)).toBe('GPT-6-Sol')
   })
 
   it('re-resolves the reported model against models discovered after the read', async () => {

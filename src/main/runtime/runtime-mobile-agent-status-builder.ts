@@ -66,6 +66,13 @@ export function buildRuntimeMobileAgentStatus(
   const ptyTitleClassification = classifyAgentTitle(ptyTitle)
   const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
   if (nonAgentTitle) {
+    // Codex can replace its agent title with a conversation title while still foregrounded.
+    const hookMatchesForegroundAgent =
+      pty?.connected === true &&
+      pty.foregroundAgent !== null &&
+      pty.foregroundAgent === hookRow.agentType &&
+      pty.foregroundAgent === hookRow.providerSessionAgentType &&
+      hookRow.providerSession !== null
     // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
     const hasLiveHookSignal =
       retained?.payload.interactivePrompt != null ||
@@ -78,7 +85,8 @@ export function buildRuntimeMobileAgentStatus(
       // that reports over HTTP need never set a title this gate would recognize.
       // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
       // this branch publishes `done`. It only keeps the transcript addressable.
-      (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
+      (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null)) ||
+      hookMatchesForegroundAgent
     if (!hasLiveHookSignal) {
       return {}
     }

@@ -27,6 +27,7 @@ import {
   sendNativeChatMessageWithImageAttachments
 } from './native-chat-runtime-image-send'
 import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 
 const SETTINGS = {} as Parameters<typeof sendNativeChatMessage>[0]
 const PTY = 'pty-1'
@@ -70,6 +71,47 @@ describe('sendNativeChatMessage', () => {
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       buildNativeChatPasteBytes('hi'),
+      NATIVE_CHAT_SUBMIT
+    ])
+  })
+
+  it('retries Codex Enter after its composer becomes live and holds later sends', async () => {
+    const retry = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
+    const options = { submitRetryDelayMs: retry }
+    const handle = sendNativeChatMessage(SETTINGS, PTY, 'first prompt', options)
+    sendNativeChatMessage(SETTINGS, PTY, 'next prompt')
+
+    expect(handle.settleAfterMs).toBe(NATIVE_CHAT_SUBMIT_DELAY_MS + retry)
+    await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('first prompt'),
+      NATIVE_CHAT_SUBMIT
+    ])
+
+    await vi.advanceTimersByTimeAsync(retry)
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('first prompt'),
+      NATIVE_CHAT_SUBMIT,
+      NATIVE_CHAT_SUBMIT,
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('next prompt')
+    ])
+  })
+
+  it('does not clear a Codex prompt after its first Enter if the retry is cancelled', () => {
+    const retry = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
+    const handle = sendNativeChatMessage(SETTINGS, PTY, 'first prompt', {
+      submitRetryDelayMs: retry
+    })
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    handle.cancel()
+    vi.advanceTimersByTime(retry)
+
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('first prompt'),
       NATIVE_CHAT_SUBMIT
     ])
   })
@@ -404,6 +446,30 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
       'driving'
     )
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(4)
+  })
+
+  it('retries Codex submit after an image and prompt have settled', () => {
+    const retry = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
+    const handle = sendNativeChatMessageWithImageAttachments(
+      'codex',
+      SETTINGS,
+      PTY,
+      'describe this',
+      ['/tmp/image.png'],
+      { submitRetryDelayMs: retry }
+    )
+
+    expect(handle.settleAfterMs).toBe(
+      NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS + retry
+    )
+    vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(
+      sendRuntimePtyInput.mock.calls.filter((call) => call[2] === NATIVE_CHAT_SUBMIT)
+    ).toHaveLength(1)
+    vi.advanceTimersByTime(retry)
+    expect(
+      sendRuntimePtyInput.mock.calls.filter((call) => call[2] === NATIVE_CHAT_SUBMIT)
+    ).toHaveLength(2)
   })
 
   it('does not append a trailing separator on an attachment-only send', () => {

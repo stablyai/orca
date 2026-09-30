@@ -46,6 +46,8 @@ export const NATIVE_CHAT_CLEAR_CONFIRM_MS = 140
 export type NativeChatSendOptions = {
   /** Bytes that empty the agent's input line. Defaults to a single Ctrl+U. */
   clearInput?: string
+  /** Extra Enter for agents whose first post-paste Enter can be swallowed. */
+  submitRetryDelayMs?: number
   /**
    * Observed check that the input line is now empty.
    * Supplied only for launch-draft replacement; when it reports "not cleared"
@@ -120,6 +122,28 @@ export function clearConfirmDurationMs(options?: NativeChatSendOptions): number 
   return options?.confirmCleared ? NATIVE_CHAT_CLEAR_CONFIRM_MS : 0
 }
 
+export function scheduleNativeChatSubmit(
+  settings: RuntimeSettings,
+  ptyId: string,
+  delay: (ms: number, fn: () => void) => void,
+  markSubmitted: () => void,
+  onFirstEnter: () => void,
+  retryDelayMs?: number
+): void {
+  delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+    sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+    onFirstEnter()
+    if (retryDelayMs === undefined) {
+      markSubmitted()
+      return
+    }
+    delay(retryDelayMs, () => {
+      sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+      markSubmitted()
+    })
+  })
+}
+
 /**
  * Chat message path:
  *   1. clear any unsubmitted TUI line
@@ -134,9 +158,12 @@ export function sendNativeChatMessage(
   text: string,
   options?: NativeChatSendOptions
 ): NativeChatSendHandle {
+  let firstEnterSent = false
   return enqueueNativeChatPtySend(
     ptyId,
-    NATIVE_CHAT_SUBMIT_DELAY_MS + clearConfirmDurationMs(options),
+    NATIVE_CHAT_SUBMIT_DELAY_MS +
+      (options?.submitRetryDelayMs ?? 0) +
+      clearConfirmDurationMs(options),
     ({ isCancelled, delay, markSubmitted }) => {
       if (isCancelled()) {
         return
@@ -148,14 +175,24 @@ export function sendNativeChatMessage(
         sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text), 'driving')
         // Schedule from the actual body write: an overdue clear-confirm callback
         // must not collapse the required body-to-Enter gap after a renderer stall.
-        delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-          markSubmitted()
-        })
+        scheduleNativeChatSubmit(
+          settings,
+          ptyId,
+          delay,
+          markSubmitted,
+          () => {
+            firstEnterSent = true
+          },
+          options?.submitRetryDelayMs
+        )
       })
     },
     {
-      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId, options)
+      onCancelUnsubmitted: () => {
+        if (!firstEnterSent) {
+          clearUnsubmittedAgentInput(settings, ptyId, options)
+        }
+      }
     }
   )
 }

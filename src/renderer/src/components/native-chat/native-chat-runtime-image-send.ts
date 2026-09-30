@@ -3,16 +3,13 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../shared/native-chat-answer-stepping'
-import {
-  buildNativeChatImagePasteBytes,
-  buildNativeChatPasteBytes,
-  NATIVE_CHAT_SUBMIT
-} from './native-chat-send'
+import { buildNativeChatImagePasteBytes, buildNativeChatPasteBytes } from './native-chat-send'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
 import {
   clearConfirmDurationMs,
   clearThenWrite,
   clearUnsubmittedAgentInput,
+  scheduleNativeChatSubmit,
   sendNativeChatMessage,
   type NativeChatSendHandle,
   type NativeChatSendOptions
@@ -34,10 +31,24 @@ export function sendNativeChatMessageWithImageAttachments(
     return sendNativeChatMessage(settings, ptyId, text, options)
   }
   const trimmedText = text.trim()
+  let firstEnterSent = false
   const durationMs =
     (trimmedText.length > 0
       ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
-      : NATIVE_CHAT_SUBMIT_DELAY_MS) + clearConfirmDurationMs(options)
+      : NATIVE_CHAT_SUBMIT_DELAY_MS) +
+    (options?.submitRetryDelayMs ?? 0) +
+    clearConfirmDurationMs(options)
+  const submit = (delay: (ms: number, fn: () => void) => void, markSubmitted: () => void): void =>
+    scheduleNativeChatSubmit(
+      settings,
+      ptyId,
+      delay,
+      markSubmitted,
+      () => {
+        firstEnterSent = true
+      },
+      options?.submitRetryDelayMs
+    )
   return enqueueNativeChatPtySend(
     ptyId,
     durationMs,
@@ -61,21 +72,19 @@ export function sendNativeChatMessageWithImageAttachments(
         if (trimmedText.length > 0) {
           delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
             sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text), 'driving')
-            delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-              sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-              markSubmitted()
-            })
+            submit(delay, markSubmitted)
           })
           return
         }
-        delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-          markSubmitted()
-        })
+        submit(delay, markSubmitted)
       })
     },
     {
-      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId, options)
+      onCancelUnsubmitted: () => {
+        if (!firstEnterSent) {
+          clearUnsubmittedAgentInput(settings, ptyId, options)
+        }
+      }
     }
   )
 }

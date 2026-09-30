@@ -15,6 +15,7 @@ import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { pushHistory, type HistoryState } from './native-chat-composer-state'
 import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
+import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
@@ -63,13 +64,17 @@ export function useNativeChatPtyComposerSend(args: {
       agent: args.agent,
       readScreen: () => args.readTerminalScreen?.()
     })
+    const promptSendOptions =
+      args.agent === 'codex'
+        ? { ...sendOptions, submitRetryDelayMs: TUI_AGENT_CONFIG.codex.submitRetryDelayMs }
+        : sendOptions
     let pendingHandle: NativeChatSendHandle | null = null
     // Why: slash-like text must not silently drop its attached images.
     if (classification !== 'chat' && imagePaths.length === 0) {
       pendingHandle =
         args.agent === 'codex' && isSlashCommandDraft(text)
           ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
-          : sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
+          : sendNativeChatMessage(target.settings, target.ptyId, text, promptSendOptions)
     } else if (imagePaths.length > 0) {
       pendingHandle = sendNativeChatMessageWithImageAttachments(
         args.agent,
@@ -77,10 +82,10 @@ export function useNativeChatPtyComposerSend(args: {
         target.ptyId,
         text,
         imagePaths,
-        sendOptions
+        promptSendOptions
       )
     } else if (text.trim().length > 0) {
-      pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
+      pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, promptSendOptions)
     } else {
       submitNativeChatPrompt(target.settings, target.ptyId)
     }
