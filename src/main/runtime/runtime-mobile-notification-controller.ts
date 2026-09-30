@@ -8,6 +8,7 @@ import type {
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
 import { notifyRuntimeListeners } from './runtime-async-boundaries'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
+import type { PluginNotificationTarget } from '../../shared/plugins/plugin-host-api'
 import {
   MobileNotificationDismissalStore,
   type DeliveredNotificationIdentity
@@ -151,16 +152,24 @@ export class RuntimeMobileNotificationController {
     pluginId: string
     title: string
     body?: string
+    target?: PluginNotificationTarget
   }): Promise<{ delivered: boolean }> {
     const title = `${input.pluginId}: ${input.title}`
     const body = input.body ?? ''
+    const target = input.target
     let delivered = false
     try {
-      delivered = getRuntimeDesktopSurface().showNotification({ title, body })
+      delivered = getRuntimeDesktopSurface().showNotification({ title, body, target })
     } catch {
       // Headless runtimes still relay the notification to mobile clients.
     }
-    this.dispatch({ type: 'notification', source: 'plugin', title, body })
+    this.dispatch({
+      type: 'notification',
+      source: 'plugin',
+      title,
+      body,
+      ...(target ? { worktreeId: target.worktreeId } : {})
+    })
     return { delivered }
   }
 }

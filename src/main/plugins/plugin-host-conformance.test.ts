@@ -269,6 +269,39 @@ describe('plugin host main/relay conformance', () => {
     }
   })
 
+  it('forwards a notification click target and rejects unknown target fields', async () => {
+    const target = {
+      worktreeId: WORKTREE_ID,
+      paneKey: 'tab-1:11111111-1111-4111-8111-111111111111'
+    }
+    for (const adapterName of ['desktop-main', 'relay']) {
+      const services = createServices()
+      const resolvePolicy = vi
+        .fn()
+        .mockResolvedValue(createPolicy(['notifications:show'], services))
+      const adapter = createAdapters(resolvePolicy)[adapterName]!
+
+      await expect(
+        adapter({ method: 'notifications.show', params: { title: 'Done', target } }, false)
+      ).resolves.toMatchObject({ ok: true })
+      expect(services.dispatchPluginNotification).toHaveBeenCalledWith({
+        pluginId: PLUGIN_KEY,
+        title: 'Done',
+        body: undefined,
+        target
+      })
+      await expect(
+        adapter(
+          {
+            method: 'notifications.show',
+            params: { title: 'Done', target: { ...target, tabId: 'tab-1' } }
+          },
+          false
+        )
+      ).resolves.toMatchObject({ ok: false, code: 'invalid_params' })
+    }
+  })
+
   it('charges malformed and oversized panel traffic before schema parsing', async () => {
     for (const adapterName of ['desktop-main', 'relay']) {
       const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['notifications:show']))

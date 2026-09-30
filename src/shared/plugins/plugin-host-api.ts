@@ -53,9 +53,20 @@ const terminalSendTextResult = z.object({ accepted: z.boolean() })
 
 const notificationsShowParams = z.object({
   title: z.string().min(1).max(120),
-  body: z.string().max(1000).optional()
+  body: z.string().max(1000).optional(),
+  // Why: lets a click (desktop) or tap (paired phone) open the worktree/pane the notification is about.
+  target: z
+    .object({
+      worktreeId: z.string().min(1).max(4096),
+      paneKey: z.string().min(1).max(512).optional()
+    })
+    .strict()
+    .optional()
 })
 const notificationsShowResult = z.object({ delivered: z.boolean() })
+export type PluginNotificationTarget = NonNullable<
+  z.infer<typeof notificationsShowParams>['target']
+>
 
 const RESERVED_STORAGE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 const storageKeySchema = z
