@@ -5,7 +5,7 @@ import type {
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { PairingOffer } from '../../shared/pairing'
 import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
-import { resolveBrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
+import { resolveBrowserHostReconnectDelay } from '../../shared/browser-client-host/browser-host-lease-reconnect-delay'
 import { retryBrowserNetworkRouteReconnect } from './browser-network-route-reconnect-retry'
 import {
   BrowserNetworkTunnelOutboundMemoryBudgetRegistry,

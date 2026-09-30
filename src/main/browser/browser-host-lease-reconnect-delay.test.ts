@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   nextBrowserHostReconnectDelay,
   resolveBrowserHostReconnectDelay
-} from './browser-host-lease-reconnect-delay'
+} from '../../shared/browser-client-host/browser-host-lease-reconnect-delay'
 
 describe('browser host lease reconnect delay', () => {
   it('uses deterministic client-specific jitter within exponential and grace bounds', () => {

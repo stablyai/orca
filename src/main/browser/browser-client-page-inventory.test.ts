@@ -1,6 +1,6 @@
+import { prepareBrowserClientPageInventoryForAttach } from '../../shared/browser-client-host/browser-client-page-inventory-attach'
 import { describe, expect, it } from 'vitest'
 import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
-import { prepareBrowserClientPageInventoryForAttach } from './browser-client-page-inventory'
 
 describe('browser client page inventory', () => {
   it('keeps URLs and duplicate-page validation when the inventory fits', () => {

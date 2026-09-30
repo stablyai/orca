@@ -1,10 +1,11 @@
+import { createDesktopBrowserHostLeaseSubscription } from '../browser/desktop-browser-host-lease-subscription'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer, connect, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PairedRuntimeBrowserNetworkRoute } from '../browser/paired-runtime-browser-network-route'
-import { PairedRuntimeBrowserHostLease } from '../browser/paired-runtime-browser-host-lease'
+import { PairedRuntimeBrowserHostLease } from '../../shared/browser-client-host/paired-runtime-browser-host-lease'
 import { parsePairingCode } from '../../shared/pairing'
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -45,7 +46,7 @@ describe('paired runtime browser network tunnel', () => {
     const errors: Error[] = []
     const onPageCommand = vi.fn(() => Promise.resolve({ status: 'completed' as const }))
     const hostLease = new PairedRuntimeBrowserHostLease({
-      pairing,
+      subscribe: createDesktopBrowserHostLeaseSubscription(pairing),
       authorityRuntimeId: runtime.getRuntimeId(),
       browserHostClientId: 'integration-browser-host',
       hostCapabilities: ['webview'],
@@ -137,7 +138,7 @@ describe('paired runtime browser network tunnel', () => {
     }
     const onPageCommand = vi.fn(() => Promise.resolve({ status: 'completed' as const }))
     const hostLease = new PairedRuntimeBrowserHostLease({
-      pairing,
+      subscribe: createDesktopBrowserHostLeaseSubscription(pairing),
       authorityRuntimeId: runtime.getRuntimeId(),
       browserHostClientId: 'integration-browser-host',
       hostCapabilities: ['webview'],
@@ -222,7 +223,7 @@ describe('paired runtime browser network tunnel', () => {
 
     const errors: Error[] = []
     const hostLease = new PairedRuntimeBrowserHostLease({
-      pairing,
+      subscribe: createDesktopBrowserHostLeaseSubscription(pairing),
       authorityRuntimeId: runtime.getRuntimeId(),
       browserHostClientId: 'integration-browser-host',
       hostCapabilities: ['webview'],

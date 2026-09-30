@@ -3,8 +3,8 @@ import {
   type BrowserClientHostCommandEvent,
   type BrowserClientHostCommandResult as BrowserClientHostCommandResultType,
   type BrowserClientHostLeaseAuthority
-} from '../../shared/browser-client-host-protocol'
-import { BROWSER_CLIENT_PAGE_METADATA_METHOD } from '../../shared/browser-client-page-metadata-protocol'
+} from '../browser-client-host-protocol'
+import { BROWSER_CLIENT_PAGE_METADATA_METHOD } from '../browser-client-page-metadata-protocol'
 import { assertBrowserClientHostAttachOptions } from './browser-client-host-attach-request'
 import {
   BrowserHostReconnectDelay,

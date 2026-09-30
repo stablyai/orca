@@ -1,3 +1,4 @@
+import { createDesktopBrowserHostLeaseSubscription } from './desktop-browser-host-lease-subscription'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
@@ -14,7 +15,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-import { PairedRuntimeBrowserHostLease } from './paired-runtime-browser-host-lease'
+import { PairedRuntimeBrowserHostLease } from '../../shared/browser-client-host/paired-runtime-browser-host-lease'
 
 const pairing = {
   v: 2,
@@ -118,7 +119,7 @@ function createLease(overrides: {
   onReconnected?: (authority: unknown) => void
 }): PairedRuntimeBrowserHostLease {
   return new PairedRuntimeBrowserHostLease({
-    pairing,
+    subscribe: createDesktopBrowserHostLeaseSubscription(pairing),
     authorityRuntimeId: 'runtime-a',
     browserHostClientId: 'host-a',
     hostCapabilities: ['webview'],

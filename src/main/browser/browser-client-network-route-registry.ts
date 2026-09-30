@@ -13,7 +13,7 @@ import {
   legacyBrowserNetworkExecutionHostStorageIdentity
 } from './browser-execution-host-storage-identity'
 import { createRouteRetirement, waitForRoute } from './browser-client-network-route-settlement'
-import { resolveBrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
+import { resolveBrowserHostReconnectDelay } from '../../shared/browser-client-host/browser-host-lease-reconnect-delay'
 import { parseBrowserNetworkExecutionHostKey } from './browser-network-execution-route'
 
 type BrowserClientNetworkRoute = {

@@ -1,7 +1,7 @@
 import {
   BrowserHostReconnectDelay,
   nextBrowserHostReconnectDelay
-} from './browser-host-lease-reconnect-delay'
+} from '../../shared/browser-client-host/browser-host-lease-reconnect-delay'
 
 export type BrowserNetworkRouteAddress = { host: string; port: number }
 
