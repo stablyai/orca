@@ -12,6 +12,14 @@ import {
   hasOpenAiSpeechApiKey,
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
+import {
+  clearCustomSttEndpointConfig,
+  hasCustomSttEndpointApiKey,
+  readCustomSttEndpointConfig,
+  saveCustomSttEndpointApiKey,
+  saveCustomSttEndpointConfig
+} from '../speech/custom-stt-endpoint-store'
+import { testCustomSttEndpoint } from '../speech/custom-stt-endpoint-test'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -35,6 +43,45 @@ export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
     clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
+  })
+
+  ipcMain.handle(
+    'speech:getCustomEndpointStatus',
+    async (): Promise<{ baseUrl: string; model: string; apiKeyConfigured: boolean }> => {
+      const config = readCustomSttEndpointConfig()
+      return {
+        baseUrl: config?.baseUrl ?? '',
+        model: config?.model ?? '',
+        apiKeyConfigured: hasCustomSttEndpointApiKey()
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'speech:saveCustomEndpoint',
+    async (
+      _event,
+      input: { baseUrl: string; model: string; apiKey?: string }
+    ): Promise<{ baseUrl: string; model: string; apiKeyConfigured: boolean }> => {
+      saveCustomSttEndpointConfig({ baseUrl: input.baseUrl, model: input.model })
+      if (typeof input.apiKey === 'string' && input.apiKey.trim()) {
+        saveCustomSttEndpointApiKey(input.apiKey)
+      }
+      return {
+        baseUrl: readCustomSttEndpointConfig()?.baseUrl ?? '',
+        model: readCustomSttEndpointConfig()?.model ?? '',
+        apiKeyConfigured: hasCustomSttEndpointApiKey()
+      }
+    }
+  )
+
+  ipcMain.handle('speech:clearCustomEndpoint', async () => {
+    clearCustomSttEndpointConfig()
+    return { baseUrl: '', model: '', apiKeyConfigured: false }
+  })
+
+  ipcMain.handle('speech:testCustomEndpoint', async () => {
+    return testCustomSttEndpoint()
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {

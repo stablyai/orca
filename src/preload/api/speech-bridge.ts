@@ -20,6 +20,10 @@ export const speechApi = {
     ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
   clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
     ipcRenderer.invoke('speech:clearOpenAiApiKey'),
+  getCustomEndpointStatus: () => ipcRenderer.invoke('speech:getCustomEndpointStatus'),
+  saveCustomEndpoint: (input) => ipcRenderer.invoke('speech:saveCustomEndpoint', input),
+  clearCustomEndpoint: () => ipcRenderer.invoke('speech:clearCustomEndpoint'),
+  testCustomEndpoint: () => ipcRenderer.invoke('speech:testCustomEndpoint'),
   downloadModel: (modelId: string): Promise<void> =>
     ipcRenderer.invoke('speech:downloadModel', modelId),
   cancelDownload: (modelId: string): Promise<void> =>

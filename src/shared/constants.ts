@@ -116,6 +116,9 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     terminalConfirmBeforeInsert: false,
     userModels: [],
     openAiApiKeyConfigured: false,
+    customSttBaseUrl: '',
+    customSttModel: '',
+    customSttApiKeyConfigured: false,
     microphoneDeviceId: null,
     microphoneDeviceLabel: null
   }
