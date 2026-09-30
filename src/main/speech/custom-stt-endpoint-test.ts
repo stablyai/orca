@@ -30,6 +30,9 @@ export async function testCustomSttEndpoint(): Promise<CustomSttEndpointTestResu
   const form = new FormData()
   form.append('model', config.model)
   form.append('response_format', 'json')
+  if (config.language) {
+    form.append('language', config.language)
+  }
   form.append('file', new Blob([silentWav()], { type: 'audio/wav' }), 'test.wav')
 
   const controller = new AbortController()

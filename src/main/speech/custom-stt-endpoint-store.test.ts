@@ -54,9 +54,18 @@ describe('custom stt endpoint store', () => {
 
     expect(readCustomSttEndpointConfig()).toEqual({
       baseUrl: 'http://127.0.0.1:8090/v1',
-      model: 'large-v3'
+      model: 'large-v3',
+      language: ''
     })
     expect(hasCustomSttEndpoint()).toBe(true)
+  })
+
+  it('persists an optional language hint and defaults it to empty', () => {
+    saveCustomSttEndpointConfig({ baseUrl: 'http://h:8090/v1', model: 'large-v3', language: 'yue' })
+    expect(readCustomSttEndpointConfig()?.language).toBe('yue')
+
+    saveCustomSttEndpointConfig({ baseUrl: 'http://h:8090/v1', model: 'large-v3' })
+    expect(readCustomSttEndpointConfig()?.language).toBe('')
   })
 
   it('rejects non-http(s) and malformed urls', () => {

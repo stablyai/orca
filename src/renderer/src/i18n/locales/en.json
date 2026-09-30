@@ -13446,7 +13446,9 @@
           "hint": "Works with any OpenAI-compatible /audio/transcriptions server, e.g. a local worker on 127.0.0.1.",
           "clear": "Disconnect",
           "test": "Test",
-          "save": "Save"
+          "save": "Save",
+          "language": "Language (optional)",
+          "languagePlaceholder": "Auto-detect (e.g. en, zh, yue)"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Make sure you trust this folder",

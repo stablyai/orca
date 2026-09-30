@@ -44,6 +44,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const [customDialogOpen, setCustomDialogOpen] = useState(false)
   const [customBaseUrlDraft, setCustomBaseUrlDraft] = useState('')
   const [customModelDraft, setCustomModelDraft] = useState('')
+  const [customLanguageDraft, setCustomLanguageDraft] = useState('')
   const [customApiKeyDraft, setCustomApiKeyDraft] = useState('')
   const [customPending, setCustomPending] = useState(false)
   const [customTesting, setCustomTesting] = useState(false)
@@ -164,11 +165,13 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         updateVoiceSettings({
           customSttBaseUrl: status.baseUrl,
           customSttModel: status.model,
+          customSttLanguage: status.language,
           customSttApiKeyConfigured: status.apiKeyConfigured,
           ...(modelId ? { sttModel: modelId } : {})
         })
         setCustomBaseUrlDraft(status.baseUrl)
         setCustomModelDraft(status.model)
+        setCustomLanguageDraft(status.language)
       })
       .catch(() => {})
     setCustomApiKeyDraft('')
@@ -182,11 +185,13 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       const status = await window.api.speech.saveCustomEndpoint({
         baseUrl: customBaseUrlDraft,
         model: customModelDraft,
+        language: customLanguageDraft,
         apiKey: customApiKeyDraft
       })
       updateVoiceSettings({
         customSttBaseUrl: status.baseUrl,
         customSttModel: status.model,
+        customSttLanguage: status.language,
         customSttApiKeyConfigured: status.apiKeyConfigured,
         sttModel: 'custom-openai-compatible'
       })
@@ -222,6 +227,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       updateVoiceSettings({
         customSttBaseUrl: '',
         customSttModel: '',
+        customSttLanguage: '',
         customSttApiKeyConfigured: false,
         sttModel: selectedModel?.provider === 'custom' ? '' : voiceSettings.sttModel
       })
@@ -229,6 +235,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       setCustomDialogOpen(false)
       setCustomBaseUrlDraft('')
       setCustomModelDraft('')
+      setCustomLanguageDraft('')
       setCustomApiKeyDraft('')
       toast.success(
         translate(
@@ -396,6 +403,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         configured={voiceSettings.customSttBaseUrl !== ''}
         baseUrlDraft={customBaseUrlDraft}
         modelDraft={customModelDraft}
+        languageDraft={customLanguageDraft}
         apiKeyDraft={customApiKeyDraft}
         apiKeyConfigured={voiceSettings.customSttApiKeyConfigured}
         pending={customPending}
@@ -404,6 +412,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onOpenChange={setCustomDialogOpen}
         onBaseUrlDraftChange={setCustomBaseUrlDraft}
         onModelDraftChange={setCustomModelDraft}
+        onLanguageDraftChange={setCustomLanguageDraft}
         onApiKeyDraftChange={setCustomApiKeyDraft}
         onSave={() => void saveCustomEndpoint()}
         onClear={() => void clearCustomEndpoint()}

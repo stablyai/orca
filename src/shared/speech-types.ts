@@ -87,6 +87,11 @@ export type VoiceSettings = {
   customSttBaseUrl: string
   /** Model id sent to the custom endpoint (e.g. `large-v3`). */
   customSttModel: string
+  /**
+   * Optional ISO-639 language hint sent to the custom endpoint (e.g. `en`, `yue`).
+   * Empty means the server auto-detects.
+   */
+  customSttLanguage: string
   /** True when a bearer token is stored for the custom endpoint. */
   customSttApiKeyConfigured: boolean
   /** null = system default input device */

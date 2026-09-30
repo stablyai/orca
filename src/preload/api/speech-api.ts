@@ -10,6 +10,7 @@ import type {
 export type CustomSttEndpointStatus = {
   baseUrl: string
   model: string
+  language: string
   apiKeyConfigured: boolean
 }
 
@@ -31,6 +32,7 @@ export type SpeechApi = {
   saveCustomEndpoint: (input: {
     baseUrl: string
     model: string
+    language?: string
     apiKey?: string
   }) => Promise<CustomSttEndpointStatus>
   clearCustomEndpoint: () => Promise<CustomSttEndpointStatus>

@@ -45,39 +45,44 @@ export function registerSpeechHandlers(store: Store): void {
     return { configured: false, protection: null }
   })
 
-  ipcMain.handle(
-    'speech:getCustomEndpointStatus',
-    async (): Promise<{ baseUrl: string; model: string; apiKeyConfigured: boolean }> => {
-      const config = readCustomSttEndpointConfig()
-      return {
-        baseUrl: config?.baseUrl ?? '',
-        model: config?.model ?? '',
-        apiKeyConfigured: hasCustomSttEndpointApiKey()
-      }
+  const readCustomEndpointStatus = (): {
+    baseUrl: string
+    model: string
+    language: string
+    apiKeyConfigured: boolean
+  } => {
+    const config = readCustomSttEndpointConfig()
+    return {
+      baseUrl: config?.baseUrl ?? '',
+      model: config?.model ?? '',
+      language: config?.language ?? '',
+      apiKeyConfigured: hasCustomSttEndpointApiKey()
     }
-  )
+  }
+
+  ipcMain.handle('speech:getCustomEndpointStatus', async () => readCustomEndpointStatus())
 
   ipcMain.handle(
     'speech:saveCustomEndpoint',
     async (
       _event,
-      input: { baseUrl: string; model: string; apiKey?: string }
-    ): Promise<{ baseUrl: string; model: string; apiKeyConfigured: boolean }> => {
-      saveCustomSttEndpointConfig({ baseUrl: input.baseUrl, model: input.model })
+      input: { baseUrl: string; model: string; language?: string; apiKey?: string }
+    ) => {
+      saveCustomSttEndpointConfig({
+        baseUrl: input.baseUrl,
+        model: input.model,
+        language: input.language
+      })
       if (typeof input.apiKey === 'string' && input.apiKey.trim()) {
         saveCustomSttEndpointApiKey(input.apiKey)
       }
-      return {
-        baseUrl: readCustomSttEndpointConfig()?.baseUrl ?? '',
-        model: readCustomSttEndpointConfig()?.model ?? '',
-        apiKeyConfigured: hasCustomSttEndpointApiKey()
-      }
+      return readCustomEndpointStatus()
     }
   )
 
   ipcMain.handle('speech:clearCustomEndpoint', async () => {
     clearCustomSttEndpointConfig()
-    return { baseUrl: '', model: '', apiKeyConfigured: false }
+    return { baseUrl: '', model: '', language: '', apiKeyConfigured: false }
   })
 
   ipcMain.handle('speech:testCustomEndpoint', async () => {

@@ -24,7 +24,8 @@ export function resolveTranscriptionTarget(modelId: string): OpenAiTranscription
     return {
       url: resolveCustomSttTranscriptionUrl(config.baseUrl),
       apiKey: readCustomSttEndpointApiKey(),
-      apiModel: config.model
+      apiModel: config.model,
+      ...(config.language ? { language: config.language } : {})
     }
   }
 

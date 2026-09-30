@@ -118,6 +118,7 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     openAiApiKeyConfigured: false,
     customSttBaseUrl: '',
     customSttModel: '',
+    customSttLanguage: '',
     customSttApiKeyConfigured: false,
     microphoneDeviceId: null,
     microphoneDeviceLabel: null
