@@ -14,6 +14,7 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 const BASELINE_REF = 'v1.4.211'
 const SESSION = 'session-alpha-1'
 
+// Why the explicit budget: a cold run may extract the pinned release inside this test.
 test('an older build loads a proof of death that names its owner and its last proof of life', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-death-evidence-downgrade-'))
   try {
@@ -58,4 +59,4 @@ test('an older build loads a proof of death that names its owner and its last pr
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
-})
+}, 180_000)

@@ -1,7 +1,9 @@
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 
-const CHECKOUT_PROCESS_TIMEOUT_MS = 45_000
+// Why not 45s: the lane runs the whole directory at once, so several pinned checkouts extract
+// concurrently beside running suites; this bounds a hung `git archive`, not a solo cold fill.
+const CHECKOUT_PROCESS_TIMEOUT_MS = 120_000
 const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 
 // Why: the wire endpoints only need the runtime RPC host, the renderer client, and

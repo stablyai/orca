@@ -192,10 +192,21 @@ Run it with:
 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
 ```
 
-The harness covers the terminal stream and the structured agent-session surface. It does
-**not** cover the session-tab sync channel, legacy agent-session publications, file or Git
-RPCs, mobile/E2EE framing, or the relay transport. A change on those paths still needs its
-own reasoning against the three rules above.
+The harness covers the terminal stream and the structured agent-session surface. The one
+agent-status path it pairs is the `worktree ps` row (`cross-version-worktree-ps-verdict.unit.test.ts`).
+It does **not** cover the session-tab sync channel, including the `agentStatus` each terminal
+tab carries to paired desktops and phones, legacy agent-session publications, file or Git RPCs,
+mobile/E2EE framing, or the relay transport. A change on those paths still needs its own
+reasoning against the three rules above.
+
+Every suite in `tests/e2e/cross-version-wire/` runs in the `cross-version-wire` PR job and
+nowhere else — the unit shards exclude the directory, because a shallow shard clone has no tags
+for an extracted release to skew against. The job therefore names the directory rather than a
+list of files. Which diffs start the job is a separate list, `CROSS_VERSION_WIRE_PREFIXES` in
+`config/scripts/pr-code-change-scope.mjs`, and every module a suite pairs must be on it.
+`config/scripts/cross-version-wire-lane-registration.test.mjs` holds both, but it sees only the
+modules a suite loads directly; one reached through them, such as the orchestration schema
+migrations behind `db.ts`, has to be added to the list by hand.
 
 ## Worked example: `agentWait` on terminal and worker reads
 
