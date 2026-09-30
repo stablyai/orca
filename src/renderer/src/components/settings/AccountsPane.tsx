@@ -38,6 +38,7 @@ import {
   providerAccountMatchesView
 } from './provider-account-visibility'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { AntigravityAccountsSection } from './AntigravityAccountsSection'
 import { CursorAccountsSection } from './CursorAccountsSection'
 import type {
   AccountsPaneProps,
@@ -56,10 +57,7 @@ import { createMiniMaxCredentialActions } from './accounts-pane-minimax-actions'
 import { renderAccountsLocationSection } from './accounts-pane-location-section'
 import { renderClaudeAccountsSection } from './accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './accounts-pane-codex-section'
-import {
-  renderGeminiAccountsSection,
-  renderOpenCodeAccountsSection
-} from './accounts-pane-provider-setting-sections'
+import { renderOpenCodeAccountsSection } from './accounts-pane-provider-setting-sections'
 import { renderMiniMaxAccountsSection } from './accounts-pane-minimax-section'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
@@ -381,9 +379,9 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsCodexSearchEntries())
       ? renderCodexAccountsSection(model)
       : null,
-    matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries())
-      ? renderGeminiAccountsSection(model)
-      : null,
+    matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries()) ? (
+      <AntigravityAccountsSection key="antigravity" model={model} />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model)
       : null,

@@ -214,6 +214,17 @@
         "title": "Run each Codex terminal on its own server",
         "description": "Keeps Orca's status and closing tabs working correctly. Turn off to use Codex's shared server and its agents overview. Applies to new terminals."
       }
+    },
+    "accounts": {
+      "antigravity": {
+        "title": "Gemini (Antigravity)",
+        "description": "Sign in through the Antigravity CLI to view your usage in Orca.",
+        "signIn": "With Antigravity CLI installed, run this command in a terminal on the computer running Orca. Complete Google sign-in in the browser if prompted, then return here and refresh usage.",
+        "usage": "Orca uses that CLI session to read your quota. To show it in the status bar, enable Antigravity Usage in Appearance → Status Bar.",
+        "refreshing": "Refreshing usage…",
+        "refresh": "Refresh usage",
+        "command": "agy"
+      }
     }
   },
   "menu": {

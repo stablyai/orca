@@ -308,6 +308,11 @@ export function resolveClaudeCommand(options: ResolveCommandOptions = {}): strin
   return resolveCliCommand('claude', options)
 }
 
+// Why: Antigravity ships its CLI as `agy`, and GUI-launched Orca may not inherit the PATH entry.
+export function resolveAntigravityCommand(options: ResolveCommandOptions = {}): string {
+  return resolveCliCommand('agy', options)
+}
+
 // Why: Win32 resolves env names case-insensitively and object order preserves
 // the block order, so the entry the child will actually read is the FIRST
 // case-insensitive match — not necessarily `Path` or `PATH`. Reading a narrower

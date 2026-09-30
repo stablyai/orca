@@ -10,6 +10,18 @@ const ANTIGRAVITY_NO_SIGN_IN_REASON =
 const ANTIGRAVITY_QUOTA_UNREADABLE_REASON =
   'Antigravity usage is not available. Orca reads it from the shared Google Code Assist quota, which could not be read right now.'
 
+// Prefer the CLI quota; retain a successful Gemini snapshot as a legacy fallback.
+export function resolveAntigravityRateLimits(
+  antigravity: ProviderRateLimits,
+  gemini: ProviderRateLimits
+): ProviderRateLimits {
+  if (antigravity.status === 'ok') {
+    return antigravity
+  }
+  const mirrored = deriveAntigravityRateLimits(gemini)
+  return mirrored.status === 'ok' ? mirrored : antigravity
+}
+
 export function deriveAntigravityRateLimits(gemini: ProviderRateLimits): ProviderRateLimits {
   if (gemini.status === 'ok') {
     return { ...gemini, provider: 'antigravity' }

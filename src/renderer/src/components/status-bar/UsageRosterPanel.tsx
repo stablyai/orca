@@ -1,3 +1,4 @@
+import { getAntigravitySummaryBuckets } from '../../../../shared/antigravity-usage-windows'
 import React from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -24,6 +25,9 @@ export type UsageSection = { label: string; window: RateLimitWindow }
 // partial/rehydrated provider can also carry an undefined window; both must be
 // dropped so downstream consumers never dereference `window.usedPercent`.
 function usedSections(p: ProviderRateLimits): UsageSection[] {
+  if (p.provider === 'antigravity' && p.buckets?.length) {
+    return getAntigravitySummaryBuckets(p.buckets).map((window) => ({ label: window.name, window }))
+  }
   return getWindowSections(p).filter(
     (s): s is UsageSection => s.window !== null && s.window !== undefined
   )

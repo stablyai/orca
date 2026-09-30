@@ -29,7 +29,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { UsageRosterPanel, UsageRow } from './UsageRosterPanel'
+import { UsageRosterPanel, UsageRow, getTightestUsageSection } from './UsageRosterPanel'
+import { ProviderPanel } from './tooltip'
 
 const signedOutCodex: ProviderRateLimits = {
   provider: 'codex',
@@ -43,6 +44,53 @@ const signedOutCodex: ProviderRateLimits = {
 describe('UsageRow', () => {
   beforeEach(() => {
     mocks.useResetCountdownClock.mockClear()
+  })
+
+  it('keeps compact summaries on Gemini even when another family is more exhausted', () => {
+    const quota: ProviderRateLimits = {
+      ...signedOutCodex,
+      provider: 'antigravity',
+      status: 'ok',
+      buckets: [
+        { name: 'Claude and GPT models · Weekly', windowMinutes: 10080, usedPercent: 99 },
+        { name: 'Gemini Models · Weekly', windowMinutes: 10080, usedPercent: 30 },
+        { name: 'Gemini Models · 5h', windowMinutes: 300, usedPercent: 20 }
+      ].map((bucket) => ({ ...bucket, resetsAt: null, resetDescription: null }))
+    }
+    expect(getTightestUsageSection(quota)?.label).toBe('Gemini Models · Weekly')
+    expect(getTightestUsageSection(quota)?.window.usedPercent).toBe(30)
+  })
+
+  it('summarizes Gemini windows while retaining other families in the detail panel', () => {
+    const quota: ProviderRateLimits = {
+      ...signedOutCodex,
+      provider: 'antigravity',
+      status: 'ok',
+      error: null,
+      buckets: [
+        { name: 'Claude and GPT models · Weekly', windowMinutes: 10080 },
+        { name: 'Gemini Models · Weekly', windowMinutes: 10080 },
+        { name: 'Gemini Models · 5h', windowMinutes: 300 },
+        { name: 'Claude and GPT models · 5h', windowMinutes: 300 }
+      ].map((bucket) => ({ ...bucket, usedPercent: 10, resetsAt: null, resetDescription: null }))
+    }
+    const row = renderToStaticMarkup(
+      <UsageRow
+        p={quota}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+    expect(row).toContain('Gemini Models · 5h')
+    expect(row).toContain('Gemini Models · Weekly')
+    expect(row.indexOf('Gemini Models · 5h')).toBeLessThan(row.indexOf('Gemini Models · Weekly'))
+    expect(row).not.toContain('Claude and GPT models')
+    const detail = renderToStaticMarkup(<ProviderPanel p={quota} />)
+    for (const bucket of quota.buckets ?? []) {
+      expect(detail).toContain(bucket.name)
+    }
   })
 
   it('renders sign-in as row copy instead of nesting an interactive button', () => {

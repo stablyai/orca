@@ -67,7 +67,7 @@ export type ProviderRateLimits = {
   fableWeekly?: RateLimitWindow | null
   /** 30-day monthly window (OpenCode Go, Grok unified billing, Cursor plan pools), null if not available. */
   monthly?: RateLimitWindow | null
-  /** Named per-model buckets (Gemini models, Cursor plan pools). */
+  /** Named buckets for Gemini models, Cursor plan pools, and Antigravity families and windows. */
   buckets?: RateLimitBucket[]
   /** Available earned Codex rate-limit reset credits, if reported. */
   rateLimitResetCredits?: {

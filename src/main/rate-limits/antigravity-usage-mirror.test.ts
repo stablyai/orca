@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { ProviderRateLimits, ProviderRateLimitStatus } from '../../shared/rate-limit-types'
-import { deriveAntigravityRateLimits } from './antigravity-usage-mirror'
+import {
+  deriveAntigravityRateLimits,
+  resolveAntigravityRateLimits
+} from './antigravity-usage-mirror'
 
 function geminiSnapshot(
   status: ProviderRateLimitStatus,
@@ -66,5 +69,49 @@ describe('deriveAntigravityRateLimits', () => {
     expect(antigravity.error).not.toContain('Gemini CLI OAuth is disabled in settings')
     expect(antigravity.error).toContain('Antigravity usage is not available')
     expect(antigravity.error).toContain('Gemini CLI sign-in is connected')
+  })
+})
+
+describe('resolveAntigravityRateLimits', () => {
+  function antigravitySnapshot(
+    status: ProviderRateLimitStatus,
+    usedPercent: number | null = null,
+    error: string | null = null
+  ): ProviderRateLimits {
+    return {
+      provider: 'antigravity',
+      session:
+        usedPercent === null
+          ? null
+          : { usedPercent, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: null,
+      updatedAt: 1_700_000_000_000,
+      error,
+      status
+    }
+  }
+
+  it('prefers the Antigravity read over the Gemini mirror', () => {
+    const primary = antigravitySnapshot('ok', 42)
+    const resolved = resolveAntigravityRateLimits(primary, geminiSnapshot('ok', null, 10))
+
+    expect(resolved).toBe(primary)
+  })
+
+  it('falls back to a successful Gemini read when the Antigravity read is empty', () => {
+    const resolved = resolveAntigravityRateLimits(
+      antigravitySnapshot('unavailable', null, 'Antigravity CLI not found'),
+      geminiSnapshot('ok', null, 10)
+    )
+
+    expect(resolved.status).toBe('ok')
+    expect(resolved.session?.usedPercent).toBe(10)
+  })
+
+  it('keeps the Antigravity read when the Gemini mirror is also empty', () => {
+    const primary = antigravitySnapshot('error', null, 'Antigravity CLI failed')
+    const resolved = resolveAntigravityRateLimits(primary, geminiSnapshot('error', 'Gemini down'))
+
+    expect(resolved).toBe(primary)
   })
 })

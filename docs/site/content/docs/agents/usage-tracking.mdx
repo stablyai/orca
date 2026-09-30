@@ -2,7 +2,7 @@
 title: Usage & rate-limit tracking
 ---
 
-Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, and MiniMax and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
+Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, MiniMax, and Antigravity and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
 
 ## What's shown
 
@@ -13,6 +13,8 @@ Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code
 ## How it works
 
 Orca reads the local usage state each agent maintains on disk (under `~/.claude`, `~/.codex`, and the Gemini/OpenCode equivalents). No API calls, no extra auth. This means the readout is only as fresh as the agent's own bookkeeping — numbers update when the agent writes, not in real time.
+
+Antigravity is the exception: Orca runs the `agy` CLI in print mode (`agy -p /quota`), which uses the CLI's own sign-in. It needs the Antigravity CLI installed and signed in, and reads the shared Gemini and Claude/GPT model families as separate buckets.
 
 ## Multi-account accounting
 

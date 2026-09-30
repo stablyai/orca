@@ -1,3 +1,4 @@
+import { fetchAntigravityRateLimits } from '../antigravity-quota-fetcher'
 import { fetchClaudeRateLimits } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
@@ -43,6 +44,7 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>
   ]
+  antigravityResultPromise: Promise<SettledProviderResult>
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
@@ -148,6 +150,11 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         (reason) => ({ status: 'rejected', reason }) as const
       )
 
+    const antigravityResultPromise = fetchAntigravityRateLimits({ signal }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+
     const zcodeResultPromise = fetchZcodeRateLimits({ signal }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -237,6 +244,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
+      antigravityResultPromise,
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise

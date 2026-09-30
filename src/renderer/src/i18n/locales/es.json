@@ -41,6 +41,17 @@
         "title": "Mostrar icono en la barra de menús",
         "description": "Mantén un acceso directo de Orca e indicador de actividad en la barra de menús de macOS."
       }
+    },
+    "accounts": {
+      "antigravity": {
+        "title": "Gemini (Antigravity)",
+        "description": "Inicia sesión desde la CLI de Antigravity para ver tu consumo en Orca.",
+        "signIn": "Con la CLI de Antigravity instalada, ejecuta este comando en una terminal del equipo donde se ejecuta Orca. Si se solicita, completa el inicio de sesión con Google en el navegador. Después, vuelve aquí y actualiza el consumo.",
+        "usage": "Orca usa esa sesión de la CLI para consultar tu cuota. Para verla en la barra de estado, activa Consumo de Antigravity en Apariencia → Barra de estado.",
+        "refreshing": "Actualizando consumo…",
+        "refresh": "Actualizar consumo",
+        "command": "agy"
+      }
     }
   },
   "menu": {

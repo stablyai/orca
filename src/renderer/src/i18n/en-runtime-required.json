@@ -1061,6 +1061,8 @@
       "settings": {
         "AccountsPane": {
           "0023cc336e": "Paste either the raw token value (e.g.",
+          "0c64dc2a64": "Gemini",
+          "0c7f915b01": "Use Gemini CLI credentials",
           "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
           "1fd1b1b6b4": "Cookie not set",
           "338820326a": ") or the full cookie header (e.g.",
@@ -1074,12 +1076,16 @@
           "8951c5309f": "auth=Fe26.2**…",
           "9107406589": "Could not load Claude accounts.",
           "922b51e02d": "Fe26.2**…",
+          "96f3649526": "Use Gemini CLI credentials (experimental)",
+          "973741a871": "Configure Gemini provider settings.",
           "a7e38affcd": "Fe26.2**… token or auth=Fe26.2**… header",
           "b10cb4f696": "adding",
           "b11078a9c2": "wsl",
           "b2b1aa936d": "Paste your opencode.ai session cookie for rate limit fetching.",
           "b43e761fe5": "MiniMax cookie update failed.",
           "b8c2905c2b": "Could not load Codex accounts.",
+          "c2aee76420": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
+          "d676c41fc6": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
           "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
         },
         "AdvancedNetworkSettingsSection": {
@@ -1565,7 +1571,12 @@
         },
         "accounts": {
           "search": {
-            "d1d2ae383c": "Paste your opencode.ai session cookie for rate limit fetching."
+            "7118d2f908": "credentials",
+            "933deaf732": "oauth",
+            "b7c2cee442": "experimental",
+            "bada4a3218": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.",
+            "d1d2ae383c": "Paste your opencode.ai session cookie for rate limit fetching.",
+            "d819755b02": "Use Gemini CLI credentials"
           }
         },
         "agent-awake-copy": {
@@ -2742,9 +2753,6 @@
         "toggleDetails": "Toggle turn details",
         "workedFor": "Worked for {{value0}}",
         "workingFor": "Working for {{value0}}"
-      },
-      "subagents": {
-        "unnamed": "Subagent"
       },
       "tool": {
         "countN": "{{value0}} tool calls",

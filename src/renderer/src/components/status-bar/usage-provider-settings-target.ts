@@ -9,8 +9,8 @@ export function getUsageProviderAccountsSectionId(
     case 'codex':
       return 'accounts-codex'
     case 'gemini':
+      return 'accounts-gemini'
     case 'antigravity':
-      // Why: Antigravity usage currently shares Gemini's OAuth configuration.
       return 'accounts-gemini'
     case 'opencode-go':
       return 'accounts-opencode-go'

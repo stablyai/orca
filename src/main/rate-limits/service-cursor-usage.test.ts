@@ -18,6 +18,7 @@ vi.mock('./codex-fetcher', () => ({
 }))
 
 vi.mock('./gemini-usage-fetcher', () => ({ fetchGeminiRateLimits: vi.fn() }))
+vi.mock('./antigravity-quota-fetcher', () => ({ fetchAntigravityRateLimits: vi.fn() }))
 vi.mock('./kimi-fetcher', () => ({ fetchKimiRateLimits: vi.fn() }))
 vi.mock('./opencode-go-usage-source-selection', () => ({ fetchOpenCodeGoUsage: vi.fn() }))
 vi.mock('./minimax/minimax-fetcher', () => ({ fetchMiniMaxRateLimits: vi.fn() }))
