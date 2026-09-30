@@ -1,13 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from '../storage/mirrored-storage-keys'
+import type { CustomKey } from '../components/CustomKeyModal'
 
-import { TERMINAL_ACCESSORY_KEYS, type TerminalAccessoryKey } from './terminal-accessory-keys'
+import { TERMINAL_ACCESSORY_KEYS } from './terminal-accessory-keys'
+import {
+  normalizeTerminalAccessoryOrder,
+  resolveTerminalAccessoryEntries,
+  terminalAccessoryBuiltInOrder,
+  type TerminalAccessoryEntry
+} from './terminal-accessory-order'
+
+export type { TerminalAccessoryEntry } from './terminal-accessory-order'
 
 export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-layout'
 
 export type TerminalAccessoryLayout = {
   orderedBuiltInIds: string[]
   visibleBuiltInIds: string[]
+  orderedIds?: string[]
 }
 
 export type TerminalAccessoryLayoutPreference = TerminalAccessoryLayout & {
@@ -31,6 +41,24 @@ function stringArray(value: unknown): string[] | null {
     return null
   }
   return value.every((item): item is string => typeof item === 'string') ? value : null
+}
+
+function withTerminalAccessoryOrder(
+  layout: TerminalAccessoryLayout,
+  value: unknown
+): TerminalAccessoryLayout {
+  const input = stringArray(value)
+  if (!input) {
+    return layout
+  }
+  const orderedIds = normalizeTerminalAccessoryOrder(input, layout.orderedBuiltInIds)
+  const orderedBuiltInIds = terminalAccessoryBuiltInOrder(orderedIds)
+  const visible = new Set(layout.visibleBuiltInIds)
+  return {
+    orderedIds,
+    orderedBuiltInIds,
+    visibleBuiltInIds: orderedBuiltInIds.filter((id) => visible.has(id))
+  }
 }
 
 function dedupeKnownIds(ids: string[], builtInSet: Set<string>): string[] {
@@ -93,11 +121,12 @@ export function normalizeTerminalAccessoryLayoutPreference(
     return fallback
   }
 
-  const candidate = value as {
-    version?: unknown
-    orderedBuiltInIds?: unknown
-    visibleBuiltInIds?: unknown
-    knownBuiltInIds?: unknown
+  const candidate = {
+    version: 'version' in value ? value.version : undefined,
+    orderedBuiltInIds: 'orderedBuiltInIds' in value ? value.orderedBuiltInIds : undefined,
+    orderedIds: 'orderedIds' in value ? value.orderedIds : undefined,
+    visibleBuiltInIds: 'visibleBuiltInIds' in value ? value.visibleBuiltInIds : undefined,
+    knownBuiltInIds: 'knownBuiltInIds' in value ? value.knownBuiltInIds : undefined
   }
   const builtInSet = new Set(currentBuiltInIds)
 
@@ -117,8 +146,13 @@ export function normalizeTerminalAccessoryLayoutPreference(
     }
     return {
       version: 2,
-      orderedBuiltInIds: ordered,
-      visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
+      ...withTerminalAccessoryOrder(
+        {
+          orderedBuiltInIds: ordered,
+          visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
+        },
+        candidate.orderedIds
+      )
     }
   }
 
@@ -158,8 +192,10 @@ export function createTerminalAccessoryLayoutPreference(
   const visibleSet = new Set(dedupeKnownIds(layout.visibleBuiltInIds, builtInSet))
   return {
     version: 2,
-    orderedBuiltInIds: ordered,
-    visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
+    ...withTerminalAccessoryOrder(
+      { orderedBuiltInIds: ordered, visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id)) },
+      layout.orderedIds
+    )
   }
 }
 
@@ -173,7 +209,8 @@ export function setTerminalAccessoryBuiltInVisible(
   if (!new Set(currentBuiltInIds).has(id)) {
     return {
       orderedBuiltInIds: preference.orderedBuiltInIds,
-      visibleBuiltInIds: preference.visibleBuiltInIds
+      visibleBuiltInIds: preference.visibleBuiltInIds,
+      ...(preference.orderedIds ? { orderedIds: preference.orderedIds } : {})
     }
   }
   const visibleSet = new Set(preference.visibleBuiltInIds)
@@ -184,33 +221,60 @@ export function setTerminalAccessoryBuiltInVisible(
   }
   return {
     orderedBuiltInIds: preference.orderedBuiltInIds,
-    visibleBuiltInIds: preference.orderedBuiltInIds.filter((builtInId) => visibleSet.has(builtInId))
+    visibleBuiltInIds: preference.orderedBuiltInIds.filter((builtInId) =>
+      visibleSet.has(builtInId)
+    ),
+    ...(preference.orderedIds ? { orderedIds: preference.orderedIds } : {})
   }
 }
 
-export function reorderTerminalAccessoryBuiltInIds(
+export function reorderTerminalAccessoryIds(
   layout: TerminalAccessoryLayout,
-  orderedBuiltInIds: string[],
+  orderedIds: string[],
   currentBuiltInIds = builtInIds()
 ): TerminalAccessoryLayout {
   const preference = createTerminalAccessoryLayoutPreference(
-    { orderedBuiltInIds, visibleBuiltInIds: layout.visibleBuiltInIds },
+    {
+      orderedBuiltInIds: terminalAccessoryBuiltInOrder(orderedIds),
+      visibleBuiltInIds: layout.visibleBuiltInIds,
+      orderedIds
+    },
     currentBuiltInIds
   )
   return {
     orderedBuiltInIds: preference.orderedBuiltInIds,
-    visibleBuiltInIds: preference.visibleBuiltInIds
+    visibleBuiltInIds: preference.visibleBuiltInIds,
+    orderedIds: preference.orderedIds
   }
 }
 
-export function getVisibleTerminalAccessoryKeys(
-  visibleBuiltInIds: string[]
-): TerminalAccessoryKey[] {
-  const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
-  return dedupeKnownIds(visibleBuiltInIds, new Set(byId.keys())).flatMap((id) => {
-    const key = byId.get(id)
-    return key ? [key] : []
-  })
+export function getTerminalAccessoryEntries(
+  layout: TerminalAccessoryLayout,
+  customKeys: CustomKey[]
+): TerminalAccessoryEntry[] {
+  return resolveTerminalAccessoryEntries(
+    createTerminalAccessoryLayoutPreference(layout),
+    customKeys
+  )
+}
+
+export function resetTerminalAccessoryLayout(
+  layout: TerminalAccessoryLayout,
+  customKeys: CustomKey[]
+): TerminalAccessoryLayout {
+  const defaults = getDefaultTerminalAccessoryLayout()
+  // Custom-key storage may still be loading when Reset is pressed.
+  const customOrder = [
+    ...(layout.orderedIds ?? []).filter((id) => id.startsWith('custom:')),
+    ...customKeys.map((key) => `custom:${key.id}`)
+  ]
+  return {
+    ...defaults,
+    orderedIds: normalizeTerminalAccessoryOrder(
+      [...defaults.orderedBuiltInIds.map((id) => `builtin:${id}`), ...customOrder],
+      defaults.orderedBuiltInIds
+    )
+  }
 }
 
 export async function loadTerminalAccessoryLayout(): Promise<TerminalAccessoryLayoutPreference> {

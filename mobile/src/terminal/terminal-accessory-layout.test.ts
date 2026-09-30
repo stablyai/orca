@@ -5,13 +5,15 @@ import {
   createTerminalAccessoryLayoutPreference,
   getDefaultTerminalAccessoryBuiltInIds,
   getDefaultTerminalAccessoryLayout,
-  getVisibleTerminalAccessoryKeys,
+  getTerminalAccessoryEntries,
   loadTerminalAccessoryLayout,
   normalizeTerminalAccessoryLayoutPreference,
-  reorderTerminalAccessoryBuiltInIds,
+  reorderTerminalAccessoryIds,
+  resetTerminalAccessoryLayout,
   saveTerminalAccessoryLayout,
   setTerminalAccessoryBuiltInVisible
 } from './terminal-accessory-layout'
+import type { CustomKey } from '../components/CustomKeyModal'
 
 const asyncStorageMock = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -24,6 +26,10 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 
 function oldBuiltInIdsBeforeSpace(): string[] {
   return getDefaultTerminalAccessoryBuiltInIds().filter((id) => id !== 'space')
+}
+
+function customKey(id: string): CustomKey {
+  return { id, label: id, bytes: `/model ${id}\r`, enter: true }
 }
 
 describe('terminal accessory layout', () => {
@@ -41,7 +47,9 @@ describe('terminal accessory layout', () => {
     expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('backspace'))
     expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('delete'))
     expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('arrowUp'))
-    expect(getVisibleTerminalAccessoryKeys(ids)).toContainEqual(
+    expect(
+      getTerminalAccessoryEntries(getDefaultTerminalAccessoryLayout(), []).map((entry) => entry.key)
+    ).toContainEqual(
       expect.objectContaining({ id: 'space', bytes: ' ', accessibilityLabel: 'Space' })
     )
   })
@@ -274,28 +282,40 @@ describe('terminal accessory layout', () => {
     }
 
     expect(
-      reorderTerminalAccessoryBuiltInIds(
+      reorderTerminalAccessoryIds(
         layout,
-        ['enter', 'escape', 'tab'],
+        ['builtin:enter', 'builtin:escape', 'builtin:tab'],
         ['escape', 'tab', 'enter']
       )
     ).toEqual({
       orderedBuiltInIds: ['enter', 'escape', 'tab'],
-      visibleBuiltInIds: ['enter', 'escape']
+      visibleBuiltInIds: ['enter', 'escape'],
+      orderedIds: ['builtin:enter', 'builtin:escape', 'builtin:tab']
     })
 
     // Why asserted: a stale drag result missing an id must not drop that key.
     expect(
-      reorderTerminalAccessoryBuiltInIds(layout, ['enter', 'escape'], ['escape', 'tab', 'enter'])
-        .orderedBuiltInIds
+      reorderTerminalAccessoryIds(
+        layout,
+        ['builtin:enter', 'builtin:escape'],
+        ['escape', 'tab', 'enter']
+      ).orderedBuiltInIds
     ).toEqual(['enter', 'escape', 'tab'])
   })
 
   it('keeps visible terminal keys in the order of their ids', () => {
-    expect(getVisibleTerminalAccessoryKeys(['enter', 'escape']).map((key) => key.id)).toEqual([
-      'enter',
-      'escape'
-    ])
+    const layout = reorderTerminalAccessoryIds(
+      {
+        ...getDefaultTerminalAccessoryLayout(),
+        visibleBuiltInIds: ['enter', 'escape']
+      },
+      ['builtin:enter', 'builtin:escape']
+    )
+    expect(
+      getTerminalAccessoryEntries(layout, [])
+        .filter((entry) => layout.visibleBuiltInIds.includes(entry.key.id))
+        .map((entry) => entry.key.id)
+    ).toEqual(['enter', 'escape'])
   })
 
   it('saves the sanitized v2 preference', async () => {
@@ -332,5 +352,324 @@ describe('terminal accessory layout', () => {
         visibleBuiltInIds: ['escape']
       }).visibleBuiltInIds
     ).toEqual(['escape'])
+  })
+
+  it.each([1, 2])('keeps the prior bar sequence when migrating a v%i layout', (version) => {
+    const defaults = getDefaultTerminalAccessoryBuiltInIds()
+    const ordered = version === 1 ? defaults : defaults.toReversed()
+    const preference = normalizeTerminalAccessoryLayoutPreference({
+      version,
+      knownBuiltInIds: defaults,
+      orderedBuiltInIds: ordered,
+      visibleBuiltInIds: ['tab']
+    })
+    const customKeys = [customKey('second'), customKey('first')]
+    const entries = getTerminalAccessoryEntries(preference, customKeys)
+
+    expect(entries.map((entry) => entry.id)).toEqual([
+      ...ordered.map((id) => `builtin:${id}`),
+      'custom:second',
+      'custom:first'
+    ])
+    expect(
+      entries
+        .filter(
+          (entry) => entry.kind === 'custom' || preference.visibleBuiltInIds.includes(entry.key.id)
+        )
+        .map((entry) => entry.id)
+    ).toEqual(['builtin:tab', 'custom:second', 'custom:first'])
+  })
+
+  it('round-trips custom keys before and between built-ins without changing hidden choices', async () => {
+    const stored = new Map<string, string>()
+    asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
+      stored.set(key, value)
+    })
+    asyncStorageMock.getItem.mockImplementation(async (key: string) => stored.get(key) ?? null)
+    const customKeys = [customKey('model'), customKey('status')]
+    const defaults = getDefaultTerminalAccessoryLayout()
+    const order = [
+      'custom:status',
+      'builtin:tab',
+      'custom:model',
+      ...defaults.orderedBuiltInIds.filter((id) => id !== 'tab').map((id) => `builtin:${id}`)
+    ]
+    const layout = setTerminalAccessoryBuiltInVisible(
+      reorderTerminalAccessoryIds(defaults, order),
+      'escape',
+      false
+    )
+
+    await saveTerminalAccessoryLayout(layout)
+    const reopened = await loadTerminalAccessoryLayout()
+    await saveTerminalAccessoryLayout(reopened)
+    const reloaded = await loadTerminalAccessoryLayout()
+
+    expect(reloaded).toEqual(reopened)
+    expect(reloaded.version).toBe(2)
+    expect(reloaded.orderedIds).toEqual(order)
+    expect(reloaded.orderedBuiltInIds).toEqual([
+      'tab',
+      ...defaults.orderedBuiltInIds.filter((id) => id !== 'tab')
+    ])
+    expect(reloaded.visibleBuiltInIds).not.toContain('escape')
+    expect(getTerminalAccessoryEntries(reloaded, customKeys).map((entry) => entry.id)).toEqual(
+      order
+    )
+    expect(
+      getTerminalAccessoryEntries(reloaded, customKeys)
+        .filter(
+          (entry) => entry.kind === 'custom' || reloaded.visibleBuiltInIds.includes(entry.key.id)
+        )
+        .map((entry) => entry.id)
+    ).toEqual(order.filter((id) => id !== 'builtin:escape'))
+  })
+
+  it('keeps mixed positions when a built-in is hidden and shown again', () => {
+    const current = ['escape', 'tab']
+    const layout = reorderTerminalAccessoryIds(
+      { orderedBuiltInIds: current, visibleBuiltInIds: current },
+      ['custom:model', 'builtin:tab', 'custom:status', 'builtin:escape'],
+      current
+    )
+    const hidden = setTerminalAccessoryBuiltInVisible(layout, 'tab', false, current)
+    const shown = setTerminalAccessoryBuiltInVisible(hidden, 'tab', true, current)
+
+    expect(hidden.orderedIds).toEqual(layout.orderedIds)
+    expect(hidden.visibleBuiltInIds).toEqual(['escape'])
+    expect(shown).toEqual(layout)
+    expect(setTerminalAccessoryBuiltInVisible(layout, 'unknown', false, current)).toEqual(layout)
+  })
+
+  it('shows custom keys when every built-in is hidden', () => {
+    const layout = {
+      ...getDefaultTerminalAccessoryLayout(),
+      visibleBuiltInIds: [],
+      orderedIds: ['custom:model', 'builtin:tab', 'custom:status']
+    }
+    const entries = getTerminalAccessoryEntries(layout, [customKey('model'), customKey('status')])
+
+    expect(entries.filter((entry) => entry.kind === 'custom').map((entry) => entry.id)).toEqual([
+      'custom:model',
+      'custom:status'
+    ])
+    expect(createTerminalAccessoryLayoutPreference(layout).visibleBuiltInIds).toEqual([])
+  })
+
+  it('uses separate identities for a custom key whose id matches a built-in', () => {
+    const custom = customKey('tab')
+    const layout = reorderTerminalAccessoryIds(getDefaultTerminalAccessoryLayout(), [
+      'custom:tab',
+      ...getDefaultTerminalAccessoryBuiltInIds().map((id) => `builtin:${id}`)
+    ])
+    const entries = getTerminalAccessoryEntries(layout, [custom])
+
+    expect(entries[0]).toEqual({ id: 'custom:tab', kind: 'custom', key: custom })
+    expect(entries.find((entry) => entry.id === 'builtin:tab')).toMatchObject({
+      kind: 'builtin',
+      key: { id: 'tab', bytes: '\t' }
+    })
+  })
+
+  it('ignores deleted custom keys and appends new keys without moving survivors', () => {
+    const layout = reorderTerminalAccessoryIds(getDefaultTerminalAccessoryLayout(), [
+      'custom:second',
+      'builtin:tab',
+      'custom:deleted',
+      'custom:first',
+      ...getDefaultTerminalAccessoryBuiltInIds()
+        .filter((id) => id !== 'tab')
+        .map((id) => `builtin:${id}`)
+    ])
+    const edited = { ...customKey('second'), label: 'Changed', bytes: 'changed\r' }
+    const entries = getTerminalAccessoryEntries(layout, [
+      customKey('first'),
+      edited,
+      customKey('new')
+    ])
+
+    expect(entries.slice(0, 3).map((entry) => entry.id)).toEqual([
+      'custom:second',
+      'builtin:tab',
+      'custom:first'
+    ])
+    expect(entries[0]?.key).toEqual(edited)
+    expect(entries.some((entry) => entry.id === 'custom:deleted')).toBe(false)
+    expect(entries.at(-1)?.id).toBe('custom:new')
+  })
+
+  it('retains saved custom positions while the separate custom-key store is loading', () => {
+    const layout = reorderTerminalAccessoryIds(getDefaultTerminalAccessoryLayout(), [
+      'custom:model',
+      ...getDefaultTerminalAccessoryBuiltInIds().map((id) => `builtin:${id}`)
+    ])
+
+    expect(getTerminalAccessoryEntries(layout, []).some((entry) => entry.kind === 'custom')).toBe(
+      false
+    )
+    const persisted = createTerminalAccessoryLayoutPreference(layout)
+    expect(persisted.orderedIds?.[0]).toBe('custom:model')
+    expect(getTerminalAccessoryEntries(persisted, [customKey('model')])[0]?.id).toBe('custom:model')
+  })
+
+  it('sanitizes mixed descriptors and synchronizes built-in ordering', () => {
+    const preference = normalizeTerminalAccessoryLayoutPreference(
+      {
+        version: 2,
+        orderedBuiltInIds: ['escape', 'tab'],
+        visibleBuiltInIds: ['escape', 'tab'],
+        orderedIds: [
+          'custom:model',
+          'builtin:tab',
+          'unknown',
+          'builtin:removed',
+          'custom:',
+          'custom:model',
+          'builtin:tab',
+          'custom:invalid\u0000id',
+          'builtin:escape'
+        ]
+      },
+      ['escape', 'tab']
+    )
+
+    expect(preference).toEqual({
+      version: 2,
+      orderedBuiltInIds: ['tab', 'escape'],
+      visibleBuiltInIds: ['tab', 'escape'],
+      orderedIds: ['custom:model', 'builtin:tab', 'builtin:escape']
+    })
+  })
+
+  it.each([null, 'custom:model', ['builtin:tab', 1]])(
+    'ignores an invalid optional mixed order without resetting legacy preferences (%j)',
+    (orderedIds) => {
+      expect(
+        normalizeTerminalAccessoryLayoutPreference(
+          {
+            version: 2,
+            orderedBuiltInIds: ['tab', 'escape'],
+            visibleBuiltInIds: ['tab'],
+            orderedIds
+          },
+          ['escape', 'tab']
+        )
+      ).toEqual({
+        version: 2,
+        orderedBuiltInIds: ['tab', 'escape'],
+        visibleBuiltInIds: ['tab']
+      })
+    }
+  )
+
+  it('inserts new built-ins beside their canonical neighbor while preserving custom positions', () => {
+    const preference = normalizeTerminalAccessoryLayoutPreference(
+      {
+        version: 2,
+        orderedBuiltInIds: ['enter', 'tab', 'escape'],
+        visibleBuiltInIds: ['enter'],
+        orderedIds: [
+          'custom:model',
+          'builtin:enter',
+          'builtin:tab',
+          'custom:status',
+          'builtin:escape'
+        ]
+      },
+      ['escape', 'tab', 'space', 'enter']
+    )
+
+    expect(preference.orderedIds).toEqual([
+      'custom:model',
+      'builtin:enter',
+      'builtin:tab',
+      'builtin:space',
+      'custom:status',
+      'builtin:escape'
+    ])
+    expect(preference.orderedBuiltInIds).toEqual(['enter', 'tab', 'space', 'escape'])
+    expect(preference.visibleBuiltInIds).toEqual(['enter', 'space'])
+  })
+
+  it('keeps a leading custom key ahead of a newly introduced first built-in', () => {
+    const preference = normalizeTerminalAccessoryLayoutPreference(
+      {
+        version: 2,
+        orderedBuiltInIds: ['tab'],
+        visibleBuiltInIds: [],
+        orderedIds: ['custom:model', 'builtin:tab']
+      },
+      ['escape', 'tab']
+    )
+
+    expect(preference.orderedIds).toEqual(['custom:model', 'builtin:escape', 'builtin:tab'])
+    expect(preference.visibleBuiltInIds).toEqual(['escape'])
+  })
+
+  it('retains missing built-ins when a stale mixed drag omits one', () => {
+    const current = ['escape', 'tab', 'enter']
+    const layout = reorderTerminalAccessoryIds(
+      {
+        orderedBuiltInIds: current,
+        visibleBuiltInIds: ['escape', 'enter']
+      },
+      ['custom:model', 'builtin:enter', 'builtin:escape'],
+      current
+    )
+
+    expect(layout.orderedIds).toEqual([
+      'custom:model',
+      'builtin:enter',
+      'builtin:escape',
+      'builtin:tab'
+    ])
+    expect(layout.visibleBuiltInIds).toEqual(['enter', 'escape'])
+  })
+
+  it('resets built-ins without deleting or scrambling the current custom order', () => {
+    const customKeys = [customKey('first'), customKey('second')]
+    const layout = reorderTerminalAccessoryIds(
+      {
+        ...getDefaultTerminalAccessoryLayout(),
+        visibleBuiltInIds: []
+      },
+      [
+        'custom:second',
+        'builtin:tab',
+        'custom:first',
+        ...getDefaultTerminalAccessoryBuiltInIds()
+          .filter((id) => id !== 'tab')
+          .map((id) => `builtin:${id}`)
+      ]
+    )
+    const reset = resetTerminalAccessoryLayout(layout, customKeys)
+
+    expect(reset.orderedBuiltInIds).toEqual(getDefaultTerminalAccessoryBuiltInIds())
+    expect(reset.visibleBuiltInIds).toEqual(getDefaultTerminalAccessoryBuiltInIds())
+    expect(getTerminalAccessoryEntries(reset, customKeys).map((entry) => entry.id)).toEqual([
+      ...getDefaultTerminalAccessoryBuiltInIds().map((id) => `builtin:${id}`),
+      'custom:second',
+      'custom:first'
+    ])
+  })
+
+  it('preserves saved custom order when Reset runs before custom-key storage finishes loading', () => {
+    const layout = reorderTerminalAccessoryIds(getDefaultTerminalAccessoryLayout(), [
+      'custom:second',
+      'builtin:tab',
+      'custom:first'
+    ])
+    const reset = resetTerminalAccessoryLayout(layout, [])
+    const reopened = normalizeTerminalAccessoryLayoutPreference(
+      JSON.parse(JSON.stringify(createTerminalAccessoryLayoutPreference(reset)))
+    )
+    const lateKeys = [customKey('first'), customKey('second'), customKey('new')]
+
+    expect(getTerminalAccessoryEntries(reopened, lateKeys).map((entry) => entry.id)).toEqual([
+      ...getDefaultTerminalAccessoryBuiltInIds().map((id) => `builtin:${id}`),
+      'custom:second',
+      'custom:first',
+      'custom:new'
+    ])
   })
 })

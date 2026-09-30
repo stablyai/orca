@@ -15,14 +15,13 @@ import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
 import { CustomKeyModal, loadCustomKeys, saveCustomKeys, type CustomKey } from './CustomKeyModal'
 import { DragReorderList } from './DragReorderList'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import {
-  TERMINAL_ACCESSORY_KEYS,
-  type TerminalAccessoryKey
-} from '../terminal/terminal-accessory-keys'
+import type { TerminalAccessoryKey } from '../terminal/terminal-accessory-keys'
 import {
   getDefaultTerminalAccessoryLayout,
   loadTerminalAccessoryLayout,
-  reorderTerminalAccessoryBuiltInIds,
+  getTerminalAccessoryEntries,
+  reorderTerminalAccessoryIds,
+  resetTerminalAccessoryLayout,
   saveTerminalAccessoryLayout,
   setTerminalAccessoryBuiltInVisible,
   type TerminalAccessoryLayout
@@ -99,10 +98,7 @@ export function TerminalShortcutSettings({
       if (pendingLayoutWritesRef.current > 0 || refreshSeq !== layoutWriteSeqRef.current) {
         return
       }
-      setShortcutLayout({
-        orderedBuiltInIds: layout.orderedBuiltInIds,
-        visibleBuiltInIds: layout.visibleBuiltInIds
-      })
+      setShortcutLayout(layout)
     })
   }, [])
 
@@ -173,10 +169,10 @@ export function TerminalShortcutSettings({
     [persistLayout]
   )
 
-  const reorderBuiltInKeys = useCallback(
+  const reorderKeys = useCallback(
     (orderedKeys: string[]) => {
       setShortcutLayout((current) => {
-        const next = reorderTerminalAccessoryBuiltInIds(current, orderedKeys)
+        const next = reorderTerminalAccessoryIds(current, orderedKeys)
         persistLayout(next)
         return next
       })
@@ -184,108 +180,56 @@ export function TerminalShortcutSettings({
     [persistLayout]
   )
 
-  const resetBuiltInKeys = useCallback(() => {
-    const next = getDefaultTerminalAccessoryLayout()
-    setShortcutLayout(next)
-    persistLayout(next)
-  }, [persistLayout])
-
-  const reorderCustomKeys = useCallback(
-    (orderedKeys: string[]) => {
-      setCustomKeys((current) => {
-        const byId = new Map(current.map((key) => [key.id, key]))
-        const reordered = orderedKeys.flatMap((id) => {
-          const key = byId.get(id)
-          return key ? [key] : []
-        })
-        if (reordered.length !== current.length) {
-          return current
-        }
-        persistCustomKeys(reordered)
-        return reordered
-      })
-    },
-    [persistCustomKeys]
-  )
+  const resetKeys = useCallback(() => {
+    setShortcutLayout((current) => {
+      const next = resetTerminalAccessoryLayout(current, customKeys)
+      persistLayout(next)
+      return next
+    })
+  }, [customKeys, persistLayout])
 
   const visibleBuiltInSet = useMemo(
     () => new Set(shortcutLayout.visibleBuiltInIds),
     [shortcutLayout.visibleBuiltInIds]
   )
-  const orderedAccessoryKeys = useMemo(() => {
-    const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
-    return shortcutLayout.orderedBuiltInIds.flatMap((id) => {
-      const key = byId.get(id)
-      return key ? [key] : []
-    })
-  }, [shortcutLayout.orderedBuiltInIds])
+  const orderedAccessoryKeys = useMemo(
+    () => getTerminalAccessoryEntries(shortcutLayout, customKeys),
+    [shortcutLayout, customKeys]
+  )
 
   return (
     <>
       <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
       <Text style={styles.groupDescription}>
-        Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on
-        the terminal shortcut bar.
+        Hold the grip to arrange built-in keys and custom shortcuts together. Toggle built-in keys
+        to show or hide them.
       </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         <DragReorderList
           items={orderedAccessoryKeys}
-          itemKey={(shortcutKey) => shortcutKey.id}
+          itemKey={(entry) => entry.id}
           rowHeight={REORDER_ROW_HEIGHT}
           scrollRef={scrollRef}
           scrollOffsetY={scrollOffsetY}
           scrollContentHeight={scrollContentHeight}
           onDragActiveChange={onDragActiveChange}
-          onReorder={reorderBuiltInKeys}
-          renderRow={(shortcutKey) => (
-            <ShortcutBarRow
-              shortcutKey={shortcutKey}
-              visible={visibleBuiltInSet.has(shortcutKey.id)}
-              onToggle={(visible) => toggleBuiltInKey(shortcutKey.id, visible)}
-            />
-          )}
-        />
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-          onPress={resetBuiltInKeys}
-        >
-          <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Reset Defaults</Text>
-            <Text style={styles.rowSublabel}>
-              Show every built-in shortcut key in the original order
-            </Text>
-          </View>
-        </Pressable>
-      </View>
-
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
-      <View style={[styles.section, styles.sectionTopGap]}>
-        {customKeys.length === 0 ? (
-          <>
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
-            </View>
-            <View style={styles.separator} />
-          </>
-        ) : (
-          <DragReorderList
-            items={customKeys}
-            itemKey={(key) => key.id}
-            rowHeight={REORDER_ROW_HEIGHT}
-            scrollRef={scrollRef}
-            scrollOffsetY={scrollOffsetY}
-            scrollContentHeight={scrollContentHeight}
-            onDragActiveChange={onDragActiveChange}
-            onReorder={reorderCustomKeys}
-            renderRow={(key) => (
+          onReorder={reorderKeys}
+          renderRow={(entry) =>
+            entry.kind === 'builtin' ? (
+              <ShortcutBarRow
+                shortcutKey={entry.key}
+                visible={visibleBuiltInSet.has(entry.key.id)}
+                onToggle={(visible) => toggleBuiltInKey(entry.key.id, visible)}
+              />
+            ) : (
               <View style={styles.reorderRowContent}>
                 <View style={styles.keycap}>
-                  <Text style={styles.keycapText}>{key.label}</Text>
+                  <Text style={styles.keycapText}>{entry.key.label}</Text>
                 </View>
                 <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>{key.label}</Text>
+                  <Text style={styles.rowLabel}>{entry.key.label}</Text>
                   <Text style={styles.rowSublabel} numberOfLines={1} ellipsizeMode="tail">
-                    {key.bytes.replace(/\r/g, ' ↵')}
+                    {entry.key.bytes.replace(/\r/g, ' ↵')}
                   </Text>
                 </View>
                 <Pressable
@@ -293,14 +237,27 @@ export function TerminalShortcutSettings({
                     styles.deleteButton,
                     pressed && styles.deleteButtonPressed
                   ]}
-                  onPress={() => handleDeleteCustomKey(key)}
+                  onPress={() => handleDeleteCustomKey(entry.key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete ${entry.key.label}`}
                 >
                   <X size={16} color={colors.statusRed} />
                 </Pressable>
               </View>
-            )}
-          />
-        )}
+            )
+          }
+        />
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          onPress={resetKeys}
+        >
+          <View style={styles.rowContent}>
+            <Text style={styles.rowLabel}>Reset Defaults</Text>
+            <Text style={styles.rowSublabel}>
+              Restore built-in keys and place custom shortcuts after them
+            </Text>
+          </View>
+        </Pressable>
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           onPress={() => setShowCustomKeyModal(true)}
@@ -398,21 +355,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize,
     fontFamily: typography.monoFamily
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  emptyContainer: {
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    padding: spacing.md
   },
   deleteButton: {
     width: 32,

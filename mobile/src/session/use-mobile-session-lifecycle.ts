@@ -14,8 +14,9 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
   const {
     hostId,
     connState,
+    customKeysRevisionRef,
     setCustomKeys,
-    setVisibleBuiltInIds,
+    setTerminalAccessoryLayout,
     setHostEndpoint,
     connStateRef,
     terminalRefs,
@@ -45,30 +46,37 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [hostId])
 
-  useEffect(() => {
-    void loadCustomKeys().then(setCustomKeys)
-  }, [])
-
+  const shortcutRefreshSeqRef = useRef(0)
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      void loadTerminalAccessoryLayout().then((layout) => {
-        if (!stale) {
-          setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      const refreshSeq = ++shortcutRefreshSeqRef.current
+      const customKeysRevision = customKeysRevisionRef.current
+      void Promise.all([loadTerminalAccessoryLayout(), loadCustomKeys()]).then(([layout, keys]) => {
+        if (!stale && refreshSeq === shortcutRefreshSeqRef.current) {
+          setTerminalAccessoryLayout(layout)
+          if (customKeysRevision === customKeysRevisionRef.current) {
+            setCustomKeys(keys)
+          }
         }
       })
       return () => {
         stale = true
       }
-    }, [])
+    }, [customKeysRevisionRef, setTerminalAccessoryLayout, setCustomKeys])
   )
 
   useEffect(() => {
     let mounted = true
     const refresh = () => {
-      void loadTerminalAccessoryLayout().then((layout) => {
-        if (mounted) {
-          setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      const refreshSeq = ++shortcutRefreshSeqRef.current
+      const customKeysRevision = customKeysRevisionRef.current
+      void Promise.all([loadTerminalAccessoryLayout(), loadCustomKeys()]).then(([layout, keys]) => {
+        if (mounted && refreshSeq === shortcutRefreshSeqRef.current) {
+          setTerminalAccessoryLayout(layout)
+          if (customKeysRevision === customKeysRevisionRef.current) {
+            setCustomKeys(keys)
+          }
         }
       })
     }
@@ -81,7 +89,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       mounted = false
       sub.remove()
     }
-  }, [])
+  }, [customKeysRevisionRef, setTerminalAccessoryLayout, setCustomKeys])
 
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {

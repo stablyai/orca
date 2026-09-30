@@ -30,10 +30,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     autocompleteEnabled,
     liveInputCapture,
     activeHandle,
-    customKeys,
     setShowCustomKeyModal,
     setDeleteKeyTarget,
-    visibleBuiltInAccessoryKeys,
+    visibleAccessoryEntries,
     terminalModes,
     canPaste,
     dictationMode,
@@ -182,68 +181,69 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 </Text>
               </Pressable>
             )}
-            {visibleBuiltInAccessoryKeys.map((key) => (
-              <Pressable
-                key={key.id}
-                style={({ pressed }) => [
-                  styles.accessoryKey,
-                  pressed && styles.accessoryKeyPressed,
-                  !canSend && styles.accessoryKeyDisabled
-                ]}
-                disabled={!canSend}
-                onPressIn={() => {
-                  if (!key.repeatable) {
-                    return
-                  }
-                  const input = createTerminalLiveAccessoryInput(key)
-                  void handleAccessoryKey(input)
-                  startAccessoryRepeat(input)
-                }}
-                onPressOut={() => {
-                  if (key.repeatable) {
-                    stopAccessoryRepeat()
-                  }
-                }}
-                onPress={() => {
-                  if (key.repeatable) {
-                    return
-                  }
-                  void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
-                }}
-                accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
-              >
-                <Text
-                  style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
+            {visibleAccessoryEntries.map((entry) =>
+              entry.kind === 'builtin' ? (
+                <Pressable
+                  key={entry.id}
+                  style={({ pressed }) => [
+                    styles.accessoryKey,
+                    pressed && styles.accessoryKeyPressed,
+                    !canSend && styles.accessoryKeyDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPressIn={() => {
+                    if (!entry.key.repeatable) {
+                      return
+                    }
+                    const input = createTerminalLiveAccessoryInput(entry.key)
+                    void handleAccessoryKey(input)
+                    startAccessoryRepeat(input)
+                  }}
+                  onPressOut={() => {
+                    if (entry.key.repeatable) {
+                      stopAccessoryRepeat()
+                    }
+                  }}
+                  onPress={() => {
+                    if (entry.key.repeatable) {
+                      return
+                    }
+                    void handleAccessoryKey(createTerminalLiveAccessoryInput(entry.key))
+                  }}
+                  accessibilityLabel={entry.key.accessibilityLabel ?? `Send ${entry.key.label}`}
                 >
-                  {key.label}
-                </Text>
-              </Pressable>
-            ))}
-            {customKeys.map((key) => (
-              <Pressable
-                key={key.id}
-                style={({ pressed }) => [
-                  styles.accessoryKey,
-                  styles.customAccessoryKey,
-                  pressed && styles.accessoryKeyPressed,
-                  !canSend && styles.accessoryKeyDisabled
-                ]}
-                disabled={!canSend}
-                onPress={() => void handleAccessoryKey({ bytes: key.bytes })}
-                onLongPress={() => {
-                  triggerMediumImpact()
-                  setDeleteKeyTarget(key)
-                }}
-                delayLongPress={400}
-                accessibilityLabel={`Send ${key.label}`}
-              >
-                <Text
-                  style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
+                  <Text
+                    style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
+                  >
+                    {entry.key.label}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  key={entry.id}
+                  style={({ pressed }) => [
+                    styles.accessoryKey,
+                    styles.customAccessoryKey,
+                    pressed && styles.accessoryKeyPressed,
+                    !canSend && styles.accessoryKeyDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPress={() => void handleAccessoryKey({ bytes: entry.key.bytes })}
+                  onLongPress={() => {
+                    triggerMediumImpact()
+                    setDeleteKeyTarget(entry.key)
+                  }}
+                  delayLongPress={400}
+                  accessibilityLabel={`Send ${entry.key.label}`}
                 >
-                  {key.label}
-                </Text>
-              </Pressable>
-            ))}
+                  <Text
+                    style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
+                  >
+                    {entry.key.label}
+                  </Text>
+                </Pressable>
+              )
+            )}
             <Pressable
               style={({ pressed }) => [styles.accessoryKey, pressed && styles.accessoryKeyPressed]}
               onPress={() => setShowCustomKeyModal(true)}

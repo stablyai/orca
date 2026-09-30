@@ -1,10 +1,11 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useCallback, type SetStateAction } from 'react'
 import { Animated, type ScrollView } from 'react-native'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
 import {
-  getDefaultTerminalAccessoryBuiltInIds,
-  getVisibleTerminalAccessoryKeys
+  getDefaultTerminalAccessoryLayout,
+  getTerminalAccessoryEntries,
+  type TerminalAccessoryLayout
 } from '../terminal/terminal-accessory-layout'
 import type { CustomKey } from '../components/CustomKeyModal'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
@@ -99,16 +100,24 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   > | null>(null)
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
-  const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
-  const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
-    getDefaultTerminalAccessoryBuiltInIds
+  const [customKeys, setCustomKeysState] = useState<CustomKey[]>([])
+  // Why: a pending focus/foreground read must not undo a completed add or delete.
+  const customKeysRevisionRef = useRef(0)
+  const setCustomKeys = useCallback((next: SetStateAction<CustomKey[]>) => {
+    customKeysRevisionRef.current += 1
+    setCustomKeysState(next)
+  }, [])
+  const [terminalAccessoryLayout, setTerminalAccessoryLayout] = useState<TerminalAccessoryLayout>(
+    getDefaultTerminalAccessoryLayout
   )
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<CustomKey | null>(null)
-  const visibleBuiltInAccessoryKeys = useMemo(
-    () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
-    [visibleBuiltInIds]
-  )
+  const visibleAccessoryEntries = useMemo(() => {
+    const visibleBuiltIns = new Set(terminalAccessoryLayout.visibleBuiltInIds)
+    return getTerminalAccessoryEntries(terminalAccessoryLayout, customKeys).filter(
+      (entry) => entry.kind === 'custom' || visibleBuiltIns.has(entry.key.id)
+    )
+  }, [terminalAccessoryLayout, customKeys])
   // Why: Expo SDK 55 edge-to-edge doesn't resize the window on IME open, so track keyboard height ourselves and lift the input without resizing the desktop PTY.
   const [keyboardHeight, setKeyboardHeight] = useState(0)
   // Why: server-authoritative display mode per terminal, populated from subscribe responses.
@@ -211,14 +220,15 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     renameTarget,
     setRenameTarget,
     customKeys,
+    customKeysRevisionRef,
     setCustomKeys,
-    visibleBuiltInIds,
-    setVisibleBuiltInIds,
+    terminalAccessoryLayout,
+    setTerminalAccessoryLayout,
     showCustomKeyModal,
     setShowCustomKeyModal,
     deleteKeyTarget,
     setDeleteKeyTarget,
-    visibleBuiltInAccessoryKeys,
+    visibleAccessoryEntries,
     keyboardHeight,
     setKeyboardHeight,
     terminalModes,
