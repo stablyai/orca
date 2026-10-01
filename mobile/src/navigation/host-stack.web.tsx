@@ -130,12 +130,13 @@ function StackScreen({
 
   // Before paint, so neither screen is ever painted at rest before its slide starts.
   useLayoutEffect(() => {
+    // Consumed by every run, so a slot that settles at rest carries no stale offset.
+    const from = stoppedAt.current
+    stoppedAt.current = null
     const node: unknown = ref.current
     if (motion === null || !(node instanceof HTMLElement)) {
       return
     }
-    const from = stoppedAt.current
-    stoppedAt.current = null
     const frames =
       motion === 'enter'
         ? [{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }]

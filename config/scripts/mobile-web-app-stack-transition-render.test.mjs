@@ -59,6 +59,7 @@ export default function ProbeList() {
   useEffect(() => {
     globalThis.__orcaStackProbe = {
       push: () => router.push(${JSON.stringify(SESSION_HREF)}),
+      pushOther: () => router.push(${JSON.stringify(`${LIST_ROUTE}/session/wt-2`)}),
       back: () => router.back(),
       hardwareBack: () => globalThis.__orcaRenderCheckSendBack()
     }
@@ -298,6 +299,20 @@ describeRender('the host stack transition on the page', () => {
     expect(frames.at(-1)).toEqual(LIST_SETTLED)
     expect(await nodeCount(page)).toBe(baseline)
     expect(await sessionMounts(page)).toBe(mounts + 1)
+    expect(errors).toEqual([])
+    await page.close()
+  }, 120_000)
+
+  it('slides a screen out from rest after a push that once interrupted its entry', async () => {
+    const { errors, page } = await openList()
+    await sampleFrames(page, 'push')
+    await sampleFrames(page, 'back')
+    // wt-1 is still entering when wt-2 covers it, so wt-1 settles beneath at rest.
+    await sampleFrames(page, 'push', { followUp: 'pushOther', afterFrames: 6 })
+    await sampleFrames(page, 'back')
+    const frames = await sampleFrames(page, 'back')
+    expect(frames.find((frame) => frame.from !== null)?.from).toBe('translateX(0)')
+    expect(frames.at(-1)).toEqual(LIST_SETTLED)
     expect(errors).toEqual([])
     await page.close()
   }, 120_000)
