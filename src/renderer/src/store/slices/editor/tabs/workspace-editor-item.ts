@@ -12,7 +12,8 @@ export function openWorkspaceEditorItem(
   label: string,
   contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
   isPreview?: boolean,
-  targetGroupId?: string
+  targetGroupId?: string,
+  activate = true
 ): string {
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
@@ -23,8 +24,10 @@ export function openWorkspaceEditorItem(
       contentType
     )
     if (existing) {
-      // Why: sidebar preview reopens focus the tab without promoting it; explicit activation still promotes previews by default.
-      state.activateTab?.(existing.id, { preservePreview: isPreview })
+      if (activate) {
+        // Why: sidebar preview reopens focus the tab without promoting it; explicit activation still promotes previews by default.
+        state.activateTab?.(existing.id, { preservePreview: isPreview })
+      }
       return existing.id
     }
   }
@@ -32,7 +35,8 @@ export function openWorkspaceEditorItem(
     entityId: fileId,
     label,
     isPreview,
-    ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {})
+    ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
+    ...(activate ? {} : { activate: false })
   })
   return created?.id ?? fileId
 }

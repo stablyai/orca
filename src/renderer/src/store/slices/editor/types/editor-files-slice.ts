@@ -44,6 +44,8 @@ export type EditorFilesSlice = {
       forceContentReload?: boolean
       focusEditor?: boolean
       reopenId?: string
+      /** false adds the tab without selecting it, leaving what the user sees alone. */
+      activate?: boolean
     }
   ) => string
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
@@ -101,7 +103,7 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions
+    options?: EditorOpenTargetOptions & { activate?: boolean }
   ) => void
   openBranchDiff: (
     worktreeId: string,

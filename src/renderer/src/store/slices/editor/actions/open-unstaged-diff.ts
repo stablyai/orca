@@ -3,7 +3,10 @@ import type { EditorSlice } from '../types/editor-slice'
 import type { DiffSource, OpenFile } from '../types/open-file'
 import { buildDiffEditorFileId, withDiffContentReloadRequest } from '../file-ids/editor-file-ids'
 import { resolveDiffRuntimeEnvironmentId } from '../git/diff-runtime-owner'
-import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
+import {
+  buildEditorActiveResult,
+  resolveEditorOpenTargetGroupId
+} from '../tabs/editor-open-target-group'
 import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,
@@ -18,6 +21,7 @@ export function createOpenUnstagedDiff(
   return {
     openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
       const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
+      const activate = options?.activate !== false
       let editorItemTargetGroupId = options?.targetGroupId
       let editorItemFileId = ''
       set((s) => {
@@ -32,6 +36,7 @@ export function createOpenUnstagedDiff(
         const targetGroupId =
           resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
         editorItemTargetGroupId = targetGroupId
+        const activeResult = activate ? buildEditorActiveResult(s, worktreeId, id) : {}
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
@@ -47,10 +52,7 @@ export function createOpenUnstagedDiff(
           })
           return {
             openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...activeResult
           }
         }
         const newFile: OpenFile = {
@@ -79,19 +81,13 @@ export function createOpenUnstagedDiff(
                 index === replaceablePreviewIndex ? newFile : file
               ),
               ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
-              activeFileId: id,
-              activeTabType: 'editor',
-              activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-              activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+              ...activeResult
             }
           }
         }
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...activeResult
         }
       })
       void openWorkspaceEditorItem(
@@ -101,7 +97,8 @@ export function createOpenUnstagedDiff(
         relativePath,
         'diff',
         isPreview,
-        editorItemTargetGroupId
+        editorItemTargetGroupId,
+        activate
       )
     }
   }

@@ -339,6 +339,132 @@ describe('orca file CLI handlers', () => {
     expect(output).toContain('docs/old.md: deleted file has no edit target')
   })
 
+  it('asks the host to move its view only when --focus is passed', async () => {
+    const opened = { worktree: 'wt-1', relativePath: 'src/App.tsx', kind: 'text', opened: true }
+    queueFixtures(
+      callMock,
+      okFixture('req_open', opened),
+      okFixture('req_open_focus', opened),
+      okFixture('req_diff', opened),
+      okFixture('req_diff_focus', opened)
+    )
+
+    await main(['file', 'open', 'src/App.tsx', '--worktree', 'id:wt-1'], '/tmp/elsewhere')
+    await main(
+      ['file', 'open', 'src/App.tsx', '--worktree', 'id:wt-1', '--focus'],
+      '/tmp/elsewhere'
+    )
+    await main(['file', 'diff', 'src/App.tsx', '--worktree', 'id:wt-1'], '/tmp/elsewhere')
+    await main(
+      ['file', 'diff', 'src/App.tsx', '--worktree', 'id:wt-1', '--focus'],
+      '/tmp/elsewhere'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'all'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      staged: false
+    })
+    expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      staged: false,
+      navigation: 'all'
+    })
+  })
+
+  it('leaves a paired remote server window alone unless --focus is passed', async () => {
+    const opened = { worktree: 'wt-1', relativePath: 'src/App.tsx', kind: 'text', opened: true }
+    queueFixtures(callMock, okFixture('req_open', opened), okFixture('req_open_focus', opened))
+    const remote = ['--worktree', 'id:wt-1', '--pairing-code', 'remote-runtime']
+
+    await main(['file', 'open', 'src/App.tsx', ...remote], '/tmp/elsewhere')
+    await main(['file', 'open', 'src/App.tsx', ...remote, '--focus'], '/tmp/elsewhere')
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'all'
+    })
+  })
+
+  it('moves the view once for open-changed --focus, on the first tab that opens', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_status', {
+        entries: [
+          { path: 'assets/logo.png', status: 'modified', area: 'unstaged' },
+          { path: 'src/App.tsx', status: 'modified', area: 'unstaged' }
+        ],
+        conflictOperation: 'unknown'
+      }),
+      okFixture('req_open_binary', {
+        worktree: 'wt-1',
+        relativePath: 'assets/logo.png',
+        kind: 'binary',
+        opened: false
+      }),
+      okFixture('req_diff_1', {
+        worktree: 'wt-1',
+        relativePath: 'assets/logo.png',
+        kind: 'binary',
+        opened: true
+      }),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      }),
+      okFixture('req_diff_2', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(
+      ['file', 'open-changed', '--mode', 'both', '--worktree', 'id:wt-1', '--focus'],
+      '/tmp/elsewhere'
+    )
+
+    // Why: a binary edit open returns opened:false before reaching the host, so focus carries to the next open.
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'assets/logo.png',
+      navigation: 'all'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'assets/logo.png',
+      staged: false,
+      navigation: 'all'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(4, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      staged: false
+    })
+  })
+
   it('requires an explicit worktree for remote file commands', async () => {
     const priorExitCode = process.exitCode
 

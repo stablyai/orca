@@ -45,6 +45,7 @@ export function applyOpenFileToState(
         forceContentReload?: boolean
         focusEditor?: boolean
         reopenId?: string
+        activate?: boolean
       }
     | undefined,
   scratch: OpenFileApplyScratch
@@ -99,7 +100,7 @@ export function applyOpenFileToState(
   const targetGroupId =
     resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
-  const activeResult = buildEditorActiveResult(s, worktreeId, id)
+  const activeResult = options?.activate === false ? {} : buildEditorActiveResult(s, worktreeId, id)
   if (existing) {
     // If opening as non-preview, also pin the existing tab
     const updatedPreview = isPreview ? existing.isPreview : false

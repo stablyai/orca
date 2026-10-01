@@ -5,6 +5,31 @@ import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { useAppStore } from '../../store'
+import type { AppState } from '../../store/types'
+import {
+  navigationTargetsHost,
+  type RuntimeNavigationTarget
+} from '../../../../shared/runtime-navigation'
+
+// Why: without host navigation (CLI --focus) nothing on screen may change; the tab is added and
+// becomes selected only inside a worktree the user is not viewing, so it is there when they go to it.
+function openRuntimeEditorTab(
+  worktreeId: string,
+  navigation: RuntimeNavigationTarget | undefined,
+  open: (store: AppState, activate: boolean) => void
+): void {
+  const store = useAppStore.getState()
+  if (navigation === undefined || !navigationTargetsHost(navigation)) {
+    open(store, worktreeId !== store.activeWorktreeId)
+    return
+  }
+  store.setActiveWorktree(worktreeId)
+  store.markWorktreeVisited(worktreeId)
+  store.setActiveView('terminal')
+  open(store, true)
+  store.setActiveTabType('editor', worktreeId)
+  store.revealWorktreeInSidebar(worktreeId)
+}
 
 export function registerMobileAndTerminalCloseIpcBridge(
   unsubs: (() => void)[],
@@ -12,41 +37,36 @@ export function registerMobileAndTerminalCloseIpcBridge(
 ): void {
   unsubs.push(
     window.api.ui.onOpenFileFromMobile(
-      ({ worktreeId, filePath, relativePath, runtimeEnvironmentId }) => {
-        const store = useAppStore.getState()
+      ({ worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation }) => {
         const basename = relativePath.split(/[\\/]/).pop() || relativePath
-        store.setActiveWorktree(worktreeId)
-        store.markWorktreeVisited(worktreeId)
-        store.setActiveView('terminal')
-        // Why: renderer owns tab creation so grouped order and markdown bridges share the desktop File Explorer's store path.
-        store.openFile({
-          filePath,
-          relativePath,
-          worktreeId,
-          language: detectLanguage(basename),
-          runtimeEnvironmentId,
-          mode: 'edit'
-        })
-        store.setActiveTabType('editor', worktreeId)
-        store.revealWorktreeInSidebar(worktreeId)
+        openRuntimeEditorTab(worktreeId, navigation, (store, activate) =>
+          // Why: renderer owns tab creation so grouped order and markdown bridges share the desktop File Explorer's store path.
+          store.openFile(
+            {
+              filePath,
+              relativePath,
+              worktreeId,
+              language: detectLanguage(basename),
+              runtimeEnvironmentId,
+              mode: 'edit'
+            },
+            { activate }
+          )
+        )
       }
     )
   )
 
   unsubs.push(
     window.api.ui.onOpenDiffFromMobile(
-      ({ worktreeId, filePath, relativePath, staged, runtimeEnvironmentId }) => {
-        const store = useAppStore.getState()
-        const language = detectLanguage(relativePath)
-        store.setActiveWorktree(worktreeId)
-        store.markWorktreeVisited(worktreeId)
-        store.setActiveView('terminal')
-        // Why: mobile renders diffs from metadata; the editor-local Changes shortcut would send plain markdown back to mobile.
-        store.openDiff(worktreeId, filePath, relativePath, language, staged, {
-          runtimeEnvironmentId
-        })
-        store.setActiveTabType('editor', worktreeId)
-        store.revealWorktreeInSidebar(worktreeId)
+      ({ worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation }) => {
+        openRuntimeEditorTab(worktreeId, navigation, (store, activate) =>
+          // Why: mobile renders diffs from metadata; the editor-local Changes shortcut would send plain markdown back to mobile.
+          store.openDiff(worktreeId, filePath, relativePath, detectLanguage(relativePath), staged, {
+            runtimeEnvironmentId,
+            activate
+          })
+        )
       }
     )
   )
