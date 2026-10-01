@@ -18,6 +18,7 @@ import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
+import { readStickyMobileTerminalTitle } from './mobile-session-custom-title'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
 import { withStructuredChatStatus } from './runtime-mobile-structured-tab-status'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
@@ -182,10 +183,24 @@ export function projectRuntimeMobileSessionTabs(
     const ownerAgent =
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
+    // A pending rename outranks OSC until the renderer snapshot echoes it. After that, desktop ranking stands.
+    const sticky = readStickyMobileTerminalTitle(tab, liveLeafPty ?? pty)
     const liveTitle = trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title
-    const agentTitle = normalizeCompatibleAgentTitleForOwner(liveTitle, ownerAgent, ownerOptions)
-    // Preserve desktop ranking over fresher main titles; window emits generated names only while shown.
-    const title = resolveTerminalTabTitle({ ...tab, title: agentTitle }, true, agentTitle)
+    const agentTitle = normalizeCompatibleAgentTitleForOwner(
+      sticky.kind === 'cleared' ? (leafTitle ?? ptyTitle ?? 'Terminal') : liveTitle,
+      ownerAgent,
+      ownerOptions
+    )
+    const title =
+      sticky.kind === 'sticky'
+        ? sticky.title
+        : resolveTerminalTabTitle(
+            sticky.kind === 'cleared'
+              ? { ...tab, customTitle: null, title: agentTitle }
+              : { ...tab, title: agentTitle },
+            true,
+            agentTitle
+          )
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Renderer status may precede hook session identity; native chat still needs a transcript address.
     const rendererStatusAgent =

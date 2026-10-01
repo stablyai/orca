@@ -1,6 +1,7 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
 import { randomUUID } from 'node:crypto'
 import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
+import { releaseEchoedManualTerminalTitles } from '../mobile-session-custom-title'
 import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
 import { stampMobileSnapshotVersion } from '../mobile-session-snapshot-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -141,6 +142,11 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       snapshot = merged
     }
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
+    // Why: `manualTitle` only bridges the gap until the renderer snapshot echoes
+    // the same custom title. Releasing it earlier lets a stale frame win.
+    if (this.ptysById && this.leaves) {
+      releaseEchoedManualTerminalTitles(snapshot, this.ptysById, this.leaves.values())
+    }
     const stamped = stampMobileSnapshotVersion(snapshot, existing)
     this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
     return stamped

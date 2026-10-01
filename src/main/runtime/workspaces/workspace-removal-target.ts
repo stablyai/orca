@@ -248,7 +248,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       // Keep manual names out of process-title evidence or they read as the shell reclaiming the pane (#20626).
       pty.pty.manualTitle = title?.trim() || null
       const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
-      this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
+      this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId, { immediate: true })
       // Persist headless custom titles so restart cannot lose a rename.
       const tabIdForTitle = !this.notifier?.renameTerminal ? recordedTabId() : null
       if (tabIdForTitle) {
@@ -281,6 +281,15 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
+    const record = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+    if (record) {
+      record.manualTitle = title?.trim() || null
+    }
+    if (leaf.worktreeId) {
+      this.touchMobileSessionTabsForWorktree(leaf.worktreeId, { immediate: true })
+    } else if (leaf.ptyId) {
+      this.touchMobileSessionSnapshotsForPty(leaf.ptyId, { immediate: true })
+    }
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
   }
