@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import { createServer, type Server } from 'node:http'
 import { findGitBash } from '../agent-hooks/windows-git-bash-path.test-fixture'
 
 const { homedirMock } = vi.hoisted(() => ({
@@ -25,11 +26,12 @@ import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
+const WINDOWS_DIRECT_LAUNCHER =
+  /^[A-Za-z]:\/.*\/\.orca\/agent-hooks\/cursor-hook\.cmd [\w]+$/
 
-// Why: on Windows one hook run is cmd.exe -> powershell.exe -> cmd.exe -> cursor-hook.cmd ->
-// curl.exe, and the package job runs ~25 files at maxWorkers 4 alongside real-Electron and
-// node-pty suites, so a cold CLR start competes for the runner. Deliberately above the product's
-// own MANAGED_HOOK_TIMEOUT_SECONDS (10s): this gates launcher correctness, not user latency.
+// Why: a cmd-safe profile no longer starts PowerShell, which recoded UTF-8 stdin. The budget
+// stays above MANAGED_HOOK_TIMEOUT_SECONDS (10s) because the space-in-path fallback still does,
+// and this gates launcher correctness, not user latency.
 const HOOK_RUN_TIMEOUT_MS = 30_000
 // Why: these cases run up to 16 of those chains back to back. Matches the same budget
 // windows-hook-payload-delivery.test.ts uses for the identical chain.
@@ -118,8 +120,12 @@ describe('CursorHookService', () => {
     for (const eventName of CURSOR_EVENTS) {
       const definition = config.hooks[eventName]?.[0]
       expect(definition?.command).toMatch(
-        process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /cursor-hook/
+        process.platform === 'win32' ? WINDOWS_DIRECT_LAUNCHER : /cursor-hook/
       )
+      if (process.platform === 'win32') {
+        expect(definition?.command).not.toMatch(/powershell|-EncodedCommand/i)
+        expect(definition?.command?.endsWith(` ${eventName}`)).toBe(true)
+      }
       if (process.platform !== 'win32') {
         expect(definition?.command).toContain(join(homeDir, '.orca'))
       }
@@ -134,6 +140,7 @@ describe('CursorHookService', () => {
     expect(script).toContain('GROK_HOOK_EVENT')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
+      expect(script).toContain('if /I "%~1"=="beforeSubmitPrompt"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
       // on the curl command line (EDR oversized-command-line false positive).
@@ -205,7 +212,8 @@ describe('CursorHookService', () => {
     expect(
       promptCommands.filter((command) =>
         process.platform === 'win32'
-          ? command !== undefined && WINDOWS_POWERSHELL_LAUNCHER.test(command)
+          ? command !== undefined &&
+            (WINDOWS_DIRECT_LAUNCHER.test(command) || WINDOWS_POWERSHELL_LAUNCHER.test(command))
           : command?.includes(CURSOR_SCRIPT_FILE_NAME)
       )
     ).toHaveLength(1)
@@ -244,18 +252,35 @@ describe('CursorHookService', () => {
   it(
     'emits protocol-valid JSON when the managed Cursor script is missing (#15462)',
     () => {
-      expect(new CursorHookService().install().state).toBe('installed')
-      const config = readInstalledCursorHooks(homeDir)
-      unlinkSync(join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME))
+      // Why: a cmd-safe command is the script path, so deleting that file cannot answer.
+      // The encoded launcher still has to, and only a profile path with a space uses it (#6078).
+      const installHome =
+        process.platform === 'win32' ? join(tmpdir(), 'orca cursor missing script') : homeDir
+      if (process.platform === 'win32') {
+        mkdirSync(installHome, { recursive: true })
+        homedirMock.mockReturnValue(installHome)
+      }
+      try {
+        expect(new CursorHookService().install().state).toBe('installed')
+        const config = readInstalledCursorHooks(installHome)
+        unlinkSync(join(installHome, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME))
 
-      for (const eventName of CURSOR_EVENTS) {
-        const command = requireRegisteredCommand(config, eventName)
-        const result = runRegisteredCursorHook(command, '')
-        expect(result.status, `${eventName} missing-script exit`).toBe(0)
-        expect(result.stderr, `${eventName} missing-script stderr`).toBe('')
-        expect(JSON.parse(result.stdout), `${eventName} missing-script stdout`).toEqual(
-          EXPECTED_CURSOR_HOOK_STDOUT[eventName]
-        )
+        for (const eventName of CURSOR_EVENTS) {
+          const command = requireRegisteredCommand(config, eventName)
+          if (process.platform === 'win32') {
+            expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+          }
+          const result = runRegisteredCursorHook(command, '')
+          expect(result.status, `${eventName} missing-script exit`).toBe(0)
+          expect(result.stderr, `${eventName} missing-script stderr`).toBe('')
+          expect(JSON.parse(result.stdout), `${eventName} missing-script stdout`).toEqual(
+            EXPECTED_CURSOR_HOOK_STDOUT[eventName]
+          )
+        }
+      } finally {
+        if (process.platform === 'win32') {
+          removeTreeSync(installHome)
+        }
       }
     },
     HOOK_CASE_TIMEOUT_MS
@@ -285,6 +310,62 @@ describe('CursorHookService', () => {
       }
     },
     HOOK_CASE_TIMEOUT_MS
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'posts UTF-8 stdin unchanged when the profile path skips PowerShell',
+    async () => {
+      expect(new CursorHookService().install().state).toBe('installed')
+      const command = requireRegisteredCommand(
+        readInstalledCursorHooks(homeDir),
+        'afterAgentResponse'
+      )
+      expect(command).not.toMatch(/powershell|-EncodedCommand/i)
+      const payload = JSON.stringify({ text: 'Сердце, почта в ЛК' })
+      const posts: string[] = []
+      const server: Server = createServer((req, res) => {
+        const chunks: Buffer[] = []
+        req.on('data', (chunk: Buffer) => chunks.push(chunk))
+        req.on('end', () => {
+          const form = new URLSearchParams(Buffer.concat(chunks).toString('utf8'))
+          const posted = form.get('payload')
+          if (posted !== null) {
+            posts.push(posted)
+          }
+          res.writeHead(204)
+          res.end()
+        })
+      })
+      const port = await new Promise<number>((resolve) => {
+        server.listen(0, '127.0.0.1', () => {
+          const address = server.address()
+          resolve(typeof address === 'object' && address ? address.port : 0)
+        })
+      })
+      try {
+        // Why: spawnSync's stdin pipe does not signal EOF to curl.exe inside a .cmd.
+        // Cursor and the Claude payload test close the pipe with stdin.end, which does.
+        const child = spawn('cmd.exe', ['/d', '/c', command], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
+          env: {
+            ...process.env,
+            ORCA_AGENT_HOOK_ENDPOINT: '',
+            ORCA_AGENT_HOOK_PORT: String(port),
+            ORCA_AGENT_HOOK_TOKEN: 'token',
+            ORCA_PANE_KEY: 'tab:leaf'
+          }
+        })
+        child.stdin.end(Buffer.from(payload, 'utf8'))
+        const status = await new Promise<number | null>((resolve) => {
+          child.on('close', resolve)
+        })
+        expect(status).toBe(0)
+        expect(posts).toEqual([payload])
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    }
   )
 
   it.skipIf(process.platform !== 'win32')(
