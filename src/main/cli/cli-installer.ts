@@ -13,6 +13,12 @@ import {
 } from './appimage-extracted-root'
 import { isAppImageStableLauncherReady } from './appimage-stable-launcher'
 import { CliPathRegistration } from './cli-path-registration'
+import {
+  defaultWindowsPowerShellShimPath,
+  installWindowsPowerShellCliShim,
+  removeWindowsPowerShellCliShim,
+  resolveWindowsMyDocumentsPath
+} from './windows-powershell-cli-shim'
 
 export class CliInstaller extends CliPathRegistration {
   isAppImageRegistrationOwnedBySibling(status: CliInstallStatus): boolean {
@@ -148,6 +154,7 @@ export class CliInstaller extends CliPathRegistration {
     if (this.platform === 'win32') {
       // Why: Windows shells find commands via user PATH, so the installer owns that entry, not the desktop installer.
       await this.ensureWindowsPathEntry(dirname(status.commandPath))
+      await this.syncWindowsPowerShellCliShim()
     }
     if (extractedRoot) {
       await pruneAppImageExtractedRoots(extractedRoot.rootPath)
@@ -166,12 +173,14 @@ export class CliInstaller extends CliPathRegistration {
     const status = await this.getStatus()
     if (!status.supported || !status.commandPath || !status.launcherPath || !status.installMethod) {
       await this.removeLinuxAppImagePayloads()
+      await this.removeWindowsPowerShellCliProfile()
       return status
     }
     if (status.state === 'not_installed') {
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
       if (this.platform === 'win32') {
         await this.removeWindowsPathEntry(dirname(status.commandPath))
+        await this.removeWindowsPowerShellCliProfile()
         return this.getStatus()
       }
       await this.removeLinuxAppImagePayloads()
@@ -200,7 +209,57 @@ export class CliInstaller extends CliPathRegistration {
     }
 
     await this.removeLinuxAppImagePayloads()
+    await this.removeWindowsPowerShellCliProfile()
     return this.getStatus()
+  }
+
+  /**
+   * Why on startup, not only install(): Windows `install()` is not run every
+   * launch, and an already-registered `orca.exe` would keep the ASCII pipe (#24428).
+   */
+  async syncWindowsPowerShellCliShim(): Promise<void> {
+    if (!this.syncWindowsPowerShellProfile || this.platform !== 'win32') {
+      return
+    }
+    try {
+      const launcherPath = await this.resolveLauncherPath()
+      if (!launcherPath) {
+        return
+      }
+      const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())
+      const shimPath =
+        this.windowsPowerShellShimPath ?? defaultWindowsPowerShellShimPath(this.localAppDataPath)
+      const status = await installWindowsPowerShellCliShim({
+        launcherPath,
+        documentsPath,
+        shimPath
+      })
+      if (status !== 'installed') {
+        console.warn(`[cli] left the Windows PowerShell profile unchanged (${status})`)
+      }
+    } catch (error) {
+      console.warn(
+        '[cli] failed to refresh the Windows PowerShell UTF-8 shim:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  }
+
+  private async removeWindowsPowerShellCliProfile(): Promise<void> {
+    if (!this.syncWindowsPowerShellProfile || this.platform !== 'win32') {
+      return
+    }
+    try {
+      const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())
+      const shimPath =
+        this.windowsPowerShellShimPath ?? defaultWindowsPowerShellShimPath(this.localAppDataPath)
+      await removeWindowsPowerShellCliShim({ documentsPath, shimPath })
+    } catch (error) {
+      console.warn(
+        '[cli] failed to remove the Windows PowerShell UTF-8 shim:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
   }
 
   private async removeLinuxAppImagePayloads(): Promise<void> {
