@@ -1,4 +1,5 @@
 import type { CustomSttEndpointReachability } from '../../shared/speech-types'
+import { resolveCustomSttTranscriptionUrl } from './custom-stt-endpoint-store'
 
 export type CustomSttModelDiscoveryResult = {
   ok: boolean
@@ -10,6 +11,7 @@ export type CustomSttModelDiscoveryResult = {
 }
 
 const DISCOVERY_TIMEOUT_MS = 6_000
+const ROUTE_TIMEOUT_MS = 8_000
 const MAX_MODELS = 200
 
 export type CustomSttModelDiscoveryInput = {
@@ -18,13 +20,19 @@ export type CustomSttModelDiscoveryInput = {
 }
 
 /**
- * Best-effort discovery of the models an OpenAI-compatible endpoint accepts.
+ * Probe an OpenAI-compatible endpoint: does it answer, and what models does it
+ * advertise?
  *
- * There is no single standard: OpenAI itself exposes `GET /v1/models`
- * (`{ data: [{ id }] }`), while leaner self-hosted servers often only expose a
- * health document with a `supportedModels` array. Try the standard first, then
- * the common fallbacks, and return an empty list rather than failing — the model
- * field stays free text, so a miss only costs the suggestions.
+ * Reachability is judged by the **actual transcription route**, not a health or
+ * models endpoint. That distinction matters: a base URL missing its `/v1` segment
+ * still answers `/health` with 200, so a health probe would show a green tick for
+ * a URL whose `/audio/transcriptions` path is a 404. A `POST` with no audio file
+ * to the resolved transcription URL is the cheapest reliable check — the route
+ * exists if the server answers with anything other than 404.
+ *
+ * Model discovery is a separate best-effort GET: `GET /v1/models` (OpenAI),
+ * then a health document's `supportedModels` (faster-whisper workers), then
+ * `GET /models`. A miss only costs the suggestions.
  */
 export async function discoverCustomSttModels(
   input: CustomSttModelDiscoveryInput
@@ -39,48 +47,78 @@ export async function discoverCustomSttModels(
     }
   }
 
-  // Why: a base URL may already name the transcription path or the version segment;
-  // derive a root so `/v1/models`, `/health` and `/models` all resolve.
-  const root = base.replace(/\/audio\/transcriptions$/i, '').replace(/\/v1$/i, '')
+  const apiKey = input.apiKey ?? null
+  const reachability = await probeTranscriptionRoute(base, apiKey)
+  const discovery = await findModelList(base, apiKey)
 
+  return {
+    ok: discovery.models.length > 0,
+    models: discovery.models,
+    reachability,
+    ...(discovery.source ? { source: discovery.source } : {}),
+    ...(discovery.detail ? { detail: discovery.detail } : {})
+  }
+}
+
+/**
+ * POST to the transcription URL with no audio. A 404 means the path does not
+ * exist (wrong base URL); anything else — 200, 400, 401, 403, 405, 422 — proves
+ * the route is there. A transport error means we never reached the server.
+ */
+async function probeTranscriptionRoute(
+  baseUrl: string,
+  apiKey: string | null
+): Promise<CustomSttEndpointReachability> {
+  const url = resolveCustomSttTranscriptionUrl(baseUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), ROUTE_TIMEOUT_MS)
+  try {
+    const form = new FormData()
+    form.append('response_format', 'json')
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+      body: form,
+      signal: controller.signal
+    })
+    // Why: an unknown path is the one signal that the URL is wrong; every other
+    // status (including auth rejections and missing-file errors) means the route
+    // is served and the URL is usable.
+    return response.status === 404 ? 'unreachable' : 'reachable'
+  } catch {
+    return 'unreachable'
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function findModelList(
+  baseUrl: string,
+  apiKey: string | null
+): Promise<{
+  models: string[]
+  source?: CustomSttModelDiscoveryResult['source']
+  detail?: string
+}> {
+  // A base URL may already name the transcription path or the version segment;
+  // derive a root so `/v1/models`, `/health` and `/models` all resolve.
+  const root = baseUrl.replace(/\/audio\/transcriptions$/i, '').replace(/\/v1$/i, '')
   const candidates: { url: string; source: CustomSttModelDiscoveryResult['source'] }[] = [
     { url: `${root}/v1/models`, source: 'openai-models' },
     { url: `${root}/health`, source: 'health' },
     { url: `${root}/models`, source: 'models' }
   ]
 
-  let sawResponse = false
   for (const candidate of candidates) {
-    const probe = await tryFetchModels(candidate.url, input.apiKey ?? null)
-    if (probe.responded) {
-      // Why: any HTTP response — including 401/403 — proves the endpoint is there.
-      // A token-protected server is "reachable, needs a key", not "broken".
-      sawResponse = true
-    }
-    if (probe.models && probe.models.length > 0) {
-      return {
-        ok: true,
-        models: probe.models,
-        reachability: 'reachable',
-        source: candidate.source
-      }
+    const models = await tryFetchModels(candidate.url, apiKey)
+    if (models && models.length > 0) {
+      return { models, source: candidate.source }
     }
   }
-
-  return {
-    ok: false,
-    models: [],
-    reachability: sawResponse ? 'reachable' : 'unreachable',
-    detail: sawResponse
-      ? 'Endpoint reachable, but it did not advertise a model list.'
-      : 'No model list found on this endpoint.'
-  }
+  return { models: [], detail: 'No model list found on this endpoint.' }
 }
 
-async function tryFetchModels(
-  url: string,
-  apiKey: string | null
-): Promise<{ responded: boolean; models: string[] | null }> {
+async function tryFetchModels(url: string, apiKey: string | null): Promise<string[] | null> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT_MS)
   try {
@@ -89,10 +127,13 @@ async function tryFetchModels(
       headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
       signal: controller.signal
     })
+    if (!response.ok) {
+      return null
+    }
     const data = (await response.json().catch(() => null)) as unknown
-    return { responded: true, models: response.ok ? extractModelIds(data) : null }
+    return extractModelIds(data)
   } catch {
-    return { responded: false, models: null }
+    return null
   } finally {
     clearTimeout(timeout)
   }

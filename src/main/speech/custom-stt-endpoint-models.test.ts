@@ -1,10 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { resolveUrlMock } = vi.hoisted(() => ({
+  resolveUrlMock: (baseUrl: string) => `${baseUrl}/audio/transcriptions`
+}))
+
+vi.mock('./custom-stt-endpoint-store', () => ({
+  resolveCustomSttTranscriptionUrl: resolveUrlMock
+}))
+
 import { discoverCustomSttModels } from './custom-stt-endpoint-models'
 
-describe('discoverCustomSttModels', () => {
-  const fetchMock = vi.fn()
+const fetchMock = vi.fn()
 
+/** The probe is a POST; model discovery is a GET. Route mocks by method. */
+function mockByMethod(handler: (url: string, method: string) => Response): void {
+  fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+    Promise.resolve(handler(url, init?.method ?? 'GET'))
+  )
+}
+
+describe('discoverCustomSttModels', () => {
   beforeEach(() => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
@@ -21,83 +36,98 @@ describe('discoverCustomSttModels', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('reads the OpenAI /v1/models shape first', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: [{ id: 'large-v3' }, { id: 'small' }] }), {
-        status: 200
-      })
+  it('is reachable when the transcription route answers (non-404)', async () => {
+    mockByMethod((_url, method) =>
+      method === 'POST'
+        ? new Response('missing file', { status: 422 })
+        : new Response(JSON.stringify({ data: [{ id: 'large-v3' }] }), { status: 200 })
     )
-
-    const result = await discoverCustomSttModels({ baseUrl: 'http://h:1/v1' })
-
-    expect(result.ok).toBe(true)
-    expect(result.models).toEqual(['large-v3', 'small'])
-    expect(result.source).toBe('openai-models')
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://h:1/v1/models')
-  })
-
-  it('falls back to a health document with supportedModels', async () => {
-    fetchMock
-      .mockResolvedValueOnce(new Response('not found', { status: 404 }))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ supportedModels: ['large-v3', 'base'] }), { status: 200 })
-      )
 
     const result = await discoverCustomSttModels({ baseUrl: 'http://h:8090/v1' })
 
-    expect(result.ok).toBe(true)
-    expect(result.models).toEqual(['large-v3', 'base'])
-    expect(result.source).toBe('health')
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('http://h:8090/health')
-  })
-
-  it('derives the root even when the base names the transcription path', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: [{ id: 'whisper-1' }] }), { status: 200 })
-    )
-
-    await discoverCustomSttModels({ baseUrl: 'http://h:1/v1/audio/transcriptions' })
-
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://h:1/v1/models')
-  })
-
-  it('attaches the bearer token when provided', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: [{ id: 'x' }] }), { status: 200 })
-    )
-
-    await discoverCustomSttModels({ baseUrl: 'http://h:1/v1', apiKey: 'secret' })
-
-    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret')
-  })
-
-  it('reports reachable-but-empty when the server answers without a list', async () => {
-    fetchMock.mockResolvedValue(new Response('nope', { status: 404 }))
-
-    const result = await discoverCustomSttModels({ baseUrl: 'http://h:1/v1' })
-
-    expect(result.ok).toBe(false)
-    expect(result.models).toEqual([])
     expect(result.reachability).toBe('reachable')
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(result.models).toEqual(['large-v3'])
+    expect(result.ok).toBe(true)
   })
 
-  it('treats a 401 as reachable (server exists, needs a token)', async () => {
-    fetchMock.mockResolvedValue(new Response('unauthorized', { status: 401 }))
+  it('is unreachable when the transcription route 404s (e.g. a missing /v1)', async () => {
+    // The regression: /health answers 200 but the real path is a 404.
+    mockByMethod((_url, method) => {
+      if (method === 'POST') {
+        return new Response('not found', { status: 404 })
+      }
+      return new Response('not found', { status: 404 })
+    })
+
+    const result = await discoverCustomSttModels({ baseUrl: 'http://h:8090' })
+
+    expect(result.reachability).toBe('unreachable')
+    expect(result.ok).toBe(false)
+  })
+
+  it('treats a 401 from the route as reachable (URL right, token missing)', async () => {
+    mockByMethod((_url, method) =>
+      method === 'POST'
+        ? new Response('unauthorized', { status: 401 })
+        : new Response('{}', { status: 404 })
+    )
 
     const result = await discoverCustomSttModels({ baseUrl: 'https://api.groq.com/openai/v1' })
 
     expect(result.reachability).toBe('reachable')
-    expect(result.models).toEqual([])
   })
 
-  it('reports unreachable when every candidate fails at the transport level', async () => {
+  it('is unreachable on a transport failure', async () => {
     fetchMock.mockRejectedValue(new TypeError('fetch failed'))
 
     const result = await discoverCustomSttModels({ baseUrl: 'http://127.0.0.1:9999/v1' })
 
-    expect(result.ok).toBe(false)
     expect(result.reachability).toBe('unreachable')
+  })
+
+  it('reads the OpenAI /v1/models shape during discovery', async () => {
+    mockByMethod((_url, method) => {
+      if (method === 'POST') {
+        return new Response('', { status: 200 })
+      }
+      return new Response(JSON.stringify({ data: [{ id: 'large-v3' }, { id: 'small' }] }), {
+        status: 200
+      })
+    })
+
+    const result = await discoverCustomSttModels({ baseUrl: 'http://h:1/v1' })
+
+    expect(result.models).toEqual(['large-v3', 'small'])
+    expect(result.source).toBe('openai-models')
+  })
+
+  it('falls back to a health document with supportedModels', async () => {
+    mockByMethod((url, method) => {
+      if (method === 'POST') {
+        return new Response('', { status: 200 })
+      }
+      if (url.endsWith('/v1/models')) {
+        return new Response('nope', { status: 404 })
+      }
+      return new Response(JSON.stringify({ supportedModels: ['large-v3', 'base'] }), {
+        status: 200
+      })
+    })
+
+    const result = await discoverCustomSttModels({ baseUrl: 'http://h:8090/v1' })
+
+    expect(result.models).toEqual(['large-v3', 'base'])
+    expect(result.source).toBe('health')
+  })
+
+  it('attaches the bearer token to the probe and discovery requests', async () => {
+    mockByMethod(() => new Response(JSON.stringify({ data: [{ id: 'x' }] }), { status: 200 }))
+
+    await discoverCustomSttModels({ baseUrl: 'http://h:1/v1', apiKey: 'secret' })
+
+    for (const call of fetchMock.mock.calls) {
+      const init = call[1] as RequestInit
+      expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret')
+    }
   })
 })
