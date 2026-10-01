@@ -6,10 +6,7 @@ import {
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
-import type {
-  RuntimeLeafRecord,
-  RuntimePtyWorktreeRecord
-} from './runtime-terminal-state-records'
+import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
 function projectTitle(args: {
   customTitle?: string
