@@ -2,6 +2,7 @@ import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
 import type { TerminalInputSource } from './terminal-input-admission'
+import { terminalInterruptBytes } from '../../shared/terminal-interrupt-bytes'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import {
   WRITE_ACCEPTED,
@@ -34,7 +35,8 @@ export class RuntimeTerminalWriter {
       data: string,
       inputKind: TerminalInputKind
     ) => WriteSettlement | Promise<WriteSettlement>,
-    private readonly claimIdleShellPrompt: (ptyId: string) => Promise<boolean> = async () => false
+    private readonly claimIdleShellPrompt: (ptyId: string) => Promise<boolean> = async () => false,
+    private readonly getKittyKeyboardFlags: (ptyId: string) => number = () => 0
   ) {}
 
   async writeAction(
@@ -82,7 +84,10 @@ export class RuntimeTerminalWriter {
       }
     }
     if (hasSuffix) {
-      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
+      const interrupt = action.interrupt
+        ? terminalInterruptBytes(this.getKittyKeyboardFlags(ptyId))
+        : ''
+      const suffix = (action.enter ? '\r' : '') + interrupt
       const claimStartedAt = performance.now()
       // A shell at its prompt reads one line as typed; agent TUIs need the paste to settle.
       if (text && !(isSingleLine(text) && (await this.claimIdleShellPrompt(ptyId)))) {

@@ -322,6 +322,11 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected readonly terminalWaiters = new RuntimeTerminalWaiterRegistry()
 
+  /** `0` until a subclass owns a headless model, so an interrupt stays a bare ETX. */
+  protected readPtyKittyKeyboardFlags(_ptyId: string): number {
+    return 0
+  }
+
   protected readonly terminalWriter = new RuntimeTerminalWriter(
     (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind) ?? false,
     (ptyId) => this.getPtyWriteHostPlatform(ptyId),
@@ -329,7 +334,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     (ptyId, data, inputKind) =>
       this.ptyController?.writeWithSettlement?.(ptyId, data, inputKind) ??
       writeRefused('provider_cannot_settle'),
-    (ptyId) => this.claimIdleShellPromptForPty(ptyId)
+    (ptyId) => this.claimIdleShellPromptForPty(ptyId),
+    (ptyId) => this.readPtyKittyKeyboardFlags(ptyId)
   )
 
   // Every tui-idle site must rank the same pane evidence identically.
