@@ -190,4 +190,29 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
       await page.close()
     }
   })
+
+  it("selects through the browser's own gesture only what native lets the user select", async () => {
+    // A double-click, not a Range: a script can select text a user cannot.
+    const page = await openPage(engine)
+    try {
+      const selectedBy = async (testId) => {
+        await page.evaluate(() => window.getSelection()?.removeAllRanges())
+        await page.dblclick(`[data-testid="${testId}"]`)
+        return page.evaluate(() => window.getSelection()?.toString() ?? '')
+      }
+      expect(await selectedBy('plain-text')).toBe('')
+      // react-native-web's Text/index.js:115 adds `styles.selectable` (`userSelect: 'text'`).
+      expect(await selectedBy('selectable-text')).not.toBe('')
+
+      await page.type('[data-testid="input"]', 'hello world')
+      await page.dblclick('[data-testid="input"]')
+      const selectedInField = await page.evaluate(() => {
+        const input = document.querySelector('[data-testid="input"]')
+        return input.selectionEnd - input.selectionStart
+      })
+      expect(selectedInField).toBeGreaterThan(0)
+    } finally {
+      await page.close()
+    }
+  })
 })

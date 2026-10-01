@@ -30,7 +30,7 @@ import { LAYOUT_SOURCE } from './mobile-web-app-terminal-probe-route.mjs'
  * Held presses on the page. Held ~500 ms, Android WebView turns a touch into a long-press: it fires
  * `contextmenu`, and where text can be selected it starts a selection and then cancels the touch.
  * react-native-web ends a press on all three unless the press refuses `contextmenu` (a Pressable
- * with `onLongPress`), and the page's `#root` style leaves no text to select. Traced on an
+ * with `onLongPress`), and the page's native-parity style leaves no text to select. Traced on an
  * emulator; headless Chromium generates no long-press from CDP touches, so `holdLikeAndroidWebView`
  * plays it.
  */
@@ -139,7 +139,7 @@ async function openProbe(pathname) {
 /**
  * Touch-holds `selector` for `holdMs`, reads `read()` mid-hold, then lifts. At 500 ms it plays
  * Android WebView's long-press: `contextmenu`, then — only where the touch could select text —
- * `selectionchange` and `touchcancel`, which is what the device did before `#root` was unselectable.
+ * `selectionchange` and `touchcancel`, which is what the device did while page text was selectable.
  */
 async function holdLikeAndroidWebView(page, selector, { holdMs, read }) {
   // A handle, not a locator: a label the selector matches can change as soon as the press lands.
@@ -251,6 +251,17 @@ describeRender(
         expect(midHold.selectable).toBe(false)
         // Nothing more once the finger is up.
         expect(afterRelease.sent - midHold.sent).toBeLessThan(3)
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it('selects nothing on a long-press of a tap key', async () => {
+        const { errors, page } = await openProbe(ROUTES.keys)
+        const { midHold } = await holdLikeAndroidWebView(page, `[aria-label="${TAP_KEY_LABEL}"]`, {
+          holdMs: 1000,
+          read: () => page.evaluate(() => ({ selection: window.getSelection()?.toString() ?? '' }))
+        })
+        expect(midHold).toEqual({ selectable: false, selection: '' })
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)
