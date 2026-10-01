@@ -9,8 +9,12 @@ const worktreeId = 'repo::/workspace'
 
 afterEach(() => vi.unstubAllGlobals())
 
-function stubListSessions(impl: (scope?: unknown) => Promise<unknown[]>) {
-  const listSessions = vi.fn(impl)
+function stubListSessions(impl: (scope?: unknown) => Promise<unknown[]>, complete = true) {
+  const listSessions = vi.fn(async (scope?: unknown) => ({
+    sessions: await impl(scope),
+    complete,
+    unverifiable: []
+  }))
   vi.stubGlobal('window', { api: { pty: { listSessions } } })
   return listSessions
 }
@@ -102,7 +106,14 @@ describe('activation inventory census', () => {
     await expect(
       listActivationPtySessions({ repos: [{ id: 'repo', executionHostId: 'ssh:box' }] }, worktreeId)
     ).resolves.toEqual([{ id: 'ssh:box@@pty-1' }])
-    expect(listSessions).toHaveBeenCalledExactlyOnceWith({ connectionId: 'box' })
+    expect(listSessions).toHaveBeenCalledExactlyOnceWith({ connectionId: 'box', worktreeId })
+  })
+
+  it('refuses a partial inventory, which the gate reads as blocked, never as empty', async () => {
+    stubListSessions(async () => [], false)
+    await expect(
+      listActivationPtySessions({ repos: [{ id: 'repo', executionHostId: 'local' }] }, worktreeId)
+    ).rejects.toThrow('a terminal service did not answer')
   })
 
   it('rejects paired ownership without consulting the client inventory', async () => {
@@ -139,7 +150,7 @@ describe('activation inventory census', () => {
     await expect(
       listActivationPtySessions({ repos: [{ id: 'repo', executionHostId: 'ssh:box' }] }, worktreeId)
     ).rejects.toThrow('No PTY provider for connection')
-    expect(detached.mock.calls).toEqual([[{ connectionId: 'box' }]])
+    expect(detached.mock.calls).toEqual([[{ connectionId: 'box', worktreeId }]])
 
     const refused = stubListSessions(async () => {
       throw new Error('relay unavailable')

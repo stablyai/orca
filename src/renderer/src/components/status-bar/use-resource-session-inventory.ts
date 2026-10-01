@@ -12,6 +12,8 @@ import {
 type ResourceSessionInventory = {
   sessionInventory: DaemonSessionInventory
   sessionsError: boolean
+  /** A terminal-service version did not answer, so its sessions are missing from the list. */
+  sessionsPartial: boolean
   refreshSessions: () => Promise<void>
   clearSessionsError: () => void
   removeSession: (sessionId: string) => void
@@ -22,6 +24,7 @@ type ResourceSessionInventoryState = {
   ready: boolean
   sessionInventory: DaemonSessionInventory
   sessionsError: boolean
+  sessionsPartial: boolean
 }
 
 export function useResourceSessionInventory(ready: boolean): ResourceSessionInventory {
@@ -33,7 +36,8 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
   const [storedState, setStoredState] = useState<ResourceSessionInventoryState>(() => ({
     ready,
     sessionInventory: EMPTY_DAEMON_SESSION_INVENTORY,
-    sessionsError: false
+    sessionsError: false,
+    sessionsPartial: false
   }))
   const state =
     storedState.ready === ready
@@ -41,7 +45,8 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
       : {
           ready,
           sessionInventory: EMPTY_DAEMON_SESSION_INVENTORY,
-          sessionsError: false
+          sessionsError: false,
+          sessionsPartial: false
         }
   if (state !== storedState) {
     // Why: readiness changes define a new inventory epoch. Reset during render
@@ -56,7 +61,7 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     const generation = ++refreshGenerationRef.current
     const lifecycleRevision = lifecycleRevisionRef.current
     try {
-      const sessions = await window.api.pty.listSessions()
+      const { sessions, complete } = await window.api.pty.listSessions()
       // Why: an exit or newer refresh can land while the global provider list
       // is in flight; stale results must not resurrect dead sessions.
       if (!mountedRef.current || generation !== refreshGenerationRef.current) {
@@ -77,7 +82,8 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
       setStoredState({
         ready: true,
         sessionInventory: inventoryFromSessions(liveSessions),
-        sessionsError: false
+        sessionsError: false,
+        sessionsPartial: !complete
       })
     } catch {
       if (mountedRef.current && generation === refreshGenerationRef.current) {
@@ -200,6 +206,7 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
   return {
     sessionInventory: state.sessionInventory,
     sessionsError: state.sessionsError,
+    sessionsPartial: state.sessionsPartial,
     refreshSessions,
     clearSessionsError,
     removeSession,

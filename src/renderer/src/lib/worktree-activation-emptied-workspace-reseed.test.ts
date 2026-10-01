@@ -480,7 +480,9 @@ describe('activating a folder workspace whose last terminal was closed', () => {
             }
           }))
         },
-        pty: { listSessions: vi.fn(async () => []) }
+        pty: {
+          listSessions: vi.fn(async () => ({ sessions: [], complete: true, unverifiable: [] }))
+        }
       }
     })
 

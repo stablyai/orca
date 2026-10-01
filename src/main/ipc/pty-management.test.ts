@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSessionInfo } from '../daemon/types'
+import type { DaemonGenerationInventory } from './pty-management'
+import type { DaemonKillAllResult } from './pty-management-kill-all'
 
 // Mirrors DaemonFolderAccessResetResult; declared here so the mock is not typed by the module it
 // replaces.
@@ -144,7 +146,10 @@ function makeSession(
 
 type MockAdapter = {
   protocolVersion: number
-  listSessions: ReturnType<typeof vi.fn>
+  // Why the call signature: readSessions reads through whatever mock a case swapped in.
+  listSessions: ReturnType<typeof vi.fn> & (() => Promise<unknown>)
+  readSessions: ReturnType<typeof vi.fn>
+  hasPty: ReturnType<typeof vi.fn>
   shutdown: ReturnType<typeof vi.fn>
   getDaemonIdentity: ReturnType<typeof vi.fn>
 }
@@ -158,12 +163,28 @@ function makeAdapter(
   // and then annotates with adapter.protocolVersion. The mock returns the
   // *internal* SessionInfo shape (no protocolVersion) since the adapter adds
   // it. Stripping it here mirrors production behavior.
-  return {
+  const adapter: MockAdapter = {
     protocolVersion,
     listSessions: vi.fn(async () => sessions.map(({ protocolVersion: _pv, ...rest }) => rest)),
+    // Why late-bound: tests swap listSessions, and the listing reads through it like the real one.
+    readSessions: vi.fn(async () => ({
+      contact: 'live' as const,
+      items: await adapter.listSessions()
+    })),
+    hasPty: vi.fn(() => false),
     shutdown: vi.fn(shutdownImpl ?? (async () => {})),
     getDaemonIdentity: vi.fn(() => ({ pid: 1530, startedAtMs: 1_700_000, launchNonce: 'n1' }))
   }
+  return adapter
+}
+
+type ListSessionsReply = { generations: DaemonGenerationInventory[]; degraded: boolean }
+
+// Why: `vi.fn()` erases the handler's declared return type, so the channel's own contract is the
+// only thing that can restore it. One reader keeps that restatement in a single place.
+async function invokeListSessions(handlers: HandlerMap): Promise<ListSessionsReply> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registerDaemonManagementHandlers declares this channel's resolved shape as ListSessionsReply; the mock only erases it.
+  return (await handlers['pty:management:listSessions']({})) as ListSessionsReply
 }
 
 async function importFresh() {
@@ -211,17 +232,21 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:listSessions']({})) as {
-        sessions: DaemonSessionInfo[]
-        degraded: boolean
-      }
+      const result = await invokeListSessions(handlers)
 
-      expect(result.sessions).toHaveLength(3)
+      const listed = result.generations.flatMap((g) => (g.contact === 'live' ? g.sessions : []))
+      expect(listed).toHaveLength(3)
       expect(result.degraded).toBe(false)
-      const byId = new Map(result.sessions.map((s) => [s.sessionId, s]))
+      const byId = new Map(listed.map((s) => [s.sessionId, s]))
       expect(byId.get('new-1')?.protocolVersion).toBe(5)
       expect(byId.get('new-2')?.protocolVersion).toBe(5)
       expect(byId.get('old-1')?.protocolVersion).toBe(3)
+      // The current adapter is the one the router routes fresh spawns to, and it is the only
+      // generation a user should read as current.
+      expect(result.generations.map((g) => [g.protocolVersion, g.isCurrent])).toEqual([
+        [5, true],
+        [3, false]
+      ])
     })
 
     it('reports degraded mode and still lists sessions when the daemon cannot spawn fresh PTYs', async () => {
@@ -231,13 +256,14 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:listSessions']({})) as {
-        sessions: DaemonSessionInfo[]
-        degraded: boolean
-      }
+      const result = await invokeListSessions(handlers)
 
       expect(result.degraded).toBe(true)
-      expect(result.sessions.map((s) => s.sessionId)).toEqual(['preserved-1'])
+      expect(
+        result.generations
+          .flatMap((g) => (g.contact === 'live' ? g.sessions : []))
+          .map((s) => s.sessionId)
+      ).toEqual(['preserved-1'])
     })
 
     it('clears degraded mode after durable fresh-spawn routing recovers', async () => {
@@ -260,14 +286,12 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:listSessions']({})) as {
-        sessions: DaemonSessionInfo[]
-      }
+      const result = await invokeListSessions(handlers)
 
-      expect(result.sessions).toEqual([])
+      expect(result.generations).toEqual([])
     })
 
-    it('tolerates a failing adapter by skipping its sessions', async () => {
+    it('reports a generation whose listing failed as unverifiable, never as absent', async () => {
       const current = makeAdapter(5, [makeSession('new-1')])
       const legacy = makeAdapter(3, [])
       legacy.listSessions = vi.fn(async () => {
@@ -278,12 +302,94 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:listSessions']({})) as {
-        sessions: DaemonSessionInfo[]
-      }
+      const result = await invokeListSessions(handlers)
 
-      expect(result.sessions).toHaveLength(1)
-      expect(result.sessions[0].sessionId).toBe('new-1')
+      const byVersion = new Map(result.generations.map((g) => [g.protocolVersion, g]))
+      expect(byVersion.get(3)?.contact).toBe('unverifiable')
+      expect(byVersion.get(5)?.contact).toBe('live')
+    })
+
+    it('never reports an unreachable generation as exited or as zero sessions', async () => {
+      const current = makeAdapter(5, [makeSession('new-1')])
+      const legacy = makeAdapter(3, [])
+      legacy.listSessions = vi.fn(async () => {
+        throw new Error('legacy socket dead')
+      })
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await invokeListSessions(handlers)
+
+      const unreachable = result.generations.find((g) => g.protocolVersion === 3)
+      expect(unreachable).toMatchObject({ contact: 'unverifiable', reason: 'listing-failed' })
+      // A generation we could not reach owns no session list at all: an empty
+      // array would read as a counted zero (docs/reference/ssh-execution-boundary.md).
+      expect(unreachable).not.toHaveProperty('sessions')
+      expect(JSON.stringify(unreachable)).not.toContain('exited')
+    })
+
+    it('lists the current version within the deadline while a previous version is frozen', async () => {
+      vi.useFakeTimers()
+      try {
+        const current = makeAdapter(5, [makeSession('new-1')])
+        const legacy = makeAdapter(3, [])
+        legacy.readSessions = vi.fn(() => new Promise(() => {}))
+        const { registerDaemonManagementHandlers } = await importFresh()
+        getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+        registerDaemonManagementHandlers()
+
+        const reply = invokeListSessions(buildHandlerMap())
+        await vi.advanceTimersByTimeAsync(3_000)
+        const result = await reply
+
+        expect(result.generations.map((g) => [g.protocolVersion, g.contact])).toEqual([
+          [5, 'live'],
+          [3, 'unverifiable']
+        ])
+        // The cap bounds only the previous version; the current one is never capped.
+        expect(current.readSessions).toHaveBeenCalledWith(undefined)
+        expect(legacy.readSessions).toHaveBeenCalledWith({ deadlineMs: expect.any(Number) })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('reports a previous version whose daemon is proven gone as exited, not as live and empty', async () => {
+      const current = makeAdapter(5, [makeSession('new-1')])
+      const legacy = makeAdapter(3, [])
+      legacy.readSessions = vi.fn(async () => ({ contact: 'exited' as const }))
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const result = await invokeListSessions(buildHandlerMap())
+
+      expect(result.generations.find((g) => g.protocolVersion === 3)).toEqual({
+        protocolVersion: 3,
+        isCurrent: false,
+        contact: 'exited'
+      })
+    })
+
+    it('keeps a reachable generation listable while a sibling generation is unverifiable', async () => {
+      const current = makeAdapter(5, [makeSession('new-1')])
+      const legacy = makeAdapter(3, [])
+      legacy.listSessions = vi.fn(async () => {
+        throw new Error('legacy socket dead')
+      })
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await invokeListSessions(handlers)
+
+      const live = result.generations.find((g) => g.contact === 'live')
+      expect(live?.contact === 'live' ? live.sessions.map((s) => s.sessionId) : []).toEqual([
+        'new-1'
+      ])
     })
   })
 
@@ -302,12 +408,9 @@ describe('pty:management IPC handlers', () => {
     async function runKillAllWithPolls(
       handler: (event: unknown, args?: unknown) => unknown,
       pollCount: number = 65
-    ): Promise<{ killedCount: number; remainingCount: number; killedSessionIds: string[] }> {
-      const resultPromise = handler({}) as Promise<{
-        killedCount: number
-        remainingCount: number
-        killedSessionIds: string[]
-      }>
+    ): Promise<DaemonKillAllResult> {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the killAll handler resolves DaemonKillAllResult; the mock map erases it.
+      const resultPromise = handler({}) as Promise<DaemonKillAllResult>
       // Why: advance the loop's sleeps one at a time. Between each sleep the
       // handler awaits collectSessions (a microtask), so we need to flush
       // pending microtasks before advancing the next timer.
@@ -355,6 +458,8 @@ describe('pty:management IPC handlers', () => {
       expect(result).toEqual({
         killedCount: 3,
         remainingCount: 0,
+        unverifiedCount: 0,
+        unreachedVersionCount: 0,
         killedSessionIds: ['new-1', 'new-2', 'old-1']
       })
       // Each initial session receives exactly one shutdown — no retries.
@@ -383,7 +488,13 @@ describe('pty:management IPC handlers', () => {
       const handlers = buildHandlerMap()
       const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
 
-      expect(result).toEqual({ killedCount: 0, remainingCount: 1, killedSessionIds: [] })
+      expect(result).toEqual({
+        killedCount: 0,
+        remainingCount: 1,
+        unverifiedCount: 0,
+        unreachedVersionCount: 0,
+        killedSessionIds: []
+      })
       // One shutdown fired — no per-session retry. Initial-snapshot
       // accounting means the stuck session is counted once.
       expect(current.shutdown).toHaveBeenCalledTimes(1)
@@ -420,6 +531,8 @@ describe('pty:management IPC handlers', () => {
       expect(result).toEqual({
         killedCount: 2,
         remainingCount: 0,
+        unverifiedCount: 0,
+        unreachedVersionCount: 0,
         killedSessionIds: ['a', 'b']
       })
     })
@@ -458,6 +571,8 @@ describe('pty:management IPC handlers', () => {
       expect(result).toEqual({
         killedCount: 1,
         remainingCount: 1,
+        unverifiedCount: 0,
+        unreachedVersionCount: 0,
         killedSessionIds: ['b']
       })
     })
@@ -468,10 +583,13 @@ describe('pty:management IPC handlers', () => {
       sessionId: string
       protocolVersion: number
       incarnationId?: string
-    }): Promise<{ success: boolean }> {
+    }): Promise<{ success: boolean; reason?: string }> {
       const handlers = buildHandlerMap()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler map is untyped by construction; this channel's handler is the one registered above.
-      return (await handlers['pty:management:killOne']({}, args)) as { success: boolean }
+      return (await handlers['pty:management:killOne']({}, args)) as {
+        success: boolean
+        reason?: string
+      }
     }
 
     it('routes to the adapter whose protocolVersion owns the session', async () => {
@@ -522,6 +640,22 @@ describe('pty:management IPC handlers', () => {
 
       expect(result.success).toBe(false)
       expect(current.shutdown).not.toHaveBeenCalled()
+    })
+
+    it('reports lost contact with the version as unverifiable, not as already gone', async () => {
+      const current = makeAdapter(5, [makeSession('new-1')])
+      const legacy = makeAdapter(3, [makeSession('old-1', { protocolVersion: 3 })])
+      legacy.readSessions = vi.fn(async () => {
+        throw new Error('Request listSessions timed out')
+      })
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const result = await killOne({ sessionId: 'old-1', protocolVersion: 3 })
+
+      expect(result).toEqual({ success: false, reason: 'unverifiable' })
+      expect(legacy.shutdown).not.toHaveBeenCalled()
     })
 
     it('returns success=false for unknown sessionId', async () => {

@@ -576,7 +576,9 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
         pty: {
           kill: vi.fn(),
           signal: vi.fn(),
-          listSessions: vi.fn().mockResolvedValue([]),
+          listSessions: vi
+            .fn()
+            .mockResolvedValue({ sessions: [], complete: true, unverifiable: [] }),
           hasPty: vi.fn().mockResolvedValue(true),
           getSize: vi.fn().mockResolvedValue(null),
           reportGeometry: vi.fn(),

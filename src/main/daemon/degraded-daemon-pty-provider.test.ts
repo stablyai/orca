@@ -126,8 +126,14 @@ function createDaemonAdapter(
   label: string,
   sessions: string[] = []
 ): DaemonPtyAdapter & ProviderMock {
+  const provider = createProvider(label, sessions, true)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the degraded provider reads only the adapter members this double implements.
   return {
-    ...createProvider(label, sessions, true),
+    ...provider,
+    readProcesses: vi.fn(async () => ({
+      contact: 'live' as const,
+      items: await provider.listProcesses()
+    })),
     protocolVersion: 13,
     supportsGitCredentialGuardHost: vi.fn(() => true),
     canProvideAuthoritativeBufferSnapshot: vi.fn(() => true),

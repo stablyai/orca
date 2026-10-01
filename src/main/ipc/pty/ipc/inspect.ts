@@ -6,7 +6,15 @@ import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
 } from '../../../providers/pty-process-list-admission'
-import type { PtyListedSession, PtySessionListScope } from '../../../../shared/pty-listed-session'
+import type {
+  PtyListedSession,
+  PtySessionListing,
+  PtySessionListScope
+} from '../../../../shared/pty-listed-session'
+import { listAnsweredProcesses } from '../../../providers/pty-process-source-listing'
+import { USER_FACING_DAEMON_LISTING_TIMEOUT_MS } from '../../../daemon/daemon-generation-listing'
+import { worktreeEvidenceScope } from '../../../runtime/worktree-persisted-pane-sessions'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { ptyOwnership } from '../provider/ownership-state'
 import {
   getProviderForPty,
@@ -27,6 +35,8 @@ import {
 
 export function installPtyInspectIpcHandlers(deps: {
   getLocalPtyProviderStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
+  /** The local workspace session, for the saved tab bindings a scoped listing weighs as evidence. */
+  getWorkspaceSession?: () => WorkspaceSessionState | undefined
 }): void {
   const ipcMain = getPtyIpc()
   const { getLocalPtyProviderStartupPromise } = deps
@@ -43,12 +53,13 @@ export function installPtyInspectIpcHandlers(deps: {
 
   ipcMain.handle(
     'pty:listSessions',
-    async (_event, scope?: PtySessionListScope): Promise<PtyListedSession[]> => {
+    async (_event, scope?: PtySessionListScope): Promise<PtySessionListing> => {
       if (scope !== undefined) {
         if (
           !scope ||
           (scope.connectionId !== null &&
-            (typeof scope.connectionId !== 'string' || !scope.connectionId.trim()))
+            (typeof scope.connectionId !== 'string' || !scope.connectionId.trim())) ||
+          (scope.worktreeId !== undefined && typeof scope.worktreeId !== 'string')
         ) {
           throw new Error('invalid_pty_session_list_scope')
         }
@@ -59,14 +70,23 @@ export function installPtyInspectIpcHandlers(deps: {
       }
       const deduped = new Map<string, PtyListedSession>()
       const admission = new PtyProcessListAdmission()
+      const unverifiable: PtySessionListing['unverifiable'] = []
       await visitPtyProcessListingsInBatches(
         scope === undefined
           ? registeredPtyProviders()
           : [{ provider: getProvider(scope.connectionId), connectionId: scope.connectionId }],
         ({ provider, connectionId }) =>
-          connectionId === null || scope !== undefined
-            ? provider.listProcesses()
-            : provider.listProcesses().catch(() => []),
+          // Why per source for the local provider: one silent daemon version must not hide the rest.
+          connectionId === null
+            ? listAnsweredProcesses(
+                provider,
+                (source) => unverifiable.push(source),
+                Date.now() + USER_FACING_DAEMON_LISTING_TIMEOUT_MS,
+                worktreeEvidenceScope(deps.getWorkspaceSession?.(), scope?.worktreeId)
+              )
+            : scope !== undefined
+              ? provider.listProcesses()
+              : provider.listProcesses().catch(() => []),
         ({ provider, connectionId }, sessions) => {
           for (const rawSession of sessions) {
             const session = admission.admit(rawSession)
@@ -90,7 +110,11 @@ export function installPtyInspectIpcHandlers(deps: {
           }
         }
       )
-      return Array.from(deduped.values())
+      return {
+        sessions: Array.from(deduped.values()),
+        complete: unverifiable.length === 0,
+        unverifiable
+      }
     }
   )
 

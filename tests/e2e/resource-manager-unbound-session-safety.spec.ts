@@ -103,8 +103,8 @@ test.describe('Resource Manager unbound-session safety', () => {
       await waitForPaneCount(firstLaunch.page, 1, 30_000)
       const ptyId = await discoverActivePtyId(firstLaunch.page)
 
-      const firstLaunchSessions = await firstLaunch.page.evaluate(async () =>
-        window.api.pty.listSessions()
+      const firstLaunchSessions = await firstLaunch.page.evaluate(
+        async () => (await window.api.pty.listSessions()).sessions
       )
       expect(firstLaunchSessions.some((s) => s.id === ptyId)).toBe(true)
 
@@ -122,7 +122,7 @@ test.describe('Resource Manager unbound-session safety', () => {
         .poll(
           async () =>
             secondLaunch.page.evaluate(async (expected: string) => {
-              const sessions = await window.api.pty.listSessions()
+              const { sessions } = await window.api.pty.listSessions()
               return sessions.some((s) => s.id === expected)
             }, ptyId),
           {
@@ -154,7 +154,7 @@ test.describe('Resource Manager unbound-session safety', () => {
       // structured-clone drop or preload contract mismatch would surface here as undefined.
       // Asserting the exact arm matters — a stub returning a constant would satisfy a typeof check.
       const ownership = await secondLaunch.page.evaluate(async (expected: string) => {
-        const sessions = await window.api.pty.listSessions()
+        const { sessions } = await window.api.pty.listSessions()
         return sessions.filter((s) => s.id === expected).map((s) => s.agentOwnership)
       }, ptyId)
       expect(

@@ -34,13 +34,19 @@ describe('closing a terminal after observing its physical exit', () => {
     expect(result.settled.exitListenerCalls).toBe(1)
   })
 
-  it('does not treat target absence as an earned exit before the stream delivers it', async () => {
+  it('confirms the stop with the daemon that owned it while an unrelated daemon is unavailable', async () => {
     const result = await runObservedExitSocketScenario('unrelated-endpoint-gone')
-    expect(result.close).toEqual({ ptyKilled: false, ptyStopVerdict: 'unverifiable' })
-    expect(result.fallbackKills).toBe(1)
+    expect(result.close).toEqual({ ptyKilled: true, ptyStopVerdict: null })
+    expect(result.fallbackKills).toBe(0)
     expect(result.targetProbe).toBe(false)
+    // The merged census still cannot say; only the owner's answer confirmed the stop.
     expect(result.routerProbe).toBeNull()
     expect(result.beforeStreamResume.providerExitCount).toBe(0)
+    expect(result.settled).toMatchObject({
+      exitCause: { kind: 'operator_close' },
+      rendererExitCount: 1,
+      exitListenerCalls: 1
+    })
   })
 
   it('uses a stamped exit for the incarnation that was actually being closed', async () => {

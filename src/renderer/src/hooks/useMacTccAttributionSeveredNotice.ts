@@ -11,7 +11,7 @@ import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import { translate } from '@/i18n/i18n'
 import { track } from '@/lib/telemetry'
 import { resolveUiLocale } from '@/i18n/supported-languages'
-import { MANAGE_SESSIONS_SECTION_ID } from '@/components/settings/TerminalTccAttributionNotice'
+import { openManageSessions as openManageSessionsSection } from '@/components/settings/open-manage-sessions'
 import { macFolderAccessFolderName } from '@/components/shared/mac-folder-access-folder-name'
 import {
   FOLDER_ACCESS_MISMATCH_NOTICE_ID,
@@ -56,15 +56,8 @@ export function useMacTccAttributionSeveredNotice(): void {
       return
     }
 
-    const openManageSessions = (): void => {
-      setSettingsSearchQuery('')
-      openSettingsTarget({
-        pane: 'terminal',
-        repoId: null,
-        sectionId: MANAGE_SESSIONS_SECTION_ID
-      })
-      openSettingsPage()
-    }
+    const openManageSessions = (): void =>
+      openManageSessionsSection({ setSettingsSearchQuery, openSettingsTarget, openSettingsPage })
 
     const applySeveredNotice = (health: PtyManagementMacTccAttributionHealth): void => {
       if (health !== 'severed') {

@@ -80,7 +80,7 @@ async function readSnapshot(
       if (!tab || ptyIds.length !== 1) {
         throw new Error(`Expected one PTY for restored WSL tab ${tabId}`)
       }
-      const sessions = await window.api.pty.listSessions()
+      const { sessions } = await window.api.pty.listSessions()
       const ownedSession = sessions.find((session) => session.id === ptyIds[0])
       if (!ownedSession) {
         throw new Error(`WSL PTY ${ptyIds[0]} was absent from provider inventory`)

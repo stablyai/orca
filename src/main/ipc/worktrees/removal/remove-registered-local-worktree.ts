@@ -104,6 +104,7 @@ export async function removeRegisteredLocalWorktree(
   }
 
   let removalResult: RemoveWorktreeResult | undefined
+  let unchecked: Pick<RemoveWorktreeResult, 'uncheckedTerminalServices'> = {}
   const removalGate = await withWorktreeRemoveStageSpan('watcher_gate', 'local', async () =>
     runtime.acquireFileWatcherRemoval(canonicalWorktreePath)
   )
@@ -112,8 +113,9 @@ export async function removeRegisteredLocalWorktree(
     // Why: hold the watcher/terminal gate through Git and any recursive fallback so no late spawn recreates a native handle.
     // Linked-path deletion is destructive too, so PTYs must release every handle before Windows or WSL filesystem cleanup starts.
     await withWorktreeRemoveStageSpan('pty_sweep', 'local', async () => {
-      await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
-        allowUnverifiedStop: args.allowUnverifiedPtyStop
+      unchecked = await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
+        allowUnverifiedStop: args.allowUnverifiedPtyStop,
+        store
       })
     })
 
@@ -189,7 +191,7 @@ export async function removeRegisteredLocalWorktree(
         invalidateAuthorizedRootsCache()
         notifyWorktreesChanged(mainWindow, repoId)
         removalCompleted = true
-        return {}
+        return unchecked
       } else {
         throw new Error(
           formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
@@ -230,5 +232,5 @@ export async function removeRegisteredLocalWorktree(
   })
 
   notifyWorktreesChanged(mainWindow, repoId)
-  return removalResult ?? {}
+  return { ...removalResult, ...unchecked }
 }

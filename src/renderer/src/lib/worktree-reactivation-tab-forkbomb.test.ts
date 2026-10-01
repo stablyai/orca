@@ -142,14 +142,18 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
           )
         },
         pty: {
-          listSessions: vi.fn(async () => [
-            {
-              id: livePtyId,
-              cwd: worktree.path,
-              title: 'Codex',
-              agentOwnership: 'present' as const
-            }
-          ])
+          listSessions: vi.fn(async () => ({
+            complete: true,
+            unverifiable: [],
+            sessions: [
+              {
+                id: livePtyId,
+                cwd: worktree.path,
+                title: 'Codex',
+                agentOwnership: 'present' as const
+              }
+            ]
+          }))
         }
       }
     })
@@ -181,7 +185,9 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
         runtime: {
           call: vi.fn(async () => ({ ok: true, result: emptySessionTabsSnapshot(worktree.id) }))
         },
-        pty: { listSessions: vi.fn(async () => []) }
+        pty: {
+          listSessions: vi.fn(async () => ({ sessions: [], complete: true, unverifiable: [] }))
+        }
       }
     })
     const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }

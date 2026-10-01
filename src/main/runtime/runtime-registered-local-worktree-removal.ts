@@ -42,7 +42,7 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   allowUnverifiedPtyStop: boolean
   deleteBranch: boolean
   acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
-  stopPtys: () => Promise<void>
+  stopPtys: () => Promise<Pick<RemoveWorktreeResult, 'uncheckedTerminalServices'>>
   closeWatchers: (path: string) => Promise<void>
   preserveBranchHead: (
     result: RemoveWorktreeResult | undefined,
@@ -122,10 +122,11 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   }
 
   let removalResult: RemoveWorktreeResult | undefined
+  let unchecked: Pick<RemoveWorktreeResult, 'uncheckedTerminalServices'> = {}
   const gate = await args.acquireWatcherRemoval(canonicalPath)
   let completed = false
   try {
-    await args.stopPtys()
+    unchecked = await args.stopPtys()
     if (linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
     }
@@ -166,6 +167,7 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
         args.finishRemoval(undefined, false, refreshed.head)
         completed = true
         return {
+          ...unchecked,
           ...(archiveHookOverride ? { archiveHookOverride } : {}),
           ...(warning ? { warning } : {})
         }
@@ -183,6 +185,7 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   args.finishRemoval(removalResult, true, refreshed.head)
   return {
     ...removalResult,
+    ...unchecked,
     ...(archiveHookOverride ? { archiveHookOverride } : {}),
     ...(warning ? { warning } : {})
   }

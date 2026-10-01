@@ -128,6 +128,23 @@ export function renderSessionsOnlyErrorBanner(): React.JSX.Element {
   )
 }
 
+export function renderSessionsPartialBanner(): React.JSX.Element {
+  return (
+    <div
+      className="flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground"
+      role="status"
+    >
+      <AlertTriangle className="size-3 shrink-0 text-status-warning" />
+      <span>
+        {translate(
+          'auto.components.status.bar.ResourceUsageStatusSegment.7a2e9c5b14',
+          'A version of the terminal service didn’t answer, so this list may be incomplete. Its sessions are not known to have stopped.'
+        )}
+      </span>
+    </div>
+  )
+}
+
 export function renderResourceUsageSummary({
   totalCpu,
   totalMemory,
@@ -135,7 +152,8 @@ export function renderResourceUsageSummary({
   commitBadgeLabel,
   commitMetricCopy,
   commitToneClass,
-  orphanCount
+  orphanCount,
+  orphanCountIsLowerBound
 }: {
   totalCpu: number
   totalMemory: number
@@ -144,7 +162,10 @@ export function renderResourceUsageSummary({
   commitMetricCopy: ReturnType<typeof getResourceCommitMetricCopy> | null
   commitToneClass: string | null
   orphanCount: number
+  /** A silent terminal-service version may hold more orphans than were counted. */
+  orphanCountIsLowerBound: boolean
 }): React.JSX.Element {
+  const orphanLabel = orphanCountIsLowerBound ? `${orphanCount}+` : orphanCount
   return (
     <div className="px-3 py-2 border-b border-border flex items-baseline justify-between gap-3 text-xs tabular-nums">
       <div className="flex items-baseline gap-3 min-w-0">
@@ -208,16 +229,16 @@ export function renderResourceUsageSummary({
       </div>
       {orphanCount > 0 && (
         <span className="shrink-0 text-yellow-500" aria-live="polite">
-          {orphanCount === 1
+          {orphanCount === 1 && !orphanCountIsLowerBound
             ? translate(
                 'auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31',
                 '{{value0}} orphan',
-                { value0: orphanCount }
+                { value0: orphanLabel }
               )
             : translate(
                 'auto.components.status.bar.ResourceUsageStatusSegment.b8f4a2c1d0e3',
                 '{{value0}} orphans',
-                { value0: orphanCount }
+                { value0: orphanLabel }
               )}
         </span>
       )}

@@ -131,6 +131,32 @@ describe('stopMissingWorktreeTerminals', () => {
     expect(provider.shutdown).toHaveBeenCalledTimes(ids.length)
   })
 
+  it('lists every daemon version once for the whole local sweep', async () => {
+    const ids = Array.from({ length: 5 }, (_, index) => `repo-1::/workspace/wt-${index}`)
+    const listProcessesBySource = vi.fn(async () => [
+      {
+        protocolVersion: 36,
+        isCurrent: true,
+        contact: 'live' as const,
+        processes: ids.map((id) => ({ id: `${id}@@session`, cwd: '/workspace', title: 'shell' }))
+      }
+    ])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these provider members.
+    const provider = {
+      ...createProvider([]),
+      listProcessesBySource
+    } as unknown as IPtyProvider
+
+    const result = await stopMissingWorktreeTerminals(localRepo, ids, [], {
+      runtime: createRuntime(),
+      getLocalProvider: () => provider,
+      getSshProvider: () => undefined
+    })
+
+    expect(result.stoppedWorktreeIds).toHaveLength(ids.length)
+    expect(listProcessesBySource).toHaveBeenCalledTimes(1)
+  })
+
   // Why: real providers put listProcesses/shutdown on the prototype and use `this`;
   // batching them behind a wrapper must not break that binding.
   it('keeps provider method binding intact while batching', async () => {

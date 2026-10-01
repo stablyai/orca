@@ -1,10 +1,12 @@
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { getSshPtyProvider, getLocalPtyProvider, clearProviderPtyState } from '../../pty'
 import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
+import { persistedPaneSessionIdsForWorktree } from '../../../runtime/worktree-persisted-pane-sessions'
 import type { Store } from '../../../persistence/loading-store/store'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
+import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../worktree-removal-repo-owner'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
@@ -18,8 +20,8 @@ import { pruneWorkspaceSpaceAnalysisSnapshot } from '../../../workspace-space-an
 export async function stopPtysForDestructiveWorktreeRemoval(
   runtime: OrcaRuntimeService,
   worktreeId: string,
-  options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
-): Promise<void> {
+  options: { connectionId?: string; allowUnverifiedStop?: boolean; store?: Store } = {}
+): Promise<Pick<RemoveWorktreeResult, 'uncheckedTerminalServices'>> {
   const { connectionId, allowUnverifiedStop } = options
   const provider = connectionId ? getSshPtyProvider(connectionId) : getLocalPtyProvider()
   if (!provider) {
@@ -38,7 +40,13 @@ export async function stopPtysForDestructiveWorktreeRemoval(
     // Why (#11960): set only by an explicit Force Delete, never by the ordinary
     // confirmation — otherwise the gate would be off on the primary delete path.
     ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {}),
-    ...(connectionId ? { includeLocalRegistry: false } : {})
+    ...(connectionId ? { includeLocalRegistry: false } : {}),
+    persistedPaneSessionIds: persistedPaneSessionIdsForWorktree(
+      options.store?.getWorkspaceSession(
+        connectionId ? toSshExecutionHostId(connectionId) : undefined
+      ),
+      worktreeId
+    )
   })
   // Structured sessions are counted here too: closing a user's chat is now an ordinary outcome
   // of this verb, and a removal that closed one but no PTY would otherwise log nothing at all.
@@ -53,6 +61,8 @@ export async function stopPtysForDestructiveWorktreeRemoval(
       `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped} structured=${structuredStopped}`
     )
   }
+  const unchecked = teardownResult.uncheckedTerminalServices
+  return unchecked ? { uncheckedTerminalServices: unchecked } : {}
 }
 
 // Why: the worktree's own persisted host outranks the repo fallback; teardown and metadata purge must resolve the same owner

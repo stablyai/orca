@@ -1,5 +1,6 @@
 import type { ColdRestorePayload } from './cold-restore-payload-cache'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
+import { connectFailureProvesExit } from './daemon-endpoint-verdict'
 import { GET_SIZE_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
@@ -49,14 +50,16 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     return this.activeSessionIds.has(id)
   }
 
-  async probePtyLiveness(id: string): Promise<boolean | null> {
+  async probePtyLiveness(id: string, opts?: { deadlineMs?: number }): Promise<boolean | null> {
+    // Why the caller's deadline exactly: overrunning it can fail the caller's own budget.
+    const timeoutMs = remainingDaemonRequestTimeoutMs(opts?.deadlineMs) ?? LIVENESS_PROBE_TIMEOUT_MS
     try {
       if (!this.getSizeUnsupported && this.protocolVersion >= GET_SIZE_PROTOCOL_VERSION) {
         try {
           const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
             'getSize',
             { sessionId: id },
-            LIVENESS_PROBE_TIMEOUT_MS
+            timeoutMs
           )
           return result.size !== null
         } catch (error) {
@@ -79,11 +82,12 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       const { sessions } = await this.client.request<ListSessionsResult>(
         'listSessions',
         undefined,
-        LIVENESS_PROBE_TIMEOUT_MS
+        timeoutMs
       )
       return sessions.some((session) => session.sessionId === id && session.isAlive)
-    } catch {
-      return null
+    } catch (error) {
+      // Why: a daemon proven gone holds nothing; any other failure is lost contact, not absence.
+      return (await connectFailureProvesExit(error, this.endpointRecord())) ? false : null
     }
   }
 

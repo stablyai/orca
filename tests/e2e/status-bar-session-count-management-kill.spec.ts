@@ -49,7 +49,9 @@ async function readChipVisibleCount(page: Page): Promise<string | null> {
 }
 
 async function listDaemonSessionIds(page: Page): Promise<string[]> {
-  return page.evaluate(async () => (await window.api.pty.listSessions()).map(({ id }) => id))
+  return page.evaluate(async () =>
+    (await window.api.pty.listSessions()).sessions.map(({ id }) => id)
+  )
 }
 
 /** The daemon's session set has to hold the expected size across consecutive reads. */

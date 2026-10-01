@@ -211,6 +211,34 @@ describe('removeWorktree cascade', () => {
     expect(toast.warning).not.toHaveBeenCalled()
   })
 
+  it('still shows one unchecked-version note across a batched cleanup', async () => {
+    const store = createTestStore()
+    const ids = ['repo1::/path/wt1', 'repo1::/path/wt2']
+    mockApi.worktrees.remove.mockResolvedValue({
+      uncheckedTerminalServices: [{ protocolVersion: 35 }]
+    })
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: ids.map((id, index) =>
+          makeWorktree({ id, repoId: 'repo1', path: `/path/wt${index + 1}` })
+        )
+      }
+    })
+
+    for (const id of ids) {
+      await store.getState().removeWorktree({ id, executionHostId: null }, false, {
+        suppressPreservedBranchToast: true
+      })
+    }
+
+    const noteIds = vi
+      .mocked(toast.info)
+      .mock.calls.map(([, options]) => (options && 'id' in options ? options.id : undefined))
+      .filter((id) => id === 'unchecked-terminal-services')
+    // Sonner replaces a toast that reuses an id, so the user sees one note, not one per row.
+    expect(noteIds).toHaveLength(ids.length)
+  })
+
   it('sets delete state with dirty/untracked error and canForceDelete=true on failure', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'

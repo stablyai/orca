@@ -1,14 +1,18 @@
-import type { PtyManagementSession } from '../../../../preload/api-types'
-import { LoaderCircle, RefreshCw, RotateCw, Trash2, X } from 'lucide-react'
+import type { PtyManagementGeneration, PtyManagementSession } from '../../../../preload/api-types'
+import { LoaderCircle, RefreshCw, RotateCw, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { formatState, formatWorkspace } from './manage-sessions-format'
+import {
+  formatVisibleSessionCount,
+  reportedSessions,
+  visibleGenerations
+} from './manage-sessions-format'
+import { GenerationRows } from './ManageSessionsGenerationRows'
 import { translate } from '@/i18n/i18n'
 
 type ManageSessionsTableProps = {
-  sessions: PtyManagementSession[]
+  generations: PtyManagementGeneration[]
   hasLoadedOnce: boolean
-  sessionCount: number
   isBusy: boolean
   isRefreshing: boolean
   daemonBusyKind: 'killAll' | 'restart' | null
@@ -21,9 +25,8 @@ type ManageSessionsTableProps = {
 }
 
 export function ManageSessionsTable({
-  sessions,
+  generations,
   hasLoadedOnce,
-  sessionCount,
   isBusy,
   isRefreshing,
   daemonBusyKind,
@@ -34,13 +37,21 @@ export function ManageSessionsTable({
   onNavigate,
   onRequestKill
 }: ManageSessionsTableProps): React.JSX.Element {
+  const reportedCount = reportedSessions(generations).length
+  const hasUnverifiable = generations.some((generation) => generation.contact === 'unverifiable')
+  const shown = visibleGenerations(generations)
+  const visibleCount = formatVisibleSessionCount(generations)
+  // Why: one generation is the ordinary case, and a header per group would be noise there.
+  const showGenerationHeaders = shown.length > 1
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border/60">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-muted-foreground">
             {translate('auto.components.settings.ManageSessionsSection.a795a9552a', 'Sessions')}
-            {hasLoadedOnce ? <span className="ml-1 tabular-nums">({sessionCount})</span> : null}
+            {hasLoadedOnce && visibleCount !== null ? (
+              <span className="ml-1 tabular-nums">({visibleCount})</span>
+            ) : null}
           </span>
           <Button
             variant="ghost"
@@ -62,7 +73,7 @@ export function ManageSessionsTable({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                disabled={isBusy || sessionCount === 0}
+                disabled={isBusy || reportedCount === 0}
                 onClick={onKillAll}
                 aria-label={translate(
                   'auto.components.settings.ManageSessionsSection.3282db098c',
@@ -118,77 +129,35 @@ export function ManageSessionsTable({
         <div className="flex items-center justify-center px-3 py-8 text-xs text-muted-foreground">
           {translate('auto.components.settings.ManageSessionsSection.39c53d6d74', 'Loading…')}
         </div>
-      ) : sessions.length === 0 ? (
+      ) : reportedCount === 0 && !hasUnverifiable ? (
         <div className="flex items-center justify-center px-3 py-8 text-xs text-muted-foreground">
           {translate('auto.components.settings.ManageSessionsSection.e26a60d9eb', 'No sessions.')}
         </div>
       ) : (
         <div className="max-h-[360px] overflow-y-auto scrollbar-sleek">
           <table className="w-full text-xs">
-            <tbody>
-              {sessions.map((session) => {
-                const dotClass = session.isAlive ? 'bg-emerald-500' : 'bg-muted-foreground/40'
-                const tabId = ptyIdToTabId.get(session.sessionId) ?? null
-                const rowClickable = tabId !== null
-                return (
-                  <tr
-                    key={`${session.protocolVersion}:${session.sessionId}`}
-                    className={`border-t border-border/50 first:border-t-0 ${
-                      rowClickable ? 'cursor-pointer hover:bg-accent/60' : ''
-                    }`}
-                    onClick={rowClickable ? () => onNavigate(tabId) : undefined}
-                    aria-label={
-                      rowClickable
-                        ? translate(
-                            'auto.components.settings.ManageSessionsSection.2896a50f50',
-                            'Go to terminal {{value0}}',
-                            { value0: formatWorkspace(session) }
-                          )
-                        : undefined
-                    }
-                  >
-                    <td className="px-3 py-1.5">
-                      <span
-                        className={`block size-1.5 rounded-full ${dotClass}`}
-                        aria-label={formatState(session)}
-                        title={formatState(session)}
-                      />
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <span className="truncate font-mono font-medium">
-                        {formatWorkspace(session)}
-                      </span>
-                    </td>
-                    <td
-                      className="px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
-                      title={session.sessionId}
-                    >
-                      <span className="block max-w-[280px] truncate">{session.sessionId}</span>
-                    </td>
-                    <td className="px-3 py-1.5 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onRequestKill(session)
-                        }}
-                        disabled={isBusy}
-                        aria-label={translate(
-                          'auto.components.settings.ManageSessionsSection.33c2a1e1b4',
-                          'Kill session {{value0}}',
-                          { value0: session.sessionId }
-                        )}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <X />
-                      </Button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
+            {shown.map((generation, index) => (
+              <GenerationRows
+                key={generation.protocolVersion}
+                generation={generation}
+                showHeader={showGenerationHeaders}
+                isFirstGroup={index === 0}
+                isBusy={isBusy}
+                ptyIdToTabId={ptyIdToTabId}
+                onNavigate={onNavigate}
+                onRequestKill={onRequestKill}
+              />
+            ))}
           </table>
+          {hasUnverifiable && reportedCount > 0 ? (
+            <p className="border-t border-border/50 px-3 py-2 text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.settings.ManageSessionsTable.2790ddcc1d',
+                '{{value0}} listed — a version Orca couldn’t reach may hold more sessions.',
+                { value0: reportedCount }
+              )}
+            </p>
+          ) : null}
         </div>
       )}
     </div>

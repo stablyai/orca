@@ -41,6 +41,7 @@ export type TestStore = {
   addRetiredWorktreeName: StoreMock
   getRetiredWorktreeNameRegistry: StoreMock
   mergeRetiredWorktreeNames: StoreMock
+  getWorkspaceSession: StoreMock
 }
 
 /** Channel handlers captured from the mocked ipcMain.handle during registration. */
@@ -76,5 +77,6 @@ export const store: TestStore = {
   getProjectGroups: vi.fn(),
   addRetiredWorktreeName: vi.fn(),
   getRetiredWorktreeNameRegistry: vi.fn(),
-  mergeRetiredWorktreeNames: vi.fn()
+  mergeRetiredWorktreeNames: vi.fn(),
+  getWorkspaceSession: vi.fn()
 }

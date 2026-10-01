@@ -16,6 +16,8 @@ const CLOSE_BATCH_SIZE = 2
 type DaemonKillAllResult = {
   killedCount: number
   remainingCount: number
+  unverifiedCount?: number
+  unreachedVersionCount?: number
   killedSessionIds?: string[]
 }
 

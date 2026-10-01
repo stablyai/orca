@@ -50,6 +50,8 @@ export type WorktreeTeardownDeps = {
   allowUnverifiedStop?: boolean
   includeProviderInventory?: boolean
   includeLocalRegistry?: boolean
+  /** Ids this worktree's saved tabs are bound to (persistedPaneSessionIdsForWorktree). */
+  persistedPaneSessionIds?: readonly string[]
   /**
    * Close structured agent sessions best-effort, for a destructive removal that does NOT require
    * PTY-stop proof — the folder-workspace paths, which sweep and kill PTYs the same way.
@@ -67,6 +69,8 @@ export type WorktreeTeardownResult = {
   registryStopped: number
   /** Structured agent sessions this teardown closed; absent when it closed none. */
   structuredStopped?: number
+  /** Terminal service versions that did not answer and held no known terminal of this worktree. */
+  uncheckedTerminalServices?: { protocolVersion: number }[]
 }
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
@@ -118,6 +122,8 @@ export async function killAllProcessesForWorktree(
   // would then report a timeout for a stop they never attempted. It is joined below, ahead of the
   // PTY verdict, so a structured refusal still outranks one.
   const structuredSweep = sweepStructuredSessions(worktreeId, deps, deadline, sweeps)
+  const unchecked = new Set<number>()
+  const silentEvidence = new Set<string>()
   void structuredSweep.catch(() => undefined)
   const stopAttempts = new Map<string, Promise<boolean>>()
   const stopPty = (
@@ -181,7 +187,15 @@ export async function killAllProcessesForWorktree(
               deadline,
               stopPty,
               deps.onPtyStopped,
-              deps.requirePhysicalStop
+              {
+                failClosed: deps.requirePhysicalStop,
+                onSilentEvidence: (ptyIds) => ptyIds.forEach((id) => silentEvidence.add(id)),
+                onUncheckedSource: (protocolVersion) =>
+                  protocolVersion !== null && unchecked.add(protocolVersion),
+                ...(deps.persistedPaneSessionIds
+                  ? { persistedPaneSessionIds: deps.persistedPaneSessionIds }
+                  : {})
+              }
             )
           ),
           0,
@@ -273,7 +287,8 @@ export async function killAllProcessesForWorktree(
       deps.includeProviderInventory !== false ||
         (deps.resolvedConnectionId === undefined &&
           deps.resolvedRuntimeEnvironmentId === undefined),
-      deps.runtime
+      deps.runtime,
+      silentEvidence
     )
     if (verdict.status === 'exited') {
       for (const ptyId of failedPtyIds) {
@@ -304,7 +319,12 @@ export async function killAllProcessesForWorktree(
     runtimeStopped: runtimeResult.stopped,
     providerStopped,
     registryStopped,
-    ...(structuredStopped > 0 ? { structuredStopped } : {})
+    ...(structuredStopped > 0 ? { structuredStopped } : {}),
+    ...(unchecked.size > 0
+      ? {
+          uncheckedTerminalServices: [...unchecked].map((protocolVersion) => ({ protocolVersion }))
+        }
+      : {})
   }
 }
 

@@ -180,3 +180,11 @@ export function toWorktreeRemovalTarget(
 ): WorktreeRemovalTarget {
   return { id: worktree.id, executionHostId: worktree.hostId ?? null }
 }
+
+/** CLI wording for a delete that went ahead past a terminal-service version that did not answer. */
+export function describeUncheckedTerminalServices(
+  services: readonly { protocolVersion: number }[]
+): string {
+  const versions = services.map((service) => service.protocolVersion).join(', ')
+  return `A version of Orca's terminal service (protocol ${versions}) did not answer, so any terminal it still runs for this workspace was not checked. Settings > Terminal > Manage Sessions in Orca on that host lists it once it answers.`
+}

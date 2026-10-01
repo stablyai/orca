@@ -50,6 +50,7 @@ export function useResourceUsageStatusController() {
   const {
     sessionInventory,
     sessionsError,
+    sessionsPartial,
     refreshSessions,
     clearSessionsError,
     removeSession,
@@ -245,6 +246,7 @@ export function useResourceUsageStatusController() {
     resourceSnapshot,
     spaceScanReady,
     recordFeatureInteraction,
+    sessionsPartial,
     ...derived,
     ...actions
   }

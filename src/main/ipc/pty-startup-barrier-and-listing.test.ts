@@ -225,11 +225,14 @@ describe('registerPtyHandlers', () => {
     } as never)
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
-    const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
-      id: string
-      cwd: string
-      title: string
-    }[]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler resolves PtySessionListing; the handler map erases it.
+    const { sessions } = (await handlers.get('pty:listSessions')!(null, undefined)) as {
+      sessions: {
+        id: string
+        cwd: string
+        title: string
+      }[]
+    }
 
     expect(sshListProcesses).toHaveBeenCalled()
     expect(sessions).toEqual(

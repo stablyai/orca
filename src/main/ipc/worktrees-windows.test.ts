@@ -174,7 +174,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     removeWorktreeMeta: vi.fn(),
     addRetiredWorktreeName: vi.fn(),
     getRetiredWorktreeNameRegistry: vi.fn(),
-    mergeRetiredWorktreeNames: vi.fn()
+    mergeRetiredWorktreeNames: vi.fn(),
+    getWorkspaceSession: vi.fn()
   }
 
   beforeEach(() => {

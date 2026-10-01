@@ -23,7 +23,7 @@ type RmParams = {
   allowFailedArchiveHook?: boolean
 }
 
-async function dispatchRm(runtime: OrcaRuntimeService, params: RmParams): Promise<void> {
+async function dispatchRm(runtime: OrcaRuntimeService, params: RmParams): Promise<unknown> {
   const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
   const request: RpcRequest = {
     id: 'req-1',
@@ -31,7 +31,7 @@ async function dispatchRm(runtime: OrcaRuntimeService, params: RmParams): Promis
     method: 'worktree.rm',
     params: { worktree: 'id:wt-1', ...params }
   }
-  await dispatcher.dispatch(request)
+  return await dispatcher.dispatch(request)
 }
 
 /** Every waiver off unless a case turns it on — the defaults are the assertion. */
@@ -84,5 +84,25 @@ describe('worktree.rm waivers travel on their own fields', () => {
       'id:wt-1',
       forwarded({ force: true, hostId: 'ssh:builder' })
     )
+  })
+
+  it('words an unchecked terminal-service version into the warning the CLI prints', async () => {
+    const runtime = makeRuntime()
+    vi.mocked(runtime.removeManagedWorktree).mockResolvedValue({
+      warning: 'orca.yaml archive hook skipped.',
+      uncheckedTerminalServices: [{ protocolVersion: 35 }]
+    })
+
+    const response = await dispatchRm(runtime, { hostId: 'local' })
+
+    expect(response).toMatchObject({
+      result: {
+        removed: true,
+        uncheckedTerminalServices: [{ protocolVersion: 35 }],
+        warning: expect.stringMatching(
+          /^orca\.yaml archive hook skipped\. A version of Orca's terminal service \(protocol 35\)/
+        )
+      }
+    })
   })
 })

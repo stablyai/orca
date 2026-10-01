@@ -72,7 +72,10 @@ describe('scoped activation PTY inventory', () => {
     })
     const startup = vi.fn(async () => {})
     installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise: startup })
-    const list = (scope?: unknown) => handlers.get('pty:listSessions')!(null, scope)
+    // Why .sessions: these cases assert the rows; completeness has its own case.
+    const list = async (scope?: unknown) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler resolves PtySessionListing; the handler map erases it.
+      ((await handlers.get('pty:listSessions')!(null, scope)) as { sessions: unknown[] }).sessions
     return { localList, remoteLists, startup, list }
   }
 
@@ -135,5 +138,105 @@ describe('scoped activation PTY inventory', () => {
     expect(await list()).toHaveLength(50)
     expect(localList).toHaveBeenCalledOnce()
     expect(remoteLists.every((mock) => mock.mock.calls.length === 1)).toBe(true)
+  })
+
+  it('lists the versions that answered and marks the inventory incomplete while one is silent', async () => {
+    let listBySource: ReturnType<typeof vi.fn> | undefined
+    installDaemonTestProvider({
+      listProcesses: vi.fn(async () => {
+        throw new Error('Request listSessions timed out')
+      }),
+      listProcessesBySource: (listBySource = vi.fn(async () => [
+        {
+          protocolVersion: 36,
+          isCurrent: true,
+          contact: 'live' as const,
+          processes: [{ id: 'wt@@current', cwd: '/', title: 'shell' }]
+        },
+        {
+          protocolVersion: 35,
+          isCurrent: false,
+          contact: 'unverifiable' as const,
+          error: new Error('Request listSessions timed out'),
+          lastKnownIds: ['wt@@old']
+        }
+      ]))
+    })
+    installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise: async () => {} })
+
+    for (const scope of [undefined, { connectionId: null }]) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler resolves PtySessionListing; the handler map erases it.
+      const listing = (await handlers.get('pty:listSessions')!(null, scope)) as {
+        sessions: { id: string }[]
+        complete: boolean
+        unverifiable: { protocolVersion: number | null }[]
+      }
+      // Why the filter: SSH providers registered by earlier cases stay in the unscoped listing.
+      const local = listing.sessions.filter((session) => !session.id.startsWith('ssh:'))
+      expect(local.map((session) => session.id)).toEqual(['wt@@current'])
+      expect(listing.complete).toBe(false)
+      expect(listing.unverifiable).toEqual([
+        { protocolVersion: 35, reason: 'Request listSessions timed out' }
+      ])
+    }
+    // The cap bounds only other versions; the current one keeps the caller's (unbounded) wait.
+    expect(listBySource).toHaveBeenCalledWith({ nonCurrentDeadlineMs: expect.any(Number) })
+  })
+
+  it('fails as before when the current version itself does not answer', async () => {
+    installDaemonTestProvider({
+      listProcessesBySource: vi.fn(async () => [
+        {
+          protocolVersion: 36,
+          isCurrent: true,
+          contact: 'unverifiable' as const,
+          error: new Error('daemon not responding'),
+          lastKnownIds: []
+        }
+      ])
+    })
+    installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise: async () => {} })
+
+    // Resource Manager keeps its "not responding" state; the activation gate blocks as before.
+    for (const scope of [undefined, { connectionId: null }]) {
+      await expect(handlers.get('pty:listSessions')!(null, scope)).rejects.toThrow(
+        'daemon not responding'
+      )
+    }
+  })
+
+  it('judges a scoped listing complete for a worktree the silent version holds no evidence of', async () => {
+    installDaemonTestProvider({
+      listProcessesBySource: vi.fn(async () => [
+        { protocolVersion: 36, isCurrent: true, contact: 'live' as const, processes: [] },
+        {
+          protocolVersion: 35,
+          isCurrent: false,
+          contact: 'unverifiable' as const,
+          error: new Error('Request listSessions timed out'),
+          lastKnownIds: ['repo::/old@@a1']
+        }
+      ])
+    })
+    const savedSession = {
+      tabsByWorktree: {
+        'repo::/restored': [{ id: 't1', worktreeId: 'repo::/restored', ptyId: null }]
+      },
+      terminalLayoutsByTabId: { t1: { ptyIdsByLeafId: { l1: 'repo::/restored@@saved' } } }
+    }
+    installPtyInspectIpcHandlers({
+      getLocalPtyProviderStartupPromise: async () => {},
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the evidence reader uses only tabs and layout bindings.
+      getWorkspaceSession: () => savedSession as never
+    })
+    const list = async (worktreeId: string): Promise<unknown> =>
+      await handlers.get('pty:listSessions')!(null, { connectionId: null, worktreeId })
+
+    // A newly added worktree: nothing points at the silent version, so activation is not blocked.
+    await expect(list('repo::/new')).resolves.toMatchObject({ complete: true })
+    // The silent version was last known to hold this worktree's session.
+    await expect(list('repo::/old')).resolves.toMatchObject({ complete: false })
+    // A saved tab is bound to a session no answering version listed.
+    await expect(list('repo::/restored')).resolves.toMatchObject({ complete: false })
   })
 })

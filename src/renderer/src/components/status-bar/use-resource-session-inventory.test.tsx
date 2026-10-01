@@ -23,8 +23,10 @@ describe('useResourceSessionInventory', () => {
   const unsubscribeExit = vi.fn()
   let spawnedCallback: ((data: { id: string }) => void) | null = null
   let exitCallback: ((data: { id: string; code: number }) => void) | null = null
+  let listingComplete = true
 
   beforeEach(() => {
+    listingComplete = true
     spawnedCallback = null
     exitCallback = null
     listSessions.mockReset()
@@ -32,7 +34,12 @@ describe('useResourceSessionInventory', () => {
     unsubscribeExit.mockReset()
     ;(window as unknown as { api: unknown }).api = {
       pty: {
-        listSessions,
+        // Why a wrapper: the cases script the session array; the channel adds completeness around it.
+        listSessions: async () => ({
+          sessions: await listSessions(),
+          complete: listingComplete,
+          unverifiable: []
+        }),
         onSpawned: (callback: (data: { id: string }) => void) => {
           spawnedCallback = callback
           return unsubscribeSpawned
@@ -66,6 +73,16 @@ describe('useResourceSessionInventory', () => {
 
     rerender({ ready: false })
     expect(result.current.sessionInventory.count).toBe(0)
+    expect(result.current.sessionsError).toBe(false)
+  })
+
+  it('shows the sessions that answered and marks the list partial while a version is silent', async () => {
+    listingComplete = false
+    listSessions.mockResolvedValue([session('one')])
+    const { result } = renderHook(() => useResourceSessionInventory(true))
+
+    await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
+    expect(result.current.sessionsPartial).toBe(true)
     expect(result.current.sessionsError).toBe(false)
   })
 

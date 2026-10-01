@@ -138,12 +138,32 @@ export async function isProviderAgentSessionOwnerLive(
   )
 }
 
+// Why the owner's answer when the provider has one: a merged census fails whenever any other
+// daemon version is silent, although that version never held this session.
+async function isStoppedPtyLive(
+  provider: IPtyProvider,
+  ptyId: string,
+  deadlineMs: number | undefined
+): Promise<boolean> {
+  if (!provider.confirmPtyStopped) {
+    return await isProviderPtyLive(provider, ptyId, deadlineMs)
+  }
+  const stopped = await provider.confirmPtyStopped(
+    ptyId,
+    deadlineMs !== undefined ? { deadlineMs } : undefined
+  )
+  if (stopped === null) {
+    throw new Error('the terminal service that owns this session did not answer')
+  }
+  return !stopped
+}
+
 export async function verifyPtyStopped(
   provider: IPtyProvider,
   ptyId: string,
   opts: { keepHistory?: boolean; deadlineMs?: number } | undefined
 ): Promise<boolean> {
-  if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
+  if (await isStoppedPtyLive(provider, ptyId, opts?.deadlineMs)) {
     return false
   }
   if (!opts?.keepHistory) {
@@ -158,7 +178,7 @@ export async function verifyPtyStopped(
     if (Date.now() >= deadline) {
       break
     }
-    if (await isProviderPtyLive(provider, ptyId, deadline)) {
+    if (await isStoppedPtyLive(provider, ptyId, deadline)) {
       return false
     }
   }

@@ -361,7 +361,9 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
             hasPty: vi.fn(hasPty),
             kill: vi.fn(),
             signal: vi.fn(),
-            listSessions: vi.fn().mockResolvedValue([]),
+            listSessions: vi
+              .fn()
+              .mockResolvedValue({ sessions: [], complete: true, unverifiable: [] }),
             getSize: vi.fn().mockResolvedValue(null),
             reportGeometry: vi.fn(),
             getMainBufferSnapshot: vi.fn().mockResolvedValue(null),

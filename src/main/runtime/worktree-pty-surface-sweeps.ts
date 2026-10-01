@@ -6,12 +6,18 @@
  * provider's session list, and the local pty-registry.
  */
 
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
+import {
+  answeredProcesses,
+  silentVersionEvidence,
+  type PtyProcessSourceListing
+} from '../providers/pty-process-source-listing'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { teardownRpcDeadline } from './worktree-teardown-deadline'
+import { USER_FACING_DAEMON_LISTING_TIMEOUT_MS } from '../daemon/daemon-generation-listing'
 
 // Why: normal inventories still coalesce into one process scan, while a stale
 // or pathological inventory cannot fan out unbounded provider/RPC shutdowns.
@@ -31,7 +37,14 @@ export async function sweepProviderByPrefix(
     stop: () => Promise<boolean>
   ) => Promise<{ stopped: boolean; owner: boolean }>,
   onPtyStopped?: (ptyId: string) => void,
-  failClosed = false
+  opts: {
+    failClosed?: boolean
+    onUncheckedSource?: (protocolVersion: number | null) => void
+    /** Ids this listing tied to a version that did not answer; their owner need not be asked again. */
+    onSilentEvidence?: (ptyIds: readonly string[]) => void
+    /** Ids this worktree's saved tabs are bound to; evidence for a version that did not answer. */
+    persistedPaneSessionIds?: readonly string[]
+  } = {}
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
   // Why (#10252): the cwd fallback only proves ownership when the filesystem path
@@ -45,9 +58,20 @@ export async function sweepProviderByPrefix(
       ? fullWorktreePath
       : undefined
   const rpcDeadline = teardownRpcDeadline(deadline)
-  const sessions = failClosed
-    ? await provider.listProcesses({ deadlineMs: rpcDeadline })
-    : await provider.listProcesses({ deadlineMs: rpcDeadline }).catch(() => [])
+  const sessions = provider.listProcessesBySource
+    ? answeredAndLastKnown(
+        // Why capped for other versions only: a silent one would spend the budget the stops need,
+        // while a slow current one must still be listed and stopped.
+        await provider.listProcessesBySource({
+          deadlineMs: rpcDeadline,
+          nonCurrentDeadlineMs: Date.now() + USER_FACING_DAEMON_LISTING_TIMEOUT_MS
+        }),
+        worktreeId,
+        opts
+      )
+    : opts.failClosed
+      ? await provider.listProcesses({ deadlineMs: rpcDeadline })
+      : await provider.listProcesses({ deadlineMs: rpcDeadline }).catch(() => [])
   const ownedSessions = sessions.filter((session) => {
     // Why: older daemon/relay process rows may omit cwd; their established ID
     // and authoritative worktree ownership must remain usable during teardown.
@@ -87,6 +111,33 @@ export async function sweepProviderByPrefix(
     }
   )
   return stopped.reduce<number>((count, value) => count + value, 0)
+}
+
+/**
+ * What answered, plus this worktree's ids a silent version may hold: the ids it was last known to
+ * hold (routes and attached ids) and the ids the worktree's saved tabs are bound to that no answered
+ * version listed. Those go down the per-id stop, whose owner cannot answer, so the delete refuses as
+ * for a known live PTY; a silent version with no such evidence is reported instead.
+ */
+function answeredAndLastKnown(
+  listings: readonly PtyProcessSourceListing[],
+  worktreeId: string,
+  opts: {
+    onUncheckedSource?: (protocolVersion: number | null) => void
+    onSilentEvidence?: (ptyIds: readonly string[]) => void
+    persistedPaneSessionIds?: readonly string[]
+  }
+): Pick<PtyProcessInfo, 'id' | 'cwd' | 'worktreeId'>[] {
+  const evidence = silentVersionEvidence(listings, worktreeId, opts.persistedPaneSessionIds)
+  opts.onSilentEvidence?.(evidence)
+  if (evidence.length === 0) {
+    for (const listing of listings) {
+      if (listing.contact === 'unverifiable') {
+        opts.onUncheckedSource?.(listing.protocolVersion)
+      }
+    }
+  }
+  return [...answeredProcesses(listings), ...evidence.map((id) => ({ id, cwd: '', worktreeId }))]
 }
 
 export async function sweepRegistryForWorktree(

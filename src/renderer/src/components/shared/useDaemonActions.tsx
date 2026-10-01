@@ -73,7 +73,18 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
             value2: summary.daemon.remainingCount
           }
         )
-  const description = [surfaceDescription, daemonDescription].filter(Boolean).join(' ')
+  const unreached =
+    summary.daemon.status === 'fulfilled' &&
+    ((summary.daemon.unverifiedCount ?? 0) > 0 || (summary.daemon.unreachedVersionCount ?? 0) > 0)
+  const unreachedDescription = unreached
+    ? translate(
+        'auto.components.shared.useDaemonActions.3d8a5f1c26',
+        'A version of the terminal service Orca couldn’t reach was not confirmed stopped; its sessions may still be running.'
+      )
+    : null
+  const description = [surfaceDescription, daemonDescription, unreachedDescription]
+    .filter(Boolean)
+    .join(' ')
   if (summary.daemon.status === 'rejected') {
     toast.error(
       translate(
@@ -94,7 +105,7 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
     )
     return
   }
-  if (summary.daemon.remainingCount > 0) {
+  if (summary.daemon.remainingCount > 0 || unreached) {
     toast.warning(
       translate(
         'auto.components.shared.useDaemonActions.80b6ea14cf',

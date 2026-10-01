@@ -1,5 +1,5 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { combineUnsubscribes } from './combine-unsubscribes'
+import { addListener, combineUnsubscribes, trackedUnsubscribe } from './combine-unsubscribes'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
 import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import type {
@@ -20,6 +20,15 @@ import {
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
 import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import {
+  requireCompleteProcessListing,
+  type PtyProcessSourceListing
+} from '../providers/pty-process-source-listing'
+import {
+  listDaemonProcessesBySource,
+  type ProcessSourceListingDeadlines
+} from './daemon-generation-listing'
+import { DaemonStoppedSessionOwners } from './daemon-stopped-session-owners'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly isDegraded = true
@@ -28,6 +37,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   private legacy: DaemonPtyAdapter[]
   private fallback: IPtyProvider
   private sessionProviders = new Map<string, IPtyProvider>()
+  private readonly stoppedOwners = new DaemonStoppedSessionOwners<IPtyProvider>()
   private freshSpawns: DegradedDaemonFreshSpawnRouter
   private ownerRecovery: DegradedDaemonOwnerRecovery
   private unsubscribers: (() => void)[] = []
@@ -84,7 +94,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   canProvideAuthoritativeBufferSnapshot = (id: string): boolean =>
     this.freshSpawns.canProvideSnapshot(id)
 
-  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
+  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
+    this.stoppedOwners.record(opts.sessionId, undefined)
+    return this.ownerRecovery.spawn(opts)
+  }
 
   // Why refuse the fallback route (unknown ids resolve to it): see attachDaemonOwnedSession.
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
@@ -101,6 +114,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       return true
     }
     return await this.ownerRecovery.probe(id)
+  }
+
+  async confirmPtyStopped(id: string, opts?: { deadlineMs?: number }): Promise<boolean | null> {
+    return await this.stoppedOwners.confirm(id, () => this.probePtyLiveness(id), opts?.deadlineMs)
   }
 
   // Why: an unknown id cannot borrow listing authority from the fresh-spawn provider.
@@ -137,6 +154,11 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
+    // Why not providerFor: its default local route would confirm an id the local provider never held.
+    const owner = this.sessionProviders.get(id) ?? this.findProviderForExistingSession(id)
+    if (owner) {
+      this.stoppedOwners.record(id, owner)
+    }
     await this.providerFor(id).shutdown(id, opts)
     if (!opts.keepHistory) {
       this.sessionProviders.delete(id)
@@ -206,10 +228,18 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
-    const results = await Promise.all(
-      this.allProviders().map((provider) => provider.listProcesses(opts))
-    )
-    return results.flat()
+    return requireCompleteProcessListing(await this.listProcessesBySource(opts))
+  }
+
+  async listProcessesBySource(
+    opts?: ProcessSourceListingDeadlines
+  ): Promise<PtyProcessSourceListing[]> {
+    const sources = {
+      adapters: this.allDaemonAdapters(),
+      current: this.current,
+      local: this.fallback
+    }
+    return await listDaemonProcessesBySource(sources, this.sessionProviders, opts)
   }
 
   async getDefaultShell(): Promise<string> {
@@ -221,13 +251,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   onData(callback: (payload: PtyDataEvent) => void): () => void {
-    this.dataListeners.push(callback)
-    return () => {
-      const idx = this.dataListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.dataListeners.splice(idx, 1)
-      }
-    }
+    return addListener(this.dataListeners, callback)
   }
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
@@ -247,30 +271,11 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void {
     const unsubscribes = this.allProviders().map((provider) => provider.onReplay(callback))
-    let active = true
-    const trackedUnsubscribe = (): void => {
-      if (!active) {
-        return
-      }
-      active = false
-      const idx = this.unsubscribers.indexOf(trackedUnsubscribe)
-      if (idx !== -1) {
-        this.unsubscribers.splice(idx, 1)
-      }
-      combineUnsubscribes(unsubscribes)()
-    }
-    this.unsubscribers.push(trackedUnsubscribe)
-    return trackedUnsubscribe
+    return trackedUnsubscribe(this.unsubscribers, unsubscribes)
   }
 
   onExit(callback: (payload: { id: string; code: number }) => void): () => void {
-    this.exitListeners.push(callback)
-    return () => {
-      const idx = this.exitListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.exitListeners.splice(idx, 1)
-      }
-    }
+    return addListener(this.exitListeners, callback)
   }
 
   ackColdRestore(sessionId: string): void {

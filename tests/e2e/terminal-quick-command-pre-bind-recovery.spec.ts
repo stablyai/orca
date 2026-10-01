@@ -305,7 +305,7 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
         async ({ siblingPtyId, siblingTabId, tabId, targetPtyId }) => {
           const state = window.__store?.getState()
           const layout = state?.terminalLayoutsByTabId[tabId]
-          const sessions = await window.api.pty.listSessions()
+          const { sessions } = await window.api.pty.listSessions()
           return {
             layoutPtyIds: Object.values(layout?.ptyIdsByLeafId ?? {}),
             siblingLive: await window.api.pty.hasPty(siblingPtyId),

@@ -1,4 +1,5 @@
 import type { IPtyProvider } from '../providers/types'
+import type { PtyProcessSourceListing } from '../providers/pty-process-source-listing'
 import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
@@ -17,8 +18,14 @@ const MISSING_WORKTREE_TEARDOWN_CONCURRENCY = 4
 // exited, and a pre-shutdown snapshot would make the proof read stale rows.
 function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
   let snapshot: Promise<Awaited<ReturnType<IPtyProvider['listProcesses']>>> | null = null
+  let bySourceSnapshot: Promise<PtyProcessSourceListing[]> | null = null
+  const listBySource = provider.listProcessesBySource?.bind(provider)
   return new Proxy(provider, {
     get(target, property) {
+      if (property === 'listProcessesBySource' && listBySource) {
+        // Why: the sweep prefers this listing; per-source answers never reject, so no fallback.
+        return (opts?: { deadlineMs?: number }) => (bySourceSnapshot ??= listBySource(opts))
+      }
       if (property !== 'listProcesses') {
         // Why: bind other members to `target`, not the proxy. With the proxy as
         // receiver, a provider whose own method called `this.listProcesses()`

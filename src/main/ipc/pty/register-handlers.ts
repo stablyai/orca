@@ -277,6 +277,9 @@ export function registerPtyHandlers(
   })
   installPtyWriteIpcHandlers({ mainWindow, runtime })
   installPtyResizeVisibilityIpc(session)
-  installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
+  installPtyInspectIpcHandlers({
+    getLocalPtyProviderStartupPromise,
+    getWorkspaceSession: () => store?.getWorkspaceSession()
+  })
   installPtyKillIpcHandler(killDeps)
 }

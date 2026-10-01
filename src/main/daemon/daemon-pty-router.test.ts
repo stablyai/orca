@@ -50,6 +50,13 @@ function createAdapter(
     []
   const identityChangeListeners: (() => void)[] = []
   const attached = new Set<string>()
+  const listProcesses = vi.fn(async () =>
+    sessions.map((id) => ({
+      id,
+      cwd: '',
+      title: label
+    }))
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the router reads only the adapter members this double implements.
   return {
     protocolVersion,
@@ -69,13 +76,9 @@ function createAdapter(
       attached.add(id)
       return { id }
     }),
-    listProcesses: vi.fn(async () =>
-      sessions.map((id) => ({
-        id,
-        cwd: '',
-        title: label
-      }))
-    ),
+    listProcesses,
+    readProcesses: vi.fn(async () => ({ contact: 'live' as const, items: await listProcesses() })),
+    getActiveSessionIds: vi.fn(() => [...attached]),
     // Why attached-only: a real adapter answers only for sessions spawned or attached this run.
     hasPty: vi.fn((id: string) => attached.has(id) && sessions.includes(id)),
     probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),

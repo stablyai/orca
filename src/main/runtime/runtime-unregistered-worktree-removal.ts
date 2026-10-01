@@ -1,3 +1,4 @@
+import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -47,10 +48,14 @@ export async function removeRuntimeUnregisteredWorktree(args: {
   localOptions: LocalProjectWorktreeGitOptions
   store: RuntimeStore
   acquireWatcherRemoval: (path: string, connectionId?: string) => Promise<RemovalGate>
-  stopPtys: (worktreeId: string, connectionId: string | undefined, allow: boolean) => Promise<void>
+  stopPtys: (
+    worktreeId: string,
+    connectionId: string | undefined,
+    allow: boolean
+  ) => Promise<Pick<RemoveWorktreeResult, 'uncheckedTerminalServices'> | void>
   deleteHistory: () => Promise<void>
   finishRemoval: () => void
-}): Promise<{}> {
+}): Promise<Pick<RemoveWorktreeResult, 'uncheckedTerminalServices'>> {
   const { repo, target, registeredWorktrees, removedMeta, route } = args
   const removalHome = resolveWorktreeRemovalHome(route)
   let canCleanOrphanedDirectory = false
@@ -89,9 +94,9 @@ export async function removeRuntimeUnregisteredWorktree(args: {
     if (!args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }
-    await deleteUnregisteredDirectory(args)
+    const unchecked = await deleteUnregisteredDirectory(args)
     args.finishRemoval()
-    return {}
+    return unchecked
   }
   if (route.kind === 'local') {
     const access = getLocalWorktreePathAccess(args.localOptions)
@@ -112,9 +117,9 @@ export async function removeRuntimeUnregisteredWorktree(args: {
       if (!args.force) {
         throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
       }
-      await deleteUnregisteredDirectory(args)
+      const unchecked = await deleteUnregisteredDirectory(args)
       args.finishRemoval()
-      return {}
+      return unchecked
     }
   }
   if (await isRuntimeWorktreePathMissing(route.hostId, target.path, args.localOptions)) {
@@ -131,13 +136,15 @@ export async function removeRuntimeUnregisteredWorktree(args: {
 
 async function deleteUnregisteredDirectory(
   args: Parameters<typeof removeRuntimeUnregisteredWorktree>[0]
-): Promise<void> {
+): Promise<Pick<RemoveWorktreeResult, 'uncheckedTerminalServices'>> {
   const route = args.route
   const connectionId = getWorktreeRemovalConnectionId(route)
+  let unchecked: Pick<RemoveWorktreeResult, 'uncheckedTerminalServices'> = {}
   const gate = await args.acquireWatcherRemoval(args.target.path, connectionId)
   let completed = false
   try {
-    await args.stopPtys(args.target.id, connectionId, args.allowUnverifiedPtyStop)
+    unchecked =
+      (await args.stopPtys(args.target.id, connectionId, args.allowUnverifiedPtyStop)) ?? {}
     if (route.kind === 'local') {
       await removeLocalWorktreePath(args.target.path, args.localOptions)
     } else if (route.fsProvider) {
@@ -151,6 +158,7 @@ async function deleteUnregisteredDirectory(
   }
   await cleanupPushTarget(args)
   await args.deleteHistory()
+  return unchecked
 }
 
 async function cleanupPushTarget(

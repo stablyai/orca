@@ -15,7 +15,11 @@ export function localPtyShutdownIncarnation(
   return savedPaneIncarnation(store.getWorkspaceSession(), ptyId)
 }
 
-function savedPaneIncarnation(session: WorkspaceSessionState, ptyId: string): string | undefined {
+/** The incarnation saved panes bound to `ptyId` recorded, or undefined when none or they disagree. */
+export function savedPaneIncarnation(
+  session: WorkspaceSessionState,
+  ptyId: string
+): string | undefined {
   const found = new Set<string>()
   for (const tabs of Object.values(session.tabsByWorktree ?? {})) {
     for (const tab of tabs) {

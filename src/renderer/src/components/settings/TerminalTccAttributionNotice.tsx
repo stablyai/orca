@@ -4,7 +4,9 @@ import { Button } from '../ui/button'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 
-export const MANAGE_SESSIONS_SECTION_ID = 'terminal-manage-sessions'
+import { openManageSessions as openManageSessionsSection } from './open-manage-sessions'
+
+export { MANAGE_SESSIONS_SECTION_ID } from './open-manage-sessions'
 
 /**
  * Why this exists: macOS pins the TCC "responsible process" of the detached terminal
@@ -53,16 +55,8 @@ export function TerminalTccAttributionNotice(props: {
     return null
   }
 
-  const openManageSessions = (): void => {
-    // Why: a stale Settings search would hide the Manage Sessions section this points at.
-    setSettingsSearchQuery('')
-    openSettingsTarget({
-      pane: 'terminal',
-      repoId: null,
-      sectionId: MANAGE_SESSIONS_SECTION_ID
-    })
-    openSettingsPage()
-  }
+  const openManageSessions = (): void =>
+    openManageSessionsSection({ setSettingsSearchQuery, openSettingsTarget, openSettingsPage })
 
   return (
     <div

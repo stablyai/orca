@@ -8,7 +8,8 @@ import {
   renderDaemonUnreachableBanner,
   renderResourceUsagePopoverHeader,
   renderResourceUsageSummary,
-  renderSessionsOnlyErrorBanner
+  renderSessionsOnlyErrorBanner,
+  renderSessionsPartialBanner
 } from './resource-usage-popover-summary'
 import {
   renderResourceUsagePopoverBody,
@@ -58,6 +59,7 @@ export function ResourceUsageStatusSegment({
     commitBadgeLabel,
     daemonUnreachable,
     sessionsOnlyError,
+    sessionsPartial,
     resourceManagerTooltipLines,
     resourceManagerAriaLabel,
     toggleRepo,
@@ -107,6 +109,10 @@ export function ResourceUsageStatusSegment({
         {renderResourceUsagePopoverHeader({ daemonActions })}
         {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions })}
         {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner()}
+        {!daemonUnreachable &&
+          !sessionsOnlyError &&
+          sessionsPartial &&
+          renderSessionsPartialBanner()}
         {resourceSnapshot &&
           renderResourceUsageSummary({
             totalCpu,
@@ -115,7 +121,8 @@ export function ResourceUsageStatusSegment({
             commitBadgeLabel,
             commitMetricCopy,
             commitToneClass,
-            orphanCount
+            orphanCount,
+            orphanCountIsLowerBound: sessionsPartial
           })}
         {/* Why: fixed 420px height so the popover doesn't jump as worktrees expand/collapse or sessions change; inner tree owns its scroll. */}
         {renderResourceUsagePopoverBody({

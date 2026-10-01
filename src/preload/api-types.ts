@@ -197,6 +197,7 @@ export type {
   PtyManagementApi,
   PtyManagementDaemonCwdClass,
   PtyManagementFolderAccessMismatch,
+  PtyManagementGeneration,
   PtyManagementMacTccAttributionHealth,
   PtyManagementSession,
   PtyManagementSessionIdentity

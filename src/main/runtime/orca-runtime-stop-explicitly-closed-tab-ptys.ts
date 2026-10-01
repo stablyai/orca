@@ -32,7 +32,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
             error instanceof Error ? error.message : String(error)
           )
         }
-        // Preserve an observed exit when a broader inventory check could not finish.
+        // Preserve an observed exit when the owner could not confirm the stop afterwards.
         if (
           !stopped &&
           expectedIncarnationId &&

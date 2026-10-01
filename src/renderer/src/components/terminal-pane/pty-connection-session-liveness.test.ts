@@ -670,7 +670,7 @@ describe('connectPanePty', () => {
       const calls: string[] = []
       listSessions.mockImplementation(() => {
         calls.push('listSessions')
-        return Promise.resolve([])
+        return Promise.resolve({ sessions: [], complete: true, unverifiable: [] })
       })
       const { binding, transport, typeKeystroke } = await connectActivePaneWithInput()
       transport.sendInput.mockImplementation(() => {

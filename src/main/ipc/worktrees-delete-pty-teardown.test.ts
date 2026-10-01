@@ -329,7 +329,8 @@ describe('registerWorktreeHandlers', () => {
       localProvider: sshPtyProvider,
       onPtyStopped: clearProviderPtyStateMock,
       requirePhysicalStop: true,
-      includeLocalRegistry: false
+      includeLocalRegistry: false,
+      persistedPaneSessionIds: []
     })
   })
 

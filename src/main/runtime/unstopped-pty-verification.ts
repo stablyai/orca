@@ -10,6 +10,9 @@ import {
   type PtyLivenessVerdict
 } from '../../shared/pty-liveness-verdict'
 import { settleBeforeDeadline } from './settle-before-deadline'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+
+const PER_PTY_VERIFY_CONCURRENCY = 8
 
 // Floor for the verification window when the sweep ran on a very short budget.
 export const WORKTREE_TEARDOWN_VERIFY_GRACE_MS = 2_000
@@ -17,7 +20,8 @@ export const WORKTREE_TEARDOWN_VERIFY_GRACE_MS = 2_000
 export type UnstoppedPtyVerdict = PtyLivenessVerdict
 
 /**
- * Re-lists the provider's processes to decide what a failed stop RPC actually
+ * Asks each failed stop's owner (daemon providers) or re-lists the provider's processes
+ * (single-source providers) to decide what a failed stop RPC actually
  * meant. The three verdicts stay distinct on purpose: "we could not ask" is not
  * evidence that a PTY survived, and callers word their errors differently.
  *
@@ -30,10 +34,15 @@ export type UnstoppedPtyVerdict = PtyLivenessVerdict
 export async function verifyUnstoppedPtys(
   failedPtyIds: readonly string[],
   provider: IPtyProvider,
-  sweepBudgetMs: number
+  sweepBudgetMs: number,
+  /** Ids this removal's listing already tied to a version that did not answer. */
+  silentEvidence: ReadonlySet<string> = new Set()
 ): Promise<UnstoppedPtyVerdict> {
   const verifyBudgetMs = Math.max(WORKTREE_TEARDOWN_VERIFY_GRACE_MS, sweepBudgetMs)
   const verifyDeadline = Date.now() + verifyBudgetMs
+  if (provider.confirmPtyStopped) {
+    return await verifyEachWithItsOwner(failedPtyIds, provider, verifyDeadline, silentEvidence)
+  }
   let listError: unknown
   const sessions = await settleBeforeDeadline(
     async () => {
@@ -56,6 +65,34 @@ export async function verifyUnstoppedPtys(
   const livePtyIds = new Set(sessions.map((session) => session.id))
   const stillLive = failedPtyIds.filter((ptyId) => livePtyIds.has(ptyId))
   return stillLive.length > 0 ? { status: 'live', ptyIds: stillLive } : { status: 'exited' }
+}
+
+// Why per id: a merged list fails whenever any daemon version is silent, and a partial one would
+// read an id held by the silent version as exited.
+async function verifyEachWithItsOwner(
+  failedPtyIds: readonly string[],
+  provider: IPtyProvider,
+  verifyDeadline: number,
+  silentEvidence: ReadonlySet<string>
+): Promise<UnstoppedPtyVerdict> {
+  const stopped = await settleBeforeDeadline(
+    () =>
+      mapWithConcurrency(failedPtyIds, PER_PTY_VERIFY_CONCURRENCY, (ptyId) =>
+        // Why no probe: this removal already found the owner silent; asking again only waits it out.
+        silentEvidence.has(ptyId)
+          ? Promise.resolve(null)
+          : provider.confirmPtyStopped!(ptyId, { deadlineMs: verifyDeadline }).catch(() => null)
+      ),
+    null,
+    verifyDeadline
+  )
+  const stillLive = failedPtyIds.filter((_, index) => stopped?.[index] === false)
+  if (stillLive.length > 0) {
+    return { status: 'live', ptyIds: stillLive }
+  }
+  return stopped && stopped.every((verdict) => verdict === true)
+    ? { status: 'exited' }
+    : { status: 'unverifiable', reason: 'the terminal service that owns it did not answer' }
 }
 
 /**
@@ -81,7 +118,8 @@ export async function resolveUnstoppedPtyVerdict(
   provider: IPtyProvider,
   sweepBudgetMs: number,
   providerObservesOwningHost: boolean,
-  runtime?: OrcaRuntimeService
+  runtime?: OrcaRuntimeService,
+  silentEvidence?: ReadonlySet<string>
 ): Promise<UnstoppedPtyVerdict> {
   if (failedPtyIds.length === 0) {
     return { status: 'exited' }
@@ -94,7 +132,7 @@ export async function resolveUnstoppedPtyVerdict(
       }
     )
   }
-  return verifyUnstoppedPtys(failedPtyIds, provider, sweepBudgetMs)
+  return verifyUnstoppedPtys(failedPtyIds, provider, sweepBudgetMs, silentEvidence)
 }
 
 /** Names the blocking PTYs so a wedged removal is diagnosable, not just refused. */

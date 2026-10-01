@@ -8,9 +8,15 @@ import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { LOCAL_EXECUTION_HOST_ID, getRepoExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  getRepoExecutionHostId,
+  toSshExecutionHostId
+} from '../../shared/execution-host'
 import type { IPtyProvider } from '../providers/types'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import { persistedPaneSessionIdsForWorktree } from './worktree-persisted-pane-sessions'
+import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type { MemorySnapshot, StatsSummary } from '../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../memory/collector'
@@ -129,7 +135,7 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
   protected async stopPtysForDestructiveWorktreeRemoval(
     worktreeId: string,
     options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
-  ): Promise<void> {
+  ): Promise<Pick<RemoveWorktreeResult, 'uncheckedTerminalServices'>> {
     const { connectionId, allowUnverifiedStop } = options
     const provider = connectionId ? this.getSshProviderFn?.(connectionId) : this.getLocalProvider()
     if (!provider) {
@@ -147,7 +153,13 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
       // Why (#11960): set only by an explicit Force Delete, never by the ordinary
       // confirmation — otherwise the gate would be off on the primary delete path.
       ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {}),
-      ...(connectionId ? { includeLocalRegistry: false } : {})
+      ...(connectionId ? { includeLocalRegistry: false } : {}),
+      persistedPaneSessionIds: persistedPaneSessionIdsForWorktree(
+        this.store?.getWorkspaceSession?.(
+          connectionId ? toSshExecutionHostId(connectionId) : undefined
+        ),
+        worktreeId
+      )
     })
     // Structured sessions are counted here too, mirroring the IPC path: closing a user's chat is
     // now an ordinary outcome of this verb, and a removal that closed one but no PTY logged nothing.
@@ -162,6 +174,8 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
         `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped} structured=${structuredStopped}`
       )
     }
+    const unchecked = teardownResult.uncheckedTerminalServices
+    return unchecked ? { uncheckedTerminalServices: unchecked } : {}
   }
 
   getStatsSummary(): StatsSummary | null {

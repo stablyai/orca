@@ -1,7 +1,6 @@
 import { ipcMain } from 'electron'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
-import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import {
   getCurrentDaemonMacTccAttributionHealth,
   getDaemonProvider,
@@ -19,25 +18,27 @@ import {
 } from '../daemon/daemon-folder-access-reset'
 import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-tcc-attribution'
 import type { DaemonEndpointIdentity } from '../daemon/daemon-hello-protocol'
-import type { DaemonSessionInfo } from '../daemon/types'
+import { USER_FACING_DAEMON_LISTING_TIMEOUT_MS } from '../daemon/daemon-generation-listing'
+import {
+  collectGenerations,
+  generationDeadline,
+  type DaemonAdapterSet,
+  type DaemonGenerationInventory
+} from './pty-management-generations'
+import { killAllDaemonSessions, type DaemonKillAllResult } from './pty-management-kill-all'
 
-// Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
-const MAX_POLL_ATTEMPTS = 65
-const POLL_INTERVAL_MS = 100
+export type { DaemonGenerationInventory } from './pty-management-generations'
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function getDaemonAdapters(): DaemonPtyAdapter[] {
+// Why identity, not PROTOCOL_VERSION: current is the adapter the router spawns fresh sessions on.
+function getDaemonAdapters(): DaemonAdapterSet {
   const provider = getDaemonProvider()
   if (!provider) {
-    return []
+    return { adapters: [], current: null }
   }
   if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
-    return [...provider.getAllAdapters()]
+    return { adapters: [...provider.getAllAdapters()], current: provider.getCurrentAdapter() }
   }
-  return [provider]
+  return { adapters: [provider], current: provider }
 }
 
 // Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.
@@ -56,20 +57,12 @@ function readCurrentDaemonIdentity(): DaemonEndpointIdentity | null {
   return provider ? getCurrentDaemonAdapter(provider).getDaemonIdentity() : null
 }
 
-async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
-  const results = await Promise.allSettled(
-    adapters.map(async (adapter) => {
-      const sessions = await adapter.listSessions()
-      return sessions.map<DaemonSessionInfo>((s) => ({
-        ...s,
-        protocolVersion: adapter.protocolVersion
-      }))
-    })
-  )
-  return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
-}
-
-export function registerDaemonManagementHandlers(): void {
+export function registerDaemonManagementHandlers(
+  deps: {
+    /** Reads the incarnation saved tabs recorded for a session id (savedPaneIncarnation). */
+    getSavedIncarnationLookup?: () => (sessionId: string) => string | undefined
+  } = {}
+): void {
   ipcMain.removeHandler('pty:management:listSessions')
   ipcMain.removeHandler('pty:management:killAll')
   ipcMain.removeHandler('pty:management:killOne')
@@ -113,69 +106,20 @@ export function registerDaemonManagementHandlers(): void {
 
   ipcMain.handle(
     'pty:management:listSessions',
-    async (): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
-      const sessions = await collectSessions(getDaemonAdapters())
-      return { sessions, degraded: isDaemonDegraded() }
+    async (): Promise<{ generations: DaemonGenerationInventory[]; degraded: boolean }> => {
+      const generations = await collectGenerations(
+        getDaemonAdapters(),
+        undefined,
+        deps.getSavedIncarnationLookup?.()
+      )
+      return { generations, degraded: isDaemonDegraded() }
     }
   )
 
   // Why: tears down sessions across all adapters (current + legacy); daemon processes survive. See docs/daemon-staleness-ux.md §Phase 1.
   ipcMain.handle(
     'pty:management:killAll',
-    async (): Promise<{
-      killedCount: number
-      remainingCount: number
-      killedSessionIds: string[]
-    }> => {
-      const adapters = getDaemonAdapters()
-      // Why: snapshot session IDs up front so mid-kill respawns aren't counted as "remaining".
-      const initial = await collectSessions(adapters)
-      const initialIds = new Set(initial.map((s) => s.sessionId))
-      const initialCount = initial.length
-
-      if (initialCount === 0) {
-        return { killedCount: 0, remainingCount: 0, killedSessionIds: [] }
-      }
-
-      // Why: no retry — session.kill() is idempotent and runs its own kill ladder; allSettled so one rejection doesn't abort the rest.
-      await Promise.allSettled(
-        initial.map(async (session) => {
-          // Why: assumes PROTOCOL_VERSION stays distinct from PREVIOUS_DAEMON_PROTOCOL_VERSIONS (types.ts), else legacy sessions misroute here.
-          const owner = adapters.find((a) => a.protocolVersion === session.protocolVersion)
-          if (!owner) {
-            return
-          }
-          // Why: immediate=true only matters to legacy/future adapters; swallow rejections since remainingCount reports stuck sessions.
-          await owner.shutdown(session.sessionId, { immediate: true }).catch(() => {})
-        })
-      )
-
-      // Why: count only the initial-snapshot intersection so renderer respawns mid-kill aren't counted as remaining.
-      let remainingOriginalCount = initialCount
-      let remainingOriginalIds = initialIds
-      for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
-        await sleep(POLL_INTERVAL_MS)
-        const current = await collectSessions(adapters)
-        remainingOriginalIds = new Set(
-          current
-            .filter((session) => initialIds.has(session.sessionId))
-            .map((session) => session.sessionId)
-        )
-        remainingOriginalCount = remainingOriginalIds.size
-        if (remainingOriginalCount === 0) {
-          break
-        }
-      }
-
-      const killedCount = initialCount - remainingOriginalCount
-      return {
-        killedCount,
-        remainingCount: remainingOriginalCount,
-        killedSessionIds: [...initialIds].filter(
-          (sessionId) => !remainingOriginalIds.has(sessionId)
-        )
-      }
-    }
+    async (): Promise<DaemonKillAllResult> => await killAllDaemonSessions(getDaemonAdapters())
   )
 
   ipcMain.handle(
@@ -183,7 +127,7 @@ export function registerDaemonManagementHandlers(): void {
     async (
       _event,
       args: { sessionId: string; protocolVersion: number; incarnationId?: string }
-    ): Promise<{ success: boolean }> => {
+    ): Promise<{ success: boolean; reason?: 'unverifiable' }> => {
       if (
         typeof args?.sessionId !== 'string' ||
         args.sessionId.length === 0 ||
@@ -193,14 +137,31 @@ export function registerDaemonManagementHandlers(): void {
       }
       // Why the clicked row's exact identity: after a fresh start over an unreachable version the
       // same id is live in two versions, and killing the first match ended the tab's own agent.
-      const owner = getDaemonAdapters().find((a) => a.protocolVersion === args.protocolVersion)
-      const listed = await owner?.listSessions().catch(() => [])
-      const match = listed?.some(
-        (s) =>
-          s.sessionId === args.sessionId &&
-          (args.incarnationId === undefined || s.incarnationId === args.incarnationId)
-      )
-      if (!owner || !match) {
+      const { adapters, current } = getDaemonAdapters()
+      const owner = adapters.find((a) => a.protocolVersion === args.protocolVersion)
+      if (!owner) {
+        return { success: false }
+      }
+      let listed
+      try {
+        const deadlineMs = generationDeadline(
+          owner,
+          current,
+          Date.now() + USER_FACING_DAEMON_LISTING_TIMEOUT_MS
+        )
+        listed = await owner.readSessions(deadlineMs === undefined ? undefined : { deadlineMs })
+      } catch {
+        // Why not "already gone": losing contact with the version is not evidence the session ended.
+        return { success: false, reason: 'unverifiable' }
+      }
+      const match =
+        listed.contact === 'live' &&
+        listed.items.some(
+          (s) =>
+            s.sessionId === args.sessionId &&
+            (args.incarnationId === undefined || s.incarnationId === args.incarnationId)
+        )
+      if (!match) {
         return { success: false }
       }
       try {

@@ -19,7 +19,7 @@ test.use({
 
 async function hasPtySession(page: Page, ptyId: string): Promise<boolean> {
   return page.evaluate(async (id) => {
-    const sessions = await window.api.pty.listSessions()
+    const { sessions } = await window.api.pty.listSessions()
     return sessions.some((session) => session.id === id)
   }, ptyId)
 }

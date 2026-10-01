@@ -80,7 +80,7 @@ test.describe('Resource Usage warm-reattach', () => {
       // close the app. If it doesn't, the second-launch assertion would
       // fail for the wrong reason (no warm-reattach state to verify).
       const firstLaunchSessions = await firstLaunch.page.evaluate(async () => {
-        return window.api.pty.listSessions()
+        return (await window.api.pty.listSessions()).sessions
       })
       expect(firstLaunchSessions.some((s) => s.id === ptyId)).toBe(true)
 

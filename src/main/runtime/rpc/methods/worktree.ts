@@ -6,6 +6,7 @@ import {
 import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
+import { describeUncheckedTerminalServices } from '../../../../shared/worktree/removal'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
 import { defineMethod } from '../core'
@@ -252,9 +253,17 @@ export const WORKTREE_METHODS = [
         allowFailedArchiveHook: params.allowFailedArchiveHook === true,
         ...(resolvedHostId ? { hostId: resolvedHostId } : {})
       })
+      // Why the existing warning: the CLI prints it (mobile reads no worktree.rm reply); the field is additive.
+      const warning = [
+        result.warning,
+        result.uncheckedTerminalServices?.length
+          ? describeUncheckedTerminalServices(result.uncheckedTerminalServices)
+          : undefined
+      ].filter(Boolean)
       return {
         removed: true,
         ...result,
+        ...(warning.length > 0 ? { warning: warning.join(' ') } : {}),
         ...(repoId ? { catalogVersion: getLocalWorktreeCatalogVersion(repoId) } : {})
       }
     }

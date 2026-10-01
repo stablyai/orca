@@ -7,7 +7,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
+import type { PtySessionListing, PtySessionListScope } from '../../shared/pty-listed-session'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
@@ -148,7 +148,7 @@ export const ptySessionControlApi = {
   },
   kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
     ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
-  listSessions: (scope?: PtySessionListScope): Promise<PtyListedSession[]> =>
+  listSessions: (scope?: PtySessionListScope): Promise<PtySessionListing> =>
     ipcRenderer.invoke('pty:listSessions', scope),
   getAuthoritativeBufferSnapshotCapabilities: (
     ids: string[]

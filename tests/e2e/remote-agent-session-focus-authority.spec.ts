@@ -443,7 +443,7 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
       .poll(
         () =>
           orcaPage.evaluate(async () =>
-            (await window.api.pty.listSessions()).map((session) => session.id)
+            (await window.api.pty.listSessions()).sessions.map((session) => session.id)
           ),
         { timeout: 15_000 }
       )
@@ -517,7 +517,7 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
         () =>
           orcaPage.evaluate(
             async (ptyIds) =>
-              (await window.api.pty.listSessions())
+              (await window.api.pty.listSessions()).sessions
                 .map((session) => session.id)
                 .filter((ptyId) => ptyIds.includes(ptyId)),
             fixturePtyIds

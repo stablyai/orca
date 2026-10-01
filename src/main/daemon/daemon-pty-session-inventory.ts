@@ -12,6 +12,7 @@ import { connectFailureProvesExit } from './daemon-endpoint-verdict'
 import { isMissingWindowsNamedPipeError } from './daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
+import type { DaemonInventoryRead } from './daemon-generation-listing'
 import { parsePtySessionId } from './pty-session-id'
 import type { ListSessionsResult, SessionInfo } from './types'
 import { PtyProcessListAdmission } from '../providers/pty-process-list-admission'
@@ -19,6 +20,13 @@ import type { PtyProcessInfo } from '../providers/types'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+    const read = await this.readProcesses(opts)
+    return read.contact === 'live' ? read.items : []
+  }
+
+  async readProcesses(opts?: {
+    deadlineMs?: number
+  }): Promise<DaemonInventoryRead<PtyProcessInfo>> {
     // Why: snapshotted before the request so ids spawned mid-flight can never
     // be reconciled away below.
     const preRequestActiveIds = new Set(this.activeSessionIds)
@@ -79,7 +87,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       this.publishAuditObservation(
         recordAuthenticatedInventory(this.auditContext, this.exactDaemonIncarnation)
       )
-      return processes
+      return { contact: 'live', items: processes }
     } catch (error) {
       const missingAuthenticatedToken = this.isRetiredEndpointTokenMissing()
       const missingNamedPipe = isMissingWindowsNamedPipeError(error)
@@ -101,7 +109,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       for (const id of preRequestActiveIds) {
         this.activeSessionIds.delete(id)
       }
-      return []
+      return { contact: 'exited' }
     }
   }
 
@@ -127,23 +135,35 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   // createdAt) per session for display; listProcesses drops that detail for
   // the IPtyProvider contract. Keep both in parallel rather than widening
   // the provider surface.
-  async listSessions(): Promise<SessionInfo[]> {
+  async listSessions(opts?: { deadlineMs?: number }): Promise<SessionInfo[]> {
+    const read = await this.readSessions(opts)
+    return read.contact === 'live' ? read.items : []
+  }
+
+  async readSessions(opts?: { deadlineMs?: number }): Promise<DaemonInventoryRead<SessionInfo>> {
     let result: ListSessionsResult
     try {
-      await this.ensureConnected()
-      result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+      await this.ensureConnected(opts?.deadlineMs)
+      result = await this.client.request<ListSessionsResult>(
+        'listSessions',
+        undefined,
+        remainingDaemonRequestTimeoutMs(opts?.deadlineMs)
+      )
     } catch (error) {
       if (await connectFailureProvesExit(error, this.endpointRecord())) {
-        return []
+        return { contact: 'exited' }
       }
       throw error
     }
-    return result.sessions
-      .filter((s) => s.isAlive)
-      .map((session) => ({
-        ...session,
-        ...this.validatedAgentSessionOwners(session.agentSessionOwners)
-      }))
+    return {
+      contact: 'live',
+      items: result.sessions
+        .filter((s) => s.isAlive)
+        .map((session) => ({
+          ...session,
+          ...this.validatedAgentSessionOwners(session.agentSessionOwners)
+        }))
+    }
   }
 
   getActiveSessionIds(): string[] {

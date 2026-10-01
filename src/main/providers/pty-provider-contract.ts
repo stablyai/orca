@@ -10,6 +10,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
+import type { PtyProcessSourceListing } from './pty-process-source-listing'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
@@ -141,7 +142,9 @@ export type IPtyProvider = {
   attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
-  probePtyLiveness?: (id: string) => Promise<boolean | null>
+  probePtyLiveness?: (id: string, opts?: { deadlineMs?: number }) => Promise<boolean | null>
+  /** After a stop: true once the owner that stopped it no longer holds it; null when it cannot say. */
+  confirmPtyStopped?: (id: string, opts?: { deadlineMs?: number }) => Promise<boolean | null>
   write(id: string, data: string): boolean | void
   /** Three-valued settlement for writes whose delivery a durable claim depends on.
    *  Required: a provider that answers this from its own fire-and-forget `write` is
@@ -242,6 +245,12 @@ export type IPtyProvider = {
     deadlineMs?: number
     includeForegroundProcessEvidence?: boolean
   }): Promise<PtyProcessInfo[]>
+  /** Per-source listing for providers that merge several; only callers that can act on a partial answer use it. */
+  listProcessesBySource?: (opts?: {
+    deadlineMs?: number
+    /** Earlier bound for versions other than the current one. */
+    nonCurrentDeadlineMs?: number
+  }) => Promise<PtyProcessSourceListing[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: PtyDataEvent) => void): () => void

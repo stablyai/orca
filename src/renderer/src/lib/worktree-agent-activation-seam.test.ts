@@ -106,6 +106,8 @@ function stubInventory(args?: {
   livePtyId?: string
   /** Host that could not produce a complete census for the workspace it was asked about. */
   unverifiableCensus?: boolean
+  /** A daemon version that did not answer the PTY listing. */
+  partialPtyListing?: boolean
 }): {
   runtimeCall: ReturnType<typeof vi.fn>
   listSessions: ReturnType<typeof vi.fn>
@@ -142,7 +144,7 @@ function stubInventory(args?: {
     }
     throw new Error(`Unexpected runtime method: ${method}`)
   })
-  const listSessions = vi.fn(async () =>
+  const listSessions = vi.fn(async (_scope?: unknown) =>
     args?.livePtyId
       ? [
           {
@@ -154,7 +156,15 @@ function stubInventory(args?: {
         ]
       : []
   )
-  vi.stubGlobal('window', { api: { runtime: { call: runtimeCall }, pty: { listSessions } } })
+  // Why a wrapper: cases script the session array; the channel adds completeness around it.
+  const pty = {
+    listSessions: async (scope?: unknown) => ({
+      sessions: await listSessions(scope),
+      complete: args?.partialPtyListing !== true,
+      unverifiable: []
+    })
+  }
+  vi.stubGlobal('window', { api: { runtime: { call: runtimeCall }, pty } })
   return { runtimeCall, listSessions }
 }
 
@@ -235,6 +245,17 @@ describe('worktree agent activation seam', () => {
     expect(tabs[0]?.ptyId).toBeNull()
   })
 
+  it('blocks instead of seeding while a terminal-service version did not answer', async () => {
+    const worktree = makeWorktree()
+    useAppStore.setState(baseState())
+    stubInventory({ partialPtyListing: true })
+
+    activateAndRevealWorktree(worktree.id)
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('blocked')
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
+  })
+
   it('re-seeds an explicitly activated workspace with a closed terminal tombstone', async () => {
     const worktree = makeWorktree()
     useAppStore.setState({
@@ -297,7 +318,10 @@ describe('worktree agent activation seam', () => {
       method: 'session.tabs.list',
       params: { worktree: `id:${worktree.id}` }
     })
-    expect(listSessions).toHaveBeenCalledExactlyOnceWith({ connectionId: null })
+    expect(listSessions).toHaveBeenCalledExactlyOnceWith({
+      connectionId: null,
+      worktreeId: worktree.id
+    })
     expect(runtimeCall).toHaveBeenCalledWith({
       method: 'agentSession.handoffStatus',
       params: { sessionId: 'chat-1' }
@@ -334,13 +358,16 @@ describe('worktree agent activation seam', () => {
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
     await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('blocked')
-    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box' }]])
+    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box', worktreeId: worktree.id }]])
     expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
 
     listSessions.mockResolvedValue([])
     activateAndRevealWorktree(worktree.id)
     await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
-    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box' }], [{ connectionId: 'box' }]])
+    expect(listSessions.mock.calls).toEqual([
+      [{ connectionId: 'box', worktreeId: worktree.id }],
+      [{ connectionId: 'box', worktreeId: worktree.id }]
+    ])
     await vi.waitFor(() =>
       expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(1)
     )
@@ -385,6 +412,9 @@ describe('worktree agent activation seam', () => {
     activateAndRevealWorktree(worktree.id)
     await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('resumed')
     expect(resume).toHaveBeenCalledExactlyOnceWith(worktree.id, { skipClaimKeys: new Set() })
-    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box' }], [{ connectionId: 'box' }]])
+    expect(listSessions.mock.calls).toEqual([
+      [{ connectionId: 'box', worktreeId: worktree.id }],
+      [{ connectionId: 'box', worktreeId: worktree.id }]
+    ])
   })
 })

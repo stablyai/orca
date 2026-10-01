@@ -2,14 +2,21 @@
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { runCleanupMock, snapshotMock, toastErrorMock, toastInfoMock, toastSuccessMock } =
-  vi.hoisted(() => ({
-    runCleanupMock: vi.fn(),
-    snapshotMock: vi.fn(),
-    toastErrorMock: vi.fn(),
-    toastInfoMock: vi.fn(),
-    toastSuccessMock: vi.fn()
-  }))
+const {
+  runCleanupMock,
+  snapshotMock,
+  toastErrorMock,
+  toastInfoMock,
+  toastSuccessMock,
+  toastWarningMock
+} = vi.hoisted(() => ({
+  runCleanupMock: vi.fn(),
+  snapshotMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+  toastInfoMock: vi.fn(),
+  toastSuccessMock: vi.fn(),
+  toastWarningMock: vi.fn()
+}))
 
 vi.mock('./kill-all-terminal-surfaces', () => ({
   runKillAllTerminalSurfaces: runCleanupMock,
@@ -21,7 +28,7 @@ vi.mock('sonner', () => ({
     error: toastErrorMock,
     info: toastInfoMock,
     success: toastSuccessMock,
-    warning: vi.fn()
+    warning: toastWarningMock
   }
 }))
 
@@ -148,6 +155,30 @@ describe('useDaemonActions kill-all cleanup', () => {
       expect.any(Object)
     )
     expect(toastInfoMock).not.toHaveBeenCalled()
+  })
+
+  it('warns instead of reporting success when a version stopped answering mid-kill', async () => {
+    runCleanupMock.mockResolvedValue({
+      ...successfulSurfaceSummary(),
+      daemon: {
+        status: 'fulfilled',
+        killedCount: 1,
+        remainingCount: 0,
+        unverifiedCount: 2,
+        unreachedVersionCount: 0
+      }
+    })
+    const { result } = renderHook(() => useDaemonActions())
+
+    await act(async () => {
+      await result.current.runKillAll()
+    })
+
+    expect(toastSuccessMock).not.toHaveBeenCalled()
+    expect(toastWarningMock).toHaveBeenCalledWith(
+      'Terminal cleanup finished with warnings.',
+      expect.objectContaining({ description: expect.stringContaining('may still be running') })
+    )
   })
 })
 

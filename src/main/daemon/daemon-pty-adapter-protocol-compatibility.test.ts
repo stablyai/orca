@@ -493,6 +493,22 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await expect(adapter.probePtyLiveness('session')).resolves.toBeNull()
     })
 
+    it('reads a daemon proven gone as absent, not as unknown', async () => {
+      const gone = new DaemonPtyAdapter({
+        socketPath: `${socketPath}.gone`,
+        tokenPath,
+        protocolVersion: 36
+      })
+      const request = vi.fn(async () => {
+        throw Object.assign(new Error('connect ENOENT'), { code: 'ENOENT', syscall: 'connect' })
+      })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the probe reaches the daemon only through client.request.
+      ;(gone as unknown as { client: { request: typeof request } }).client.request = request
+
+      await expect(gone.probePtyLiveness('session')).resolves.toBe(false)
+      gone.dispose()
+    })
+
     function createProbeAdapter(
       protocolVersion: number,
       request: ReturnType<typeof vi.fn>

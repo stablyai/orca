@@ -3628,6 +3628,7 @@
             "2b84c4d11f": "{{value0}} espace de travail · {{value1}} externes"
           },
           "ResourceUsageStatusSegment": {
+            "7a2e9c5b14": "Une version du service de terminal n’a pas répondu, cette liste est donc peut-être incomplète. Rien n’indique que ses sessions se soient arrêtées.",
             "946d9f94d0": "Annuler",
             "67c4ecda49": "Force la fermeture de ce terminal. Tout travail non enregistré dans le volet est perdu. Action irréversible.",
             "4bb076fa89": "Tuer",
@@ -5031,6 +5032,11 @@
         }
       },
       "sidebar": {
+        "UncheckedTerminalServicesToast": {
+          "1d7e4b9f03": "Les terminaux qu’elle exécute peut-être encore pour cet espace de travail sur l’hôte concerné n’ont pas été vérifiés.",
+          "5b1e0c7d2a": "Espace de travail supprimé. Une version du service de terminal n’a pas répondu.",
+          "9c4f6a3e18": "Les terminaux qu’elle exécute peut-être encore pour cet espace de travail n’ont pas été vérifiés. Gérer les sessions les affichera dès qu’elle répondra."
+        },
         "local": {
           "base": {
             "ref": {
@@ -6396,6 +6402,7 @@
       },
       "shared": {
         "useDaemonActions": {
+          "3d8a5f1c26": "L’arrêt n’a pas pu être confirmé pour une version du service de terminal qu’Orca n’a pas pu joindre ; ses sessions sont peut-être toujours en cours.",
           "01af244097": "Annuler",
           "28c8e53176": "Force l'arrêt de tous les volets de terminal en cours d'exécution dans tous les espaces de travail. Tout travail non enregistré de ces sessions est perdu. Le daemon continue de tourner et de nouveaux terminaux peuvent être ouverts immédiatement. Irréversible.",
           "1bbea41a77": "Forcer l'arrêt de toutes les sessions de terminal ?",
@@ -6465,6 +6472,14 @@
         }
       },
       "settings": {
+        "ManageSessionsTable": {
+          "d4ae93e65d": "Version actuelle",
+          "285148ee08": "Version précédente",
+          "e6ec9241a4": "Protocole {{value0}}",
+          "3388ec840f": "Orca n’a pas pu joindre cette version du service de terminal, ses sessions ne peuvent donc pas être listées. Rien n’indique qu’elles se soient arrêtées.",
+          "2790ddcc1d": "{{value0}} listée(s) — une version qu’Orca n’a pas pu joindre peut contenir d’autres sessions.",
+          "4f7c2d9a61": "non vérifiable"
+        },
         "keep": {
           "local": {
             "main": {
@@ -7581,6 +7596,7 @@
           "d3dba51b15": "Arrêt forcé…"
         },
         "ManageSessionsSection": {
+          "6e1b9d4c07": "Orca n’a pas pu joindre cette version du service de terminal ; la session est peut-être toujours en cours.",
           "33c2a1e1b4": "Tuer la session {{value0}}",
           "2896a50f50": "Aller au terminal {{value0}}",
           "e26a60d9eb": "Aucune session.",

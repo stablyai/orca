@@ -160,11 +160,14 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
 
-    const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
-      id: string
-      cwd: string
-      title: string
-    }[]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler resolves PtySessionListing; the handler map erases it.
+    const { sessions } = (await handlers.get('pty:listSessions')!(null, undefined)) as {
+      sessions: {
+        id: string
+        cwd: string
+        title: string
+      }[]
+    }
 
     expect(sessions).toEqual(
       expect.arrayContaining([
@@ -235,10 +238,13 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
 
-    const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
-      id: string
-      agentOwnership: string
-    }[]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler resolves PtySessionListing; the handler map erases it.
+    const { sessions } = (await handlers.get('pty:listSessions')!(null, undefined)) as {
+      sessions: {
+        id: string
+        agentOwnership: string
+      }[]
+    }
 
     expect(sessions.find((s) => s.id === 'agent-pty')?.agentOwnership).toBe('present')
     expect(sessions.find((s) => s.id === 'plain-pty')?.agentOwnership).toBe('absent')
@@ -271,10 +277,13 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
 
-    const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
-      id: string
-      agentOwnership: string
-    }[]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler resolves PtySessionListing; the handler map erases it.
+    const { sessions } = (await handlers.get('pty:listSessions')!(null, undefined)) as {
+      sessions: {
+        id: string
+        agentOwnership: string
+      }[]
+    }
 
     expect(sessions.find((s) => s.id === 'legacy-pty')?.agentOwnership).toBe('unknown')
   })

@@ -13,7 +13,22 @@ export type PtyManagementSession = {
   createdAt: number
   protocolVersion: number
   incarnationId?: string
+  /** The copy an open tab shows; a same-id copy in another version does not. */
+  backsTab: boolean
 }
+
+/**
+ * Mirror of main's `DaemonGenerationInventory` (src/main/ipc/pty-management.ts).
+ *
+ * A generation Orca could not reach is `unverifiable` and carries no session list: an empty
+ * array would read as a counted zero, and a listing this process could not complete is never
+ * evidence that the generation's terminals exited (docs/reference/ssh-execution-boundary.md).
+ */
+export type PtyManagementGeneration = { protocolVersion: number; isCurrent: boolean } & (
+  | { contact: 'live'; sessions: PtyManagementSession[] }
+  | { contact: 'exited' }
+  | { contact: 'unverifiable'; reason: 'listing-failed'; detail: string | null }
+)
 
 /** One row's exact identity: the same id can be live in two daemon versions at once. */
 export type PtyManagementSessionIdentity = Pick<
@@ -49,13 +64,17 @@ export type PtyManagementFolderAccessResetResult =
 
 export type PtyManagementApi = {
   // `degraded`: daemon is alive but can't spawn fresh PTYs, so new terminals run locally without daemon persistence.
-  listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
+  listSessions: () => Promise<{ generations: PtyManagementGeneration[]; degraded: boolean }>
   killAll: () => Promise<{
     killedCount: number
     remainingCount: number
+    unverifiedCount?: number
+    unreachedVersionCount?: number
     killedSessionIds?: string[]
   }>
-  killOne: (args: PtyManagementSessionIdentity) => Promise<{ success: boolean }>
+  killOne: (
+    args: PtyManagementSessionIdentity
+  ) => Promise<{ success: boolean; reason?: 'unverifiable' }>
   restart: () => Promise<{ success: boolean }>
   macTccAttribution: () => Promise<{
     health: PtyManagementMacTccAttributionHealth
