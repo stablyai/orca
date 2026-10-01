@@ -702,7 +702,7 @@ describe('MobileNativeChatView', () => {
             node.type === 'Pressable' &&
             ['Scroll to latest', 'Scroll to prompt'].includes(node.props.accessibilityLabel)
         )
-        .map((node) => node.props.accessibilityLabel as string)
+        .map((node) => String(node.props.accessibilityLabel))
     }
 
     async function reportViewable(...keys: string[]): Promise<void> {

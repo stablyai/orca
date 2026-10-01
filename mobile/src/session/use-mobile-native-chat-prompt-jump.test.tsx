@@ -19,6 +19,7 @@ type Jump = ReturnType<typeof useMobileNativeChatPromptJump>
 
 function harness() {
   const list = { scrollToIndex: vi.fn(), scrollToOffset: vi.fn() }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The hook reads only the two mocked FlatList scroll methods.
   const listRef = { current: list as unknown as FlatList<NativeChatMessage> }
   const seen: Jump[] = []
   const onLeaveTail = vi.fn()
