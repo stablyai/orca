@@ -5515,6 +5515,7 @@
           "bdd23b4e07": "Issues GitHub",
           "44713a5d04": "Issues Linear",
           "jiraIssues": "Tickets Jira",
+          "host": "Hôte",
           "cc17bd443b": "Détaillé",
           "0f9b959b31": "PR",
           "e029a2d775": "Statut",
