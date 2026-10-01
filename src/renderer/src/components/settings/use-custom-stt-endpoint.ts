@@ -40,7 +40,8 @@ export function useCustomSttEndpoint({
   setModelDraft: (value: string) => void
   setLanguageDraft: (value: string) => void
   setApiKeyDraft: (value: string) => void
-  openDialog: (modelId: string | null) => void
+  openDialog: () => void
+  cancel: () => void
   save: () => Promise<void>
   clear: () => Promise<void>
   test: () => Promise<void>
@@ -94,29 +95,35 @@ export function useCustomSttEndpoint({
     }
   }, [dialogOpen, baseUrlDraft, apiKeyDraft])
 
-  const openDialog = useCallback(
-    (modelId: string | null): void => {
-      void window.api.speech
-        .getCustomEndpointStatus()
-        .then((status) => {
-          updateVoiceSettings({
-            customSttBaseUrl: status.baseUrl,
-            customSttModel: status.model,
-            customSttLanguage: status.language,
-            customSttApiKeyConfigured: status.apiKeyConfigured,
-            ...(modelId ? { sttModel: modelId } : {})
-          })
-          setBaseUrlDraft(status.baseUrl)
-          setModelDraft(status.model)
-          setLanguageDraft(status.language)
-        })
-        .catch(() => {})
-      setApiKeyDraft('')
-      setTestResult(null)
-      setDialogOpen(true)
-    },
-    [updateVoiceSettings]
-  )
+  const resetDrafts = useCallback((): void => {
+    setBaseUrlDraft('')
+    setModelDraft('')
+    setLanguageDraft('')
+    setApiKeyDraft('')
+    setTestResult(null)
+  }, [])
+
+  // Why: opening the dialog must not change any setting — the endpoint model is
+  // only selected on Save. Drafts are seeded from the persisted store for display,
+  // so Cancel/Esc leaves the profile exactly as it was.
+  const openDialog = useCallback((): void => {
+    void window.api.speech
+      .getCustomEndpointStatus()
+      .then((status) => {
+        setBaseUrlDraft(status.baseUrl)
+        setModelDraft(status.model)
+        setLanguageDraft(status.language)
+      })
+      .catch(() => {})
+    setApiKeyDraft('')
+    setTestResult(null)
+    setDialogOpen(true)
+  }, [])
+
+  const cancel = useCallback((): void => {
+    resetDrafts()
+    setDialogOpen(false)
+  }, [resetDrafts])
 
   const save = useCallback(async (): Promise<void> => {
     setPending(true)
@@ -135,8 +142,8 @@ export function useCustomSttEndpoint({
         sttModel: 'custom-openai-compatible'
       })
       await refreshModelStates()
+      resetDrafts()
       setDialogOpen(false)
-      setApiKeyDraft('')
       toast.success(
         translate(
           'auto.components.settings.VoicePane.customEndpointSaved',
@@ -164,6 +171,7 @@ export function useCustomSttEndpoint({
     apiKeyDraft,
     updateVoiceSettings,
     refreshModelStates,
+    resetDrafts,
     isMounted
   ])
 
@@ -179,11 +187,8 @@ export function useCustomSttEndpoint({
         sttModel: selectedModel?.provider === 'custom' ? '' : voiceSettings.sttModel
       })
       await refreshModelStates()
+      resetDrafts()
       setDialogOpen(false)
-      setBaseUrlDraft('')
-      setModelDraft('')
-      setLanguageDraft('')
-      setApiKeyDraft('')
       toast.success(
         translate(
           'auto.components.settings.VoicePane.customEndpointCleared',
@@ -204,7 +209,14 @@ export function useCustomSttEndpoint({
         setPending(false)
       }
     }
-  }, [selectedModel, voiceSettings.sttModel, updateVoiceSettings, refreshModelStates, isMounted])
+  }, [
+    selectedModel,
+    voiceSettings.sttModel,
+    updateVoiceSettings,
+    refreshModelStates,
+    resetDrafts,
+    isMounted
+  ])
 
   const test = useCallback(async (): Promise<void> => {
     setTesting(true)
@@ -250,6 +262,7 @@ export function useCustomSttEndpoint({
     setLanguageDraft,
     setApiKeyDraft,
     openDialog,
+    cancel,
     save,
     clear,
     test
