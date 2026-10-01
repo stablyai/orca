@@ -51,6 +51,10 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
     agentTaskComplete: booleanOr(candidate.agentTaskComplete, defaults.agentTaskComplete),
     terminalBell: booleanOr(candidate.terminalBell, defaults.terminalBell),
     suppressWhenFocused: booleanOr(candidate.suppressWhenFocused, defaults.suppressWhenFocused),
+    showChildWorktreeUnread: booleanOr(
+      candidate.showChildWorktreeUnread,
+      defaults.showChildWorktreeUnread ?? true
+    ),
     customSoundId,
     customSoundPath:
       typeof candidate.customSoundPath === 'string'

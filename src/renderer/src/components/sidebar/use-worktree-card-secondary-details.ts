@@ -45,7 +45,8 @@ export function useWorktreeCardSecondaryDetails({
   workspacePorts,
   openTaskPage,
   updateWorktreeMeta,
-  settings
+  settings,
+  showWorktreeUnread = true
 }: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'statusPrDisplay'> &
   Pick<
     Foundation,
@@ -63,6 +64,7 @@ export function useWorktreeCardSecondaryDetails({
     ReviewDetails,
     'prDisplay' | 'linkedGitLabMR' | 'linkedBitbucketPR' | 'linkedAzureDevOpsPR' | 'linkedGiteaPR'
   > & {
+    showWorktreeUnread?: boolean
     showStatus: boolean
     showIssue: boolean
     showLinearIssue: boolean
@@ -74,7 +76,7 @@ export function useWorktreeCardSecondaryDetails({
     showPorts: boolean
   }) {
   // Why: unread lives in the left status lane, so the Status toggle owns both the dot/PR slot and unread emphasis.
-  const showUnreadEmphasis = showStatus && worktree.isUnread
+  const showUnreadEmphasis = showStatus && showWorktreeUnread && worktree.isUnread
   const hoverIssue = issueDisplay
   const hoverLinearIssue = linearIssueDisplay
   const hoverJiraIssue = jiraIssueDisplay

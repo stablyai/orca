@@ -11,6 +11,11 @@
     "retrying": "Reintentando…"
   },
   "settings": {
+    "notifications": {
+      "childUnreadKeywords": "secundario hijos espacios de trabajo no leído indicador dock barra lateral",
+      "showChildWorktreeUnread": "Mostrar indicadores de no leído en espacios de trabajo secundarios",
+      "showChildWorktreeUnreadDescription": "Incluir los espacios secundarios en el contador del Dock y los indicadores de no leído de la barra lateral. Desactívalo si sigues el progreso desde su espacio principal. Los estados de actividad y las notificaciones del sistema no cambian."
+    },
     "appearance": {
       "language": {
         "title": "Idioma",
@@ -5396,6 +5401,14 @@
           "copied": "Comando copiado",
           "retry": "Reintentar ahora",
           "restored": "Git funciona de nuevo. Worktrees actualizados."
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}} esperando permiso",
+          "working": "{{value0}} trabajando",
+          "monitoring": "{{value0}} supervisando tareas en segundo plano",
+          "unread": "{{value0}} sin leer",
+          "failed": "{{value0}} con error",
+          "interrupted": "{{value0}} interrumpido(s)"
         }
       },
       "shared": {

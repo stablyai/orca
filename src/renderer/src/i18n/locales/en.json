@@ -127,6 +127,11 @@
     "retrying": "Retrying…"
   },
   "settings": {
+    "notifications": {
+      "childUnreadKeywords": "child children workspaces unread badge dock sidebar",
+      "showChildWorktreeUnread": "Show unread badges for child workspaces",
+      "showChildWorktreeUnreadDescription": "Include child workspaces in Dock counts and sidebar unread indicators. Turn off when following progress through their parent. Activity statuses and native notifications are unchanged."
+    },
     "appearance": {
       "language": {
         "title": "Language",
@@ -6474,6 +6479,14 @@
           "copied": "Command copied",
           "retry": "Retry now",
           "restored": "Git is working again. Worktrees refreshed."
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}} waiting for permission",
+          "working": "{{value0}} working",
+          "monitoring": "{{value0}} monitoring background tasks",
+          "unread": "{{value0}} unread",
+          "failed": "{{value0}} failed",
+          "interrupted": "{{value0}} interrupted"
         }
       },
       "shared": {

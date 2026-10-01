@@ -5,6 +5,20 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
+      'settings.notifications.showChildWorktreeUnread',
+      'Show unread badges for child workspaces'
+    ),
+    description: translate(
+      'settings.notifications.showChildWorktreeUnreadDescription',
+      'Include child workspaces in Dock counts and sidebar unread indicators. Turn off when following progress through their parent. Activity statuses and native notifications are unchanged.'
+    ),
+    keywords: translateSearchKeyword(
+      'settings.notifications.childUnreadKeywords',
+      'child children workspaces unread badge dock sidebar'
+    )
+  },
+  {
+    title: translate(
       'auto.components.settings.notifications.search.4a210b2f72',
       'Enable Notifications'
     ),

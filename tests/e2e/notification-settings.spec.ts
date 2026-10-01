@@ -29,6 +29,36 @@ async function openNotificationSettings(
 }
 
 test.describe('Notification settings', () => {
+  test('persists child unread badges independently of native notifications', async ({
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await openNotificationSettings(orcaPage)
+    const section = orcaPage.locator('[data-settings-section="notifications"]')
+    const childUnread = section.getByRole('switch', {
+      name: 'Show unread badges for child workspaces'
+    })
+    const native = section.getByRole('switch', { name: 'Enable Notifications' })
+    await expect(childUnread).toHaveAttribute('aria-checked', 'true')
+    await section.screenshot({ path: testInfo.outputPath('child-unread-setting-on.png') })
+    await native.click()
+    await expect(native).toHaveAttribute('aria-checked', 'false')
+    await expect(childUnread).toBeEnabled()
+    await childUnread.click()
+    await expect(childUnread).toHaveAttribute('aria-checked', 'false')
+    await section.screenshot({
+      path: testInfo.outputPath('child-unread-setting-off-native-disabled.png')
+    })
+    await orcaPage.reload()
+    await waitForSessionReady(orcaPage)
+    await openNotificationSettings(orcaPage)
+    await expect(childUnread).toHaveAttribute('aria-checked', 'false')
+    await expect(native).toHaveAttribute('aria-checked', 'false')
+    await expect(childUnread).toBeEnabled()
+    await childUnread.click()
+    await native.click()
+  })
+
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
   })

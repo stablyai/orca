@@ -142,7 +142,7 @@ export function WorktreeCardParentContent({
             worktreeId={worktree.id}
             showStatus={showStatus}
             showUnreadAction={showUnreadQuickAction}
-            isUnread={worktree.isUnread}
+            isUnread={card.showWorktreeUnread && worktree.isUnread}
             unreadTooltip={unreadTooltip}
             onPointerDown={stopQuickActionPointerPropagation}
             onToggleUnread={handleToggleUnreadQuick}

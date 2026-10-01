@@ -88,7 +88,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const showConflictOperationBadge =
     !!conflictOperation && conflictOperation !== 'unknown' && conflictOperation !== 'rebase'
   const hasMetadataBadge = showConflictOperationBadge
-  const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
+  const showUnreadQuickAction =
+    !affiliateListMode && showStatus && !newCardStyle && card.showWorktreeUnread
   // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
   const showCombinedStatusSlot = showStatus
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder

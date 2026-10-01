@@ -110,6 +110,11 @@
     "retrying": "Nouvelle tentative…"
   },
   "settings": {
+    "notifications": {
+      "childUnreadKeywords": "enfant enfants espaces de travail non lu indicateur dock barre latérale",
+      "showChildWorktreeUnread": "Afficher les indicateurs non lus des espaces de travail enfants",
+      "showChildWorktreeUnreadDescription": "Inclure les espaces enfants dans le compteur du Dock et les indicateurs non lus de la barre latérale. Désactivez cette option si vous suivez leur progression depuis le parent. Les états d’activité et les notifications système restent inchangés."
+    },
     "appearance": {
       "language": {
         "title": "Langue",
@@ -6407,6 +6412,14 @@
           "copied": "Commande copiée",
           "retry": "Réessayer maintenant",
           "restored": "Git fonctionne à nouveau. Worktrees actualisés."
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}} en attente d'autorisation",
+          "working": "{{value0}} en cours",
+          "monitoring": "{{value0}} en surveillance des tâches d'arrière-plan",
+          "unread": "{{value0}} non lu(s)",
+          "failed": "{{value0}} en échec",
+          "interrupted": "{{value0}} interrompu(s)"
         }
       },
       "shared": {
