@@ -529,7 +529,7 @@ describeEditor(
               () =>
                 document.querySelector('#first-surface #editor p')?.textContent === 'alpha bravo'
             )
-            // The browser's own gesture, not a Range: `#root` is `user-select: none` on the page.
+            // The browser's own gesture, not a Range: `body` is `user-select: none` on the page.
             await page.evaluate(() => window.getSelection()?.removeAllRanges())
             await word.dblclick()
             expect(await page.evaluate(() => window.getSelection()?.toString().trim())).not.toBe('')
