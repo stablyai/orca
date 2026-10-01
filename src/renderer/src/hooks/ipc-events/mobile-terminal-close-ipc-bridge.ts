@@ -11,15 +11,16 @@ import {
   type RuntimeNavigationTarget
 } from '../../../../shared/runtime-navigation'
 
-// Why: without host navigation (CLI --focus) nothing on screen may change; the tab is added and
-// becomes selected only inside a worktree the user is not viewing, so it is there when they go to it.
+// Why: a caller that names a non-host target (CLI without --focus) must not change anything on screen;
+// the tab is selected only inside a worktree the user is not viewing. No target (phones, older CLIs)
+// keeps the original switch, which the phone's "Open in session" relies on.
 function openRuntimeEditorTab(
   worktreeId: string,
   navigation: RuntimeNavigationTarget | undefined,
   open: (store: AppState, activate: boolean) => void
 ): void {
   const store = useAppStore.getState()
-  if (navigation === undefined || !navigationTargetsHost(navigation)) {
+  if (navigation !== undefined && !navigationTargetsHost(navigation)) {
     open(store, worktreeId !== store.activeWorktreeId)
     return
   }

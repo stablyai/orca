@@ -42,7 +42,7 @@ export const ResolveTerminalPath = WorktreeSelector.extend({
     .optional()
 })
 
-// Why: opening a tab is not view intent; absent `navigation` (phones, older CLIs) leaves the host desktop's view alone.
+// Why: absent `navigation` (phones, older CLIs) keeps the original host switch; 'caller'/'clients' open without moving it.
 export const FileOpenTab = FileOpen.extend({
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })

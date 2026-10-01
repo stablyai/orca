@@ -152,23 +152,23 @@ describe('runtime file opens on the host desktop', () => {
     vi.unstubAllGlobals()
   })
 
-  it('adds the tab to the viewed worktree without leaving the focused terminal', () => {
+  it('CLI caller open adds the tab to the viewed worktree without leaving the focused terminal', () => {
     const { openFile, store } = setup('terminal')
     const before = screenState(store)
     expect(store.getState().activeTabType).toBe('terminal')
 
-    openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS })
+    openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'caller' })
 
     expect(screenState(store)).toEqual(before)
     expect(tabEntityIds(store, VIEWED)).toContain(VIEWED_APP_TS.filePath)
   })
 
-  it('adds a diff to the viewed worktree without replacing the visible editor', () => {
+  it('CLI caller diff is added to the viewed worktree without replacing the visible editor', () => {
     const { openDiff, store } = setup('editor')
     const before = screenState(store)
     expect(store.getState().activeFileId).toBe(VIEWED_FILE)
 
-    openDiff({ worktreeId: VIEWED, ...VIEWED_APP_TS, staged: false })
+    openDiff({ worktreeId: VIEWED, ...VIEWED_APP_TS, staged: false, navigation: 'caller' })
 
     expect(screenState(store)).toEqual(before)
     expect(
@@ -176,11 +176,11 @@ describe('runtime file opens on the host desktop', () => {
     ).toBe(true)
   })
 
-  it('opens in a background worktree without touching the viewed editor', () => {
+  it('CLI caller open in a background worktree leaves the viewed editor alone', () => {
     const { openFile, store } = setup('editor')
     const before = screenState(store)
 
-    openFile({ worktreeId: BACKGROUND, ...APP_TS })
+    openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
 
     expect(screenState(store)).toEqual(before)
     // Why: the tab is that worktree's selection, so it is what the user sees on going there.
@@ -191,11 +191,11 @@ describe('runtime file opens on the host desktop', () => {
     expect(store.getState().activeTabType).toBe('editor')
   })
 
-  it('opens a background diff without touching the viewed editor', () => {
+  it('CLI caller diff in a background worktree leaves the viewed editor alone', () => {
     const { openDiff, store } = setup('editor')
     const before = screenState(store)
 
-    openDiff({ worktreeId: BACKGROUND, ...APP_TS, staged: true })
+    openDiff({ worktreeId: BACKGROUND, ...APP_TS, staged: true, navigation: 'caller' })
 
     expect(screenState(store)).toEqual(before)
     const opened = store
@@ -205,24 +205,56 @@ describe('runtime file opens on the host desktop', () => {
     expect(activeEditorEntityId(store, BACKGROUND)).toBe(opened?.id)
   })
 
-  it('keeps the desktop still for a phone open (no navigation field) and still publishes the tab', () => {
+  it('switches the desktop for a phone open (no navigation field), as before', () => {
+    const { openFile, store } = setup('terminal')
+
+    openFile({ worktreeId: BACKGROUND, ...APP_TS })
+
+    const state = store.getState()
+    expect(state.activeWorktreeId).toBe(BACKGROUND)
+    expect(state.activeView).toBe('terminal')
+    expect(state.activeFileId).toBe(APP_TS.filePath)
+    expect(state.activeTabType).toBe('editor')
+    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
+    expect(state.pendingRevealWorktree?.worktreeId).toBe(BACKGROUND)
+    expect(state.lastVisitedAtByWorktreeId[BACKGROUND]).toBeDefined()
+  })
+
+  it('selects a phone-opened diff in the viewed worktree so "Open in session" lands on it', () => {
+    const { openDiff, store } = setup('terminal')
+
+    openDiff({ worktreeId: VIEWED, ...VIEWED_APP_TS, staged: false })
+
+    const state = store.getState()
+    const diff = state.openFiles.find((file) => file.mode === 'diff' && file.worktreeId === VIEWED)
+    expect(state.activeWorktreeId).toBe(VIEWED)
+    expect(state.activeTabType).toBe('editor')
+    expect(state.activeFileId).toBe(diff?.id)
+    expect(activeEditorEntityId(store, VIEWED)).toBe(diff?.id)
+    const snapshot = buildMobileSessionTabSnapshots(state, false).find(
+      (candidate) => candidate.worktree === VIEWED
+    )
+    const activeTab = snapshot?.tabs.find((tab) => tab.id === snapshot.activeTabId)
+    expect(activeTab && 'relativePath' in activeTab ? activeTab.relativePath : null).toBe(
+      VIEWED_APP_TS.relativePath
+    )
+  })
+
+  it('publishes a CLI caller tab to the phone tab list without moving the desktop', () => {
     const { openFile, store } = setup('terminal')
     const before = screenState(store)
 
-    openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS })
-    openFile({ worktreeId: BACKGROUND, ...APP_TS })
+    openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'caller' })
 
     expect(screenState(store)).toEqual(before)
-    const snapshots = buildMobileSessionTabSnapshots(store.getState(), false)
-    for (const [worktreeId, relativePath] of [
-      [VIEWED, VIEWED_APP_TS.relativePath],
-      [BACKGROUND, APP_TS.relativePath]
-    ]) {
-      const snapshot = snapshots.find((candidate) => candidate.worktree === worktreeId)
-      expect(
-        snapshot?.tabs.some((tab) => 'relativePath' in tab && tab.relativePath === relativePath)
-      ).toBe(true)
-    }
+    const snapshot = buildMobileSessionTabSnapshots(store.getState(), false).find(
+      (candidate) => candidate.worktree === VIEWED
+    )
+    expect(
+      snapshot?.tabs.some(
+        (tab) => 'relativePath' in tab && tab.relativePath === VIEWED_APP_TS.relativePath
+      )
+    ).toBe(true)
   })
 
   it.each(['caller', 'clients'] as const)(

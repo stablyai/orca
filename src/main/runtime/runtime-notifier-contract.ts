@@ -98,7 +98,7 @@ export type RuntimeNotifier = {
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
-  /** Absent `navigation` opens the tab in its worktree without moving the host's view. */
+  /** A non-host `navigation` opens the tab without moving the host's view; absent keeps the original switch. */
   openFile?(
     worktreeId: string,
     filePath: string,

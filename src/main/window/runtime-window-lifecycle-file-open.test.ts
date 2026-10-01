@@ -45,7 +45,7 @@ function attachNotifier(): { notifier: RuntimeNotifier; send: ReturnType<typeof 
 }
 
 describe('runtime window file-open notifications', () => {
-  it('omits navigation when the caller did not ask to move the host view', () => {
+  it('omits navigation when the caller sent none (legacy switch)', () => {
     const { notifier, send } = attachNotifier()
 
     notifier.openFile?.('wt-1', '/repo/a.ts', 'a.ts', undefined)
@@ -73,7 +73,7 @@ describe('runtime window file-open notifications', () => {
     const { notifier, send } = attachNotifier()
 
     notifier.openFile?.('wt-1', '/repo/a.ts', 'a.ts', undefined, 'all')
-    notifier.openDiff?.('wt-1', '/repo/a.ts', 'a.ts', false, undefined, 'host')
+    notifier.openDiff?.('wt-1', '/repo/a.ts', 'a.ts', false, undefined, 'caller')
 
     expect(send).toHaveBeenCalledWith(
       'ui:openFileFromMobile',
@@ -81,7 +81,7 @@ describe('runtime window file-open notifications', () => {
     )
     expect(send).toHaveBeenCalledWith(
       'ui:openDiffFromMobile',
-      expect.objectContaining({ navigation: 'host' })
+      expect.objectContaining({ navigation: 'caller' })
     )
   })
 })

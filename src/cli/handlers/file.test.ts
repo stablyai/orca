@@ -82,7 +82,8 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:repo::/tmp/repo',
-      relativePath: 'src/App.tsx'
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
   })
@@ -107,7 +108,8 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith('files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: true
+      staged: true,
+      navigation: 'caller'
     })
   })
 
@@ -127,7 +129,8 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith('files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'assets/logo.png',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe(
       'Did not open diff for assets/logo.png: binary file.'
@@ -186,17 +189,20 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'src/App.tsx',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'package.json',
-      staged: true
+      staged: true,
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'docs/new.md',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened 3 changed file targets.')
   })
@@ -263,7 +269,8 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: true
+      staged: true,
+      navigation: 'caller'
     })
     const output = vi.mocked(console.log).mock.calls[0][0]
     expect(output).toContain('Opened 1 changed file targets.')
@@ -317,22 +324,26 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'git.status', { worktree: 'id:wt-1' })
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:wt-1',
-      relativePath: 'src/App.tsx'
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: true
+      staged: true,
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'docs/old.md',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     const output = vi.mocked(console.log).mock.calls[0][0]
     expect(output).toContain('Opened 4 changed file targets.')
@@ -362,7 +373,8 @@ describe('orca file CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'files.open', {
       worktree: 'id:wt-1',
-      relativePath: 'src/App.tsx'
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:wt-1',
@@ -372,7 +384,8 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
       worktree: 'id:wt-1',
@@ -392,7 +405,8 @@ describe('orca file CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'files.open', {
       worktree: 'id:wt-1',
-      relativePath: 'src/App.tsx'
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:wt-1',
@@ -456,12 +470,14 @@ describe('orca file CLI handlers', () => {
     })
     expect(callMock).toHaveBeenNthCalledWith(4, 'files.open', {
       worktree: 'id:wt-1',
-      relativePath: 'src/App.tsx'
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
   })
 
