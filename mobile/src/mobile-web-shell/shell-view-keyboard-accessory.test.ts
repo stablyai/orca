@@ -28,4 +28,11 @@ describe("the iOS WebView's keyboard", () => {
     const accessory = readFileSync(join(SHELL, 'MobileWebShellKeyboardAccessory.swift'), 'utf8')
     expect(accessory).toContain('keyboardWillChangeFrameNotification')
   })
+
+  it('keeps WebKit text interaction on, without which a focused field takes no text', () => {
+    // iPhone 17 Pro simulator, Release OTA: the composer focused and received keydown, but no
+    // beforeinput or input fired and no caret drew; enabling text interaction alone fixed it.
+    const view = readFileSync(join(SHELL, 'MobileWebShellView.swift'), 'utf8')
+    expect(view).not.toMatch(/isTextInteractionEnabled\s*=\s*false/)
+  })
 })
