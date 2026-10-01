@@ -72,47 +72,81 @@ export const REPEAT_KEY_LABEL = 'Arrow Up'
 export const TAP_KEY_LABEL = 'Escape'
 
 /**
- * The key bar's built-in keys. The repeat cadence is `use-mobile-session-accessory-selection.ts`'s
- * (send on press-in, repeat after 400 ms, then every 45 ms, stop on press-out), restated here
- * because that hook is bound to the whole session controller.
+ * The session's command dock with a stub controller, in buffered mode. The repeat cadence is
+ * `use-mobile-session-accessory-selection.ts`'s (send on press-in, repeat after 400 ms, then every
+ * 45 ms, stop on press-out), restated here because that hook is bound to the whole session.
  */
-export function accessoryKeyProbeRouteSource({ accessoryKeyModule, keyDefinitionsModule }) {
+export function commandDockProbeRouteSource({ commandDockModule, keyDefinitionsModule }) {
   return `import { useRef } from 'react'
-import { View } from 'react-native'
-import { MobileTerminalAccessoryKey } from ${JSON.stringify(accessoryKeyModule)}
+import { MobileSessionCommandDock } from ${JSON.stringify(commandDockModule)}
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from ${JSON.stringify(keyDefinitionsModule)}
 
-const pick = (id) => TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((key) => key.id === id)
+const noop = () => {}
+const KEYS = TERMINAL_ACCESSORY_KEY_DEFINITIONS.filter((key) => ['arrowUp', 'escape'].includes(key.id))
+const IDLE = { isStarting: false, isRecording: false, isProcessing: false }
 
-export default function AccessoryKeyProbeRoute() {
+export default function CommandDockProbeRoute() {
   const sentRef = useRef([])
   const timersRef = useRef({ timeout: null, interval: null })
   const stop = () => {
     clearTimeout(timersRef.current.timeout)
     clearInterval(timersRef.current.interval)
   }
-  const send = (input) => sentRef.current.push(input.bytes)
+  const send = (input) => {
+    sentRef.current.push(input.bytes)
+    return Promise.resolve()
+  }
   const start = (input) => {
     stop()
     timersRef.current.timeout = setTimeout(() => {
-      timersRef.current.interval = setInterval(() => send(input), 45)
+      timersRef.current.interval = setInterval(() => void send(input), 45)
     }, 400)
   }
   globalThis.__orcaHeldPressProbe = { sent: () => [...sentRef.current] }
-  return (
-    <View style={{ padding: 24, flexDirection: 'row', gap: 12 }}>
-      {['arrowUp', 'escape'].map((id) => (
-        <MobileTerminalAccessoryKey
-          key={id}
-          accessoryKey={pick(id)}
-          canSend
-          onSend={send}
-          onRepeatStart={start}
-          onRepeatStop={stop}
-        />
-      ))}
-    </View>
-  )
+  const controller = {
+    insets: { top: 0, bottom: 0, left: 0, right: 0 },
+    bufferedTerminalDraftState: { input: '', setInput: noop },
+    autocompleteEnabled: false,
+    liveInputCapture: '',
+    activeHandle: 'held-press-terminal',
+    customKeys: [],
+    setShowCustomKeyModal: noop,
+    setDeleteKeyTarget: noop,
+    visibleBuiltInAccessoryKeys: KEYS,
+    terminalModes: new Map(),
+    canPaste: false,
+    dictationMode: 'toggle',
+    bindCommandField: noop,
+    handleLiveInputChange: noop,
+    handleLiveInputKeyPress: noop,
+    bindLiveInputField: noop,
+    submitLiveInput: noop,
+    canSend: true,
+    canCompose: true,
+    liveInputEnabled: false,
+    focusLiveInput: noop,
+    showNativeChat: false,
+    dictation: IDLE,
+    cancelDictation: noop,
+    handleDictationToggle: noop,
+    handleDictationPressIn: noop,
+    handleDictationPressOut: noop,
+    toggleDisplayMode: noop,
+    handleSend: () => Promise.resolve(),
+    handleAccessoryKey: send,
+    dismissSoftwareKeyboard: noop,
+    toggleLiveInput: noop,
+    stopAccessoryRepeat: stop,
+    startAccessoryRepeat: start,
+    handlePaste: () => Promise.resolve(),
+    isAttaching: false,
+    attachImage: () => Promise.resolve(),
+    activeMarkdownTab: null,
+    activeFileTab: null,
+    activeBrowserTab: null,
+    keyboardLift: 0
+  }
+  return <MobileSessionCommandDock controller={controller} />
 }
 `
 }
@@ -121,8 +155,7 @@ export const BROWSER_VIEWPORT_ID = 'held-press-browser-viewport'
 
 /**
  * The browser pane's view with its real interactions hook, which owns the 550 ms long-press
- * right-click. A right-click shows as the hook's own "Right click" toast. An init script may set
- * `__orcaHeldPressInitialDialog` to open the pane on a browser dialog.
+ * right-click. A right-click shows as the hook's own "Right click" toast.
  */
 export function browserPaneProbeRouteSource({
   paneViewModule,
@@ -155,8 +188,7 @@ export default function BrowserPaneProbeRoute() {
   const layoutRef = useRef(LAYOUT)
   const longPressTimerRef = useRef(null)
   const zoom = { scale: 1, offsetX: 0, offsetY: 0 }
-  // Seeded before load: a dialog opened from outside a React event is not reliably kept here.
-  const [dialog, setDialog] = useState(globalThis.__orcaHeldPressInitialDialog ?? null)
+  const [dialog, setDialog] = useState(null)
   const dialogRef = useRef(null)
   dialogRef.current = dialog
   const frameGeometry = computeBrowserFrameGeometry(LAYOUT, null)

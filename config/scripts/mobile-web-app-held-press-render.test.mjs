@@ -11,8 +11,8 @@ import {
   REPEAT_KEY_LABEL,
   TAP_KEY_LABEL,
   TERMINAL_MIC_ID,
-  accessoryKeyProbeRouteSource,
   browserPaneProbeRouteSource,
+  commandDockProbeRouteSource,
   holdDictationProbeRouteSource
 } from './mobile-web-app-held-press-probe-routes.mjs'
 import { MOBILE_WEB_APP_ROUTE_ROOT } from './mobile-web-app-route-manifest.mjs'
@@ -27,19 +27,20 @@ import {
 import { LAYOUT_SOURCE } from './mobile-web-app-terminal-probe-route.mjs'
 
 /**
- * Held presses on the page. Held ~500 ms, Android WebView turns a touch into a long-press: it
- * starts a text selection, fires `contextmenu`, then cancels the touch, and react-native-web ends
- * the press on the selection and on the cancel. Traced on an emulator: none of it happens once the
- * element cancels its `touchstart`. Headless Chromium generates no long-press from CDP touches, so
- * `holdLikeAndroidWebView` plays that sequence itself, and only when `touchstart` went uncancelled.
+ * Held presses on the page. Held ~500 ms, Android WebView turns a touch into a long-press: it fires
+ * `contextmenu`, and where text can be selected it starts a selection and then cancels the touch.
+ * react-native-web ends a press on all three unless the press refuses `contextmenu` (a Pressable
+ * with `onLongPress`), and the page's `#root` style leaves no text to select. Traced on an
+ * emulator; headless Chromium generates no long-press from CDP touches, so `holdLikeAndroidWebView`
+ * plays it.
  */
 
 const ROUTES = {
   mic: `/${MOBILE_WEB_APP_ROUTE_ROOT}/hold-dictation-probe`,
-  keys: `/${MOBILE_WEB_APP_ROUTE_ROOT}/accessory-key-probe`,
+  keys: `/${MOBILE_WEB_APP_ROUTE_ROOT}/command-dock-probe`,
   browser: `/${MOBILE_WEB_APP_ROUTE_ROOT}/browser-pane-probe`
 }
-/** When Android WebView's long-press lands; its cancel follows ~20-50 ms later on the device. */
+/** When Android WebView's long-press lands; a selection's cancel follows ~20-50 ms later. */
 const LONG_PRESS_MS = 500
 const bundles = mobileWebAppDependenciesPresent()
 const describeRender = bundles ? describe : describe.skip
@@ -74,9 +75,9 @@ beforeAll(async () => {
     })
   )
   await writeFile(
-    join(routeDir, 'accessory-key-probe.tsx'),
-    accessoryKeyProbeRouteSource({
-      accessoryKeyModule: join(sessionDir, 'MobileTerminalAccessoryKey'),
+    join(routeDir, 'command-dock-probe.tsx'),
+    commandDockProbeRouteSource({
+      commandDockModule: join(sessionDir, 'MobileSessionCommandDock'),
       keyDefinitionsModule: join(terminalDir, 'terminal-key-definitions')
     })
   )
@@ -108,13 +109,8 @@ afterAll(async () => {
   }
 })
 
-async function openProbe(pathname, { initialDialog } = {}) {
+async function openProbe(pathname) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
-  if (initialDialog) {
-    await page.addInitScript((dialog) => {
-      globalThis.__orcaHeldPressInitialDialog = dialog
-    }, initialDialog)
-  }
   await page.addInitScript(installShellDouble, {
     version: bridgeVersion,
     sessionId: 'held-press-session',
@@ -142,41 +138,42 @@ async function openProbe(pathname, { initialDialog } = {}) {
 
 /**
  * Touch-holds `selector` for `holdMs`, reads `read()` mid-hold, then lifts. At 500 ms it plays
- * Android WebView's long-press — `contextmenu`, then `touchcancel` — unless the element cancelled
- * its `touchstart`, which on the device is what keeps the WebView from producing that gesture.
+ * Android WebView's long-press: `contextmenu`, then — only where the touch could select text —
+ * `selectionchange` and `touchcancel`, which is what the device did before `#root` was unselectable.
  */
 async function holdLikeAndroidWebView(page, selector, { holdMs, read }) {
   // A handle, not a locator: a label the selector matches can change as soon as the press lands.
   const target = await page.waitForSelector(selector)
   const box = await target.boundingBox()
   const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-  await page.evaluate(() => {
-    globalThis.__touchStartCancelled = null
-    // Bubble phase on window, so every listener on the target has already run.
-    window.addEventListener('touchstart', (event) => {
-      globalThis.__touchStartCancelled = event.defaultPrevented
-    })
-  })
   const input = await page.context().newCDPSession(page)
   await input.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
   await page.waitForTimeout(LONG_PRESS_MS)
-  const touchStartCancelled = await page.evaluate(() => globalThis.__touchStartCancelled)
-  if (!touchStartCancelled) {
-    await target.evaluate((node, at) => {
-      node.dispatchEvent(
-        new MouseEvent('contextmenu', {
-          bubbles: true,
-          cancelable: true,
-          clientX: at.x,
-          clientY: at.y
-        })
-      )
-    }, point)
+  const selectable = await target.evaluate((node, at) => {
+    node.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: at.x,
+        clientY: at.y
+      })
+    )
+    // The nearest explicit user-select up the tree decides, as Blink resolves `auto`.
+    for (let element = node; element; element = element.parentElement) {
+      const value = getComputedStyle(element).userSelect
+      if (value && value !== 'auto') {
+        return value !== 'none'
+      }
+    }
+    return true
+  }, point)
+  if (selectable) {
+    await page.evaluate(() => document.dispatchEvent(new Event('selectionchange')))
     await input.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
   }
   await page.waitForTimeout(holdMs - LONG_PRESS_MS)
-  const midHold = { touchStartCancelled, ...(await read(target)) }
-  if (touchStartCancelled) {
+  const midHold = { selectable, ...(await read(target)) }
+  if (!selectable) {
     await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   }
   await page.waitForTimeout(300)
@@ -203,7 +200,7 @@ describeRender(
           }
         )
         expect(midHold).toEqual({
-          touchStartCancelled: true,
+          selectable: false,
           label: 'Stop voice dictation',
           pressOuts: { terminal: 0, chat: 0 }
         })
@@ -226,7 +223,7 @@ describeRender(
           }
         )
         expect(midHold).toEqual({
-          touchStartCancelled: true,
+          selectable: false,
           label: 'Stop dictation',
           pressOuts: { terminal: 0, chat: 0 }
         })
@@ -251,14 +248,14 @@ describeRender(
         // One send on press-in, then every 45 ms from 400 ms: ~25 by 1.5 s, against 1 when the
         // long-press ends the press before the first repeat.
         expect(midHold.sent).toBeGreaterThan(20)
-        expect(midHold.touchStartCancelled).toBe(true)
+        expect(midHold.selectable).toBe(false)
         // Nothing more once the finger is up.
         expect(afterRelease.sent - midHold.sent).toBeLessThan(3)
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)
 
-      it('leaves a tap key its click, which the guard would cancel', async () => {
+      it('sends a tapped key once', async () => {
         const { errors, page } = await openProbe(ROUTES.keys)
         const key = await page.waitForSelector(`[aria-label="${TAP_KEY_LABEL}"]`)
         await key.tap()
@@ -279,22 +276,7 @@ describeRender(
           read: async () => ({ toasts: await toasts(page) })
         })
         // The hook's timer is 550 ms, after the WebView's long-press would have ended the press.
-        expect(midHold).toEqual({ touchStartCancelled: true, toasts: ['Right click'] })
-        expect(errors).toEqual([])
-        await page.close()
-      }, 300_000)
-
-      it("leaves a dialog's buttons their click", async () => {
-        const { errors, page } = await openProbe(ROUTES.browser, {
-          initialDialog: { dialogType: 'confirm', message: 'Leave?' }
-        })
-        const ok = await page.waitForSelector(`#${BROWSER_VIEWPORT_ID} >> text=OK`)
-        const cancelled = await ok.evaluate((node) => {
-          const event = new Event('touchstart', { bubbles: true, cancelable: true })
-          node.dispatchEvent(event)
-          return event.defaultPrevented
-        })
-        expect(cancelled).toBe(false)
+        expect(midHold).toEqual({ selectable: false, toasts: ['Right click'] })
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)

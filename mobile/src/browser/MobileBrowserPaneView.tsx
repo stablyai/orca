@@ -21,7 +21,6 @@ import {
 import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
 import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
 import { buttonColor } from './mobile-browser-frame-state'
-import { useHoldPressTouchRef } from '../platform/hold-press-touch'
 import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
 import type { BrowserFrameLayerBinding } from './browser-frame-pacer'
 import type {
@@ -119,8 +118,6 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     togglePointerModifier,
     zoom
   } = props
-  // The long-press right-click is a held touch; off while a dialog's buttons need their click.
-  const viewportHoldsTouch = useHoldPressTouchRef(dialog === null)
   return (
     <View ref={setRootViewRef} style={styles.root}>
       <View style={styles.toolbar}>
@@ -162,7 +159,6 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
       </View>
 
       <View
-        ref={viewportHoldsTouch}
         style={styles.viewport}
         onLayout={(event) => {
           const next = {

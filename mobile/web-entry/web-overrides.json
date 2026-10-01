@@ -204,10 +204,6 @@
     {
       "file": "src/app-update/use-wall-app-update.web.ts",
       "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
-    },
-    {
-      "file": "src/platform/hold-press-touch.web.ts",
-      "reason": "Android WebView turns a touch held ~500 ms into a long-press: it starts a text selection, whose selectionchange react-native-web treats as a responder termination, and ~20 ms after contextmenu it sends pointercancel/touchcancel, so a hold-to-dictate mic's press ended mid-hold (traced on Pixel_API_37). onLongPress refuses neither. This sibling cancels touchstart on that one element with a native non-passive listener (React's root touch listeners are passive), which stops the gesture; natively a held Pressable is never interrupted, so the native module returns no ref."
     }
   ]
 }

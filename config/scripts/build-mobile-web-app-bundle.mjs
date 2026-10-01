@@ -139,9 +139,14 @@ export const MOBILE_WEB_APP_ROOT_RESET =
  * Inputs and textareas: Chromium rings a focused one (`:focus-visible` matches every focused
  * text field); no native TextInput paints one, and the caret and the IME already mark focus.
  * Those only: a button reached by a hardware keyboard keeps the browser's ring.
+ *
+ * Text: natively unselectable unless it opts in. On the page a long-press selected the nearest
+ * text, and that selection's `selectionchange` and `touchcancel` ended a held press (traced on
+ * Android); react-native-web's `<Text selectable>` sets `user-select: text` and opts back in.
  */
 export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
-  '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}</style>'
+  '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
+  '#root{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}</style>'
 
 const PAGE_ASYNC_STORAGE_MODULE = join(
   mobileDir,
