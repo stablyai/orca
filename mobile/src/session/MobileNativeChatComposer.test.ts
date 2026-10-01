@@ -13,7 +13,10 @@ function MobileNativeChatComposer({
 }: Omit<ComponentProps<typeof NativeChatComposer>, 'getComposerEditGeneration'> & {
   getComposerEditGeneration?: () => number
 }): React.JSX.Element {
-  return createElement(NativeChatComposer, { ...props, getComposerEditGeneration })
+  return createElement(NativeChatComposer, {
+    ...props,
+    getComposerEditGeneration
+  })
 }
 
 vi.mock('react-native', async () => {
@@ -115,9 +118,15 @@ describe('MobileNativeChatComposer', () => {
   it('stacks the input above the composer action row', async () => {
     await render(vi.fn().mockResolvedValue(true), vi.fn())
 
-    const composer = renderer!.root.findByProps({ testID: 'native-chat-composer' })
-    const inset = renderer!.root.findByProps({ testID: 'native-chat-composer-inset' })
-    const actions = renderer!.root.findByProps({ testID: 'native-chat-composer-actions' })
+    const composer = renderer!.root.findByProps({
+      testID: 'native-chat-composer'
+    })
+    const inset = renderer!.root.findByProps({
+      testID: 'native-chat-composer-inset'
+    })
+    const actions = renderer!.root.findByProps({
+      testID: 'native-chat-composer-actions'
+    })
     expect(composer.findAllByType('TextInput')).toHaveLength(1)
     expect(composer.children[1]).toBe(actions)
     expect(inset.props.style).toMatchObject({
@@ -194,11 +203,15 @@ describe('MobileNativeChatComposer', () => {
         })
       )
     })
-    const modelPill = (): { props: { accessibilityState: { disabled: boolean } } } =>
+    const modelPill = (): {
+      props: { accessibilityState: { disabled: boolean } }
+    } =>
       renderer!.root.find(
         (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Model, Model'
       ) as { props: { accessibilityState: { disabled: boolean } } }
-    expect(modelPill().props.accessibilityState).toMatchObject({ disabled: false })
+    expect(modelPill().props.accessibilityState).toMatchObject({
+      disabled: false
+    })
     // Start the send but don't await it — it stays in flight on purpose.
     let pressed!: Promise<void>
     await act(async () => {
@@ -206,12 +219,16 @@ describe('MobileNativeChatComposer', () => {
       await Promise.resolve()
     })
     expect(onSend).toHaveBeenCalled()
-    expect(modelPill().props.accessibilityState).toMatchObject({ disabled: true })
+    expect(modelPill().props.accessibilityState).toMatchObject({
+      disabled: true
+    })
     await act(async () => {
       releaseSend?.(true)
       await pressed
     })
-    expect(modelPill().props.accessibilityState).toMatchObject({ disabled: false })
+    expect(modelPill().props.accessibilityState).toMatchObject({
+      disabled: false
+    })
   })
 
   it('blocks composer submission while a session-option command is pending', async () => {
@@ -378,7 +395,9 @@ describe('MobileNativeChatComposer', () => {
     expect(input().props.selection).toBeUndefined()
     // Place the caret at the end so the slash trigger is active and suggestions render.
     await act(async () =>
-      input().props.onSelectionChange({ nativeEvent: { selection: { end: 2 } } })
+      input().props.onSelectionChange({
+        nativeEvent: { selection: { end: 2 } }
+      })
     )
     const firstSuggestion = renderer!.root.findAll(
       (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
@@ -389,36 +408,11 @@ describe('MobileNativeChatComposer', () => {
     expect(input().props.selection).toEqual({ start: 7, end: 7 })
     // The next native selection event releases control so manual placement still works.
     await act(async () =>
-      input().props.onSelectionChange({ nativeEvent: { selection: { end: 7 } } })
+      input().props.onSelectionChange({
+        nativeEvent: { selection: { end: 7 } }
+      })
     )
     expect(input().props.selection).toBeUndefined()
-  })
-
-  it('serves the active agent’s shared command catalog with descriptions', async () => {
-    await act(async () => {
-      renderer = create(
-        createElement(MobileNativeChatComposer, {
-          value: '/',
-          onChangeText: vi.fn(),
-          onSend: vi.fn().mockResolvedValue(true),
-          sendSurfaceId: 'tab-a',
-          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
-          agent: 'codex'
-        })
-      )
-    })
-    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
-      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
-    }
-    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
-    const texts = renderer!.root
-      .findAll((node) => node.type === 'Text')
-      .map((node) => (node.props as { children?: unknown }).children)
-    // Codex-only commands from the shared catalog, with their description rows —
-    // and none of the old hardcoded provider-agnostic list's phantom entries.
-    expect(texts).toContain('/permissions')
-    expect(texts).toContain('Choose what Codex is allowed to do')
-    expect(texts).not.toContain('/cost')
   })
 
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {
@@ -428,7 +422,9 @@ describe('MobileNativeChatComposer', () => {
     const mic = () =>
       renderer!.root.find(
         (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Dictate'
-      ) as { props: { onPress?: unknown; onPressIn?: unknown; onPressOut?: unknown } }
+      ) as {
+        props: { onPress?: unknown; onPressIn?: unknown; onPressOut?: unknown }
+      }
 
     await act(async () => {
       renderer = create(
@@ -604,7 +600,9 @@ describe('MobileNativeChatComposer', () => {
       )
     })
     const input = renderer!.root.find((node) => node.type === 'TextInput') as {
-      props: { onSelectionChange: (event: { nativeEvent: { selection: { end: number } } }) => void }
+      props: {
+        onSelectionChange: (event: { nativeEvent: { selection: { end: number } } }) => void
+      }
     }
     await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 2 } } }))
 
@@ -655,7 +653,10 @@ describe('MobileNativeChatComposer', () => {
     editGeneration += 1
     await act(async () => {
       renderer!.update(
-        createElement(MobileNativeChatComposer, { ...props, value: 'hello dictated text' })
+        createElement(MobileNativeChatComposer, {
+          ...props,
+          value: 'hello dictated text'
+        })
       )
     })
     await act(async () => {

@@ -232,6 +232,7 @@ export function useMobileNativeChatController(args: {
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
     agent: activeChatResolution?.agent === 'claude' ? 'claude' : 'codex',
     sendStructured: structuredNativeChat.sendWithOutcome,
+    reportedCommands: structuredNativeChat.sessionCommands,
     captureSendOrigin,
     clearDraftForSend,
     acceptSend,
@@ -279,6 +280,8 @@ export function useMobileNativeChatController(args: {
     onSendResolved
   )
 
+  const sessionCommands = activeChatStructured ? structuredNativeChat.sessionCommands : undefined
+
   return {
     isTabChatView,
     toggleTabChatView,
@@ -293,6 +296,9 @@ export function useMobileNativeChatController(args: {
     nativeChatSession,
     /** Structured lane: drives the per-turn status row and live tool progress. */
     nativeChatStructured: activeChatStructured,
+    /** Structured lane: the session's reported command surface (undefined until
+     *  the first report), feeding the composer's `/` menu. */
+    nativeChatSessionCommands: sessionCommands,
     nativeChatAgentWorking,
     nativeChatTurnIndicator: activeChatStructured ? structuredNativeChat.turnIndicator : null,
     nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,

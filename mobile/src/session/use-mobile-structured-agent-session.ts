@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
@@ -46,6 +47,8 @@ type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions
     turnId: string | null
     /** What labels the live turn's one indicator row. */
     turnIndicator: NativeChatLiveTurnIndicator
+    /** The session's self-reported command surface; undefined until the first report. */
+    sessionCommands: readonly AgentSessionSlashCommand[] | undefined
     sendWithOutcome: (
       text: string,
       images?: string[],
@@ -209,6 +212,9 @@ export function useMobileStructuredAgentSession(args: {
   )
 
   return {
+    /** The session's self-reported command surface; undefined until the first
+     *  report arrives (mirrors the desktop transport's normalization). */
+    sessionCommands: state.commands ?? undefined,
     ...options,
     session: {
       messages,

@@ -1,19 +1,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Image,
-  Keyboard,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View
-} from 'react-native'
-import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
+import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native'
+import { ArrowUp, ImagePlus, Mic, Square } from 'lucide-react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-import { getVerifiedNativeChatCommands } from '../../../src/shared/native-chat-agent-profiles'
-import { structuredSlashCommands } from '../../../src/shared/structured-agent-session-composer'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
+import {
+  mobileComposerMenuRows,
+  nativeChatComposerCatalog
+} from '../../../src/shared/native-chat-composer-catalog'
+import { getNativeChatAgentProfile } from '../../../src/shared/native-chat-agent-profiles'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
@@ -30,15 +26,23 @@ import {
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
 import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
+const NO_SKILL_SUGGESTIONS: readonly SlashCommandSuggestion[] = []
 
 type Props = {
   /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
   inputRef?: React.Ref<TextInput>
   structuredCommands?: readonly AgentSessionConversationCommand[]
+  /** The structured session's self-reported command surface — the authority for
+   *  the `/` menu whenever it has arrived. */
+  sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** Filesystem-discovered skills for the active worktree — offered on every
+   *  lane, deduped against whatever the session already reported. */
+  skillSuggestions?: readonly SlashCommandSuggestion[]
   /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
   onChangeText: (text: string) => void
@@ -82,6 +86,8 @@ export function MobileNativeChatComposer({
   getComposerEditGeneration,
   agent,
   structuredCommands,
+  sessionCommands,
+  skillSuggestions = NO_SKILL_SUGGESTIONS,
   sessionOptions,
   onAttachImage,
   attachments = NO_ATTACHMENTS,
@@ -101,9 +107,10 @@ export function MobileNativeChatComposer({
   // Transiently drives the native caret after a mid-text autocomplete insert,
   // then released on the next selection change so manual caret placement still
   // works (a permanently controlled `selection` breaks it in React Native).
-  const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | null>(
-    null
-  )
+  const [pendingSelection, setPendingSelection] = useState<{
+    start: number
+    end: number
+  } | null>(null)
   const sendingRef = useRef(false)
   const mountedRef = useRef(true)
   const sendSurfaceIdRef = useRef(sendSurfaceId)
@@ -127,30 +134,40 @@ export function MobileNativeChatComposer({
     !sessionOptionDispatching
 
   const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
+  // Codex dispatches skills with `$`; every other profiled agent uses `/`.
+  const skillSigil = getNativeChatAgentProfile(agent)?.skillPrefix ?? '/'
   const suggestions = useMemo<ComposerSuggestion[]>(() => {
     if (!trigger) {
       return []
     }
     if (trigger.kind === 'slash') {
-      const commands =
-        structuredCommands !== undefined
-          ? structuredSlashCommands(structuredCommands, agent)
-          : agent
-            ? getVerifiedNativeChatCommands(agent)
-            : []
+      if (!agent) {
+        return []
+      }
+      const catalog = nativeChatComposerCatalog(
+        agent,
+        structuredCommands !== undefined || sessionCommands !== undefined
+          ? { sessionCommands, conversationCommands: structuredCommands }
+          : undefined
+      )
+      // Why: the kind rides on the row — a command and a skill can share a
+      // name when their sigils differ, so names alone cannot classify.
+      const rows = mobileComposerMenuRows(catalog, skillSigil, skillSuggestions)
+      const kindByEntry = new Map(rows.map((row) => [row.entry, row.kind]))
       // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
       // (~5 rows visible), so an uncapped `/` would mount every row and
       // re-reconcile them on each streaming tick right above the transcript.
-      return rankSlashCommandSuggestions(commands, trigger.query, 12).map((command) => ({
-        kind: 'command' as const,
-        command
-      }))
+      return rankSlashCommandSuggestions([...kindByEntry.keys()], trigger.query, 12).map((entry) =>
+        kindByEntry.get(entry) === 'command'
+          ? { kind: 'command' as const, command: entry }
+          : { kind: 'skill' as const, skill: entry }
+      )
     }
     return rankSuggestions(filePaths, trigger.query).map((path) => ({
       kind: 'file' as const,
       path
     }))
-  }, [trigger, filePaths, agent, structuredCommands])
+  }, [trigger, filePaths, agent, structuredCommands, sessionCommands, skillSuggestions])
 
   useEffect(() => {
     if (trigger?.kind === 'file') {
@@ -177,7 +194,7 @@ export function MobileNativeChatComposer({
     const { text: nextText, cursor: nextCursor } = applyAutocomplete(
       value,
       trigger,
-      composerSuggestionInsertText(suggestion)
+      composerSuggestionInsertText(suggestion, skillSigil)
     )
     onChangeText(nextText)
     setCursor(nextCursor)
@@ -218,36 +235,17 @@ export function MobileNativeChatComposer({
   return (
     <View>
       {suggestions.length > 0 ? (
-        <MobileNativeChatComposerSuggestions suggestions={suggestions} onPick={pickSuggestion} />
+        <MobileNativeChatComposerSuggestions
+          suggestions={suggestions}
+          skillSigil={skillSigil}
+          onPick={pickSuggestion}
+        />
       ) : null}
       {attachments.length > 0 ? (
-        <ScrollView
-          horizontal
-          keyboardShouldPersistTaps="always"
-          showsHorizontalScrollIndicator={false}
-          style={styles.attachmentStrip}
-          contentContainerStyle={styles.attachmentStripContent}
-        >
-          {attachments.map((attachment) => (
-            <View key={attachment.id} style={styles.attachmentThumb}>
-              <Image
-                source={{ uri: attachment.previewUri }}
-                style={styles.attachmentImage}
-                resizeMode="cover"
-              />
-              {onRemoveAttachment ? (
-                <Pressable
-                  accessibilityLabel="Remove image"
-                  style={styles.attachmentRemove}
-                  onPress={() => onRemoveAttachment(attachment.id)}
-                  hitSlop={8}
-                >
-                  <X size={12} color={colors.textPrimary} strokeWidth={2.6} />
-                </Pressable>
-              ) : null}
-            </View>
-          ))}
-        </ScrollView>
+        <MobileNativeChatComposerAttachments
+          attachments={attachments}
+          onRemoveAttachment={onRemoveAttachment}
+        />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         <View style={styles.bar} testID="native-chat-composer">
@@ -339,45 +337,6 @@ export function MobileNativeChatComposer({
 }
 
 const styles = StyleSheet.create({
-  attachmentStrip: {
-    maxHeight: 76,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  attachmentStripContent: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  attachmentThumb: {
-    width: 60,
-    height: 60,
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  attachmentImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: radii.button
-  },
-  attachmentRemove: {
-    // Inset inside the thumb: Android drops touches outside the parent's bounds,
-    // so an overhanging badge would lose part of its tap target.
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
   composerInset: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,

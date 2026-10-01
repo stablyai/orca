@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type {
@@ -21,6 +23,7 @@ import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
+import { mobileNativeChatListHeader } from './mobile-native-chat-list-header'
 import {
   buildMobileNativeChatTransientData,
   mobileNativeChatEmptyState,
@@ -67,6 +70,12 @@ type Props = MobileQueuedSlotProps & {
   settledTurns?: NativeChatSettledTurns | null
   /** Structured lane: the journal that places each row in its turn. */
   turnJournal?: NativeChatTurnJournal | null
+  /** Structured lane: the session's self-reported command surface, driving the
+   *  composer's `/` menu (undefined on the PTY lane). */
+  sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** Filesystem-discovered skills for the active worktree — offered in the
+   *  composer's `/` menu on every lane. */
+  skillSuggestions?: readonly SlashCommandSuggestion[]
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   /** Interrupt a provider turn. */
   onStop?: () => void
@@ -153,6 +162,8 @@ export function MobileNativeChatView({
   workingStartedAt,
   settledTurns,
   turnJournal = null,
+  sessionCommands,
+  skillSuggestions,
   onStop,
   streaming,
   hasMore,
@@ -334,21 +345,11 @@ export function MobileNativeChatView({
               scrollEventThrottle={32}
               onContentSizeChange={pinToTailAfterContentResize}
               onLayout={pinToTail}
-              ListHeaderComponent={
-                hasMore ? (
-                  <Pressable
-                    style={styles.loadEarlier}
-                    onPress={loadEarlier}
-                    disabled={loadingEarlier}
-                  >
-                    {loadingEarlier ? (
-                      <ActivityIndicator size="small" color={colors.textMuted} />
-                    ) : (
-                      <Text style={styles.loadEarlierText}>Load earlier messages</Text>
-                    )}
-                  </Pressable>
-                ) : null
-              }
+              ListHeaderComponent={mobileNativeChatListHeader({
+                hasMore,
+                loadingEarlier,
+                onLoadEarlier: loadEarlier
+              })}
               ListFooterComponent={mobileNativeChatListFooter(
                 liveStatus,
                 turns.waitingRows,
@@ -431,6 +432,8 @@ export function MobileNativeChatView({
         structuredCommands={
           structuredActivityUi ? (sessionOptions?.controller.conversationCommands ?? []) : undefined
         }
+        sessionCommands={sessionCommands}
+        skillSuggestions={skillSuggestions}
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}
