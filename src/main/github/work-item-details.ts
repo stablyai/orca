@@ -5,8 +5,8 @@ import type { IssueSourcePreference } from '../../shared/repo-types'
 import { getPRChecks, getPRComments, getWorkItem } from './client'
 import { acquire, release, type LocalGitExecOptions } from './gh-utils'
 import {
-  getIssueGitHubApiRepository,
   resolveGitHubRepoExecution,
+  resolveIssueGitHubApiRepositorySource,
   type GitHubApiRepository
 } from './github-api-repository'
 import { getIssueBodyAndComments, getIssueDetailsViaGraphQL } from './issue-work-item-details'
@@ -83,9 +83,18 @@ export async function getWorkItemDetails(
     return null
   }
 
+  // Why: issue body/comments/assignees must come from the repo getWorkItem read
+  // the issue from; the upstream-first heuristic showed upstream#N under origin#N.
   const resolvedRepository =
     item.type === 'issue'
-      ? await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions)
+      ? (
+          await resolveIssueGitHubApiRepositorySource(
+            repoPath,
+            preference,
+            connectionId,
+            localGitOptions
+          )
+        ).source
       : (await resolveGitHubRepoExecution(repoPath, item.prRepo, connectionId, localGitOptions))
           .ownerRepo
 

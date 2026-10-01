@@ -626,10 +626,13 @@ describe('github RPC methods', () => {
       })
     )
 
-    expect(runtime.addRepoIssueComment).toHaveBeenCalledWith('repo-1', 3, 'Looks good', {
-      owner: 'acme',
-      repo: 'widgets'
-    })
+    expect(runtime.addRepoIssueComment).toHaveBeenCalledWith(
+      'repo-1',
+      3,
+      'Looks good',
+      { owner: 'acme', repo: 'widgets' },
+      'pr'
+    )
     expect(response).toMatchObject({ ok: true, result: { ok: true, comment: { id: 1 } } })
   })
 
