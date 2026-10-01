@@ -15,11 +15,13 @@ import {
 import {
   clearCustomSttEndpointConfig,
   hasCustomSttEndpointApiKey,
+  readCustomSttEndpointApiKey,
   readCustomSttEndpointConfig,
   saveCustomSttEndpointApiKey,
   saveCustomSttEndpointConfig
 } from '../speech/custom-stt-endpoint-store'
 import { testCustomSttEndpoint } from '../speech/custom-stt-endpoint-test'
+import { discoverCustomSttModels } from '../speech/custom-stt-endpoint-models'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -89,6 +91,16 @@ export function registerSpeechHandlers(store: Store): void {
     'speech:testCustomEndpoint',
     async (_event, probe?: { baseUrl: string; model: string; language: string }) => {
       return testCustomSttEndpoint(probe)
+    }
+  )
+
+  ipcMain.handle(
+    'speech:discoverCustomEndpointModels',
+    async (_event, input: { baseUrl: string; apiKey?: string }) => {
+      return discoverCustomSttModels({
+        baseUrl: input.baseUrl,
+        apiKey: input.apiKey?.trim() ? input.apiKey.trim() : readCustomSttEndpointApiKey()
+      })
     }
   )
 

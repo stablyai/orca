@@ -13414,7 +13414,8 @@
           "language": "Language (optional)",
           "languagePlaceholder": "Auto-detect (e.g. en, zh, yue)",
           "saveAnyway": "Save anyway (advanced)",
-          "languageHint": "Suggestions are examples — enter any code your server accepts. Leave empty to auto-detect."
+          "languageHint": "Suggestions are examples — enter any code your server accepts. Leave empty to auto-detect.",
+          "modelHint": "Suggested from this endpoint — type any model your server accepts."
         }
       },
       "right": {

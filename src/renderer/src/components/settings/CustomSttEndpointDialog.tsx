@@ -26,6 +26,8 @@ type CustomSttEndpointDialogProps = {
   configured: boolean
   baseUrlDraft: string
   modelDraft: string
+  modelSuggestions: string[]
+  discovering: boolean
   languageDraft: string
   apiKeyDraft: string
   apiKeyConfigured: boolean
@@ -47,6 +49,8 @@ export function CustomSttEndpointDialog({
   configured,
   baseUrlDraft,
   modelDraft,
+  modelSuggestions,
+  discovering,
   languageDraft,
   apiKeyDraft,
   apiKeyConfigured,
@@ -63,6 +67,7 @@ export function CustomSttEndpointDialog({
   onTest
 }: CustomSttEndpointDialogProps): React.JSX.Element {
   const canSave = baseUrlDraft.trim() !== '' && modelDraft.trim() !== ''
+  const canTest = baseUrlDraft.trim() !== ''
   // Why: a server rejection or a local format error means saving is pointless; a
   // transport failure may just be an offline server, so it must not block saving.
   const blocked = testResult?.outcome === 'rejected' || testResult?.outcome === 'invalid'
@@ -97,21 +102,41 @@ export function CustomSttEndpointDialog({
               onChange={(event) => onBaseUrlDraftChange(event.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="custom-stt-model">
-              {translate('auto.components.settings.CustomSttEndpointDialog.model', 'Model')}
-            </Label>
-            <Input
-              id="custom-stt-model"
-              value={modelDraft}
-              placeholder="large-v3"
-              disabled={pending}
-              onChange={(event) => onModelDraftChange(event.target.value)}
-            />
-          </div>
-          <LanguageCombobox
-            value={languageDraft}
+          <SuggestionCombobox
+            id="custom-stt-model"
+            label={translate('auto.components.settings.CustomSttEndpointDialog.model', 'Model')}
+            value={modelDraft}
+            placeholder="large-v3"
             disabled={pending}
+            loading={discovering}
+            hint={
+              modelSuggestions.length > 0
+                ? translate(
+                    'auto.components.settings.CustomSttEndpointDialog.modelHint',
+                    'Suggested from this endpoint — type any model your server accepts.'
+                  )
+                : undefined
+            }
+            suggestions={modelSuggestions.map((id) => ({ value: id, label: id }))}
+            onChange={onModelDraftChange}
+          />
+          <SuggestionCombobox
+            id="custom-stt-language"
+            label={translate(
+              'auto.components.settings.CustomSttEndpointDialog.language',
+              'Language (optional)'
+            )}
+            value={languageDraft}
+            placeholder={translate(
+              'auto.components.settings.CustomSttEndpointDialog.languagePlaceholder',
+              'Auto-detect (e.g. en, zh, yue)'
+            )}
+            disabled={pending}
+            suggestions={filterSpeechLanguageOptions('')}
+            hint={translate(
+              'auto.components.settings.CustomSttEndpointDialog.languageHint',
+              'Suggestions are examples — enter any code your server accepts. Leave empty to auto-detect.'
+            )}
             onChange={onLanguageDraftChange}
           />
           <div className="space-y-2">
@@ -168,7 +193,7 @@ export function CustomSttEndpointDialog({
               {translate('auto.components.settings.CustomSttEndpointDialog.clear', 'Disconnect')}
             </Button>
           )}
-          <Button variant="outline" disabled={pending || testing || !canSave} onClick={onTest}>
+          <Button variant="outline" disabled={pending || testing || !canTest} onClick={onTest}>
             {testing ? <Loader2 className="size-4 animate-spin" /> : null}
             {translate('auto.components.settings.CustomSttEndpointDialog.test', 'Test')}
           </Button>
@@ -195,38 +220,47 @@ export function CustomSttEndpointDialog({
   )
 }
 
-type LanguageComboboxProps = {
+/**
+ * Free-text field with a suggestion list. Deliberately not a fixed dropdown: the
+ * accepted set is server/model specific (and a strict ISO-639-1 list would exclude
+ * valid three-letter codes such as `yue`), so the user can always type a value the
+ * suggestions do not cover.
+ */
+type SuggestionComboboxProps = {
+  id: string
+  label: string
   value: string
+  placeholder: string
   disabled: boolean
+  suggestions: { value: string; label: string }[]
   onChange: (value: string) => void
+  loading?: boolean
+  hint?: string
 }
 
-/**
- * Free-text language field with a suggestion list. Deliberately not a fixed
- * dropdown: the accepted code set is server/model specific, and a strict
- * ISO-639-1 list would exclude valid three-letter codes such as `yue`.
- */
-function LanguageCombobox({ value, disabled, onChange }: LanguageComboboxProps): React.JSX.Element {
+function SuggestionCombobox({
+  id,
+  label,
+  value,
+  placeholder,
+  disabled,
+  suggestions,
+  onChange,
+  loading,
+  hint
+}: SuggestionComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const suggestions = filterSpeechLanguageOptions(value)
+  const filtered = filterSuggestions(suggestions, value)
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="custom-stt-language">
-        {translate(
-          'auto.components.settings.CustomSttEndpointDialog.language',
-          'Language (optional)'
-        )}
-      </Label>
+      <Label htmlFor={id}>{label}</Label>
       <div className="relative">
         <Input
-          id="custom-stt-language"
+          id={id}
           value={value}
           autoComplete="off"
-          placeholder={translate(
-            'auto.components.settings.CustomSttEndpointDialog.languagePlaceholder',
-            'Auto-detect (e.g. en, zh, yue)'
-          )}
+          placeholder={placeholder}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
           onFocus={() => setOpen(true)}
@@ -235,9 +269,12 @@ function LanguageCombobox({ value, disabled, onChange }: LanguageComboboxProps):
             setTimeout(() => setOpen(false), 120)
           }}
         />
-        {open && suggestions.length > 0 && (
+        {loading && (
+          <Loader2 className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+        )}
+        {open && filtered.length > 0 && (
           <div className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto scrollbar-sleek rounded-md border border-border bg-popover p-1 shadow-md">
-            {suggestions.map((option) => (
+            {filtered.map((option) => (
               <button
                 key={option.value || 'auto'}
                 type="button"
@@ -250,7 +287,7 @@ function LanguageCombobox({ value, disabled, onChange }: LanguageComboboxProps):
                 className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1 text-left text-sm hover:bg-accent hover:text-accent-foreground"
               >
                 <span>{option.label}</span>
-                {option.value && (
+                {option.value && option.label !== option.value && (
                   <span className="text-[11px] text-muted-foreground">{option.value}</span>
                 )}
               </button>
@@ -258,12 +295,22 @@ function LanguageCombobox({ value, disabled, onChange }: LanguageComboboxProps):
           </div>
         )}
       </div>
-      <p className="text-[11px] text-muted-foreground/70">
-        {translate(
-          'auto.components.settings.CustomSttEndpointDialog.languageHint',
-          'Suggestions are examples — enter any code your server accepts. Leave empty to auto-detect.'
-        )}
-      </p>
+      {hint && <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
     </div>
+  )
+}
+
+function filterSuggestions(
+  suggestions: { value: string; label: string }[],
+  query: string
+): { value: string; label: string }[] {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) {
+    return suggestions
+  }
+  return suggestions.filter(
+    (option) =>
+      option.value.toLowerCase().includes(normalized) ||
+      option.label.toLowerCase().includes(normalized)
   )
 }
