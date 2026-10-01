@@ -1,10 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { mkdtempSync } from 'node:fs'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, afterEach, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
+import { rejectNodeWebSocketOverCapacity } from './node-websocket-lifecycle'
 import { loadOrCreateTlsCertificate } from '../tls-certificate'
 
 // Why: disable TLS verification for self-signed certs in tests.
@@ -433,9 +435,7 @@ describe('WebSocketTransport', () => {
 
     vi.useFakeTimers()
     try {
-      ;(transport as unknown as { rejectOverCapacity(ws: WebSocket): void }).rejectOverCapacity(
-        serverSocket!
-      )
+      rejectNodeWebSocketOverCapacity(serverSocket!)
       vi.advanceTimersByTime(1_000)
     } finally {
       vi.useRealTimers()
@@ -453,6 +453,24 @@ describe('WebSocketTransport', () => {
     await transport.start()
 
     await transport.stop()
+  })
+
+  it('stops while an HTTP client holds an unanswered request open', async () => {
+    const transport = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+    transports.push(transport)
+    await transport.start()
+    const socket = connect(transport.resolvedPort, '127.0.0.1')
+    await new Promise<void>((resolve) => socket.once('connect', () => resolve()))
+    socket.on('error', () => {})
+    // Why: the server's automatic 100 Continue proves the request is parsed and in flight.
+    const continued = new Promise<void>((resolve) => socket.once('data', () => resolve()))
+    socket.write(
+      'POST /unanswered HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 1\r\nExpect: 100-continue\r\n\r\n'
+    )
+    await continued
+
+    await transport.stop()
+    socket.destroy()
   })
 
   it('is safe to stop without starting', async () => {
@@ -667,6 +685,23 @@ describe('WebSocketTransport', () => {
       transports.push(transport)
       await transport.start()
       expect(transport.resolvedPort).toBe(fallbackPort)
+    })
+
+    it('fails closed when a managed tunnel requires the configured port', async () => {
+      const preferredHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(preferredHolder)
+      await preferredHolder.start()
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredHolder.resolvedPort,
+        fallbackPort: await reserveFreePort(),
+        preferPinnedPort: true,
+        strictPort: true
+      })
+      transports.push(transport)
+
+      await expect(transport.start()).rejects.toMatchObject({ code: 'EADDRINUSE' })
+      expect(transport.resolvedHost).toBeNull()
     })
 
     it('binds the preferred port when the persisted fallback is taken', async () => {

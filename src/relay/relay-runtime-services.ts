@@ -32,6 +32,7 @@ export class RelayRuntimeServices {
   readonly fsHandler: FsHandler
   readonly gitHandler: GitHandler
   readonly skillInstallHandler: SkillInstallHandler
+  private readonly responseStreams: GitResponseStreamRegistry
   private readonly aiVaultService: ReturnType<typeof createRelayAiVaultService> | null
   private readonly sessionSearch: { dispose(): void } | null
   private readonly registeredHandlers: readonly unknown[]
@@ -66,6 +67,7 @@ export class RelayRuntimeServices {
     // so two registries would hand out the same id, and only GitHandler routes the `git.responseAck`
     // credit every pump waits on. A second registry is not an option — see git-response-stream.ts.
     const responseStreams = new GitResponseStreamRegistry()
+    this.responseStreams = responseStreams
     this.fsHandler = new FsHandler(dispatcher, context, undefined, responseStreams)
     const watchRegistry = this.fsHandler.getWatchRegistry()
     this.ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
@@ -119,7 +121,16 @@ export class RelayRuntimeServices {
     this.registerRemoteCliRoutes()
   }
 
+  // Why: the handler work drain ends when a stream's metadata/sentinel is answered; the detached
+  // pumps and file descriptors behind it are only proven gone by these registry drains.
   async disposeOwnedProcesses(): Promise<void> {
+    const failures: unknown[] = []
+    const responses = this.responseStreams.disposeAllAndWait().catch((error: unknown) => {
+      failures.push(error)
+    })
+    const fileStreams = this.fsHandler.disposeFileStreams().catch((error: unknown) => {
+      failures.push(error)
+    })
     await this.skillInstallHandler.dispose().catch((error) => {
       relayLogLine(
         `[relay] Skill upload cleanup failed: ${error instanceof Error ? error.message : String(error)}`
@@ -130,6 +141,13 @@ export class RelayRuntimeServices {
         `[relay] AI Vault sidecar shutdown failed: ${error instanceof Error ? error.message : String(error)}`
       )
     })
+    await responses
+    await fileStreams
+    // Why: an unclosed fd defers shutdown so the next attempt retries it; skill/AI Vault
+    // cleanup stays log-and-continue until the T2 lifecycle port.
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'relay_owned_process_shutdown_incomplete')
+    }
   }
 
   disposeHandlers(): void {

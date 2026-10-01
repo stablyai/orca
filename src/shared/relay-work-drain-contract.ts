@@ -6,6 +6,9 @@ const drainRequests = new Set<string>([
   'relay.status',
   'fs.unwatchAndWait',
   'agent.cancelExec',
+  // Why (not in #16741): it only retires an existing delivery and replays its proof on retry;
+  // refusing it turns a provable client cancellation into an unverifiable one.
+  'pty.cancelDelivery',
   SKILL_SSH_RELAY_CANCEL_UPLOAD_METHOD
 ])
 const drainNotifications = new Set<string>([

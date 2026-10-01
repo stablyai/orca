@@ -10,15 +10,22 @@ export class RelayWorkAdmission {
     return !this.draining || allowsRelayWorkDuringDrain(method, notification)
   }
 
-  async run<T>(
-    method: string,
-    context: RequestContext,
-    operation: () => T | Promise<T>
-  ): Promise<T> {
+  // Why not async: an async wrapper adds microtask turns to every relay handler's response.
+  run<T>(method: string, context: RequestContext, operation: () => T | Promise<T>): Promise<T> {
     if (!this.allows(method)) {
-      throw new Error('relay_work_admission_closed')
+      return Promise.reject(new Error('relay_work_admission_closed'))
     }
-    return this.track(context, operation)
+    const finish = this.trackEntry(context)
+    let result: Promise<T>
+    try {
+      const value = operation()
+      result = value instanceof Promise ? value : Promise.resolve(value)
+    } catch (error) {
+      finish()
+      return Promise.reject(error)
+    }
+    result.then(finish, finish)
+    return result
   }
 
   runNotification(method: string, context: RequestContext, operation: () => void): void {
@@ -56,15 +63,6 @@ export class RelayWorkAdmission {
         return
       }
       await Promise.all(pending.map((entry) => entry.done))
-    }
-  }
-
-  private async track<T>(context: RequestContext, operation: () => T | Promise<T>): Promise<T> {
-    const finish = this.trackEntry(context)
-    try {
-      return await operation()
-    } finally {
-      finish()
     }
   }
 
