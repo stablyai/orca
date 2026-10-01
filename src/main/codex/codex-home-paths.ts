@@ -29,6 +29,8 @@ const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'profile-v2',
   'themes',
   'prompts',
+  // Why: Codex loads execpolicy `.rules` only from `$CODEX_HOME/rules`.
+  'rules',
   CODEX_GLOBAL_INSTRUCTIONS_ENTRY
 ] as const
 
