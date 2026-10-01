@@ -24,7 +24,7 @@ type ChecksPanelPollingInput = Pick<
     | 'pollIntervalRef'
     | 'prevChecksRef'
     | 'repo'
-    | 'settings'
+    | 'ownerSettings'
     | 'setChecks'
     | 'setChecksLoading'
     | 'setComments'
@@ -49,7 +49,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     prNumber,
     prevChecksRef,
     repo,
-    settings,
+    ownerSettings,
     setChecks,
     setChecksLoading,
     setComments,
@@ -176,7 +176,8 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         const details = await fetchGitLabMRDetailsForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          settings: settingsOverride ?? settings,
+          // Why: fetch MR details from the worktree owner, not the globally focused host.
+          settings: settingsOverride ?? ownerSettings,
           iid: targetMRNumber,
           repoOwnerExecutionHostId: activeWorktree?.hostId
         })
@@ -218,7 +219,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
       hostedReviewCacheKey,
       isCurrentAsyncResult,
       repo,
-      settings,
+      ownerSettings,
       asyncResultKeyRef,
       setChecksLoading,
       prevChecksRef,
