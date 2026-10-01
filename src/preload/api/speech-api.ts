@@ -1,5 +1,6 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
+  CustomSttEndpointTestOutcome,
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechModelManifest,
@@ -16,6 +17,7 @@ export type CustomSttEndpointStatus = {
 
 export type CustomSttEndpointTestResult = {
   ok: boolean
+  outcome: CustomSttEndpointTestOutcome
   detail: string
 }
 

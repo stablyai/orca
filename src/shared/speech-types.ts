@@ -39,6 +39,12 @@ export type SpeechModelManifest = {
 
 export type SpeechModelStatus = 'not-downloaded' | 'downloading' | 'extracting' | 'ready' | 'error'
 
+/**
+ * Outcome of probing a custom OpenAI-compatible endpoint. Drives how strict the
+ * settings Save gate is (see the custom-endpoint design doc).
+ */
+export type CustomSttEndpointTestOutcome = 'ok' | 'auth' | 'rejected' | 'transport' | 'invalid'
+
 export type SpeechModelState = {
   id: string
   status: SpeechModelStatus

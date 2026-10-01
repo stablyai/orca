@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Loader2, Server, Wifi } from 'lucide-react'
 import { Button } from '../ui/button'
 import {
@@ -10,7 +11,15 @@ import {
 } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { filterSpeechLanguageOptions } from '../../../../shared/speech-language-options'
+import type { CustomSttEndpointTestOutcome } from '../../../../shared/speech-types'
 import { translate } from '@/i18n/i18n'
+
+export type CustomSttEndpointTestState = {
+  ok: boolean
+  outcome: CustomSttEndpointTestOutcome
+  detail: string
+}
 
 type CustomSttEndpointDialogProps = {
   open: boolean
@@ -22,13 +31,13 @@ type CustomSttEndpointDialogProps = {
   apiKeyConfigured: boolean
   pending: boolean
   testing: boolean
-  testResult: { ok: boolean; detail: string } | null
+  testResult: CustomSttEndpointTestState | null
   onOpenChange: (open: boolean) => void
   onBaseUrlDraftChange: (value: string) => void
   onModelDraftChange: (value: string) => void
   onLanguageDraftChange: (value: string) => void
   onApiKeyDraftChange: (value: string) => void
-  onSave: () => void
+  onSave: (options?: { allowInvalid?: boolean }) => void
   onClear: () => void
   onTest: () => void
 }
@@ -54,6 +63,9 @@ export function CustomSttEndpointDialog({
   onTest
 }: CustomSttEndpointDialogProps): React.JSX.Element {
   const canSave = baseUrlDraft.trim() !== '' && modelDraft.trim() !== ''
+  // Why: a server rejection or a local format error means saving is pointless; a
+  // transport failure may just be an offline server, so it must not block saving.
+  const blocked = testResult?.outcome === 'rejected' || testResult?.outcome === 'invalid'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -97,24 +109,11 @@ export function CustomSttEndpointDialog({
               onChange={(event) => onModelDraftChange(event.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="custom-stt-language">
-              {translate(
-                'auto.components.settings.CustomSttEndpointDialog.language',
-                'Language (optional)'
-              )}
-            </Label>
-            <Input
-              id="custom-stt-language"
-              value={languageDraft}
-              placeholder={translate(
-                'auto.components.settings.CustomSttEndpointDialog.languagePlaceholder',
-                'Auto-detect (e.g. en, zh, yue)'
-              )}
-              disabled={pending}
-              onChange={(event) => onLanguageDraftChange(event.target.value)}
-            />
-          </div>
+          <LanguageCombobox
+            value={languageDraft}
+            disabled={pending}
+            onChange={onLanguageDraftChange}
+          />
           <div className="space-y-2">
             <Label htmlFor="custom-stt-api-key">
               {translate(
@@ -152,7 +151,11 @@ export function CustomSttEndpointDialog({
         {testResult && (
           <p
             className={`flex items-center gap-1.5 text-[11px] ${
-              testResult.ok ? 'text-status-success' : 'text-destructive'
+              testResult.ok
+                ? 'text-status-success'
+                : testResult.outcome === 'transport' || testResult.outcome === 'auth'
+                  ? 'text-status-warning'
+                  : 'text-destructive'
             }`}
           >
             <Wifi className="size-3 shrink-0" />
@@ -169,12 +172,98 @@ export function CustomSttEndpointDialog({
             {testing ? <Loader2 className="size-4 animate-spin" /> : null}
             {translate('auto.components.settings.CustomSttEndpointDialog.test', 'Test')}
           </Button>
-          <Button disabled={pending || !canSave} onClick={onSave}>
+          <Button disabled={pending || !canSave || blocked} onClick={() => onSave()}>
             {pending ? <Loader2 className="size-4 animate-spin" /> : null}
             {translate('auto.components.settings.CustomSttEndpointDialog.save', 'Save')}
           </Button>
         </DialogFooter>
+        {blocked && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onSave({ allowInvalid: true })}
+            className="self-center text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+          >
+            {translate(
+              'auto.components.settings.CustomSttEndpointDialog.saveAnyway',
+              'Save anyway (advanced)'
+            )}
+          </button>
+        )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+type LanguageComboboxProps = {
+  value: string
+  disabled: boolean
+  onChange: (value: string) => void
+}
+
+/**
+ * Free-text language field with a suggestion list. Deliberately not a fixed
+ * dropdown: the accepted code set is server/model specific, and a strict
+ * ISO-639-1 list would exclude valid three-letter codes such as `yue`.
+ */
+function LanguageCombobox({ value, disabled, onChange }: LanguageComboboxProps): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const suggestions = filterSpeechLanguageOptions(value)
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="custom-stt-language">
+        {translate(
+          'auto.components.settings.CustomSttEndpointDialog.language',
+          'Language (optional)'
+        )}
+      </Label>
+      <div className="relative">
+        <Input
+          id="custom-stt-language"
+          value={value}
+          autoComplete="off"
+          placeholder={translate(
+            'auto.components.settings.CustomSttEndpointDialog.languagePlaceholder',
+            'Auto-detect (e.g. en, zh, yue)'
+          )}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => {
+            // Why: delay so a click on a suggestion lands before the list unmounts.
+            setTimeout(() => setOpen(false), 120)
+          }}
+        />
+        {open && suggestions.length > 0 && (
+          <div className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto scrollbar-sleek rounded-md border border-border bg-popover p-1 shadow-md">
+            {suggestions.map((option) => (
+              <button
+                key={option.value || 'auto'}
+                type="button"
+                // Why: mousedown fires before the input's blur, so the pick is not lost.
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  onChange(option.value)
+                  setOpen(false)
+                }}
+                className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+              >
+                <span>{option.label}</span>
+                {option.value && (
+                  <span className="text-[11px] text-muted-foreground">{option.value}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground/70">
+        {translate(
+          'auto.components.settings.CustomSttEndpointDialog.languageHint',
+          'Suggestions are examples — enter any code your server accepts. Leave empty to auto-detect.'
+        )}
+      </p>
+    </div>
   )
 }
