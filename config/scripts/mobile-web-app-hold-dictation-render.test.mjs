@@ -22,9 +22,11 @@ import {
 import { LAYOUT_SOURCE } from './mobile-web-app-terminal-probe-route.mjs'
 
 /**
- * Hold-to-dictate on the page. Android WebView turns a held touch into a `contextmenu` about
- * 500 ms in; react-native-web reads that as a responder termination unless the Pressable declares
- * `onLongPress`, so the mic's press-out fires mid-hold and the recording stops.
+ * Hold-to-dictate on the page. Held ~500 ms, Android WebView turns a touch into a long-press: it
+ * starts a text selection on the nearest text and then cancels the touch, and react-native-web ends
+ * the press on either, so the mic's press-out stops the recording mid-hold. Cancelling the mic's
+ * `touchstart` is what stops the WebView generating that gesture (traced on an emulator); headless
+ * Chromium generates no long-press from CDP touches, so the check reads the cancel itself.
  */
 
 const PROBE_ROUTE = `/${MOBILE_WEB_APP_ROUTE_ROOT}/hold-dictation-probe`
@@ -105,33 +107,26 @@ async function openProbe() {
   return { errors, page }
 }
 
-/**
- * Touch-holds the mic, delivers Android's long-press `contextmenu` 600 ms in, reads mid-hold,
- * then lifts the finger. `contextMenuPrevented` stands in for the WebView's text selection, which
- * is that event's default action on a device and has none for a synthetic event here.
- */
-async function holdThroughLongPress(page, selector) {
+/** Touch-holds the mic for 1.5 s, reads the press mid-hold, then lifts the finger. */
+async function holdAndRelease(page, selector) {
   // A handle, not a locator: the label the selector matches changes as soon as the press lands.
   const mic = await page.waitForSelector(selector)
   const box = await mic.boundingBox()
   const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  await page.evaluate(() => {
+    globalThis.__touchStartCancelled = null
+    // Bubble phase on window, so every listener on the target has already run.
+    window.addEventListener('touchstart', (event) => {
+      globalThis.__touchStartCancelled = event.defaultPrevented
+    })
+  })
   const input = await page.context().newCDPSession(page)
   await input.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
-  await page.waitForTimeout(600)
-  const contextMenuPrevented = await mic.evaluate((node, at) => {
-    const event = new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: at.x,
-      clientY: at.y
-    })
-    return !node.dispatchEvent(event)
-  }, point)
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(1500)
   const midHold = {
     label: await mic.getAttribute('aria-label'),
     pressOuts: await page.evaluate(() => globalThis.__orcaHoldDictationProbe.pressOuts()),
-    contextMenuPrevented,
+    touchStartCancelled: await page.evaluate(() => globalThis.__touchStartCancelled),
     selection: await page.evaluate(() => document.getSelection()?.toString() ?? '')
   }
   await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
@@ -145,16 +140,16 @@ async function holdThroughLongPress(page, selector) {
 describeRender(
   'hold-to-dictate on the page',
   () => {
-    it('keeps the terminal mic recording through the long-press contextmenu', async () => {
+    it('keeps the terminal mic held until the finger lifts', async () => {
       const { errors, page } = await openProbe()
-      const { midHold, pressOutsAfterRelease } = await holdThroughLongPress(
+      const { midHold, pressOutsAfterRelease } = await holdAndRelease(
         page,
         `#${TERMINAL_MIC_ID} [aria-label="Start voice dictation"]`
       )
       expect(midHold).toEqual({
         label: 'Stop voice dictation',
         pressOuts: { terminal: 0, chat: 0 },
-        contextMenuPrevented: true,
+        touchStartCancelled: true,
         selection: ''
       })
       expect(pressOutsAfterRelease).toEqual({ terminal: 1, chat: 0 })
@@ -162,16 +157,16 @@ describeRender(
       await page.close()
     }, 300_000)
 
-    it('keeps the chat mic recording through the long-press contextmenu', async () => {
+    it('keeps the chat mic held until the finger lifts', async () => {
       const { errors, page } = await openProbe()
-      const { midHold, pressOutsAfterRelease } = await holdThroughLongPress(
+      const { midHold, pressOutsAfterRelease } = await holdAndRelease(
         page,
         `#${CHAT_MIC_ID} [aria-label="Dictate"]`
       )
       expect(midHold).toEqual({
         label: 'Stop dictation',
         pressOuts: { terminal: 0, chat: 0 },
-        contextMenuPrevented: true,
+        touchStartCancelled: true,
         selection: ''
       })
       // The icon under the finger swaps on press, so the release has to reach the Pressable.

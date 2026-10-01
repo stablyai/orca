@@ -31,6 +31,7 @@ import {
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
+import { useHoldPressTouchRef } from '../platform/hold-press-touch'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -115,6 +116,7 @@ export function MobileNativeChatComposer({
     }
   }, [sendSurfaceId])
   const [sending, setSending] = useState(false)
+  const holdPressTouchRef = useHoldPressTouchRef(dictationMode === 'hold')
   const trimmed = value.trim()
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   // An attached image alone is a valid send (desktop parity), so the image rides
@@ -295,15 +297,13 @@ export function MobileNativeChatComposer({
             <View style={styles.actionSpacer} />
             {onMicPress ? (
               <Pressable
+                ref={holdPressTouchRef}
                 accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
                 style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
                 // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
                 onPress={dictationMode === 'hold' ? undefined : onMicPress}
                 onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
                 onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
-                // Without onLongPress, react-native-web lets a touch contextmenu terminate the
-                // press, and Android WebView sends one ~500 ms into a hold.
-                onLongPress={dictationMode === 'hold' ? () => {} : undefined}
                 disabled={disabled}
               >
                 {/* The icon swaps on press; as the page's touch target, its removal would send
