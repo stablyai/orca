@@ -287,6 +287,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         apiKeyConfigured={voiceSettings.customSttApiKeyConfigured}
         pending={customEndpoint.pending}
         testing={customEndpoint.testing}
+        reachability={customEndpoint.reachability}
         testResult={customEndpoint.testResult}
         onOpenChange={(open) => {
           if (open) {

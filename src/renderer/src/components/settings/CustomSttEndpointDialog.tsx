@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2, Server, Wifi } from 'lucide-react'
+import { CheckCircle2, Loader2, Server, Wifi, XCircle } from 'lucide-react'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -12,7 +12,10 @@ import {
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { filterSpeechLanguageOptions } from '../../../../shared/speech-language-options'
-import type { CustomSttEndpointTestOutcome } from '../../../../shared/speech-types'
+import type {
+  CustomSttEndpointReachability,
+  CustomSttEndpointTestOutcome
+} from '../../../../shared/speech-types'
 import { translate } from '@/i18n/i18n'
 
 export type CustomSttEndpointTestState = {
@@ -33,6 +36,7 @@ type CustomSttEndpointDialogProps = {
   apiKeyConfigured: boolean
   pending: boolean
   testing: boolean
+  reachability: CustomSttEndpointReachability
   testResult: CustomSttEndpointTestState | null
   onOpenChange: (open: boolean) => void
   onBaseUrlDraftChange: (value: string) => void
@@ -57,6 +61,7 @@ export function CustomSttEndpointDialog({
   apiKeyConfigured,
   pending,
   testing,
+  reachability,
   testResult,
   onOpenChange,
   onBaseUrlDraftChange,
@@ -96,12 +101,41 @@ export function CustomSttEndpointDialog({
             <Label htmlFor="custom-stt-base-url">
               {translate('auto.components.settings.CustomSttEndpointDialog.baseUrl', 'Base URL')}
             </Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="custom-stt-base-url"
+                value={baseUrlDraft}
+                placeholder="http://127.0.0.1:8090/v1"
+                disabled={pending}
+                onChange={(event) => onBaseUrlDraftChange(event.target.value)}
+              />
+              <EndpointStatusMark reachability={reachability} discovering={discovering} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="custom-stt-api-key">
+              {translate(
+                'auto.components.settings.CustomSttEndpointDialog.apiKey',
+                'API Key (optional)'
+              )}
+            </Label>
             <Input
-              id="custom-stt-base-url"
-              value={baseUrlDraft}
-              placeholder="http://127.0.0.1:8090/v1"
+              id="custom-stt-api-key"
+              type="password"
+              value={apiKeyDraft}
+              placeholder={
+                apiKeyConfigured
+                  ? translate(
+                      'auto.components.settings.CustomSttEndpointDialog.apiKeyConfigured',
+                      'Token configured'
+                    )
+                  : translate(
+                      'auto.components.settings.CustomSttEndpointDialog.apiKeyOptional',
+                      'Leave empty for self-hosted servers'
+                    )
+              }
               disabled={pending}
-              onChange={(event) => onBaseUrlDraftChange(event.target.value)}
+              onChange={(event) => onApiKeyDraftChange(event.target.value)}
             />
           </div>
           <SuggestionCombobox
@@ -141,32 +175,6 @@ export function CustomSttEndpointDialog({
             )}
             onChange={onLanguageDraftChange}
           />
-          <div className="space-y-2">
-            <Label htmlFor="custom-stt-api-key">
-              {translate(
-                'auto.components.settings.CustomSttEndpointDialog.apiKey',
-                'API Key (optional)'
-              )}
-            </Label>
-            <Input
-              id="custom-stt-api-key"
-              type="password"
-              value={apiKeyDraft}
-              placeholder={
-                apiKeyConfigured
-                  ? translate(
-                      'auto.components.settings.CustomSttEndpointDialog.apiKeyConfigured',
-                      'Token configured'
-                    )
-                  : translate(
-                      'auto.components.settings.CustomSttEndpointDialog.apiKeyOptional',
-                      'Leave empty for self-hosted servers'
-                    )
-              }
-              disabled={pending}
-              onChange={(event) => onApiKeyDraftChange(event.target.value)}
-            />
-          </div>
         </div>
         <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
           <Server className="size-3 shrink-0" />
@@ -223,6 +231,54 @@ export function CustomSttEndpointDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+/**
+ * A green tick when the URL answers, a red cross when it does not, and a spinner
+ * while probing. Sits inside the Base URL field so the verdict is attached to the
+ * value it is about.
+ */
+function EndpointStatusMark({
+  reachability,
+  discovering
+}: {
+  reachability: CustomSttEndpointReachability
+  discovering: boolean
+}): React.JSX.Element | null {
+  if (discovering) {
+    return (
+      <Loader2
+        aria-label={translate(
+          'auto.components.settings.CustomSttEndpointDialog.checking',
+          'Checking endpoint'
+        )}
+        className="size-4 shrink-0 animate-spin text-muted-foreground"
+      />
+    )
+  }
+  if (reachability === 'reachable') {
+    return (
+      <CheckCircle2
+        aria-label={translate(
+          'auto.components.settings.CustomSttEndpointDialog.reachable',
+          'Endpoint reachable'
+        )}
+        className="size-4 shrink-0 text-status-success"
+      />
+    )
+  }
+  if (reachability === 'unreachable') {
+    return (
+      <XCircle
+        aria-label={translate(
+          'auto.components.settings.CustomSttEndpointDialog.unreachable',
+          'Endpoint unreachable'
+        )}
+        className="size-4 shrink-0 text-destructive"
+      />
+    )
+  }
+  return null
 }
 
 /**

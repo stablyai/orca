@@ -45,6 +45,12 @@ export type SpeechModelStatus = 'not-downloaded' | 'downloading' | 'extracting' 
  */
 export type CustomSttEndpointTestOutcome = 'ok' | 'auth' | 'rejected' | 'transport' | 'invalid'
 
+/**
+ * Whether an endpoint URL answers at all, independent of whether it advertises a
+ * model list: `reachable` means the server responded (even a 401 means it exists).
+ */
+export type CustomSttEndpointReachability = 'reachable' | 'unreachable' | 'unknown'
+
 export type SpeechModelState = {
   id: string
   status: SpeechModelStatus

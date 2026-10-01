@@ -17,6 +17,7 @@ describe('discoverCustomSttModels', () => {
   it('returns nothing without a base URL', async () => {
     const result = await discoverCustomSttModels({ baseUrl: '' })
     expect(result.ok).toBe(false)
+    expect(result.reachability).toBe('unknown')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -71,13 +72,32 @@ describe('discoverCustomSttModels', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret')
   })
 
-  it('reports not-found when no candidate yields a list', async () => {
+  it('reports reachable-but-empty when the server answers without a list', async () => {
     fetchMock.mockResolvedValue(new Response('nope', { status: 404 }))
 
     const result = await discoverCustomSttModels({ baseUrl: 'http://h:1/v1' })
 
     expect(result.ok).toBe(false)
     expect(result.models).toEqual([])
+    expect(result.reachability).toBe('reachable')
     expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('treats a 401 as reachable (server exists, needs a token)', async () => {
+    fetchMock.mockResolvedValue(new Response('unauthorized', { status: 401 }))
+
+    const result = await discoverCustomSttModels({ baseUrl: 'https://api.groq.com/openai/v1' })
+
+    expect(result.reachability).toBe('reachable')
+    expect(result.models).toEqual([])
+  })
+
+  it('reports unreachable when every candidate fails at the transport level', async () => {
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'))
+
+    const result = await discoverCustomSttModels({ baseUrl: 'http://127.0.0.1:9999/v1' })
+
+    expect(result.ok).toBe(false)
+    expect(result.reachability).toBe('unreachable')
   })
 })
