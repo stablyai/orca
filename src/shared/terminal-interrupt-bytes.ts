@@ -8,9 +8,18 @@ export const TERMINAL_INTERRUPT_ETX = '\x03'
 export const TERMINAL_INTERRUPT_KITTY_CTRL_C = '\x1b[99;5u'
 
 /**
+ * Progressive-enhancement bits that change Ctrl+C from a legacy ETX into CSI u.
+ * Alternate-key reporting (4) only annotates sequences that are already encoded,
+ * so `CSI >4u` must still interrupt with ETX.
+ */
+const KITTY_CTRL_C_ESCAPE_FLAGS = 1 | 8
+
+/**
  * Interrupt bytes for one PTY write.
- * `kittyKeyboardFlags === 0` keeps ETX so a plain shell is unchanged.
+ * A plain shell, and a TUI that only asked for alternate keys, still get ETX.
  */
 export function terminalInterruptBytes(kittyKeyboardFlags: number): string {
-  return kittyKeyboardFlags > 0 ? TERMINAL_INTERRUPT_KITTY_CTRL_C : TERMINAL_INTERRUPT_ETX
+  return (kittyKeyboardFlags & KITTY_CTRL_C_ESCAPE_FLAGS) !== 0
+    ? TERMINAL_INTERRUPT_KITTY_CTRL_C
+    : TERMINAL_INTERRUPT_ETX
 }
