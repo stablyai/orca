@@ -10,6 +10,7 @@ import { MOBILE_WEB_APP_ROUTE_ROOT } from './mobile-web-app-route-manifest.mjs'
 import {
   createBundleServer,
   installShellDouble,
+  readBridgeBackNames,
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
@@ -39,6 +40,7 @@ let scratch = null
 let server = null
 let bridgeVersion = null
 let faultGrant = null
+let backNames = null
 
 const layoutSource = (
   hostStackModule
@@ -48,23 +50,27 @@ export default function ProbeHostLayout() {
 }
 `
 
-const LIST_SOURCE = `import { useEffect } from 'react'
+// Both screens go through the page's real router seam, so Back claims and pops as shipped.
+const listSource = (handoffModule) => `import { useEffect } from 'react'
 import { View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouteHandoff } from ${JSON.stringify(handoffModule)}
 export default function ProbeList() {
-  const router = useRouter()
+  const router = useRouteHandoff()
   useEffect(() => {
     globalThis.__orcaStackProbe = {
       push: () => router.push(${JSON.stringify(SESSION_HREF)}),
-      back: () => router.back()
+      back: () => router.back(),
+      hardwareBack: () => globalThis.__orcaRenderCheckSendBack()
     }
   }, [router])
   return <View testID="stack-probe-list" style={{ flex: 1, backgroundColor: '#204060' }} />
 }
 `
 
-const SESSION_SOURCE = `import { View } from 'react-native'
+const sessionSource = (handoffModule) => `import { View } from 'react-native'
+import { useRouteHandoff } from ${JSON.stringify(handoffModule)}
 export default function ProbeSession() {
+  useRouteHandoff()
   return <View testID="stack-probe-session" style={{ flex: 1, backgroundColor: '#602040' }} />
 }
 `
@@ -80,12 +86,15 @@ beforeAll(async () => {
   scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-stack-transition-'))
   const routeDir = join(scratch, 'app', MOBILE_WEB_APP_ROUTE_ROOT)
   await mkdir(join(routeDir, '[hostId]', 'session'), { recursive: true })
+  const navigationDir = join(projectDir, 'mobile', 'src', 'navigation')
+  const handoffModule = join(navigationDir, 'route-handoff')
+  backNames = await readBridgeBackNames()
+  await writeFile(join(routeDir, '_layout.tsx'), layoutSource(join(navigationDir, 'host-stack')))
+  await writeFile(join(routeDir, '[hostId]', 'index.tsx'), listSource(handoffModule))
   await writeFile(
-    join(routeDir, '_layout.tsx'),
-    layoutSource(join(projectDir, 'mobile', 'src', 'navigation', 'host-stack'))
+    join(routeDir, '[hostId]', 'session', '[worktreeId].tsx'),
+    sessionSource(handoffModule)
   )
-  await writeFile(join(routeDir, '[hostId]', 'index.tsx'), LIST_SOURCE)
-  await writeFile(join(routeDir, '[hostId]', 'session', '[worktreeId].tsx'), SESSION_SOURCE)
   const built = await buildMobileWebAppBundle({
     appDir: join(scratch, 'app'),
     outDir: join(scratch, 'bundle'),
@@ -109,11 +118,21 @@ afterAll(async () => {
   }
 })
 
-async function openList({ animation = 'default', reducedMotion = 'no-preference' } = {}) {
+async function openList({
+  animation = 'default',
+  reducedMotion = 'no-preference',
+  webAnimations = true
+} = {}) {
   const page = await browser.newPage({ viewport: VIEWPORT, reducedMotion })
-  await page.addInitScript((value) => {
-    globalThis.__orcaStackProbeAnimation = value
-  }, animation)
+  await page.addInitScript(
+    ([value, keepAnimate]) => {
+      globalThis.__orcaStackProbeAnimation = value
+      if (!keepAnimate) {
+        delete Element.prototype.animate
+      }
+    },
+    [animation, webAnimations]
+  )
   await page.addInitScript(installShellDouble, {
     version: bridgeVersion,
     sessionId: 'stack-transition-session',
@@ -122,8 +141,11 @@ async function openList({ animation = 'default', reducedMotion = 'no-preference'
     host: { id: HOST_ID, name: 'Stack Host', endpoint: 'ws://stack', lastConnected: 1 },
     storage: {},
     faultGrant,
-    grants: [faultGrant],
-    pageRoutes: [LIST_ROUTE, SESSION_HREF],
+    backFrame: backNames.frame,
+    pageRoutes: [
+      `/${MOBILE_WEB_APP_ROUTE_ROOT}/[hostId]`,
+      `/${MOBILE_WEB_APP_ROUTE_ROOT}/[hostId]/session/[worktreeId]`
+    ],
     replies: {}
   })
   const errors = []
@@ -140,9 +162,9 @@ async function openList({ animation = 'default', reducedMotion = 'no-preference'
  * Runs `action` on the probe, then reads both screens' left edge once per animation frame.
  * A hidden screen (display: none, or unmounted) reads as null.
  */
-function sampleFrames(page, action) {
+function sampleFrames(page, action, { then = null, afterFrames = 0 } = {}) {
   return page.evaluate(
-    ([name, sampleMs]) =>
+    ([name, sampleMs, followUp, followAt]) =>
       new Promise((resolve) => {
         const leftOf = (id) => {
           const node = document.querySelector(`[data-testid="${id}"]`)
@@ -153,6 +175,9 @@ function sampleFrames(page, action) {
         const start = performance.now()
         globalThis.__orcaStackProbe[name]()
         const tick = () => {
+          if (followUp !== null && frames.length === followAt) {
+            globalThis.__orcaStackProbe[followUp]()
+          }
           frames.push({ list: leftOf('stack-probe-list'), session: leftOf('stack-probe-session') })
           if (performance.now() - start < sampleMs) {
             requestAnimationFrame(tick)
@@ -162,7 +187,21 @@ function sampleFrames(page, action) {
         }
         requestAnimationFrame(tick)
       }),
-    [action, SAMPLE_MS]
+    [action, SAMPLE_MS, then, afterFrames]
+  )
+}
+
+/** Every element in the document, hidden ones included: a retained slot still counts. */
+const nodeCount = (page) => page.evaluate(() => document.querySelectorAll('*').length)
+
+async function waitForBackClaim(page) {
+  await page.waitForFunction(
+    (name) =>
+      globalThis.__orcaRenderCheckNotifies.some(
+        (frame) => frame.name === name && frame.claimed === true
+      ),
+    backNames.claim,
+    { timeout: 10_000, polling: 50 }
   )
 }
 
@@ -192,8 +231,42 @@ describeRender('the host stack transition on the page', () => {
     await page.close()
   }, 120_000)
 
-  it('swaps instantly in the tablet split view and under reduced motion', async () => {
-    for (const options of [{ animation: 'none' }, { reducedMotion: 'reduce' }]) {
+  it('pops with the slide on the device Back key and drops the popped screen', async () => {
+    const { errors, page } = await openList()
+    const baseline = await nodeCount(page)
+    await sampleFrames(page, 'push')
+    await waitForBackClaim(page)
+    const frames = await sampleFrames(page, 'hardwareBack')
+    expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
+    expect(frames.at(-1)).toEqual({ list: 0, session: null })
+    expect(await nodeCount(page)).toBe(baseline)
+    expect(errors).toEqual([])
+    await page.close()
+  }, 120_000)
+
+  it('leaves no slot behind when a push interrupts a pop', async () => {
+    const { errors, page } = await openList()
+    await sampleFrames(page, 'push')
+    const pushed = await nodeCount(page)
+    const frames = await sampleFrames(page, 'back', { then: 'push', afterFrames: 3 })
+    expect(frames.slice(0, 3).some((frame) => between(frame.session))).toBe(true)
+    expect(frames.at(-1)).toEqual({ list: null, session: 0 })
+    expect(await nodeCount(page)).toBe(pushed)
+    expect(
+      await page.evaluate(
+        () => document.querySelectorAll('[data-testid="stack-probe-session"]').length
+      )
+    ).toBe(1)
+    expect(errors).toEqual([])
+    await page.close()
+  }, 120_000)
+
+  it('swaps instantly in the tablet split view, under reduced motion and without animate()', async () => {
+    for (const options of [
+      { animation: 'none' },
+      { reducedMotion: 'reduce' },
+      { webAnimations: false }
+    ]) {
       const { errors, page } = await openList(options)
       const pushed = await sampleFrames(page, 'push')
       expect(pushed.filter((frame) => between(frame.session))).toEqual([])

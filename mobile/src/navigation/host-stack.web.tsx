@@ -49,8 +49,12 @@ type Shown = Readonly<{
   leaving: Readonly<{ route: Routes[number]; descriptors: Descriptors }> | null
 }>
 
-function prefersReducedMotion(): boolean {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+/** No Web Animations (an old WebView) or reduced motion settles at once rather than throwing. */
+function slidesAllowed(): boolean {
+  return (
+    'animate' in Element.prototype &&
+    !('matchMedia' in window && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  )
 }
 
 /** Push = the old top is still in the stack below the new one; pop = the old top left it. */
@@ -84,7 +88,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
 
   // Derived during render, so the first painted frame of a pop still holds the leaving screen.
   if (shown.routes !== routes) {
-    const animates = animation !== 'none' && !prefersReducedMotion()
+    const animates = animation !== 'none' && slidesAllowed()
     const moved = shown.routes.at(-1)?.key !== routes.at(-1)?.key
     const transition = !moved
       ? shown.transition
