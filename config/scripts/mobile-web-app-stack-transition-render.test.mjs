@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { chromium } from 'playwright-core'
+import { chromium, webkit } from 'playwright-core'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { MOBILE_WEB_APP_ROUTE_ROOT } from './mobile-web-app-route-manifest.mjs'
@@ -34,7 +34,19 @@ const SAMPLE_MS = 1500
 const bundles = mobileWebAppDependenciesPresent()
 const describeRender = bundles ? describe : describe.skip
 
-let browser = null
+/** WKWebView carries the page on iOS, so WebKit's Web Animations and keyframes count too. */
+const ENGINES = [
+  {
+    name: 'chromium',
+    launch: () => {
+      const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
+      return chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
+    }
+  },
+  { name: 'webkit', launch: () => webkit.launch({ headless: true }) }
+]
+
+const browsers = new Map()
 let origin = null
 let scratch = null
 let server = null
@@ -112,19 +124,22 @@ beforeAll(async () => {
   const served = await createBundleServer({ outDir: built.outDir, cspHeader })
   server = served.server
   origin = served.origin
-  const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
-  browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
+  for (const engine of ENGINES) {
+    browsers.set(engine.name, await engine.launch())
+  }
 }, 600_000)
 
 afterAll(async () => {
-  await browser?.close()
+  for (const browser of browsers.values()) {
+    await browser.close()
+  }
   server?.close()
   if (scratch) {
     await rm(scratch, { recursive: true, force: true })
   }
 })
 
-async function openList({ animation = 'default', reducedMotion = 'no-preference' } = {}) {
+async function openList(browser, { animation = 'default', reducedMotion = 'no-preference' } = {}) {
   const page = await browser.newPage({ viewport: VIEWPORT, reducedMotion })
   await page.addInitScript((value) => {
     globalThis.__orcaStackProbeAnimation = value
@@ -220,115 +235,120 @@ const LIST_SETTLED = { list: 0, session: null, hit: 'list', from: null }
 const sessionMounts = (page) => page.evaluate(() => globalThis.__orcaSessionMounts ?? 0)
 
 describeRender('the host stack transition on the page', () => {
-  it('slides the session in from the right on push, over the list', async () => {
-    const { errors, page } = await openList()
-    const frames = await sampleFrames(page, 'push')
-    const firstShown = frames.find((frame) => frame.session !== null)
-    // Red on native-stack's web view: the session's first visible frame is already at x = 0.
-    expect(firstShown?.session).toBeGreaterThan(0)
-    expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
-    // The list stays painted under the slide but takes no tap, so a double tap cannot push twice.
-    expect(sliding(frames).map((frame) => frame.hit)).toEqual(sliding(frames).map(() => null))
-    expect(frames.at(-1)).toEqual(SESSION_SETTLED)
-    expect(errors).toEqual([])
-    await page.close()
-  }, 120_000)
+  for (const engine of ENGINES) {
+    describe(engine.name, () => {
+      const open = (options) => openList(browsers.get(engine.name), options)
+      it('slides the session in from the right on push, over the list', async () => {
+        const { errors, page } = await open()
+        const frames = await sampleFrames(page, 'push')
+        const firstShown = frames.find((frame) => frame.session !== null)
+        // Red on native-stack's web view: the session's first visible frame is already at x = 0.
+        expect(firstShown?.session).toBeGreaterThan(0)
+        expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
+        // The list stays painted under the slide but takes no tap, so a double tap cannot push twice.
+        expect(sliding(frames).map((frame) => frame.hit)).toEqual(sliding(frames).map(() => null))
+        expect(frames.at(-1)).toEqual(SESSION_SETTLED)
+        expect(errors).toEqual([])
+        await page.close()
+      }, 120_000)
 
-  it('slides the session out to the right on Back, revealing the list', async () => {
-    const { errors, page } = await openList()
-    await sampleFrames(page, 'push')
-    expect(await sessionMounts(page)).toBe(1)
-    const frames = await sampleFrames(page, 'back')
-    // Red on native-stack's web view: the popped screen is gone on the first frame after Back.
-    expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
-    // The screen sliding out is the one that was on screen, not a fresh mount of it.
-    expect(await sessionMounts(page)).toBe(1)
-    expect(frames.at(-1)).toEqual(LIST_SETTLED)
-    expect(errors).toEqual([])
-    await page.close()
-  }, 120_000)
+      it('slides the session out to the right on Back, revealing the list', async () => {
+        const { errors, page } = await open()
+        await sampleFrames(page, 'push')
+        expect(await sessionMounts(page)).toBe(1)
+        const frames = await sampleFrames(page, 'back')
+        // Red on native-stack's web view: the popped screen is gone on the first frame after Back.
+        expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
+        // The screen sliding out is the one that was on screen, not a fresh mount of it.
+        expect(await sessionMounts(page)).toBe(1)
+        expect(frames.at(-1)).toEqual(LIST_SETTLED)
+        expect(errors).toEqual([])
+        await page.close()
+      }, 120_000)
 
-  it('pops with the slide on the device Back key and drops the popped screen', async () => {
-    const { errors, page } = await openList()
-    const baseline = await nodeCount(page)
-    await sampleFrames(page, 'push')
-    await waitForBackClaim(page)
-    const frames = await sampleFrames(page, 'hardwareBack')
-    expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
-    expect(frames.at(-1)).toEqual(LIST_SETTLED)
-    expect(await nodeCount(page)).toBe(baseline)
-    expect(errors).toEqual([])
-    await page.close()
-  }, 120_000)
+      it('pops with the slide on the device Back key and drops the popped screen', async () => {
+        const { errors, page } = await open()
+        const baseline = await nodeCount(page)
+        await sampleFrames(page, 'push')
+        await waitForBackClaim(page)
+        const frames = await sampleFrames(page, 'hardwareBack')
+        expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
+        expect(frames.at(-1)).toEqual(LIST_SETTLED)
+        expect(await nodeCount(page)).toBe(baseline)
+        expect(errors).toEqual([])
+        await page.close()
+      }, 120_000)
 
-  it('leaves no slot behind when a push interrupts a pop', async () => {
-    const { errors, page } = await openList()
-    await sampleFrames(page, 'push')
-    const pushed = await nodeCount(page)
-    const frames = await sampleFrames(page, 'back', { followUp: 'push', afterFrames: 3 })
-    expect(frames.slice(0, 3).some((frame) => between(frame.session))).toBe(true)
-    expect(frames.at(-1)).toEqual(SESSION_SETTLED)
-    expect(await nodeCount(page)).toBe(pushed)
-    expect(
-      await page.evaluate(
-        () => document.querySelectorAll('[data-testid="stack-probe-session"]').length
-      )
-    ).toBe(1)
-    expect(errors).toEqual([])
-    await page.close()
-  }, 120_000)
+      it('leaves no slot behind when a push interrupts a pop', async () => {
+        const { errors, page } = await open()
+        await sampleFrames(page, 'push')
+        const pushed = await nodeCount(page)
+        const frames = await sampleFrames(page, 'back', { followUp: 'push', afterFrames: 3 })
+        expect(frames.slice(0, 3).some((frame) => between(frame.session))).toBe(true)
+        expect(frames.at(-1)).toEqual(SESSION_SETTLED)
+        expect(await nodeCount(page)).toBe(pushed)
+        expect(
+          await page.evaluate(
+            () => document.querySelectorAll('[data-testid="stack-probe-session"]').length
+          )
+        ).toBe(1)
+        expect(errors).toEqual([])
+        await page.close()
+      }, 120_000)
 
-  it('settles on the list when Back interrupts an unfinished push', async () => {
-    const { errors, page } = await openList()
-    // Warm the session chunk, so the interrupted push is mid-slide rather than waiting for content.
-    await sampleFrames(page, 'push')
-    await sampleFrames(page, 'back')
-    const baseline = await nodeCount(page)
-    const mounts = await sessionMounts(page)
-    const frames = await sampleFrames(page, 'push', { followUp: 'back', afterFrames: 6 })
-    expect(between(frames[5].session)).toBe(true)
-    // Leaves from where the push stopped, not from 0: the exit's first keyframe is mid-screen.
-    const exitFrom = frames.slice(6).find((frame) => frame.from?.startsWith('matrix'))?.from
-    const startX = Number(exitFrom?.match(/matrix\(1, 0, 0, 1, ([\d.]+), 0\)/)?.[1])
-    expect(between(startX)).toBe(true)
-    const leaving = frames
-      .slice(6)
-      .map((frame) => frame.session)
-      .filter((left) => left !== null)
-    expect(leaving).toEqual(leaving.toSorted((a, b) => a - b))
-    expect(frames.at(-1)).toEqual(LIST_SETTLED)
-    expect(await nodeCount(page)).toBe(baseline)
-    expect(await sessionMounts(page)).toBe(mounts + 1)
-    expect(errors).toEqual([])
-    await page.close()
-  }, 120_000)
+      it('settles on the list when Back interrupts an unfinished push', async () => {
+        const { errors, page } = await open()
+        // Warm the session chunk, so the interrupted push is mid-slide rather than waiting for content.
+        await sampleFrames(page, 'push')
+        await sampleFrames(page, 'back')
+        const baseline = await nodeCount(page)
+        const mounts = await sessionMounts(page)
+        const frames = await sampleFrames(page, 'push', { followUp: 'back', afterFrames: 6 })
+        expect(between(frames[5].session)).toBe(true)
+        // Leaves from where the push stopped, not from 0: the exit's first keyframe is mid-screen.
+        const exitFrom = frames.slice(6).find((frame) => frame.from?.startsWith('matrix'))?.from
+        const startX = Number(exitFrom?.match(/matrix\(1, 0, 0, 1, ([\d.]+), 0\)/)?.[1])
+        expect(between(startX)).toBe(true)
+        const leaving = frames
+          .slice(6)
+          .map((frame) => frame.session)
+          .filter((left) => left !== null)
+        expect(leaving).toEqual(leaving.toSorted((a, b) => a - b))
+        expect(frames.at(-1)).toEqual(LIST_SETTLED)
+        expect(await nodeCount(page)).toBe(baseline)
+        expect(await sessionMounts(page)).toBe(mounts + 1)
+        expect(errors).toEqual([])
+        await page.close()
+      }, 120_000)
 
-  it('slides a screen out from rest after a push that once interrupted its entry', async () => {
-    const { errors, page } = await openList()
-    await sampleFrames(page, 'push')
-    await sampleFrames(page, 'back')
-    // wt-1 is still entering when wt-2 covers it, so wt-1 settles beneath at rest.
-    await sampleFrames(page, 'push', { followUp: 'pushOther', afterFrames: 6 })
-    await sampleFrames(page, 'back')
-    const frames = await sampleFrames(page, 'back')
-    // getKeyframes() reports the keyframe normalized, as translateX(0px).
-    expect(frames.find((frame) => frame.from !== null)?.from).toMatch(/^translateX\(0(px)?\)$/)
-    expect(frames.at(-1)).toEqual(LIST_SETTLED)
-    expect(errors).toEqual([])
-    await page.close()
-  }, 120_000)
+      it('slides a screen out from rest after a push that once interrupted its entry', async () => {
+        const { errors, page } = await open()
+        await sampleFrames(page, 'push')
+        await sampleFrames(page, 'back')
+        // wt-1 is still entering when wt-2 covers it, so wt-1 settles beneath at rest.
+        await sampleFrames(page, 'push', { followUp: 'pushOther', afterFrames: 6 })
+        await sampleFrames(page, 'back')
+        const frames = await sampleFrames(page, 'back')
+        // getKeyframes() reports the keyframe normalized, as translateX(0px).
+        expect(frames.find((frame) => frame.from !== null)?.from).toMatch(/^translateX\(0(px)?\)$/)
+        expect(frames.at(-1)).toEqual(LIST_SETTLED)
+        expect(errors).toEqual([])
+        await page.close()
+      }, 120_000)
 
-  it('swaps instantly in the tablet split view and under reduced motion', async () => {
-    for (const options of [{ animation: 'none' }, { reducedMotion: 'reduce' }]) {
-      const { errors, page } = await openList(options)
-      const pushed = await sampleFrames(page, 'push')
-      expect(pushed.filter((frame) => between(frame.session))).toEqual([])
-      expect(pushed.at(-1)).toEqual(SESSION_SETTLED)
-      const popped = await sampleFrames(page, 'back')
-      expect(popped.filter((frame) => between(frame.session))).toEqual([])
-      expect(popped.at(-1)).toEqual(LIST_SETTLED)
-      expect(errors).toEqual([])
-      await page.close()
-    }
-  }, 120_000)
+      it('swaps instantly in the tablet split view and under reduced motion', async () => {
+        for (const options of [{ animation: 'none' }, { reducedMotion: 'reduce' }]) {
+          const { errors, page } = await open(options)
+          const pushed = await sampleFrames(page, 'push')
+          expect(pushed.filter((frame) => between(frame.session))).toEqual([])
+          expect(pushed.at(-1)).toEqual(SESSION_SETTLED)
+          const popped = await sampleFrames(page, 'back')
+          expect(popped.filter((frame) => between(frame.session))).toEqual([])
+          expect(popped.at(-1)).toEqual(LIST_SETTLED)
+          expect(errors).toEqual([])
+          await page.close()
+        }
+      }, 120_000)
+    })
+  }
 })
