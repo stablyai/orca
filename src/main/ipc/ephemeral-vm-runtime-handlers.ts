@@ -4,7 +4,10 @@ import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
 } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import {
+  mayReconnectEphemeralVmRuntimeTransport,
+  type EphemeralVmRuntimeRecord
+} from '../../shared/ephemeral-vm-runtimes'
 import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
@@ -27,6 +30,7 @@ import {
 import {
   connectRuntimeOwnedSshTarget,
   disconnectRuntimeOwnedSshTarget,
+  ensureRuntimeOwnedSshConnection,
   removeRuntimeOwnedSshTarget
 } from '../ephemeral-vm-runtime-ssh'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
@@ -203,6 +207,13 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         return null
       }
       if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
+        // The sandbox never stopped, so the recipe must not re-run; only this process's
+        // transport can be missing (a restart drops the PTY provider but not the record).
+        // Statuses with no reachable sandbox stay untouched, or activating a failed runtime
+        // would raise a connection error for something that was never up.
+        if (mayReconnectEphemeralVmRuntimeTransport(runtime.status)) {
+          await ensureRuntimeOwnedSshConnection({ runtime })
+        }
         return runtime
       }
       const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
@@ -226,24 +237,36 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
       }
       const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
-      if (!result.skipped && connection.type === 'ssh') {
-        try {
-          const ssh = await connectRuntimeOwnedSshTarget({
-            runtimeId: result.runtime.id,
-            connection
-          })
-          return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-            connectionMode: 'ssh',
-            sshTargetId: ssh.targetId
-          })
-        } catch (error) {
-          updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-            status: 'resume_failed'
-          })
-          throw error
-        }
+      if (connection.type !== 'ssh') {
+        return result.runtime
       }
-      return result.runtime
+      if (result.skipped) {
+        // No resume ran, so a transport failure is `unverifiable` and must not be recorded as
+        // 'resume_failed'; the record stays running and the next activation retries.
+        const targetId = await ensureRuntimeOwnedSshConnection({ runtime: result.runtime })
+        return targetId && targetId !== result.runtime.sshTargetId
+          ? updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+              connectionMode: 'ssh',
+              sshTargetId: targetId
+            })
+          : result.runtime
+      }
+      try {
+        // A re-run resume may have moved the endpoint, so this reconnects unconditionally.
+        const ssh = await connectRuntimeOwnedSshTarget({
+          runtimeId: result.runtime.id,
+          connection
+        })
+        return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+          connectionMode: 'ssh',
+          sshTargetId: ssh.targetId
+        })
+      } catch (error) {
+        updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+          status: 'resume_failed'
+        })
+        throw error
+      }
     }
   )
 
