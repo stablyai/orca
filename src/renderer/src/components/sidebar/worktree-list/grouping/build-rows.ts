@@ -44,6 +44,7 @@ import type {
 } from './row-types'
 import { getRenderedNaturalAnchorRepoIds, withRepoSectionDisplayLabels } from './section-order'
 import { buildOrderedGroups } from './worktree-grouping'
+import { DEFAULT_TAG_SECTION_ORDER, type TagSectionOrder } from './tag-section-order'
 
 export function buildRows(
   groupBy: WorktreeGroupBy,
@@ -70,7 +71,8 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  tagOrder: TagSectionOrder = DEFAULT_TAG_SECTION_ORDER
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -209,6 +211,8 @@ export function buildRows(
     pendingByRepo,
     repoOrder,
     projectOrderBy,
+    tagOrderBy: tagOrder.by,
+    manualTagOrder: tagOrder.manual,
     folderWorkspaces: renderableFolderWorkspaces
   })
 

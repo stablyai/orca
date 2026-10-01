@@ -35,6 +35,7 @@ import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
+import { WorktreeTagsMenuItems } from './WorktreeTagsMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
@@ -48,6 +49,7 @@ import {
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
+    activeContextWorktrees,
     batchDeleteWorktrees,
     children,
     contentClassName,
@@ -169,6 +171,10 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             isMultiContext={isMultiContext}
             onAssignWorkspaceStatus={handleAssignWorkspaceStatus}
             workspaceStatuses={workspaceStatuses}
+          />
+          <WorktreeTagsMenuItems
+            contextWorktrees={activeContextWorktrees}
+            disabled={deletingContext}
           />
           <DropdownMenuSeparator />
           {!isMultiContext && (

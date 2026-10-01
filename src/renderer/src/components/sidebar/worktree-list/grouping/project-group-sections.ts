@@ -9,11 +9,8 @@ import { PROJECT_GROUP_META, getProjectGroupHeaderKey } from './group-keys'
 import { appendOrderedGroups } from './group-sections'
 import type { SectionAppendContext } from './group-sections'
 import type { OrderedGroupEntry } from './project-grouping'
-import {
-  compareRecentRank,
-  recentRankForEntry,
-  withRepoSectionDisplayLabels
-} from './section-order'
+import { withRepoSectionDisplayLabels } from './section-order'
+import { compareRecentRank, recentRankForEntry } from './section-recent-rank'
 import { buildFolderWorkspaceRow } from './row-builders'
 
 export function appendProjectGroupSections(

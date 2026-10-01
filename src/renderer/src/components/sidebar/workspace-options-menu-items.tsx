@@ -17,7 +17,8 @@ import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
 import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
-import { PROJECT_ORDER_OPTIONS, SORT_OPTIONS } from './sidebar-workspace-option-items'
+import { SORT_OPTIONS } from './sidebar-workspace-option-items'
+import { PROJECT_ORDER_OPTIONS, TAG_ORDER_OPTIONS } from './sidebar-section-order-option-items'
 import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection'
 import { translate } from '@/i18n/i18n'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
@@ -98,11 +99,14 @@ export function WorkspaceOptionsMenuItems({
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
+  const tagOrderBy = useAppStore((s) => s.tagOrderBy)
+  const setTagOrderBy = useAppStore((s) => s.setTagOrderBy)
   const { hostOptions } = useSidebarHostScopeOptions()
   const showHostScopeControls = shouldShowHostScopeControls(hostOptions)
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
   const projectOrderLabel =
     PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
+  const tagOrderLabel = TAG_ORDER_OPTIONS.find((opt) => opt.id === tagOrderBy)?.label ?? 'Name'
   const hostVisibilityLabel = getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions)
   const boardAttr = preserveWorkspaceBoardOpen ? '' : undefined
 
@@ -212,6 +216,53 @@ export function WorkspaceOptionsMenuItems({
               onValueChange={(v) => setProjectOrderBy(v as typeof projectOrderBy)}
             >
               {PROJECT_ORDER_OPTIONS.map((opt) => (
+                <Tooltip key={opt.id}>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuRadioItem
+                      value={opt.id}
+                      // Keep the menu open so people can compare order modes.
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      {opt.label}
+                    </DropdownMenuRadioItem>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={6}>
+                    {opt.description}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      )}
+
+      {/* Why: tag order is the same choice one level down; it only applies while
+          the sidebar actually renders tag sections. */}
+      {groupBy === 'tag' && (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="flex flex-1 items-center justify-between">
+              <span>
+                {translate(
+                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrder',
+                  'Tag order'
+                )}
+              </span>
+              <span className="text-[11px] font-medium text-muted-foreground">{tagOrderLabel}</span>
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-44" data-workspace-board-preserve-open={boardAttr}>
+            <DropdownMenuRadioGroup
+              value={tagOrderBy}
+              onValueChange={(v) => {
+                // Why look it up: the radio value is a string, and the option ids are the union.
+                const next = TAG_ORDER_OPTIONS.find((opt) => opt.id === v)
+                if (next) {
+                  setTagOrderBy(next.id)
+                }
+              }}
+            >
+              {TAG_ORDER_OPTIONS.map((opt) => (
                 <Tooltip key={opt.id}>
                   <TooltipTrigger asChild>
                     <DropdownMenuRadioItem

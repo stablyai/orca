@@ -100,6 +100,16 @@ orca worktree set --worktree active --comment "reproduced failure; testing token
 orca worktree rm --worktree id:<worktreeId> --force --json
 ```
 
+Tag workspaces to group them across repos in the sidebar (Group by → Tag):
+
+```bash
+orca worktree set --worktree active --tag billing --tag api --json
+orca worktree set --worktree active --untag api --json
+orca worktree set --worktree active --tags null --json
+```
+
+`--tag` and `--untag` repeat and keep the workspace's other tags; `--tags a,b` replaces the whole set, and `--tags null` clears it. Tags match case-insensitively, and `worktree ps` lists them.
+
 When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
 
 Agent startup flags:

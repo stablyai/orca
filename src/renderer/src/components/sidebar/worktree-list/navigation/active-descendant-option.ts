@@ -1,4 +1,3 @@
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { RenderRow } from '../listing/render-row'
 import {
   getWorktreeExecutionHostId,
@@ -8,6 +7,7 @@ import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import { isPinnedWorktreeRow } from '../listing/renderable-rows'
 import { getRenderRowWorktreeItem, renderRowContainsWorktree } from './render-row-lookup'
 import { getWorktreeOptionId } from '../rows/option-dom'
+import { getFolderWorkspaceRowNavigationKey } from '../grouping/row-builders'
 
 export function getRenderRowOptionId(
   row: RenderRow | undefined,
@@ -33,7 +33,7 @@ export function getRenderRowOptionId(
     return getWorktreeOptionId(row.rowKey)
   }
   if (row.type === 'folder-workspace') {
-    return getWorktreeOptionId(folderWorkspaceKey(row.folderWorkspace.id))
+    return getWorktreeOptionId(getFolderWorkspaceRowNavigationKey(row))
   }
   return undefined
 }

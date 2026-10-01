@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
+import { WorktreeCardTagChips } from './WorktreeCardTagChips'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
@@ -34,7 +35,7 @@ export function WorktreeCardSecondaryRows({
     lineageChildAriaLabel,
     childWorkspaceShortLabel
   } = card
-  const { hasMetaRow } = presentation
+  const { hasMetaRow, visibleTags } = presentation
 
   return (
     <>
@@ -62,6 +63,8 @@ export function WorktreeCardSecondaryRows({
           settings={settings}
         />
       ) : null}
+
+      {visibleTags.length > 0 ? <WorktreeCardTagChips tags={visibleTags} /> : null}
 
       {/* Why: counterbalance the card stack gap (-mt-1) so agents right after the title read as one header group. */}
       {showInlineAgentList && (

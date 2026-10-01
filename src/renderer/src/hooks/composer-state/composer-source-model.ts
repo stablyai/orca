@@ -17,7 +17,11 @@ export type ComposerSourceModel = {
     options?: { preserveBranchNameOverride?: boolean | undefined }
   ) => void
   applyLocalComposerDrop: (paths: string[], canApply?: () => boolean) => Promise<void>
-  applyWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => Promise<void>
+  /** Resolves with the store's result; never rejects. */
+  applyWorktreeMeta: (
+    worktreeId: string,
+    meta: Partial<WorktreeMeta>
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
   canPrefetchSelectedRepoWorkItems: boolean
   folderCreateDisabled: boolean
   handleAddAttachment: () => Promise<void>

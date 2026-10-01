@@ -139,7 +139,7 @@ export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreeP
   const body = result.worktrees
     .map(
       (worktree) =>
-        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  live:${worktree.liveTerminalCount}  pty:${worktree.hasAttachedPty ? 'yes' : 'no'}  unread:${worktree.unread ? 'yes' : 'no'}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
+        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  live:${worktree.liveTerminalCount}  pty:${worktree.hasAttachedPty ? 'yes' : 'no'}  unread:${worktree.unread ? 'yes' : 'no'}${worktree.tags?.length ? `  tags:${worktree.tags.join(',')}` : ''}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`

@@ -8,6 +8,7 @@ import { ALL_GROUP_KEY, getPRGroupKey, getProjectGroupHeaderKey } from './group-
 import { buildProjectGroupingIndex, getProjectGroupingForRepo } from './project-grouping'
 import type { ProjectGroupingModel } from './project-grouping'
 import type { WorktreeGroupBy } from './row-types'
+import { getTagGroupKeys } from './tag-groups'
 
 export function getGroupKeyForWorktree(
   groupBy: WorktreeGroupBy,
@@ -23,6 +24,9 @@ export function getGroupKeyForWorktree(
   }
   if (groupBy === 'workspace-status') {
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
+  }
+  if (groupBy === 'tag') {
+    return getTagGroupKeys(worktree)[0] ?? null
   }
   if (groupBy === 'repo') {
     return getProjectGroupingForRepo(
@@ -55,6 +59,10 @@ export function getGroupKeysForWorktree(
   )
   if (!groupKey) {
     return []
+  }
+  if (groupBy === 'tag') {
+    // Why every tag: revealing a workspace opens each section it renders in.
+    return getTagGroupKeys(worktree)
   }
   if (groupBy !== 'repo') {
     return [groupKey]

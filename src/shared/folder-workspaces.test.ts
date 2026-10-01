@@ -60,3 +60,24 @@ describe('normalizeFolderWorkspaces host attribution', () => {
     expect(inherited.connectionId).toBe('ssh-group')
   })
 })
+
+describe('normalizeFolderWorkspaces tags', () => {
+  it('normalizes persisted tags and omits an empty list', () => {
+    const [tagged, untagged] = normalizeFolderWorkspaces(
+      [
+        {
+          id: 'ws-a',
+          projectGroupId: 'group-1',
+          name: 'A',
+          sortOrder: 2,
+          tags: [' Web', 'web', 3]
+        },
+        { id: 'ws-b', projectGroupId: 'group-1', name: 'B', sortOrder: 1, tags: [] }
+      ],
+      [folderGroup]
+    )
+
+    expect(tagged.tags).toEqual(['Web'])
+    expect(Object.keys(untagged)).not.toContain('tags')
+  })
+})

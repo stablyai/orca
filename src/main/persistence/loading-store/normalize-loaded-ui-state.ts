@@ -78,6 +78,7 @@ export function normalizeLoadedUiState(
   const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
   const expandedCardPropsMigrated = parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
   const jiraIssueCardPropDefaulted = parsed.ui?._jiraIssueWorktreeCardPropertyDefaulted === true
+  const tagsCardPropDefaulted = parsed.ui?._tagsWorktreeCardPropertyDefaulted === true
   const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
   const deliberateUncheck =
     hadExperimentOn && Array.isArray(rawCardProps) && !rawCardProps.includes('inline-agents')
@@ -119,7 +120,13 @@ export function normalizeLoadedUiState(
       jiraIssueCardPropDefaulted || expandedCandidate.includes('jira-issue')
         ? expandedCandidate
         : [...expandedCandidate, 'jira-issue' as const]
-    const normalized = normalizeWorktreeCardProperties(jiraCandidate)
+    // Why: 'tags' joined the Default-mode list after profiles saved theirs; backfill once, but
+    // never into Compact, whose preset stays quiet.
+    const tagsCandidate =
+      tagsCardPropDefaulted || loadedCompactWorktreeCards || jiraCandidate.includes('tags')
+        ? jiraCandidate
+        : [...jiraCandidate, 'tags' as const]
+    const normalized = normalizeWorktreeCardProperties(tagsCandidate)
     const changed =
       normalized.length !== rawCardProps.length ||
       normalized.some((property, index) => property !== rawCardProps[index])
@@ -129,7 +136,8 @@ export function normalizeLoadedUiState(
     migratedCardProps !== undefined ||
     !inlineAgentsMigrated ||
     !expandedCardPropsMigrated ||
-    !jiraIssueCardPropDefaulted
+    !jiraIssueCardPropDefaulted ||
+    !tagsCardPropDefaulted
   ) {
     markNeedsSave()
   }
@@ -213,6 +221,7 @@ export function normalizeLoadedUiState(
     _inlineAgentsDefaultedForExperiment: true,
     _inlineAgentsDefaultedForAllUsers: true,
     _expandedWorktreeCardPropertiesDefaulted: true,
-    _jiraIssueWorktreeCardPropertyDefaulted: true
+    _jiraIssueWorktreeCardPropertyDefaulted: true,
+    _tagsWorktreeCardPropertyDefaulted: true
   }
 }

@@ -1,7 +1,8 @@
+import type { WorkspaceGroupBy } from '../../../../shared/workspace-group-by'
 export function shouldShowProjectOrderManualDefaultNotice(args: {
   persistedUIReady: boolean
   projectOrderManualDefaultNoticeDismissed: boolean
-  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy: WorkspaceGroupBy
   projectOrderBy: 'manual' | 'recent'
   repoCount: number
 }): boolean {

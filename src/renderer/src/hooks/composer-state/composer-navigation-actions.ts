@@ -62,16 +62,7 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
   ])
 
   const applyWorktreeMeta = useCallback(
-    async (worktreeId: string, meta: Partial<WorktreeMeta>): Promise<void> => {
-      if (Object.keys(meta).length === 0) {
-        return
-      }
-      try {
-        await updateWorktreeMeta(worktreeId, meta)
-      } catch {
-        console.error('Failed to update worktree meta after creation')
-      }
-    },
+    (worktreeId: string, meta: Partial<WorktreeMeta>) => updateWorktreeMeta(worktreeId, meta),
     [updateWorktreeMeta]
   )
 

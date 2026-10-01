@@ -7,6 +7,7 @@ import {
 } from '../../../../../../shared/workspace-statuses'
 import { ALL_GROUP_KEY, getPRLaneKey } from './group-keys'
 import type { WorktreeGroupBy } from './row-types'
+import { getTagGroupKeys } from './tag-groups'
 
 /** A folder workspace paired with the project group that owns it. The pair is
  *  carried through grouping because FolderWorkspaceRow needs a non-optional
@@ -41,27 +42,32 @@ export function getRenderableFolderWorkspaces(
 }
 
 /**
- * Which lane a folder workspace belongs to, per Group by mode.
+ * Which lanes a folder workspace belongs to, per Group by mode. Only tag mode
+ * yields more than one: a workspace renders once under each of its tags.
  *
  * Deliberately exhaustive with no `default:` so a new WorktreeGroupBy variant is
  * a compile error here rather than a silent fall-through that hides folder
  * workspaces again. Total by construction: a folder workspace always gets a lane.
  */
-export function getFolderWorkspaceLaneKey(
+export function getFolderWorkspaceLaneKeys(
   pair: RenderableFolderWorkspace,
   groupBy: Exclude<WorktreeGroupBy, 'repo'>,
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-): string {
+): string[] {
   switch (groupBy) {
     case 'workspace-status':
-      return getWorkspaceStatusGroupKey(getWorkspaceStatus(pair.folderWorkspace, workspaceStatuses))
+      return [
+        getWorkspaceStatusGroupKey(getWorkspaceStatus(pair.folderWorkspace, workspaceStatuses))
+      ]
     case 'pr-status':
       // Why in-progress: a folder workspace has no branch or repo, so it can
       // never resolve a PR. getPRGroupKey returns this same lane for any
       // worktree without one, so the two stay consistent.
-      return getPRLaneKey('in-progress')
+      return [getPRLaneKey('in-progress')]
+    case 'tag':
+      return getTagGroupKeys(pair.folderWorkspace)
     case 'none':
-      return ALL_GROUP_KEY
+      return [ALL_GROUP_KEY]
   }
 }
 

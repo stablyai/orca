@@ -85,7 +85,8 @@ function useSelectedSourceReset(
     setAttachmentPaths: vi.fn(),
     setCreateError: vi.fn(),
     setName,
-    setNote
+    setNote,
+    setTagDraft: vi.fn()
   })
   return {
     ...reset,

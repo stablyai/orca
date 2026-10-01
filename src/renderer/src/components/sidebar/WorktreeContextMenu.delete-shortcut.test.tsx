@@ -95,6 +95,7 @@ const defaultStoreState = {
   worktreeLineageById: {},
   workspaceLineageByChildKey: {},
   updateWorktreeLineage: vi.fn(),
+  folderWorkspaces: [],
   tabsByWorktree: {},
   ptyIdsByTabId: {},
   browserTabsByWorktree: {},

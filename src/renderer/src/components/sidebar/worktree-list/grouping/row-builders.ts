@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../../../shared/repo-types'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -256,14 +257,26 @@ export function appendWorktreeRows(
  *  grouped-lane and flat emitters so their rows cannot diverge. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  sectionKey?: string
 ): FolderWorkspaceRow {
   return {
     type: 'folder-workspace',
-    key: `folder-workspace:${pair.folderWorkspace.id}`,
+    key: sectionKey
+      ? `folder-workspace:${sectionKey}:${pair.folderWorkspace.id}`
+      : `folder-workspace:${pair.folderWorkspace.id}`,
+    ...(sectionKey ? { sectionKey } : {}),
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: 0,
     groupDepth
   }
+}
+
+/** Navigation and DOM-option key for a folder row; section-scoped when the row can repeat. */
+export function getFolderWorkspaceRowNavigationKey(
+  row: Pick<FolderWorkspaceRow, 'folderWorkspace' | 'sectionKey'>
+): string {
+  const workspaceKey = folderWorkspaceKey(row.folderWorkspace.id)
+  return row.sectionKey ? `${row.sectionKey}:${workspaceKey}` : workspaceKey
 }

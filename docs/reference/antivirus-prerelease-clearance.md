@@ -5,7 +5,7 @@ tracking issue for the current grouping. This document covers the part of that
 problem worth engineering effort: **stopping the next release from being
 flagged.**
 
-Clearing a *historic* release is explicitly not a goal. A user sitting on a
+Clearing a _historic_ release is explicitly not a goal. A user sitting on a
 flagged build should update to a cleared one, not wait for a vendor to whitelist
 a version we no longer ship. Retroactive submissions cost the same effort per
 vendor and expire the moment we cut a new version.
@@ -54,17 +54,17 @@ Enrollment state is deliberately left as a task here rather than asserted — fi
 each in as it is confirmed, and record the account that owns it so a lapsed
 enrollment is traceable.
 
-| Vendor                    | Mechanism                                                                    | Scope                    | State |
-| ------------------------- | ---------------------------------------------------------------------------- | ------------------------ | ----- |
-| **VirusTotal**            | Monitor — paid; builds rescanned daily, developer and vendor both notified     | ~70 engines at once      | TODO  |
-| **Microsoft**             | Defender Security Intelligence submission, as a software developer            | Defender, Defender FP EP | TODO  |
-| **Microsoft**             | Trusted Signing, or an EV certificate, for SmartScreen and Smart App Control  | Reputation gates         | TODO  |
-| **Kaspersky**             | Whitelist Program — vendors submit builds for the Dynamic Allowlist           | Endpoint, all platforms  | TODO  |
-| **Trend Micro**           | Certified Safe Software Service — pre-release software whitelisting           | Endpoint, Virus Buster   | TODO  |
-| **Bitdefender**           | False-positive submission for software vendors                                | Endpoint, ATD            | TODO  |
-| **Avast / AVG / Norton**  | Gen Digital false-positive and whitelisting channels                          | Consumer suites          | TODO  |
-| **ESET**                  | False-positive sample submission                                             | Endpoint                 | TODO  |
-| **Tencent iOA**           | No public developer channel found; needs a support relationship               | iOA, macOS and Windows   | TODO  |
+| Vendor                   | Mechanism                                                                    | Scope                    | State |
+| ------------------------ | ---------------------------------------------------------------------------- | ------------------------ | ----- |
+| **VirusTotal**           | Monitor — paid; builds rescanned daily, developer and vendor both notified   | ~70 engines at once      | TODO  |
+| **Microsoft**            | Defender Security Intelligence submission, as a software developer           | Defender, Defender FP EP | TODO  |
+| **Microsoft**            | Trusted Signing, or an EV certificate, for SmartScreen and Smart App Control | Reputation gates         | TODO  |
+| **Kaspersky**            | Whitelist Program — vendors submit builds for the Dynamic Allowlist          | Endpoint, all platforms  | TODO  |
+| **Trend Micro**          | Certified Safe Software Service — pre-release software whitelisting          | Endpoint, Virus Buster   | TODO  |
+| **Bitdefender**          | False-positive submission for software vendors                               | Endpoint, ATD            | TODO  |
+| **Avast / AVG / Norton** | Gen Digital false-positive and whitelisting channels                         | Consumer suites          | TODO  |
+| **ESET**                 | False-positive sample submission                                             | Endpoint                 | TODO  |
+| **Tencent iOA**          | No public developer channel found; needs a support relationship              | iOA, macOS and Windows   | TODO  |
 
 VirusTotal Monitor is the highest-leverage single entry, because it is the only
 channel built for exactly this workflow: uploads sit in a private store, get
@@ -75,10 +75,10 @@ a paid service, monetised on developers and free to the antivirus vendors.
 
 Be honest about its limit: VirusTotal states plainly that Monitor is not a free
 pass to get a file whitelisted. Vendors sometimes keep a detection. What it
-reliably buys is *early notice and a real contact path* instead of discovering a
+reliably buys is _early notice and a real contact path_ instead of discovering a
 verdict from a user's issue report weeks later.
 
-Do not treat a plain VirusTotal *scan* as equivalent. A scan tells us a verdict
+Do not treat a plain VirusTotal _scan_ as equivalent. A scan tells us a verdict
 exists; Monitor is what routes it to someone who can drop it.
 
 If the subscription is not worth it, the free fallback is the community-maintained

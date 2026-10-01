@@ -1,4 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import { createUiTagOrderActions } from './ui-slice-tag-order-actions'
 import {
   DEFAULT_AGENTS_GROUP_BY,
   DEFAULT_AGENTS_READ_FILTER
@@ -309,6 +310,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         usagePercentageDisplayChangeNoticeDismissed: true
       })
     },
+    ...createUiTagOrderActions(set),
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {
       const normalized = normalizeStatusBarUsageMode(mode)

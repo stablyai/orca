@@ -10,6 +10,7 @@ type MultipleCreateResetInput = Pick<
   | 'setCreateError'
   | 'setName'
   | 'setNote'
+  | 'setTagDraft'
 >
 
 import { useCallback } from 'react'
@@ -23,7 +24,8 @@ export function useMultipleCreateReset(input: MultipleCreateResetInput) {
     setAttachmentPaths,
     setCreateError,
     setName,
-    setNote
+    setNote,
+    setTagDraft
   } = input
   const resetForNextCreate = useCallback(() => {
     // Clear the checkout source too, so a PR's resolved SHA cannot become the next selection.
@@ -32,6 +34,8 @@ export function useMultipleCreateReset(input: MultipleCreateResetInput) {
     lastAutoNameRef.current = ''
     setAgentPrompt('')
     setNote('')
+    // Why keep tags: a batch of workspaces for one task usually shares them.
+    setTagDraft('')
     setAttachmentPaths([])
     setCreateError(null)
     requestAnimationFrame(() => nameInputRef.current?.focus())
@@ -43,7 +47,8 @@ export function useMultipleCreateReset(input: MultipleCreateResetInput) {
     setAttachmentPaths,
     setCreateError,
     setName,
-    setNote
+    setNote,
+    setTagDraft
   ])
 
   return {

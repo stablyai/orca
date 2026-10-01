@@ -14,6 +14,7 @@ type MainOwnedUIState =
   | 'dashboardPopoutBounds'
   | '_expandedWorktreeCardPropertiesDefaulted'
   | '_jiraIssueWorktreeCardPropertyDefaulted'
+  | '_tagsWorktreeCardPropertyDefaulted'
   | 'starNagBaselineAgents'
   | 'starNagAppVersion'
   | 'starNagNextThreshold'

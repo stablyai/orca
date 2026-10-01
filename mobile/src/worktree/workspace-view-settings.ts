@@ -5,6 +5,7 @@
 
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
+import type { WorkspaceGroupBy } from '../../../src/shared/workspace-group-by'
 
 export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
 // Desktop sort adds 'manual'; mobile renders it but sorts by server order.
@@ -12,7 +13,7 @@ export type MobileSortMode = 'smart' | 'name' | 'recent' | 'repo' | 'manual'
 
 // Desktop PersistedUIState fields this screen syncs (a structural subset).
 export type WorkspaceViewSettings = {
-  groupBy?: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy?: WorkspaceGroupBy
   sortBy?: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   hideSleepingWorkspaces?: boolean
   hideDefaultBranchWorkspace?: boolean
@@ -33,7 +34,9 @@ const GROUP_FROM_DESKTOP: Record<NonNullable<WorkspaceViewSettings['groupBy']>, 
   none: 'none',
   'workspace-status': 'workspaceStatus',
   repo: 'repo',
-  'pr-status': 'prStatus'
+  'pr-status': 'prStatus',
+  // Why: mobile has no tag view yet; show the desktop's tag grouping as a flat list.
+  tag: 'none'
 }
 
 const SORT_VALUES: readonly MobileSortMode[] = ['smart', 'name', 'recent', 'repo', 'manual']

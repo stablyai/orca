@@ -62,7 +62,7 @@ describe('useFullCreationExecution cancellation', () => {
     const state = {
       applyWorktreeMeta: vi
         .fn<FullCreationExecutionInput['applyWorktreeMeta']>()
-        .mockResolvedValue(),
+        .mockResolvedValue({ ok: true }),
       clearNewWorkspaceDraft: vi.fn<FullCreationExecutionInput['clearNewWorkspaceDraft']>(),
       createWorktree,
       effectivePresetId: null,
@@ -71,6 +71,7 @@ describe('useFullCreationExecution cancellation', () => {
       linkedGitLabMR: null,
       normalizedSparseDirectories: [],
       note: '',
+      tags: [],
       onCreated: vi.fn<NonNullable<FullCreationExecutionInput['onCreated']>>(),
       parentWorktreeId: null,
       persistDraft: false,

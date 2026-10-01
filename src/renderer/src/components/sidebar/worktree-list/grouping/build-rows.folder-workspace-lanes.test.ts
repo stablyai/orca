@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './build-rows'
-import { getFolderWorkspaceLaneKey } from './folder-workspace-lanes'
+import { getFolderWorkspaceLaneKeys } from './folder-workspace-lanes'
 import { getPRGroupKey, getPRLaneKey } from './group-keys'
 import type { Row, WorktreeGroupBy } from './row-types'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
@@ -117,7 +117,7 @@ describe('a folder workspace can be the only member of a lane', () => {
 
 describe('lane assignment', () => {
   it('routes to the same PR lane as a worktree with no PR', () => {
-    const laneKey = getFolderWorkspaceLaneKey(
+    const [laneKey] = getFolderWorkspaceLaneKeys(
       { folderWorkspace: makeFolderWorkspace(), projectGroup: GROUP },
       'pr-status',
       []

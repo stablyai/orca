@@ -35,6 +35,8 @@ import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-sele
 import { useSidebarWorktreeSortOrder } from './worktree-list/listing/use-sort-order'
 import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-worktrees'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
+import { useWorkspaceTagCommands } from './use-workspace-tag-commands'
+import { TagRenameDialogHost } from './TagRenameDialogHost'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 
@@ -76,6 +78,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
+  const tagOrderBy = useAppStore((s) => s.tagOrderBy)
+  const manualTagOrder = useAppStore((s) => s.manualTagOrder)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -153,9 +157,14 @@ const WorktreeList = React.memo(function WorktreeList({
     detectedWorktreesByRepo,
     filterRepoIds: filterState.filterRepoIds
   })
+  const tagOrder = useMemo(
+    () => ({ by: tagOrderBy, manual: manualTagOrder }),
+    [manualTagOrder, tagOrderBy]
+  )
   const rowModel = useSidebarSectionRows({
     groupBy,
     projectOrderBy,
+    tagOrder,
     pinnedDisplayPolicy,
     defaultHostId,
     worktrees: visibleWorktrees,
@@ -181,6 +190,7 @@ const WorktreeList = React.memo(function WorktreeList({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
   })
+  const tagCommands = useWorkspaceTagCommands()
   const statusMutations = useWorktreeStatusMutations({
     manualOrderCatalog,
     worktreeMap,
@@ -264,6 +274,7 @@ const WorktreeList = React.memo(function WorktreeList({
 
   return (
     <>
+      <TagRenameDialogHost />
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
         repos={repos}
@@ -295,6 +306,7 @@ const WorktreeList = React.memo(function WorktreeList({
         groupBy={groupBy}
         pinnedDisplayPolicy={pinnedDisplayPolicy}
         projectOrderBy={projectOrderBy}
+        tagOrder={tagOrder}
         toggleGroup={toggleGroup}
         collapsedGroups={effectiveCollapsedGroups}
         handleCreateForRepo={handleCreateForRepo}
@@ -347,10 +359,16 @@ const WorktreeList = React.memo(function WorktreeList({
         onMoveWorktreesToStatusAtIndex={statusMutations.moveWorktreesToStatusAtIndex}
         onPinWorktree={statusMutations.pinWorktree}
         onPinWorktrees={statusMutations.pinWorktrees}
+        onTagWorktrees={tagCommands.addTagToIdentities}
         onDropWorktreesOnWorkspaceBoard={statusMutations.dropWorktreesOnWorkspaceBoard}
         workspaceBoardOpen={workspaceBoardOpen}
         onWorktreeCardClick={onWorktreeCardClick}
-        onWorkspaceBoardDragPreviewStart={onWorkspaceBoardDragPreviewStart}
+        // Why: a tag-mode drag means "tag this"; auto-opening the status board competes with the tag sections.
+        onWorkspaceBoardDragPreviewStart={
+          groupBy === 'tag'
+            ? NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
+            : onWorkspaceBoardDragPreviewStart
+        }
         onWorkspaceBoardDragPreviewCommit={onWorkspaceBoardDragPreviewCommit}
         onWorkspaceBoardDragPreviewCancel={onWorkspaceBoardDragPreviewCancel}
         shouldShowWorkspaceBoardDropIndicator={

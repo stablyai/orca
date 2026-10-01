@@ -63,6 +63,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     pendingFirstAgentMessageRename: folderWorkspace.pendingFirstAgentMessageRename,
     firstAgentMessageRenameError: folderWorkspace.firstAgentMessageRenameError,
     workspaceStatus: folderWorkspace.workspaceStatus,
+    ...(folderWorkspace.tags !== undefined ? { tags: folderWorkspace.tags } : {}),
     diffComments: folderWorkspace.diffComments,
     path: folderWorkspace.folderPath,
     head: '',

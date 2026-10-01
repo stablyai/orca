@@ -41,6 +41,8 @@ export type WorktreeCardProperty =
   // Badge marking workspaces created through `orca worktree create`.
   | 'cli'
   | 'comment'
+  // User-authored workspace tags, shown as chips under the title.
+  | 'tags'
   | 'ports'
   // Inline agent-activity list rendered in each workspace card; on by default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts).
   | 'inline-agents'
@@ -103,6 +105,8 @@ export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 
 export type ProjectOrderBy = 'manual' | 'recent'
+/** Tag section ordering in `groupBy: 'tag'`: 'manual' uses persisted order + header drag, 'activity' by latest agent activity. */
+export type TagOrderBy = 'name' | 'manual' | 'activity'
 export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${string}`
 export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null
 export type WorkspaceHostOrder = Exclude<WorkspaceHostScope, 'all'>[]

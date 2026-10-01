@@ -1,3 +1,4 @@
+import type { WorkspaceGroupBy } from '../../../../../shared/workspace-group-by'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import type {
   ActivityGroupBy,
@@ -5,6 +6,7 @@ import type {
   ManualRepoOrderEntry,
   ProjectOrderBy,
   StatusBarItem,
+  TagOrderBy,
   ThreadReadFilter,
   WorktreeCardMode,
   WorktreeCardProperty,
@@ -27,12 +29,15 @@ export type UISlicePreferences = {
   /** Which list the sidebar body shows. Navigator-only; does not change the active view. */
   sidebarBody: 'workspaces' | 'agents'
   setSidebarBody: (body: UISlicePreferences['sidebarBody']) => void
-  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy: WorkspaceGroupBy
   setGroupBy: (g: UISlicePreferences['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlicePreferences['sortBy']) => void
   projectOrderBy: ProjectOrderBy
   setProjectOrderBy: (p: ProjectOrderBy) => void
+  tagOrderBy: TagOrderBy
+  /** Persists immediately, off the debounced writer; see the action for why. */
+  setTagOrderBy: (t: TagOrderBy) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
@@ -47,6 +52,9 @@ export type UISlicePreferences = {
   automationHostFilter: AutomationHostFilter
   setAutomationHostFilter: (filter: AutomationHostFilter) => void
   manualRepoOrder: ManualRepoOrderEntry[]
+  manualTagOrder: string[]
+  /** Persists immediately; the debounced writer never owns a drag-committed order. */
+  setManualTagOrder: (order: readonly string[]) => void
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
   hideAutomationGeneratedWorkspaces: boolean

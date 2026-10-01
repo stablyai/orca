@@ -1,7 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_TAGS_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
@@ -133,6 +136,13 @@ export function createFolderWorkspaceMutationActions(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
           'Update the remote runtime to link Jira'
+        )
+      }
+      if (target.kind === 'environment' && updates.tags !== undefined) {
+        await assertRuntimeEnvironmentCapability(
+          target.environmentId,
+          WORKTREE_TAGS_RUNTIME_CAPABILITY,
+          'Update the remote runtime to tag workspaces'
         )
       }
       const updateTicket = folderWorkspaceUpdates.begin(

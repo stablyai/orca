@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import type { ComposerTargetState } from './composer-target-state-contract'
+import { withPendingTag } from '@/lib/worktree-creation-meta'
 import type { ComposerExternalSyncState } from './composer-external-sync-contract'
 import type { ComposerSourceState } from './composer-source-state-contract'
 import type { ComposerSubmitState } from './composer-submit-state-contract'
@@ -18,6 +20,8 @@ export function useComposerSubmitOrchestration(
   external: ComposerExternalSyncState,
   source: ComposerSourceState
 ): ComposerSubmitState {
+  const { tags, tagDraft } = target.sourceContextState
+  const submittedTags = useMemo(() => withPendingTag(tags, tagDraft), [tags, tagDraft])
   const folderSubmitOrchestration = useFolderSubmitOrchestration({
     clearNewWorkspaceDraft: target.composerTargetStore.clearNewWorkspaceDraft,
     createFolderWorkspace: target.composerTargetStore.createFolderWorkspace,
@@ -34,6 +38,7 @@ export function useComposerSubmitOrchestration(
     linkedWorkItem: target.sourceContextState.linkedWorkItem,
     name: target.sourceContextState.name,
     note: target.sourceContextState.note,
+    tags: submittedTags,
     onCreated: target.composerTargetStore.onCreated,
     persistDraft: target.composerTargetStore.persistDraft,
     resolvePendingSmartGitHubSubmit:
@@ -97,6 +102,7 @@ export function useComposerSubmitOrchestration(
     linkedGitLabMR: target.workspaceIdentityState.linkedGitLabMR,
     normalizedSparseDirectories: target.derivedComposerState.normalizedSparseDirectories,
     note: target.sourceContextState.note,
+    tags: submittedTags,
     onCreated: target.composerTargetStore.onCreated,
     parentWorktreeId: target.workspaceIdentityState.parentWorktreeId,
     persistDraft: target.composerTargetStore.persistDraft,
@@ -145,7 +151,8 @@ export function useComposerSubmitOrchestration(
     setAttachmentPaths: target.sourceContextState.setAttachmentPaths,
     setCreateError: target.asyncComposerState.setCreateError,
     setName: target.sourceContextState.setName,
-    setNote: target.sourceContextState.setNote
+    setNote: target.sourceContextState.setNote,
+    setTagDraft: target.sourceContextState.setTagDraft
   })
   const quickSubmitSourcePreparation = useQuickSubmitSourcePreparation({
     baseBranch: target.workspaceIdentityState.baseBranch,
@@ -173,6 +180,7 @@ export function useComposerSubmitOrchestration(
     loadHookCheckForRepo: target.providerRuntimeSync.loadHookCheckForRepo,
     name: target.sourceContextState.name,
     note: target.sourceContextState.note,
+    tags: submittedTags,
     prepareQuickSubmitSource: quickSubmitSourcePreparation.prepareQuickSubmitSource,
     repoId: target.initialTargetState.repoId,
     resolvedSetupDecision: target.derivedComposerState.resolvedSetupDecision,

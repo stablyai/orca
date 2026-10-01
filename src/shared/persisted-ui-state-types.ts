@@ -15,6 +15,7 @@ import type {
   RightSidebarExplorerView,
   RightSidebarTab,
   StatusBarItem,
+  TagOrderBy,
   TaskResumeState,
   ThreadReadFilter,
   TopLevelView,
@@ -25,6 +26,7 @@ import type {
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type { WorkspaceGroupBy } from './workspace-group-by'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null
@@ -38,10 +40,14 @@ export type PersistedUIState = {
   rightSidebarWidth: number
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
-  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy: WorkspaceGroupBy
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Project header ordering in `groupBy: 'repo'`, independent of `sortBy`: 'manual' uses persisted order + header drag, 'recent' by latest visible activity. */
   projectOrderBy: ProjectOrderBy
+  /** Tag header ordering in `groupBy: 'tag'`: 'name' alphabetical, 'manual' persisted order + header drag, 'activity' by latest agent activity. */
+  tagOrderBy?: TagOrderBy
+  /** User-defined tag section order for `tagOrderBy: 'manual'`; tags missing here append after the listed ones. */
+  manualTagOrder?: string[]
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
@@ -196,6 +202,8 @@ export type PersistedUIState = {
   _expandedWorktreeCardPropertiesDefaulted?: boolean
   /** One-shot backfill flag for 'jira-issue', which joined the defaults after the expansion migration had already stamped upgraded profiles. */
   _jiraIssueWorktreeCardPropertyDefaulted?: boolean
+  /** One-shot backfill flag for 'tags', so a later deliberate uncheck sticks across restarts. */
+  _tagsWorktreeCardPropertyDefaulted?: boolean
   /** totalAgentsSpawned snapshot at first sighting of the current app version, so the nag counts agents since last update (not from zero). */
   starNagBaselineAgents?: number | null
   /** App version that set the current baseline; a version change re-captures the baseline on next spawn, restarting the nag countdown. */

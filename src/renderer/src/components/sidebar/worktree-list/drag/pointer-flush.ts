@@ -8,6 +8,7 @@ import {
 } from '../../workspace-kanban-sidebar-drop'
 import { updateSidebarDragPreviewPosition } from '../../worktree-sidebar-pointer-drag-dom'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
+import { getPointerDropTagSection } from './tag-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import {
   applyWorktreeDropPreview,
@@ -35,6 +36,7 @@ export type WorktreePointerDragFrameArgs = {
   setWorktreeDragState: React.Dispatch<React.SetStateAction<WorktreeRowDragState>>
   setDragOverStatus: (status: WorkspaceStatus | null) => void
   setPinDragOver: (pinDragOver: boolean) => void
+  setDragOverTagSection: (sectionKey: string | null) => void
 }
 
 // Reflect a status/pin hover that has no insertion line of its own.
@@ -71,6 +73,7 @@ function showStatusHoverWithoutInsertionLine(
 }
 
 function clearInsertionLine(args: WorktreePointerDragFrameArgs): void {
+  args.setDragOverTagSection(null)
   args.setDragOverStatus(null)
   args.setPinDragOver(false)
   args.setWorktreeDragState((prev) =>
@@ -132,6 +135,18 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
   }
 
   const sidebarContainer = ctx.scrollRef.current
+  const tagSection = sidebarContainer
+    ? getPointerDropTagSection({ container: sidebarContainer, x: drag.currentX, y: drag.currentY })
+    : null
+  // Why mirror the commit rule: highlight only where a release would add the tag.
+  if (tagSection && tagSection !== drag.sourceGroupKey) {
+    drag.reorderIntent = null
+    drag.latestStatusDropTarget = null
+    clearInsertionLine(args)
+    args.setDragOverTagSection(tagSection)
+    return
+  }
+  args.setDragOverTagSection(null)
   const preferredStatusTarget = ctx.getEligibleLineageDropTarget(
     sidebarContainer
       ? getPointerDropStatusTarget({

@@ -75,6 +75,7 @@ export type PreparedQuickSubmit = QuickSubmitSource & {
   createDisplayName: string | undefined
   pendingFirstAgentMessageRename: boolean
   trimmedNote: string
+  tags: string[]
 }
 
 export type ComposerSubmitModel = {
