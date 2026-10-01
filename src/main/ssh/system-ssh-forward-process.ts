@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from 'node:child_process'
 import { connect, createServer } from 'node:net'
+import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
 import { buildSshArgs, findSystemSsh, type SystemSshBuildArgsOptions } from './ssh-system-fallback'
 import type { SshTarget } from '../../shared/ssh-types'
+import { buildTeleportSshPortForwardCommand } from './teleport-ssh-command'
 
 export const SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS = 750
 export const SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS = 50
@@ -11,7 +12,7 @@ export const SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS = 2_000
 export const SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS = 500
 
 export type SystemSshPortForwardProcess = {
-  process: ChildProcess
+  process: SpawnedProcess
   waitForStartup: () => Promise<void>
   close: () => Promise<void>
   dispose: () => void
@@ -23,7 +24,24 @@ export function spawnSystemSshPortForward(
   remoteHost: string,
   remotePort: number,
   options?: SystemSshBuildArgsOptions
-): ChildProcess {
+): SpawnedProcess {
+  const teleportCommand = buildTeleportSshPortForwardCommand(
+    target,
+    localPort,
+    remoteHost,
+    remotePort,
+    options?.resolvedConfig
+  )
+  if (teleportCommand) {
+    // Why: tsh has no no-session mode equivalent to `ssh -N`; an open stdin
+    // keeps its non-TTY session and local forward alive until Orca closes it.
+    return spawnProcess({
+      program: teleportCommand.executable,
+      args: teleportCommand.args,
+      stdio: ['pipe', 'ignore', 'pipe']
+    })
+  }
+
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error(
@@ -50,9 +68,10 @@ export function spawnSystemSshPortForward(
 
   // Why: port-forward ssh processes are not wired to Orca credential prompts;
   // system SSH forwards must authenticate via OpenSSH config, agent, or control socket.
-  return spawn(sshPath, args, {
-    stdio: ['ignore', 'ignore', 'pipe'],
-    windowsHide: true
+  return spawnProcess({
+    program: sshPath,
+    args,
+    stdio: ['ignore', 'ignore', 'pipe']
   })
 }
 
@@ -102,7 +121,7 @@ export function assertLocalForwardPortAvailable(localPort: number): Promise<void
 }
 
 export function waitForSystemSshForwardStartup(
-  process: ChildProcess,
+  process: SpawnedProcess,
   localPort: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -161,7 +180,7 @@ export function waitForSystemSshForwardStartup(
   })
 }
 
-export function waitForSystemSshForwardStop(process: ChildProcess): Promise<void> {
+export function waitForSystemSshForwardStop(process: SpawnedProcess): Promise<void> {
   return new Promise((resolve) => {
     let settled = false
     let postKillTimer: ReturnType<typeof setTimeout> | undefined

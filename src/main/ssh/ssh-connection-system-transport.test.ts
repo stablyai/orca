@@ -211,6 +211,22 @@ describe('SshConnection', () => {
     expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
   })
 
+  it('does not apply OpenSSH ControlMaster retries to direct Teleport commands', async () => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshCommandMock.mockImplementationOnce(() =>
+      createFailingSystemCommandChannel(255, 'Teleport access denied')
+    )
+    const conn = new SshConnection(
+      createTarget({ proxyCommand: 'tsh ssh root@%h' }),
+      createCallbacks()
+    )
+
+    await expect(conn.connect()).rejects.toThrow('Teleport access denied')
+
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    expect(removeControlSocketPathMock).not.toHaveBeenCalled()
+  })
+
   it('retries a generic direct system SSH timeout without ControlMaster', async () => {
     vi.useFakeTimers()
     try {

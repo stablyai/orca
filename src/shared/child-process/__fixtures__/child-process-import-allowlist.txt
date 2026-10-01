@@ -138,10 +138,7 @@ src/main/skills/skill-update-run.ts
 src/main/ssh/ssh-connection.ts
 src/main/ssh/ssh-proxy-command.ts
 src/main/ssh/ssh-remote-cli-host-passthrough.ts
-src/main/ssh/system-ssh-command.ts
 src/main/ssh/system-ssh-dynamic-forward-process.ts
-src/main/ssh/system-ssh-file-transfer.ts
-src/main/ssh/system-ssh-forward-process.ts
 src/main/ssh/system-ssh-operation-lifecycle.ts
 src/main/startup/ensure-virtual-display.ts
 src/main/startup/hydrate-shell-path.ts
