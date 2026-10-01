@@ -33,7 +33,9 @@ function attachNotifier(): { notifier: RuntimeNotifier; send: ReturnType<typeof 
     }
   }
   registerRuntimeWindowLifecycle(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only reads id, isDestroyed, on and webContents.
     mainWindow as unknown as BrowserWindow,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only calls the stubbed runtime members.
     runtime as unknown as OrcaRuntimeService
   )
   if (!attached.notifier) {
