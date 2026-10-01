@@ -40,6 +40,7 @@ import {
   InlineUsageSignInAction,
   InlineUsageSkeleton
 } from './InlineProviderUsage'
+import { previewInactiveAccountUsage } from './usage-roster-row-state'
 import { AccountSwitchList } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
@@ -288,6 +289,7 @@ export function ClaudeSwitcherForOwner({
           const inactiveUsage = target.id
             ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
             : null
+          const inactivePreview = previewInactiveAccountUsage(inactiveUsage)
           // Why local only: the hidden sign-in runs on this device, not a remote server.
           const signInId = target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
 
@@ -327,13 +329,19 @@ export function ClaudeSwitcherForOwner({
                   {target.hint ? (
                     <span className="text-3xs leading-4 text-muted-foreground">{target.hint}</span>
                   ) : null}
-                  {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                  {inactivePreview.kind === 'loading' ? (
                     <InlineUsageSkeleton />
-                  ) : inactiveUsage?.rateLimits ? (
+                  ) : inactivePreview.kind === 'usage' ? (
                     <InlineUsageBars
-                      limits={inactiveUsage.rateLimits}
-                      isFetching={inactiveUsage.isFetching}
+                      limits={inactivePreview.limits}
+                      isFetching={inactiveUsage?.isFetching ?? false}
                     />
+                  ) : inactivePreview.kind === 'message' || inactivePreview.kind === 'sign-in' ? (
+                    <span
+                      className={`text-[10px] text-muted-foreground ${inactiveUsage?.isFetching ? 'animate-pulse' : ''}`}
+                    >
+                      {inactivePreview.label}
+                    </span>
                   ) : null}
                 </div>
               ) : null}
