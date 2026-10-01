@@ -10,6 +10,7 @@ import {
   profileHasUserOrcaFunction,
   removeWindowsPowerShellCliShim,
   renderOrcaPowerShellCliShim,
+  renderOrcaPowerShellProfileBlock,
   shouldManageWindowsPowerShellCliShim,
   upsertManagedProfileBlock,
   windowsPowerShell51ProfilePath
@@ -27,7 +28,12 @@ describe('windows powershell cli shim', () => {
   it('keeps a user orca function and still replaces only the managed block', () => {
     const profile = "function orca { 'user' }\n"
     expect(profileHasUserOrcaFunction(profile)).toBe(true)
+    expect(profileHasUserOrcaFunction("function orca-tools { }\n")).toBe(false)
+    expect(profileHasUserOrcaFunction("# function orca { 'nope' }\n")).toBe(false)
     expect(upsertManagedProfileBlock(profile, 'block')).toBe('skipped-user-function')
+    expect(upsertManagedProfileBlock("function orca-tools { }\n", 'NEXT')).toBe(
+      "function orca-tools { }\n\nNEXT\n"
+    )
     const managed = `${ORCA_POWERSHELL_SHIM_BEGIN}\n. 'shim.ps1'\n# <<< orca cli utf-8 shim <<<\n`
     expect(upsertManagedProfileBlock(`Write-Host 'keep'\n\n${managed}`, 'NEXT')).toBe(
       "Write-Host 'keep'\n\nNEXT\n"
@@ -48,6 +54,10 @@ describe('windows powershell cli shim', () => {
 
     const managed = `${ORCA_POWERSHELL_SHIM_BEGIN}\n. 'shim.ps1'\n${ORCA_POWERSHELL_SHIM_END}\n`
     expect(upsertManagedProfileBlock(`${user}${managed}`, 'NEXT')).toBe(`${user}NEXT\n`)
+    const dollarBlock = renderOrcaPowerShellProfileBlock('C:\\Users\\a$&b$$\\shim.ps1')
+    const refreshed = upsertManagedProfileBlock(upsertManagedProfileBlock(user, dollarBlock), dollarBlock)
+    expect(refreshed).toContain("a$&b$$")
+    expect(refreshed).toContain("Write-Host 'keep'")
   })
 
   it('refuses a launcher path that would break the profile script', async () => {
@@ -73,6 +83,22 @@ describe('windows powershell cli shim', () => {
     })
     expect(status).toBe('skipped-undecodable-profile')
     expect(await readFile(profilePath)).toEqual(Buffer.from([0xc0, 0x80]))
+  })
+
+  it('adds a UTF-8 BOM when a no-BOM profile gains a non-ASCII shim path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ps-bom-'))
+    const profilePath = windowsPowerShell51ProfilePath(root)
+    await mkdir(join(root, 'WindowsPowerShell'), { recursive: true })
+    await writeFile(profilePath, "Write-Host 'keep'\n", 'utf8')
+    const shimPath = join(root, 'Сердце', 'shim.ps1')
+    await installWindowsPowerShellCliShim({
+      launcherPath: 'C:\\Orca\\orca.exe',
+      documentsPath: root,
+      shimPath
+    })
+    const profile = await readFile(profilePath)
+    expect(profile.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]))
+    expect(profile.toString('utf8')).toContain('Сердце')
   })
 
   it('renders a simple function that quotes the launcher path', () => {

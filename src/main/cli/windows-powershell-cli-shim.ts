@@ -7,7 +7,8 @@ import type { CliInstallerOptions } from './cli-installer-contracts'
 export const ORCA_POWERSHELL_SHIM_BEGIN = '# >>> orca cli utf-8 shim >>>'
 export const ORCA_POWERSHELL_SHIM_END = '# <<< orca cli utf-8 shim <<<'
 
-const USER_ORCA_FUNCTION = /function\s+(?:global:)?orca\b/i
+// Why the line anchor: `\borca\b` also matches `function orca-tools` and comments.
+const USER_ORCA_FUNCTION = /^[ \t]*function[ \t]+(?:[A-Za-z]+:)?orca[ \t]*(?:$|[({])/im
 
 export type WindowsPowerShellCliShimStatus =
   | 'installed'
@@ -96,7 +97,8 @@ export function upsertManagedProfileBlock(profile: string, block: string): strin
   const pattern = managedBlockPattern()
   if (pattern.test(profile)) {
     pattern.lastIndex = 0
-    return profile.replace(pattern, `${block}\n`)
+    // Why a function: a string replacement treats `$&` and `$$` in the path as patterns.
+    return profile.replace(pattern, () => `${block}\n`)
   }
   if (profile.trim().length === 0) {
     return `${block}\n`
@@ -126,11 +128,14 @@ export async function installWindowsPowerShellCliShim(input: {
   await mkdir(dirname(input.shimPath), { recursive: true })
   // Why BOM: Windows PowerShell 5.1 reads a no-BOM .ps1 as the ANSI code page.
   await writeFile(input.shimPath, encodeProfile(renderOrcaPowerShellCliShim(input.launcherPath), 'utf8-bom'))
-  if (existing?.text === next) {
+  // Why BOM: Windows PowerShell 5.1 reads a no-BOM profile as the ANSI code page,
+  // so a non-ASCII shim path in that file never loads. UTF-16 already has a BOM.
+  const profileEncoding: ProfileEncoding = existing?.encoding === 'utf16le' ? 'utf16le' : 'utf8-bom'
+  if (existing?.text === next && existing.encoding === profileEncoding) {
     return 'installed'
   }
   await mkdir(dirname(profilePath), { recursive: true })
-  await writeFile(profilePath, encodeProfile(next, existing?.encoding ?? 'utf8-bom'))
+  await writeFile(profilePath, encodeProfile(next, profileEncoding))
   return 'installed'
 }
 
