@@ -82,7 +82,9 @@ async function startSttSession(
     if (modelState.status !== 'ready') {
       throw new Error(`Model not ready: ${modelState.status}`)
     }
-    state.cloudSession = new OpenAiTranscriptionSession(modelId, resolveTranscriptionTarget)
+    // Why: resolve the destination now and fix it for the whole recording, so a
+    // mid-dictation settings change cannot re-route the buffered audio.
+    state.cloudSession = new OpenAiTranscriptionSession(resolveTranscriptionTarget(modelId))
     state.activeModelId = modelId
     state.activeHotwordsFilePath = undefined
     state.eventSink = sink

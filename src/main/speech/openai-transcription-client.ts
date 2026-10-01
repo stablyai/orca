@@ -8,15 +8,20 @@ export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
 export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
 const CLOUD_TRANSCRIPTION_SAMPLE_RATE = 16000
 const MAX_CLOUD_AUDIO_SECONDS = 10 * 60
+const TRANSCRIPTION_TIMEOUT_MS = 120_000
 
 /**
- * Resolved POST target for an OpenAI-shaped transcription request. `apiKey` is null
- * for self-hosted endpoints that do not authenticate (e.g. a local sidecar).
+ * Resolved POST target for an OpenAI-shaped transcription request.
+ *
+ * `readApiKey` is a getter, not a value, so the secret is read only when a request
+ * is actually made (an empty dictation never touches the keychain). The URL/model/
+ * language are snapshotted when the session starts, so a settings change mid-dictation
+ * cannot re-route the buffered audio.
  */
 export type OpenAiTranscriptionTarget = {
   url: string
-  apiKey: string | null
   apiModel: string
+  readApiKey: () => string | null
   /** ISO-639 language hint for the multipart `language` field; undefined = auto-detect. */
   language?: string
 }
@@ -92,10 +97,12 @@ export class OpenAiTranscriptionSession {
   private audioSeconds = 0
   private readonly abortController = new AbortController()
 
-  constructor(
-    private readonly modelId: string,
-    private readonly resolveTarget: (modelId: string) => OpenAiTranscriptionTarget
-  ) {}
+  /**
+   * The destination is fixed for the whole recording. Why: resolving it lazily at
+   * finish would let a settings change mid-dictation re-route the buffered audio to
+   * a different server (or none, if the endpoint was disconnected), losing the clip.
+   */
+  constructor(private readonly target: OpenAiTranscriptionTarget) {}
 
   cancel(): void {
     this.chunks = []
@@ -120,7 +127,7 @@ export class OpenAiTranscriptionSession {
       return ''
     }
 
-    const target = this.resolveTarget(this.modelId)
+    const target = this.target
 
     const chunks = this.chunks
     this.chunks = []
@@ -134,12 +141,25 @@ export class OpenAiTranscriptionSession {
     // A named WAV blob satisfies multipart uploads without temporary files.
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'dictation.wav')
 
-    const response = await fetch(target.url, {
-      method: 'POST',
-      signal: this.abortController.signal,
-      headers: target.apiKey ? { Authorization: `Bearer ${target.apiKey}` } : {},
-      body: form
-    })
+    // Why: a user-selected LAN/remote server can leave the request open; without a
+    // deadline the cloud stop path would wait forever instead of releasing the
+    // session and reporting a failure. `cancel()` aborts through the session
+    // controller, so combine both signals.
+    const timeoutSignal = AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS)
+    const signal = AbortSignal.any([this.abortController.signal, timeoutSignal])
+    let response: Response
+    try {
+      response = await fetch(target.url, {
+        method: 'POST',
+        headers: target.apiKey ? { Authorization: `Bearer ${target.apiKey}` } : {},
+        body: form,
+        signal
+      })
+    } catch (error) {
+      throw timeoutSignal.aborted && !this.abortController.signal.aborted
+        ? new Error(`Transcription timed out after ${TRANSCRIPTION_TIMEOUT_MS / 1000}s`)
+        : error
+    }
 
     const data = (await response.json().catch(() => ({}))) as OpenAiTranscriptionResponse
     if (!response.ok) {

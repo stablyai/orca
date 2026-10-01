@@ -42,6 +42,7 @@ export type SpeechApi = {
     baseUrl: string
     model: string
     language: string
+    apiKey?: string
   }) => Promise<CustomSttEndpointTestResult>
   discoverCustomEndpointModels: (input: { baseUrl: string; apiKey?: string }) => Promise<{
     ok: boolean
