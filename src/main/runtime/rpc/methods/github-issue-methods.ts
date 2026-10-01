@@ -35,12 +35,19 @@ export const GITHUB_ISSUE_METHODS = [
     name: 'github.addIssueComment',
     params: IssueComment,
     handler: async (params, { runtime }) =>
-      runtime.addRepoIssueComment(
-        params.repo,
-        params.number,
-        params.body,
-        params.prRepo ?? null,
-        params.type
-      )
+      params.type
+        ? runtime.addRepoIssueComment(
+            params.repo,
+            params.number,
+            params.body,
+            params.prRepo ?? null,
+            params.type
+          )
+        : runtime.addRepoIssueComment(
+            params.repo,
+            params.number,
+            params.body,
+            params.prRepo ?? null
+          )
   })
 ]

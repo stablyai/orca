@@ -717,13 +717,7 @@ describe('OrcaRuntimeRpcServer', () => {
     })
     expect(mocks.listRepoLabels).toHaveBeenCalledWith('id:repo-1')
     expect(mocks.listRepoAssignableUsers).toHaveBeenCalledWith('id:repo-1')
-    expect(mocks.addRepoIssueComment).toHaveBeenCalledWith(
-      'id:repo-1',
-      123,
-      'done',
-      null,
-      undefined
-    )
+    expect(mocks.addRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', null)
     expect(mocks.addRepoPRReviewComment).toHaveBeenCalledWith('id:repo-1', {
       prNumber: 456,
       commitId: 'abc123',
