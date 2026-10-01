@@ -18,7 +18,8 @@ describe('resolveAnotherDevicePairingAddress', () => {
       resolveAnotherDevicePairingAddress({
         interfaces: [EN0, BRIDGE],
         selectedAddress: '',
-        ...PREFERENCE
+        ...PREFERENCE,
+        platform: 'darwin'
       })
     ).toBe(BRIDGE.address)
   })
@@ -28,7 +29,8 @@ describe('resolveAnotherDevicePairingAddress', () => {
       resolveAnotherDevicePairingAddress({
         interfaces: [EN0],
         selectedAddress: EN0.address,
-        ...PREFERENCE
+        ...PREFERENCE,
+        platform: 'darwin'
       })
     ).toBe(BRIDGE.address)
   })
@@ -40,7 +42,8 @@ describe('resolveAnotherDevicePairingAddress', () => {
         interfaces: [BRIDGE, ipv6],
         selectedAddress: ipv6.address,
         preferredInterfaceName: 'bridge0',
-        preferredAddress: BRIDGE.address
+        preferredAddress: BRIDGE.address,
+        platform: 'darwin'
       })
     ).toBe(ipv6.address)
   })
@@ -51,7 +54,8 @@ describe('resolveAnotherDevicePairingAddress', () => {
         interfaces: [BRIDGE, EN0],
         selectedAddress: '',
         preferredInterfaceName: null,
-        preferredAddress: ''
+        preferredAddress: '',
+        platform: 'darwin'
       })
     ).toBe(EN0.address)
   })
@@ -59,13 +63,13 @@ describe('resolveAnotherDevicePairingAddress', () => {
 
 describe('selectRuntimePairingIntent', () => {
   it('returns to the saved Thunderbolt address when Another device is chosen again', () => {
-    expect(selectRuntimePairingIntent('another', [EN0, BRIDGE], '', PREFERENCE)).toBe(
+    expect(selectRuntimePairingIntent('another', [EN0, BRIDGE], '', PREFERENCE, 'darwin')).toBe(
       BRIDGE.address
     )
   })
 
   it('does not keep loopback when switching to Another device while Thunderbolt is down', () => {
-    expect(selectRuntimePairingIntent('another', [EN0], '127.0.0.1', PREFERENCE)).toBe(
+    expect(selectRuntimePairingIntent('another', [EN0], '127.0.0.1', PREFERENCE, 'darwin')).toBe(
       BRIDGE.address
     )
   })

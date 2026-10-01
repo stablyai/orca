@@ -91,6 +91,7 @@ export function resolveAnotherDevicePairingAddress(args: {
   selectedAddress: string
   preferredInterfaceName: string | null
   preferredAddress: string
+  platform: NodeJS.Platform
 }): string {
   if (args.preferredInterfaceName) {
     const onPreferred = args.interfaces.filter(
@@ -120,7 +121,11 @@ export function resolveAnotherDevicePairingAddress(args: {
   if (args.interfaces.some((iface) => iface.address === args.selectedAddress)) {
     return args.selectedAddress
   }
-  return selectAutoAdvertisedPairingAddress(args.interfaces) ?? args.interfaces[0]?.address ?? ''
+  return (
+    selectAutoAdvertisedPairingAddress(args.interfaces, args.platform) ??
+    args.interfaces[0]?.address ??
+    ''
+  )
 }
 
 export function selectRuntimePairingIntent(
@@ -130,7 +135,8 @@ export function selectRuntimePairingIntent(
   preference: AnotherDevicePairingPreference = {
     preferredInterfaceName: null,
     preferredAddress: ''
-  }
+  },
+  platform: NodeJS.Platform
 ): string {
   runtimePairingLinkCache.intent = intent
   const selectedAddress =
@@ -141,7 +147,8 @@ export function selectRuntimePairingIntent(
             interfaces: networkInterfaces,
             selectedAddress: '',
             preferredInterfaceName: preference.preferredInterfaceName,
-            preferredAddress: preference.preferredAddress
+            preferredAddress: preference.preferredAddress,
+            platform
           })
         : customAddress
   runtimePairingLinkCache.selectedAddress = selectedAddress

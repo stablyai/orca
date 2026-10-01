@@ -36,22 +36,22 @@ const AMBIGUOUS_SWITCH: PairingNetworkInterface = {
 
 describe('selectAutoAdvertisedPairingAddress', () => {
   it('allows a reachable Hyper-V external-switch management address', () => {
-    expect(selectAutoAdvertisedPairingAddress([EXTERNAL_SWITCH])).toBe(EXTERNAL_SWITCH.address)
+    expect(selectAutoAdvertisedPairingAddress([EXTERNAL_SWITCH], 'win32')).toBe(
+      EXTERNAL_SWITCH.address
+    )
   })
 
   it('selects a physical address while filtering Default Switch, WSL, and host-local bridges', () => {
     expect(
-      selectAutoAdvertisedPairingAddress([
-        DEFAULT_SWITCH,
-        WSL_SWITCH,
-        HOST_LOCAL_BRIDGE,
-        PHYSICAL_LAN
-      ])
+      selectAutoAdvertisedPairingAddress(
+        [DEFAULT_SWITCH, WSL_SWITCH, HOST_LOCAL_BRIDGE, PHYSICAL_LAN],
+        'win32'
+      )
     ).toBe(PHYSICAL_LAN.address)
   })
 
   it('filters a vEthernet adapter when route reachability is ambiguous', () => {
-    expect(selectAutoAdvertisedPairingAddress([AMBIGUOUS_SWITCH])).toBeUndefined()
+    expect(selectAutoAdvertisedPairingAddress([AMBIGUOUS_SWITCH], 'win32')).toBeUndefined()
   })
 
   it('does not treat macOS Thunderbolt Bridge as a container bridge', () => {
@@ -92,7 +92,7 @@ describe('selectAutoAdvertisedPairingAddress', () => {
     'vEthernet (WSL)',
     'vEthernet (WSL (Hyper-V firewall))'
   ])('keeps the known host-local %s label filtered with a default route', (name) => {
-    expect(isVirtualBridgeInterface(name, true)).toBe(true)
+    expect(isVirtualBridgeInterface(name, true, 'win32')).toBe(true)
   })
 
   it.each([
@@ -101,6 +101,17 @@ describe('selectAutoAdvertisedPairingAddress', () => {
     'vEthernet (WSL LAN)',
     'vEthernet (WSL External)'
   ])('does not treat the route-backed near-match %s as a known host-local label', (name) => {
-    expect(isVirtualBridgeInterface(name, true)).toBe(false)
+    expect(isVirtualBridgeInterface(name, true, 'win32')).toBe(false)
+  })
+
+  it.each([
+    ['external', EXTERNAL_SWITCH, false],
+    ['Default Switch', DEFAULT_SWITCH, true],
+    ['WSL', WSL_SWITCH, true],
+    ['physical', PHYSICAL_LAN, false],
+    ['host-local', HOST_LOCAL_BRIDGE, true],
+    ['ambiguous', AMBIGUOUS_SWITCH, true]
+  ] as const)('classifies the %s fixture', (_label, fixture, expected) => {
+    expect(isVirtualBridgeInterface(fixture.name, fixture.hasDefaultRoute, 'win32')).toBe(expected)
   })
 })

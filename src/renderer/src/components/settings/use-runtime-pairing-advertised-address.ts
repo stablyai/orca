@@ -9,6 +9,7 @@ import {
   type RuntimePairingIntent,
   type RuntimePairingInterface
 } from './runtime-pairing-link-state'
+import { readPairingHostPlatform } from './read-pairing-host-platform'
 
 export function useRuntimePairingAdvertisedAddress(args: {
   intent: RuntimePairingIntent
@@ -61,7 +62,8 @@ export function useRuntimePairingAdvertisedAddress(args: {
       interfaces: networkInterfaces,
       selectedAddress,
       preferredInterfaceName: preferredInterfaceNameNow,
-      preferredAddress: rememberedAddress
+      preferredAddress: rememberedAddress,
+      platform: readPairingHostPlatform()
     })
     const adopted = networkInterfaces.find(
       (networkInterface) =>
@@ -127,7 +129,8 @@ export function useRuntimePairingAdvertisedAddress(args: {
         nextIntent,
         networkInterfaces,
         runtimePairingLinkCache.customAddress,
-        { preferredInterfaceName, preferredAddress }
+        { preferredInterfaceName, preferredAddress },
+        readPairingHostPlatform()
       )
     )
   }
