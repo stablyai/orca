@@ -36,20 +36,46 @@ export function useRuntimePairingAdvertisedAddress(args: {
   const preferredAddress = runtimePairingLinkCache.advertisedAddress || storedAddress
 
   useEffect(() => {
-    if (intent !== 'another' || networkInterfaces.length === 0) {
+    if (intent !== 'another') {
       return
     }
     if (runtimePairingLinkCache.advertisedInterfaceName === null && storedInterfaceName) {
       runtimePairingLinkCache.advertisedInterfaceName = storedInterfaceName
       runtimePairingLinkCache.advertisedAddress = storedAddress
     }
+    if (networkInterfaces.length === 0) {
+      const restored =
+        runtimePairingLinkCache.selectedAddress ||
+        runtimePairingLinkCache.advertisedAddress ||
+        storedAddress
+      if (!selectedAddress && restored) {
+        runtimePairingLinkCache.selectedAddress = restored
+        setSelectedAddress(restored)
+      }
+      return
+    }
+    const preferredInterfaceNameNow =
+      runtimePairingLinkCache.advertisedInterfaceName ?? storedInterfaceName
+    const rememberedAddress = runtimePairingLinkCache.advertisedAddress || storedAddress
     const nextAddress = resolveAnotherDevicePairingAddress({
       interfaces: networkInterfaces,
       selectedAddress,
-      preferredInterfaceName:
-        runtimePairingLinkCache.advertisedInterfaceName ?? storedInterfaceName,
-      preferredAddress: runtimePairingLinkCache.advertisedAddress || storedAddress
+      preferredInterfaceName: preferredInterfaceNameNow,
+      preferredAddress: rememberedAddress
     })
+    const adopted = networkInterfaces.find(
+      (networkInterface) =>
+        networkInterface.name === preferredInterfaceNameNow &&
+        networkInterface.address === nextAddress
+    )
+    if (adopted && rememberedAddress !== nextAddress) {
+      runtimePairingLinkCache.advertisedInterfaceName = adopted.name
+      runtimePairingLinkCache.advertisedAddress = nextAddress
+      void updateSettings({
+        runtimePairingAdvertisedInterfaceName: adopted.name,
+        runtimePairingAdvertisedAddress: nextAddress
+      })
+    }
     if (nextAddress === selectedAddress) {
       return
     }
@@ -61,7 +87,8 @@ export function useRuntimePairingAdvertisedAddress(args: {
     selectedAddress,
     setSelectedAddress,
     storedAddress,
-    storedInterfaceName
+    storedInterfaceName,
+    updateSettings
   ])
 
   const updateSelectedAddress = (address: string): void => {

@@ -55,22 +55,33 @@ describe('selectAutoAdvertisedPairingAddress', () => {
   })
 
   it('does not treat macOS Thunderbolt Bridge as a container bridge', () => {
-    expect(isThunderboltBridgeInterface('bridge0')).toBe(true)
-    expect(isThunderboltBridgeInterface('Bridge12')).toBe(true)
-    expect(isVirtualBridgeInterface('bridge0')).toBe(false)
-    expect(isVirtualBridgeInterface('bridge1')).toBe(false)
-    expect(isVirtualBridgeInterface('bridge')).toBe(true)
-    expect(isVirtualBridgeInterface('br-lan')).toBe(true)
-    expect(isVirtualBridgeInterface('docker0')).toBe(true)
+    expect(isThunderboltBridgeInterface('bridge0', 'darwin')).toBe(true)
+    expect(isThunderboltBridgeInterface('Bridge12', 'darwin')).toBe(true)
+    expect(isVirtualBridgeInterface('bridge0', undefined, 'darwin')).toBe(false)
+    expect(isVirtualBridgeInterface('bridge1', undefined, 'darwin')).toBe(false)
+    expect(isVirtualBridgeInterface('bridge', undefined, 'darwin')).toBe(true)
+    expect(isVirtualBridgeInterface('br-lan', undefined, 'darwin')).toBe(true)
+    expect(isVirtualBridgeInterface('docker0', undefined, 'darwin')).toBe(true)
+  })
+
+  it('keeps a Linux bridge0 out of the direct pairing address', () => {
+    const linuxBridge = { name: 'bridge0', address: '10.0.0.1' }
+    const lan = { name: 'eth0', address: '192.168.4.191' }
+    expect(isThunderboltBridgeInterface('bridge0', 'linux')).toBe(false)
+    expect(isVirtualBridgeInterface('bridge0', undefined, 'linux')).toBe(true)
+    expect(selectAutoAdvertisedPairingAddress([linuxBridge], 'linux')).toBeUndefined()
+    expect(selectAutoAdvertisedPairingAddress([linuxBridge, lan], 'linux')).toBe(lan.address)
   })
 
   it('prefers LAN and tailnet over Thunderbolt Bridge, and uses the bridge when it is the only direct address', () => {
     const thunderbolt = { name: 'bridge0', address: '10.99.88.1' }
     const lan = { name: 'en0', address: '192.168.4.191' }
     const tailnet = { name: 'tailscale0', address: '100.64.1.20' }
-    expect(selectAutoAdvertisedPairingAddress([thunderbolt, lan])).toBe(lan.address)
-    expect(selectAutoAdvertisedPairingAddress([thunderbolt, tailnet])).toBe(tailnet.address)
-    expect(selectAutoAdvertisedPairingAddress([HOST_LOCAL_BRIDGE, thunderbolt])).toBe(
+    expect(selectAutoAdvertisedPairingAddress([thunderbolt, lan], 'darwin')).toBe(lan.address)
+    expect(selectAutoAdvertisedPairingAddress([thunderbolt, tailnet], 'darwin')).toBe(
+      tailnet.address
+    )
+    expect(selectAutoAdvertisedPairingAddress([HOST_LOCAL_BRIDGE, thunderbolt], 'darwin')).toBe(
       thunderbolt.address
     )
   })
