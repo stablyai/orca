@@ -19,6 +19,7 @@ vi.mock('os', async () => {
   }
 })
 
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { CursorHookService } from './hook-service'
 import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
@@ -28,6 +29,24 @@ const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 const WINDOWS_DIRECT_LAUNCHER =
   /^[A-Za-z]:\/.*\/\.orca\/agent-hooks\/cursor-hook\.cmd [\w]+$/
+
+// Why: mkdtemp lives under tmpdir(). A profile with a space is the encoded-launcher case
+// (#6078), so a live UTF-8 post cannot require the direct command. Same guard as
+// windows-direct-cmd-hook-command.test.ts.
+const windowsProfileIsCmdSafe =
+  process.platform === 'win32' &&
+  wrapWindowsDirectCmdHookCommand(
+    join(tmpdir(), 'orca-cursor-home-x', '.orca', 'agent-hooks', 'cursor-hook.cmd')
+  ) !== null
+
+function directLauncherFor(home: string): string | null {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  return wrapWindowsDirectCmdHookCommand(
+    join(home, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME)
+  )
+}
 
 // Why: a cmd-safe profile no longer starts PowerShell, which recoded UTF-8 stdin. The budget
 // stays above MANAGED_HOOK_TIMEOUT_SECONDS (10s) because the space-in-path fallback still does,
@@ -117,16 +136,15 @@ describe('CursorHookService', () => {
     }
     expect(config.version).toBe(1)
     expect(Object.keys(config.hooks).sort()).toEqual([...CURSOR_EVENTS].sort())
+    const directLauncher = directLauncherFor(homeDir)
     for (const eventName of CURSOR_EVENTS) {
       const definition = config.hooks[eventName]?.[0]
-      expect(definition?.command).toMatch(
-        process.platform === 'win32' ? WINDOWS_DIRECT_LAUNCHER : /cursor-hook/
-      )
-      if (process.platform === 'win32') {
-        expect(definition?.command).not.toMatch(/powershell|-EncodedCommand/i)
-        expect(definition?.command?.endsWith(` ${eventName}`)).toBe(true)
-      }
-      if (process.platform !== 'win32') {
+      if (directLauncher) {
+        expect(definition?.command).toBe(`${directLauncher} ${eventName}`)
+      } else if (process.platform === 'win32') {
+        expect(definition?.command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+      } else {
+        expect(definition?.command).toMatch(/cursor-hook/)
         expect(definition?.command).toContain(join(homeDir, '.orca'))
       }
       expect(definition?.hooks).toBeUndefined()
@@ -312,7 +330,7 @@ describe('CursorHookService', () => {
     HOOK_CASE_TIMEOUT_MS
   )
 
-  it.skipIf(process.platform !== 'win32')(
+  it.skipIf(process.platform !== 'win32' || !windowsProfileIsCmdSafe)(
     'posts UTF-8 stdin unchanged when the profile path skips PowerShell',
     async () => {
       expect(new CursorHookService().install().state).toBe('installed')
