@@ -35,6 +35,7 @@ vi.mock('@/lib/workspace-session-host-persistence', () => ({
 }))
 
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
+import { handleSwitchRecentTab } from '../ipc-tab-switch'
 
 type OpenFilePayload = {
   worktreeId: string
@@ -239,47 +240,63 @@ describe('runtime file opens on the host desktop', () => {
     expect(tabEntityIds(store, VIEWED)).toHaveLength(tabCount)
   })
 
-  it('selects a background CLI tab without recording a visit to it', () => {
+  it('selects a background CLI tab without stamping a visit, keeping its tab history', () => {
     const { openFile, store } = setup('editor')
     const terminal = store.getState().createTab(BACKGROUND)
-    const recency = (): {
-      lastFocusedAt: [string, number | undefined][]
-      recentTabIds: unknown
-    } => {
-      const s = store.getState()
-      return {
-        lastFocusedAt: (s.unifiedTabsByWorktree[BACKGROUND] ?? []).map((tab) => [
-          tab.entityId,
-          tab.lastFocusedAt
-        ]),
-        recentTabIds: s.groupsByWorktree[BACKGROUND]?.map((group) => group.recentTabIds)
-      }
+    const tabId = (entityId: string): string | undefined =>
+      store.getState().unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === entityId)
+        ?.id
+    const focusTimes = (): [string, number | undefined][] =>
+      (store.getState().unifiedTabsByWorktree[BACKGROUND] ?? []).map((tab) => [
+        tab.entityId,
+        tab.lastFocusedAt
+      ])
+    const history = (): string[] | undefined =>
+      store.getState().groupsByWorktree[BACKGROUND]?.[0]?.recentTabIds
+    const timesBefore = focusTimes()
+
+    openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
+
+    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
+    // Why: the jump palette's recent rows sort by lastFocusedAt; the user never looked at this tab.
+    expect(focusTimes()).toEqual([...timesBefore, [APP_TS.filePath, undefined]])
+    // Why: the group history must still end on the active tab, or Ctrl+Tab has nowhere to go back to.
+    expect(history()?.at(-1)).toBe(tabId(APP_TS.filePath))
+
+    store.getState().activateTab(tabId(terminal.id) ?? '')
+    const timesBeforeReopen = focusTimes()
+    openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
+
+    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
+    expect(focusTimes()).toEqual(timesBeforeReopen)
+    expect(history()?.at(-1)).toBe(tabId(APP_TS.filePath))
+  })
+
+  it.each([
+    ['a new tab', false],
+    ['a reopened tab already in the history', true]
+  ] as const)('Ctrl+Tab works after a background CLI open of %s', (_label, reopen) => {
+    const { openFile, store } = setup('editor')
+    store.getState().setActiveWorktree(BACKGROUND)
+    const terminal = store.getState().createTab(BACKGROUND)
+    store.getState().setActiveTabType('terminal', BACKGROUND)
+    store.getState().setActiveWorktree(VIEWED)
+    const terminalTabId = store
+      .getState()
+      .unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === terminal.id)?.id
+    if (reopen) {
+      openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
+      // Why: the user went back to the terminal, so the file is in the history but not last.
+      store.getState().activateTab(terminalTabId ?? '')
     }
-    const withoutNewTab = recency()
 
     openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
+    store.getState().setActiveWorktree(BACKGROUND)
+    store.getState().setActiveTabType('editor', BACKGROUND)
 
     expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
-    const opened = store
-      .getState()
-      .unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === APP_TS.filePath)
-    expect(opened?.lastFocusedAt).toBeUndefined()
-    const afterOpen = recency()
-    expect(afterOpen).toEqual({
-      lastFocusedAt: [...withoutNewTab.lastFocusedAt, [APP_TS.filePath, undefined]],
-      recentTabIds: withoutNewTab.recentTabIds
-    })
-
-    // Reopen while the background worktree's selection is back on its terminal.
-    const terminalTab = store
-      .getState()
-      .unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === terminal.id)
-    store.getState().activateTab(terminalTab?.id ?? '', { recordFocus: false })
-    const beforeReopen = recency()
-    openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
-
-    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
-    expect(recency()).toEqual(beforeReopen)
+    expect(handleSwitchRecentTab()).toBe(true)
+    expect(activeEditorEntityId(store, BACKGROUND)).toBe(terminal.id)
   })
 
   it('switches the desktop for a phone open (no navigation field), as before', () => {

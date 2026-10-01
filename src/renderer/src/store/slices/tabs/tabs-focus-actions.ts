@@ -90,13 +90,10 @@ export function createTabsFocusActions(
                     ...group,
                     activeTabId: tabId,
                     // Why: track every activation in the group's MRU so closeUnifiedTab returns to the previous tab; sanitize to prune removed ids.
-                    recentTabIds:
-                      opts?.recordFocus === false
-                        ? group.recentTabIds
-                        : pushRecentTabId(
-                            sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
-                            tabId
-                          )
+                    recentTabIds: pushRecentTabId(
+                      sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
+                      tabId
+                    )
                   }
                 : group
             )
