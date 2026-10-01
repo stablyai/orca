@@ -117,8 +117,9 @@ function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMo
   throw new RuntimeClientError('invalid_argument', 'Invalid --mode. Use edit, diff, or both.')
 }
 
-// Why: the CLI has no view of its own, so 'caller' moves nothing; --focus sends 'all', as
-// worktree create --activate does. Hosts treat a missing field as the legacy switch.
+// Why: the CLI has no view of its own, so 'caller' moves nothing. --focus sends 'all', but unlike
+// worktree create --activate a file open moves only the host's own window (intended; paired
+// clients are not navigated). Hosts treat a missing field as the legacy switch.
 function getFileOpenNavigation(flags: Map<string, string | boolean>): RuntimeNavigationTarget {
   return flags.get('focus') === true ? 'all' : 'caller'
 }

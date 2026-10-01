@@ -5,6 +5,7 @@ import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../r
 import type { AppState } from '../../../types'
 import {
   type ClosedEditorTabSnapshot,
+  type EditorTabSelection,
   MAX_RECENT_CLOSED_EDITOR_TABS,
   type OpenFile
 } from '../types/open-file'
@@ -45,7 +46,7 @@ export function applyOpenFileToState(
         forceContentReload?: boolean
         focusEditor?: boolean
         reopenId?: string
-        activate?: boolean
+        selection?: EditorTabSelection
       }
     | undefined,
   scratch: OpenFileApplyScratch
@@ -100,7 +101,8 @@ export function applyOpenFileToState(
   const targetGroupId =
     resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
-  const activeResult = options?.activate === false ? {} : buildEditorActiveResult(s, worktreeId, id)
+  const activeResult =
+    options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
   if (existing) {
     // If opening as non-preview, also pin the existing tab
     const updatedPreview = isPreview ? existing.isPreview : false

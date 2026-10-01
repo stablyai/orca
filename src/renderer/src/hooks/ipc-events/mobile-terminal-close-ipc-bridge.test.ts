@@ -205,6 +205,83 @@ describe('runtime file opens on the host desktop', () => {
     expect(activeEditorEntityId(store, BACKGROUND)).toBe(opened?.id)
   })
 
+  it('CLI caller reopen of an already-open file keeps the focused terminal', () => {
+    const { openFile, store } = setup('terminal')
+    const before = screenState(store)
+    const tabCount = tabEntityIds(store, VIEWED).length
+
+    openFile({
+      worktreeId: VIEWED,
+      filePath: VIEWED_FILE,
+      relativePath: 'notes.md',
+      navigation: 'caller'
+    })
+    openFile({
+      worktreeId: VIEWED,
+      filePath: VIEWED_FILE,
+      relativePath: 'notes.md',
+      navigation: 'caller'
+    })
+
+    expect(screenState(store)).toEqual(before)
+    expect(tabEntityIds(store, VIEWED)).toHaveLength(tabCount)
+  })
+
+  it('CLI caller reopen of an already-open diff keeps the focused terminal', () => {
+    const { openDiff, store } = setup('terminal')
+    const before = screenState(store)
+
+    openDiff({ worktreeId: VIEWED, ...VIEWED_APP_TS, staged: false, navigation: 'caller' })
+    const tabCount = tabEntityIds(store, VIEWED).length
+    openDiff({ worktreeId: VIEWED, ...VIEWED_APP_TS, staged: false, navigation: 'caller' })
+
+    expect(screenState(store)).toEqual(before)
+    expect(tabEntityIds(store, VIEWED)).toHaveLength(tabCount)
+  })
+
+  it('selects a background CLI tab without recording a visit to it', () => {
+    const { openFile, store } = setup('editor')
+    const terminal = store.getState().createTab(BACKGROUND)
+    const recency = (): {
+      lastFocusedAt: [string, number | undefined][]
+      recentTabIds: unknown
+    } => {
+      const s = store.getState()
+      return {
+        lastFocusedAt: (s.unifiedTabsByWorktree[BACKGROUND] ?? []).map((tab) => [
+          tab.entityId,
+          tab.lastFocusedAt
+        ]),
+        recentTabIds: s.groupsByWorktree[BACKGROUND]?.map((group) => group.recentTabIds)
+      }
+    }
+    const withoutNewTab = recency()
+
+    openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
+
+    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
+    const opened = store
+      .getState()
+      .unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === APP_TS.filePath)
+    expect(opened?.lastFocusedAt).toBeUndefined()
+    const afterOpen = recency()
+    expect(afterOpen).toEqual({
+      lastFocusedAt: [...withoutNewTab.lastFocusedAt, [APP_TS.filePath, undefined]],
+      recentTabIds: withoutNewTab.recentTabIds
+    })
+
+    // Reopen while the background worktree's selection is back on its terminal.
+    const terminalTab = store
+      .getState()
+      .unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === terminal.id)
+    store.getState().activateTab(terminalTab?.id ?? '', { recordFocus: false })
+    const beforeReopen = recency()
+    openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
+
+    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
+    expect(recency()).toEqual(beforeReopen)
+  })
+
   it('switches the desktop for a phone open (no navigation field), as before', () => {
     const { openFile, store } = setup('terminal')
 

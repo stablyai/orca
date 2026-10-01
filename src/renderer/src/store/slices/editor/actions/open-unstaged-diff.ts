@@ -21,7 +21,7 @@ export function createOpenUnstagedDiff(
   return {
     openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
       const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
-      const activate = options?.activate !== false
+      const selection = options?.selection
       let editorItemTargetGroupId = options?.targetGroupId
       let editorItemFileId = ''
       set((s) => {
@@ -36,7 +36,7 @@ export function createOpenUnstagedDiff(
         const targetGroupId =
           resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
         editorItemTargetGroupId = targetGroupId
-        const activeResult = activate ? buildEditorActiveResult(s, worktreeId, id) : {}
+        const activeResult = selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
@@ -98,7 +98,7 @@ export function createOpenUnstagedDiff(
         'diff',
         isPreview,
         editorItemTargetGroupId,
-        activate
+        selection
       )
     }
   }

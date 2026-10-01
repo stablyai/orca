@@ -18,6 +18,7 @@ import type {
   ConflictReviewEntry,
   ConflictReviewState,
   EditorOpenTargetOptions,
+  EditorTabSelection,
   OpenFile
 } from './open-file'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from './open-file-path-rekey'
@@ -44,8 +45,7 @@ export type EditorFilesSlice = {
       forceContentReload?: boolean
       focusEditor?: boolean
       reopenId?: string
-      /** false adds the tab without selecting it, leaving what the user sees alone. */
-      activate?: boolean
+      selection?: EditorTabSelection
     }
   ) => string
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
@@ -103,7 +103,7 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions & { activate?: boolean }
+    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection }
   ) => void
   openBranchDiff: (
     worktreeId: string,

@@ -66,6 +66,7 @@ export function createTabsCreateActions(
         }
 
         const shouldActivate = init?.activate ?? true
+        const recordsFocus = shouldActivate && init?.recordFocus !== false
         const createdAt = Date.now()
         const executionHostId =
           init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
@@ -100,7 +101,7 @@ export function createTabsCreateActions(
           sortOrder: insertedIndex,
           createdAt,
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
-          ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
+          ...(recordsFocus ? { lastFocusedAt: createdAt } : {}),
           isPreview: init?.isPreview,
           isPinned: init?.isPinned
         }
@@ -108,7 +109,7 @@ export function createTabsCreateActions(
         const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
         // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.
-        const nextRecent = shouldActivate
+        const nextRecent = recordsFocus
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent
         return {

@@ -395,7 +395,7 @@ describe('orca file CLI handlers', () => {
     })
   })
 
-  it('leaves a paired remote server window alone unless --focus is passed', async () => {
+  it('sends caller to a paired remote server, and all with --focus', async () => {
     const opened = { worktree: 'wt-1', relativePath: 'src/App.tsx', kind: 'text', opened: true }
     queueFixtures(callMock, okFixture('req_open', opened), okFixture('req_open_focus', opened))
     const remote = ['--worktree', 'id:wt-1', '--pairing-code', 'remote-runtime']
