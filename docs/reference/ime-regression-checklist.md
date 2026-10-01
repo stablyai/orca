@@ -12,6 +12,19 @@ one machine.
 | [#16950](https://github.com/stablyai/orca/issues/16950) typing diagnostic records no CJK samples                              | The probe observes echoing keydowns but not reconciled composition commits, then guesses which queued input owns opaque TUI output.                                                        | A reconciled composition is observed even when `compositionend.data` is empty; only an isolated input enters exact percentiles, while overlap or a dropped-input gap produces one aggregate ambiguous burst.                                                                                                                                                    | Recorded Linux IBus empty-data commit, isolated direct and IME samples, mixed-source ambiguity, timeout/cap gaps, UTF-8 output bytes, and stop/drain cleanup are covered.                                                                                                                                    |
 | [#17104](https://github.com/stablyai/orca/issues/17104) Korean preedit repeats the Codex placeholder                          | Generic xterm row-tail reproduction exposed an application-semantic Codex or Claude composer placeholder that presentation style cannot identify safely.                                   | Xterm always preserves generic covered row text. Orca's existing structural composer classifier masks only a verified placeholder during the exact active composition session; repaint reclassification runs only while composing, and end, blur, or disposal clears ownership, class, and listeners. Arbitrary dim output and shell lookalikes remain visible. | Codex prompt/footer and Claude prompt/frame classification, arbitrary all-dim and shell-lookalike negatives, repaint entry and exit, end/blur/disposal cleanup, and rendered Electron proof at cursor column 2 preserving generic row text are covered.                                                      |
 
+## Preedit overwrite display
+
+The composition view contains only preedit and its caret. It overlays its own
+width at the cursor and does not copy, shift, or restyle committed row text.
+The temporarily covered cells reappear on cancel; commit is sent once and the
+application owns the resulting repaint. The preedit background follows the cursor
+cell's ANSI background, including palette, RGB, inverse and default colors.
+Uncovered placeholders remain dim on the original grid. A short preedit may leave
+the end of a placeholder visible; full semantic placeholder hiding is not promised.
+This replaces the row-tail reproduction and semantic placeholder-mask contracts
+in the historical issues above. No agent name, placeholder wording or footer
+layout participates in this display path.
+
 ## Preedit cell advances (#19315)
 
 Single-codepoint CJK graphemes use the active Unicode provider's cell width and
@@ -42,7 +55,7 @@ IME evidence.
 Every transient collection and ownership tracker must have an explicit lifetime and bound:
 
 - Native Chat uses `NATIVE_FILE_DROP_MAX_PATHS` (`256`). If a resolved completion would cross the cap, the whole batch is rejected atomically and the overflow notice remains visible through settlement; accepted paths keep order and duplicates. The queue is cleared before re-entry and on disable or pane-owner remount.
-- The terminal placeholder mask tracks one scalar `activeSessionId` because xterm renders one composition view. A newer start supersedes an older one, a stale end cannot clear the latest owner, and blur or disposal clears it. The composition route keeps its per-ID reference-counted map intentionally for transport ownership; it is not replaced by the scalar.
+- The composition route retains its per-ID reference-counted map for transport ownership. Display uses the existing xterm composition lifecycle; there is no separate semantic placeholder mask.
 - Typing diagnostics cap pending and ignored echo candidates at `MAX_PENDING_ECHO_CANDIDATES` (`64`), cap pending user-input signals, drain timed-out candidates, and clear all series on pane detach. Overflow becomes an explicitly ambiguous burst rather than an arbitrary attribution.
 
 ## Native Chat asynchronous attachment settlement

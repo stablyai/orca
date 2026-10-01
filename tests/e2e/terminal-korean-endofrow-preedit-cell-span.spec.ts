@@ -74,10 +74,7 @@ test.describe('Terminal end-of-row Korean preedit cell span', () => {
         sample.terminalColumns - 1
       )
       expect(sample.rowTailFromCursor, 'the final committed cell is not under the cursor').toBe('x')
-      expect(sample.remainderText, 'the overlay lost the final committed cell').toBe('x')
-      expect(sample.remainderDisplay, 'the impossible tail still clips the preedit caret').toBe(
-        'none'
-      )
+      expect(sample.remainderText, 'the overlay copied the final committed cell').toBeNull()
       expect(sample.overlayText, 'the hidden tail still appears in the overlay').toBe('가')
       expect(caret, 'the active preedit has no caret element').not.toBeNull()
       expect(caret!.width, 'the preedit caret has zero width').toBeGreaterThan(0)
