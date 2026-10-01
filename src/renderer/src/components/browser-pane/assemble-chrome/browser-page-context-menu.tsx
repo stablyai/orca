@@ -13,6 +13,7 @@ import { translate } from '@/i18n/i18n'
 import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
 import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
 import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
+import { BrowserExtensionMenuItems } from './browser-extension-menu-items'
 
 // `focus:` rather than `focus-visible:` — items are only ever focused programmatically
 // while the menu is open, so every focus here is keyboard navigation.
@@ -51,7 +52,8 @@ export function BrowserPageContextMenu({
         y,
         linkUrl: event.linkUrl,
         pageUrl: event.pageUrl,
-        selectionText: event.selectionText ?? ''
+        selectionText: event.selectionText ?? '',
+        extensionMenuItems: event.extensionMenuItems ?? []
       })
     })
   }, [browserPageId])
@@ -315,6 +317,12 @@ export function BrowserPageContextMenu({
           {translate('auto.components.browser.pane.BrowserPane.1b179ab561', 'Copy Page URL')}
         </button>
         <div className="my-1 h-px bg-border/70" />
+        <BrowserExtensionMenuItems
+          browserPageId={browserPageId}
+          items={contextMenu.extensionMenuItems}
+          itemClassName={MENU_ITEM_CLASS}
+          onPicked={closeMenu}
+        />
         <button
           role="menuitem"
           className={MENU_ITEM_CLASS}

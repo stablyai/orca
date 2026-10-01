@@ -41,6 +41,22 @@
         "title": "Mostrar icono en la barra de menús",
         "description": "Mantén un acceso directo de Orca e indicador de actividad en la barra de menús de macOS."
       }
+    },
+    "browser": {
+      "extensions": {
+        "title": "Extensiones",
+        "description": "Extensiones de Chrome instaladas en el navegador de Orca desde Chrome Web Store.",
+        "keyword": {
+          "extension": "extensión",
+          "chrome": "chrome",
+          "password": "gestor de contraseñas"
+        },
+        "options": "Opciones",
+        "remove": "Quitar",
+        "confirmRemove": "Confirmar",
+        "help": "Abre chromewebstore.google.com en una pestaña del navegador de Orca y elige \"Añadir a Chrome\" para instalar una. Las extensiones se ejecutan en las pestañas de este equipo.",
+        "empty": "No hay extensiones instaladas."
+      }
     }
   },
   "menu": {
@@ -13898,6 +13914,7 @@
             "a38f217b46": "Cambiar de perfil recargará esta página. Todos los datos del formulario no guardados se perderán.",
             "fe683eb3b4": "Cambiar perfil",
             "a771c2b6c8": "Configuración del navegador…",
+            "getExtensions": "Obtener extensiones…",
             "ed8f54509d": "Por defecto",
             "e5d31de1a9": "Tamaño de la ventana gráfica",
             "56f94f4ffa": "Desde archivo…",
@@ -14889,6 +14906,18 @@
       }
     },
     "main": {
+      "browser": {
+        "browserExtensions": {
+          "installTitle": "¿Añadir \"{{name}}\"?",
+          "installDetail": "Puede leer y cambiar tus datos en los sitios que visitas en el navegador de Orca.",
+          "installConfirm": "Añadir extensión",
+          "installCancel": "Cancelar",
+          "removeTitle": "¿Quitar \"{{name}}\"?",
+          "removeConfirm": "Quitar",
+          "remove": "Quitar de Orca…",
+          "options": "Opciones"
+        }
+      },
       "window": {
         "editableContextMenu": {
           "table": "Tabla",

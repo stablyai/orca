@@ -189,6 +189,20 @@
         "optionNativeTooltip": "Conserve l'identité intégrée d'Electron pour les sites qui rejettent l'identité nettoyée. La connexion Google n'est pas disponible en mode natif.",
         "restartRequired": "Redémarrage requis",
         "unavailable": "L'identité du navigateur n'est pas disponible."
+      },
+      "extensions": {
+        "title": "Extensions",
+        "description": "Extensions Chrome installées dans le navigateur d’Orca depuis le Chrome Web Store.",
+        "keyword": {
+          "extension": "extension",
+          "chrome": "chrome",
+          "password": "gestionnaire de mots de passe"
+        },
+        "options": "Options",
+        "remove": "Supprimer",
+        "confirmRemove": "Confirmer la suppression",
+        "help": "Ouvrez chromewebstore.google.com dans un onglet du navigateur d’Orca et choisissez « Ajouter à Chrome » pour en installer une. Les extensions s’exécutent dans les onglets de cet ordinateur.",
+        "empty": "Aucune extension installée."
       }
     }
   },
@@ -15898,6 +15912,7 @@
             "a38f217b46": "Changer de profil rechargera cette page. Toutes les données de formulaire non enregistrées seront perdues.",
             "fe683eb3b4": "Changer de profil",
             "a771c2b6c8": "Paramètres du navigateur…",
+            "getExtensions": "Obtenir des extensions…",
             "ed8f54509d": "Par défaut",
             "e5d31de1a9": "Taille de la zone d'affichage",
             "56f94f4ffa": "Depuis un fichier…",
@@ -17363,6 +17378,18 @@
       }
     },
     "main": {
+      "browser": {
+        "browserExtensions": {
+          "installTitle": "Ajouter « {{name}} » ?",
+          "installDetail": "Elle peut lire et modifier vos données sur les sites que vous visitez dans le navigateur d'Orca.",
+          "installConfirm": "Ajouter l'extension",
+          "installCancel": "Annuler",
+          "removeTitle": "Supprimer « {{name}} » ?",
+          "removeConfirm": "Supprimer",
+          "remove": "Supprimer d’Orca…",
+          "options": "Options"
+        }
+      },
       "window": {
         "editableContextMenu": {
           "table": "Tableau",

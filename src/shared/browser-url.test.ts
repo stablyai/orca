@@ -123,6 +123,11 @@ describe('browser-url helpers', () => {
     expect(normalizeBrowserNavigationUrl('about:blank')).toBe(ORCA_BROWSER_BLANK_URL)
   })
 
+  it("opens installed extensions' own pages", () => {
+    const page = 'chrome-extension://aeblfdkhhhdcdjpifhhbdiojplfjncoa/app/app.html#/page/welcome'
+    expect(normalizeBrowserNavigationUrl(page)).toBe(page)
+  })
+
   it('rejects non-web schemes for in-app navigation', () => {
     expect(normalizeBrowserNavigationUrl('javascript:alert(1)')).toBeNull()
     expect(normalizeExternalBrowserUrl('about:blank')).toBeNull()

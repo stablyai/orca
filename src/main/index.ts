@@ -1,4 +1,6 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
+// Why a bare import: registers extension support without putting it in unit-tested graphs.
+import './browser/extensions/extension-sessions'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch } from './window/foreground-activation-policy'

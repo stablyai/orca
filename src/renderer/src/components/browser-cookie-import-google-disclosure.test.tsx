@@ -65,6 +65,7 @@ describe('cookie-import Google disclosure footer', () => {
           browserSessionImportState={null}
           onImportFromBrowser={vi.fn()}
           onImportFromFile={vi.fn()}
+          onGetExtensions={vi.fn()}
           viewportPresetId={null}
           onApplyViewportPreset={vi.fn()}
           overflow={{

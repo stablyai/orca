@@ -90,6 +90,20 @@
         "optionNativeTooltip": "정리된 ID를 거부하는 사이트에 대해 Electron의 내장 ID를 유지합니다. 기본 모드에서는 Google 로그인을 사용할 수 없습니다.",
         "restartRequired": "다시 시작해야 함",
         "unavailable": "브라우저 ID를 사용할 수 없습니다."
+      },
+      "extensions": {
+        "title": "확장 프로그램",
+        "description": "Chrome 웹 스토어에서 Orca 브라우저에 설치한 Chrome 확장 프로그램입니다.",
+        "keyword": {
+          "extension": "확장",
+          "chrome": "chrome",
+          "password": "비밀번호 관리자"
+        },
+        "options": "옵션",
+        "remove": "삭제",
+        "confirmRemove": "삭제 확인",
+        "help": "Orca 브라우저 탭에서 chromewebstore.google.com을 열고 \"Chrome에 추가\"를 선택하면 설치됩니다. 확장 프로그램은 이 컴퓨터의 브라우저 탭에서 실행됩니다.",
+        "empty": "설치된 확장 프로그램이 없습니다."
       }
     }
   },
@@ -15795,6 +15809,7 @@
             "a38f217b46": "프로필을 전환하면 이 페이지가 다시 로드됩니다. 저장하지 않은 양식 데이터는 모두 손실됩니다.",
             "fe683eb3b4": "프로필 전환",
             "a771c2b6c8": "브라우저 설정…",
+            "getExtensions": "확장 프로그램 추가…",
             "ed8f54509d": "기본",
             "e5d31de1a9": "뷰포트 크기",
             "56f94f4ffa": "파일에서…",
@@ -17264,6 +17279,18 @@
       }
     },
     "main": {
+      "browser": {
+        "browserExtensions": {
+          "installTitle": "\"{{name}}\"을(를) 추가하시겠습니까?",
+          "installDetail": "Orca 브라우저에서 방문하는 사이트의 데이터를 읽고 변경할 수 있습니다.",
+          "installConfirm": "확장 프로그램 추가",
+          "installCancel": "취소",
+          "removeTitle": "\"{{name}}\"을(를) 삭제할까요?",
+          "removeConfirm": "삭제",
+          "remove": "Orca에서 삭제…",
+          "options": "옵션"
+        }
+      },
       "window": {
         "editableContextMenu": {
           "table": "표",

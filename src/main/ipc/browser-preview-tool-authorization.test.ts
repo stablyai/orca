@@ -144,7 +144,13 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:session:importFromBrowser',
   // Process-wide identity: reads/writes the host's own user-agent choice, never a viewed guest.
   'browser:identity:get',
-  'browser:identity:set'
+  'browser:identity:set',
+  // Chrome extensions: a browsing page's toolbar, and the app-wide installed list.
+  'browser:extensionActions',
+  'browser:installedExtensions',
+  'browser:setExtensionEnabled',
+  'browser:removeExtension',
+  'browser:openExtensionOptions'
 ]
 
 type Handler = (event: { sender: Electron.WebContents }, args: unknown) => unknown

@@ -1,3 +1,4 @@
+import type { BrowserExtensionsApi } from './browser-extensions-api'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
   BrowserIdentityModeSetResult,
@@ -48,7 +49,7 @@ import type {
   BrowserClientPageRendererRequest
 } from '../../shared/browser-client-page-renderer-protocol'
 
-export type BrowserApi = {
+export type BrowserApi = BrowserExtensionsApi & {
   /** Absent wherever this client hosts no guests of its own, which is how the web client reads. */
   readClientHostId?: () => string | null
   onClientPageRendererRequest?: (

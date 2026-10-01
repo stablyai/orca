@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
+import { getBrowserExtensionsSearchEntry } from './browser-extensions-search'
 import {
   getBrowserLinkRoutingDescription,
   getLinkRoutingModifierDescription,
@@ -296,6 +297,7 @@ export function getBrowserPaneSearchEntries(
         )
       ]
     },
-    getBrowserUserAgentSearchEntry()
+    getBrowserUserAgentSearchEntry(),
+    getBrowserExtensionsSearchEntry()
   ]
 }

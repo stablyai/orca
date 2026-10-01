@@ -207,6 +207,20 @@
         "optionNativeTooltip": "Keeps Electron's built-in identity for sites that reject the cleaned identity. Google sign-in is unavailable in Native mode.",
         "restartRequired": "Restart required",
         "unavailable": "Browser identity is unavailable."
+      },
+      "extensions": {
+        "title": "Extensions",
+        "description": "Chrome extensions installed in Orca's browser from the Chrome Web Store.",
+        "keyword": {
+          "extension": "extension",
+          "chrome": "chrome",
+          "password": "password manager"
+        },
+        "options": "Options",
+        "remove": "Remove",
+        "confirmRemove": "Confirm remove",
+        "help": "Open chromewebstore.google.com in an Orca browser tab and choose \"Add to Chrome\" to install one. Extensions run in browser tabs on this computer.",
+        "empty": "No extensions installed."
       }
     },
     "agents": {
@@ -15982,6 +15996,7 @@
             "a38f217b46": "Switching profiles will reload this page. Any unsaved form data will be lost.",
             "fe683eb3b4": "Switch Profile",
             "a771c2b6c8": "Browser Settings…",
+            "getExtensions": "Get Extensions…",
             "ed8f54509d": "Default",
             "e5d31de1a9": "Viewport Size",
             "56f94f4ffa": "From File…",
@@ -17411,6 +17426,18 @@
       }
     },
     "main": {
+      "browser": {
+        "browserExtensions": {
+          "installTitle": "Add \"{{name}}\"?",
+          "installDetail": "It can read and change your data on the sites you visit in Orca's browser.",
+          "installConfirm": "Add extension",
+          "installCancel": "Cancel",
+          "removeTitle": "Remove \"{{name}}\"?",
+          "removeConfirm": "Remove",
+          "remove": "Remove from Orca…",
+          "options": "Options"
+        }
+      },
       "window": {
         "editableContextMenu": {
           "table": "Table",

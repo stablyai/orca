@@ -4,6 +4,7 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../shared/browser-url'
+import { getBrowserExtensionMenuItems } from './extensions/extension-context-menus'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
 
@@ -39,6 +40,7 @@ export function setupGuestContextMenu(args: {
       linkUrl,
       // Why: forward the native selection so the renderer can Copy it directly, bypassing pages that suppress copy via oncopy handlers.
       selectionText: params.selectionText ?? '',
+      extensionMenuItems: getBrowserExtensionMenuItems(guest, params),
       ...navigationState
     })
   }

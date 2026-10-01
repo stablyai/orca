@@ -183,6 +183,7 @@
     "@xterm/addon-serialize": "0.15.0-beta.300",
     "@xterm/headless": "6.1.0-beta.302",
     "agent-browser": "~0.27.0",
+    "electron-chrome-web-store": "0.13.0",
     "electron-updater": "^6.8.9",
     "i18next": "^26.3.1",
     "jsonc-parser": "^3.3.1",
