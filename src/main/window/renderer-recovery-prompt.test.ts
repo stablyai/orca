@@ -28,6 +28,7 @@ function harness(overrides: Partial<RendererRecoveryPromptDeps> & { responses?: 
   const quit = vi.fn()
   const deps: RendererRecoveryPromptDeps = {
     recentRecoveryCount: 4,
+    revealSurface: () => {},
     isQuitting: () => false,
     diagnose: () => null,
     showMessageBox: async (options: MessageBoxOptions): Promise<MessageBoxReturnValue> => {
@@ -134,6 +135,40 @@ describe('presentRendererRecoveryPrompt', () => {
     await run()
     expect(quit).toHaveBeenCalledOnce()
     expect(copied).toEqual([])
+  })
+
+  // Field: a renderer that traps before first paint never fires ready-to-show, so the window this
+  // box is parented to is still hidden. On macOS the box is then a sheet inside an invisible window
+  // (fa0a6033 / 8468e3ec): the recovery surface exists and the user can never reach it.
+  it('reveals the window before every box, including the Copy Commands re-ask', async () => {
+    const order: string[] = []
+    const { run } = harness({
+      diagnose: () => POISON,
+      responses: [1, 0],
+      revealSurface: () => order.push('reveal'),
+      showMessageBox: async () => {
+        order.push('box')
+        return {
+          response: order.filter((o) => o === 'box').length === 1 ? 1 : 0,
+          checkboxChecked: false
+        }
+      }
+    })
+    await run()
+    expect(order).toEqual(['reveal', 'box', 'reveal', 'box'])
+  })
+
+  // The reveal is best-effort native window work on a window whose renderer just died; the box behind
+  // it is the only retry/quit surface, so a throw must not swallow it.
+  it('still shows the box when revealing the surface throws', async () => {
+    const { run, shown, reload } = harness({
+      revealSurface: () => {
+        throw new Error('Render frame was disposed before WebFrameMain could be accessed')
+      }
+    })
+    await run()
+    expect(shown).toHaveLength(1)
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 
   it('shows nothing once the app is already quitting', async () => {

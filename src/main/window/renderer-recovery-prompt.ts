@@ -11,6 +11,9 @@ export type RendererRecoveryPromptDeps = {
   isQuitting: () => boolean
   diagnose: () => InstallDirAclPoisonDiagnosis | null
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
+  /** macOS draws a parented box as a sheet inside its window, so an unrevealed window swallows the
+   *  only retry/quit surface. Called before every box, not just the first: Copy Commands loops. */
+  revealSurface: () => void
   copyToClipboard: (text: string) => void
   reload: () => void
   quit: () => void
@@ -47,6 +50,13 @@ export async function presentRendererRecoveryPrompt(
           'rendererRecovery.genericDetail',
           'This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.'
         )
+    // Why: reveal is best-effort native work on a window whose renderer just died; the box below is
+    // the only retry/quit surface and must open even when it throws.
+    try {
+      deps.revealSurface()
+    } catch (error) {
+      console.warn('[window] Failed to reveal the renderer recovery surface', error)
+    }
     const { response } = await deps.showMessageBox({
       type: 'error',
       buttons,
