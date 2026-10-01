@@ -4,8 +4,11 @@ import {
   resolveCustomSttTranscriptionUrl
 } from './custom-stt-endpoint-store'
 
+import type { CustomSttEndpointTestOutcome } from '../../shared/speech-types'
+
 export type CustomSttEndpointTestResult = {
   ok: boolean
+  outcome: CustomSttEndpointTestOutcome
   /** A short, secret-free description of what happened. */
   detail: string
 }
@@ -37,10 +40,10 @@ export async function testCustomSttEndpoint(
   const language = (probe?.language ?? saved?.language ?? '').trim()
 
   if (!baseUrl) {
-    return { ok: false, detail: 'Enter a base URL first.' }
+    return { ok: false, outcome: 'invalid', detail: 'Enter a base URL first.' }
   }
   if (!model) {
-    return { ok: false, detail: 'Enter a model first.' }
+    return { ok: false, outcome: 'invalid', detail: 'Enter a model first.' }
   }
 
   // Why: a bad base URL is the most common mistake; reject it here rather than
@@ -48,10 +51,14 @@ export async function testCustomSttEndpoint(
   try {
     const parsed = new URL(baseUrl)
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return { ok: false, detail: 'Base URL must start with http:// or https://.' }
+      return {
+        ok: false,
+        outcome: 'invalid',
+        detail: 'Base URL must start with http:// or https://.'
+      }
     }
   } catch {
-    return { ok: false, detail: 'Base URL is not a valid URL.' }
+    return { ok: false, outcome: 'invalid', detail: 'Base URL is not a valid URL.' }
   }
 
   const url = resolveCustomSttTranscriptionUrl(baseUrl)
@@ -67,16 +74,28 @@ export async function testCustomSttEndpoint(
     try {
       const response = await postProbe(url, model, language, apiKey, controller.signal)
       if (response.ok) {
-        return { ok: true, detail: `Reachable (HTTP ${response.status}).` }
+        return { ok: true, outcome: 'ok', detail: `Reachable (HTTP ${response.status}).` }
       }
       if (response.status === 401 || response.status === 403) {
-        return { ok: false, detail: `Authentication failed (HTTP ${response.status}).` }
+        return {
+          ok: false,
+          outcome: 'auth',
+          detail: `Authentication failed (HTTP ${response.status}).`
+        }
       }
-      // Any other status means the server is up and parsed the request shape.
+      // Why: a non-auth error status means the server answered and refused the
+      // request. Servers are inconsistent about the class — a bad language is 400
+      // on some and 500 on others — so treat any 4xx, or a 5xx that explains
+      // itself with a body, as a deterministic rejection (blocking Save). A bare
+      // 5xx with no body is more likely transient, so leave it as transport.
       const body = (await response.text().catch(() => '')).slice(0, MAX_ERROR_BODY_CHARS)
+      const rejected = response.status < 500 || body.length > 0
       return {
-        ok: true,
-        detail: `Reachable (HTTP ${response.status})${body ? `: ${body}` : ''}`
+        ok: false,
+        outcome: rejected ? 'rejected' : 'transport',
+        detail: `${rejected ? 'Server rejected the request' : 'Server error'} (HTTP ${
+          response.status
+        })${body ? `: ${body}` : ''}`
       }
     } catch (error) {
       lastError = error
@@ -85,7 +104,11 @@ export async function testCustomSttEndpoint(
     }
   }
 
-  return { ok: false, detail: `Could not reach endpoint: ${describeFetchError(lastError)}` }
+  return {
+    ok: false,
+    outcome: 'transport',
+    detail: `Could not reach endpoint: ${describeFetchError(lastError)}`
+  }
 }
 
 function postProbe(

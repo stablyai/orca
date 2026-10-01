@@ -29,6 +29,7 @@ describe('testCustomSttEndpoint', () => {
   it('rejects a missing base URL before any fetch', async () => {
     const result = await testCustomSttEndpoint({ baseUrl: '', model: 'large-v3', language: '' })
     expect(result.ok).toBe(false)
+    expect(result.outcome).toBe('invalid')
     expect(result.detail).toMatch(/base URL/i)
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -102,7 +103,38 @@ describe('testCustomSttEndpoint', () => {
     const result = await testCustomSttEndpoint()
 
     expect(result.ok).toBe(false)
+    expect(result.outcome).toBe('auth')
     expect(result.detail).toMatch(/Authentication/)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('classifies a 4xx as rejected (e.g. an unsupported language code)', async () => {
+    storeState.config = { baseUrl: 'http://h:1/v1', model: 'large-v3', language: 'xx' }
+    fetchMock.mockResolvedValue(new Response('not a valid language code', { status: 400 }))
+
+    const result = await testCustomSttEndpoint()
+
+    expect(result.ok).toBe(false)
+    expect(result.outcome).toBe('rejected')
+  })
+
+  it('classifies an explained 5xx as rejected (servers vary on bad-parameter status)', async () => {
+    storeState.config = { baseUrl: 'http://h:1/v1', model: 'large-v3', language: 'english' }
+    fetchMock.mockResolvedValue(new Response('not a valid language code', { status: 500 }))
+
+    const result = await testCustomSttEndpoint()
+
+    expect(result.ok).toBe(false)
+    expect(result.outcome).toBe('rejected')
+  })
+
+  it('treats a bodiless 5xx as transport (likely transient)', async () => {
+    storeState.config = { baseUrl: 'http://h:1/v1', model: 'large-v3', language: '' }
+    fetchMock.mockResolvedValue(new Response('', { status: 502 }))
+
+    const result = await testCustomSttEndpoint()
+
+    expect(result.ok).toBe(false)
+    expect(result.outcome).toBe('transport')
   })
 })

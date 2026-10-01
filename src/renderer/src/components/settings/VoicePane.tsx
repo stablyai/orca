@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
-import { CustomSttEndpointDialog } from './CustomSttEndpointDialog'
+import { CustomSttEndpointDialog, type CustomSttEndpointTestState } from './CustomSttEndpointDialog'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
@@ -48,10 +48,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const [customApiKeyDraft, setCustomApiKeyDraft] = useState('')
   const [customPending, setCustomPending] = useState(false)
   const [customTesting, setCustomTesting] = useState(false)
-  const [customTestResult, setCustomTestResult] = useState<{
-    ok: boolean
-    detail: string
-  } | null>(null)
+  const [customTestResult, setCustomTestResult] = useState<CustomSttEndpointTestState | null>(null)
   const mountedRef = useRef(true)
   // Merge async whole-object writes into committed current settings; render snapshots could undo toggles changed during IPC and disable the microphone picker.
   const voiceSettingsRef = useRef(voiceSettings)
@@ -179,7 +176,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     setCustomDialogOpen(true)
   }
 
-  const saveCustomEndpoint = async (): Promise<void> => {
+  const saveCustomEndpoint = async (_options?: { allowInvalid?: boolean }): Promise<void> => {
     setCustomPending(true)
     try {
       const status = await window.api.speech.saveCustomEndpoint({
@@ -275,6 +272,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       if (mountedRef.current) {
         setCustomTestResult({
           ok: false,
+          outcome: 'transport',
           detail: err instanceof Error ? err.message : String(err)
         })
       }
@@ -418,7 +416,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onModelDraftChange={setCustomModelDraft}
         onLanguageDraftChange={setCustomLanguageDraft}
         onApiKeyDraftChange={setCustomApiKeyDraft}
-        onSave={() => void saveCustomEndpoint()}
+        onSave={(options) => void saveCustomEndpoint(options)}
         onClear={() => void clearCustomEndpoint()}
         onTest={() => void testCustomEndpoint()}
       />

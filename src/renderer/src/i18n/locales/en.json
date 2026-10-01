@@ -13448,7 +13448,9 @@
           "test": "Test",
           "save": "Save",
           "language": "Language (optional)",
-          "languagePlaceholder": "Auto-detect (e.g. en, zh, yue)"
+          "languagePlaceholder": "Auto-detect (e.g. en, zh, yue)",
+          "saveAnyway": "Save anyway (advanced)",
+          "languageHint": "Suggestions are examples — enter any code your server accepts. Leave empty to auto-detect."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Make sure you trust this folder",
