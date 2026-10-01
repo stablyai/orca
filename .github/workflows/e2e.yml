@@ -282,6 +282,7 @@ jobs:
             . != "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts" and
             . != "tests/e2e/ssh-cold-activation-restore.spec.ts" and
             . != "tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts" and
+            . != "tests/e2e/ssh-emptied-worktree-reactivation.spec.ts" and
             . != "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts" and
             . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
             . != "tests/e2e/ssh-docker-half-open-link.spec.ts" and
@@ -351,6 +352,7 @@ jobs:
       contains(inputs.test_files, 'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-cold-activation-restore.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/ssh-emptied-worktree-reactivation.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-docker-half-open-link.spec.ts') ||
