@@ -124,6 +124,36 @@ describe('selectRefreshedNetworkAddress', () => {
     }
   )
 
+  it('replaces an auto-selected Thunderbolt address when Ethernet appears', () => {
+    expect(
+      selectRefreshedNetworkAddress(
+        '10.99.88.1',
+        [
+          { name: 'bridge0', address: '10.99.88.1' },
+          { name: 'en0', address: '192.168.4.191' }
+        ],
+        false,
+        false,
+        'darwin'
+      )
+    ).toBe('192.168.4.191')
+  })
+
+  it('keeps a Thunderbolt address the user picked when Ethernet appears', () => {
+    expect(
+      selectRefreshedNetworkAddress(
+        '10.99.88.1',
+        [
+          { name: 'bridge0', address: '10.99.88.1' },
+          { name: 'en0', address: '192.168.4.191' }
+        ],
+        false,
+        true,
+        'darwin'
+      )
+    ).toBe('10.99.88.1')
+  })
+
   it('prefers Ethernet over Thunderbolt Bridge when the renderer has no process', () => {
     const priorProcess = globalThis.process
     const priorWindow = globalThis.window

@@ -199,7 +199,7 @@ describe('MobilePane pairing connection mode', () => {
           listNetworkInterfaces: mocks.listNetworkInterfaces,
           revokeDevice: mocks.revokeDevice
         },
-        ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }
+        ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }, platform: { get: () => ({ platform: 'darwin' as const }) }
       }
     })
   })
@@ -798,7 +798,7 @@ describe('MobilePane', () => {
           listDevices: mocks.listDevices,
           listNetworkInterfaces: mocks.listNetworkInterfaces,
           revokeDevice: mocks.revokeDevice
-        }
+        }, platform: { get: () => ({ platform: 'darwin' as const }) }
       }
     })
   })
