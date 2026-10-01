@@ -4,6 +4,7 @@ import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-tit
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
 import { isKnownReadyPromptBody } from './terminal-wait-detection'
+import { getScreenReadyRule, readScreenRuledVerdict } from './screen-ruled-agent-readiness'
 import {
   evaluateTuiIdle,
   hasFreshDoneFirstPartyStatus,
@@ -31,6 +32,7 @@ function input(overrides: Partial<TuiIdleEvaluationInput> = {}): TuiIdleEvaluati
     readTailBlockedReason: () => null,
     readPositiveBodyEvidence: () => false,
     readQuietReadyBodyEvidence: () => true,
+    readScreenDecidesReadiness: () => false,
     agent: 'muse',
     firstPartyStatus: null,
     quiescenceMs: QUIESCENCE_MS,
@@ -206,6 +208,27 @@ describe('rest signal agrees with the lanes that can settle a wait', () => {
       false
     )
     const quietScreenBody = hasQuietReadyScreen(record(), agent, () => true, QUIESCENCE_MS)
+    // Why a screen-ruled `none` is sound: its screen shuts the quiet lane whenever one is readable.
+    const rule = getScreenReadyRule(agent)
+    if (rule !== null) {
+      const refused = ['> not an idle composer']
+      expect(rule(refused)).toBe(false)
+      const verdict = (screen: readonly string[] | null) =>
+        evaluateTuiIdle(
+          input({
+            agent,
+            record: record({ lastOscTitle: null }),
+            readQuietReadyBodyEvidence: () => false,
+            readScreenDecidesReadiness: () => readScreenRuledVerdict(agent, () => screen) !== null
+          })
+        )
+      expect(verdict(refused)).toEqual({ kind: 'pending', quietForeground: 'closed' })
+      expect(verdict(null)).toEqual({
+        kind: 'pending',
+        quietForeground: signal === 'none' ? 'after-paint' : 'closed'
+      })
+      return
+    }
     // Why not only ready-body: Codex keeps its stronger hook-driven title beside this lane.
     if (quietScreenBody) {
       expect(signal).not.toBe('none')
@@ -247,6 +270,7 @@ describe('a DSH pane settles tui-idle on its own hook', () => {
     rendererTitle: undefined,
     readPositiveBodyEvidence: () => false,
     readQuietReadyBodyEvidence: () => false,
+    readScreenDecidesReadiness: () => false,
     readTailBlockedReason: () => null,
     agent: 'dsh' as const,
     firstPartyStatus: { state: 'done' as const, updatedAt: Date.now() },

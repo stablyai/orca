@@ -124,6 +124,7 @@ docs/**
 !docs/reference/agent-status-store.md
 !docs/reference/antigravity-readiness-evidence.md
 !docs/reference/antivirus-prerelease-clearance.md
+!docs/reference/cline-and-prime-agent-readiness-evidence.md
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
 !docs/reference/ime-regression-checklist.md

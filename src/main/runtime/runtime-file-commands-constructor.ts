@@ -11,6 +11,7 @@ import {
 } from './runtime-file-command-host'
 import { basenameFromRelativePath } from './runtime-file-paths'
 import type { RuntimeFileListResult, RuntimeFileOpenResult } from '../../shared/runtime-types'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
 import {
   MOBILE_FILE_LIST_LIMIT,
@@ -155,7 +156,8 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
 
   async openMobileFile(
     worktreeSelector: string,
-    relativePath: string
+    relativePath: string,
+    navigation?: RuntimeNavigationTarget
   ): Promise<RuntimeFileOpenResult> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
@@ -177,7 +179,7 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     // Why: CLI/agents treat opened:true as success; stat first so missing paths fail the RPC instead of opening a ghost tab.
     await this.assertMobileOpenTargetExists(filePath, runtimeFileRouteForTarget(target))
     // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
-    this.host.openFile(worktree.id, filePath, relativePath, undefined)
+    this.host.openFile(worktree.id, filePath, relativePath, undefined, navigation)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -203,7 +205,8 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
   async openMobileDiff(
     worktreeSelector: string,
     relativePath: string,
-    staged: boolean
+    staged: boolean,
+    navigation?: RuntimeNavigationTarget
   ): Promise<RuntimeFileOpenResult> {
     const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     if (!isSafeMobileRelativePath(relativePath)) {
@@ -216,7 +219,7 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Why: see openMobileFile; avoid stamping internal runtimeId as runtimeEnvironmentId.
-    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined)
+    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined, navigation)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 }

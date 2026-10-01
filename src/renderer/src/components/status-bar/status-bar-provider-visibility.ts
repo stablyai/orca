@@ -137,7 +137,11 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     session: null,
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
-    ...(providerId === 'gemini' || providerId === 'cursor' ? { buckets: [] } : {}),
+    // Why antigravity joins these: it reports one pool per model group, so its pending skeleton
+    // has to be bucket-shaped too or the segment changes shape once the first reading lands.
+    ...(providerId === 'gemini' || providerId === 'cursor' || providerId === 'antigravity'
+      ? { buckets: [] }
+      : {}),
     updatedAt: 0,
     error: null,
     status: 'fetching'

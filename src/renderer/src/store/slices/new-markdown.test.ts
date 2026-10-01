@@ -401,6 +401,8 @@ describe('New Markdown — rename flow store operations', () => {
     expect(store.getState().activeFileId).toBe('/repo/untitled.md')
 
     store.getState().closeFile('/repo/untitled.md')
+    // Why: closing the only tab left the landing state; the renamed file opens back on the on-screen worktree.
+    store.setState({ activeWorktreeId: 'wt-1' })
     store.getState().openFile({
       filePath: '/repo/notes.md',
       relativePath: 'notes.md',

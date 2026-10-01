@@ -18,6 +18,7 @@ import type {
   ConflictReviewEntry,
   ConflictReviewState,
   EditorOpenTargetOptions,
+  EditorTabSelection,
   OpenFile
 } from './open-file'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from './open-file-path-rekey'
@@ -44,6 +45,7 @@ export type EditorFilesSlice = {
       forceContentReload?: boolean
       focusEditor?: boolean
       reopenId?: string
+      selection?: EditorTabSelection
     }
   ) => string
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
@@ -101,7 +103,7 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions
+    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection }
   ) => void
   openBranchDiff: (
     worktreeId: string,
