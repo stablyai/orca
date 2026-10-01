@@ -21,7 +21,8 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.detectAgents',
     params: null,
-    handler: async () => detectInstalledAgentsWithShellPathHydration()
+    handler: async (_params, { runtime }) =>
+      detectInstalledAgentsWithShellPathHydration(runtime.getHostAgentPreflightContext())
   }),
   defineMethod({
     name: 'preflight.detectRemoteAgents',
@@ -36,6 +37,7 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.refreshAgents',
     params: null,
-    handler: async () => refreshShellPathAndDetectAgents()
+    handler: async (_params, { runtime }) =>
+      refreshShellPathAndDetectAgents(runtime.getHostAgentPreflightContext())
   })
 ]
