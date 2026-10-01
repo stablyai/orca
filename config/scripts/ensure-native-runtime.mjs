@@ -328,7 +328,10 @@ function getNodePtyNativeModuleName() {
     return 'pty'
   }
 
-  return getWindowsBuildNumber() >= 18309 ? 'conpty' : 'pty'
+  // Why 17763: desktop and orcad pass useConptyDll, and the patched agent uses
+  // ConPTY from the first build that has the API. 18309 is the floor only when
+  // that DLL is off (the relay).
+  return getWindowsBuildNumber() >= 17763 ? 'conpty' : 'pty'
 }
 
 function getPatchedNodePtyRebuildReason() {

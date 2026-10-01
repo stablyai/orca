@@ -186,16 +186,21 @@ export function classifyLoaderMessage(message: string): NodePtyProbeFailure {
  * loader that aborts the process — still reaches us as a signal, which is the case this
  * whole indirection exists for.
  */
-export function buildNodePtyLoadProbeScript(nodePtyDir: string): string {
+export function buildNodePtyLoadProbeScript(
+  nodePtyDir: string,
+  options: { useConptyDll?: boolean } = {}
+): string {
   const entry = JSON.stringify(join(nodePtyDir, 'lib', 'index.js'))
   const utils = JSON.stringify(join(nodePtyDir, 'lib', 'utils.js'))
   const root = JSON.stringify(nodePtyDir)
   // Same directory order node-pty's own loader walks, so the file opened here is the file
-  // it would load. Windows defers conpty.node to the first spawn, which is why the name is
-  // chosen the way node-pty chooses it rather than always being 'pty'.
+  // it would load. Windows defers conpty.node to the first spawn. Orcad passes
+  // useConptyDll and the patched agent then accepts ConPTY from build 17763; the relay
+  // leaves the DLL off, so the default stays at the inbox floor of 18309.
+  const conptyBuild = options.useConptyDll ? 17763 : 18309
   return [
     `const fs=require('fs'),p=require('path');`,
-    `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=18309?'conpty':'pty';`,
+    `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=${conptyBuild}?'conpty':'pty';`,
     `let f=null;`,
     `for(const d of ['build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
     `for(const r of [${root},p.join(${root},'lib')]){`,
@@ -278,7 +283,9 @@ export function checkNodePtyPrecondition(
   try {
     result = runProcessSync({
       program: process.execPath,
-      args: ['-e', buildNodePtyLoadProbeScript(nodePtyDir)],
+      // Why the DLL floor: orcad spawns with useConptyDll, so the binding to prove
+      // loadable is the one the patched agent selects from build 17763.
+      args: ['-e', buildNodePtyLoadProbeScript(nodePtyDir, { useConptyDll: true })],
       timeoutMs: PROBE_TIMEOUT_MS
     })
   } catch (error) {

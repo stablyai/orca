@@ -31,6 +31,19 @@ const PATCHED_FILES = ['windowsPtyAgent.js', 'windowsTerminal.js']
 /** The hunks config/patches/node-pty@1.1.0.patch adds to the installed desktop tree. */
 const DESKTOP_HUNKS = {
   'windowsPtyAgent.js': [
+    // useConptyDll lowers the ConPTY floor to 17763. Un-applied so the relay fixture
+    // stays the published agent, which still requires build 18309.
+    [
+      [
+        '            var build = this._getWindowsBuildNumber();',
+        '            this._useConpty = build >= 18309 || (this._useConptyDll && build >= 17763);',
+        ''
+      ].join('\n'),
+      [
+        '            this._useConpty = this._getWindowsBuildNumber() >= 18309;',
+        ''
+      ].join('\n')
+    ],
     [
       [
         '                this._inSocket.readable = false;',
@@ -82,6 +95,37 @@ afterEach(() => {
   for (const dir of cleanupDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+describe('node-pty patch: ConPTY floor when useConptyDll is set', () => {
+  const patch = readFileSync(
+    join(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch'),
+    'utf8'
+  )
+  const clause = 'this._useConpty = build >= 18309 || (this._useConptyDll && build >= 17763);'
+
+  function fileHunk(startMarker, endMarker) {
+    const start = patch.indexOf(startMarker)
+    const end = patch.indexOf(endMarker, start + startMarker.length)
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(end).toBeGreaterThan(start)
+    return patch.slice(start, end)
+  }
+
+  it('lowers the floor to 17763 only on the bundled-DLL path, in both agent sources', () => {
+    const js = fileHunk('diff --git a/lib/windowsPtyAgent.js', 'diff --git a/lib/windowsTerminal.js')
+    const ts = fileHunk(
+      'diff --git a/src/windowsPtyAgent.ts',
+      'diff --git a/src/windowsTerminal.ts'
+    )
+    expect(js).toContain(`+            ${clause}`)
+    expect(js).toContain('+            var build = this._getWindowsBuildNumber();')
+    expect(ts).toContain(`+      ${clause}`)
+    expect(ts).toContain('+      const build = this._getWindowsBuildNumber();')
+    // The removed line is the relay's floor: useConptyDll false still requires 18309.
+    expect(js).toContain('-            this._useConpty = this._getWindowsBuildNumber() >= 18309;')
+    expect(ts).toContain('-      this._useConpty = this._getWindowsBuildNumber() >= 18309;')
+  })
 })
 
 describe('Windows SSH relay node-pty ConPTY teardown patch', () => {

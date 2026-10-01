@@ -661,7 +661,8 @@ function getNodePtyNativeModuleName() {
   }
   const match = /(\\d+)\\.(\\d+)\\.(\\d+)/g.exec(release())
   const buildNumber = match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
-  return buildNumber >= 18309 ? 'conpty' : 'pty'
+  // Desktop passes useConptyDll; the patched agent uses ConPTY from build 17763.
+  return buildNumber >= 17763 ? 'conpty' : 'pty'
 }
 
 function formatError(error) {

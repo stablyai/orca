@@ -1219,7 +1219,16 @@ diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
 index a358ffb177357e177661033c1b092f9c9d0e5f5a..26c2a4c58799ce649f5113131e4c52f7ed2d87ad 100644
 --- a/lib/windowsPtyAgent.js
 +++ b/lib/windowsPtyAgent.js
-@@ -136,6 +136,9 @@ var WindowsPtyAgent = /** @class */ (function () {
+@@ -35,6 +35,7 @@ var WindowsPtyAgent = /** @class */ (function () {
+         this._pid = 0;
+         this._innerPid = 0;
+         if (this._useConpty === undefined || this._useConpty === true) {
+-            this._useConpty = this._getWindowsBuildNumber() >= 18309;
++            var build = this._getWindowsBuildNumber();
++            this._useConpty = build >= 18309 || (this._useConptyDll && build >= 17763);
+         }
+         if (this._useConpty) {
+@@ -136,6 +137,9 @@ var WindowsPtyAgent = /** @class */ (function () {
          if (this._useConpty) {
              if (!this._useConptyDll) {
                  this._inSocket.readable = false;
@@ -1229,7 +1238,7 @@ index a358ffb177357e177661033c1b092f9c9d0e5f5a..26c2a4c58799ce649f5113131e4c52f7
                  this._outSocket.readable = false;
                  this._getConsoleProcessList().then(function (consoleProcessList) {
                      consoleProcessList.forEach(function (pid) {
-@@ -154,9 +157,10 @@ var WindowsPtyAgent = /** @class */ (function () {
+@@ -154,9 +158,10 @@ var WindowsPtyAgent = /** @class */ (function () {
                  // Close the input write handle to signal the end of session.
                  this._inSocket.destroy();
                  this._ptyNative.kill(this._pty, this._useConptyDll);
@@ -1331,7 +1340,16 @@ diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
 index d7054449516f0c9a62af351c2caa17331206d530..0c28a32e2e1db2b3f208ddde8443cd4e67bb1ad6 100644
 --- a/src/windowsPtyAgent.ts
 +++ b/src/windowsPtyAgent.ts
-@@ -143,6 +143,9 @@ export class WindowsPtyAgent {
+@@ -59,6 +59,7 @@ export class WindowsPtyAgent {
+     conptyInheritCursor: boolean = false
+   ) {
+     if (this._useConpty === undefined || this._useConpty === true) {
+-      this._useConpty = this._getWindowsBuildNumber() >= 18309;
++      const build = this._getWindowsBuildNumber();
++      this._useConpty = build >= 18309 || (this._useConptyDll && build >= 17763);
+     }
+     if (this._useConpty) {
+@@ -143,6 +144,9 @@ export class WindowsPtyAgent {
      if (this._useConpty) {
        if (!this._useConptyDll) {
          this._inSocket.readable = false;
@@ -1341,7 +1359,7 @@ index d7054449516f0c9a62af351c2caa17331206d530..0c28a32e2e1db2b3f208ddde8443cd4e
          this._outSocket.readable = false;
          this._getConsoleProcessList().then(consoleProcessList => {
            consoleProcessList.forEach((pid: number) => {
-@@ -159,9 +162,10 @@ export class WindowsPtyAgent {
+@@ -159,9 +163,10 @@ export class WindowsPtyAgent {
          // Close the input write handle to signal the end of session.
          this._inSocket.destroy();
          (this._ptyNative as IConptyNative).kill(this._pty, this._useConptyDll);

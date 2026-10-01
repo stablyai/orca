@@ -15,8 +15,9 @@ export type WindowsTreeKillTarget = 'own' | 'absent' | 'foreign' | 'unknown'
 
 export const WINDOWS_ROOT_IDENTITY_TIMEOUT_MS = 3_000
 
-// Why: ConPTY spawns the shell directly from this process (1 hop). node-pty falls
-// back to winpty below Windows build 18309, which adds a winpty-agent.exe hop.
+// Why: ConPTY spawns the shell directly from this process (1 hop). With
+// useConptyDll, node-pty falls back to winpty below Windows build 17763, which
+// adds a winpty-agent.exe hop.
 const MAX_ANCESTOR_HOPS = 4
 
 type ProcessLink = { pid: number; ppid: number }
