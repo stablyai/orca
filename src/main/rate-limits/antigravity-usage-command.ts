@@ -36,6 +36,19 @@ export const ANTIGRAVITY_USAGE_ARGS: readonly string[] = [
  */
 export const ANTIGRAVITY_USAGE_TIMEOUT_MS = 30_000
 
+/**
+ * Why 1.1.11: older agy answers `/usage` as a billable model turn instead of a quota report, so a
+ * CLI below this floor must never see the usage args. The floor is compared as semver, so
+ * `1.1.11-rc.1` stays below it and cannot spawn the read early.
+ */
+export const ANTIGRAVITY_MIN_USAGE_VERSION = '1.1.11'
+
+/** The version probe; free in every sense — no conversation, no quota. */
+export const ANTIGRAVITY_VERSION_ARGS: readonly string[] = ['--version']
+
+/** Why bound it: the probe runs before every quota read, so a wedged CLI must not stall the cycle. */
+export const ANTIGRAVITY_VERSION_TIMEOUT_MS = 5_000
+
 /** Cap on captured output; the envelope is a single JSON line well under a kilobyte. */
 export const ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES = 512 * 1024
 

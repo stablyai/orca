@@ -1,11 +1,15 @@
 import { runProcess } from '../../shared/child-process/run-process'
+import { hasReachedAppVersion, parseCliVersion } from '../../shared/app-version'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
 import type { ProviderRateLimits, UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
 import {
+  ANTIGRAVITY_MIN_USAGE_VERSION,
   ANTIGRAVITY_USAGE_ARGS,
   ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
   ANTIGRAVITY_USAGE_TIMEOUT_MS,
+  ANTIGRAVITY_VERSION_ARGS,
+  ANTIGRAVITY_VERSION_TIMEOUT_MS,
   antigravityCommandName
 } from './antigravity-usage-command'
 import { parseAntigravityUsageStdout, stdoutShowsModelTurn } from './antigravity-usage-response'
@@ -16,6 +20,12 @@ import { parseAntigravityUsageStdout, stdoutShowsModelTurn } from './antigravity
  * "answered nothing".
  */
 const NOT_SIGNED_IN_MARKER = 'not logged into antigravity'
+
+/**
+ * The other shape of "signed out": agy failing the read with an auth diagnostic on stderr and a
+ * non-zero exit. Same user action as the marker above, so same verdict.
+ */
+const NOT_SIGNED_IN_STDERR_RE = /auth|login|sign.?in|credential/i
 
 const UNSUPPORTED_USAGE_COMMAND_REASON =
   'Antigravity usage is not available. This version of the Antigravity CLI answers `/usage` as a prompt instead of a command, so Orca stopped asking rather than spend quota on it. Update `agy` and restart Orca.'
@@ -64,6 +74,10 @@ function unavailable(
     status: 'unavailable',
     usageMetadata: { source: 'cli', attemptedSources: ['cli'], failureKind }
   }
+}
+
+function spawnFailureMessage(error: unknown): string {
+  return `Antigravity usage is not available. The Antigravity CLI could not be started: ${error instanceof Error ? error.message : 'unknown error'}.`
 }
 
 function failed(
@@ -120,6 +134,33 @@ export async function fetchAntigravityRateLimits(
     )
   }
 
+  // Why the version is re-checked before every read: it is the only thing that separates a free
+  // metadata read from a billed model turn, and the CLI can be swapped or updated while Orca runs.
+  // Below the floor `/usage` is a prompt, so the gate must decide from `--version` alone.
+  let versionRun: Awaited<ReturnType<typeof runProcess>>
+  try {
+    versionRun = await run({
+      program,
+      args: ANTIGRAVITY_VERSION_ARGS,
+      env,
+      timeoutMs: ANTIGRAVITY_VERSION_TIMEOUT_MS,
+      maxOutputBytes: ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
+      signal: options.signal
+    })
+  } catch (error) {
+    return failed(spawnFailureMessage(error), 'cli-unavailable', now())
+  }
+  const version = versionRun.code === 0 ? parseCliVersion(versionRun.stdout) : null
+  if (!version || !hasReachedAppVersion(version, ANTIGRAVITY_MIN_USAGE_VERSION)) {
+    return unavailable(
+      version
+        ? `Antigravity usage needs agy ${ANTIGRAVITY_MIN_USAGE_VERSION} or newer (found ${version}). Update the agy CLI to show quota in the status bar.`
+        : `Antigravity usage is unavailable because the agy CLI version could not be read. Update agy to ${ANTIGRAVITY_MIN_USAGE_VERSION} or newer.`,
+      'usage-unavailable',
+      now()
+    )
+  }
+
   let result: Awaited<ReturnType<typeof runProcess>>
   try {
     result = await run({
@@ -131,26 +172,13 @@ export async function fetchAntigravityRateLimits(
       signal: options.signal
     })
   } catch (error) {
-    return failed(
-      `Antigravity usage is not available. The Antigravity CLI could not be started: ${error instanceof Error ? error.message : 'unknown error'}.`,
-      'cli-unavailable',
-      now()
-    )
+    return failed(spawnFailureMessage(error), 'cli-unavailable', now())
   }
 
   if (result.timedOut) {
     return failed(
       'Antigravity usage is not available. The Antigravity CLI did not answer in time.',
       'usage-unavailable',
-      now()
-    )
-  }
-
-  const output = `${result.stdout}\n${result.stderr}`
-  if (output.toLowerCase().includes(NOT_SIGNED_IN_MARKER)) {
-    return unavailable(
-      'Antigravity usage is not available. Sign in with `agy` to report this account’s quota.',
-      'missing-credentials',
       now()
     )
   }
@@ -162,9 +190,23 @@ export async function fetchAntigravityRateLimits(
     usageCommandUnsupported = true
     return unavailable(UNSUPPORTED_USAGE_COMMAND_REASON, 'usage-unavailable', now())
   }
+  // Why two shapes: a signed-out agy either exits 0 with the observed marker below or fails the
+  // read with an auth diagnostic on stderr. Both mean "sign in", not "the read broke". Checked
+  // after the turn check so a spent turn always latches first.
+  const output = `${result.stdout}\n${result.stderr}`
+  const signedOut =
+    output.toLowerCase().includes(NOT_SIGNED_IN_MARKER) ||
+    (result.code !== 0 && result.code !== null && NOT_SIGNED_IN_STDERR_RE.test(result.stderr))
+  if (signedOut) {
+    return unavailable(
+      'Antigravity usage is not available. Sign in with `agy` to report this account’s quota.',
+      'missing-credentials',
+      now()
+    )
+  }
   if (!reading) {
-    // Why a non-zero exit is reported only here: `runProcess` treats the exit code as data, and agy
-    // exits 0 for a signed-out read, so the code only adds detail once the payload is missing.
+    // Why a non-zero exit is reported only here: `runProcess` treats the exit code as data, and a
+    // signed-out read is classified above, so the code only adds detail once the payload is missing.
     const exitDetail = result.code === 0 || result.code === null ? '' : ` (exit ${result.code})`
     return failed(
       `Antigravity usage is not available. The Antigravity CLI did not report a quota${exitDetail}.`,
