@@ -33,6 +33,17 @@ describe('windows powershell cli shim', () => {
     )
   })
 
+  it('refuses a launcher path that would break the profile script', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ps-newline-'))
+    await expect(
+      installWindowsPowerShellCliShim({
+        launcherPath: 'C:\\Orca\\orca\r\n.exe',
+        documentsPath: root,
+        shimPath: join(root, 'shim.ps1')
+      })
+    ).rejects.toThrow(/newline/)
+  })
+
   it('refuses to rewrite a profile that is not UTF-8 or UTF-16', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ps-profile-'))
     const profilePath = windowsPowerShell51ProfilePath(root)
@@ -49,8 +60,9 @@ describe('windows powershell cli shim', () => {
 
   it('renders a simple function that quotes the launcher path', () => {
     const script = renderOrcaPowerShellCliShim("C:\\Orca\\it's\\orca.exe")
-    expect(script).toContain("function global:orca {")
+    expect(script).toContain('function global:orca {')
     expect(script).toContain("$launcher = 'C:\\Orca\\it''s\\orca.exe'")
+    expect(script).toContain('Get-Command -Name orca.exe -CommandType Application')
     expect(script).not.toContain('[CmdletBinding(')
     expect(script).not.toContain('$global:OutputEncoding')
   })

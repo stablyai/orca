@@ -223,7 +223,9 @@ export class CliInstaller extends CliPathRegistration {
     }
     try {
       const launcherPath = await this.resolveLauncherPath()
-      if (!launcherPath) {
+      // Why .exe only: a .cmd launcher is itself a native pipe target, so it
+      // would recode the UTF-8 stdin this function just produced (#24428).
+      if (!launcherPath || !launcherPath.toLowerCase().endsWith('.exe')) {
         return
       }
       const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())

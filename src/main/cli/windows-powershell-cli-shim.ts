@@ -48,9 +48,14 @@ export function renderOrcaPowerShellCliShim(launcherPath: string): string {
     'function global:orca {',
     `  $launcher = ${quotedLauncher}`,
     '  if (-not (Test-Path -LiteralPath $launcher)) {',
-    '    [Console]::Error.WriteLine("Orca CLI launcher is missing at $launcher")',
-    '    $global:LASTEXITCODE = 1',
-    '    return',
+    '    $fallback = Get-Command -Name orca.exe -CommandType Application -ErrorAction SilentlyContinue',
+    '    if ($fallback) {',
+    '      $launcher = $fallback.Source',
+    '    } else {',
+    '      [Console]::Error.WriteLine("Orca CLI launcher is missing at $launcher")',
+    '      $global:LASTEXITCODE = 1',
+    '      return',
+    '    }',
     '  }',
     '  if ($MyInvocation.ExpectingInput) {',
     '    $OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
@@ -106,8 +111,13 @@ export async function installWindowsPowerShellCliShim(input: {
   if (next === 'skipped-user-function') {
     return 'skipped-user-function'
   }
+  const unsafePath = [input.launcherPath, input.shimPath].find((value) => /[\r\n\0]/.test(value))
+  if (unsafePath) {
+    throw new Error('Refusing to write a PowerShell shim for a path that contains a newline')
+  }
   await mkdir(dirname(input.shimPath), { recursive: true })
-  await writeFile(input.shimPath, renderOrcaPowerShellCliShim(input.launcherPath), 'utf8')
+  // Why BOM: Windows PowerShell 5.1 reads a no-BOM .ps1 as the ANSI code page.
+  await writeFile(input.shimPath, encodeProfile(renderOrcaPowerShellCliShim(input.launcherPath), 'utf8-bom'))
   await mkdir(dirname(profilePath), { recursive: true })
   await writeFile(profilePath, encodeProfile(next, existing?.encoding ?? 'utf8-bom'))
   return 'installed'

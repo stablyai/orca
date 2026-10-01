@@ -145,7 +145,12 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // rewritten on launch, so the PowerShell ASCII pipe would stay broken (#24428).
   if (process.platform === 'win32') {
     void Promise.resolve()
-      .then(() => new CliInstaller().syncWindowsPowerShellCliShim())
+      .then(() =>
+        new CliInstaller({
+          syncWindowsPowerShellProfile: true,
+          windowsDocumentsPath: app.getPath('documents')
+        }).syncWindowsPowerShellCliShim()
+      )
       .catch((error: unknown) => {
         console.warn('[cli] failed to refresh the Windows PowerShell UTF-8 shim:', error)
       })

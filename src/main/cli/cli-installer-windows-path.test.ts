@@ -377,16 +377,19 @@ describe('CliInstaller', () => {
     const fixture = await makeFixture()
     const documentsPath = join(fixture.root, 'Documents')
     const shimPath = join(fixture.root, 'shim', 'orca-powershell-shim.ps1')
-    const installPath = join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd')
+    const resourcesPath = join(fixture.root, 'resources')
+    const bundledLauncher = join(resourcesPath, 'bin', 'orca.exe')
+    await mkdir(dirname(bundledLauncher), { recursive: true })
+    await writeFile(bundledLauncher, 'native launcher', 'utf8')
     const profilePath = join(documentsPath, 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1')
     let userPath = 'C:\\Windows\\System32'
     const installer = new CliInstaller({
       platform: 'win32',
-      isPackaged: false,
+      isPackaged: true,
+      resourcesPath,
       userDataPath: fixture.userDataPath,
-      execPath: 'C:\\Users\\me\\AppData\\Local\\Orca\\Orca.exe',
+      execPath: join(fixture.root, 'Orca.exe'),
       appPath: fixture.appPath,
-      commandPathOverride: installPath,
       syncWindowsPowerShellProfile: true,
       windowsDocumentsPath: documentsPath,
       windowsPowerShellShimPath: shimPath,
@@ -400,9 +403,11 @@ describe('CliInstaller', () => {
     const profile = await readFile(profilePath)
     expect(profile.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]))
     expect(profile.toString('utf8')).toContain('orca-powershell-shim.ps1')
-    const shim = await readFile(shimPath, 'utf8')
+    const shim = (await readFile(shimPath)).toString('utf8')
+    expect(shim.charCodeAt(0)).toBe(0xfeff)
     expect(shim).toContain('function global:orca')
     expect(shim).toContain('$OutputEncoding = [System.Text.UTF8Encoding]::new($false)')
+    expect(shim).toContain(bundledLauncher)
 
     await installer.remove()
     await expect(readFile(shimPath)).rejects.toThrow()
