@@ -279,15 +279,44 @@ describeRender(
 
     describe('the browser pane', () => {
       const toasts = (page) => page.evaluate(() => globalThis.__orcaHeldPressProbe.toasts())
+      const clicks = (page) =>
+        page.evaluate(() =>
+          globalThis.__orcaHeldPressProbe
+            .requests()
+            .filter((request) => request.method === 'browser.mouseClick')
+            .map((request) => ({ button: request.params.button, page: request.params.page }))
+        )
 
       it('right-clicks on a 1 s hold', async () => {
         const { errors, page } = await openProbe(ROUTES.browser)
-        const { midHold } = await holdLikeAndroidWebView(page, `#${BROWSER_VIEWPORT_ID}`, {
-          holdMs: 1000,
-          read: async () => ({ toasts: await toasts(page) })
-        })
+        const { midHold, afterRelease } = await holdLikeAndroidWebView(
+          page,
+          `#${BROWSER_VIEWPORT_ID}`,
+          {
+            holdMs: 1000,
+            read: async () => ({ toasts: await toasts(page), clicks: await clicks(page) })
+          }
+        )
         // The hook's timer is 550 ms, after the WebView's long-press would have ended the press.
-        expect(midHold).toEqual({ selectable: false, toasts: ['Right click'] })
+        const rightClick = { button: 'right', page: 'held-press-page' }
+        expect(midHold).toEqual({
+          selectable: false,
+          toasts: ['Right click'],
+          clicks: [rightClick]
+        })
+        // The release after a right-click sends no left click.
+        expect(afterRelease.clicks).toEqual([rightClick])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it('left-clicks once on a tap', async () => {
+        const { errors, page } = await openProbe(ROUTES.browser)
+        const viewport = await page.waitForSelector(`#${BROWSER_VIEWPORT_ID}`)
+        await viewport.tap()
+        await page.waitForFunction(() => globalThis.__orcaHeldPressProbe.requests().length > 0)
+        expect(await clicks(page)).toEqual([{ button: 'left', page: 'held-press-page' }])
+        expect(await toasts(page)).toEqual([])
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)

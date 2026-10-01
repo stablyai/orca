@@ -155,7 +155,8 @@ export const BROWSER_VIEWPORT_ID = 'held-press-browser-viewport'
 
 /**
  * The browser pane's view with its real interactions hook, which owns the 550 ms long-press
- * right-click. A right-click shows as the hook's own "Right click" toast.
+ * right-click. The stub client records each request, so a right-click is read where the host would
+ * see it, not only from the hook's "Right click" toast.
  */
 export function browserPaneProbeRouteSource({
   paneViewModule,
@@ -185,6 +186,13 @@ const TAB = {
 
 export default function BrowserPaneProbeRoute() {
   const toastsRef = useRef([])
+  const requestsRef = useRef([])
+  const clientRef = useRef({
+    sendRequest: (method, params) => {
+      requestsRef.current.push({ method, params })
+      return Promise.resolve({ ok: true, id: String(requestsRef.current.length), result: {} })
+    }
+  })
   const layoutRef = useRef(LAYOUT)
   const longPressTimerRef = useRef(null)
   const zoom = { scale: 1, offsetX: 0, offsetY: 0 }
@@ -194,7 +202,7 @@ export default function BrowserPaneProbeRoute() {
   const frameGeometry = computeBrowserFrameGeometry(LAYOUT, null)
   const interactions = useMobileBrowserInteractions({
     clearLongPressTimer: () => clearTimeout(longPressTimerRef.current),
-    client: null,
+    client: clientRef.current,
     dialogRef,
     frameGeometry,
     frameMetadataRef: { current: null },
@@ -202,7 +210,7 @@ export default function BrowserPaneProbeRoute() {
     layoutRef,
     longPressTimerRef,
     onToast: (message) => toastsRef.current.push(message),
-    pageParams: () => null,
+    pageParams: () => ({ worktree: 'held-press-worktree', page: TAB.browserPageId }),
     panRef: useRef(null),
     pinchRef: useRef(null),
     pointerModifiers: [],
@@ -217,7 +225,8 @@ export default function BrowserPaneProbeRoute() {
     zoomRef: { current: zoom }
   })
   globalThis.__orcaHeldPressProbe = {
-    toasts: () => [...toastsRef.current]
+    toasts: () => [...toastsRef.current],
+    requests: () => [...requestsRef.current]
   }
   return (
     <View nativeID=${JSON.stringify(BROWSER_VIEWPORT_ID)} style={{ flex: 1 }}>
