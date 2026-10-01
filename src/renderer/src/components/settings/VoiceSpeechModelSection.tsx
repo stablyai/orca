@@ -96,9 +96,8 @@ export function VoiceSpeechModelSection({
                 disabled={isDownloading}
                 onSelect={(event) => {
                   if (manifest.provider === 'custom') {
-                    // Why: the endpoint row is both the selector and its own editor, so
-                    // clicking it always opens the dialog (which re-selects the model).
-                    event.preventDefault()
+                    // Why: the endpoint row is both the selector and its own editor;
+                    // let the menu close first so it cannot overlap the dialog.
                     onOpenCustomEndpointDialog(manifest.id)
                   } else if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
