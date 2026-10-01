@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { flushSync } from 'react-dom'
 import { bindTabStripContentResizeObservers } from './tab-strip-content-resize-observers'
 import {
   computeTabStripScrollMetrics,
@@ -20,29 +21,8 @@ import {
   revealTabStripSlot,
   type ActiveTabDockSide
 } from './tab-strip-slot-geometry'
-
-const TAB_STRIP_SCROLL_FRACTION = 0.75
-const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
-
-export function scrollTabStripByStep(
-  el: HTMLElement,
-  direction: 'start' | 'end',
-  behavior: ScrollBehavior = 'smooth'
-): void {
-  const scrollStep = Math.max(
-    TAB_STRIP_MIN_SCROLL_STEP_PX,
-    el.clientWidth * TAB_STRIP_SCROLL_FRACTION
-  )
-  el.scrollBy({
-    left: direction === 'start' ? -scrollStep : scrollStep,
-    behavior
-  })
-}
-
-function isTabStripScrolledToEnd(el: HTMLElement): boolean {
-  const max = Math.max(0, el.scrollWidth - el.clientWidth)
-  return el.scrollLeft >= max - 2
-}
+import { useTabStripCloseSpacer } from './use-tab-strip-close-spacer'
+import { isTabStripScrolledToEnd, scrollTabStripByStep } from './tab-strip-scroll-step'
 
 const EMPTY_TAB_STRIP_OVERFLOW_STATE: TabStripScrollMetrics = {
   hasOverflow: false,
@@ -67,6 +47,7 @@ export function useTabStripOverflowNavigation({
   tabStripRef: RefObject<HTMLDivElement | null>
   tabStripOverflowState: TabStripScrollMetrics
   activeTabDockSide: ActiveTabDockSide | null
+  closeSpacerRef: RefObject<HTMLDivElement | null>
   scrollTabStrip: (direction: 'start' | 'end', behavior?: ScrollBehavior) => void
 } {
   const tabStripRef = useRef<HTMLDivElement>(null)
@@ -112,6 +93,23 @@ export function useTabStripOverflowNavigation({
     const activeTabId = activeTabIdRef.current
     scrollAnchorRef.current = { activeTabId, anchor: captureTabStripScrollAnchor(el, activeTabId) }
   }, [])
+  const settleAfterCloseSpacer = useCallback((): void => {
+    const el = tabStripRef.current
+    if (el) {
+      stickToEndRef.current = isTabStripScrolledToEnd(el)
+      // Why flushSync: release comes from native events that render late, so the scroll arrows
+      // would drop a frame after the tabs regrow and the strip would settle in two steps.
+      flushSync(updateTabStripOverflowState)
+      recordScrollAnchor()
+    }
+  }, [recordScrollAnchor, updateTabStripOverflowState])
+  const {
+    closeSpacerRef,
+    recordStripExtent,
+    holdStripAfterClose,
+    shrinkCloseSpacer,
+    releaseCloseSpacer
+  } = useTabStripCloseSpacer(tabStripRef, settleAfterCloseSpacer)
 
   useEffect(() => {
     const el = tabStripRef.current
@@ -151,6 +149,7 @@ export function useTabStripOverflowNavigation({
         el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
       }
       recordScrollAnchor()
+      recordStripExtent(el)
     }
 
     const disconnectResizeObservers = bindTabStripContentResizeObservers(el, handleStripResize)
@@ -159,7 +158,7 @@ export function useTabStripOverflowNavigation({
       el.removeEventListener('scroll', onScroll)
       disconnectResizeObservers()
     }
-  }, [recordScrollAnchor, updateTabStripOverflowState])
+  }, [recordScrollAnchor, recordStripExtent, updateTabStripOverflowState])
 
   useEffect(() => {
     const el = tabStripRef.current
@@ -185,8 +184,11 @@ export function useTabStripOverflowNavigation({
       updateTabStripOverflowState()
       recordScrollAnchor()
     }
-    el.addEventListener('pointerleave', onPointerLeave)
-    return () => el.removeEventListener('pointerleave', onPointerLeave)
+    // Why the wrapper, registered after the close spacer's: the reveal must measure the strip
+    // once the spacer is gone, and the scroll thumb overlay is not a way out of the strip.
+    const wrapper = el.parentElement ?? el
+    wrapper.addEventListener('pointerleave', onPointerLeave)
+    return () => wrapper.removeEventListener('pointerleave', onPointerLeave)
   }, [recordScrollAnchor, updateTabStripOverflowState])
 
   // Why a ref set first: the growth effect below must see this commit's active tab without re-running on every tab switch.
@@ -205,13 +207,22 @@ export function useTabStripOverflowNavigation({
     prevStripRef.current = { worktreeId, tabIds }
     if (!prev || prev.worktreeId !== worktreeId) {
       hoverDeferredRevealIdsRef.current = new Set()
+      releaseCloseSpacer()
       updateTabStripOverflowState()
+      recordStripExtent(strip)
       return
     }
     const pointerGestureActive = isTabStripPointerGestureActive()
     // Why identities, not a count: a tab that replaces another opens without the strip growing.
-    const tabOpened = [...tabIds].some((id) => !prev.tabIds.has(id))
-    tabClosedThisCommitRef.current = !tabOpened && [...prev.tabIds].some((id) => !tabIds.has(id))
+    const openedIds = new Set([...tabIds].filter((id) => !prev.tabIds.has(id)))
+    const closedIds = [...prev.tabIds].filter((id) => !tabIds.has(id))
+    const tabOpened = openedIds.size > 0
+    tabClosedThisCommitRef.current = !tabOpened && closedIds.length > 0
+    if (tabOpened) {
+      shrinkCloseSpacer(strip, openedIds)
+    } else if (closedIds.length > 0) {
+      holdStripAfterClose(strip, closedIds)
+    }
     const scrollToEnd = (stick: boolean): void => {
       const el = tabStripRef.current
       if (!el) {
@@ -262,7 +273,17 @@ export function useTabStripOverflowNavigation({
     updateTabStripOverflowState()
     requestAnimationFrame(updateTabStripOverflowState)
     recordScrollAnchor()
-  }, [layoutKey, recordScrollAnchor, updateTabStripOverflowState, worktreeId])
+    recordStripExtent(strip)
+  }, [
+    holdStripAfterClose,
+    layoutKey,
+    recordScrollAnchor,
+    recordStripExtent,
+    releaseCloseSpacer,
+    shrinkCloseSpacer,
+    updateTabStripOverflowState,
+    worktreeId
+  ])
 
   useLayoutEffect(() => {
     const strip = tabStripRef.current
@@ -300,5 +321,5 @@ export function useTabStripOverflowNavigation({
     tabClosedThisCommitRef.current = false
   })
 
-  return { tabStripRef, tabStripOverflowState, activeTabDockSide, scrollTabStrip }
+  return { tabStripRef, tabStripOverflowState, activeTabDockSide, closeSpacerRef, scrollTabStrip }
 }

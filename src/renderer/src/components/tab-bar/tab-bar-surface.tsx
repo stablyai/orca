@@ -88,7 +88,7 @@ export function renderTabBarSurface({
   } = createMenu
   const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
-  const { tabStripRef, tabStripOverflowState, activeTabDockSide, scrollTabStrip } =
+  const { tabStripRef, tabStripOverflowState, activeTabDockSide, closeSpacerRef, scrollTabStrip } =
     tabStripNavigation
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderedItems = renderTabBarItems({
@@ -164,6 +164,8 @@ export function renderTabBarSurface({
                 includeTopTabBorder={includeTopTabBorder}
               />
             ) : null}
+            {/* Why: holds the scroll position after a close until the pointer leaves (use-tab-strip-close-spacer). */}
+            <div ref={closeSpacerRef} aria-hidden className="h-full w-0 shrink-0" />
           </div>
           <TabStripScrollIndicator
             metrics={tabStripOverflowState}

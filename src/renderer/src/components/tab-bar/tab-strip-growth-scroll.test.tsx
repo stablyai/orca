@@ -3,8 +3,9 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 
-const TAB_WIDTH = 100
-const VIEWPORT_WIDTH = 300
+const MIN_TAB_WIDTH = 100
+const BASIS_TAB_WIDTH = 180
+const DEFAULT_VIEWPORT_WIDTH = 300
 
 const scrollLeftByElement = new WeakMap<Element, number>()
 const originals = {
@@ -23,43 +24,77 @@ function rect(left: number, width: number): DOMRect {
   return DOMRect.fromRect({ x: left, y: 0, width, height: 20 })
 }
 
-/** 100px tabs in a 300px strip; a tab's x is its index minus the strip's scroll, clamped into view when docked. */
+/**
+ * Flex layout of the real strip: tabs start at 180px and shrink to a 100px floor, a strip that
+ * fits shrink-wraps its tabs, and an overflowing one fills the viewport and scrolls.
+ */
+function stripLayout(strip: Element): {
+  tabWidth: number
+  clientWidth: number
+  scrollWidth: number
+} {
+  const slots = strip.querySelectorAll(':scope > [data-tab-strip-slot]').length
+  const spacerEl = strip.querySelector<HTMLElement>(':scope > [data-close-spacer]')
+  const spacer = spacerEl ? Number.parseFloat(spacerEl.style.width || '0') : 0
+  const viewport = Number(strip.getAttribute('data-viewport') ?? DEFAULT_VIEWPORT_WIDTH)
+  const basis = slots * BASIS_TAB_WIDTH + spacer
+  if (basis <= viewport) {
+    return { tabWidth: BASIS_TAB_WIDTH, clientWidth: basis, scrollWidth: basis }
+  }
+  const tabWidth = slots > 0 ? Math.max(MIN_TAB_WIDTH, (viewport - spacer) / slots) : 0
+  return {
+    tabWidth,
+    clientWidth: viewport,
+    scrollWidth: Math.max(viewport, slots * tabWidth + spacer)
+  }
+}
+
+function maxScrollLeft(el: Element): number {
+  const { clientWidth, scrollWidth } = stripLayout(el)
+  return Math.max(0, scrollWidth - clientWidth)
+}
+
+/** A tab's x is its index times the tab width minus the scroll, clamped into view when docked. */
 function installStripLayout(): void {
   Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
     configurable: true,
     get(this: Element) {
-      return isStrip(this) ? this.children.length * TAB_WIDTH : 0
+      return isStrip(this) ? stripLayout(this).scrollWidth : 0
     }
   })
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
     get(this: Element) {
-      return isStrip(this) ? VIEWPORT_WIDTH : 0
+      return isStrip(this) ? stripLayout(this).clientWidth : 0
     }
   })
+  // Why clamp and keep: a browser clamps scrollLeft as soon as the content shrinks.
   Object.defineProperty(HTMLElement.prototype, 'scrollLeft', {
     configurable: true,
     get(this: Element) {
-      return scrollLeftByElement.get(this) ?? 0
+      const value = Math.min(
+        isStrip(this) ? maxScrollLeft(this) : 0,
+        scrollLeftByElement.get(this) ?? 0
+      )
+      scrollLeftByElement.set(this, value)
+      return value
     },
     set(this: Element, value: number) {
-      const max = Math.max(0, this.scrollWidth - this.clientWidth)
+      const max = isStrip(this) ? maxScrollLeft(this) : 0
       scrollLeftByElement.set(this, Math.min(max, Math.max(0, value)))
     }
   })
   HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement): DOMRect {
     if (isStrip(this)) {
-      return rect(0, VIEWPORT_WIDTH)
+      return rect(0, stripLayout(this).clientWidth)
     }
     const strip = this.parentElement
     if (strip && isStrip(strip)) {
+      const { tabWidth, clientWidth } = stripLayout(strip)
       const index = Array.from(strip.children).indexOf(this)
-      const left = index * TAB_WIDTH - strip.scrollLeft
+      const left = index * tabWidth - strip.scrollLeft
       const docked = this.hasAttribute('data-active-tab-dock')
-      return rect(
-        docked ? Math.min(VIEWPORT_WIDTH - TAB_WIDTH, Math.max(0, left)) : left,
-        TAB_WIDTH
-      )
+      return rect(docked ? Math.min(clientWidth - tabWidth, Math.max(0, left)) : left, tabWidth)
     }
     return rect(0, 0)
   }
@@ -86,12 +121,14 @@ function Strip({
   tabs,
   active,
   hostedRows = NO_HOSTED_ROWS,
-  activeHostedRow = null
+  activeHostedRow = null,
+  viewport
 }: {
   tabs: string[]
   active: string
   hostedRows?: string[]
   activeHostedRow?: string | null
+  viewport?: number
 }): React.JSX.Element {
   const navigation = useTabStripOverflowNavigation({
     activeVisibleTabId: active,
@@ -102,6 +139,7 @@ function Strip({
   return (
     <div
       data-strip=""
+      data-viewport={viewport}
       data-dock={navigation.activeTabDockSide ?? undefined}
       ref={navigation.tabStripRef}
     >
@@ -111,15 +149,20 @@ function Strip({
           data-tab-id={id}
           data-tab-strip-slot={id}
           data-active-tab-dock={id === active && !activeHostedRow ? '' : undefined}
-        />
+        >
+          <button type="button" data-tab-close-button="true" />
+        </div>
       ))}
       {hostedRows.map((id) => (
         <div
           key={id}
           data-tab-strip-slot={id}
           data-active-tab-dock={id === activeHostedRow ? '' : undefined}
-        />
+        >
+          <button type="button" data-tab-close-button="true" />
+        </div>
       ))}
+      <div data-close-spacer="" ref={navigation.closeSpacerRef} />
     </div>
   )
 }
@@ -210,7 +253,7 @@ describe('tab strip scroll when tabs are added', () => {
     })
     rerender(<Strip tabs={[...TABS, 'N']} active="J" />)
     act(() => {
-      strip.dispatchEvent(new Event('pointerleave'))
+      strip.parentElement!.dispatchEvent(new Event('pointerleave'))
     })
     expect(tabX(strip, 'J')).toBe(100)
     expect(tabX(strip, 'N')).toBe(200)
@@ -253,6 +296,152 @@ describe('tab strip scroll when tabs are closed', () => {
     rerender(<Strip tabs={remaining} active="J" />)
     expect(strip.scrollLeft).toBe(600)
     expect(tabX(strip, 'I')).toBe(100)
+  })
+})
+
+/** The pointer rests on the strip; the close spacer reads the wrapper, deferred reveals the strip. */
+function hoverStrip(strip: HTMLElement): void {
+  for (const el of [strip, strip.parentElement!]) {
+    const matches = Element.prototype.matches.bind(el)
+    Object.defineProperty(el, 'matches', {
+      configurable: true,
+      value: (selector: string) => selector === ':hover' || matches(selector)
+    })
+  }
+}
+
+/** Click the tab's close button, the way a mouse close starts before the store removes the tab. */
+function clickClose(strip: HTMLElement, id: string): void {
+  strip
+    .querySelector(`[data-tab-strip-slot="${id}"] [data-tab-close-button]`)!
+    .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+}
+
+function leaveStrip(strip: HTMLElement): void {
+  act(() => {
+    strip.parentElement!.dispatchEvent(new Event('pointerleave'))
+  })
+}
+
+describe('tab strip close made with the mouse', () => {
+  beforeEach(installStripLayout)
+  afterEach(() => {
+    cleanup()
+    restoreStripLayout()
+  })
+
+  const withoutI = TABS.filter((id) => id !== 'I')
+  const withoutHI = TABS.filter((id) => id !== 'H' && id !== 'I')
+
+  function closeIAtEnd() {
+    const view = mountScrolled('J', 700)
+    hoverStrip(view.strip)
+    clickClose(view.strip, 'I')
+    view.rerender(<Strip tabs={withoutI} active="J" />)
+    return view
+  }
+
+  it('holds the scroll after a close at the end so the next tab slides under the cursor', () => {
+    const { strip } = closeIAtEnd()
+    expect(strip.scrollLeft).toBe(700)
+    expect(tabX(strip, 'H')).toBe(0)
+    expect(tabX(strip, 'J')).toBe(100)
+  })
+
+  it('settles once the pointer leaves the strip', () => {
+    const { strip } = closeIAtEnd()
+    leaveStrip(strip)
+    expect(strip.scrollLeft).toBe(600)
+    expect(tabX(strip, 'J')).toBe(200)
+  })
+
+  it('settles on a key press, since pointerleave can be swallowed', () => {
+    const { strip } = closeIAtEnd()
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }))
+    })
+    expect(strip.scrollLeft).toBe(600)
+  })
+
+  it('settles on a pointer press outside the strip', () => {
+    const { strip } = closeIAtEnd()
+    act(() => {
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    })
+    expect(strip.scrollLeft).toBe(600)
+  })
+
+  it('stacks a second close in the same spot', () => {
+    const { strip, rerender } = closeIAtEnd()
+    clickClose(strip, 'H')
+    rerender(<Strip tabs={withoutHI} active="J" />)
+    expect(strip.scrollLeft).toBe(700)
+    expect(strip.scrollWidth).toBe(1000)
+    expect(tabX(strip, 'J')).toBe(0)
+  })
+
+  it('lets an opened tab take the held space instead of dropping it', () => {
+    const { strip, rerender } = closeIAtEnd()
+    clickClose(strip, 'H')
+    rerender(<Strip tabs={withoutHI} active="J" />)
+    rerender(<Strip tabs={[...withoutHI, 'N']} active="J" />)
+    expect(strip.scrollLeft).toBe(700)
+    expect(strip.scrollWidth).toBe(1000)
+    expect(tabX(strip, 'J')).toBe(0)
+  })
+
+  it('does not hold a close that did not come from the mouse, like a shortcut', () => {
+    const { strip, rerender } = mountScrolled('J', 700)
+    hoverStrip(strip)
+    rerender(<Strip tabs={withoutI} active="J" />)
+    expect(strip.scrollLeft).toBe(600)
+  })
+
+  it('does not hold when the pointer is not over the strip', () => {
+    const { strip, rerender } = mountScrolled('J', 700)
+    clickClose(strip, 'I')
+    rerender(<Strip tabs={withoutI} active="J" />)
+    expect(strip.scrollLeft).toBe(600)
+    expect(tabX(strip, 'H')).toBe(100)
+  })
+
+  it('keeps the strip width for a close away from the end', () => {
+    const { strip, rerender } = mountScrolled('A', 0)
+    hoverStrip(strip)
+    clickClose(strip, 'B')
+    rerender(<Strip tabs={TABS.filter((id) => id !== 'B')} active="A" />)
+    expect(strip.scrollWidth).toBe(1000)
+    expect(tabX(strip, 'A')).toBe(0)
+    expect(tabX(strip, 'C')).toBe(100)
+  })
+
+  it('keeps tabs from widening when a close drops the strip just under the overflow line', () => {
+    const view = render(<Strip tabs={['A', 'B', 'C', 'D']} active="A" viewport={390} />)
+    const strip = view.container.querySelector<HTMLElement>('[data-strip]')!
+    hoverStrip(strip)
+    clickClose(strip, 'B')
+    view.rerender(<Strip tabs={['A', 'C', 'D']} active="A" viewport={390} />)
+    const c = strip.querySelector<HTMLElement>('[data-tab-strip-slot="C"]')!.getBoundingClientRect()
+    expect(c.width).toBe(100)
+    expect(c.left).toBe(100)
+  })
+
+  it('does not hold the strip for a bulk close', () => {
+    const { strip, rerender } = mountScrolled('J', 700)
+    hoverStrip(strip)
+    clickClose(strip, 'H')
+    rerender(<Strip tabs={withoutHI} active="J" />)
+    expect(strip.scrollWidth).toBe(800)
+    expect(strip.scrollLeft).toBe(500)
+  })
+
+  it('does not hold a strip that fit its tabs', () => {
+    const view = render(<Strip tabs={['A', 'B', 'C']} active="A" viewport={600} />)
+    const strip = view.container.querySelector<HTMLElement>('[data-strip]')!
+    hoverStrip(strip)
+    clickClose(strip, 'C')
+    view.rerender(<Strip tabs={['A', 'B']} active="A" viewport={600} />)
+    expect(strip.scrollWidth).toBe(360)
   })
 })
 

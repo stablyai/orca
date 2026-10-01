@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { scrollTabStripByStep } from './tab-strip-overflow-navigation'
+import { scrollTabStripByStep } from './tab-strip-scroll-step'
 
 describe('scrollTabStripByStep', () => {
   it('scrolls instantly when requested for drag-hover navigation', () => {

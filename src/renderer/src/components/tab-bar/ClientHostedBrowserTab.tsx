@@ -83,6 +83,7 @@ export default function ClientHostedBrowserTab({
                   ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   : 'text-transparent group-hover:text-muted-foreground hover:!bg-muted hover:!text-foreground'
               }`}
+              data-tab-close-button="true"
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation()
