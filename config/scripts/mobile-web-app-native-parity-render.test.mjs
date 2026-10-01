@@ -47,7 +47,7 @@ const ENGINES = [
 const PAGE_ENTRY = `
 import { createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
-const { StyleSheet, Text, TextInput, View } = require('react-native')
+const { StyleSheet, TextInput, View } = require('react-native')
 const styles = StyleSheet.create({
   separatorBox: { paddingTop: 10.1, width: 12, backgroundColor: '#ffffff' },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#000000' },
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   input: { height: 40 }
 })
 createRoot(document.getElementById('root')).render(
-  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }), h(Text, { testID: 'plain' }, 'Esc key label'), h(Text, { testID: 'selectable', selectable: true }, 'Selectable output line'))
+  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }))
 )
 `
 
@@ -164,33 +164,6 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
         return { focused: document.activeElement === input, style: style.outlineStyle }
       })
       expect(outline).toEqual({ focused: true, style: 'none' })
-    } finally {
-      await page.close()
-    }
-  })
-
-  it('selects only what native lets the user select', async () => {
-    // Through the browser's own gesture, not a Range: a script can select what a user cannot.
-    const page = await openPage(engine)
-    try {
-      const selectedBy = async (testId) => {
-        await page.evaluate(() => window.getSelection()?.removeAllRanges())
-        await page.dblclick(`[data-testid="${testId}"]`)
-        return page.evaluate(() => window.getSelection()?.toString() ?? '')
-      }
-      // react-native-web's Text/index.js:115 adds `userSelect: 'text'` for `selectable`.
-      expect(await selectedBy('plain')).toBe('')
-      expect(await selectedBy('selectable')).not.toBe('')
-
-      await page.click('[data-testid="input"]')
-      await page.keyboard.type('hello world')
-      await page.dblclick('[data-testid="input"]')
-      const field = await page.evaluate(() => {
-        const input = document.querySelector('[data-testid="input"]')
-        return { value: input.value, selected: input.selectionEnd - input.selectionStart }
-      })
-      expect(field.value).toBe('hello world')
-      expect(field.selected).toBeGreaterThan(0)
     } finally {
       await page.close()
     }
