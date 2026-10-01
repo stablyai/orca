@@ -19,7 +19,7 @@ public enum KeyboardInputSafety {
     /// Apple warns that a framework may ignore the Unicode string and
     /// translate from the virtual key code, so the typed character is not
     /// copied onto key-up.
-    public static func unicodeUnitCount(forKeyDown keyDown: Bool) -> Int {
+    static func unicodeUnitCount(forKeyDown keyDown: Bool) -> Int {
         keyDown ? 1 : 0
     }
 
@@ -29,7 +29,7 @@ public enum KeyboardInputSafety {
         writeUnicode(unit, to: keyUp, keyDown: false)
     }
 
-    public static func unicodeUnits(of event: CGEvent) -> [UInt16] {
+    static func unicodeUnits(of event: CGEvent) -> [UInt16] {
         var length = 0
         event.keyboardGetUnicodeString(maxStringLength: 0, actualStringLength: &length, unicodeString: nil)
         guard length > 0 else {
