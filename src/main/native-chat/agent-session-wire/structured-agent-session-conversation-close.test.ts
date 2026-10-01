@@ -137,8 +137,8 @@ describe('closing the handle', () => {
   it('keeps the row when a chat with an open tab is evicted, and forgets it once the tab closes', async () => {
     await foundRestTestChat(rig)
 
-    await rig.host.close(SESSION)
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+    await rig.host.close(SESSION, 'evict')
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, 'evict')
     // The stop says not-running; the row belongs to the tab, so nothing forgets it.
     expect(rig.sink.forget).not.toHaveBeenCalled()
     expect(rig.sink.publish.mock.calls.at(-1)?.[0]).toMatchObject({ sessionId: SESSION })
@@ -261,7 +261,7 @@ describe('a start that never finishes (P2-15)', () => {
     rig.clock.now += IDLE_MS + 1
 
     await sweepOnce(rig.host)
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, 'host-stop')
     await vi.waitFor(() =>
       expect(readerSaw(reader.events).submissions).toContainEqual(
         expect.objectContaining({ dispatchState: 'rejected', reason: stopReason })
@@ -311,8 +311,9 @@ describe('the wind-down retry with a message queued (P2-31)', () => {
       now: () => IDLE_MS + 1,
       isDisposed: () => false,
       deliveryActive: () => true,
-      backgroundTaskState: () => undefined,
+      childWork: () => undefined,
       hasOpenDispatch: () => false,
+      providerHoldsDispatch: () => false,
       stopAgent,
       stopStartingAgent: stopAgent,
       closeConversation: vi.fn(async () => false),

@@ -8,6 +8,8 @@ import type {
 import { reconcileAgentChildWorkEvidence } from './agent-status-child-work-reconciliation'
 import { STRUCTURED_CHILD_WORK_MAX_LIVE } from './agent-status-child-work-evidence-admission'
 import { createAgentStatusStore, type AgentStatusStore } from './agent-status-store'
+import { projectAgentChildWorkViews } from './agent-status-child-work-view'
+import { structuredRunningChildWork } from './agent-child-work-listing'
 import { makeStructuredAgentStatusSubject } from './agent-status-subject'
 
 const parent = makeStructuredAgentStatusSubject(
@@ -424,5 +426,120 @@ describe('structured child-work reconciliation', () => {
       apply({ type: 'removed', observedAt: 201, handle: { idKind: 'task_id', id: 'shell' } })
     ).toMatchObject({ removed: 0 })
     expect(records(store)).toHaveLength(1)
+  })
+
+  // The product rule: a finished subagent stays listed, with how it ended, until the parent's next
+  // turn begins. A finished child whose shell still runs stays so that shell keeps its owner.
+  it("keeps finished children until the session's next turn starts, then only owners of live work", () => {
+    const { store, apply } = harness()
+    const ended = (id: string, observedAt: number): AgentChildWorkEvidence => ({
+      type: 'ended',
+      observedAt,
+      handle: { idKind: 'task_id', id },
+      outcome: 'succeeded'
+    })
+    apply(live(child('finished')), ended('finished', 101))
+    apply(live(child('owner')), live(child('shell', { kind: 'command', ownerId: 'owner' })))
+    apply(ended('owner', 102), live(child('running')))
+    expect(records(store).map((record) => [record.description, record.membership])).toEqual([
+      ['Task finished', 'settled'],
+      ['Task owner', 'settled'],
+      ['Task shell', 'live'],
+      ['Task running', 'live']
+    ])
+
+    expect(apply({ type: 'turn-started', observedAt: 104 })).toMatchObject({ removed: 1 })
+    expect(records(store).map((record) => record.description)).toEqual([
+      'Task owner',
+      'Task shell',
+      'Task running'
+    ])
+  })
+
+  it('keeps every finished owner above live work at the next turn, however deep', () => {
+    const { store, apply } = harness()
+    const ended = (id: string, observedAt: number): AgentChildWorkEvidence => ({
+      type: 'ended',
+      observedAt,
+      handle: { idKind: 'task_id', id },
+      outcome: 'succeeded'
+    })
+    // A settled agent owns a settled agent that owns a live command.
+    apply(
+      live(child('top')),
+      live(child('nested', { ownerId: 'top' })),
+      live(child('shell', { kind: 'command', ownerId: 'nested' })),
+      ended('nested', 101),
+      ended('top', 102)
+    )
+    const tree = () => {
+      const all = records(store)
+      return all.map((record) => [
+        record.description,
+        record.membership,
+        all.find((owner) => owner.childWorkId === record.parentChildWorkId)?.description ?? null
+      ])
+    }
+    const before = tree()
+    expect(before).toEqual([
+      ['Task top', 'settled', null],
+      ['Task nested', 'settled', 'Task top'],
+      ['Task shell', 'live', 'Task nested']
+    ])
+    const surfaces = () => {
+      const all = records(store)
+      const views = projectAgentChildWorkViews(
+        all,
+        all.flatMap((record) => store.getAliasesForChild(record.childWorkId))
+      )
+      return {
+        running: structuredRunningChildWork(views).map((view) => view.description)
+      }
+    }
+    expect(surfaces().running).toEqual(['Task top', 'Task nested', 'Task shell'])
+
+    expect(apply({ type: 'turn-started', observedAt: 200 })).toMatchObject({ removed: 0 })
+    expect(tree()).toEqual(before)
+    expect(surfaces()).toEqual({ running: ['Task top', 'Task nested', 'Task shell'] })
+  })
+
+  it("lets the child's own ending replace an acknowledged Stop's, and nothing else replace its own", () => {
+    const ended = (
+      id: string,
+      outcome: 'succeeded' | 'failed' | 'cancelled',
+      observedAt: number,
+      extra: Partial<Extract<AgentChildWorkEvidence, { type: 'ended' }>> = {}
+    ): AgentChildWorkEvidence => ({
+      type: 'ended',
+      observedAt,
+      handle: { idKind: 'task_id', id },
+      outcome,
+      ...extra
+    })
+    const stopped = { basis: 'stop-acknowledged' as const }
+    const { store, apply } = harness()
+    apply(live(child('replaced')), live(child('kept')), live(child('same')))
+    apply(
+      ended('replaced', 'cancelled', 101, stopped),
+      ended('replaced', 'succeeded', 102, { lastMessage: 'all tests passed' }),
+      ended('kept', 'failed', 101, { lastMessage: 'Exit code 1' }),
+      ended('kept', 'cancelled', 102, stopped),
+      ended('same', 'cancelled', 101, stopped),
+      ended('same', 'cancelled', 102)
+    )
+    expect(
+      records(store).map((record) => [
+        record.description,
+        record.outcome,
+        record.outcomeBasis ?? 'reported',
+        record.lastMessage ?? null
+      ])
+    ).toEqual([
+      ['Task replaced', 'succeeded', 'reported', 'all tests passed'],
+      ['Task kept', 'failed', 'reported', 'Exit code 1'],
+      ['Task same', 'cancelled', 'reported', null]
+    ])
+    // Once the child reported its ending, a later acknowledged Stop changes nothing either.
+    expect(apply(ended('same', 'failed', 103, stopped))).toMatchObject({ settled: 0 })
   })
 })

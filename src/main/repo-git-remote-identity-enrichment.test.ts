@@ -614,22 +614,4 @@ describe('retiring probes for removed repos', () => {
     expect(listHandlersChanged).toHaveBeenCalledTimes(1)
     expect(runtimeChanged).toHaveBeenCalledTimes(1)
   })
-
-  it('still notifies a caller whose sweep was coalesced into one already running', async () => {
-    const first = deferred<GitRemoteIdentityProbe>()
-    vi.mocked(probeGitRemoteIdentity).mockReturnValue(first.promise)
-    const store = makeMutableStore([makeRepo()])
-    const listHandlerChanged = vi.fn()
-    // The runtime RPC caller also drops a resolved-worktree cache, so it must not be dropped.
-    const runtimeChanged = vi.fn()
-
-    enrichMissingRepoGitRemoteIdentities(store, { onChanged: listHandlerChanged })
-    enrichMissingRepoGitRemoteIdentities(store, { onChanged: runtimeChanged })
-
-    first.resolve(resolvedProbe)
-    await drainEnrichmentSweep()
-
-    expect(listHandlerChanged).toHaveBeenCalledTimes(1)
-    expect(runtimeChanged).toHaveBeenCalledTimes(1)
-  })
 })

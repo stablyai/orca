@@ -130,8 +130,7 @@ describe('Codex rate-limit process contract', () => {
   it('starts a read-only non-interactive app-server with the managed home', async () => {
     await expect(
       fetchCodexRateLimits({
-        codexHomePath: process.env.ORCA_EXPECTED_CODEX_HOME,
-        allowPtyFallback: false
+        codexHomePath: process.env.ORCA_EXPECTED_CODEX_HOME
       })
     ).resolves.toMatchObject({
       provider: 'codex',

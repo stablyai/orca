@@ -5,9 +5,9 @@ import type { HookListenerState } from './listener-state'
 /**
  * Which pane owns one OpenCode session, as observed from the client side.
  *
- * Why this exists: OpenCode v2 serves every pane from a single shared server
- * process, so the status plugin's per-post stamp (`process.env.ORCA_PANE_KEY`)
- * is frozen to whichever pane started the server. The session id is the only
+ * Why this exists: OpenCode 1 `opencode serve` serves every `opencode attach`
+ * pane from one server process, so the status plugin's per-post stamp
+ * (`process.env.ORCA_PANE_KEY`) is frozen to the pane that started it. The session id is the only
  * per-event truth that survives — every post carries it — but nothing maps it
  * back to a pane. This registry is that map, filled by the main-process binder
  * (client argv, then creation-correlation against the session store) and read
@@ -139,6 +139,19 @@ export function lookupOpenCodePaneLaunchToken(
   return state.lastLaunchTokenByPaneKey.get(paneKey)
 }
 
+/**
+ * OpenCode-1-only: remove with OpenCode 1 support. OpenCode 2 posts declare `opencodeMajor: 2`
+ * and always name their own pane; posts without it (OpenCode 1, mimo-code, older plugins) may
+ * come from a shared server.
+ */
+export function isOpenCodeSharedServerPost(source: AgentHookSource, body: unknown): boolean {
+  if ((source !== 'opencode' && source !== 'mimo-code') || typeof body !== 'object' || !body) {
+    return false
+  }
+  const major = 'opencodeMajor' in body ? body.opencodeMajor : undefined
+  return !(typeof major === 'number' && major >= 2)
+}
+
 /** Envelope fields the rewrite may substitute, as stamped by the poster. */
 export type OpenCodeStampedEnvelope = {
   paneKey: string
@@ -159,9 +172,11 @@ export function resolveOpenCodeSharedServerEnvelope(args: {
   source: AgentHookSource
   stamped: OpenCodeStampedEnvelope
   sessionId: string | undefined
+  /** The raw post; see isOpenCodeSharedServerPost. */
+  body: unknown
 }): OpenCodeStampedEnvelope {
   const { state, source, stamped, sessionId } = args
-  if ((source !== 'opencode' && source !== 'mimo-code') || !sessionId) {
+  if (!isOpenCodeSharedServerPost(source, args.body) || !sessionId) {
     return stamped
   }
   const binding = lookupOpenCodeSessionPane(state, sessionId)

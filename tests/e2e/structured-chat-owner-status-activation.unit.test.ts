@@ -133,7 +133,7 @@ describe('a chat at rest keeps its worktree activatable', () => {
   it('after the idle sweep stopped its agent and closed the conversation', async () => {
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
+    expect(closeSession).toHaveBeenCalledWith(SESSION, 'evict')
 
     expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
     expect(await activate()).toBe('structured')

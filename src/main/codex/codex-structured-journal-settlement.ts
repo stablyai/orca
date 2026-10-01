@@ -20,6 +20,7 @@ import {
   type CodexTurnOrdinals
 } from './codex-structured-item-translation'
 import type { CodexStructuredItemStreams } from './codex-structured-item-streams'
+import type { CodexHelperName } from './codex-collab-agent-item-translation'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
 import {
@@ -34,6 +35,8 @@ export type CodexActiveJournalItem = {
   turnId: string | null
   identity: AgentJournalItemIdentity
   item: CodexThreadItem
+  /** Names the helpers a collab call acted on, so a settled revision keeps naming them. */
+  helperName?: CodexHelperName
 }
 
 export type CodexPendingJournalPrompt = {
@@ -66,7 +69,7 @@ export function settleCodexJournalSession(input: {
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
     const translated = streamed
       ? codexStreamingJournalItem(active.item, streamed.text)
-      : codexJournalItem(active.item)
+      : codexJournalItem(active.item, active.helperName)
     const body = interruptedBody(translated.body)
     if (body) {
       mutations.push(settledRow(input.attributionFor, active, body))
@@ -138,7 +141,7 @@ export function settleCodexJournalTurn(input: {
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
     const translated = streamed
       ? codexStreamingJournalItem(active.item, streamed.text)
-      : codexJournalItem(active.item)
+      : codexJournalItem(active.item, active.helperName)
     const body = interruptedBody(translated.body)
     if (body) {
       mutations.push(settledRow(input.attributionFor, active, body))

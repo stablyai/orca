@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { useDelayedStatus } from '@/hooks/use-delayed-status'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import type { StructuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
+import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
 
 type StoppingBackgroundTasks = {
   sessionId: string
@@ -22,6 +23,8 @@ export function NativeChatStructuredSessionStatus(props: {
   /** The host's word on the provider child; `starting` is published but not yet answering. */
   startupPhase: 'starting' | 'ready' | null
   startupChildKey: string | number | null
+  /** The session's own status row, whose verdict the strip's children read. */
+  paneKey: string
   error: string | null
   /** A read the pane is reconnecting on its own: said plainly, not as an error. */
   reconnecting?: boolean
@@ -38,6 +41,7 @@ export function NativeChatStructuredSessionStatus(props: {
     props.startupPhase === 'starting' ? 'starting' : null,
     SLOW_STARTUP_NOTICE_DELAY_MS
   )
+  const childRowContext = useStructuredSessionChildRowContext(props.paneKey)
 
   const onStop = (taskId?: string) => {
     const sessionId = props.sessionId
@@ -95,6 +99,9 @@ export function NativeChatStructuredSessionStatus(props: {
           isVisible={props.isVisible}
           tasks={props.backgroundTasks.tasks}
           settledTasks={props.backgroundTasks.settledTasks}
+          {...(props.backgroundTasks.children
+            ? { childViews: props.backgroundTasks.children, childRowContext }
+            : {})}
           indicatorActive={props.backgroundTasks.isMonitoring}
           supportsTaskStop={props.backgroundTasks.supportsStop}
           supportsStopAll={props.backgroundTasks.supportsStopAll}

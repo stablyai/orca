@@ -142,6 +142,8 @@ describe('a process that inherited a spawn token', () => {
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveEnvironment: async () => ({})
     })
+    // The installed host reads the record the seed wrote, so the check below has a lease to act on.
+    expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     await host.reconcileRestartLeases()
     // Install work that is not awaited would have run by now; nothing here waits on a timer.
     await new Promise((resolve) => setTimeout(resolve, 50))

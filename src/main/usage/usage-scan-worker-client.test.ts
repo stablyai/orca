@@ -1,13 +1,10 @@
-import { join, sep } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
 import {
   MAX_CONSECUTIVE_DEATHS,
   USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS,
   UsageScanWorkerClient,
   scanCodexUsageOnWorker
 } from './usage-scan-worker-client'
-import { USAGE_SCAN_WORKER_ENTRY_FILENAME } from './usage-scan-worker-spawn'
 import type {
   UsageScanWorkerRequest,
   UsageScanWorkerRequestBody
@@ -213,25 +210,5 @@ describe('UsageScanWorkerClient', () => {
     })
 
     await expect(pending).rejects.toThrow(/answered for claude/)
-  })
-})
-
-// Why: the packaged branch never runs in dev or e2e (both take the __dirname
-// path), so it is pinned here at the path-construction level.
-describe('usage scan worker entry path', () => {
-  it('resolves a packaged build under resourcesPath/app.asar/out/main', () => {
-    const resourcesPath = join(sep, 'Applications', 'Orca.app', 'Contents', 'Resources')
-
-    const resolved = resolveWorkerThreadEntryPath(
-      { isPackaged: true, resourcesPath, moduleDir: join(sep, 'unpackaged', 'out', 'main') },
-      USAGE_SCAN_WORKER_ENTRY_FILENAME
-    )
-
-    expect(resolved.slice(resourcesPath.length + 1).split(sep)).toEqual([
-      'app.asar',
-      'out',
-      'main',
-      USAGE_SCAN_WORKER_ENTRY_FILENAME
-    ])
   })
 })

@@ -75,7 +75,7 @@ export function createStructuredSessionMocks() {
     launchLifecycle: nullable<StructuredAgentSessionLaunchLifecycle>(),
     launchFailure: nullable<AgentSessionWriteRefusal>(),
     launchResumes: false,
-    retryLaunch: vi.fn<(...args: never[]) => unknown>(),
+    retryLaunch: vi.fn<(worktreeId: string, sessionId: string) => unknown>(),
     controllerProps: nullable<{ transportEnabled?: boolean }>(),
     mode: 'static' as 'static' | 'outbox',
     status: 'ready' as 'idle' | 'loading' | 'ready' | 'error',
@@ -231,6 +231,11 @@ export function createStructuredSessionMocks() {
     },
     structuredAgentSessionLaunch: () => ({
       retryStructuredAgentSessionLaunch: mocks.retryLaunch,
+      relaunchFailedStructuredAgentSessionForMessage: (worktreeId: string, sessionId: string) => {
+        if (mocks.launchLifecycle === 'failed') {
+          mocks.retryLaunch(worktreeId, sessionId)
+        }
+      },
       getStructuredAgentSessionLaunchLifecycle: () => mocks.launchLifecycle,
       getStructuredAgentSessionLaunchResumes: () => mocks.launchResumes,
       useStructuredAgentSessionLaunchSelection: () => null,
@@ -268,7 +273,8 @@ export function createStructuredSessionMocks() {
           },
           insertTypedText: () => true,
           handlePasteEvent: mocks.handlePasteEvent,
-          pasteFromClipboard: mocks.pasteFromClipboard
+          pasteFromClipboard: mocks.pasteFromClipboard,
+          contains: (node: Node | null) => fieldRef.current?.contains(node) === true
         }))
         return <textarea ref={fieldRef} data-testid="structured-composer" />
       })

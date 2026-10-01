@@ -96,7 +96,7 @@ describe('AgentStateDot', () => {
     expect(markup).not.toContain('data-agent-spinner')
   })
 
-  it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
+  it.each(['blocked', 'failed'] satisfies AgentDotState[])(
     'renders %s as a red attention dot',
     (state) => {
       const classNames = renderDotClassNames(state)
@@ -105,6 +105,14 @@ describe('AgentStateDot', () => {
       expect(classNames).not.toContain('bg-amber-500')
     }
   )
+
+  it("renders a user's Stop as a muted dot, neither the fault red nor the idle grey", () => {
+    const classNames = renderDotClassNames('interrupted')
+
+    expect(classNames).toContain('bg-muted-foreground')
+    expect(classNames).not.toContain('bg-red-500')
+    expect(classNames).not.toContain('bg-neutral-500/40')
+  })
 
   const ALL_STATES = [
     'working',
@@ -116,6 +124,7 @@ describe('AgentStateDot', () => {
     'done',
     'idle',
     'unverifiable',
+    'unconfirmed',
     'permission'
   ] satisfies AgentDotState[]
 

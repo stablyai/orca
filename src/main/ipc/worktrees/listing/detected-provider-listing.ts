@@ -1,4 +1,8 @@
 import {
+  projectPendingWorktreeRemovals,
+  snapshotPendingWorktreeRemovals
+} from '../../../worktree-background-removal'
+import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost
 } from '../../../../shared/execution-host'
@@ -128,6 +132,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
       }
     }
+    const pendingAtScan = snapshotPendingWorktreeRemovals()
     const scan = await scanUntilNotOvertaken(
       repo.id,
       connectionId && provider
@@ -184,7 +189,15 @@ export async function listDetectedWorktreesForCapturedRepo(
       authoritative: true,
       source: 'git',
       catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
-      worktrees: buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta)
+      worktrees: connectionId
+        ? buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta)
+        : // Why always marked: the desktop renderer ships with this main process.
+          projectPendingWorktreeRemovals(
+            buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta),
+            (worktree) => worktree.id,
+            true,
+            pendingAtScan
+          )
     }
   } catch (err) {
     const aborted = abortedResult()

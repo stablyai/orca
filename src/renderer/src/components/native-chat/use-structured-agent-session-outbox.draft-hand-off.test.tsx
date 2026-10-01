@@ -5,7 +5,7 @@
 // handed off belongs to the host, whatever the hand-off's state, and nothing here compares a draft
 // id with a submission id.
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
@@ -27,6 +27,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { writeOutbox } from './structured-agent-session-outbox-storage'
+
+// Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
+afterEach(cleanup)
 
 const TARGET = { kind: 'local' } as const
 const QUEUEING = { capability: 'supported', enabled: true } as const

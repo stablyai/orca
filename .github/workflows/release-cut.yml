@@ -1395,6 +1395,20 @@ jobs:
           node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
           node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
 
+      # Why an explicit step rather than trusting the runner image: the packaged
+      # CLI launcher is a native Rust binary, and a Windows host without cargo
+      # fails deep inside electron-builder's native hook instead of here. Real
+      # Windows dev machines do not have it by default either.
+      - name: Ensure the Rust toolchain for the Windows CLI launcher
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            rustup toolchain install stable --profile minimal
+            rustup default stable
+          }
+          cargo --version
+
       # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
       # produces a published binary, so this is the only place the secret
       # needs to be in scope. The key is a PostHog *project* API key, not

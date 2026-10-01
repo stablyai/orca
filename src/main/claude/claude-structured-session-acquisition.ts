@@ -118,7 +118,7 @@ export async function acquireClaudeSession({
       if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
         persistClaudeTurnResumePoint(sessionId, liveSession, deps)
       }
-      // The CLI idles only once its queue drains, so it holds none of this session's sends.
+      // The CLI's idle releases its doubted sends; a late echo still accepts one it goes on to run.
       if (claudeSessionStateEndsTurn(message) && sessions.get(sessionId) === liveSession) {
         deps.onSessionIdle?.({ sessionId })
       }

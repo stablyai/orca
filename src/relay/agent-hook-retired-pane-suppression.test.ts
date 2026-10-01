@@ -162,8 +162,10 @@ describe('RelayAgentHookRuntime wiring', () => {
   it('routes hook admission through the PTY handler and drops the cache on retirement', async () => {
     const retired = new RetiredPaneSurfaceRegistry()
     const surfaceRetiredListeners: PtySurfaceRetiredListener[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this stand-in implements every PtyHandler member the hook runtime registers or reads.
     const ptyHandler = {
       addEnvAugmenter: vi.fn(),
+      setAgentPresenceTrigger: vi.fn(),
       setExitListener: vi.fn(),
       setSurfaceRetiredListener: vi.fn((listener: PtySurfaceRetiredListener | null) => {
         if (listener) {

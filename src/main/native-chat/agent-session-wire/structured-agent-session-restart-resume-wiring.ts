@@ -11,6 +11,7 @@ import type {
   AgentSessionMutationResult,
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import type { SendSettlementWaitOptions } from './structured-agent-session-send-settlement'
 
@@ -30,6 +31,8 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   onNoteFailed: (sessionId: string, error: unknown) => void
+  /** The session's child records, the host's one read of them. */
+  readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   now: () => number
 }
 
@@ -60,7 +63,7 @@ type RestartResumeHostBindings = {
 export function structuredAgentSessionRestartResumeSurfaces(
   host: RestartResumeHostBindings,
   now: () => number
-): StructuredAgentSessionRestartResumeSurfaces {
+): Omit<StructuredAgentSessionRestartResumeSurfaces, 'readChildWork'> {
   return {
     revealSession: host.revealSession,
     send: (params) =>

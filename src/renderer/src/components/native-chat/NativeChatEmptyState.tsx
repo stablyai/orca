@@ -1,13 +1,17 @@
 import { MessageSquare, TriangleAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../../shared/native-chat-empty-state'
+import {
+  NATIVE_CHAT_EMPTY_STATE_COPY,
+  NATIVE_CHAT_KEEPS_TRYING_COPY
+} from '../../../../shared/native-chat-empty-state'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 
 export function NativeChatEmptyState({
   kind,
   message,
   headline,
+  headlineSaysUnread = false,
   agent,
   retrying = false
 }: {
@@ -15,12 +19,15 @@ export function NativeChatEmptyState({
   message?: string
   /** The chat's own sentence for the failure, said once: it takes the generic title's place. */
   headline?: string
+  /** The headline already says the history didn't load, so the retrying line says only that
+   *  Orca keeps trying. */
+  headlineSaysUnread?: boolean
   agent?: NativeChatSession['agent']
   /** The read retries on its own (structured chat), so the error says so instead of pointing
    *  back to the terminal. */
   retrying?: boolean
 }): React.JSX.Element {
-  const copy = emptyStateCopy(kind, { message, headline }, agent, retrying)
+  const copy = emptyStateCopy(kind, { message, headline, headlineSaysUnread }, agent, retrying)
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
       <div
@@ -46,7 +53,7 @@ export function NativeChatEmptyState({
 
 function emptyStateCopy(
   kind: 'loading' | 'empty' | 'error' | 'not-agent',
-  words: { message?: string; headline?: string },
+  words: { message?: string; headline?: string; headlineSaysUnread?: boolean },
   agent?: NativeChatSession['agent'],
   retrying = false
 ): { title: string; subtitle: string | null } {
@@ -63,12 +70,17 @@ function emptyStateCopy(
         )
       }
     case 'error': {
-      const retryingLine = retrying
-        ? translate(
-            'components.native-chat.state.error.retryingSubtitle',
-            NATIVE_CHAT_EMPTY_STATE_COPY.retryingError.subtitle
-          )
-        : null
+      const retryingLine = !retrying
+        ? null
+        : words.headline && words.headlineSaysUnread
+          ? translate(
+              'components.native-chat.state.error.keepsTrying',
+              NATIVE_CHAT_KEEPS_TRYING_COPY
+            )
+          : translate(
+              'components.native-chat.state.error.retryingSubtitle',
+              NATIVE_CHAT_EMPTY_STATE_COPY.retryingError.subtitle
+            )
       if (words.headline) {
         return { title: words.headline, subtitle: retryingLine }
       }

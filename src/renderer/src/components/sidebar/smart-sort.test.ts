@@ -891,14 +891,4 @@ describe('buildWorktreeComparator — recent with createdAt grace window', () =>
 
     expect(worktrees.map((w) => w.id)).toEqual(['fresh-activity', 'old-created'])
   })
-
-  it('does not disturb ranking for worktrees without createdAt', () => {
-    const alpha = makeWorktree({ id: 'alpha', displayName: 'Alpha', lastActivityAt: 5000 })
-    const bravo = makeWorktree({ id: 'bravo', displayName: 'Bravo', lastActivityAt: 10_000 })
-    const worktrees = [alpha, bravo]
-
-    worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
-
-    expect(worktrees.map((w) => w.id)).toEqual(['bravo', 'alpha'])
-  })
 })

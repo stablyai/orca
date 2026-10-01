@@ -1,5 +1,5 @@
 import {
-  getOpenCode2SetupSource,
+  getOpenCode2ModuleSource,
   getOpenCode2EventNormalizationSource
 } from '../opencode2/status-plugin-setup-source'
 
@@ -103,6 +103,7 @@ export function getStatusPluginFactorySource(options: {
           '      const info = event.properties?.info;',
           '      if (!info?.id || info.parentID) return;',
           '      rememberSessionRoot(info.id, info.id);',
+          '      if (isOpenCodeRunProcess()) return; // a `run` goes Busy at once; its start row only blinks idle',
           '      await enqueueLifecycle(() =>',
           '        disposed ? undefined : post("SessionStart", { sessionID: info.id })',
           '      );',
@@ -286,7 +287,7 @@ export function getStatusPluginFactorySource(options: {
     '  },',
     '  };',
     '};',
-    ...(options.emitNextEvents ? getOpenCode2SetupSource() : []),
+    ...(options.emitNextEvents ? getOpenCode2ModuleSource(pluginID, expectedAgent) : []),
     '',
     '// Why: OpenCode also resolves plugins through the module default export, and that',
     '// loader rejects the module unless the default exposes `server()` ("must default',

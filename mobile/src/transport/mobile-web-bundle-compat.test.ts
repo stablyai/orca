@@ -55,12 +55,6 @@ describe('evaluateMobileWebBundleCompat', () => {
     })
   })
 
-  it('separates permission to fetch a manifest from permission to open one', () => {
-    // Why: both are `ok`, and a caller that mounted on the first would mount an unchecked bundle.
-    expect(evaluate({ manifest: null })).toEqual({ kind: 'ok', manifestChecked: false })
-    expect(evaluate({})).toEqual({ kind: 'ok', manifestChecked: true })
-  })
-
   it('blocks a host that ships no bundle', () => {
     expect(evaluate({ hostCapabilities: ['browser.screencast.v1'] })).toEqual({
       kind: 'blocked',

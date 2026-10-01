@@ -145,7 +145,7 @@ async function errorStatuses(): Promise<string[]> {
 
 /** The child timed out or exited: its lease is handed back and the host holds no session. */
 async function loseOwner(): Promise<void> {
-  await host.close(SESSION)
+  await host.close(SESSION, 'evict')
   expect(store.getRecord(SESSION)?.lease).toMatchObject({
     claimStatus: 'released',
     ownerProcess: null

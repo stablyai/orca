@@ -2,6 +2,7 @@ import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-ses
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { agentJournalItemPosition } from './agent-session-journal-position'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
+import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
 import type { NativeChatMessage } from './native-chat-types'
 import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
 import { reconcileStructuredAgentSessionOutboxWithQueue } from './structured-agent-session-draft-hand-off'
@@ -47,7 +48,8 @@ export function projectStructuredAgentSessionMessages(
     }
   }
   return [
-    ...delivered,
+    // After the held sends leave: they are drawn after the conversation, never inside a run.
+    ...collapseProviderRetryRuns(delivered),
     ...held,
     ...optimistic
       .filter((entry) => !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)))

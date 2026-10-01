@@ -245,7 +245,7 @@ export async function createQueuedMessageTestRig() {
   /** A host-process restart, as the queue sees it: the conversation closes, and
    *  opens afresh under a new instance id while its rows survive. */
   async function restartHostProcess(): Promise<void> {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     rotateStructuredAgentSessionHostInstanceForTests()
   }
 

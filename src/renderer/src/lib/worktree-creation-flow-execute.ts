@@ -23,6 +23,8 @@ import {
   type WorktreeCreationStructuredSessionResult
 } from '@/lib/worktree-creation-structured-session'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
+import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-toast'
+import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
 // Why: activePendingCreationId can outlive the terminal route when the user
@@ -30,6 +32,17 @@ import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-wor
 function isPendingCreationSurfaceVisible(creationId: string): boolean {
   const state = useAppStore.getState()
   return state.activeView === 'terminal' && state.activePendingCreationId === creationId
+}
+
+// Why: the created row is listed before completion, so a user may already have opened it.
+function isCreatedWorkspaceInView(creationId: string, worktreeId: string): boolean {
+  const state = useAppStore.getState()
+  return (
+    isPendingCreationSurfaceVisible(creationId) ||
+    (state.activeView === 'terminal' &&
+      state.activePendingCreationId === null &&
+      state.activeWorktreeId === worktreeId)
+  )
 }
 
 export async function executeWorktreeCreation(
@@ -145,16 +158,10 @@ export async function executeWorktreeCreation(
     ? undefined
     : buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
 
-  // `createWorktree` already inserted the real worktree row. Leaving for an app
-  // view keeps the create in the background, while selecting another workspace
-  // means the user still expects this task-launch handoff when it becomes ready;
-  // the entry guard keeps a cancelled create from being revived.
-  const completionState = useAppStore.getState()
-  const shouldActivateOnCompletion =
-    completionState.pendingWorktreeCreations[creationId] !== undefined &&
-    (isPendingCreationSurfaceVisible(creationId) ||
-      (completionState.activeView === 'terminal' &&
-        completionState.activePendingCreationId === null))
+  // Why: only a user still watching the creation surface (or already on the new
+  // workspace) is handed it; anyone who moved on (another workspace or an app
+  // view) keeps their place and gets a toast instead (#9944).
+  const shouldActivateOnCompletion = isCreatedWorkspaceInView(creationId, worktree.id)
 
   // Why: the worktree exists past this point and nothing awaits this caller, so
   // each follow-up step is best-effort — an escaped throw would strand the
@@ -246,6 +253,11 @@ export async function executeWorktreeCreation(
       } catch (error) {
         console.error('worktree create: initial terminal seeding failed', worktree.id, error)
       }
+      try {
+        mountCreatedWorktreeStartupTabsInBackground(worktree.id)
+      } catch (error) {
+        console.error('worktree create: background terminal mount failed', worktree.id, error)
+      }
     }
     if (!structuredLaunch && !backendSpawned) {
       try {
@@ -290,6 +302,14 @@ export async function executeWorktreeCreation(
       if (structuredSession.cancelled) {
         return
       }
+    }
+  }
+
+  if (!shouldActivateOnCompletion && useAppStore.getState().pendingWorktreeCreations[creationId]) {
+    try {
+      showWorktreeCreationReadyToast(worktree)
+    } catch (error) {
+      console.error('worktree create: ready toast failed', worktree.id, error)
     }
   }
 

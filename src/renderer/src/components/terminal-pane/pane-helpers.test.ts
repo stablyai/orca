@@ -80,10 +80,12 @@ describe('fitAndFocusPanes', () => {
 
   function makeManager(): { manager: PaneManager; terminal: { focus: ReturnType<typeof vi.fn> } } {
     const terminal = { focus: vi.fn() }
+    const pane = { terminal, container: { querySelector: () => null } }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fitAndFocusPanes reads only these members, and the focus path reads only a pane's terminal and container.
     const manager = {
       fitAllPanes: vi.fn(),
-      getActivePane: () => ({ terminal }),
-      getPanes: () => [{ terminal }]
+      getActivePane: () => pane,
+      getPanes: () => [pane]
     } as unknown as PaneManager
     return { manager, terminal }
   }

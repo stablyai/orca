@@ -12,6 +12,7 @@ import {
   type CodexThreadItem
 } from './codex-structured-item-translation'
 import { createCodexStructuredItemStreams } from './codex-structured-item-streams'
+import type { CodexHelperName } from './codex-collab-agent-item-translation'
 import { boundStreamItem, codexStructuredItemKey } from './codex-structured-item-stream-bounds'
 import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
 import type {
@@ -46,7 +47,8 @@ export class CodexJournalItems {
       'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule'
     > & { maxMetadataBytes?: number; attributionFor: CodexRowAttribution },
     private readonly activeTurn: (threadId: string) => string | null,
-    private readonly suppress: (threadId: string, turnId: string) => void
+    private readonly suppress: (threadId: string, turnId: string) => void,
+    private readonly helperName?: CodexHelperName
   ) {
     this.streams = createCodexStructuredItemStreams({
       sink: deps.sink,
@@ -96,15 +98,17 @@ export class CodexJournalItems {
     ) {
       return { handled: true, admission: { accepted: false, reason: 'failed' } }
     }
-    const translated = codexJournalItem(item)
+    const itemKey = codexStructuredItemKey(event.threadId, item.id)
+    const started =
+      event.method === 'item/completed' ? this.activeItems.get(itemKey)?.item : undefined
+    const translated = codexJournalItem(item, this.helperName, started)
     const command = readCodexJournalString(item, 'command')
     if (command) {
       const boundedCommand = Buffer.from(command, 'utf8')
         .subarray(0, MAX_CODEX_DETAIL_BYTES)
         .toString('utf8')
-      this.details.set(codexStructuredItemKey(event.threadId, item.id), boundedCommand)
+      this.details.set(itemKey, boundedCommand)
     }
-    const itemKey = codexStructuredItemKey(event.threadId, item.id)
     if (!translated.body) {
       if (event.method === 'item/completed') {
         this.streams.forget(event.threadId, item.id)
@@ -193,7 +197,8 @@ export class CodexJournalItems {
       threadId,
       turnId,
       identity,
-      item: retainedItem
+      item: retainedItem,
+      ...(this.helperName ? { helperName: this.helperName } : {})
     })
   }
 
@@ -234,7 +239,7 @@ export class CodexJournalItems {
       }
       const evicted = this.activeItems.get(oldest)
       if (evicted) {
-        const translated = codexJournalItem(evicted.item).body
+        const translated = codexJournalItem(evicted.item, this.helperName).body
         if (translated) {
           const admission = appendCodexLifecycleItem(
             this.deps.sink,

@@ -14,6 +14,7 @@ import type {
 } from './agent-session-wire'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
+import { admitAgentSessionBackgroundTaskState } from './agent-session-background-task-state-admission'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import {
   MAX_RETAINED_ITEMS,
@@ -136,7 +137,7 @@ function replacePage(
     ...(backgroundTasks !== undefined
       ? { backgroundTasks }
       : page.backgroundTasks !== undefined
-        ? { backgroundTasks: page.backgroundTasks }
+        ? { backgroundTasks: admitAgentSessionBackgroundTaskState(page.backgroundTasks) }
         : {})
   }
 }
@@ -254,7 +255,12 @@ export function reduceStructuredAgentSession(
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
     return {
-      ...replacePage(event.page, event.fence, event.backgroundTasks, event.activity),
+      ...replacePage(
+        event.page,
+        event.fence,
+        admitAgentSessionBackgroundTaskState(event.backgroundTasks),
+        event.activity
+      ),
       commands: event.commands,
       // A snapshot omits the list when unchanged since the last frame sent to this subscriber.
       ...queuePublicationField(event, event.page, state),
@@ -268,7 +274,9 @@ export function reduceStructuredAgentSession(
     return state
   }
   const backgroundTasks =
-    event.backgroundTasks !== undefined ? event.backgroundTasks : state.backgroundTasks
+    event.backgroundTasks !== undefined
+      ? admitAgentSessionBackgroundTaskState(event.backgroundTasks, state.backgroundTasks)
+      : state.backgroundTasks
   const activity = event.activity !== undefined ? event.activity : state.activity
   const liveItems = liveItemsWithinWindow(state, event.batch.items)
   // Every roster revision, the window's or not: a trimmed roster row keeps its sequence.

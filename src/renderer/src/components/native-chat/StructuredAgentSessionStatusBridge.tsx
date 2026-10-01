@@ -11,7 +11,17 @@ import {
   isAgentStatusHeldOpenByChildWork,
   mainAgentTurnInterrupted
 } from '../../../../shared/agent-lead-status-fold'
-import { mainAgentStatusEqual, agentSubagentsEqual } from '../../../../shared/agent-status-types'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
+import {
+  agentChildWorkViewsEqual,
+  decodeAgentChildWorkViews
+} from '../../../../shared/agent-status-child-work-view-wire'
+import {
+  agentSubagentsEqual,
+  mainAgentStatusEqual,
+  type AgentSubagentSnapshot
+} from '../../../../shared/agent-status-types'
+import { structuredChildWorkLegacySubagents } from '../../../../shared/structured-agent-session-child-work-legacy'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../../shared/structured-agent-session-agent-status'
 import {
@@ -73,6 +83,25 @@ export function useStructuredAgentSessionHostExecution(
   return { phase, childKey }
 }
 
+/** The host's child records for the row, and the legacy roster readers of `subagents` keep. A host
+ *  that publishes views is copied verbatim; only an older host's task list is converted here. */
+function childWorkFor(summary: AgentSessionStatusSummary): {
+  children?: AgentChildWorkView[]
+  subagents?: AgentSubagentSnapshot[]
+} {
+  const children = decodeAgentChildWorkViews(summary.children)
+  if (children) {
+    const subagents = structuredChildWorkLegacySubagents(children, summary.agent)
+    return { children, ...(subagents ? { subagents } : {}) }
+  }
+  const subagents = summary.backgroundTasks
+    ? projectAgentChildWorkLegacySubagents(
+        summary.backgroundTasks.map(agentChildWorkProjectionCandidateFromBackgroundTask)
+      )
+    : undefined
+  return subagents ? { subagents } : {}
+}
+
 function projectStatus(
   tab: StructuredTab,
   summary: AgentSessionStatusSummary | null,
@@ -87,17 +116,11 @@ function projectStatus(
     }
     return
   }
-  // Sidebar children are the agent-kind tasks, projected by the same code every
-  // child-work reader uses; a backgrounded shell never counts as a subagent.
-  const subagents = summary.backgroundTasks
-    ? projectAgentChildWorkLegacySubagents(
-        summary.backgroundTasks.map(agentChildWorkProjectionCandidateFromBackgroundTask)
-      )
-    : undefined
+  const { children, subagents } = childWorkFor(summary)
   // Shared with `worktree ps`, so the CLI and this row cannot disagree about one session.
   const agentStatus = structuredAgentSessionAgentStatus({
     status: summary.status,
-    backgroundTasks: summary.backgroundTasks,
+    childWork: children ?? summary.backgroundTasks,
     turnOutcome: summary.turnOutcome
   })
   const current = store.agentStatusByPaneKey?.[paneKey]
@@ -121,7 +144,9 @@ function projectStatus(
     ...(summary.toolName ? { toolName: summary.toolName } : {}),
     ...(summary.toolInput ? { toolInput: summary.toolInput } : {}),
     ...(summary.lastAssistantMessage ? { lastAssistantMessage: summary.lastAssistantMessage } : {}),
-    ...(subagents ? { subagents, subagentObservation: observation } : {}),
+    ...(subagents ? { subagents } : {}),
+    ...(children ? { children } : {}),
+    ...(subagents || children ? { subagentObservation: observation } : {}),
     sessionBoundary: false
   } as const
   if (
@@ -136,6 +161,7 @@ function projectStatus(
     current.toolInput === summary.toolInput &&
     current.lastAssistantMessage === summary.lastAssistantMessage &&
     agentSubagentsEqual(current.subagents, subagents) &&
+    agentChildWorkViewsEqual(current.children, children) &&
     current.subagentObservation === desired.subagentObservation &&
     current.sessionBoundary === desired.sessionBoundary &&
     current.updatedAt === summary.updatedAt &&

@@ -1,4 +1,5 @@
-import { readAgentSessionFailureFact, type AgentSessionFailureFact } from './agent-session-failure'
+import type { AgentSessionFailureFact } from './agent-session-failure'
+import { readWholeAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalMessageItem, AgentJournalSubmission } from './agent-session-journal-types'
 import {
   parseAgentSessionWriteFailure,
@@ -58,13 +59,13 @@ export type StructuredAgentSessionAttemptFailure =
   /** The host recorded the message and the provider turned it down, with the provider's reason. */
   | { kind: 'rejected'; reason: string | null; rejection?: StructuredAgentSessionRejectionFact }
 
-/** The failure a rejected submission leaves on its message. A fact this build cannot place is
+/** The failure a rejected submission leaves on its message. A fact this build cannot read whole is
  *  dropped, leaving the reason. */
 export function structuredAgentSessionRejectedFailure(submission: {
   reason: string | null
   rejection?: unknown
 }): Extract<StructuredAgentSessionAttemptFailure, { kind: 'rejected' }> {
-  const fact = readAgentSessionFailureFact(submission.rejection)
+  const fact = readWholeAgentSessionFailureFact(submission.rejection)
   return {
     kind: 'rejected',
     reason: submission.reason,

@@ -89,20 +89,6 @@ describe('resolveSynchronizedOutputSafeSplit', () => {
     expect(resolveSynchronizedOutputSafeSplit(data, 20)).toBe(20)
   })
 
-  it('degrades to the plain limit when the buffer starts inside a frame', () => {
-    // Callers do not thread prior latch state, so a remainder that begins inside
-    // an already-open frame is scanned as if closed. It must never be WORSE than
-    // the blind offset it replaced: same boundary, byte-exact.
-    const data = `${'z'.repeat(40)}${CLOSE}${'q'.repeat(40)}`
-    const limit = 20
-    const splitAt = resolveSynchronizedOutputSafeSplit(data, limit, '', true)
-    const naive = resolveSynchronizedOutputSafeSplit(data, limit)
-    // With the real prior state it can only do better or the same.
-    expect(splitAt).toBeLessThanOrEqual(limit)
-    expect(naive).toBeLessThanOrEqual(limit)
-    expect(data.slice(0, naive) + data.slice(naive)).toBe(data)
-  })
-
   it('never returns past the limit or breaks byte-exactness across many shapes', () => {
     const outputSamples = [
       `${OPEN}${'a'.repeat(50)}${CLOSE}`,

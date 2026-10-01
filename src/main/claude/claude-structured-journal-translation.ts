@@ -1,3 +1,7 @@
+import {
+  childEndCauseOfEndedEvent,
+  turnVerdictForChildEnd
+} from '../native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
@@ -185,8 +189,11 @@ export function createClaudeJournalTranslator(
         streamedText.flush()
         subagents.settleSession()
         backgroundTasks.settleSession()
-        // The host saw the child end, so the turn's end is observed, not lost.
-        turn.settle({ state: 'interrupted', completedAt: event.observedAt ?? Date.now() })
+        // The host saw the child end, so the turn's end is observed, not lost; its verdict is only
+        // what the host's own cause says, a user's stop of this chat or else news.
+        turn.settle(
+          turnVerdictForChildEnd(childEndCauseOfEndedEvent(event), event.observedAt ?? Date.now())
+        )
         // A frame that arrives after the child is gone must not open a turn no
         // event can close.
         turn.suppressReopen()
@@ -275,6 +282,8 @@ export function createClaudeJournalTranslator(
     get currentTurnId() {
       return turn.id
     },
+    recordTurnStop: (turnId, cause) => turn.recordStop(turnId, cause),
+    withdrawTurnStop: (turnId) => turn.withdrawStop(turnId),
     get commandTurnId() {
       return turn.command ? turn.id : null
     },

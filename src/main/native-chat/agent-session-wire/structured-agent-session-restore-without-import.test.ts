@@ -232,8 +232,8 @@ async function restore(sessionIds: readonly string[]) {
   await restoreStructuredAgentSessionsOnRestart({
     openDeps: deps,
     records: sessionIds.map(recordFor),
-    reconcile: async () => null,
-    resolveRecovery: async () => undefined,
+    reconcile: async () => true,
+    resolveRecovery: async () => true,
     serialize: async (_sessionId, task) => task(),
     hasSession: (sessionId) => sessions.has(sessionId),
     onReadable: (sessionId, opened) => {
@@ -250,7 +250,8 @@ async function restore(sessionIds: readonly string[]) {
       serialize: async (_sessionId, task) => task(),
       open,
       deliveryActive: () => false,
-      closeStatus: () => undefined
+      closeStatus: () => undefined,
+      readChildWork: () => undefined
     })
   const lifetime = lifetimeOver(sessions, async (sessionId) => sessions.get(sessionId) ?? null)
   return { sessions, lifetime, lifetimeOver }

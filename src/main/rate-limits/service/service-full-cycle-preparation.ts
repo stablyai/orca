@@ -6,6 +6,7 @@ import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
+import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
@@ -46,6 +47,7 @@ export type FetchAllCyclePrepared = {
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
+  antigravityResultPromise: Promise<SettledProviderResult>
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
@@ -153,6 +155,14 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
+    // Why its own promise: the Antigravity read spawns `agy` and waits ~2.5 s for the CLI to start
+    // its language server and refresh the quota. Inside the awaited tuple that latency would be
+    // added to every other provider's cycle.
+    const antigravityResultPromise = fetchAntigravityRateLimits({ signal }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
     const grokResultPromise = fetchGrokRateLimits({
@@ -183,7 +193,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           : (missingWslCodexHome ??
             fetchCodexRateLimits({
               codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
               signal
             })),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
@@ -240,7 +249,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise
+      zcodeResultPromise,
+      antigravityResultPromise
     }
   }
 }

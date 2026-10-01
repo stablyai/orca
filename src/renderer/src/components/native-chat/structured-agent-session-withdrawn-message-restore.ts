@@ -3,7 +3,7 @@ import type { AgentJournalSubmission } from '../../../../shared/agent-session-jo
 import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
-import { readOutbox } from './structured-agent-session-outbox-storage'
+import { getStructuredAgentSessionOutbox } from './structured-agent-session-outbox-storage'
 import { appendNativeChatAttachmentCache } from './use-native-chat-composer-attachments'
 
 /**
@@ -20,9 +20,9 @@ function restoreWithdrawnMessages(
   if (!composerScopeKey || withdrawn.length === 0) {
     return
   }
-  // What storage no longer holds was already given back by whichever view dropped it first.
+  // What the outbox no longer holds was already given back by whichever view dropped it first.
   const held = new Set(
-    readOutbox(sessionId, { recoverDispatching: false }).map((entry) => entry.clientMessageId)
+    getStructuredAgentSessionOutbox(sessionId).map((entry) => entry.clientMessageId)
   )
   for (const entry of withdrawn) {
     if (!held.has(entry.clientMessageId)) {

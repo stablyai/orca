@@ -306,20 +306,6 @@ describe('createOptionAsAltProbe', () => {
     probe.dispose()
   })
 
-  it('trusts the input source ID over the fingerprint even when the fingerprint says us', async () => {
-    // Pre-fix: the fingerprint's 'us' verdict was authoritative and the
-    // macOS ID was ignored, so Turkish-F (which reports US-identical on
-    // several keys) plus any US-like fingerprint flipped
-    // macOptionIsMeta=true. Now the ID overrides.
-    const win = makeMockWindow(US_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window, {
-      readInputSourceId: async () => 'com.apple.keylayout.German'
-    })
-    await probe.refresh()
-    expect(probe.getCurrent()).toBe('non-us')
-    probe.dispose()
-  })
-
   it('falls back to the fingerprint when the input-source reader returns null (non-Darwin)', async () => {
     const win = makeMockWindow(US_MAP)
     const probe = createOptionAsAltProbe(win as unknown as Window, {

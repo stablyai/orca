@@ -239,6 +239,28 @@ describe('mobileQueuedMessageCards', () => {
     expect(card?.caption).toBe('Words for a kind a newer host added.')
   })
 
+  it("shows the host's sentence for a fact this build cannot read all of, as the desktop card", () => {
+    const reason = "Claude couldn't start. Start a new chat to continue."
+    // As a newer host sends it: a known code with a reason this build doesn't know.
+    const newer = {
+      kind: 'startFailed',
+      refusal: { code: 'agent_session_conflict', details: { reason: 'newerReason' } }
+    }
+    const [card] = mobileQueuedMessageCards(
+      [
+        draft({
+          messageId: 'a',
+          state: 'returned',
+          returnedReason: reason,
+          returnedRejection: newer
+        })
+      ],
+      [],
+      { pendingPrompt: false }
+    )
+    expect(card?.caption).toBe(reason)
+  })
+
   it('maps the send-failed pause marker to English and an unknown marker to a plain pause', () => {
     const cards = mobileQueuedMessageCards(
       [

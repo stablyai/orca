@@ -67,11 +67,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
   [
     'claude',
     {
-      local: (path) =>
-        [true, false].map(
-          (gitBashAvailable) =>
-            getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS, { gitBashAvailable }).command
-        ),
+      local: (path) => [getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS).command],
       remote: (path) => [getClaudeRemoteCommand(path)]
     }
   ],
@@ -237,9 +233,8 @@ describe('managed hook command contract', () => {
         // Native PowerShell hooks evaluate these variables without Grok's dollar-byte scanner.
         const scannedCommand =
           platform === 'win32' &&
-          ((agent === 'codex' && command.startsWith('if (Test-Path')) ||
-            ((agent === 'qoder' || agent === 'codebuddy') &&
-              command.startsWith('$scriptPath = Join-Path')))
+          (agent === 'qoder' || agent === 'codebuddy') &&
+          command.startsWith('$scriptPath = Join-Path')
             ? command
                 .replaceAll('$LASTEXITCODE', '')
                 .replaceAll('$env:', '')

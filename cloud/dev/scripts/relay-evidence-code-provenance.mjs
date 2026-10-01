@@ -25,6 +25,7 @@ export const TRUSTED_EVIDENCE_CODE_PATHS = [
   relayTreePath('dev/scripts/relay-production-same-cap-wave.mjs'),
   relayTreePath('dev/scripts/relay-repository.mjs'),
   // Every other script those jobs run against live production.
+  relayTreePath('dev/scripts/check-relay-same-cap-headroom.mjs'),
   relayTreePath('dev/scripts/infra.mjs'),
   relayTreePath('dev/scripts/operate-relay-regional-rehome.mjs'),
   relayTreePath('dev/scripts/prepare-relay-production-capacity-canary.mjs'),

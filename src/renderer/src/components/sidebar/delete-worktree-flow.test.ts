@@ -230,9 +230,15 @@ describe('delete worktree flow', () => {
   })
 
   it('revalidates each queued instance immediately before execution', async () => {
+    // Same-repo deletes queue on a host that does not serialize their branch cleanup itself.
     setWorktrees([
-      { id: 'wt-1', instanceId: 'instance-1', path: '/workspaces/first-longer' },
-      { id: 'wt-2', instanceId: 'instance-2', path: '/workspaces/second' }
+      {
+        id: 'wt-1',
+        instanceId: 'instance-1',
+        path: '/workspaces/first-longer',
+        hostId: 'ssh:builder'
+      },
+      { id: 'wt-2', instanceId: 'instance-2', path: '/workspaces/second', hostId: 'ssh:builder' }
     ])
     const targets = Array.from(mocks.state.worktreeMap.values())
     let finishFirst!: (result: { ok: true }) => void
@@ -243,7 +249,7 @@ describe('delete worktree flow', () => {
     const deletion = runWorktreeDeletesInParallel(targets)
     await vi.waitFor(() =>
       expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
-        { id: 'wt-1', executionHostId: null },
+        { id: 'wt-1', executionHostId: 'ssh:builder' },
         false,
         {
           suppressPreservedBranchToast: true
@@ -251,14 +257,24 @@ describe('delete worktree flow', () => {
       )
     )
     setWorktrees([
-      { id: 'wt-1', instanceId: 'instance-1', path: '/workspaces/first-longer' },
-      { id: 'wt-2', instanceId: 'replacement-instance', path: '/workspaces/second' }
+      {
+        id: 'wt-1',
+        instanceId: 'instance-1',
+        path: '/workspaces/first-longer',
+        hostId: 'ssh:builder'
+      },
+      {
+        id: 'wt-2',
+        instanceId: 'replacement-instance',
+        path: '/workspaces/second',
+        hostId: 'ssh:builder'
+      }
     ])
     finishFirst({ ok: true })
 
-    await expect(deletion).resolves.toEqual([{ id: 'wt-1', executionHostId: null }])
+    await expect(deletion).resolves.toEqual([{ id: 'wt-1', executionHostId: 'ssh:builder' }])
     expect(mocks.state.removeWorktree).not.toHaveBeenCalledWith(
-      { id: 'wt-2', executionHostId: null },
+      { id: 'wt-2', executionHostId: 'ssh:builder' },
       false,
       {
         suppressPreservedBranchToast: true

@@ -88,7 +88,7 @@ function subscriptionHarness(opts: {
     unsubscribeTerminalRef: { current: vi.fn() },
     signalTerminalInventoryRecovery: vi.fn(),
     terminalRefs: { current: new Map([[HANDLE, terminal]]) },
-    pendingActiveTerminalHandleRef: { current: null },
+    pendingSelectionRef: { current: null },
     nativeChatStream: { notifyWebReady: vi.fn() },
     terminalGestureInputBucketsRef: { current: new Map() },
     terminalGestureInputQueuesRef: { current: new Map() },

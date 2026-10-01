@@ -82,7 +82,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
 
-    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    const resultPromise = fetchCodexRateLimits()
     await vi.advanceTimersByTimeAsync(0)
 
     const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
@@ -105,7 +105,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
       const rpcChild = makeRpcChild()
       childSpawnMock.mockReturnValue(rpcChild)
 
-      const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+      const resultPromise = fetchCodexRateLimits()
       await vi.advanceTimersByTimeAsync(0)
 
       const spawnCommand = childSpawnMock.mock.calls[0]?.[0] as string
@@ -127,7 +127,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
 
-    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    const resultPromise = fetchCodexRateLimits()
     await vi.advanceTimersByTimeAsync(0)
 
     const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv

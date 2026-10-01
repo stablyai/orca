@@ -35,6 +35,7 @@ function statusElement(
       agentLabel="Claude"
       startupPhase={startupPhase}
       startupChildKey={startupChildKey}
+      paneKey="pane-1"
       error={null}
       composerError={null}
       isVisible

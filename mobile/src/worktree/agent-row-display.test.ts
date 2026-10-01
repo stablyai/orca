@@ -4,7 +4,7 @@ import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
 } from '../../../src/shared/agent-main-agent-verdict'
-import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
+import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentDisplayLabel,
@@ -16,7 +16,7 @@ import {
   formatTimeAgo
 } from './agent-row-display'
 
-type Outcome = (typeof AGENT_JOURNAL_TURN_OUTCOMES)[number]
+type Outcome = (typeof AGENT_TURN_OUTCOMES)[number]
 const mainAgentDone = (outcome: Outcome, stateStartedAt = 0) => ({
   mainAgent: { state: 'done' as const, outcome, stateStartedAt }
 })
@@ -50,19 +50,48 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'unknown-state' as never }), 0)).toBe('idle')
   })
 
-  it('reports the verdict of a done row: failed, interrupted, or an old host legacy flag', () => {
+  it("reports the verdict of a done row: failed, or a user's Stop (also an old host's flag) as interrupted", () => {
     expect(agentDotState(row({ state: 'done', interrupted: true }), 0)).toBe('interrupted')
     expect(agentDotState(row({ state: 'done', ...mainAgentDone('failure') }), 0)).toBe('failed')
     expect(
       agentDotState(row({ state: 'done', ...mainAgentDone('cancellation'), interrupted: true }), 0)
     ).toBe('interrupted')
     expect(agentDotState(row({ state: 'done', ...mainAgentDone('success') }), 0)).toBe('done')
+    // A turn a newer request replaced reads as a Stop does.
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('superseded') }), 0)).toBe(
+      'interrupted'
+    )
+  })
+
+  it('reads a crash-cut turn as failed and an unproven end as unconfirmed', () => {
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('interruption') }), 0)).toBe(
+      'failed'
+    )
+    expect(agentDisplayLabel(row({ state: 'done', ...mainAgentDone('interruption') }), 0)).toBe(
+      'Failed'
+    )
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('unconfirmed') }), 0)).toBe(
+      'unconfirmed'
+    )
+    expect(agentDisplayLabel(row({ state: 'done', ...mainAgentDone('unconfirmed') }), 0)).toBe(
+      'Couldn’t confirm'
+    )
+  })
+
+  // Rows arrive unparsed, so an arm a newer host adds must read as the done it always did.
+  it('reads a done row carrying an outcome it cannot name as done', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an arm from a newer host, which the unparsed wire row can carry.
+    const future = mainAgentDone('from-a-newer-host' as Outcome)
+    expect(agentDotState(row({ state: 'done', ...future }), 0)).toBe('done')
   })
 
   it('shows a main agent that failed while its subagents still run as failed', () => {
     expect(agentDotState(row({ state: 'working', ...mainAgentDone('failure') }), 0)).toBe('failed')
     expect(agentDotState(row({ state: 'waiting', ...mainAgentDone('failure') }), 0)).toBe('failed')
-    // Only a failure outranks live work; a success or a stop with live subagents reads working.
+    expect(agentDotState(row({ state: 'working', ...mainAgentDone('interruption') }), 0)).toBe(
+      'failed'
+    )
+    // Only a fault outranks live work; a success or a stop with live subagents reads working.
     expect(agentDotState(row({ state: 'working', ...mainAgentDone('success') }), 0)).toBe('working')
     expect(
       agentDotState(
@@ -78,7 +107,7 @@ describe('agentDotState', () => {
     const mainAgents = [
       undefined,
       ...states.flatMap((state) =>
-        [undefined, ...AGENT_JOURNAL_TURN_OUTCOMES].map((outcome) => ({
+        [undefined, ...AGENT_TURN_OUTCOMES].map((outcome) => ({
           state,
           ...(outcome ? { outcome } : {}),
           stateStartedAt: 0
@@ -112,9 +141,9 @@ describe('agentDotState', () => {
     ).toBe('working')
     // 'done' never decays, and neither does its verdict.
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), stale)).toBe('done')
-    expect(agentDotState(row({ state: 'done', updatedAt: 0, interrupted: true }), stale)).toBe(
-      'interrupted'
-    )
+    expect(
+      agentDotState(row({ state: 'done', updatedAt: 0, ...mainAgentDone('interruption') }), stale)
+    ).toBe('failed')
   })
 })
 

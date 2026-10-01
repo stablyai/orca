@@ -11,6 +11,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle,
+  AgentJournalTurnLifecycleState,
   AgentJournalTurnOutcome
 } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
@@ -29,8 +30,9 @@ export type StructuredAgentSessionLatestRequest = {
   kind: 'turn' | 'refused-send'
   /** The turn's id, or the refused send's journal item key. Unique only within its kind. */
   id: string
-  running: boolean
-  /** Null while the turn runs, and for a turn whose end carried no verdict. */
+  /** The turn's lifecycle state: what the host observed of it. Null for a refused send. */
+  turnState: AgentJournalTurnLifecycleState | null
+  /** The provider's verdict. Null while the turn runs, and for a turn whose end carried none. */
   outcome: AgentJournalTurnOutcome | null
   /** When it settled: the turn's end, or the refusal. Undefined while it runs. */
   settledAt: number | undefined
@@ -58,13 +60,12 @@ export function latestStructuredAgentSessionRequest(
     }
     const turn = readAgentJournalTurn(item.body)
     if (turn) {
-      const running = turn.state === 'running'
       return {
         kind: 'turn',
         id: turn.turnId,
-        running,
+        turnState: turn.state,
         outcome: readAgentJournalTurnOutcome(turn),
-        settledAt: running ? undefined : turnEndedAt(item, turn)
+        settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn)
       }
     }
     const submission = rejected.get(item.itemId)
@@ -77,7 +78,7 @@ export function latestStructuredAgentSessionRequest(
       return {
         kind: 'refused-send',
         id: item.itemId,
-        running: false,
+        turnState: null,
         outcome: 'failure',
         settledAt: submission.resolvedAt ?? undefined
       }

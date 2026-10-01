@@ -132,6 +132,12 @@ describe('per-job path classification', () => {
     expectClassification(['.github/actions/prepare-git-compatibility/action.yml'], {
       git_compatibility: true
     })
+    // The contract pins the local-main fast-forward's exact arguments.
+    expectClassification(['src/shared/worktree/local-base-branch-fast-forward.ts'], {
+      git_compatibility: true,
+      package: true,
+      package_windows: true
+    })
   })
 
   it('runs the Codex index-heal contract only when the heal or its transport changes', () => {
@@ -194,7 +200,7 @@ describe('per-job path classification', () => {
   })
 
   it('runs native package jobs only for the platform that ships the changed native', () => {
-    expectClassification(['native/windows-cli-launcher/OrcaCliLauncher.cs'], {
+    expectClassification(['native/windows-cli-launcher/src/main.rs'], {
       package_windows: true
     })
     expectClassification(['native/computer-use-linux/runtime.py'], {

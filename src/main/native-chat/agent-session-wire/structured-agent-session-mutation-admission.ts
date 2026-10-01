@@ -21,8 +21,17 @@ import {
   type AgentSessionMutationResult,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
+import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
+import type {
+  AgentSessionMutationOperationAdmission,
+  AgentSessionMutationOperationDecision
+} from '../../runtime/agent-session-operation-admission'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import {
+  classifyJournalOpenFailure,
+  journalOpenRefusal
+} from '../agent-session-journal/journal-open-failure'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
@@ -104,14 +113,32 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   if (!journal) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
-  const admitted = await request.store.admitMutationOperation({
+  const operation: AgentSessionMutationOperationAdmission = {
     callerKey: request.callerKey,
     envelope,
     hostFingerprint,
     now: request.now(),
     ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {}),
     ...(plan.conversationWrite ? { conversationWrite: true } : {})
-  })
+  }
+  let admitted: AgentSessionMutationOperationDecision
+  let ledgerRowWritten = true
+  try {
+    admitted = await request.store.admitMutationOperation(operation)
+  } catch (error) {
+    if (plan.runsWithoutLedgerRow) {
+      admitted = admitWithoutLedgerRow(request.store, operation, error)
+      ledgerRowWritten = false
+    } else if (
+      isAgentSessionRefusalError(error) ||
+      classifyJournalOpenFailure(error) === 'journalCorrupt'
+    ) {
+      // A store refusing the row (a newer Orca's records) or damage SQLite proves: as an open says.
+      return refuseAgentSessionMutation(journalOpenRefusal(error))
+    } else {
+      throw error
+    }
+  }
   if (!admitted) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
@@ -152,18 +179,45 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     }
   }
 
-  const outcome = await runSettledAgentSessionMutation({
-    store: request.store,
-    // A global send replay can cross caller identities. Settlement still owns
-    // the durable row admitted by the original caller.
-    operationCallerKey: admission.row.callerKey,
-    envelope,
-    plan,
-    context
-  })
+  // With no row, a settle fails on the same storage and turns a landed Stop into a throw.
+  const outcome = ledgerRowWritten
+    ? await runSettledAgentSessionMutation({
+        store: request.store,
+        // A global send replay can cross caller identities. Settlement still owns
+        // the durable row admitted by the original caller.
+        operationCallerKey: admission.row.callerKey,
+        envelope,
+        plan,
+        context
+      })
+    : await plan.run(context)
   return outcome.ok
     ? { ok: true, replayed: false, fence, cursor: journal.cursor(), value: outcome.value }
     : refuseAgentSessionMutation(outcome.refusal)
+}
+
+/** The committed ledger's admission, placing nothing: a failed commit left memory as it was. */
+function admitWithoutLedgerRow(
+  store: AgentSessionRecordStore,
+  operation: AgentSessionMutationOperationAdmission,
+  error: unknown
+): AgentSessionMutationOperationDecision {
+  console.warn("[agent-session] Stop's ledger row skipped:", {
+    sessionId: operation.envelope.sessionId,
+    error: error instanceof Error ? error.message : String(error)
+  })
+  const evaluated = store.evaluateMutationOperation(operation)
+  if (!evaluated) {
+    return null
+  }
+  const admission = admitAgentSessionMutation({
+    envelope: operation.envelope,
+    hostFingerprint: operation.hostFingerprint,
+    ledger: evaluated.decision,
+    lease: evaluated.record.lease,
+    ...(operation.conversationWrite ? { conversationWrite: true } : {})
+  })
+  return { admission, record: evaluated.record }
 }
 
 function turnContext<TValue>(

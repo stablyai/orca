@@ -1,5 +1,7 @@
 /* oxlint-disable max-lines */
 import { resolveSynchronizedOutputSafeSplit } from '../shared/terminal-synchronized-output-scan'
+import { createTerminalTitleTracker } from '../shared/terminal-output-side-effects'
+import { getDecorativeTitleGateKey } from '../shared/agent-decorative-title-signature'
 import { FreebuffStatusProjection } from './freebuff-status-projection'
 import { applyRelayAgentWorkspaceTrust } from './agent-workspace-trust-spawn'
 import type { IPty } from 'node-pty'
@@ -715,6 +717,12 @@ export class PtyHandler {
     return this.graceTimeMs
   }
 
+  private agentPresenceTrigger: ((paneKey: string) => void) | null = null
+
+  setAgentPresenceTrigger(listener: ((paneKey: string) => void) | null): void {
+    this.agentPresenceTrigger = listener
+  }
+
   /** Subscribe to PTY-exit events (relay-hook server uses this to evict per-paneKey caches). */
   setExitListener(listener: PtyExitListener | null): void {
     this.exitListener = listener
@@ -1019,7 +1027,25 @@ export class PtyHandler {
         }
       })
     }
+    const recheckAgentPresence = (): void => {
+      if (managed.paneKey) {
+        this.agentPresenceTrigger?.(managed.paneKey)
+      }
+    }
+    let lastTitleGateKey: string | null = null
+    const presenceTriggers = createTerminalTitleTracker({
+      onTitle: (normalizedTitle, rawTitle, meta) => {
+        // Why: spinner frames arrive several times a second; only a real title change re-checks.
+        const gateKey = getDecorativeTitleGateKey(rawTitle, normalizedTitle)
+        if (gateKey !== lastTitleGateKey && !meta?.staleWorkingTitleClear) {
+          recheckAgentPresence()
+        }
+        lastTitleGateKey = gateKey
+      },
+      onCommandFinished: recheckAgentPresence
+    })
     managed.pty.onData((data: string) => {
+      presenceTriggers.handleChunk(data)
       const startup = managed.startupCommand
       if (startup?.waitForShellReady && startup.outputScanState && !startup.delivered) {
         const scanned = scanShellStartupOutput(startup.outputScanState, data)
@@ -1041,6 +1067,7 @@ export class PtyHandler {
       }
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
+      presenceTriggers.dispose()
       managed.physicalExit?.markExited()
       if (managed.disposed) {
         return

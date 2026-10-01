@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
-  getStructuredAgentSessionLaunchLifecycle,
   getStructuredAgentSessionLaunchResumes,
+  relaunchFailedStructuredAgentSessionForMessage,
   retryStructuredAgentSessionLaunch,
   useStructuredAgentSessionLaunchFailure,
   useStructuredAgentSessionLaunchLifecycle,
@@ -73,16 +73,11 @@ export function useNativeChatProvisionalLaunch(
       retryStructuredAgentSessionLaunch(worktreeId, sessionId)
     }
   }, [sessionId, worktreeId])
-  // A send into a start that never published relaunches it; the queued message goes out on publish.
   const sendThroughRelaunch = useCallback(
     (send: () => boolean): boolean => {
       const accepted = send()
-      if (
-        accepted &&
-        worktreeId &&
-        getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId) === 'failed'
-      ) {
-        retryStructuredAgentSessionLaunch(worktreeId, sessionId)
+      if (accepted && worktreeId) {
+        relaunchFailedStructuredAgentSessionForMessage(worktreeId, sessionId)
       }
       return accepted
     },

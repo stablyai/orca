@@ -1,5 +1,6 @@
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { tryReadQueuePublication } from './structured-agent-session-queued-publication'
@@ -31,13 +32,16 @@ export class StructuredAgentSessionClientDelivery {
     now: () => number,
     deps: () => StructuredAgentSessionHostDeps,
     private readonly onJournalActivity?: (sessionId: string) => void,
-    onAgentStarted?: (sessionId: string) => void
+    onAgentStarted?: (sessionId: string) => void,
+    /** A session's child records changed; the chat strip republishes from them. */
+    onChildWorkChanged?: (sessionId: string) => void
   ) {
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
       sessions,
       now,
       deps,
-      ...(onAgentStarted ? { onAgentStarted } : {})
+      ...(onAgentStarted ? { onAgentStarted } : {}),
+      ...(onChildWorkChanged ? { onChildWorkChanged } : {})
     })
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({
       sessions,
@@ -60,6 +64,9 @@ export class StructuredAgentSessionClientDelivery {
 
   publishChildWork = (sessionId: string, evidence: AgentChildWorkEvidence[]): void =>
     this.statusFeed.publishChildWork(sessionId, evidence)
+
+  readChildWork = (sessionId: string): AgentChildWorkView[] | undefined =>
+    this.statusFeed.readChildWork(sessionId)
 
   publishStatusAndSettlement = (sessionId: string): void => {
     this.statusFeed.publish(sessionId)

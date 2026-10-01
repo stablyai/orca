@@ -113,7 +113,7 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
         state: 'stop_unknown'
       }
     )
-    expect(close).toHaveBeenCalledWith(SESSION)
+    expect(close).toHaveBeenCalledWith(SESSION, 'evict')
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('stop_unknown')
   })
 

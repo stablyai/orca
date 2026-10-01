@@ -5,40 +5,67 @@ import {
   formatNativeChatDuration,
   NATIVE_CHAT_TURN_STATUS_COPY
 } from '../../../../shared/native-chat-turn-status'
+import type { AgentTurnOutcome } from '../../../../shared/agent-turn-outcome'
 import { useNativeChatElapsedSeconds } from './use-native-chat-elapsed-seconds'
 
 export { formatNativeChatDuration }
+
+// Literal keys with literal fallbacks: a dynamic key registers no catalog reference.
+function turnStatusLabel(
+  key: ReturnType<typeof describeNativeChatTurnStatus>['key'],
+  duration: string
+): string {
+  switch (key) {
+    case 'workedFor':
+      return translate(
+        'components.native-chat.status.workedFor',
+        NATIVE_CHAT_TURN_STATUS_COPY.workedFor,
+        { value0: duration }
+      )
+    case 'interruptedAfter':
+      return translate(
+        'components.native-chat.status.interruptedAfter',
+        NATIVE_CHAT_TURN_STATUS_COPY.interruptedAfter,
+        { value0: duration }
+      )
+    case 'failedAfter':
+      return translate(
+        'components.native-chat.status.failedAfter',
+        NATIVE_CHAT_TURN_STATUS_COPY.failedAfter,
+        { value0: duration }
+      )
+    case 'workingFor':
+      return translate(
+        'components.native-chat.status.workingFor',
+        NATIVE_CHAT_TURN_STATUS_COPY.workingFor,
+        { value0: duration }
+      )
+  }
+}
 
 /** The turn bar under the user's message: a running clock while the turn works,
  *  then the settled duration, which toggles the turn's folded detail. */
 export function NativeChatWorkingStatus({
   startedAt,
   workedSeconds,
+  verdict,
   expanded = false,
   onToggleExpanded
 }: {
   startedAt: number | null
   workedSeconds?: number | null
+  verdict?: AgentTurnOutcome
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
   const elapsedSeconds = useNativeChatElapsedSeconds(startedAt, workedSeconds == null)
 
-  const { key, duration } = describeNativeChatTurnStatus({ workedSeconds, elapsedSeconds })
-  const label =
-    key === 'workedFor'
-      ? translate(
-          'components.native-chat.status.workedFor',
-          NATIVE_CHAT_TURN_STATUS_COPY.workedFor,
-          {
-            value0: duration
-          }
-        )
-      : translate(
-          'components.native-chat.status.workingFor',
-          NATIVE_CHAT_TURN_STATUS_COPY.workingFor,
-          { value0: duration }
-        )
+  const { key, duration } = describeNativeChatTurnStatus({
+    workedSeconds,
+    elapsedSeconds,
+    verdict
+  })
+  const label = turnStatusLabel(key, duration)
   // `tabular-nums`: the live clock reflows its own label every second otherwise.
   const className =
     'flex min-h-8 items-center gap-1 border-b border-border text-sm text-muted-foreground tabular-nums'

@@ -1,6 +1,4 @@
-import { randomBytes } from 'node:crypto'
 import { OrchestrationError } from '../../orchestration-error'
-import { hashDispatchCapability } from '../dispatch-capability-hash'
 import type { OrchestrationDb } from '../orchestration-db'
 import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
 
@@ -21,7 +19,7 @@ export function prepareStartingWorkerAuthority(
     // an explicit --terminal reuse; ownership transfers only from an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
   }
-): string {
+): void {
   this.db.exec('BEGIN IMMEDIATE')
   try {
     // Why: read inside the transaction so the guarded UPDATEs below cannot lose a race with a concurrent state change.
@@ -49,14 +47,13 @@ export function prepareStartingWorkerAuthority(
         `Terminal ${params.handle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
       )
     }
-    const capability = `dcap_${randomBytes(32).toString('base64url')}`
     const endpointId = this.getWorkerDispatch(params.dispatchId)?.runtime_epoch ?? null
     const contextUpdate = this.db
       .prepare(
         `UPDATE dispatch_contexts
          SET assignee_handle = ?, assignee_pane_key = ?, assignee_orca_session_id = ?,
              process_incarnation = ?, host_scope = ?,
-             capability_hash = ?, launch_token_hash = COALESCE(launch_token_hash, ?),
+             launch_token_hash = COALESCE(launch_token_hash, ?),
              capability_revoked_at = NULL,
              consumer_generation = consumer_generation + 1
          WHERE id = ? AND status = 'pending'`
@@ -67,7 +64,6 @@ export function prepareStartingWorkerAuthority(
         dispatchAssigneeOrcaSessionId(params.processIncarnation),
         params.processIncarnation,
         params.hostScope ?? null,
-        hashDispatchCapability(capability),
         params.launchTokenHash ?? null,
         params.dispatchId
       )
@@ -155,7 +151,6 @@ export function prepareStartingWorkerAuthority(
       }
     }
     this.db.exec('COMMIT')
-    return capability
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
@@ -168,7 +163,7 @@ export function prepareStartingWorkerAuthority(
  * ownership to flip, so the takeover is silently dropped and a later `worker-release` closes the
  * pane under the user.
  *
- * Ownership of a pane only; the Dispatch capability stays behind the boot wait, because authority
+ * Ownership of a pane only; lifecycle authority stays behind the boot wait, because authority
  * must not be handed to a process that has not come up.
  */
 export function recordCreatedWorkerTerminalCustody(

@@ -100,7 +100,7 @@ async function seedPendingRewind(phase: 'prepared' | 'provider-succeeded') {
 }
 
 async function reattach() {
-  await host.close(HOST_TEST_SESSION)
+  await host.close(HOST_TEST_SESSION, 'evict')
   expect(await host.attach(caller, attachParams(fence()))).toMatchObject({ ok: true })
 }
 

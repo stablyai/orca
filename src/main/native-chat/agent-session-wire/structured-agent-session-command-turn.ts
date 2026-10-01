@@ -29,6 +29,7 @@ import {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
 import {
   agentJournalTurnBody,
@@ -153,6 +154,8 @@ export type StructuredAgentSessionCommandHandoverContext = {
   /** Who a failure the handover meets names, as the start's own row does. */
   failureTextContext?: AgentSessionFailureWordsContext
   record: () => AgentSessionRecord | null
+  /** The session's child records, the same read the strip and conversation-command admission use. */
+  childWork: () => readonly AgentChildWorkView[] | undefined
   flushStreamedEvents: () => Promise<void>
   now: () => number
 }
@@ -313,7 +316,7 @@ function commandBlocked(
   if (!record) {
     return agentSessionFailureFact('hostFault')
   }
-  const refusal = conversationCommandBlocked(ctx, record, 'handover')
+  const refusal = conversationCommandBlocked(ctx, record, ctx.childWork(), 'handover')
   return refusal
     ? agentSessionFailureFact('commandRefused', { refusal: agentSessionRefusalReference(refusal) })
     : null

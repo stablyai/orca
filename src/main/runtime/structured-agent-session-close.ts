@@ -75,7 +75,8 @@ export async function closeStructuredAgentSessionChild(
   try {
     await host.setSessionTabVisibility?.(sessionId, false)
     closeAttempted = true
-    await host.close(sessionId)
+    // A worktree teardown or an orchestration stop: not the user closing this chat.
+    await host.close(sessionId, 'evict')
   } catch (error) {
     // Only `closeAttempted` proves the hide landed: the store transaction restores its own state on
     // failure, so a `setSessionTabVisibility` that threw hid nothing and has nothing to undo.

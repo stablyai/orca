@@ -7,9 +7,9 @@ import {
   AGENT_JOURNAL_MESSAGE_SEND_MODES,
   type AgentJournalMessageSendMode,
   type AgentJournalRenderItem,
-  type AgentJournalSubmission,
-  type AgentJournalTurnOutcome
+  type AgentJournalSubmission
 } from './agent-session-journal-types'
+import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
 import { agentJournalLinkageFields } from './agent-session-journal-producer'
 import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
 import { agentJournalItemRowOrigin } from './agent-session-journal-position'
@@ -89,7 +89,9 @@ function itemBlocks(item: AgentJournalRenderItem): {
               {
                 type: 'tool-result' as const,
                 output: boundedText(body.output),
-                isError: body.state === 'failed'
+                isError: body.state === 'failed',
+                // The call and its output are one journal row, so the result names its call.
+                ...(body.callId !== undefined ? { callId: body.callId } : {})
               }
             ]
           : [])
@@ -209,8 +211,9 @@ export type StructuredAgentSessionStatusProjection = {
   toolInput?: string
   lastAssistantMessage?: string
   /** The latest request's verdict: its turn's, or `failure` for a send the agent or its start
-   *  refused. Present only while `status` is idle. */
-  turnOutcome?: AgentJournalTurnOutcome
+   *  refused. A turn the provider gave none reads as its host-observed end. Present only while
+   *  `status` is idle. */
+  turnOutcome?: AgentTurnOutcome
   statusStartedAt?: number
 }
 
@@ -261,7 +264,9 @@ export function projectStructuredAgentSessionStatusState(
   const latestRequest = latestStructuredAgentSessionRequest(items, submissions)
   // A verdict is a fact about a finished request: only an idle session has one to report.
   const request = status === 'idle' ? latestRequest : null
-  const turnOutcome = request?.outcome
+  const turnOutcome = request
+    ? agentTurnVerdict({ state: request.turnState, outcome: request.outcome })
+    : null
   const statusStartedAt = structuredAgentSessionStatusStartedAt(
     status,
     items,

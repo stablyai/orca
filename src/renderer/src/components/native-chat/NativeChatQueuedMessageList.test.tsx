@@ -167,6 +167,25 @@ describe('NativeChatQueuedMessageList', () => {
     expect(row.textContent).not.toContain('Your message was not sent.')
   })
 
+  it("shows the host's sentence for a fact this build cannot read all of", () => {
+    const reason = "Claude couldn't start. Start a new chat to continue."
+    renderList(
+      controller([
+        card({
+          messageId: 'newer',
+          state: 'returned',
+          hold: 'returned',
+          returnedReason: reason,
+          // As a newer host sends it: a known code with a reason this build doesn't know.
+          returnedRejection: JSON.parse(
+            '{ "kind": "startFailed", "refusal": { "code": "agent_session_conflict", "details": { "reason": "newerReason" } } }'
+          )
+        })
+      ])
+    )
+    expect(screen.getByRole('listitem').textContent).toContain(reason)
+  })
+
   it('the words leave out sending again: the card offers its own Send', () => {
     renderList(
       controller([

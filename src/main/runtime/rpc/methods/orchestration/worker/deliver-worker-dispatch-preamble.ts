@@ -27,7 +27,6 @@ export async function deliverWorkerDispatchPreamble(args: {
   taskId: string
   taskSpec: string
   coordinatorHandle: string
-  dispatchCapability: string
   devMode: boolean | undefined
   requestId: string
 }): Promise<{
@@ -45,7 +44,6 @@ export async function deliverWorkerDispatchPreamble(args: {
     taskSpec: args.taskSpec,
     coordinatorHandle: args.coordinatorHandle,
     workerHandle: terminalHandle,
-    dispatchCapability: args.dispatchCapability,
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
   })

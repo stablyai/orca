@@ -87,7 +87,7 @@ export function createStructuredAgentSessionRestartResume(
   const witnesses = createStructuredAgentSessionRestartWitnesses({
     sessions,
     getRecord: deps.store.getRecord,
-    backgroundTasks: (sessionId) => deps.adapter.backgroundTaskState?.(sessionId)?.tasks,
+    childWork: surfaces.readChildWork,
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
     teardownId: randomUUID(),
     now: surfaces.now,

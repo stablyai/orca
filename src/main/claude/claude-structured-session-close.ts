@@ -6,6 +6,7 @@ import type {
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 import { cancelClaudeAcquisitionAttempt } from './claude-structured-session-state'
+import type { StructuredAgentSessionStopCause } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError,
@@ -14,7 +15,6 @@ import {
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
@@ -77,6 +77,8 @@ export function settleClaudeExitedSession(session: ClaudeSession): void {
 type CloseClaudePublishedSessionInput = {
   sessions: Map<string, ClaudeSession>
   sessionId: string
+  /** Who asked for the close; the translator settles the open turn with it. */
+  stopCause?: StructuredAgentSessionStopCause
   persistHandle?: (handle: {
     sessionId: string
     providerSessionId: string
@@ -84,10 +86,6 @@ type CloseClaudePublishedSessionInput = {
     fence: number
   }) => Promise<void>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  onBackgroundTasksChanged?: (
-    sessionId: string,
-    state: AgentSessionBackgroundTaskState | null
-  ) => void
 }
 
 async function finalizeClaudePublishedSession(
@@ -116,10 +114,9 @@ async function finalizeClaudePublishedSession(
     }
     rootExitVerdict = cleanupError
   }
+  // Queues the session's ending for the host's child records; the adapter delivers it after close.
   session.childWork.clear()
-  if (session.backgroundTasks.clear()) {
-    input.onBackgroundTasksChanged?.(input.sessionId, null)
-  }
+  session.backgroundTasks.clear()
   const leafUuid = await settledClaudeTurnEndLeaf(session)
   const persistence =
     session.closePersistence ??
@@ -135,6 +132,7 @@ async function finalizeClaudePublishedSession(
     type: 'ended',
     sessionId: input.sessionId,
     reason: 'claude session closed',
+    ...(input.stopCause ? { stopCause: input.stopCause } : {}),
     observedAt: Date.now()
   } as const
   let callbackError: unknown
@@ -231,10 +229,6 @@ export function closeClaudePublishedSessionForDeps(
       fence: number
     }) => Promise<void>
     onEvent?: (event: ClaudeStructuredSessionEvent) => void
-    onBackgroundTasksChanged?: (
-      sessionId: string,
-      state: AgentSessionBackgroundTaskState | null
-    ) => void
   }
 ): Promise<boolean> {
   return closeClaudePublishedSession({ sessions, sessionId, ...deps })
@@ -242,6 +236,7 @@ export function closeClaudePublishedSessionForDeps(
 
 export async function closeClaudeSession(input: {
   sessionId: string
+  stopCause?: StructuredAgentSessionStopCause
   sessions: Map<string, ClaudeSession>
   acquisitions: ClaudeAcquisitionRegistry
   persistHandle?: (handle: {
@@ -251,10 +246,6 @@ export async function closeClaudeSession(input: {
     fence: number
   }) => Promise<void>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  onBackgroundTasksChanged?: (
-    sessionId: string,
-    state: AgentSessionBackgroundTaskState | null
-  ) => void
 }): Promise<boolean> {
   const attempt = input.acquisitions.get(input.sessionId)
   if (!(await cancelClaudeAcquisitionAttempt(attempt))) {

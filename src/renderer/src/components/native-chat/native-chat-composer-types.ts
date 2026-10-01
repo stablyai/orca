@@ -38,6 +38,13 @@ export type NativeChatStructuredComposerTransport = {
   runtimeEnvironmentId: string | null
 }
 
+export type NativeChatOptimisticSendOutcome = {
+  /** The host refused the write: mark the echo "Message not sent". */
+  reject: (pendingId: string) => void
+  /** The write acknowledgment was lost: hold the echo, then flag it unconfirmed. */
+  holdUnconfirmed: (pendingId: string) => void
+}
+
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
@@ -54,6 +61,8 @@ export type NativeChatComposerProps = {
   onStop?: () => void
   /** Render an optimistic echo until the real transcript turn lands. */
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
+  /** Settle an optimistic echo whose write was refused or never acknowledged. */
+  optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   /** Remove an optimistic echo when its delayed submit is canceled. */
   onOptimisticSendCanceled?: (pendingId: string) => void
   /** Record a dispatched slash command that does not create a chat turn. */
@@ -92,4 +101,6 @@ export type NativeChatComposerHandle = {
   }) => void
   /** Pastes clipboard content when no DOM paste event is available. */
   pasteFromClipboard: () => void
+  /** Whether a node is inside the composer's own input, not merely the chat pane. */
+  contains: (node: Node | null) => boolean
 }

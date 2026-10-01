@@ -7,6 +7,7 @@ import {
   NATIVE_CHAT_TURN_STATUS_COPY,
   nativeChatElapsedSeconds
 } from '../../../src/shared/native-chat-turn-status'
+import type { AgentTurnOutcome } from '../../../src/shared/agent-turn-outcome'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
 /** Seconds tick only while a turn is actually counting, so a settled transcript
@@ -27,22 +28,26 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
 }
 
 /** The turn bar under the user's message: "Working for 12s" while the turn runs,
- *  settling in place to a tappable "Worked for 3m 4s" that discloses the turn's
- *  tool activity. Desktop parity: `NativeChatWorkingStatus`. */
+ *  settling in place to a tappable "Worked for 3m 4s" ("Interrupted after" for a Stop,
+ *  "Failed after" for a fault) that discloses the turn's tool activity. Desktop parity:
+ *  `NativeChatWorkingStatus`. */
 export function MobileNativeChatTurnStatus({
   startedAt,
   workedSeconds,
+  verdict,
   expanded = false,
   onToggleExpanded
 }: {
   startedAt: number | null
   workedSeconds?: number | null
+  /** How a settled turn ended; it picks the settled label. */
+  verdict?: AgentTurnOutcome
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
   const settled = workedSeconds != null
   const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
-  const label = formatNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds })
+  const label = formatNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict })
 
   if (settled && onToggleExpanded) {
     return (

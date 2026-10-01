@@ -147,8 +147,7 @@ async function openHost() {
       [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
     ]),
     getRecord: () => null,
-    now: () => 1,
-    readBackgroundTasks: () => ({ state: 'monitoring', tasks: [] })
+    now: () => 1
   })
   const events: AgentSessionStatusEvent[] = []
   feed.subscribe({ id: 'renderer', emit: (event) => events.push(event) })

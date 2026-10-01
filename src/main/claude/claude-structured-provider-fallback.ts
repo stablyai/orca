@@ -16,6 +16,7 @@ import {
   type ClaudeMessageEnvelope
 } from './claude-structured-item-translation'
 import { claudeResultOutcome } from './claude-result-outcome'
+import type { StructuredAgentSessionStopCause } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeRowStamp } from './claude-provisional-row-corrections'
 import {
   CLAUDE_API_RETRY_FRAME_KIND,
@@ -51,11 +52,12 @@ export function isSettledClaudeResultKind(kind: string): boolean {
  * would only be noise.
  */
 export function claudeResultFailure(
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
+  stop: StructuredAgentSessionStopCause | null = null
 ): { text: string | null } | null {
   // A cancellation is not a fault and earns no error row; the outcome classifier
   // owns that distinction so this reader cannot drift from the turn's verdict.
-  if (claudeResultOutcome(message) !== 'failure') {
+  if (claudeResultOutcome(message, stop) !== 'failure') {
     return null
   }
   const result = claudeText(message.result)?.trim()

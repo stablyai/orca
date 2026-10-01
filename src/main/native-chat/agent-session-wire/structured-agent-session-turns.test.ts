@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performCancel, type AgentSessionTurnContext } from './structured-agent-session-turns'
@@ -196,14 +197,20 @@ describe('performCancel', () => {
     const result = await performCancel(ctx, {
       clientOperationId: 'cancel-background-tasks',
       turnId: 'background-tasks',
-      scope: 'background-tasks'
+      scope: 'background-tasks',
+      childWork: () => [liveTask('task-1'), liveTask('task-2', { stoppable: false })]
     })
 
     expect(result).toEqual({
       ok: true,
       value: { turnId: 'background-tasks', cancelled: true }
     })
-    expect(stopBackgroundTasks).toHaveBeenCalledWith({ sessionId: 'session-1', fence: 1 })
+    // Every task the records offer a stop, and nothing else.
+    expect(stopBackgroundTasks).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      fence: 1,
+      taskIds: ['task-1']
+    })
     expect(cancelTurn).not.toHaveBeenCalled()
     expect(journal.snapshot().items).toEqual([])
   })
@@ -229,7 +236,8 @@ describe('performCancel', () => {
       clientOperationId: 'cancel-background-task-2',
       turnId: 'background-tasks',
       scope: 'background-tasks',
-      taskId: 'task-2'
+      taskId: 'task-2',
+      childWork: () => [liveTask('task-1'), liveTask('task-2')]
     })
 
     expect(result).toEqual({
@@ -239,12 +247,31 @@ describe('performCancel', () => {
     expect(stopBackgroundTasks).toHaveBeenCalledWith({
       sessionId: 'session-1',
       fence: 1,
-      taskId: 'task-2'
+      taskIds: ['task-2']
     })
     expect(cancelTurn).not.toHaveBeenCalled()
     expect(journal.snapshot().items).toEqual([])
   })
 })
+
+/** A live child record the strip would offer a stop, named by the provider as `providerId`. */
+function liveTask(
+  providerId: string,
+  overrides: Partial<AgentChildWorkView> = {}
+): AgentChildWorkView {
+  return {
+    id: `child-${providerId}`,
+    providerId,
+    kind: 'agent',
+    state: 'working',
+    membership: 'live',
+    firstObservedAt: 1,
+    observedAt: 1,
+    stoppable: true,
+    invocation: { invocationId: `spawn-${providerId}`, generation: 1 },
+    ...overrides
+  }
+}
 
 describe('what a conversation Stop reports when the provider stopped nothing', () => {
   async function cancelWith(

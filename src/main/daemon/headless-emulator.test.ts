@@ -565,6 +565,16 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.modes.sgrMouseMode).toBe(false)
       expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
+      // Replay readers must not guess the encoding of an active tracking mode.
+      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006l')
+    })
+
+    it('states no mouse encoding while nothing tracks the mouse', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b[?1002h\x1b[?1002l')
+
+      expect(emulator.getSnapshot().rehydrateSequences).not.toContain('\x1b[?1006')
     })
 
     it('tracks SGR-pixels mouse reporting as a separate active encoding', async () => {

@@ -177,7 +177,8 @@ function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
     dispatchId: dispatch.id,
     runtimeEpoch: null,
     state: 'unsupervised' as const,
-    stage: dispatch.capability_hash ? 'injected' : 'context_only',
+    // Why: with no worker row Orca supervises only the context; it keeps no record of an --inject paste.
+    stage: 'context_only',
     worktreeId: null,
     agentTerminalHandle: dispatch.assignee_handle,
     setupState: 'not_applicable',

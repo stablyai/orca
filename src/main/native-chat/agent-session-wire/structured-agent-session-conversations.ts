@@ -17,6 +17,7 @@ export class StructuredAgentSessionConversations extends Map<
   StructuredAgentSessionHostSession
 > {
   private readonly activity = new Map<string, number>()
+  private readonly closeObservers = new Set<(sessionId: string) => void>()
 
   constructor(
     private readonly delivery: {
@@ -58,7 +59,18 @@ export class StructuredAgentSessionConversations extends Map<
 
   override delete(sessionId: string): boolean {
     this.activity.delete(sessionId)
-    return super.delete(sessionId)
+    const deleted = super.delete(sessionId)
+    if (deleted) {
+      for (const observer of this.closeObservers) {
+        observer(sessionId)
+      }
+    }
+    return deleted
+  }
+
+  /** Told when a conversation leaves the map, so state kept per conversation dies with it. */
+  observeClose(observer: (sessionId: string) => void): void {
+    this.closeObservers.add(observer)
   }
 
   touch(sessionId: string): void {

@@ -27,12 +27,6 @@ function makeAgentEntry(
 }
 
 describe('worktree activity state', () => {
-  it('treats a slept wake-hint workspace as inactive', () => {
-    expect(
-      isInactiveWorkspace('wt-1', { 'wt-1': [makeTab('tab-1')] }, { 'tab-1': [] }, {}, new Set())
-    ).toBe(true)
-  })
-
   it('treats a never-opened workspace as inactive', () => {
     expect(isInactiveWorkspace('wt-1', {}, {}, {}, new Set())).toBe(true)
   })

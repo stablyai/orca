@@ -9,7 +9,8 @@
 
 import type {
   AgentChildWorkKind,
-  AgentChildWorkOperation
+  AgentChildWorkOperation,
+  AgentChildWorkOutcomeBasis
 } from '../../shared/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
@@ -110,6 +111,16 @@ export class ClaudeChildWorkDecoder {
           lastMessage: taskText(message.summary),
           totalTokens: taskUsageTotalTokens(message)
         })
+    }
+  }
+
+  /** The CLI acknowledged a stop of this task, and one it no longer knows is acknowledged with no
+   *  frame at all, so the acknowledgement ends a task still live here. Provisionally: the SDK hands
+   *  the acknowledgement over as soon as it reads it, ahead of frames the CLI wrote before it, so
+   *  the task's own ending may still arrive and replace this one. */
+  stopAcknowledged(id: string): void {
+    if (this.live.has(id)) {
+      this.end(id, 'stopped', { basis: 'stop-acknowledged' })
     }
   }
 
@@ -229,7 +240,12 @@ export class ClaudeChildWorkDecoder {
   private end(
     id: string,
     status: unknown,
-    reported: { runId?: string; lastMessage?: string; totalTokens?: number }
+    reported: {
+      runId?: string
+      lastMessage?: string
+      totalTokens?: number
+      basis?: AgentChildWorkOutcomeBasis
+    }
   ): void {
     const task = this.live.get(id)
     this.live.delete(id)
@@ -251,6 +267,7 @@ export class ClaudeChildWorkDecoder {
         ...(reported.runId !== undefined ? { runId: reported.runId } : {})
       },
       outcome,
+      ...(reported.basis ? { basis: reported.basis } : {}),
       ...(reported.lastMessage ? { lastMessage: reported.lastMessage } : {}),
       ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {})
     }))

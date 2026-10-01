@@ -120,6 +120,20 @@ describe('command aliases dispatch to the canonical handler', () => {
     )
   })
 
+  it('says the checkout is still being deleted when the host accepted a background removal', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'local' } }),
+      okFixture('req', { removed: true, removing: true })
+    )
+
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1'], '/tmp/repo')
+
+    expect(logSpy).toHaveBeenCalledWith(
+      'removed: true\nOrca is still deleting the checkout in the background.'
+    )
+  })
+
   it('fails closed when worktree removal cannot resolve a host', async () => {
     queueFixtures(callMock, okFixture('req_show', { worktree: { id: 'wt-1' } }))
     const priorExitCode = process.exitCode

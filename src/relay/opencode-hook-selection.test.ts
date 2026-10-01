@@ -143,6 +143,17 @@ describe('relay OpenCode source selection on real fixture files', () => {
     expect((await spawn()).ORCA_OPENCODE_AGENT).toBe('opencode')
     expect(readFileSync(original, 'utf8')).toBe('// refreshed v1')
   })
+  // Why: a running OpenCode 2 service reloads a changed plugin file, so connecting must upgrade it.
+  it('refreshes an existing canonical plugin on install without creating a new one', async () => {
+    const dir = join(root, 'xdg', 'opencode')
+    mkdirSync(join(dir, 'plugins'), { recursive: true })
+    writeFileSync(plugin(dir, 'opencode2'), '// old v2')
+    await install('// v1', '// v2')
+    expect(readFileSync(plugin(dir, 'opencode2'), 'utf8')).toBe('// v2')
+    const tuiEntry = join(dir, 'plugins', 'orca-opencode2-status-tui', 'tui.js')
+    expect(readFileSync(tuiEntry, 'utf8')).toBe('// v2')
+    expect(existsSync(plugin(dir, 'opencode'))).toBe(false)
+  })
   it('restores the real custom source when all OpenCode sources are revoked', async () => {
     await install('// v1', '// v2')
     const first = await spawn({ env: { OPENCODE_CONFIG_DIR: custom } })

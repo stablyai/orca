@@ -65,13 +65,15 @@ async function gitExecFileAsyncUnlocked(
       const policy = effectiveOptions.useConfiguredSshCommandForNetwork
         ? await buildNetworkSshPolicyEnv(effectiveOptions)
         : { env: nonInteractiveGitEnv(effectiveOptions.env), mode: 'default' as const }
-      const grant = await acquireGitAdmission({
-        args,
-        cwd: options.cwd,
-        wslDistro: options.wslDistro,
-        tier: options.admissionTier,
-        signal: options.signal
-      })
+      const grant = options.admissionExempt
+        ? { queueWaitMs: 0, release: () => {} }
+        : await acquireGitAdmission({
+            args,
+            cwd: options.cwd,
+            wslDistro: options.wslDistro,
+            tier: options.admissionTier,
+            signal: options.signal
+          })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
       const terminationState: { current: Promise<void> | null } = { current: null }

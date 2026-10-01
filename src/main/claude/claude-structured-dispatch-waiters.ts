@@ -13,8 +13,10 @@ export function forgetRetiredWaiter(session: ClaudeSession, waiter: ClaudeDispat
  * A waiter with no deadline. A mid-turn send Claude folds into the running turn
  * is replayed mid-turn; one it runs later is replayed only when its own turn
  * starts — an interval bounded only by the previous turn. Elapsed time is
- * therefore not evidence about delivery, and nothing here expires. Waiters are
- * retired by process facts instead: a failed write, or child exit.
+ * therefore not evidence about delivery, and nothing here expires. Waiters end
+ * by provider and process facts instead: an echo, a `command_lifecycle` frame,
+ * the CLI's idle after `started` (`claude-command-lifecycle.ts`), a failed
+ * write, or child exit.
  */
 export function waitForReplay(
   session: ClaudeSession,

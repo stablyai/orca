@@ -377,18 +377,19 @@ describe('durable orchestration mutation ledger', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'ask', runId: run.id })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
-    const capability = db.mintDispatchCapability({
-      dispatchId: dispatch.id,
-      paneKey: 'tab_worker:leaf_worker',
-      processIncarnation: 'runtime:pty:1'
-    })
+    createRootDispatch(
+      db,
+      task.id,
+      'term_worker',
+      'tab_worker:leaf_worker',
+      undefined,
+      'runtime:pty:1'
+    )
     const askRequest: RpcRequest = {
       id: 'rpc_ask_1',
       authToken: 'caller-token',
       method: 'orchestration.ask',
       params: { from: 'term_worker', question: 'Proceed?', timeoutMs: 60_000 },
-      orchestrationCapability: capability,
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'mutation_ask'
     }

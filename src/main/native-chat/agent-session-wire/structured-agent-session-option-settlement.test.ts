@@ -212,9 +212,9 @@ describe('structured session options and close', () => {
   it('stops the provider child and forgets the session when the chat closes', async () => {
     expect(host.hasSession(SESSION)).toBe(true)
 
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
 
-    expect(closeNativeSession).toHaveBeenCalledWith(SESSION)
+    expect(closeNativeSession).toHaveBeenCalledWith(SESSION, 'evict')
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       ownerProcess: null,
@@ -222,15 +222,15 @@ describe('structured session options and close', () => {
     })
     expect(host.hasSession(SESSION)).toBe(false)
 
-    await expect(host.close(SESSION)).resolves.toBeUndefined()
+    await expect(host.close(SESSION, 'evict')).resolves.toBeUndefined()
     expect(closeNativeSession).toHaveBeenCalledOnce()
   })
 
   it('is a no-op for a session it does not hold', async () => {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     closeNativeSession.mockClear()
 
-    await expect(host.close(SESSION)).resolves.toBeUndefined()
+    await expect(host.close(SESSION, 'evict')).resolves.toBeUndefined()
     expect(closeNativeSession).not.toHaveBeenCalled()
   })
 })

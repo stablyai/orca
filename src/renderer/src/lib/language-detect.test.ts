@@ -177,4 +177,35 @@ describe('detectLanguage', () => {
   ])('detects dotenv names without overriding specific mappings: %s', (filePath, expected) => {
     expect(detectLanguage(filePath)).toBe(expected)
   })
+
+  it.each([
+    ['/Users/me/.zshrc', 'shell'],
+    ['/home/me/.bashrc', 'shell'],
+    ['C:\\Users\\me\\.bash_profile', 'shell'],
+    ['/home/me/.bash_login', 'shell'],
+    ['/home/me/.bash_logout', 'shell'],
+    ['/home/me/.profile', 'shell'],
+    ['/home/me/.zshenv', 'shell'],
+    ['/home/me/.zprofile', 'shell'],
+    ['/home/me/.zlogin', 'shell'],
+    ['/home/me/.zlogout', 'shell']
+  ])('maps shell startup dotfiles to shell: %s', (filePath, expected) => {
+    expect(detectLanguage(filePath)).toBe(expected)
+  })
+
+  it.each([
+    ['/Users/me/.ZSHRC', 'shell'],
+    ['C:\\Users\\me\\.BASHRC', 'shell'],
+    ['/home/me/.Bash_Profile', 'shell'],
+    ['/home/me/.PROFILE', 'shell'],
+    ['/home/me/.ZPROFILE', 'shell'],
+    ['C:\\repo\\DOCKERFILE', 'dockerfile'],
+    ['C:\\repo\\dockerfile', 'dockerfile'],
+    ['C:\\repo\\MAKEFILE', 'makefile'],
+    ['C:\\repo\\makefile', 'makefile'],
+    ['C:\\repo\\CMAKELISTS.TXT', 'cmake'],
+    ['C:\\repo\\.GITIGNORE', 'ini']
+  ])('maps exact filenames case-insensitively: %s', (filePath, expected) => {
+    expect(detectLanguage(filePath)).toBe(expected)
+  })
 })

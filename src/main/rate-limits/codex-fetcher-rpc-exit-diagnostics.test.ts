@@ -62,7 +62,8 @@ let stubPath: string
 function runStub(stderr: string, exitCode: number): Promise<{ error: string | null }> {
   process.env.ORCA_STUB_CODEX_STDERR = stderr
   process.env.ORCA_STUB_CODEX_EXIT_CODE = String(exitCode)
-  return fetchCodexRateLimits({ allowPtyFallback: false })
+  // Why: a temp home with no auth.json keeps the HTTP fallback off the developer's real login.
+  return fetchCodexRateLimits({ codexHomePath: tempRoot })
 }
 
 describe('Codex RPC exit diagnostics', () => {

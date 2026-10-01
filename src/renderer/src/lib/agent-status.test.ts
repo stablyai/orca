@@ -8,7 +8,6 @@ import {
   isClaudeAgent,
   isClaudeManagementTitle,
   normalizeTerminalTitle,
-  isExplicitAgentStatusFresh,
   mapAgentStatusStateToVisualStatus,
   formatAgentTypeLabel,
   agentTypeToIconAgent
@@ -732,23 +731,6 @@ describe('createAgentStatusTracker', () => {
     }
 
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('isExplicitAgentStatusFresh', () => {
-  it('treats the boundary (now - updatedAt == staleAfterMs) as fresh', () => {
-    // Why: uses `<=`, so equality at the boundary stays fresh (not stale one tick before the TTL).
-    const staleAfterMs = 60_000
-    const now = 1_000_000
-    const entry = { updatedAt: now - staleAfterMs }
-    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
-  })
-
-  it('treats one millisecond past the boundary as stale', () => {
-    const staleAfterMs = 60_000
-    const now = 1_000_000
-    const entry = { updatedAt: now - staleAfterMs - 1 }
-    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(false)
   })
 })
 

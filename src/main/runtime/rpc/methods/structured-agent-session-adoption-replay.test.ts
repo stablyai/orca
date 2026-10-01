@@ -103,7 +103,7 @@ beforeEach(async () => {
 afterEach(async () => {
   setStructuredAgentSessionHost(null)
   await host?.flushAllStreamedEvents()
-  await host?.close(SESSION)
+  await host?.close(SESSION, 'evict')
   await rm(root, { recursive: true, force: true })
   vi.restoreAllMocks()
   vi.unstubAllEnvs()

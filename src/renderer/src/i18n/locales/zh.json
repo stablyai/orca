@@ -16500,6 +16500,7 @@
             "done": "完成",
             "idle": "空闲",
             "unverifiable": "暂无近期更新",
+            "unconfirmed": "无法确认",
             "permission": "需注意"
           },
           "filtersSection": "筛选",
@@ -17279,6 +17280,65 @@
   },
   "components": {
     "native-chat": {
+      "failureWords": {
+        "theAgent": "智能体",
+        "providerStartFailed": "{{agent}} 在完成启动前已停止。",
+        "runCommandAgain": "请重新运行 /{{command}}。",
+        "sendToTryAgain": "请发送您的消息以重试。",
+        "couldNotStart": "{{agent}} 无法启动。",
+        "couldNotRestart": "{{agent}} 无法重新启动。",
+        "notSignedIn": "{{agent}} 未使用所选账户登录。",
+        "signInFirst": "请先登录。",
+        "signInThenRunCommand": "请登录，然后重新运行 /{{command}}。",
+        "signInThenSend": "请登录，然后重新发送您的消息。",
+        "historyTooLarge": "此对话的历史记录过大，无法在此恢复。",
+        "managedAccountEnvOverride": "此次 Claude 启动设置了自己的 Anthropic 登录变量。请移除这些变量以使用受管理的 Claude 账户。",
+        "accountSwitchInProgress": "正在切换 Claude 账户。请在切换完成后重试。",
+        "managedAccountUnsupported": "当 WSL 中添加了 Claude 账户时，Claude 聊天需要 Windows Claude 账户。",
+        "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个。",
+        "chooseClaudeAccountThenRunCommand": "请在 Claude 账户设置中选择或添加一个，然后重新运行 /{{command}}。",
+        "chooseClaudeAccountThenSend": "请在 Claude 账户设置中选择或添加一个，然后重新发送您的消息。",
+        "providerExitedRow": "{{agent}} 在生成此回复时停止了。您可以在此对话中继续。",
+        "providerExitedRejection": "{{agent}} 在发送此消息前已停止。",
+        "providerRejected": "提供商未接受此消息。",
+        "providerRejectedQuoted": "提供商未接受此消息：{{detail}}。",
+        "attachmentEmpty": "此消息中的一张图片为空，因此消息未发送。",
+        "attachmentTooLarge": "此消息中的一张图片过大，因此消息未发送。",
+        "attachmentLargerThan": "此消息中的一张图片超过 {{size}} MB，因此消息未发送。",
+        "attachmentTooMany": "此消息包含的图片过多，因此未发送。",
+        "attachmentAtMost": "{{agent}} 每条消息最多接受 {{limit}} 张图片，因此此消息未发送。",
+        "attachmentTotalTooLarge": "此消息中的图片总大小过大，因此消息未发送。",
+        "attachmentTotalMoreThan": "此消息中的图片总计超过 {{size}} MB，因此消息未发送。",
+        "attachmentUnsupportedType": "{{agent}} 仅接受 PNG、JPEG、GIF 和 WebP 图片，因此此消息未发送。",
+        "attachmentNotAFile": "此消息中的一张图片不是文件，因此消息未发送。",
+        "attachmentNoSource": "此消息中的一张图片没有可发送的文件，因此消息未发送。",
+        "attachmentInvalid": "此消息中的附件无法发送给智能体。",
+        "attachmentUnreadable": "无法读取此消息中的附件，因此消息未发送。",
+        "emptyMessage": "此消息为空，因此未发送。",
+        "queueFull": "等待智能体处理的消息过多，因此此消息未发送。",
+        "writeFailed": "Orca 无法将此消息交给智能体，因此消息未发送。",
+        "cancelled": "此消息在智能体开始处理前已撤回。",
+        "chatClosed": "此消息发送前聊天已关闭。",
+        "hostRestarted": "此消息发送前 Orca 已重新启动。",
+        "notDelivered": "此消息未送达。",
+        "notDeliveredSendAgain": "此消息未送达。请重新发送以继续。",
+        "commandRefused": "此命令未运行。",
+        "commandRefusedTryAgain": "此命令未运行。请重试。",
+        "compactionFailed": "压缩失败。",
+        "compactionFailedQuoted": "压缩失败：{{detail}}。",
+        "compactionUnconfirmed": "未确认压缩是否完成。",
+        "cancelUnconfirmed": "未确认取消。",
+        "stopRefused": "{{agent}} 未停止。",
+        "stopRefusedQuoted": "{{agent}} 未停止：{{detail}}。",
+        "noTurnToStop": "{{agent}} 没有正在运行的轮次可停止。",
+        "answerUnconfirmed": "您的回答已记录，但智能体未确认。",
+        "hostFault": "Orca 遇到问题，因此此操作未完成。",
+        "hostFaultTryAgain": "Orca 遇到问题，因此此操作未完成。请重试。",
+        "hostStopped": "{{agent}} 始终未完成启动，因此 Orca 已将其停止。",
+        "providerRateLimited": "{{agent}} 已被限流，正在重试。",
+        "providerRetrying": "{{agent}} 遇到临时问题，正在重试。",
+        "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。"
+      },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录。",
         "notDoneSend": "您的消息未发送。",
@@ -17347,6 +17407,7 @@
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
+        "pasteUnavailable": "无法粘贴 — 此聊天当前不接受输入。",
         "uploadingAttachments": "正在将 {{value0}} 个文件上传到远端…",
         "model": "模型",
         "effort": "推理强度",
@@ -17473,6 +17534,8 @@
         "thinking": "思维",
         "workingFor": "已工作 {{value0}}",
         "workedFor": "工作了 {{value0}}",
+        "interruptedAfter": "{{value0}} 后中断",
+        "failedAfter": "{{value0}} 后失败",
         "toggleDetails": "切换回合详情"
       },
       "jumpToLatest": "跳到最新消息",
@@ -17488,7 +17551,8 @@
         "error": {
           "title": "无法加载对话",
           "subtitle": "无法读取记录。请切回终端继续工作。",
-          "retryingSubtitle": "无法读取记录。Orca 会继续尝试加载。"
+          "retryingSubtitle": "无法读取记录。Orca 会继续尝试加载。",
+          "keepsTrying": "Orca 会继续尝试加载。"
         },
         "reconnecting": "正在重新连接此聊天…",
         "pairHost": "配对主机以查看智能体聊天记录。",
@@ -17643,8 +17707,7 @@
         "unnamed": "子代理"
       },
       "conversationCommand": {
-        "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。",
-        "unconfirmed": "对话操作未确认。"
+        "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。"
       },
       "drop": {
         "title": "拖放以附加到此聊天",
@@ -17677,6 +17740,9 @@
         "title": "上下文",
         "estimated": "根据上一次响应的估算值。"
       },
+      "dismissDeliveryNotice": "关闭",
+      "messageNotSent": "消息未发送",
+      "deliveryUnconfirmed": "无法确认送达 — 重试前请检查聊天",
       "queuedMessages": {
         "alreadySent": "此消息已发送。",
         "editAlreadySent": "已发送 — 你的文本仍在输入框中。",
@@ -17953,6 +18019,12 @@
           "unknown": "未知主机",
           "candidateName": "{{value0}} 在 {{value1}} 上"
         }
+      },
+      "creation": {
+        "worktreeReadyToast": "工作树 {{name}} 已就绪",
+        "workspaceReadyToast": "工作区 {{name}} 已就绪",
+        "goToWorktree": "转到工作树",
+        "goToWorkspace": "转到工作区"
       }
     },
     "agentSessionContinuation": {

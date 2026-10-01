@@ -8,7 +8,8 @@ export const NETWORK_HEADROOM = 1
 export const ROUTE_CAP = 2
 export const ROUTE_HEADROOM = 1
 export const GIT_ADMISSION_AGING_MS = 15_000
-// General 4+2 and network 3+1 are disjoint, so at most ten git children run globally.
+// General 4+2 and network 3+1 are disjoint, so at most ten admitted git children run globally;
+// worktree deletes bypass admission under their own limit (WORKTREE_DELETE_CONCURRENCY).
 export const MAX_GIT_CHILDREN = 10
 
 export type AdmissionClass = 'general' | 'network'

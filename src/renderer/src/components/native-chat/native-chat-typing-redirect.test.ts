@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   shouldFocusNativeChatComposerFromEditingKey,
+  shouldFocusNativeChatInputForPaste,
   shouldFocusNativeChatPaneFromPointerTarget,
   shouldRedirectNativeChatTyping
 } from './native-chat-typing-redirect'
@@ -94,5 +95,46 @@ describe('shouldFocusNativeChatPaneFromPointerTarget', () => {
 
   it('does not steal focus from controls', () => {
     expect(shouldFocusNativeChatPaneFromPointerTarget(interactiveTarget())).toBe(false)
+  })
+})
+
+describe('shouldFocusNativeChatInputForPaste', () => {
+  it.each([
+    [true, { key: 'v', metaKey: true }],
+    [false, { key: 'v', ctrlKey: true }],
+    [false, { key: 'V', ctrlKey: true, shiftKey: true }],
+    [false, { key: 'Insert', shiftKey: true }]
+  ])('takes the platform paste chord (mac=%s) outside an input', (isMac, keys) => {
+    expect(shouldFocusNativeChatInputForPaste(keyEvent(keys), isMac)).toBe(true)
+  })
+
+  it('ignores the other platform chord, Alt chords, IME, handled events and inputs', () => {
+    expect(shouldFocusNativeChatInputForPaste(keyEvent({ key: 'v', ctrlKey: true }), true)).toBe(
+      false
+    )
+    expect(shouldFocusNativeChatInputForPaste(keyEvent({ key: 'v', metaKey: true }), false)).toBe(
+      false
+    )
+    expect(
+      shouldFocusNativeChatInputForPaste(keyEvent({ key: 'v', ctrlKey: true, altKey: true }), false)
+    ).toBe(false)
+    expect(
+      shouldFocusNativeChatInputForPaste(
+        keyEvent({ key: 'v', ctrlKey: true, isComposing: true }),
+        false
+      )
+    ).toBe(false)
+    expect(
+      shouldFocusNativeChatInputForPaste(
+        keyEvent({ key: 'v', ctrlKey: true, defaultPrevented: true }),
+        false
+      )
+    ).toBe(false)
+    expect(
+      shouldFocusNativeChatInputForPaste(
+        keyEvent({ key: 'v', ctrlKey: true, target: interactiveTarget() }),
+        false
+      )
+    ).toBe(false)
   })
 })

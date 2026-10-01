@@ -1,3 +1,4 @@
+import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
@@ -275,6 +276,11 @@ export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-defaults.v1' as const
 export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-source-defaults.v1' as const
+// Why: Git's checkout delete outlives worktree.rm's older client timeouts. A client with this waits
+// for the reply and shows `removing` rows as Deleting; one without it is answered on acceptance and
+// would re-show that row as a normal workspace, so the host leaves such rows out of its listings.
+export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
+  'worktree.background-removal.v1' as const
 // Why: older hosts drop automation.list's selector and answer with the whole authority, so a scoped client must not read that as one host's rows.
 export const AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY =
   'automation.list-host-scope.v1' as const
@@ -335,7 +341,9 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   // Why: only the renderer runs the retirement-proof ledger; CLI and mobile must keep full lists.
-  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
+  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
+  // Only the renderer shows Deleting for a `removing` row; CLI and mobile get those rows omitted.
+  WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
 ] as const
 
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
@@ -418,6 +426,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,

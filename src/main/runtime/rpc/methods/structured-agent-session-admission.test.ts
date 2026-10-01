@@ -52,7 +52,7 @@ describe('admission revoked while a session is still open', () => {
     })
 
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
-    expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
+    expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
     // The durable tab has to be retired too, or the chat comes back on the next sync.
     expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
   })
@@ -80,7 +80,7 @@ describe('admission revoked while a session is still open', () => {
       )
 
       expect(response).toMatchObject({ ok: true })
-      expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
+      expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
     }
   )
 
@@ -93,7 +93,7 @@ describe('admission revoked while a session is still open', () => {
     )
 
     expect(response).toMatchObject({ ok: true })
-    expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
+    expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
   })
 
   it.each(ADMISSION_METHODS)(

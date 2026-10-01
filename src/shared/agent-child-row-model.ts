@@ -19,6 +19,7 @@ import {
   deriveAgentChildDisplayState,
   type AgentChildDisplayState
 } from './agent-status-child-work-display'
+import { agentChildWorkViewOffersStop } from './agent-child-work-stop-targets'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import {
   agentStatusAuthorityObservedAt,
@@ -242,7 +243,7 @@ function rowFromView(
     recencyAt: view.observedAt + context.hostClockOffsetMs,
     ...(view.settledAt !== undefined ? { settledAt: view.settledAt } : {}),
     ...(view.totalTokens !== undefined ? { totalTokens: view.totalTokens } : {}),
-    canStop: !settled && view.stoppable && view.providerId !== undefined,
+    canStop: agentChildWorkViewOffersStop(view),
     settled,
     owned: (ownedByOwner.get(view.id) ?? [])
       .filter((owned) => !nextPath.has(owned.id))

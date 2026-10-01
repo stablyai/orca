@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+// worker_done carries a CLI-minted request id so its runtime_unavailable retries replay one mutation.
+const WORKER_DONE_REQUEST = { orchestrationRequestId: expect.any(String) }
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
@@ -79,24 +81,28 @@ describe('orchestration send structured payload flags', () => {
       ])
     )
 
-    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
-      from: 'term_worker',
-      to: 'term_coord',
-      subject: 'done',
-      body: undefined,
-      type: 'worker_done',
-      priority: undefined,
-      threadId: undefined,
-      payload: JSON.stringify({
-        taskId: 'task_1',
-        dispatchId: 'ctx_1',
-        outcome: 'succeeded',
-        filesModified: ['src/a.ts', 'src/b.ts'],
-        reportPath: 'reports/done.md'
-      }),
-      waitForLifecycleSettlement: true,
-      devMode: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done',
+        body: undefined,
+        type: 'worker_done',
+        priority: undefined,
+        threadId: undefined,
+        payload: JSON.stringify({
+          taskId: 'task_1',
+          dispatchId: 'ctx_1',
+          outcome: 'succeeded',
+          filesModified: ['src/a.ts', 'src/b.ts'],
+          reportPath: 'reports/done.md'
+        }),
+        waitForLifecycleSettlement: true,
+        devMode: false
+      },
+      WORKER_DONE_REQUEST
+    )
   })
 
   it('forwards multiline message bodies without normalization', async () => {
@@ -202,18 +208,22 @@ describe('orchestration send structured payload flags', () => {
       ])
     )
 
-    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
-      from: 'term_worker',
-      to: 'term_coord',
-      subject: 'done',
-      body: undefined,
-      type: 'worker_done',
-      priority: undefined,
-      threadId: undefined,
-      payload: JSON.stringify({ outcome: 'succeeded' }),
-      waitForLifecycleSettlement: true,
-      devMode: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done',
+        body: undefined,
+        type: 'worker_done',
+        priority: undefined,
+        threadId: undefined,
+        payload: JSON.stringify({ outcome: 'succeeded' }),
+        waitForLifecycleSettlement: true,
+        devMode: false
+      },
+      WORKER_DONE_REQUEST
+    )
   })
 
   it('sends lifecycle messages from ORCA_TERMINAL_HANDLE without a liveness probe', async () => {
@@ -229,18 +239,22 @@ describe('orchestration send structured payload flags', () => {
     )
 
     expect(callMock).toHaveBeenCalledTimes(1)
-    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
-      from: 'term_worker_env',
-      to: 'term_coord',
-      subject: 'done',
-      body: undefined,
-      type: 'worker_done',
-      priority: undefined,
-      threadId: undefined,
-      payload: JSON.stringify({ outcome: 'succeeded' }),
-      waitForLifecycleSettlement: true,
-      devMode: false
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      {
+        from: 'term_worker_env',
+        to: 'term_coord',
+        subject: 'done',
+        body: undefined,
+        type: 'worker_done',
+        priority: undefined,
+        threadId: undefined,
+        payload: JSON.stringify({ outcome: 'succeeded' }),
+        waitForLifecycleSettlement: true,
+        devMode: false
+      },
+      WORKER_DONE_REQUEST
+    )
   })
 
   it.each(['worker_done', 'heartbeat'] as const)(
@@ -265,7 +279,8 @@ describe('orchestration send structured payload flags', () => {
       expect(callMock).toHaveBeenCalledTimes(1)
       expect(callMock).toHaveBeenCalledWith(
         'orchestration.send',
-        expect.objectContaining({ from: 'term_worker_env' })
+        expect.objectContaining({ from: 'term_worker_env' }),
+        ...(type === 'worker_done' ? [WORKER_DONE_REQUEST] : [])
       )
     }
   )
@@ -285,7 +300,8 @@ describe('orchestration send structured payload flags', () => {
 
     expect(callMock).toHaveBeenCalledWith(
       'orchestration.send',
-      expect.objectContaining({ senderPaneKey: 'tab_worker:leaf_worker' })
+      expect.objectContaining({ senderPaneKey: 'tab_worker:leaf_worker' }),
+      WORKER_DONE_REQUEST
     )
   })
 

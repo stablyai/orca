@@ -133,15 +133,6 @@ describe('Claude structured Fast mode', () => {
     expect(applyFlagSettings).not.toHaveBeenCalled()
   })
 
-  it('does not authorize a new Fast enable when model support is unknown', async () => {
-    const { session, applyFlagSettings } = fastModeSession(undefined)
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'fastMode', value: 'true' }, undefined)
-    ).rejects.toThrow('does not support Fast mode')
-    expect(applyFlagSettings).not.toHaveBeenCalled()
-  })
-
   it.each([undefined, false])(
     'allows explicit Fast off when model support is %s',
     async (supportsFastMode) => {

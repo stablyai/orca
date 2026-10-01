@@ -7,6 +7,7 @@ import { remoteRuntimeTerminalColorPush } from '@/runtime/remote-runtime-termina
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
+import { registerBackgroundWorktreeRemovalBridge } from './background-worktree-removal-bridge'
 import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from './content-creation-ipc-bridge'
@@ -85,6 +86,7 @@ export function installAppLifetimeIpcEvents(
       .catch((error) => console.error('Failed to read runtime status snapshots:', error))
   }
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
+  registerBackgroundWorktreeRemovalBridge(unsubs)
   registerProjectCatalogIpcBridge(
     unsubs,
     worktreeRuntime.worktreeChangeRefreshQueue,

@@ -508,37 +508,56 @@ describe('codex journal translation', () => {
     ])
   })
 
-  it('renders a system error carried by a suppressed status kind', () => {
-    const { translator, tap } = translatorWith()
+  it.each(['idle', 'active', 'notLoaded', 'systemError'])(
+    'journals no row for a %s thread status',
+    (type) => {
+      const { translator, tap } = translatorWith()
 
+      translator.handle(
+        notification('thread/status/changed', { threadId: THREAD_ID, status: { type } })
+      )
+
+      expect(tap.rows).toEqual([])
+    }
+  )
+
+  it('a failed turn journals its error, not the thread status Codex reports beside it', () => {
+    const tap = recorder()
+    const stopped: string[] = []
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      primaryThreadId: () => THREAD_ID,
+      onPrimaryThreadStoppedRunning: () => stopped.push(THREAD_ID)
+    })
+
+    translator.handle(TURN_STARTED)
     translator.handle(
       notification('thread/status/changed', {
         threadId: THREAD_ID,
         status: { type: 'systemError' }
       })
     )
-
-    const timeline = projectStructuredItemsToNativeChat(
-      tap.rows.map((row, index) => ({
-        itemId: row.key,
-        revision: 1,
-        sequence: index + 1,
-        observedAt: index + 1,
-        body: row.body
-      }))
-    )
-    expect(timeline).toEqual([
-      expect.objectContaining({
-        role: 'system',
-        blocks: [
-          expect.objectContaining({
-            providerFrame: expect.objectContaining({
-              kind: 'notification:thread/status/changed'
-            })
-          })
-        ]
+    translator.handle(
+      notification('error', {
+        threadId: THREAD_ID,
+        turnId: TURN_ID,
+        willRetry: false,
+        error: { message: 'Selected model is at capacity.' }
       })
+    )
+    translator.handle(notification('turn/completed', { turn: { id: TURN_ID, status: 'failed' } }))
+
+    const bodies = tap.rows.map((row) => row.body)
+    expect(bodies.filter((body) => body.kind === 'status')).toEqual([
+      expect.objectContaining({ text: 'Selected model is at capacity.', tone: 'error' })
     ])
+    expect(bodies.at(-1)).toMatchObject({
+      kind: 'turn',
+      turnId: TURN_ID,
+      state: 'completed',
+      outcome: 'failure'
+    })
+    expect(stopped).toEqual([THREAD_ID])
   })
 
   it('writes nothing more after dispose', () => {

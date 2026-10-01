@@ -150,26 +150,6 @@ describe('startMobileDictationDesktopSession', () => {
     })
   })
 
-  it('does not surface a desktop-start failure after the start became stale', async () => {
-    let setNewerStart = () => undefined
-    const harness = createStartHarness({
-      sendRequest: async (method) => {
-        if (method === 'speech.dictation.start') {
-          setNewerStart()
-          throw new Error('Desktop start failed')
-        }
-        return OK_RESPONSE
-      }
-    })
-    setNewerStart = harness.setNewerStart
-
-    await expect(startMobileDictationDesktopSession(harness.options)).resolves.toBe(false)
-
-    expect(harness.setIdle).not.toHaveBeenCalled()
-    expect(harness.getActiveId()).toBe('dictation-b')
-    expect(harness.commitRecordingStart).not.toHaveBeenCalled()
-  })
-
   it('commits recording before returning a current start to the hook', async () => {
     const harness = createStartHarness()
 

@@ -5,6 +5,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
+import type { StructuredAgentSessionStopCause } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeResultOutcome } from './claude-result-outcome'
 import type { ClaudeCommandTurn } from './claude-command-turn'
@@ -31,9 +32,9 @@ export function claudeCurrentTurnIdentity(turn: ClaudeCurrentTurn): AgentJournal
 export type ClaudeTurnEnd = {
   state: 'completed' | 'interrupted'
   completedAt: number
-  /** Only an end the PROVIDER reported carries one. An end the host inferred —
-   *  the child going away, a new turn superseding this one — leaves it absent,
-   *  which reads as unknown rather than claiming the turn worked. */
+  /** An end the provider reported carries its verdict, and a turn a newer one
+   *  replaced carries `superseded`. The child going away leaves it absent, which
+   *  reads as unknown rather than claiming the turn worked. */
   outcome?: AgentJournalTurnOutcome
   /** The SDK's own measured turn duration; only a result frame carries one. */
   durationMs?: number
@@ -44,9 +45,10 @@ export type ClaudeTurnEnd = {
  *  is still a turn the host watched finish, and only `outcome` says it failed. */
 export function claudeTurnEndForResult(
   message: Record<string, unknown>,
-  completedAt: number
+  completedAt: number,
+  stop: StructuredAgentSessionStopCause | null = null
 ): ClaudeTurnEnd {
-  const outcome = claudeResultOutcome(message)
+  const outcome = claudeResultOutcome(message, stop)
   const durationMs = message.duration_ms
   return {
     state: outcome === 'cancellation' ? 'interrupted' : 'completed',

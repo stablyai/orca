@@ -217,6 +217,39 @@ describe('the words written beside a failure fact', () => {
     )
   })
 
+  it("quotes a provider's own retry progress, and keeps a log detail out of it", () => {
+    const retrying = (fact: Omit<AgentSessionFailureFact, 'kind'>) =>
+      agentSessionFailureSentence({ kind: 'providerRetrying', ...fact }, 'row', {
+        agentName: 'Codex'
+      })
+    expect(retrying({ detail: { text: 'Reconnecting... 2/5', audience: 'person' } })).toBe(
+      'Codex is retrying: Reconnecting... 2/5.'
+    )
+    expect(
+      retrying({
+        detail: { text: '{"type":"system","subtype":"api_retry"}', audience: 'log' },
+        retry: { error: 'rate_limit', status: 429 }
+      })
+    ).toBe('Codex is rate-limited and retrying.')
+    expect(retrying({})).toBe('Codex hit a temporary problem and is retrying.')
+  })
+
+  it("puts the provider's account of what failed on the retry row's second line", () => {
+    const retrying = (fact: Omit<AgentSessionFailureFact, 'kind'>) =>
+      agentSessionFailureSentence({ kind: 'providerRetrying', ...fact }, 'row', {
+        agentName: 'Codex'
+      })
+    expect(
+      retrying({
+        detail: { text: 'Reconnecting... 2/5', audience: 'person' },
+        retry: { cause: 'stream disconnected before completion' }
+      })
+    ).toBe('Codex is retrying: Reconnecting... 2/5.\nstream disconnected before completion')
+    expect(retrying({ retry: { status: 429, cause: 'Too many requests' } })).toBe(
+      'Codex is rate-limited and retrying.\nToo many requests'
+    )
+  })
+
   it('says which limit an attachment broke, in megabytes', () => {
     const sentence = (attachment: AgentSessionFailureFact['attachment']) =>
       agentSessionFailureSentence({ kind: 'attachmentInvalid', attachment }, 'rejection', {

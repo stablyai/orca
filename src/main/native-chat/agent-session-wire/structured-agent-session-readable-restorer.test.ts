@@ -39,8 +39,8 @@ describe('StructuredAgentSessionReadableRestorer', () => {
         adapter: {}
       },
       supportsRecord: () => true,
-      reconcile: async () => null,
-      resolveRecovery: async () => undefined,
+      reconcile: async () => true,
+      resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
       onReadable: () => undefined

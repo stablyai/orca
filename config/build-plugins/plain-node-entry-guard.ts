@@ -20,7 +20,6 @@ type OutputChunk = Rollup.OutputChunk
 export const CLI_MAIN_ENTRY_NAMES = [
   'agent-hooks/managed-agent-hook-controls',
   'orca-profiles/profile-index-store',
-  'codex/managed-home-shell-preflight',
   'claude-accounts/keychain',
   ...[
     'access',

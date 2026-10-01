@@ -133,7 +133,7 @@ describe('capability gating', () => {
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
 
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
-    expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
+    expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
     expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
     expect(hostCalls.setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(
       hostCalls.close.mock.invocationCallOrder[0]!

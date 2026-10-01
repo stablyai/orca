@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
@@ -23,6 +23,9 @@ import {
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
 import { writeOutbox } from './structured-agent-session-outbox-storage'
+
+// Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
+afterEach(cleanup)
 
 function shownFailure(entry: StructuredAgentSessionOutboxEntry | undefined): string | undefined {
   return (

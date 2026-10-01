@@ -5,6 +5,7 @@ import { canContinueAgentSessionInNewSession } from './terminal-agent-session-co
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 import { useAppStore } from '@/store'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
+import { NativeChatPaneCover } from './NativeChatPaneCover'
 
 export function TerminalPaneNativeChatPortal({
   controller
@@ -64,7 +65,7 @@ export function TerminalPaneNativeChatPortal({
   }
 
   return createPortal(
-    <div className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
+    <NativeChatPaneCover pane={chatPane}>
       <NativeChatView
         terminalTabId={tabId}
         isVisible={isRendererVisible}
@@ -78,7 +79,7 @@ export function TerminalPaneNativeChatPortal({
         readTerminalScreen={readNativeChatTerminalScreen}
         contextMenuActions={contextMenuActions}
       />
-    </div>,
+    </NativeChatPaneCover>,
     chatPane.container,
     `native-chat-${tabId}-${chatPane.leafId}`
   )

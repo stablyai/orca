@@ -519,7 +519,7 @@ describe('claude journal translation — background task rows', () => {
     const { translator, fallbackRows, taskRowIds, taskRowTexts } = harness()
     playFailedBackgroundCommand(translator)
 
-    // ABLATION: drop `message:system:task_*` from CLAUDE_TYPED_TRANSLATOR_KINDS
+    // ABLATION: drop `message:system:task_*` from TYPED_TRANSLATOR_KINDS
     // and this is `['claude · message:system:task_updated', 'claude ·
     // message:system:task_notification']` — the reported bug exactly.
     expect(fallbackRows()).toEqual([])

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeVisibleWorktreeIds, type SidebarFilterState } from './visible-worktrees'
+import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -83,30 +83,6 @@ describe('#8873 default-branch workspace under "Hide sleeping"', () => {
     })
 
     expect(visible).toEqual([worktree.id])
-  })
-
-  it('exposes an opt-in that keeps the default branch visible under "Hide sleeping"', () => {
-    // The issue asks for an "Always display default branch" flag. Prove the
-    // sidebar filter contract has no such knob today.
-    const filterKeys: readonly (keyof SidebarFilterState)[] = [
-      'showSleepingWorkspaces',
-      'filterRepoIds',
-      'hideDefaultBranchWorkspace',
-      'hideAutomationGeneratedWorkspaces',
-      'hideCliCreatedWorkspaces',
-      'hideDetachedHeadWorkspaces',
-      'hideWorkspacesFromOtherDevices',
-      'alwaysShowDefaultBranchWorkspace',
-      'visibleWorkspaceHostIds',
-      'workspaceHostScope'
-    ]
-    const optionKeys = Object.keys(visibleOptions())
-
-    const alwaysShowKnob = [...filterKeys, ...optionKeys].find((key) =>
-      /always.*default|default.*always|pinDefaultBranch/i.test(key)
-    )
-
-    expect(alwaysShowKnob).toBeDefined()
   })
 })
 

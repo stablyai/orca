@@ -11,12 +11,14 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 }))
 
 import {
-  NATIVE_CHAT_CLEAR_CONFIRM_MS,
-  NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
   NATIVE_CHAT_SUBMIT_DELAY_MS,
   resetNativeChatPtySendQueuesForTests,
   sendNativeChatMessage
 } from './native-chat-runtime-send'
+import {
+  NATIVE_CHAT_CLEAR_CONFIRM_MS,
+  NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT
+} from './native-chat-input-clear'
 import {
   NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   sendNativeChatMessageWithImageAttachments

@@ -30,6 +30,10 @@ import { join } from 'node:path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 import {
+  openCodeTuiPluginDirName,
+  writeOpenCodeTuiPlugin
+} from '../shared/opencode-tui-plugin-install'
+import {
   installOpenCodePluginInCanonicalConfig,
   isRelayOpenCodeOverlayPath,
   type OpenCodeAgent
@@ -55,6 +59,10 @@ const PI_OVERLAY_SUBDIR_BY_KIND: Record<LegacyOverlayAgentKind, string> = {
 }
 const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE2_PLUGIN_FILE = 'orca-opencode2-status.js'
+// Orca's own entries (either major, file and TUI copy) are never mirrored from user config.
+const ORCA_OPENCODE_PLUGIN_ENTRIES = new Set(
+  [OPENCODE_PLUGIN_FILE, OPENCODE2_PLUGIN_FILE].flatMap((f) => [f, openCodeTuiPluginDirName(f)])
+)
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
@@ -166,11 +174,7 @@ export class PluginOverlayManager {
     const source = this.piExtensionSources[kind]
     return source ?? (kind === 'omp' ? this.piExtensionSources.pi : null)
   }
-  private mirrorOpenCodeConfig(
-    sourceDir: string,
-    overlayDir: string,
-    pluginFileName: string
-  ): void {
+  private mirrorOpenCodeConfig(sourceDir: string, overlayDir: string): void {
     for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
       const sourcePath = join(sourceDir, entry.name)
       if (entry.name === 'plugins') {
@@ -188,11 +192,7 @@ export class PluginOverlayManager {
           const overlayPluginsDir = join(overlayDir, 'plugins')
           mkdirSync(overlayPluginsDir, { recursive: true })
           for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            if (
-              pluginEntry.name === pluginFileName ||
-              pluginEntry.name === OPENCODE_PLUGIN_FILE ||
-              pluginEntry.name === OPENCODE2_PLUGIN_FILE
-            ) {
+            if (ORCA_OPENCODE_PLUGIN_ENTRIES.has(pluginEntry.name)) {
               continue
             }
             mirrorEntry(
@@ -210,6 +210,7 @@ export class PluginOverlayManager {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
     const pluginPath = join(pluginsDir, pluginFileName)
+    writeOpenCodeTuiPlugin(pluginsDir, pluginFileName, source)
     try {
       unlinkSync(pluginPath)
     } catch {
@@ -246,7 +247,7 @@ export class PluginOverlayManager {
         // Why: OPENCODE_CONFIG_DIR is a single config root. Mirror the user's
         // remote root into the overlay before adding Orca's plugin so status
         // reporting does not hide their auth, models, keybinds, or plugins.
-        this.mirrorOpenCodeConfig(existingConfigDir, dir, pluginFileName)
+        this.mirrorOpenCodeConfig(existingConfigDir, dir)
       }
       this.writeOpenCodePlugin(dir, pluginFileName, source)
       return dir

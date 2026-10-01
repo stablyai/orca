@@ -82,6 +82,9 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         terminalProvenance: 'current_runtime' | 'restored'
       }) => AgentHookAuthorityAttestation | null
       retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+      checkHookAgentPresence?: (
+        paneKey: string
+      ) => Promise<'live' | 'unverifiable' | 'exited' | null>
       reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: the device registry lives on the RPC server, which is constructed with this runtime;
@@ -230,6 +233,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =
       deps?.retireAgentHookCompatibilityAuthority ?? null
+    this.checkHookAgentPresenceFn = deps?.checkHookAgentPresence ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)

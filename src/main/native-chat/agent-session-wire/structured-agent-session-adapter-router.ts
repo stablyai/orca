@@ -4,7 +4,10 @@ import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session-record'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionStopCause
+} from './structured-agent-session-adapter'
 
 type RoutedAgent = 'claude' | 'codex'
 type SessionRoute = { adapter: StructuredAgentSessionAdapter; state: 'live' | 'stopped' }
@@ -108,9 +111,12 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return stop ? stop(input) : Promise.resolve({ cancelled: false })
   }
 
-  backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
+  backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
     sessionId
-  ) => this.liveOwnerOrNull(sessionId)?.backgroundTaskState?.(sessionId)
+  ) => this.liveOwnerOrNull(sessionId)?.backgroundTaskStops?.(sessionId)
+
+  holdsDispatch = (sessionId: string): boolean =>
+    this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.readCommands?.(sessionId)
@@ -145,20 +151,21 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     accountHome: AgentSessionAccountHome
   }) => this.requireAgent(input.identity).providerHistoryWindow?.(input) ?? Promise.resolve(null)
 
-  closeSession = (sessionId: string): Promise<boolean> =>
-    this.stopSession(sessionId, (adapter) => adapter.closeSession)
+  closeSession = (sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean> =>
+    this.stopSession(sessionId, (adapter) => adapter.closeSession, cause)
 
   forceCloseSession = (sessionId: string): Promise<boolean> =>
     this.stopSession(sessionId, (adapter) => adapter.forceCloseSession ?? adapter.closeSession)
 
-  disposeSession = (sessionId: string): Promise<boolean> =>
-    this.stopSession(sessionId, (adapter) => adapter.disposeSession ?? adapter.closeSession)
+  disposeSession = (sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean> =>
+    this.stopSession(sessionId, (adapter) => adapter.disposeSession ?? adapter.closeSession, cause)
 
   private async stopSession(
     sessionId: string,
     selectStop: (
       adapter: StructuredAgentSessionAdapter
-    ) => NonNullable<StructuredAgentSessionAdapter['closeSession']> | undefined
+    ) => NonNullable<StructuredAgentSessionAdapter['closeSession']> | undefined,
+    cause?: StructuredAgentSessionStopCause
   ): Promise<boolean> {
     const route = this.routes.get(sessionId)
     if (!route) {
@@ -171,7 +178,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       return true
     }
     const stop = selectStop(route.adapter)
-    const stopped = await stop?.call(route.adapter, sessionId)
+    const stopped = await stop?.call(route.adapter, sessionId, cause)
     if (stopped === true) {
       route.state = 'stopped'
       return true

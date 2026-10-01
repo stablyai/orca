@@ -14,8 +14,8 @@ import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import {
   shouldReuseCompiledWindowsCliLauncher,
-  windowsCliLauncherFingerprint,
-  windowsCliLauncherVersionSource
+  windowsCliLauncherFileVersion,
+  windowsCliLauncherFingerprint
 } from './build-windows-cli-launcher.mjs'
 
 const itCrossHost = process.platform === 'win32' ? it.skip : it
@@ -35,22 +35,25 @@ function removeFixtureTree(path) {
     }
   }
 }
-// Why: cold csc.exe startup exceeds Vitest's 5s unit budget on hosted Windows;
-// keep the larger allowance scoped to the real compiler integration test.
+// Why: a cold cargo build compiles the resource crate and links from scratch,
+// which far exceeds Vitest's 5s unit budget on a hosted Windows runner. Later
+// cases reuse the shared target directory, so only the first pays it.
 function itWindows(name, test) {
   const runner = process.platform === 'win32' ? it : it.skip
-  runner(name, { timeout: 15_000 }, test)
+  runner(name, { timeout: 300_000 }, test)
 }
 
 describe('Windows CLI launcher', () => {
   it('reuses restored builds only while all embedded inputs and the release version match', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-cli-launcher-reuse-'))
     try {
-      const inputs = ['source.cs', 'app.manifest', 'icon.ico', 'build.mjs'].map((name) => {
-        const path = join(root, name)
-        writeFileSync(path, name)
-        return path
-      })
+      const inputs = ['main.rs', 'build.rs', 'Cargo.toml', 'app.manifest', 'icon.ico'].map(
+        (name) => {
+          const path = join(root, name)
+          writeFileSync(path, name)
+          return path
+        }
+      )
       const outputPath = join(root, 'orca.exe')
       const fingerprint = windowsCliLauncherFingerprint(inputs, '1.4.214')
       expect(shouldReuseCompiledWindowsCliLauncher(outputPath, fingerprint)).toBe(false)
@@ -88,12 +91,11 @@ describe('Windows CLI launcher', () => {
     }
   })
 
-  it('keeps prerelease identity while emitting a valid Windows numeric version', () => {
-    const source = windowsCliLauncherVersionSource('1.4.214-daily.202609281300')
-    expect(source).toContain('AssemblyFileVersion("1.4.214.0")')
-    expect(source).toContain('AssemblyInformationalVersion("1.4.214-daily.202609281300")')
+  it('reduces a prerelease to the numeric version Windows can record', () => {
+    expect(windowsCliLauncherFileVersion('1.4.214-daily.202609281300')).toBe('1.4.214.0')
+    expect(windowsCliLauncherFileVersion('1.4.214')).toBe('1.4.214.0')
     for (const version of ['1.4.65535', '1.4', '1.4.214"', undefined]) {
-      expect(() => windowsCliLauncherVersionSource(version)).toThrow('Invalid Windows')
+      expect(() => windowsCliLauncherFileVersion(version)).toThrow('Invalid Windows')
     }
   })
 
@@ -156,18 +158,28 @@ describe('Windows CLI launcher', () => {
     }
   })
 
-  itCrossHost('never materializes the child environment block from ProcessStartInfo', () => {
-    // Why: both ProcessStartInfo env properties copy the process block into a case-insensitive
-    // dictionary that throws when the inherited block holds PATH and Path (stablyai/orca#12046).
+  itCrossHost('never hands the child an explicit environment map', () => {
+    // Why: setting any entry on the child's environment makes the spawn build its own
+    // block from a case-insensitive map, which collapses an inherited PATH and Path
+    // into one entry and killed the CLI (stablyai/orca#12046). Mutating this process
+    // and leaving the map untouched passes the block through verbatim.
     const source = readFileSync(
-      join(projectRoot, 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs'),
+      join(projectRoot, 'native', 'windows-cli-launcher', 'src', 'main.rs'),
       'utf8'
     )
     const code = source.replace(/^\s*\/\/.*$/gm, '')
 
-    expect(code).not.toContain('EnvironmentVariables')
-    expect(code).not.toContain('startInfo.Environment')
-    expect(code).toContain('Environment.SetEnvironmentVariable')
+    expect(code).not.toMatch(/\.envs?\(/u)
+    expect(code).not.toContain('env_clear')
+    expect(code).toContain('env::set_var')
+  })
+
+  itCrossHost('never reintroduces a managed launcher alongside the native one', () => {
+    // Why: the MSIL image is what vendors flagged (stablyai/orca#23383). A stray .cs
+    // left in the crate would compile back into the shape the rewrite removed.
+    expect(
+      existsSync(join(projectRoot, 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs'))
+    ).toBe(false)
   })
 
   itWindows('preserves a multiline argument from PowerShell through the native launcher', () => {

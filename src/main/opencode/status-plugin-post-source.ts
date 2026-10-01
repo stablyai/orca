@@ -16,6 +16,8 @@ export function getStatusPluginPostSource(hookPathname: string): string[] {
     '    worktreeId: process.env.ORCA_WORKTREE_ID || "",',
     '    env: coords.env,',
     '    version: coords.version,',
+    // opencodeMajor is set only by the OpenCode 2 setup() path, never read from OpenCode's version.
+    '    ...(reportingOpenCodeMajor ? { opencodeMajor: reportingOpenCodeMajor } : {}),',
     '    payload: { hook_event_name: hookEventName, ...(extraProperties || {}) },',
     '  });',
     '  const controller = new AbortController();',

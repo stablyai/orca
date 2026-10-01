@@ -94,16 +94,16 @@ The structured feed keeps its job of projecting a session's journal into a
 summary and streaming it to subscribers. On every publish it additionally
 ingests the summary into the hook server as a status row:
 
-| Row field                                           | From                                                                                                                                                                          |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `paneKey`                                           | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it                               |
-| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                                                      |
-| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                                                |
-| `state`                                             | `structuredAgentSessionAgentStatus(summary).state`: the lead's own status folded with its live `backgroundTasks`, so a settled lead whose subagent still runs reads `working` |
-| `workingMode`                                       | `'monitoring'` from the same fold when watch loops are the only live child work; omitted otherwise, which clears it on the row                                                |
-| `mainAgent`                                         | the main agent's own state before the fold, its last-turn verdict (`summary.turnOutcome`, present only while idle) and its own clock; see "The main agent fact" below         |
-| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it                                        |
-| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                                                          |
+| Row field                                           | From                                                                                                                                                                                                                                    |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paneKey`                                           | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it                                                                                         |
+| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                                                                                                                |
+| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                                                                                                          |
+| `state`                                             | `structuredAgentSessionAgentStatus(summary).state`: the lead's own status folded with the live child records the store holds for the session (not the summary's task list), so a settled lead whose subagent still runs reads `working` |
+| `workingMode`                                       | `'monitoring'` from the same fold when watch loops are the only live child work; omitted otherwise, which clears it on the row                                                                                                          |
+| `mainAgent`                                         | the main agent's own state before the fold, its last-turn verdict (`summary.turnOutcome`, present only while idle) and its own clock; see "The main agent fact" below                                                                   |
+| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it                                                                                                  |
+| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                                                                                                                    |
 
 Sessions with no request (`status === null`) produce no row. A request is a
 turn record, an assistant message, a user message the provider journaled itself
@@ -112,7 +112,10 @@ its start refused; a send that was withdrawn, or left undelivered by a
 restart or a close, fails nobody and makes nothing listable.
 `summary.turnOutcome` is the latest request's verdict: its turn's outcome, or
 `failure` for a send the agent or its start refused (a send that joined a running
-turn is answered by that turn). The row also publishes `interrupted` from
+turn is answered by that turn). A turn the provider gave no outcome reads as its
+host-observed end through `agentTurnVerdict`: `interruption` for an `interrupted`
+lifecycle, `unconfirmed` for an `unverifiable` one. It is derived on each read,
+never journaled. The row also publishes `interrupted` from
 `mainAgent.outcome`, exactly as the hook lanes do. When the host revokes live ownership the row is re-set
 without the flag; when the host closes or evicts the session the row is
 dropped. Both already exist as feed events (`revokeLive` and the roster
@@ -202,7 +205,7 @@ Claude, Codex and Grok hook rows and structured-session rows publish the combine
 rows and terminal-title-only rows carry none, and readers fall back to `state`:
 
 ```ts
-mainAgent?: { state: AgentStatusState; outcome?: AgentJournalTurnOutcome; stateStartedAt: number }
+mainAgent?: { state: AgentStatusState; outcome?: AgentTurnOutcome; stateStartedAt: number }
 ```
 
 `state` still answers "what should the user see" and folds live child work in,
@@ -215,8 +218,12 @@ works (including a child's permission wait) refuses OSC, which carries no child
 identity; the children's own lifecycle hooks settle it. `outcome` is the recorded verdict on
 the main agent's most recent finished turn, present only while `mainAgent.state` is
 `done`. It is reported by the provider, or is a `cancellation` Orca inferred
-from the user's own interrupt keystroke (the journal's turn outcome, by
-contrast, is never inferred). A plain end of turn carries none, because absent
+from the user's own interrupt keystroke, or a `superseded` the host recorded when
+a newer request replaced a structured Claude turn before it ended (it names no
+sender, and sets no legacy flag), or, on a structured row whose turn the
+provider gave no verdict, is what the host observed of its end: `interruption`
+(a proven death nobody asked for) or `unconfirmed` (an end it cannot prove,
+never success). The journal's turn outcome, by contrast, stores only recorded verdicts: the provider's, a `cancellation`, or the host's `superseded`; `interruption` and `unconfirmed` are derived from the turn's lifecycle state and never stored. A plain end of turn carries none, because absent
 means unknown and a provider that omits its interrupt flag must not turn a
 cancel into a success.
 In the Claude hook lane the cancellation comes primarily from Orca's own
@@ -235,21 +242,31 @@ the verdict through `agentVerdictFields`, which carries `interrupted` and the
 whole `mainAgent` (state, outcome and its own clock) together, so a copy agrees
 with the row and can date a failure by `mainAgent.stateStartedAt`.
 
-Display reads the verdict through `agentVerdictDisplayMark`: a failure marks the
+Display reads the verdict through `agentVerdictDisplayMark`. A fault marks the
 agent failed whatever the combined state, because it is news the user must see
-even while subagents run; a stop marks it interrupted only on a `done` row, so
-a stopped or finished main agent with live child work still reads working.
+even while subagents run: a `failure`, and an `interruption`, a turn cut short
+by anything other than the user or a newer request. A user's stop (`cancellation`)
+marks it interrupted, drawn in the muted tone with the row text "Interrupted by user";
+a turn a newer request replaced (`superseded`) marks it interrupted in the same muted
+tone with the row text "Interrupted"; and `unconfirmed` marks it unconfirmed, all only
+on a `done` row, so a stopped
+or finished main agent with live child work still reads working. The folded
+turn header follows the same mark: "Failed after N", "Interrupted after N", or
+"Worked for N".
 Each subagent keeps its own row and state. Container rollups (worktree card,
 terminal tab, Cmd+J) rank a pending question first, then a failure, then live
-work, then a stop, then done. On the worktree card, a failure retained after its
-agent's pane went away has no expiry, so it ranks below live work and above a
-stop. Lifecycle waiters keep reading the combined `state`.
+work, then an unconfirmed end, then a user's stop, then done. On the worktree
+card, a failure retained after its agent's pane went away has no expiry, so it
+ranks below live work and above an unconfirmed end. Lifecycle waiters keep
+reading the combined `state`.
 
 Policy splits the verdict two ways. Clean-finish policy (hibernation, pane
-ownership, the star-nag value moment) treats a failure like a cancellation
-(`agentTurnEndedUncleanly`). Attention (completion time, Smart Sort, sticky
-retention, Cmd+J Recent) demotes only a turn the user stopped
-(`agentTurnStoppedByUser`); a failure ranks like a completion.
+ownership, the star-nag value moment) treats a failure, an interruption and an
+unconfirmed end like a cancellation (`agentTurnEndedUncleanly`). Attention
+(completion time, Smart Sort, sticky retention, Cmd+J Recent) demotes only a
+turn ended on purpose, the user's stop or a newer request that replaced it
+(`agentTurnEndedOnPurpose`); a failure, an interruption or
+an unconfirmed end ranks like a completion.
 
 Admission is one function, `normalizeAgentStatusPayload`, on the relay wire,
 IPC and disk. A malformed `mainAgent` drops the field and keeps the row. Old hosts

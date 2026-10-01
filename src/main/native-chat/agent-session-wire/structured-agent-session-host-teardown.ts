@@ -174,7 +174,9 @@ export async function flushStructuredAgentSessionHost(
     retainSessionIds,
     acknowledgeSessionRelease: (sessionId) =>
       context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
-    abandonQueued: (sessionId, session) =>
-      abandonQueuedStructuredAgentSessionMessages(context.deps, sessionId, session.journal)
+    // Quit's is best effort: a failure is reported, and the next open rejects the leftover.
+    abandonQueued: async (sessionId, session) => {
+      await abandonQueuedStructuredAgentSessionMessages(context.deps, sessionId, session.journal)
+    }
   })
 }

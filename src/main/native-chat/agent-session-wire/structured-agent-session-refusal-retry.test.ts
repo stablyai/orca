@@ -346,7 +346,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     }
 
     const unreadable = await createHarness()
-    await unreadable.host.close(SESSION)
+    await unreadable.host.close(SESSION, 'evict')
     unreadable.host.deps.adapter.historyFilePath = async () => {
       throw new Error('transcript unreadable')
     }

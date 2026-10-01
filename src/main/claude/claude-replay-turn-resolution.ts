@@ -3,10 +3,14 @@
 // A replay or result is joined to its waiter by the client uuid Claude echoes.
 // A send Claude FOLDS into the running request cycle is replayed mid-cycle with
 // the client uuid adopted: once that cycle has done work, that replay is a
-// delivery receipt and opens no boundary. A `command_lifecycle` frame opens no turn; its
-// `cancelled` can settle a send the CLI withdrew (`claude-command-lifecycle.ts`).
+// delivery receipt and opens no boundary. A `command_lifecycle` frame opens no turn; it and the
+// CLI going idle settle sends the CLI took but never echoed (`claude-command-lifecycle.ts`).
 
-import { observeClaudeCommandLifecycle } from './claude-command-lifecycle'
+import {
+  observeClaudeCommandLifecycle,
+  releaseClaudeDispatchesUnansweredAtIdle
+} from './claude-command-lifecycle'
+import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { forgetRetiredWaiter } from './claude-structured-dispatch-waiters'
 import {
   claudeHasReplayContent,
@@ -32,6 +36,10 @@ export function resolveClaudeReplayTurn(
 ): ClaudeReplayTurnOrigin | null {
   if (message.type === 'command_lifecycle') {
     observeClaudeCommandLifecycle(session, message, onSettledLate)
+    return null
+  }
+  if (claudeSessionStateEndsTurn(message)) {
+    releaseClaudeDispatchesUnansweredAtIdle(session, onSettledLate)
     return null
   }
   const envelope = readClaudeMessageEnvelope(message)

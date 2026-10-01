@@ -10,7 +10,9 @@
 // would have written them. Stop and the conversation's close are the only other writers of a
 // queued message: a child's exit only ends the child, and this loop reads why.
 
+import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import {
   agentSessionFailureFact,
   type SubmissionRejectionFact
@@ -53,10 +55,16 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   ) => Promise<StructuredAgentSessionResumeOutcome>
   /** The fence the conversation's own writes carry; see `structuredAgentSessionConversationFence`. */
   conversationFence: (sessionId: string) => number
+  /** Rejects queued messages as a completed close of the chat does; false when that failed. */
+  abandonQueued: (
+    sessionId: string,
+    which: (submission: AgentJournalSubmission) => boolean
+  ) => Promise<boolean>
   /** Who the chat's failure sentences name. */
   failureTextContext: (sessionId: string) => AgentSessionFailureWordsContext
   onError: (sessionId: string, error: unknown) => void
   record: (sessionId: string) => AgentSessionRecord | null
+  readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   flushStreamedEvents: (sessionId: string) => Promise<void>
   now: () => number
 }
@@ -149,6 +157,10 @@ export class StructuredAgentSessionDeliveryLoop {
       // A handle closes only with nothing queued, so one an earlier handle wrote is a leftover.
       (submission) => session.journal.wroteBeforeOpen(submission.acceptedSequence)
     )
+    if (!(await this.closeWhatTheUserClosed(sessionId, session))) {
+      // Never start an agent for a message the user closed; the next wake re-derives and retries.
+      return this.stop(sessionId)
+    }
     const oldest = oldestQueuedSubmission(session)
     // A running command takes no input while its child carries it; its end is a commit, which
     // wakes the loop again. With no child it is a gone generation's, which the start below settles.
@@ -193,8 +205,8 @@ export class StructuredAgentSessionDeliveryLoop {
       // The child waited on is gone, replaced by another, or settled its start without proving it.
       const ended = awaitedChild ? undefined : session.lastEndedChild
       const endedFailure = ended ? structuredAgentSessionEndedChildFailure(ended) : undefined
-      // A user's Stop is not a failure: the next step starts, or waits on, a child for what is
-      // queued.
+      // A user's Stop or close is not a failure: the next step starts, or waits on, a child for
+      // what is queued, after closing what a close of the chat closed.
       if (endedFailure === null) {
         return 'continue'
       }
@@ -218,6 +230,7 @@ export class StructuredAgentSessionDeliveryLoop {
         providerChildPhase: () => this.deps.sessions.get(sessionId)?.child?.phase,
         failureTextContext: this.deps.failureTextContext(sessionId),
         record: () => this.deps.record(sessionId),
+        childWork: () => this.deps.readChildWork(sessionId),
         flushStreamedEvents: () => this.deps.flushStreamedEvents(sessionId),
         now: this.deps.now
       },
@@ -241,6 +254,27 @@ export class StructuredAgentSessionDeliveryLoop {
       )
     }
     return this.stop(sessionId)
+  }
+
+  /** A close of this chat that stopped its child and then did not complete still closed what was
+   *  queued before it, so no child starts for those. Ordered, not latched: a later send goes on.
+   *  False when those could not be closed. */
+  private async closeWhatTheUserClosed(
+    sessionId: string,
+    session: StructuredAgentSessionHostSession
+  ): Promise<boolean> {
+    const ended = session.lastEndedChild
+    if (session.child || ended?.cause !== 'user-close') {
+      return true
+    }
+    const { epoch } = session.journal.cursor()
+    return this.deps.abandonQueued(
+      sessionId,
+      (submission) =>
+        ended.endedAt.epoch === epoch &&
+        submission.acceptedSequence !== undefined &&
+        submission.acceptedSequence <= ended.endedAt.sequence
+    )
   }
 
   /** Inside the serialized step that found nothing to do, so an accept after it wakes anew. */
@@ -281,6 +315,8 @@ function providerEndFailure(
 // Every end cause, so a new one does not compile until it says whether it fails what is queued.
 const ENDED_CHILD_FAILURE = {
   'user-stop': () => null,
+  // The user closing this chat closes what was queued before it; see `closeWhatTheUserClosed`.
+  'user-close': () => null,
   // The host stopping the child is Orca's cause, never the provider's: a start that never finished.
   'host-stop': () => ({ failure: agentSessionFailureFact('hostStopped') }),
   exit: providerEndFailure,

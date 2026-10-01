@@ -2,7 +2,7 @@
 // The wire carries no hold copy on purpose: the caption is derived here from the
 // draft's own state plus the live facts the client already holds.
 
-import { readAgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import { readWholeAgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
 import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
 import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
@@ -37,13 +37,13 @@ function returnedCaption(
   if (dispatchWasWithdrawn({ dispatchState: 'rejected', reason, rejection })) {
     return 'Stopped before it was sent'
   }
-  // Worded as the desktop card words it: the fact decides, the reason is the fallback, and the
-  // card's own Send is the retry, so the words leave out sending again.
+  // Worded as the desktop card words it: a fact read whole decides, the host's reason is the
+  // fallback, and the card's own Send is the retry, so the words leave out sending again.
   return agentSessionWriteNoticeEnglish(
     structuredAgentSessionAttemptFailureParts(
       { kind: 'rejected', reason },
       { retryControl: true },
-      readAgentSessionFailureFact(rejection)
+      readWholeAgentSessionFailureFact(rejection)
     )
   )
 }

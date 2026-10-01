@@ -1,8 +1,9 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A turn that was running when its host went away ends when recovery settles it. That settlement is
 // the edge the user needs to see — their work stopped — so the session reads as newly done then,
-// and nothing along the way may call it a success. Every hop is the real one: durable journal,
-// recovery settlement, status feed, the host's status row, and the turn-completion feed.
+// with what the host observed of the end as its verdict, and nothing along the way may call it a
+// success. Every hop is the real one: durable journal, recovery settlement, status feed, the host's
+// status row, and the turn-completion feed.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,6 +13,12 @@ import type {
   AgentSessionStatusSummary,
   AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
+import {
+  agentTurnEndedOnPurpose,
+  agentVerdictDisplayMark
+} from '../../../shared/agent-main-agent-verdict'
+import { formatNativeChatTurnStatusLabel } from '../../../shared/native-chat-turn-status'
+import { selectStructuredAgentSettledTurns } from '../../../shared/structured-agent-session-turn-timing'
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -19,7 +26,11 @@ import {
   settleStaleStructuredAgentSessionState,
   settleStructuredAgentSessionDeadGeneration
 } from './structured-agent-session-dead-generation-settlement'
-import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
+import {
+  childEndCauseOfEndedEvent,
+  turnVerdictForChildEnd,
+  type StructuredAgentSessionTurnVerdict
+} from './structured-agent-session-stale-turn-verdict'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
@@ -131,11 +142,22 @@ function settleDeadGeneration(
 
 describe('a turn recovery settled after its host went away', () => {
   it.each([
-    ['an unverifiable end', { state: 'unverifiable' } as const],
-    ['an exit observed before the restart', { state: 'interrupted', completedAt: EXIT_OBSERVED }]
-  ] satisfies [string, StructuredAgentSessionTurnVerdict][])(
-    'is done as of the recovery, never as a success: %s',
-    async (_label, verdict) => {
+    ['an unverifiable end', { state: 'unverifiable' } as const, 'unconfirmed', 'unconfirmed'],
+    [
+      'an exit observed before the restart',
+      { state: 'interrupted', completedAt: EXIT_OBSERVED },
+      'interruption',
+      // A turn the user did not stop is a fault, marked as a failure is.
+      'failed'
+    ]
+  ] satisfies [
+    string,
+    StructuredAgentSessionTurnVerdict,
+    'unconfirmed' | 'interruption',
+    'unconfirmed' | 'failed'
+  ][])(
+    'is done as of the recovery with the end the host observed, never a success: %s',
+    async (_label, verdict, outcome, mark) => {
       const session = await sessionWithRunningTurn()
       session.recoverAt(RECOVERED)
       expect(await settleDeadGeneration(session.journal, verdict)).toBe(true)
@@ -143,19 +165,72 @@ describe('a turn recovery settled after its host went away', () => {
 
       expect(session.summaries.at(-1)).toMatchObject({
         status: 'idle',
-        statusStartedAt: RECOVERED
+        statusStartedAt: RECOVERED,
+        turnOutcome: outcome
       })
-      expect(session.summaries.at(-1)).not.toHaveProperty('turnOutcome')
       const [row] = session.server.getStatusSnapshot()
       // A done row dated at the recovery is a completion the user has not read yet.
       expect(row).toMatchObject({
         state: 'done',
         stateStartedAt: RECOVERED,
-        mainAgent: { state: 'done', stateStartedAt: RECOVERED }
+        mainAgent: { state: 'done', outcome, stateStartedAt: RECOVERED }
       })
-      expect(row?.mainAgent).not.toHaveProperty('outcome')
+      // Nobody stopped it: the flag older readers take as a user's stop stays down.
+      expect(row?.interrupted ?? false).toBe(false)
+      // The sidebar and tab read the published row, with no user action in between.
+      expect(row && agentVerdictDisplayMark(row)).toBe(mark)
+      expect(row && agentTurnEndedOnPurpose(row)).toBe(false)
       // The dot and the OS notification come only from a completion event, and none is sent.
       expect(session.completionEvents).toEqual([])
+    }
+  )
+
+  // The chat's turn bar and the tab's mark read one verdict: a turn nobody stopped failed, and
+  // must never show the done tick of a finished turn.
+  it.each([
+    [
+      'a restart',
+      (journal: AgentSessionJournal) =>
+        settleDeadGeneration(journal, { state: 'interrupted', completedAt: EXIT_OBSERVED })
+    ],
+    [
+      'quitting Orca',
+      // A quit evicts the child, and its adapter settles the open turn through the one mapping.
+      (journal: AgentSessionJournal) =>
+        journal.appendItem(
+          { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 9 },
+          {
+            kind: 'turn',
+            turnId: 'turn-1',
+            startedAt: TURN_STARTED,
+            ...turnVerdictForChildEnd(
+              childEndCauseOfEndedEvent({
+                type: 'ended',
+                cause: 'requested-close',
+                stopCause: 'evict'
+              }),
+              EXIT_OBSERVED
+            )
+          },
+          { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+        )
+    ]
+  ] as const)(
+    'reads Failed after N, marked failed, for a turn cut off by %s',
+    async (_label, cut) => {
+      const session = await sessionWithRunningTurn()
+      session.recoverAt(RECOVERED)
+      await cut(session.journal)
+      session.publish()
+
+      const [row] = session.server.getStatusSnapshot()
+      expect(row && agentVerdictDisplayMark(row)).toBe('failed')
+      const [settled] = [
+        ...selectStructuredAgentSettledTurns(session.journal.snapshot().items).values()
+      ]
+      expect(settled && formatNativeChatTurnStatusLabel({ elapsedSeconds: 0, ...settled })).toBe(
+        'Failed after 1s'
+      )
     }
   )
 
@@ -173,12 +248,17 @@ describe('a turn recovery settled after its host went away', () => {
 
     expect(session.summaries.at(-1)).toMatchObject({
       status: 'idle',
-      statusStartedAt: RECOVERED
+      statusStartedAt: RECOVERED,
+      // No evidence of the old owner's death: the end cannot be proven.
+      turnOutcome: 'unconfirmed'
     })
-    expect(session.server.getStatusSnapshot()[0]).toMatchObject({
+    const [row] = session.server.getStatusSnapshot()
+    expect(row).toMatchObject({
       state: 'done',
-      stateStartedAt: RECOVERED
+      stateStartedAt: RECOVERED,
+      mainAgent: { state: 'done', outcome: 'unconfirmed' }
     })
+    expect(row && agentVerdictDisplayMark(row)).toBe('unconfirmed')
     expect(session.completionEvents).toEqual([])
   })
 

@@ -119,7 +119,8 @@ describe('Claude root-exit stop', () => {
     const deps = {
       store,
       adapter,
-      journalDatabase: openTestJournalHostDatabase(root),
+      // The one database the store and the journal share, as the runtime installs them.
+      journalDatabase: openTestJournalHostDatabase(stateDirectory),
       claimKeyId: 'key-1'
     }
     const runtimeState = new StructuredAgentSessionHostRuntimeState(deps)
@@ -134,7 +135,8 @@ describe('Claude root-exit stop', () => {
           now: () => NOW + 30 * 60_000,
           publishStatus
         },
-        'session-1'
+        'session-1',
+        { cause: 'evict' }
       )
     ).resolves.toBeUndefined()
 

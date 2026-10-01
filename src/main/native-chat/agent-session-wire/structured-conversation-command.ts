@@ -177,7 +177,7 @@ export function runStructuredConversationCommand(
         run: async (ctx) => {
           await host.flushStreamedEvents(sessionId)
           const record = store.getRecord(sessionId)!
-          const blocked = conversationCommandBlocked(ctx, record)
+          const blocked = conversationCommandBlocked(ctx, record, context.readChildWork(sessionId))
           if (blocked) {
             return { ok: false, refusal: blocked }
           }

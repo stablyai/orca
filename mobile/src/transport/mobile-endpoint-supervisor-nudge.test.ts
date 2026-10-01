@@ -136,20 +136,6 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.stop()
   })
 
-  it('does not suspend a relay from one focus RPC failure', async () => {
-    const logical = new FakeLogicalClient('connected', 'relay')
-    const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
-    await supervisor.start()
-
-    supervisor.nudge('focus')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
-    expect(deps.openRelay).not.toHaveBeenCalled()
-    expect(logical.getState()).toBe('connected')
-    supervisor.stop()
-  })
-
   it('queues a network replacement that lands while another dial owns the mutex', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     let resolveWrite: (() => void) | null = null

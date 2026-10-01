@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
-import type * as DurableFileWrite from '../../durable-file-write'
+import type * as AgentSessionRecordRows from '../../runtime/agent-session-record-rows'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type {
@@ -31,21 +31,16 @@ const CALLER = { callerKey: 'client-1' }
 
 const publishFault = vi.hoisted(() => ({ failOnPublish: 0, publishCount: 0 }))
 
-vi.mock('../../durable-file-write', async (importOriginal) => {
-  const actual = await importOriginal<typeof DurableFileWrite>()
+vi.mock('../../runtime/agent-session-record-rows', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentSessionRecordRows>()
   return {
     ...actual,
-    renameDurable: async (tmpPath: string, finalPath: string) => {
-      if (finalPath.endsWith('agent-sessions.json')) {
-        publishFault.publishCount += 1
-      }
-      if (
-        finalPath.endsWith('agent-sessions.json') &&
-        publishFault.publishCount === publishFault.failOnPublish
-      ) {
+    writeAgentSessionStoreRows: (...args: Parameters<typeof actual.writeAgentSessionStoreRows>) => {
+      publishFault.publishCount += 1
+      if (publishFault.publishCount === publishFault.failOnPublish) {
         throw new Error('simulated crash before failed-settlement publish')
       }
-      return actual.renameDurable(tmpPath, finalPath)
+      return actual.writeAgentSessionStoreRows(...args)
     }
   }
 })

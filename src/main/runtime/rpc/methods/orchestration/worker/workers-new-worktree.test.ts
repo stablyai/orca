@@ -224,7 +224,7 @@ describe('orchestration new-worktree workers', () => {
     expect(db.getDispatchContext(task.id)).toBeUndefined()
   })
 
-  it('injects the execution host CLI command and Dispatch capability together', async () => {
+  it('injects the execution host CLI command without a Dispatch capability', async () => {
     mockCreatedWorktree()
     vi.mocked(runtime.getTerminalOrchestrationCliCommand).mockReturnValue('orca-ide')
 
@@ -232,7 +232,6 @@ describe('orchestration new-worktree workers', () => {
 
     const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
     expect(prompt).toContain('orca-ide orchestration send')
-    expect(prompt).toMatch(/--dispatch-capability dcap_[A-Za-z0-9_-]+/)
     expect(prompt).not.toMatch(/(^|\s)orca orchestration send/)
   })
 

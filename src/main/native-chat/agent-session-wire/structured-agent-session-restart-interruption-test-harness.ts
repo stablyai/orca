@@ -12,16 +12,19 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
+import { childRecord } from './structured-agent-session-restart-resume-test-harness'
 import {
   adapter,
   attach,
   CALLER,
   envelope,
   hostTestState,
-  replaceHostTestState
+  replaceHostTestState,
+  serveHostTestChildWork
 } from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW as NOW,
@@ -54,6 +57,10 @@ export async function interruptedRestart(
   })
 ) {
   const previous = hostTestState()
+  let children: AgentChildWorkView[] = []
+  if (work === 'children') {
+    serveHostTestChildWork(() => children)
+  }
   await attach()
   const events = previous.acquire.mock.calls[0]?.[0].events
   if (!events) {
@@ -98,10 +105,7 @@ export async function interruptedRestart(
       ]
     })
     events.appendItem(group, roster('working'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    previous.host.deps.adapter.backgroundTaskState = () => ({
-      state: 'monitoring',
-      tasks: [{ id: 'child-1', kind: 'agent', description: 'Review loop 4', state: 'working' }]
-    })
+    children = [childRecord({ id: 'child-1', kind: 'agent', description: 'Review loop 4' })]
     // As the real adapters do: the child's own close settles the children it can no longer hear.
     previous.host.deps.adapter.closeSession = async () => {
       events.appendItem(group, roster('unverifiable'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })

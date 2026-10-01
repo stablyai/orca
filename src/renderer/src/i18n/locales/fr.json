@@ -16605,6 +16605,7 @@
             "done": "Fait",
             "idle": "Inactif",
             "unverifiable": "Aucune mise à jour récente",
+            "unconfirmed": "Impossible de confirmer",
             "permission": "A besoin d'attention"
           }
         },
@@ -17378,6 +17379,65 @@
   },
   "components": {
     "native-chat": {
+      "failureWords": {
+        "theAgent": "L'agent",
+        "providerStartFailed": "{{agent}} s'est arrêté avant d'avoir fini de démarrer.",
+        "runCommandAgain": "Relancez /{{command}}.",
+        "sendToTryAgain": "Envoyez votre message pour réessayer.",
+        "couldNotStart": "{{agent}} n'a pas pu démarrer.",
+        "couldNotRestart": "{{agent}} n'a pas pu redémarrer.",
+        "notSignedIn": "{{agent}} n'est pas connecté avec le compte sélectionné.",
+        "signInFirst": "Connectez-vous d'abord.",
+        "signInThenRunCommand": "Connectez-vous, puis relancez /{{command}}.",
+        "signInThenSend": "Connectez-vous, puis renvoyez votre message.",
+        "historyTooLarge": "L'historique de cette conversation est trop volumineux pour être restauré ici.",
+        "managedAccountEnvOverride": "Ce lancement de Claude définit ses propres variables de connexion Anthropic. Supprimez-les pour utiliser un compte Claude géré.",
+        "accountSwitchInProgress": "Un changement de compte Claude est en cours. Réessayez une fois qu'il sera terminé.",
+        "managedAccountUnsupported": "Tant qu'un compte Claude est ajouté dans WSL, les chats Claude nécessitent un compte Claude Windows.",
+        "chooseClaudeAccount": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude.",
+        "chooseClaudeAccountThenRunCommand": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude, puis relancez /{{command}}.",
+        "chooseClaudeAccountThenSend": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude, puis renvoyez votre message.",
+        "providerExitedRow": "{{agent}} s'est arrêté pendant que cette réponse était en cours. Vous pouvez continuer dans cette conversation.",
+        "providerExitedRejection": "{{agent}} s'est arrêté avant l'envoi de ce message.",
+        "providerRejected": "Le fournisseur n'a pas accepté ce message.",
+        "providerRejectedQuoted": "Le fournisseur n'a pas accepté ce message : {{detail}}.",
+        "attachmentEmpty": "Une image de ce message est vide, le message n'a donc pas été envoyé.",
+        "attachmentTooLarge": "Une image de ce message est trop volumineuse, le message n'a donc pas été envoyé.",
+        "attachmentLargerThan": "Une image de ce message dépasse {{size}} Mo, le message n'a donc pas été envoyé.",
+        "attachmentTooMany": "Ce message contient trop d'images, il n'a donc pas été envoyé.",
+        "attachmentAtMost": "{{agent}} accepte au maximum {{limit}} images par message, ce message n'a donc pas été envoyé.",
+        "attachmentTotalTooLarge": "Les images de ce message sont trop volumineuses au total, le message n'a donc pas été envoyé.",
+        "attachmentTotalMoreThan": "Les images de ce message dépassent {{size}} Mo au total, le message n'a donc pas été envoyé.",
+        "attachmentUnsupportedType": "{{agent}} n'accepte que les images PNG, JPEG, GIF et WebP, ce message n'a donc pas été envoyé.",
+        "attachmentNotAFile": "Une image de ce message n'est pas un fichier, le message n'a donc pas été envoyé.",
+        "attachmentNoSource": "Une image de ce message n'a aucun fichier à envoyer, le message n'a donc pas été envoyé.",
+        "attachmentInvalid": "Une pièce jointe de ce message ne peut pas être envoyée à l'agent.",
+        "attachmentUnreadable": "Une pièce jointe de ce message n'a pas pu être lue, le message n'a donc pas été envoyé.",
+        "emptyMessage": "Ce message est vide, il n'a donc pas été envoyé.",
+        "queueFull": "Trop de messages attendaient l'agent, celui-ci n'a donc pas été envoyé.",
+        "writeFailed": "Orca n'a pas pu transmettre ce message à l'agent, il n'a donc pas été envoyé.",
+        "cancelled": "Ce message a été retiré avant que l'agent ne commence à le traiter.",
+        "chatClosed": "Le chat s'est fermé avant l'envoi de ce message.",
+        "hostRestarted": "Orca a redémarré avant l'envoi de ce message.",
+        "notDelivered": "Ce message n'a pas été remis.",
+        "notDeliveredSendAgain": "Ce message n'a pas été remis. Renvoyez-le pour continuer.",
+        "commandRefused": "Cette commande n'a pas été exécutée.",
+        "commandRefusedTryAgain": "Cette commande n'a pas été exécutée. Réessayez.",
+        "compactionFailed": "La compaction a échoué.",
+        "compactionFailedQuoted": "La compaction a échoué : {{detail}}.",
+        "compactionUnconfirmed": "La fin de la compaction n'est pas confirmée.",
+        "cancelUnconfirmed": "L'annulation n'a pas été confirmée.",
+        "stopRefused": "{{agent}} ne s'est pas arrêté.",
+        "stopRefusedQuoted": "{{agent}} ne s'est pas arrêté : {{detail}}.",
+        "noTurnToStop": "{{agent}} n'avait aucun tour en cours à arrêter.",
+        "answerUnconfirmed": "Votre réponse a été enregistrée, mais l'agent ne l'a pas confirmée.",
+        "hostFault": "Orca a rencontré un problème, l'opération n'a donc pas abouti.",
+        "hostFaultTryAgain": "Orca a rencontré un problème, l'opération n'a donc pas abouti. Réessayez.",
+        "hostStopped": "{{agent}} n'a jamais fini de démarrer, Orca l'a donc arrêté.",
+        "providerRateLimited": "{{agent}} est limité en débit et réessaie.",
+        "providerRetrying": "{{agent}} a rencontré un problème temporaire et réessaie.",
+        "providerRetryingQuoted": "{{agent}} réessaie : {{detail}}."
+      },
       "writeNotice": {
         "notDoneReadHistory": "L'historique de ce chat n'a pas pu être chargé.",
         "notDoneSend": "Votre message n'a pas été envoyé.",
@@ -17461,6 +17521,7 @@
         "pastedImageLabel": "Image collée",
         "imagePasteFailed": "Échec du collage de l'image.",
         "worktreeNotReady": "Worktree pas encore prêt — réessayez dans un instant.",
+        "pasteUnavailable": "Impossible de coller — ce chat n'accepte pas de saisie pour le moment.",
         "uploadingAttachments": "Envoi de {{value0}} fichier(s) vers le distant…",
         "model": "Modèle",
         "effort": "Effort",
@@ -17572,6 +17633,8 @@
         "thinking": "Réflexion",
         "workingFor": "En cours depuis {{value0}}",
         "workedFor": "A travaillé pendant {{value0}}",
+        "interruptedAfter": "Interrompu après {{value0}}",
+        "failedAfter": "Échoué après {{value0}}",
         "toggleDetails": "Basculer les détails du tour"
       },
       "jumpToLatest": "Aller au dernier message",
@@ -17587,7 +17650,8 @@
         "error": {
           "title": "Impossible de charger la conversation",
           "subtitle": "La transcription n'a pas pu être lue. Rebasculez sur le terminal pour continuer à travailler.",
-          "retryingSubtitle": "La transcription n'a pas pu être lue. Orca continue d'essayer de la charger."
+          "retryingSubtitle": "La transcription n'a pas pu être lue. Orca continue d'essayer de la charger.",
+          "keepsTrying": "Orca continue d'essayer de le charger."
         },
         "reconnecting": "Reconnexion à ce chat…",
         "pairHost": "Associez un hôte pour consulter l'historique de chat des agents.",
@@ -17742,8 +17806,7 @@
         "unnamed": "Sous-agent"
       },
       "conversationCommand": {
-        "pendingWork": "Attendez la fin du travail et des messages en attente avant d'utiliser cette commande.",
-        "unconfirmed": "L'opération de conversation n'a pas été confirmée."
+        "pendingWork": "Attendez la fin du travail et des messages en attente avant d'utiliser cette commande."
       },
       "drop": {
         "title": "Déposer pour joindre à ce chat",
@@ -17776,6 +17839,9 @@
         "title": "Contexte",
         "estimated": "Estimation basée sur la dernière réponse."
       },
+      "dismissDeliveryNotice": "Ignorer",
+      "messageNotSent": "Message non envoyé",
+      "deliveryUnconfirmed": "Livraison non confirmée — vérifiez le chat avant de réessayer",
       "queuedMessages": {
         "alreadySent": "Ce message a déjà été envoyé.",
         "editAlreadySent": "Déjà envoyé — votre texte reste dans la zone de saisie.",
@@ -18052,6 +18118,12 @@
           "unknown": "Hôte inconnu",
           "candidateName": "{{value0}} sur {{value1}}"
         }
+      },
+      "creation": {
+        "worktreeReadyToast": "Le worktree {{name}} est prêt",
+        "workspaceReadyToast": "L'espace de travail {{name}} est prêt",
+        "goToWorktree": "Aller au worktree",
+        "goToWorkspace": "Aller à l'espace de travail"
       }
     },
     "agentSessionContinuation": {

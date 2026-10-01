@@ -4,7 +4,7 @@
 // session owns are cleared exactly once, and only when the child was actually
 // proven stopped — a refused close leaves the session indexed for a retry.
 
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { StructuredAgentSessionStopCause } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   closeAllCodexSessions,
   closeCodexPublishedSession,
@@ -20,22 +20,19 @@ export type CodexStructuredSessionTeardownDeps = {
   sessions: Map<string, CodexSession>
   acquisitions: CodexAcquisitionRegistry
   onEvent?: (event: CodexStructuredSessionEvent) => void
-  onBackgroundTasksChanged?: (
-    sessionId: string,
-    state: AgentSessionBackgroundTaskState | null
-  ) => void
   forgetNotificationRetries: (sessionId: string) => void
 }
 
 export class CodexStructuredSessionTeardown {
   constructor(private readonly deps: CodexStructuredSessionTeardownDeps) {}
 
-  close = async (sessionId: string): Promise<boolean> => {
+  close = async (sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean> => {
     const closed = await closeCodexSession(
       sessionId,
       this.deps.sessions,
       this.deps.acquisitions,
-      this.deps.onEvent
+      this.deps.onEvent,
+      cause
     )
     return this.settled(sessionId, closed)
   }
@@ -84,10 +81,6 @@ export class CodexStructuredSessionTeardown {
   private settled(sessionId: string, closed: boolean): boolean {
     if (closed) {
       this.deps.forgetNotificationRetries(sessionId)
-      // Explicit null, not silence: the state reader answers `undefined` once
-      // the session leaves the map, which every channel reads as "unchanged"
-      // and would leave the last roster on screen.
-      this.deps.onBackgroundTasksChanged?.(sessionId, null)
     }
     return closed
   }

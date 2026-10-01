@@ -370,7 +370,7 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
 
 it('leaves a command whose start failed not sent, beside one start-failure row (B3)', async () => {
   await attach()
-  await state.host.close(SESSION)
+  await state.host.close(SESSION, 'evict')
   state.acquire.mockRejectedValue(new Error('not signed in'))
   const params = compactParams()
 

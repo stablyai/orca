@@ -62,6 +62,34 @@ export function readCodexTurnDurationMs(payload: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 }
 
+/** `error` carries `willRetry`: Codex sets it on a stream error it is about to
+ *  retry, and omits it (false) on one that ended the turn the frame names. */
+export function readCodexErrorWillRetry(payload: unknown): boolean {
+  return record(payload)?.willRetry === true
+}
+
+/** `error.message` on an `error` frame: Codex's own words for the person reading the chat. */
+export function readCodexErrorMessage(payload: unknown): string | null {
+  return nonEmptyString(record(record(payload)?.error)?.message)
+}
+
+/** `error.additionalDetails`: what failed underneath, which Codex shows under its message. */
+export function readCodexErrorAdditionalDetails(payload: unknown): string | null {
+  return nonEmptyString(record(record(payload)?.error)?.additionalDetails)
+}
+
+/** `error.codexErrorInfo` is a bare variant (`"serverOverloaded"`) or one keyed to its fields
+ *  (`{"responseStreamDisconnected":{"httpStatusCode":502}}`); read as the variant and its status. */
+export function readCodexErrorInfo(payload: unknown): { error: string; status?: unknown } | null {
+  const info = record(record(payload)?.error)?.codexErrorInfo
+  const bare = nonEmptyString(info)
+  if (bare) {
+    return { error: bare }
+  }
+  const [variant, fields] = Object.entries(record(info) ?? {})[0] ?? []
+  return variant ? { error: variant, status: record(fields)?.httpStatusCode } : null
+}
+
 /** `thread/status/changed` carries a TAGGED status (`{status:{type}}`), never a
  *  bare string. `idle` and `systemError` are the two arms that mean the thread
  *  is not running; `active` and `notLoaded` are not. */

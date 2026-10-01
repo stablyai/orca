@@ -1,6 +1,7 @@
+import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { createHash } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentRowBusyError, RelayAssignmentStore } from './assignment-store.js'
 import {
   encodeMembership,
   type CellAdmissionMembership,
@@ -39,7 +40,14 @@ const TARGETS: RelayCellConfig[] = [
     ...CAPPED
   }
 ]
-const CELLS = [ISOLATED, ...TARGETS]
+// The next tier: taken only when the source's region has no general room.
+const OTHER_REGION: RelayCellConfig = {
+  id: 'isolated-replacement-other-region',
+  url: 'https://isolated-replacement-other-region.example.com',
+  region: 'asia-east2',
+  ...CAPPED
+}
+const CELLS = [ISOLATED, ...TARGETS, OTHER_REGION]
 const HOST_COUNT = 50
 
 function hostIdentity(index: number): { userId: string; relayHostId: string } {
@@ -62,7 +70,102 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     return Number(rows[0]!['reserved_requests'])
   }
 
-  async function heartbeatAll(): Promise<void> {
+  // The accounting invariant the migration paths assert: a cell's counter is
+  // exactly the units of the leases held on it.
+  async function expectReservationAccounting(): Promise<void> {
+    for (const cell of CELLS) {
+      const leased = await databases[0]!.query(
+        `SELECT COALESCE(SUM(request_units), 0) AS units
+         FROM relay_assignment_activity_leases WHERE cell_id = ?`,
+        [cell.id]
+      )
+      expect({ cell: cell.id, reserved: await reservedRequests(cell.id) }).toEqual({
+        cell: cell.id,
+        reserved: Number(leased[0]!['units'])
+      })
+    }
+  }
+
+  async function expectReservationAccountingExcept(cellId: string): Promise<void> {
+    for (const cell of CELLS.filter(({ id }) => id !== cellId)) {
+      const leased = await databases[0]!.query(
+        `SELECT COALESCE(SUM(request_units), 0) AS units
+         FROM relay_assignment_activity_leases WHERE cell_id = ?`,
+        [cell.id]
+      )
+      expect(await reservedRequests(cell.id)).toBe(Number(leased[0]!['units']))
+    }
+  }
+
+  async function counters(identity: {
+    userId: string
+    relayHostId: string
+  }): Promise<{ controls: number; splices: number }> {
+    const rows = await databases[0]!.query(
+      `SELECT reserved_controls, reserved_splices FROM relay_assignments
+       WHERE user_id = ? AND relay_host_id = ?`,
+      [identity.userId, identity.relayHostId]
+    )
+    return {
+      controls: Number(rows[0]!['reserved_controls']),
+      splices: Number(rows[0]!['reserved_splices'])
+    }
+  }
+
+  // Holds the named relay_cells rows in another session until released, the
+  // way a release from a far cell holds its row across a round trip.
+  async function holdCellRows(cellIds: string[]): Promise<() => Promise<void>> {
+    return await holdRows(
+      `SELECT cell_id FROM relay_cells WHERE cell_id IN (${cellIds.map(() => '?').join(', ')})
+       ORDER BY cell_id ASC`,
+      cellIds
+    )
+  }
+
+  async function holdRows(sql: string, params: unknown[]): Promise<() => Promise<void>> {
+    let release!: () => void
+    const released = new Promise<void>((resolve) => (release = resolve))
+    let held!: () => void
+    const acquired = new Promise<void>((resolve) => (held = resolve))
+    const holder = databases[3]!.transaction(async (transaction) => {
+      await transaction.queryLocked(sql, params)
+      held()
+      await released
+    })
+    await acquired
+    return async () => {
+      release()
+      await holder
+    }
+  }
+
+  // Puts a host on the source with a live control and a splice, then isolates
+  // the source for a roll with both targets open.
+  async function seedActiveHostOnIsolatedSource(index: number): Promise<{
+    identity: { userId: string; relayHostId: string }
+    first: { cellId: string; assignmentEpoch: number }
+  }> {
+    const identity = hostIdentity(index)
+    await applySelector({ [TARGETS[0]!.id]: 'migration-only', [TARGETS[1]!.id]: 'migration-only' })
+    const first = await stores[0]!.assign(identity, 'us-central1')
+    expect(first.cellId).toBe(ISOLATED.id)
+    await stores[0]!.activateControl(identity, {
+      cellId: ISOLATED.id,
+      assignmentEpoch: first.assignmentEpoch,
+      generation: 1
+    })
+    await stores[0]!.acquireActivity(identity, {
+      activityId: 'splice:keep-1',
+      kind: 'splice',
+      cellId: ISOLATED.id
+    })
+    await applySelector({ [TARGETS[0]!.id]: 'general', [TARGETS[1]!.id]: 'general' })
+    await applySelector({ [ISOLATED.id]: 'migration-only' }, [ISOLATED.id])
+    return { identity, first }
+  }
+
+  // `enforced` puts a cell at its connection cap, which leaves it no headroom.
+  async function heartbeatAll(enforced: Record<string, number> = {}): Promise<void> {
     for (const [index, cell] of CELLS.entries()) {
       await stores[0]!.recordCellHeartbeat({
         cellId: cell.id,
@@ -72,10 +175,11 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
         ready: true,
         observedRequests: 0,
         region: cell.region,
-        totalConnections: 0,
+        // The cell checks enforced = total + in-flight + reserved.
+        totalConnections: enforced[cell.id] ?? 0,
         inFlightConnections: 0,
         reservedConnectionUnits: 0,
-        enforcedConnectionUnits: 0,
+        enforcedConnectionUnits: enforced[cell.id] ?? 0,
         connectionHardCap: 600,
         connectionUnobservedBound: 50
       })
@@ -113,7 +217,11 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
       else membership.general.push(cellId)
     }
     await stores[0]!.applyCellAdmissionSelector({
-      attemptId: `isolated-${current.selector.generation}-${Object.keys(states).join('-')}`,
+      // The id is capped at 128 characters; the generation already makes it unique.
+      attemptId: `isolated-${current.selector.generation}-${createHash('sha256')
+        .update(Object.keys(states).join('-'))
+        .digest('hex')
+        .slice(0, 16)}`,
       expectedGeneration: current.selector.generation,
       ...(current.selector.generation === 0
         ? {
@@ -140,6 +248,12 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
   // isolated would otherwise starve the next one of placement candidates.
   async function resetFleet(): Promise<void> {
     await deleteHostRows()
+    // Only this file's hosts hold leases on these cells, so zero is exact.
+    await databases[0]!.query(
+      `UPDATE relay_cells SET reserved_requests = 0
+       WHERE cell_id IN (${CELLS.map(() => '?').join(', ')})`,
+      CELLS.map((cell) => cell.id)
+    )
     await applySelector(Object.fromEntries(CELLS.map((cell) => [cell.id, 'general'])))
   }
 
@@ -293,10 +407,23 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
       expect(grant.assignmentEpoch).toBe(first.get(identity.relayHostId)!.assignmentEpoch + 1)
     }
 
-    expect(await reservedRequests(ISOLATED.id)).toBe(sourceBaseline)
+    // The placement leaves the source row alone: each host's pending control
+    // there still counts until the source releases it.
+    expect(await reservedRequests(ISOLATED.id)).toBe(sourceBaseline + HOST_COUNT)
     expect(
       (await reservedRequests(TARGETS[0]!.id)) + (await reservedRequests(TARGETS[1]!.id))
     ).toBe(targetBaseline + HOST_COUNT)
+    await expectReservationAccounting()
+    for (const identity of identities) {
+      expect(
+        await stores[0]!.releaseActivity(
+          identity,
+          `control-pending:${first.get(identity.relayHostId)!.assignmentEpoch}`
+        )
+      ).toBe(true)
+    }
+    expect(await reservedRequests(ISOLATED.id)).toBe(sourceBaseline)
+    await expectReservationAccounting()
 
     const rows = await databases[0]!.query(
       `SELECT COUNT(*) AS count FROM relay_assignments
@@ -331,13 +458,13 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     expect(granted.length).toBeGreaterThan(0)
 
     // However many dials were granted, only one re-placement may have
-    // committed: the epoch advances by exactly one and the reservation moves
-    // exactly one unit.
+    // committed: the epoch advances by exactly one and the target gains exactly
+    // one unit. The source keeps its lease until the source releases it.
     const settled = await stores[0]!.resolve(identity)
     expect(settled?.assignmentEpoch).toBe(first.assignmentEpoch + 1)
     expect(settled?.cellId).not.toBe(ISOLATED.id)
     for (const grant of granted) expect(grant.cellId).toBe(settled?.cellId)
-    expect(await reservedRequests(ISOLATED.id)).toBe(sourceBefore - 1)
+    expect(await reservedRequests(ISOLATED.id)).toBe(sourceBefore)
     expect(
       (await reservedRequests(TARGETS[0]!.id)) + (await reservedRequests(TARGETS[1]!.id))
     ).toBe(targetBaseline + 1)
@@ -360,5 +487,406 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     expect((await stores[0]!.resolve(identity))?.assignmentEpoch).toBe(
       first.assignmentEpoch + 1
     )
+  }, 30_000)
+  it('leaves the source row to the source’s own releases and keeps the host’s counters', async () => {
+    await resetFleet()
+    const { identity, first } = await seedActiveHostOnIsolatedSource(910)
+    const sourceBefore = await reservedRequests(ISOLATED.id)
+    const targetsBefore =
+      (await reservedRequests(TARGETS[0]!.id)) + (await reservedRequests(TARGETS[1]!.id))
+    expect(sourceBefore).toBe(3)
+    expect(await counters(identity)).toEqual({ controls: 1, splices: 1 })
+
+    const moved = await stores[1]!.assign(identity, 'us-central1')
+    expect(TARGETS.map(({ id }) => id)).toContain(moved.cellId)
+    expect(moved.assignmentEpoch).toBe(first.assignmentEpoch + 1)
+    expect(await reservedRequests(ISOLATED.id)).toBe(sourceBefore)
+    expect(
+      (await reservedRequests(TARGETS[0]!.id)) + (await reservedRequests(TARGETS[1]!.id))
+    ).toBe(targetsBefore + 1)
+    // One control added on the target; the source's control and splice kept.
+    expect(await counters(identity)).toEqual({ controls: 2, splices: 1 })
+    await expectReservationAccounting()
+
+    // The source closes the host's sockets: each release takes its own units.
+    expect(await stores[0]!.releaseActivity(identity, `control:${ISOLATED.id}:1`)).toBe(true)
+    expect(await reservedRequests(ISOLATED.id)).toBe(sourceBefore - 1)
+    expect(await counters(identity)).toEqual({ controls: 1, splices: 1 })
+    expect(await stores[0]!.releaseActivity(identity, 'splice:keep-1')).toBe(true)
+    expect(await reservedRequests(ISOLATED.id)).toBe(0)
+    // The target's control survives the source's releases.
+    expect(await counters(identity)).toEqual({ controls: 1, splices: 0 })
+    await expectReservationAccounting()
+  }, 30_000)
+
+  it('re-places an isolated incumbent while the source row is held', async () => {
+    await resetFleet()
+    const { identity, first } = await seedActiveHostOnIsolatedSource(911)
+    const sourceBefore = await reservedRequests(ISOLATED.id)
+    const release = await holdCellRows([ISOLATED.id])
+    try {
+      // Held far past the 500ms bounded wait: a placement that asked for the
+      // source row could not finish inside this window.
+      const moved = await Promise.race([
+        stores[1]!.assign(identity, 'us-central1'),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 3_000))
+      ])
+      expect(moved).not.toBe('blocked')
+      expect(moved).toMatchObject({ assignmentEpoch: first.assignmentEpoch + 1 })
+    } finally {
+      await release()
+    }
+    expect(await reservedRequests(ISOLATED.id)).toBe(sourceBefore)
+    await expectReservationAccounting()
+  }, 30_000)
+
+  it('waits for the target rows it increments', async () => {
+    await resetFleet()
+    const { identity, first } = await seedActiveHostOnIsolatedSource(912)
+    const targetsBefore =
+      (await reservedRequests(TARGETS[0]!.id)) + (await reservedRequests(TARGETS[1]!.id))
+    const release = await holdCellRows(TARGETS.map(({ id }) => id))
+    let settled = false
+    const placement = stores[1]!.assign(identity, 'us-central1').finally(() => {
+      settled = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    expect(settled).toBe(false)
+    await release()
+    expect(await placement).toMatchObject({ assignmentEpoch: first.assignmentEpoch + 1 })
+    expect(
+      (await reservedRequests(TARGETS[0]!.id)) + (await reservedRequests(TARGETS[1]!.id))
+    ).toBe(targetsBefore + 1)
+    await expectReservationAccounting()
+  }, 30_000)
+
+  it('keeps the pin when no general cell in any region has headroom', async () => {
+    await resetFleet()
+    const { identity, first } = await seedActiveHostOnIsolatedSource(913)
+    const sourceBefore = await reservedRequests(ISOLATED.id)
+    await databases[0]!.query(
+      `UPDATE relay_cells SET reserved_requests = capacity_requests WHERE cell_id IN (?, ?, ?)`,
+      [...TARGETS, OTHER_REGION].map(({ id }) => id)
+    )
+    try {
+      expect(await stores[1]!.assign(identity, 'us-central1')).toMatchObject({
+        cellId: ISOLATED.id,
+        assignmentEpoch: first.assignmentEpoch
+      })
+      expect(await reservedRequests(ISOLATED.id)).toBe(sourceBefore)
+      expect(await counters(identity)).toEqual({ controls: 1, splices: 1 })
+    } finally {
+      await databases[0]!.query(
+        `UPDATE relay_cells SET reserved_requests = 0 WHERE cell_id IN (?, ?, ?)`,
+        [...TARGETS, OTHER_REGION].map(({ id }) => id)
+      )
+    }
+  }, 30_000)
+
+  it('moves to another region when its own is at the connection cap, without the source row', async () => {
+    await resetFleet()
+    const { identity, first } = await seedActiveHostOnIsolatedSource(917)
+    const sourceBefore = await reservedRequests(ISOLATED.id)
+    await heartbeatAll(Object.fromEntries(TARGETS.map(({ id }) => [id, 600])))
+    const release = await holdCellRows([ISOLATED.id])
+    try {
+      const moved = await Promise.race([
+        stores[1]!.assign(identity, 'us-central1'),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 3_000))
+      ])
+      expect(moved).toMatchObject({
+        cellId: OTHER_REGION.id,
+        region: 'asia-east2',
+        assignmentEpoch: first.assignmentEpoch + 1
+      })
+    } finally {
+      await release()
+      await heartbeatAll()
+    }
+    expect(await reservedRequests(ISOLATED.id)).toBe(sourceBefore)
+    expect(await reservedRequests(OTHER_REGION.id)).toBe(1)
+    await expectReservationAccounting()
+  }, 30_000)
+  it('places a dormant host without asking for its old cell row', async () => {
+    await resetFleet()
+    const identity = hostIdentity(914)
+    await applySelector({ [TARGETS[0]!.id]: 'migration-only', [TARGETS[1]!.id]: 'migration-only' })
+    const first = await stores[0]!.assign(identity, 'us-central1')
+    expect(first.cellId).toBe(ISOLATED.id)
+    // Dormant: no units held and no activity inside the dormancy window.
+    await databases[0]!.query(
+      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ? AND relay_host_id = ?`,
+      [identity.userId, identity.relayHostId]
+    )
+    await databases[0]!.query(
+      `UPDATE relay_assignments SET reserved_controls = 0, last_activity_at = ?
+       WHERE user_id = ? AND relay_host_id = ?`,
+      [NOW - ASSIGNMENT_LIMITS.dormantTtlMs, identity.userId, identity.relayHostId]
+    )
+    await databases[0]!.query(`UPDATE relay_cells SET reserved_requests = 0 WHERE cell_id = ?`, [
+      ISOLATED.id
+    ])
+    await applySelector({ [TARGETS[0]!.id]: 'general', [TARGETS[1]!.id]: 'general' })
+    await applySelector({ [ISOLATED.id]: 'migration-only' }, [ISOLATED.id])
+
+    const release = await holdCellRows([ISOLATED.id])
+    try {
+      const moved = await Promise.race([
+        stores[1]!.assign(identity, 'us-central1'),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 3_000))
+      ])
+      expect(moved).toMatchObject({ assignmentEpoch: first.assignmentEpoch + 1 })
+      expect(TARGETS.map(({ id }) => id)).toContain(moved === 'blocked' ? moved : moved.cellId)
+    } finally {
+      await release()
+    }
+    await expectReservationAccounting()
+  }, 30_000)
+  // Moves a seeded host onto TARGETS[0] next to another host whose splice there
+  // outlives the test, so an over-charge shows instead of clamping at zero.
+  async function seedMovedHostBesideNeighbour(index: number): Promise<{
+    identity: { userId: string; relayHostId: string }
+    neighbour: { userId: string; relayHostId: string }
+  }> {
+    const { identity } = await seedActiveHostOnIsolatedSource(index)
+    await applySelector({ [TARGETS[1]!.id]: 'migration-only' })
+    const neighbour = hostIdentity(index + 50)
+    expect((await stores[0]!.assign(neighbour, 'us-central1')).cellId).toBe(TARGETS[0]!.id)
+    await stores[0]!.acquireActivity(neighbour, {
+      activityId: 'splice:neighbour',
+      kind: 'splice',
+      cellId: TARGETS[0]!.id,
+      expiresAt: NOW + 10 * 60 * 60_000
+    })
+    expect((await stores[1]!.assign(identity, 'us-central1')).cellId).toBe(TARGETS[0]!.id)
+    expect(await counters(identity)).toEqual({ controls: 2, splices: 1 })
+    await expectReservationAccounting()
+    return { identity, neighbour }
+  }
+
+  it('leaves a host with leases on two cells to the lease sweep', async () => {
+    await resetFleet()
+    const { identity } = await seedMovedHostBesideNeighbour(915)
+    // Past every lease but the neighbour's splice.
+    const later = new RelayAssignmentStore(databases[0]!, () => NOW + 60 * 60_000, {
+      requireLiveCells: true,
+      heartbeatTtlMs: 45_000
+    })
+    try {
+      // Aggregate expiry first, with the source's leases still present: the
+      // order a lease sweep skipped on a busy row leaves behind.
+      await later.releaseExpiredActivity()
+      expect(await counters(identity)).toEqual({ controls: 2, splices: 1 })
+      await expectReservationAccounting()
+      await later.releaseExpiredActivityLeases()
+      await later.releaseExpiredActivity()
+      expect(await counters(identity)).toEqual({ controls: 0, splices: 0 })
+      expect(await reservedRequests(ISOLATED.id)).toBe(0)
+      // Only the neighbour's splice is left on the target.
+      expect(await reservedRequests(TARGETS[0]!.id)).toBe(2)
+      await expectReservationAccounting()
+    } finally {
+      await applySelector({ [TARGETS[1]!.id]: 'general' })
+    }
+  }, 30_000)
+
+  it('frees the source leases on their own cell when the target dies', async () => {
+    await resetFleet()
+    const { identity } = await seedMovedHostBesideNeighbour(916)
+    // The roll finishes, then the target stops heartbeating before the source
+    // has released the host. Uncapped, so no fence is needed to move off it.
+    await applySelector({ [ISOLATED.id]: 'general' })
+    await databases[0]!.query(`UPDATE relay_cell_runtime SET ready = 0 WHERE cell_id = ?`, [
+      TARGETS[0]!.id
+    ])
+    await databases[0]!.query(`DELETE FROM relay_cell_connection_limits WHERE cell_id = ?`, [
+      TARGETS[0]!.id
+    ])
+    try {
+      const moved = await stores[1]!.assign(identity, 'us-central1')
+      expect(moved.cellId).toBe(ISOLATED.id)
+      expect(await counters(identity)).toEqual({ controls: 1, splices: 0 })
+      // The deleted source leases took their units with them; a late release
+      // from the source finds nothing and charges nothing.
+      expect(await stores[0]!.releaseActivity(identity, `control:${ISOLATED.id}:1`)).toBe(false)
+      expect(await reservedRequests(ISOLATED.id)).toBe(1)
+      expect(await reservedRequests(TARGETS[0]!.id)).toBe(3)
+      await expectReservationAccounting()
+    } finally {
+      // Re-registers the connection limit, then the heartbeat restores ready.
+      await stores[0]!.reconcileCells(CELLS, false)
+      await heartbeatAll()
+      await applySelector({ [TARGETS[1]!.id]: 'general' })
+    }
+  }, 30_000)
+  // A host main's old placement left behind: its counters were reset while its
+  // source lease stayed, and the lease's release floored them at zero.
+  async function seedDriftedHost(
+    index: number,
+    counted: { controls: number; unbackedSourceUnits: number }
+  ): Promise<{ identity: { userId: string; relayHostId: string }; epoch: number }> {
+    const identity = hostIdentity(index)
+    await applySelector({ [TARGETS[0]!.id]: 'migration-only', [TARGETS[1]!.id]: 'migration-only' })
+    const first = await stores[0]!.assign(identity, 'us-central1')
+    expect(first.cellId).toBe(ISOLATED.id)
+    await stores[0]!.activateControl(identity, {
+      cellId: ISOLATED.id,
+      assignmentEpoch: first.assignmentEpoch,
+      generation: 1
+    })
+    await databases[0]!.query(
+      `UPDATE relay_assignments SET reserved_controls = ? WHERE user_id = ? AND relay_host_id = ?`,
+      [counted.controls, identity.userId, identity.relayHostId]
+    )
+    // Units the source still counts with no lease behind them.
+    await databases[0]!.query(
+      `UPDATE relay_cells SET reserved_requests = reserved_requests + ? WHERE cell_id = ?`,
+      [counted.unbackedSourceUnits, ISOLATED.id]
+    )
+    await applySelector({ [TARGETS[0]!.id]: 'general', [TARGETS[1]!.id]: 'general' })
+    await applySelector({ [ISOLATED.id]: 'migration-only' }, [ISOLATED.id])
+    return { identity, epoch: first.assignmentEpoch }
+  }
+
+  it('heals counters below the leases on the narrowed path', async () => {
+    await resetFleet()
+    const { identity, epoch } = await seedDriftedHost(918, { controls: 0, unbackedSourceUnits: 0 })
+    expect(await counters(identity)).toEqual({ controls: 0, splices: 0 })
+    await expectReservationAccounting()
+    const release = await holdCellRows([ISOLATED.id])
+    try {
+      const moved = await Promise.race([
+        stores[1]!.assign(identity, 'us-central1'),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 3_000))
+      ])
+      expect(moved).toMatchObject({ assignmentEpoch: epoch + 1 })
+      expect(TARGETS.map(({ id }) => id)).toContain(moved === 'blocked' ? moved : moved.cellId)
+    } finally {
+      await release()
+    }
+    // The kept source control plus the new one.
+    expect(await counters(identity)).toEqual({ controls: 2, splices: 0 })
+    await expectReservationAccounting()
+    expect(await stores[0]!.releaseActivity(identity, `control:${ISOLATED.id}:1`)).toBe(true)
+    expect(await counters(identity)).toEqual({ controls: 1, splices: 0 })
+    expect(await reservedRequests(ISOLATED.id)).toBe(0)
+    await expectReservationAccounting()
+  }, 30_000)
+
+  it('takes the all-rows path for units no lease backs', async () => {
+    await resetFleet()
+    const { identity, epoch } = await seedDriftedHost(919, { controls: 3, unbackedSourceUnits: 2 })
+    await expectReservationAccountingExcept(ISOLATED.id)
+    const release = await holdCellRows([ISOLATED.id])
+    const held = stores[1]!.assign(identity, 'us-central1').then(
+      () => 'placed' as const,
+      () => 'failed' as const
+    )
+    try {
+      // It needs the source row to take the unbacked units off it, so while the
+      // row is held it either waits or times out; it never places.
+      expect(
+        await Promise.race([
+          held,
+          new Promise<'waiting'>((resolve) => setTimeout(() => resolve('waiting'), 1_000))
+        ])
+      ).not.toBe('placed')
+    } finally {
+      await release()
+    }
+    await held
+    // Whether the held dial finished after the release or failed, the next one
+    // lands the single move.
+    expect(await stores[1]!.assign(identity, 'us-central1')).toMatchObject({
+      assignmentEpoch: epoch + 1
+    })
+    expect(await counters(identity)).toEqual({ controls: 2, splices: 0 })
+    await expectReservationAccounting()
+  }, 30_000)
+  it('refuses at once while the host’s own release holds its assignment row', async () => {
+    await resetFleet()
+    const { identity, epoch } = await seedDriftedHost(921, { controls: 1, unbackedSourceUnits: 0 })
+    const release = await holdRows(
+      `SELECT user_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+      [identity.userId, identity.relayHostId]
+    )
+    try {
+      const startedAt = performance.now()
+      await expect(stores[1]!.assign(identity, 'us-central1')).rejects.toBeInstanceOf(
+        RelayAssignmentRowBusyError
+      )
+      // An isolated pin gets no wait: far under the 1s a release can hold it.
+      expect(performance.now() - startedAt).toBeLessThan(500)
+    } finally {
+      await release()
+    }
+    expect((await stores[0]!.resolve(identity))?.assignmentEpoch).toBe(epoch)
+    expect((await stores[1]!.assign(identity, 'us-central1')).assignmentEpoch).toBe(epoch + 1)
+    await expectReservationAccounting()
+  }, 30_000)
+
+  it('waits up to a second for the row of a host pinned to a live general cell', async () => {
+    await resetFleet()
+    const identity = hostIdentity(922)
+    const first = await stores[0]!.assign(identity, 'us-central1')
+    const holdAssignment = async (): Promise<() => Promise<void>> =>
+      await holdRows(
+        `SELECT user_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+
+    // A short hold, like a calm host's own release: the sticky re-grant waits.
+    const shortHold = await holdAssignment()
+    const regrant = stores[1]!.assign(identity, 'us-central1')
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    await shortHold()
+    expect(await regrant).toMatchObject({
+      cellId: first.cellId,
+      assignmentEpoch: first.assignmentEpoch
+    })
+
+    // Held past the bound: refused, after about the bound and not the pool's.
+    const longHold = await holdAssignment()
+    try {
+      const startedAt = performance.now()
+      await expect(stores[1]!.assign(identity, 'us-central1')).rejects.toBeInstanceOf(
+        RelayAssignmentRowBusyError
+      )
+      const waitedMs = performance.now() - startedAt
+      expect(waitedMs).toBeGreaterThanOrEqual(900)
+      expect(waitedMs).toBeLessThan(2_000)
+    } finally {
+      await longHold()
+    }
+  }, 30_000)
+  it('never waits on the assignment row while its retry holds the pinned cell row', async () => {
+    await resetFleet()
+    const identity = hostIdentity(923)
+    const first = await stores[0]!.assign(identity, 'us-central1')
+    // No control lease, so the sticky re-grant needs the cell row itself.
+    expect(
+      await stores[0]!.releaseActivity(identity, `control-pending:${first.assignmentEpoch}`)
+    ).toBe(true)
+    // The first attempt finds the cell row busy and retries cell row first.
+    const releaseCell = await holdCellRows([first.cellId])
+    const regrant = stores[1]!.assign(identity, 'us-central1').then(
+      () => 'granted',
+      (error: unknown) => error
+    )
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    // The row the retry reaches next, held the way this host's release holds it.
+    const releaseAssignment = await holdRows(
+      `SELECT user_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+      [identity.userId, identity.relayHostId]
+    )
+    try {
+      await releaseCell()
+      const cellFreedAt = performance.now()
+      expect(await regrant).toBeInstanceOf(RelayAssignmentRowBusyError)
+      // NOWAIT once the cell row is held: nowhere near the 1s bounded wait.
+      expect(performance.now() - cellFreedAt).toBeLessThan(300)
+    } finally {
+      await releaseAssignment()
+    }
   }, 30_000)
 })

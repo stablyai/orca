@@ -16500,6 +16500,7 @@
             "done": "完了",
             "idle": "アイドル",
             "unverifiable": "最近の更新なし",
+            "unconfirmed": "確認できませんでした",
             "permission": "要対応"
           },
           "filtersSection": "フィルター",
@@ -17314,6 +17315,65 @@
       }
     },
     "native-chat": {
+      "failureWords": {
+        "theAgent": "Agent",
+        "providerStartFailed": "{{agent}} は起動が完了する前に停止しました。",
+        "runCommandAgain": "/{{command}} をもう一度実行してください。",
+        "sendToTryAgain": "もう一度試すには、メッセージを送信してください。",
+        "couldNotStart": "{{agent}} を起動できませんでした。",
+        "couldNotRestart": "{{agent}} を再起動できませんでした。",
+        "notSignedIn": "{{agent}} は選択したアカウントでサインインしていません。",
+        "signInFirst": "先にサインインしてください。",
+        "signInThenRunCommand": "サインインしてから、/{{command}} をもう一度実行してください。",
+        "signInThenSend": "サインインしてから、メッセージをもう一度送信してください。",
+        "historyTooLarge": "この会話の履歴は大きすぎるため、ここでは復元できません。",
+        "managedAccountEnvOverride": "この Claude の起動では独自の Anthropic サインイン変数が設定されています。管理対象の Claude アカウントを使用するには、それらを削除してください。",
+        "accountSwitchInProgress": "Claude アカウントの切り替え中です。完了してからもう一度お試しください。",
+        "managedAccountUnsupported": "WSL に Claude アカウントが追加されている間、Claude チャットには Windows の Claude アカウントが必要です。",
+        "chooseClaudeAccount": "Claude アカウントの設定で選択または追加してください。",
+        "chooseClaudeAccountThenRunCommand": "Claude アカウントの設定で選択または追加してから、/{{command}} をもう一度実行してください。",
+        "chooseClaudeAccountThenSend": "Claude アカウントの設定で選択または追加してから、メッセージをもう一度送信してください。",
+        "providerExitedRow": "この応答の途中で {{agent}} が停止しました。この会話で続けることができます。",
+        "providerExitedRejection": "このメッセージが送信される前に {{agent}} が停止しました。",
+        "providerRejected": "プロバイダーはこのメッセージを受け付けませんでした。",
+        "providerRejectedQuoted": "プロバイダーはこのメッセージを受け付けませんでした: {{detail}}。",
+        "attachmentEmpty": "このメッセージの画像が空のため、メッセージは送信されませんでした。",
+        "attachmentTooLarge": "このメッセージの画像が大きすぎるため、メッセージは送信されませんでした。",
+        "attachmentLargerThan": "このメッセージの画像が {{size}} MB を超えているため、メッセージは送信されませんでした。",
+        "attachmentTooMany": "このメッセージには画像が多すぎるため、送信されませんでした。",
+        "attachmentAtMost": "{{agent}} が 1 つのメッセージで受け付ける画像は最大 {{limit}} 枚のため、このメッセージは送信されませんでした。",
+        "attachmentTotalTooLarge": "このメッセージの画像の合計サイズが大きすぎるため、メッセージは送信されませんでした。",
+        "attachmentTotalMoreThan": "このメッセージの画像の合計が {{size}} MB を超えているため、メッセージは送信されませんでした。",
+        "attachmentUnsupportedType": "{{agent}} が受け付けるのは PNG、JPEG、GIF、WebP 画像のみのため、このメッセージは送信されませんでした。",
+        "attachmentNotAFile": "このメッセージの画像がファイルではないため、メッセージは送信されませんでした。",
+        "attachmentNoSource": "このメッセージの画像に送信するファイルがないため、メッセージは送信されませんでした。",
+        "attachmentInvalid": "このメッセージの添付ファイルは Agent に送信できません。",
+        "attachmentUnreadable": "このメッセージの添付ファイルを読み取れなかったため、メッセージは送信されませんでした。",
+        "emptyMessage": "このメッセージは空のため、送信されませんでした。",
+        "queueFull": "Agent を待っているメッセージが多すぎたため、このメッセージは送信されませんでした。",
+        "writeFailed": "Orca はこのメッセージを Agent に渡せなかったため、送信されませんでした。",
+        "cancelled": "このメッセージは Agent が処理を始める前に取り消されました。",
+        "chatClosed": "このメッセージが送信される前にチャットが閉じられました。",
+        "hostRestarted": "このメッセージが送信される前に Orca が再起動しました。",
+        "notDelivered": "このメッセージは配信されませんでした。",
+        "notDeliveredSendAgain": "このメッセージは配信されませんでした。続けるには、もう一度送信してください。",
+        "commandRefused": "このコマンドは実行されませんでした。",
+        "commandRefusedTryAgain": "このコマンドは実行されませんでした。もう一度お試しください。",
+        "compactionFailed": "圧縮に失敗しました。",
+        "compactionFailedQuoted": "圧縮に失敗しました: {{detail}}。",
+        "compactionUnconfirmed": "圧縮の完了は確認されていません。",
+        "cancelUnconfirmed": "キャンセルは確認されませんでした。",
+        "stopRefused": "{{agent}} は停止しませんでした。",
+        "stopRefusedQuoted": "{{agent}} は停止しませんでした: {{detail}}。",
+        "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
+        "answerUnconfirmed": "回答は記録されましたが、Agent は確認しませんでした。",
+        "hostFault": "Orca で問題が発生したため、この操作は完了しませんでした。",
+        "hostFaultTryAgain": "Orca で問題が発生したため、この操作は完了しませんでした。もう一度お試しください。",
+        "hostStopped": "{{agent}} の起動が完了しなかったため、Orca が停止しました。",
+        "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
+        "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
+        "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。"
+      },
       "writeNotice": {
         "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",
         "notDoneSend": "メッセージは送信されませんでした。",
@@ -17382,6 +17442,7 @@
         "pastedImageLabel": "貼り付けた画像",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",
         "worktreeNotReady": "ワークツリーが準備できていません — しばらくしてから再試行してください。",
+        "pasteUnavailable": "貼り付けできません — このチャットは現在入力を受け付けていません。",
         "uploadingAttachments": "{{value0}}個のファイルをリモートにアップロード中…",
         "model": "モデル",
         "effort": "推論レベル",
@@ -17508,6 +17569,8 @@
         "thinking": "考え",
         "workingFor": "{{value0}} 処理中",
         "workedFor": "{{value0}} で完了",
+        "interruptedAfter": "{{value0}} 後に中断",
+        "failedAfter": "{{value0}} 後に失敗",
         "toggleDetails": "ターンの詳細を切り替えます"
       },
       "jumpToLatest": "最新にジャンプ",
@@ -17523,7 +17586,8 @@
         "error": {
           "title": "会話を読み込めませんでした",
           "subtitle": "トランスクリプトを読み取ることができませんでした。作業を続けるには、ターミナルに切り替えてください。",
-          "retryingSubtitle": "トランスクリプトを読み取ることができませんでした。Orca は読み込みを再試行し続けます。"
+          "retryingSubtitle": "トランスクリプトを読み取ることができませんでした。Orca は読み込みを再試行し続けます。",
+          "keepsTrying": "Orca は読み込みを再試行し続けます。"
         },
         "reconnecting": "このチャットに再接続しています…",
         "pairHost": "ホストをペアリングして、Agent のチャット履歴を表示します。",
@@ -17678,8 +17742,7 @@
         "unnamed": "サブ Agent"
       },
       "conversationCommand": {
-        "pendingWork": "このコマンドを使用する前に、保留中の作業とメッセージが完了するまで待ってください。",
-        "unconfirmed": "会話動作は確認できておりません。"
+        "pendingWork": "このコマンドを使用する前に、保留中の作業とメッセージが完了するまで待ってください。"
       },
       "drop": {
         "title": "ドロップしてこのチャットに添付します",
@@ -17712,6 +17775,9 @@
         "title": "コンテキスト",
         "estimated": "最後の応答から推定。"
       },
+      "dismissDeliveryNotice": "閉じる",
+      "messageNotSent": "メッセージは送信されませんでした",
+      "deliveryUnconfirmed": "配信を確認できません — 再試行する前にチャットを確認してください",
       "queuedMessages": {
         "alreadySent": "このメッセージはすでに送信されています。",
         "editAlreadySent": "すでに送信されています — テキストは入力欄に残っています。",
@@ -17988,6 +18054,12 @@
           "unknown": "不明なホスト",
           "candidateName": "{{value0}}、{{value1}}"
         }
+      },
+      "creation": {
+        "worktreeReadyToast": "ワークツリー {{name}} の準備ができました",
+        "workspaceReadyToast": "ワークスペース {{name}} の準備ができました",
+        "goToWorktree": "ワークツリーに移動",
+        "goToWorkspace": "ワークスペースに移動"
       }
     },
     "agentSessionContinuation": {

@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
 import { enqueueStructuredAgentSessionLaunchPrompt } from './structured-agent-session-outbox-storage'
@@ -18,6 +18,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
+
+// Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
+afterEach(cleanup)
 
 const LOCAL_TARGET = { kind: 'local' } as const
 

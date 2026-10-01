@@ -30,6 +30,7 @@ import { trackStructuredLaunchFailureToast } from './structured-agent-session-la
 import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
 import {
   deleteStructuredLaunchStateIfCurrent,
+  getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchState,
   getStructuredLaunchStateBySessionId,
   markStructuredAgentSessionLaunchCancelled,
@@ -314,4 +315,15 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
   }
   restartStructuredLaunchState(state)
   return true
+}
+
+/** A message queued on a chat whose start never published relaunches it; the message goes out on
+ *  publish. Shared by the chat's composer and by messages sent from elsewhere. */
+export function relaunchFailedStructuredAgentSessionForMessage(
+  worktreeId: string,
+  sessionId: string
+): void {
+  if (getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId) === 'failed') {
+    retryStructuredAgentSessionLaunch(worktreeId, sessionId)
+  }
 }

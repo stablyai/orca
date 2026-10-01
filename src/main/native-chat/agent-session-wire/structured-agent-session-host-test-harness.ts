@@ -1,5 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +7,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
@@ -20,6 +20,7 @@ import type {
 } from './structured-agent-session-adapter'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { TrackedTestRecoveryCapsule } from './structured-agent-session-host-test-recovery-capsule'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -58,6 +59,7 @@ const attachParams = (
 const ensureParams = (fence: number): AgentSessionAttachParams => hostTestAttachParams(fence)
 
 let root: string
+let recoveryCapsule: TrackedTestRecoveryCapsule
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
@@ -149,11 +151,12 @@ beforeEach(async () => {
   answerPrompt = vi.fn(async ({ commit }) => commit())
   setOption = vi.fn(async () => undefined)
   store = await openTestAgentSessionRecordStore(root)
+  recoveryCapsule = new TrackedTestRecoveryCapsule(root)
   host = new StructuredAgentSessionHost({
     store,
     adapter: adapter(),
     journalDatabase: openTestJournalHostDatabase(root),
-    recoveryCapsule: new AgentSessionRecoveryCapsule(root),
+    recoveryCapsule,
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -163,8 +166,15 @@ beforeEach(async () => {
 afterEach(async () => {
   await host.flushAllStreamedEvents()
   await journals.closeAll()
+  // A host a test replaced can still hold the capsule's lock directory under `root`.
+  await recoveryCapsule.settled()
   await rm(root, { recursive: true, force: true })
 })
+
+/** Waits out every recovery-capsule operation a host of this test started, replaced ones too. */
+function hostTestRecoveryCapsuleSettled(): Promise<void> {
+  return recoveryCapsule.settled()
+}
 
 /** A restarted process swaps the store and the host under the same directories.
  *  The helpers here close over both, so they have to be told. */
@@ -174,6 +184,12 @@ export function replaceHostTestState(next: {
 }): void {
   store = next.store
   host = next.host
+}
+
+/** Serves `records` as the session's child records through the status sink, as the host's store
+ *  does. Call before `attach`: only the attach's publish carries the address a row lands under. */
+export function serveHostTestChildWork(records: () => AgentChildWorkView[]): void {
+  host.deps.statusSink = { publish: () => {}, forget: () => {}, readChildWork: records }
 }
 
 /** The live per-test state. Read it in a `beforeEach` so a suite's test bodies
@@ -201,6 +217,7 @@ export {
   attachParams,
   ensureParams,
   envelope,
+  hostTestRecoveryCapsuleSettled,
   journals,
   seedApproval
 }

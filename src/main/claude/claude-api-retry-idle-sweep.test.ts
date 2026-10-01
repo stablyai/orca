@@ -123,7 +123,7 @@ describe('a Claude retrying a refused request', () => {
     // Once the frames stop, the same clock does let the sweep close it.
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS
     await vi.waitFor(() => {
-      expect(closeSession).toHaveBeenCalledWith(SESSION)
+      expect(closeSession).toHaveBeenCalledWith(SESSION, 'evict')
       expect(host.hasSession(SESSION)).toBe(false)
     })
   })

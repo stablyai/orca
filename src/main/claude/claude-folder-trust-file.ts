@@ -15,6 +15,7 @@ import { lock } from 'proper-lockfile'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { runWslProcess } from '../wsl/wsl-runner'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth/runtime-auth-types'
 
 export type ClaudeTrustPathStyle = 'posix' | 'win32'
@@ -144,20 +145,52 @@ function readConfigObject(target: string): Record<string, unknown> | null {
   }
 }
 
-function writeConfigAtomically(target: string, config: Record<string, unknown>): void {
-  const mode = statSync(target).mode & 0o777
-  const tmpPath = `${target}.orca-trust-${randomUUID()}.tmp`
+type ReplacementFile = { target: string; path: string }
+
+/**
+ * Creates an empty file beside `target` that already has `target`'s permission bits, so
+ * renaming it over `target` can never widen them.
+ */
+async function createReplacementFile(target: string): Promise<ReplacementFile> {
+  const suffix = `.orca-trust-${randomUUID()}.tmp`
+  const path = `${target}${suffix}`
+  const guestFile = parseWslUncPath(target)
   try {
-    writeFileSync(tmpPath, `${JSON.stringify(config, null, 2)}\n`, { encoding: 'utf-8', mode })
-    if (process.platform !== 'win32') {
-      // Why: umask may narrow the requested mode; the replacement must match the original exactly.
-      chmodSync(tmpPath, mode)
+    if (guestFile) {
+      // Why: Windows sees a synthetic 0o666 for a guest file and cannot set its bits, and the
+      // guest gives a file made through \\wsl.localhost its default 0644; only the guest can copy them.
+      writeFileSync(path, '', { flag: 'wx' })
+      const copied = await runWslProcess({
+        distro: guestFile.distro,
+        loginPath: 'none',
+        program: 'chmod',
+        args: [`--reference=${guestFile.linuxPath}`, '--', `${guestFile.linuxPath}${suffix}`]
+      })
+      if (copied.code !== 0) {
+        throw new Error(`could not copy the guest mode of ${target}: ${copied.stderr.trim()}`)
+      }
+    } else {
+      const mode = statSync(target).mode & 0o777
+      writeFileSync(path, '', { flag: 'wx', mode })
+      if (process.platform !== 'win32') {
+        // Why: umask may narrow the requested mode; the replacement must match the original exactly.
+        chmodSync(path, mode)
+      }
     }
-    renameFileWithWindowsRetry(tmpPath, target)
   } catch (error) {
-    rmSync(tmpPath, { force: true })
+    rmSync(path, { force: true })
     throw error
   }
+  return { target, path }
+}
+
+function replaceConfig(replacement: ReplacementFile, config: Record<string, unknown>): void {
+  // Why r+: reopening without create/truncate keeps the mode the replacement was given.
+  writeFileSync(replacement.path, `${JSON.stringify(config, null, 2)}\n`, {
+    encoding: 'utf-8',
+    flag: 'r+'
+  })
+  renameFileWithWindowsRetry(replacement.path, replacement.target)
 }
 
 /**
@@ -188,37 +221,49 @@ async function grantClaudeFolderTrustNow(args: {
     return planned === 'refuse' ? 'unreadable' : 'unchanged'
   }
 
-  let release: () => Promise<void>
+  // Why before the lock: a WSL guest's mode takes a guest process to copy, and Claude's
+  // lock should stay held only for the synchronous read → rename below.
+  const replacement = await createReplacementFile(probe.path)
   try {
-    release = await lock(args.configFile, {
-      // Why: Claude locks the literal `<file>.lock`, not a realpath'd one.
-      lockfilePath: `${args.configFile}.lock`,
-      realpath: false,
-      stale: NEVER_STALE_MS,
-      retries: LOCK_RETRIES,
-      onCompromised: () => {}
-    })
-  } catch {
-    return 'locked'
-  }
-  try {
-    // Why: read → rename stays synchronous so Orca's own synchronous auth writer to
-    // this file cannot interleave and lose an update.
-    const current = readConfigAt(resolveConfigTarget(args.configFile))
-    if (typeof current === 'string') {
-      return current
+    let release: () => Promise<void>
+    try {
+      release = await lock(args.configFile, {
+        // Why: Claude locks the literal `<file>.lock`, not a realpath'd one.
+        lockfilePath: `${args.configFile}.lock`,
+        realpath: false,
+        stale: NEVER_STALE_MS,
+        retries: LOCK_RETRIES,
+        onCompromised: () => {}
+      })
+    } catch {
+      return 'locked'
     }
-    const change = applyClaudeFolderTrust(current.config, args.folderKeys)
-    if (change.kind === 'refuse') {
-      return 'unreadable'
+    try {
+      // Why: read → rename stays synchronous so Orca's own synchronous auth writer to
+      // this file cannot interleave and lose an update.
+      const current = readConfigAt(resolveConfigTarget(args.configFile))
+      if (typeof current === 'string') {
+        return current
+      }
+      // Why: a link retargeted since the replacement copied its mode means Claude asks.
+      if (current.path !== replacement.target) {
+        return 'unreadable'
+      }
+      const change = applyClaudeFolderTrust(current.config, args.folderKeys)
+      if (change.kind === 'refuse') {
+        return 'unreadable'
+      }
+      if (change.kind === 'unchanged') {
+        return 'unchanged'
+      }
+      replaceConfig(replacement, change.config)
+      return 'granted'
+    } finally {
+      await release().catch(() => {})
     }
-    if (change.kind === 'unchanged') {
-      return 'unchanged'
-    }
-    writeConfigAtomically(current.path, change.config)
-    return 'granted'
   } finally {
-    await release().catch(() => {})
+    // Why: a no-op after the rename; otherwise the unused replacement must not linger.
+    rmSync(replacement.path, { force: true })
   }
 }
 

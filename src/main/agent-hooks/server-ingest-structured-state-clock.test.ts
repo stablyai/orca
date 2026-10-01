@@ -4,6 +4,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { AgentHookServer, _internals } from './server'
 
@@ -29,6 +30,22 @@ function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionSta
     latestPrompt: 'fan out',
     updatedAt: SETTLED,
     ...over
+  }
+}
+
+const CHILD = { idKind: 'task_id', id: 'child-1' } as const
+
+function liveChild(observedAt: number): AgentChildWorkEvidence {
+  return {
+    type: 'live',
+    observedAt,
+    child: {
+      handle: CHILD,
+      kind: 'agent',
+      residency: 'background',
+      state: 'working',
+      stoppable: true
+    }
   }
 }
 
@@ -68,16 +85,16 @@ describe("the host row's state clock", () => {
       summary({ status: 'working', statusStartedAt: 10_000, updatedAt: 10_000 }),
       SUBJECT
     )
-    server.ingestStructuredStatus(
-      summary({
-        statusStartedAt: SETTLED,
-        updatedAt: 24_000,
-        backgroundTasks: [{ id: 'child-1', kind: 'agent', state: 'working' }]
-      }),
-      SUBJECT
-    )
+    // The row reads child liveness from the host's records, not the summary's task list.
+    server.ingestStructuredChildWork(SUBJECT, [liveChild(23_000)], 'codex')
+    server.ingestStructuredStatus(summary({ statusStartedAt: SETTLED, updatedAt: 24_000 }), SUBJECT)
     expect(row(server)).toMatchObject({ state: 'working', stateStartedAt: 10_000 })
 
+    server.ingestStructuredChildWork(
+      SUBJECT,
+      [{ type: 'ended', observedAt: 25_000, handle: CHILD, outcome: 'succeeded' }],
+      'codex'
+    )
     server.ingestStructuredStatus(summary({ statusStartedAt: SETTLED, updatedAt: 26_000 }), SUBJECT)
     expect(row(server)).toMatchObject({ state: 'done', stateStartedAt: SETTLED })
   })

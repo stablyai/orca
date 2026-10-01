@@ -3,7 +3,7 @@
  * the real structured host, the real runtime, and the real RPC handlers. Only the provider is faked.
  */
 
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,7 +27,7 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
-  testAgentSessionStoreFilePath
+  seedTestAgentSessionStoreFromNewerBuild
 } from '../../agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
@@ -193,6 +193,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await host?.flushAllStreamedEvents()
   setStructuredAgentSessionHost(null)
   await rm(directory, { recursive: true, force: true })
@@ -282,27 +283,6 @@ describe('a chat tab across /clear', () => {
       present: true,
       sessionIds: [replacement]
     })
-  })
-
-  it('gives a reopened cleared conversation the same id when an older build drops the table', async () => {
-    await createChat(HOST_TEST_SESSION)
-    const first = await clear(HOST_TEST_SESSION)
-    await call('agentSession.reveal', { sessionId: HOST_TEST_SESSION })
-    const current = await clear(first)
-    const reopenedTab = store.getSessionTabId(HOST_TEST_SESSION)
-    expect(reopenedTab).not.toBeNull()
-    await host.flushAllStreamedEvents()
-
-    // An older build rewrites the file from what it read, which drops the table.
-    const file = testAgentSessionStoreFilePath(directory)
-    const raw = JSON.parse(await readFile(file, 'utf-8'))
-    expect(raw.sessionTabs).toHaveLength(2)
-    delete raw.sessionTabs
-    await writeFile(file, JSON.stringify(raw))
-
-    await openHost()
-    expect(store.getSessionTabId(current)).toBe(SOURCE_TAB)
-    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBe(reopenedTab)
   })
 })
 
@@ -406,5 +386,49 @@ describe('a create that reserves its tab', () => {
       ok: true,
       value: { tabId: 'reserved-tab' }
     })
+  })
+})
+
+describe('a chat tab over records a newer Orca wrote', () => {
+  it('opens a closed chat from history for reading', async () => {
+    await createChat(HOST_TEST_SESSION)
+    await host.close(HOST_TEST_SESSION, 'user-close')
+    await host.setSessionTabVisibility(HOST_TEST_SESSION, false)
+    await host.flushAllStreamedEvents()
+    await seedTestAgentSessionStoreFromNewerBuild(directory)
+    await openHost()
+    expect(store.readOnly).toBe(true)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    expect(await call('agentSession.reveal', { sessionId: HOST_TEST_SESSION })).toMatchObject({
+      ok: true,
+      result: { ok: true, readable: true }
+    })
+
+    expect((await snapshot()).activeTabId).toBe(`agent-session:${HOST_TEST_SESSION}`)
+    expect(warn).toHaveBeenCalledWith(
+      '[structured-agent-session] recording an opened chat tab failed',
+      expect.anything()
+    )
+  })
+})
+
+describe('a chat tab whose restore index cannot be written', () => {
+  // The index is bookkeeping: the chat is created and its tab opens, but no restart restores it.
+  it('creates the chat and opens its tab, reporting the index write', async () => {
+    const failure = new Error('disk I/O error')
+    vi.spyOn(store, 'setSessionTabVisibility').mockRejectedValue(failure)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const created = await createChat(HOST_TEST_SESSION)
+
+    expect(created).toMatchObject({ ok: true, value: { sessionId: HOST_TEST_SESSION } })
+    expect(created.ok ? created.value.tabId : null).toBeUndefined()
+    expect((await snapshot()).activeTabId).toBe(`agent-session:${HOST_TEST_SESSION}`)
+    expect(warn).toHaveBeenCalledWith(
+      '[structured-agent-session] recording an opened chat tab failed',
+      failure
+    )
+    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBeNull()
   })
 })

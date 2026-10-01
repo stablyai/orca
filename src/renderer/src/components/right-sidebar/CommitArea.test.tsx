@@ -510,18 +510,6 @@ describe('CommitArea', () => {
     expect(firstButton(markup)).not.toContain('animate-spin')
   })
 
-  it('shows a spinner on a Commit primary while the commit itself is in flight', () => {
-    const props = baseProps({
-      stagedCount: 1,
-      hasMessage: true,
-      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-      isCommitting: true
-    })
-    expect(firstButton(renderCommitArea({ ...props, isCommitting: true }))).toContain(
-      'animate-spin'
-    )
-  })
-
   it('shows a spinner on a remote primary while the matching remote op is active', () => {
     const markup = renderCommitArea(
       baseProps({

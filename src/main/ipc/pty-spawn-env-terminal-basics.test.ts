@@ -1,9 +1,8 @@
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
-import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
+import { TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { delimiter } from 'node:path'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
@@ -416,33 +415,8 @@ describe('registerPtyHandlers', () => {
       )
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
-      // Why (STA-4270): a bare name would be resolved by the post-profile PATH the codex()
-      // wrapper inherits, so the preflight must carry the CLI's verified absolute path.
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
-    })
-    it('skips the Codex launch preflight when the bundled CLI is not executable', async () => {
-      const env = await withBundledCli(
-        () => spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME),
-        { launcherExecutable: false }
-      )
-
-      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      // Why: the app prepares a native pane's Codex home; only WSL panes run the preflight.
       expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
-    })
-    // Why (STA-4270): profile scripts run before the codex() wrapper and routinely prepend
-    // directories to PATH, so a scratch `orca` there must never become the preflight.
-    it('pins the Codex launch preflight to the bundled CLI even when PATH leads elsewhere', async () => {
-      const env = await withBundledCli(() =>
-        spawnAndGetEnv(
-          { PATH: `/tmp/hijack-scratch${delimiter}/usr/bin` },
-          undefined,
-          () => TEST_CODEX_HOME
-        )
-      )
-
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).not.toBe('orca')
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT.startsWith('/tmp/hijack-scratch')).toBe(false)
     })
     it('does not install the Codex launch preflight when Codex hooks are disabled', async () => {
       const env = await spawnAndGetEnv(

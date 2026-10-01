@@ -140,6 +140,7 @@ function acceptStructuredConversationCommand(
           conversationCommandBlocked(
             ctx,
             record,
+            context.readChildWork(ctx.sessionId),
             context.sessions.get(ctx.sessionId)?.child ? undefined : 'at-rest'
           )
         const blocked =

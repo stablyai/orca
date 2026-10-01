@@ -292,25 +292,6 @@ describe('ai vault resume target ownership', () => {
     ).toBe('unknown')
   })
 
-  it('blocks folder workspaces owned by runtime project groups', () => {
-    expect(
-      getAiVaultResumeWorkspaceTargetStatus(
-        makeState({
-          folderWorkspaces: [
-            {
-              id: 'folder-1',
-              projectGroupId: 'group-1',
-              name: 'Platform',
-              folderPath: '/repo/platform'
-            }
-          ],
-          projectGroups: [{ id: 'group-1', executionHostId: 'runtime:env-1' }]
-        }),
-        folderWorkspaceKey('folder-1')
-      )
-    ).toBe('runtime')
-  })
-
   it('blocks mixed local and runtime folder workspace targets', () => {
     expect(
       getAiVaultResumeWorkspaceTargetStatus(

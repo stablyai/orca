@@ -150,12 +150,12 @@ export function readCompletedWorkerLedger(): LifecycleEvent[] {
     .map((line) => JSON.parse(line) as LifecycleEvent)
 }
 
-export function readCompletedWorkerDispatchCapability(): string | null {
-  const input = readCompletedWorkerLedger()
+export function hasCompletedWorkerReceivedPreamble(): boolean {
+  return readCompletedWorkerLedger()
     .filter((event) => event.event === 'input')
     .map((event) => event.input ?? '')
     .join('')
-  return input.match(/--dispatch-capability\s+(\S+)/)?.[1] ?? null
+    .includes('--type worker_done')
 }
 
 export function runBuiltOrcaCli(

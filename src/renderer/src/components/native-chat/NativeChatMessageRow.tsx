@@ -30,7 +30,11 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 /** What a user message says under it when it did not go through, with its own Retry when the
  *  surface can send it again. */
-export type NativeChatDeliveryNotice = { text: string; onRetry?: () => void }
+export type NativeChatDeliveryNotice = {
+  text: string
+  onRetry?: () => void
+  onDismiss?: () => void
+}
 
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
@@ -185,6 +189,11 @@ export const MessageRow = memo(function MessageRow({
         {deliveryNotice ? (
           <div className="flex max-w-[85%] items-center gap-2 text-[11px] text-destructive/80">
             <span className="min-w-0 break-words">{deliveryNotice.text}</span>
+            {deliveryNotice.onDismiss ? (
+              <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
+                {translate('components.native-chat.dismissDeliveryNotice', 'Dismiss')}
+              </Button>
+            ) : null}
             {deliveryNotice.onRetry ? (
               <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onRetry}>
                 <RotateCcw className="size-3" />

@@ -2,10 +2,7 @@ import type { CodexRateLimitResetOutcome, ProviderRateLimits } from '../../share
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import {
-  CODEX_DISABLE_PLUGINS_ARGS,
-  CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
-} from '../codex-cli/codex-read-only-app-server-args'
+import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexCommand } from '../codex-cli/command'
 // Why: import from the shared module, not the codex-cli re-export, so a test that
 // mocks '../codex-cli/command' does not have to restate this pure helper.
@@ -16,9 +13,7 @@ import {
 } from '../codex-cli/codex-home-process-lock'
 import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
-import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { spawnProcess } from '../../shared/child-process/run-process'
-import { getCmdExePath } from '../win32-utils'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import {
   fetchCodexRateLimitsViaBackend,
@@ -26,7 +21,6 @@ import {
 } from './codex-backend-usage-client'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 import { abortedCodexRateLimitResult } from './codex-rate-limit-fetch-result'
-import { fetchCodexRateLimitsViaPty } from './codex-pty-rate-limit-probe'
 import { terminateCodexProbeChild } from './codex-probe-termination'
 import {
   consumeCodexRateLimitResetCreditFromBackend,
@@ -47,17 +41,11 @@ const WSL_RPC_TIMEOUT_MS = 25_000
 const RPC_INIT_TIMEOUT_MS = 30_000
 const WSL_RPC_INIT_TIMEOUT_MS = 40_000
 
-// Keep the PTY fallback aligned with the RPC probe: rate-limit collection does
-// not need marketplace/plugin startup, and those background clones can outlive
-// the short-lived probe process.
-const CODEX_RATE_LIMIT_PLUGIN_ARGS = CODEX_DISABLE_PLUGINS_ARGS
-
 export type FetchCodexRateLimitsOptions = CodexRateLimitFetchOptions
 
 function buildWslCodexCommand(
   codexHomePath: string,
-  args: string[],
-  isolateRpcStdio: boolean
+  args: string[]
 ): { command: string; args: string[] } | null {
   const wslInfo = parseWslUncPath(codexHomePath)
   if (process.platform !== 'win32' || !wslInfo) {
@@ -67,15 +55,17 @@ function buildWslCodexCommand(
     ...getHiddenRateLimitWslCwdSetupCommands(),
     `export CODEX_HOME=${quoteHiddenRateLimitShellValue(wslInfo.linuxPath)}`
   ].join(' && ')
-  const execSuffix = `${args.map(quoteHiddenRateLimitShellValue).join(' ')}${
-    isolateRpcStdio ? ' <&3 >&4 3<&- 4>&-' : ''
-  }`
+  const execSuffix = `${args.map(quoteHiddenRateLimitShellValue).join(' ')} <&3 >&4 3<&- 4>&-`
   const loginShellCommand = buildWslLoginShellCommand(
     [setupCommands, `exec codex ${execSuffix}`].join(' && ')
   )
-  const command = isolateRpcStdio
-    ? ['exec 3<&0', 'exec 4>&1', 'exec </dev/null', 'exec >/dev/null', loginShellCommand].join('\n')
-    : loginShellCommand
+  const command = [
+    'exec 3<&0',
+    'exec 4>&1',
+    'exec </dev/null',
+    'exec >/dev/null',
+    loginShellCommand
+  ].join('\n')
   return {
     command: 'wsl.exe',
     args: buildWslExecArgs(wslInfo.distro, ['sh', '-c', command])
@@ -106,7 +96,7 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
   }
   const codexArgs = [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
   const wslCodex = options?.codexHomePath
-    ? buildWslCodexCommand(options.codexHomePath, codexArgs, true)
+    ? buildWslCodexCommand(options.codexHomePath, codexArgs)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
   // Why the bare CLI: spawnProcess resolves an npm `codex.cmd` shim past cmd.exe itself.
@@ -128,28 +118,6 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     fetchOptions: options,
     terminate: () => terminateCodexProbeChild(child)
   })
-}
-
-function resolvePtyCommand(options?: CodexRateLimitFetchOptions) {
-  const wslCodex = options?.codexHomePath
-    ? buildWslCodexCommand(options.codexHomePath, [...CODEX_RATE_LIMIT_PLUGIN_ARGS], false)
-    : null
-  const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
-  const isWin32 = process.platform === 'win32'
-  return {
-    command: wslCodex ? wslCodex.command : isWin32 ? getCmdExePath() : codexCommand,
-    args: wslCodex
-      ? wslCodex.args
-      : isWin32
-        ? ['/d', '/c', codexCommand, ...CODEX_RATE_LIMIT_PLUGIN_ARGS]
-        : [...CODEX_RATE_LIMIT_PLUGIN_ARGS],
-    cwd: resolveHiddenRateLimitPtyCwd(),
-    env: withCliRuntimeOnPath(codexCommand, {
-      ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
-      TERM: 'xterm-256color',
-      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-    })
-  }
 }
 
 export function consumeCodexRateLimitResetCredit(options: {
@@ -178,19 +146,19 @@ function codexUnavailable(error: string, status: 'error' | 'unavailable'): Provi
   }
 }
 
-async function fetchWslBackend(
-  options: CodexRateLimitFetchOptions
+async function fetchBackendUsage(
+  options: CodexRateLimitFetchOptions | undefined
 ): Promise<ProviderRateLimits | null> {
   try {
     const result = await fetchCodexRateLimitsViaBackend(fetchCodexUsage, options)
-    if (options.signal?.aborted) {
+    if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
     return result
       ? supplementCodexRateLimitResetCredits(result, fetchCodexResetCredits, options)
       : null
   } catch {
-    return options.signal?.aborted ? abortedCodexRateLimitResult() : null
+    return options?.signal?.aborted ? abortedCodexRateLimitResult() : null
   }
 }
 
@@ -218,10 +186,11 @@ export async function fetchCodexRateLimits(
     )
   }
 
-  if (options?.codexHomePath && parseWslUncPath(options.codexHomePath)) {
-    const backendResult = await fetchWslBackend(options)
+  const isWslHome = Boolean(options?.codexHomePath && parseWslUncPath(options.codexHomePath))
+  if (isWslHome) {
+    const backendResult = await fetchBackendUsage(options)
     if (backendResult) {
-      return options.signal?.aborted ? abortedCodexRateLimitResult() : backendResult
+      return options?.signal?.aborted ? abortedCodexRateLimitResult() : backendResult
     }
   }
 
@@ -233,9 +202,12 @@ export async function fetchCodexRateLimits(
     )
   }
 
-  const homeLockKey = resolveCodexHomeProcessLockKey(options?.codexHomePath)
+  let rpcFailure: ProviderRateLimits
   try {
-    const rpcResult = await withCodexHomeProcessLock(homeLockKey, () => fetchViaRpc(options))
+    const rpcResult = await withCodexHomeProcessLock(
+      resolveCodexHomeProcessLockKey(options?.codexHomePath),
+      () => fetchViaRpc(options)
+    )
     if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
@@ -243,39 +215,24 @@ export async function fetchCodexRateLimits(
       const supplemented = await supplementBackendMetadata(rpcResult, options)
       return options?.signal?.aborted ? abortedCodexRateLimitResult() : supplemented
     }
-    if (isCodexAuthError(rpcResult.error) || options?.allowPtyFallback === false) {
+    if (isCodexAuthError(rpcResult.error)) {
       return rpcResult
     }
+    rpcFailure = rpcResult
   } catch {
     if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
-    if (options?.allowPtyFallback === false) {
-      return codexUnavailable('RPC failed', 'error')
-    }
+    rpcFailure = codexUnavailable('RPC failed', 'error')
   }
 
-  try {
-    if (options?.signal?.aborted) {
-      return abortedCodexRateLimitResult()
-    }
-    const ptyResult = await withCodexHomeProcessLock(homeLockKey, () =>
-      fetchCodexRateLimitsViaPty(() => resolvePtyCommand(options), options)
-    )
-    if (options?.signal?.aborted) {
-      return abortedCodexRateLimitResult()
-    }
-    const supplemented = await supplementBackendMetadata(ptyResult, options)
-    return options?.signal?.aborted ? abortedCodexRateLimitResult() : supplemented
-  } catch (error) {
-    if (options?.signal?.aborted) {
-      return abortedCodexRateLimitResult()
-    }
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    const isNotInstalled = message.includes('ENOENT')
-    return codexUnavailable(
-      isNotInstalled ? 'Codex CLI not found' : withMacTailscaleDnsHint(message),
-      isNotInstalled ? 'unavailable' : 'error'
-    )
+  if (isWslHome) {
+    return rpcFailure
   }
+  // Why: read usage over HTTP, never by driving the interactive Codex TUI — keystrokes sent there can accept startup dialogs such as "Update now" (#17415).
+  const backendResult = await fetchBackendUsage(options)
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
+  return backendResult ?? rpcFailure
 }

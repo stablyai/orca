@@ -58,7 +58,7 @@ let requests = 0
 function request(
   method: string,
   params: Record<string, unknown>,
-  options: { sessionId?: string; capability?: string } = {}
+  options: { sessionId?: string } = {}
 ): RpcRequest {
   requests += 1
   return {
@@ -70,15 +70,14 @@ function request(
     orchestrationRequestId: `req-${requests}`,
     ...(options.sessionId
       ? { orchestrationCompatibilityEvidence: { agentSessionId: options.sessionId } }
-      : {}),
-    ...(options.capability ? { orchestrationCapability: options.capability } : {})
+      : {})
   }
 }
 
 async function call(
   method: string,
   params: Record<string, unknown>,
-  options?: { sessionId?: string; capability?: string }
+  options?: { sessionId?: string }
 ): Promise<Record<string, unknown>> {
   const response = await dispatcher.dispatch(request(method, params, options))
   if (!response.ok) {
@@ -160,7 +159,7 @@ async function userTexts(sessionId: string): Promise<string[]> {
   )
 }
 
-/** A capability-backed terminal worker under the coordinator's Run, and its worker_done. */
+/** A supervised terminal worker under the coordinator's Run, and its worker_done. */
 async function finishWorker(
   taskId: string,
   worker: { handle: string; paneKey: string } = { handle: 'term_worker', paneKey: WORKER_PANE }
@@ -171,7 +170,7 @@ async function finishWorker(
     taskId,
     startOptions: {}
   })
-  const capability = db.prepareStartingWorkerAuthority({
+  db.prepareStartingWorkerAuthority({
     dispatchId: started.dispatch.id,
     handle: worker.handle,
     paneKey: worker.paneKey,
@@ -181,16 +180,12 @@ async function finishWorker(
     setupState: 'not_applicable'
   })
   db.markWorkerDispatchReady(started.dispatch.id)
-  await call(
-    'orchestration.send',
-    {
-      from: worker.handle,
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId, dispatchId: started.dispatch.id, outcome: 'succeeded' })
-    },
-    { capability }
-  )
+  await call('orchestration.send', {
+    from: worker.handle,
+    subject: 'Done',
+    type: 'worker_done',
+    payload: JSON.stringify({ taskId, dispatchId: started.dispatch.id, outcome: 'succeeded' })
+  })
 }
 
 async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: string }> {
@@ -468,7 +463,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   it('leaves a pointer the person stopped while its agent was starting stopped', async () => {
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
-    await host.close(COORDINATOR)
+    await host.close(COORDINATOR, 'evict')
     providerFaults.startDelayMs = 400
     const before = providerFaults.starts
     await finishWorker(taskId)
@@ -533,7 +528,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   ): Promise<{ runId: string; starts: number }> {
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
-    await host.close(COORDINATOR)
+    await host.close(COORDINATOR, 'evict')
     providerFaults.refuseStart = refusal
     const before = providerFaults.starts
     await finishWorker(taskId)
@@ -677,7 +672,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
     // What the idle sweep leaves of a chat nobody is looking at: agent stopped, no map entry.
-    await host.close(COORDINATOR)
+    await host.close(COORDINATOR, 'evict')
     expect(host.hasSession(COORDINATOR)).toBe(false)
     const before = codex.connections.length
 

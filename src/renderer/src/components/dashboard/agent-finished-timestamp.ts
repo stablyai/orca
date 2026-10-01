@@ -1,6 +1,6 @@
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import {
-  agentTurnStoppedByUser,
+  agentTurnEndedOnPurpose,
   agentVerdictDisplayMark
 } from '../../../../shared/agent-main-agent-verdict'
 import type { DashboardAgentRow } from './useDashboardData'
@@ -27,7 +27,7 @@ export function lastEnteredDoneAt(
     return completedAt
   }
   // Why: display is looser than ranking — a stopped turn still shows when it ended.
-  if (entry.state === 'done' && agentTurnStoppedByUser(entry) && entry.sessionBoundary !== true) {
+  if (entry.state === 'done' && agentTurnEndedOnPurpose(entry) && entry.sessionBoundary !== true) {
     return entry.stateStartedAt
   }
   // Why: a failed main agent reads failed while its subagents run, so it shows when it failed.

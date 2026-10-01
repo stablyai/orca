@@ -36,8 +36,8 @@ export class StructuredAgentSessionLeaseRenewer {
   }
 
   /** Clearing the interval only stops the NEXT tick. A tick already past its guard still has a
-   *  store transaction to commit, and that transaction re-creates the store directory, so a stop
-   *  that returned before it landed would let the write outlive whatever tore the host down. */
+   *  store transaction to commit, so a stop that returned before it landed would let the write
+   *  outlive whatever tore the host down. */
   stop(): Promise<void> {
     if (this.timer) {
       clearInterval(this.timer)
@@ -91,8 +91,8 @@ export class StructuredAgentSessionLeaseRenewer {
         now
       })
     }
-    // The store persists the whole record file per transaction, so keep the healthy path to
-    // one commit. If one renewal is superseded, retrying individually preserves isolation.
+    // One transaction for every renewal on the healthy path. If one renewal is superseded,
+    // retrying individually preserves isolation.
     let results: PromiseSettledResult<AgentSessionRecord>[]
     try {
       const renewed = await this.input.store.renewLeases(renewals)

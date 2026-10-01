@@ -342,7 +342,7 @@ describe("a restart's pause", () => {
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
     // Reopened, that turn is "before this open", yet the pause it ended stays ended:
     // the lift adopted the rows into this process.
-    await rig.host.close(HOST_TEST_SESSION)
+    await rig.host.close(HOST_TEST_SESSION, 'evict')
     expect(await rig.queuePause()).toBeNull()
     expect(await rig.drafts()).toContainEqual({ messageId: second, state: 'waiting' })
   })

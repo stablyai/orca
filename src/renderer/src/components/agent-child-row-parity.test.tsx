@@ -7,6 +7,7 @@ import {
 } from '../../../shared/agent-child-row-model'
 import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
@@ -133,17 +134,23 @@ function sidebarRows(parent: AgentStatusEntry, parentIsFresh = true): RenderedRo
   )
 }
 
+/** The strip's rows over what the host sends it: the running children, and no strip at all when
+ *  none runs. */
 function stripRows(
   children: AgentChildWorkView[] | undefined,
   childRowContext?: AgentChildRowContext,
   tasks: AgentSessionBackgroundTask[] = []
 ): RenderedRow[] {
+  const sent = children ? structuredRunningChildWork(children) : undefined
+  if (sent?.length === 0 && tasks.length === 0) {
+    return []
+  }
   const root = mount(
     renderToStaticMarkup(
       <NativeChatBackgroundTasksStatus
         tasks={tasks}
         settledTasks={[]}
-        childViews={children}
+        childViews={sent}
         childRowContext={childRowContext}
         supportsTaskStop
         supportsStopAll
@@ -283,12 +290,21 @@ const FULL_ROW_DETAIL: Record<string, { shows: string[]; hides?: string[] }> = {
   'parked, still live': { shows: [] }
 }
 
+// The sidebar and the strip list running children only; a finished child is in the transcript. A
+// finished child whose shell still runs reads monitoring, so it stays on both.
+const FINISHED = new Set(['finished', 'failed', 'cancelled', 'ended, outcome unknown'])
+
 describe('a child reads the same in the sidebar and the chat strip', () => {
   it.each(SCENARIOS)('%s', (name, children, expected) => {
-    const [sidebar] = sidebarRows(parentWith(children))
+    if (FINISHED.has(name)) {
+      expect(stripRows(children)).toEqual([])
+      expect(sidebarRows(parentWith(children))).toEqual([])
+      return
+    }
     const [strip] = stripRows(children)
-    expect(sidebar).toEqual(expected)
     expect(strip).toEqual(expected)
+    const [sidebar] = sidebarRows(parentWith(children))
+    expect(sidebar).toEqual(expected)
     const full = fullRow(parentWith(children))
     expect(full.labels).toContain(expected.dot)
     expect(full.text).toContain(expected.lead === expected.dot ? expected.trail : expected.lead)
@@ -300,15 +316,21 @@ describe('a child reads the same in the sidebar and the chat strip', () => {
     }
   })
 
-  it('names an unlabeled child by the same state on every surface', () => {
+  it('lists a finished child on neither surface', () => {
     const children = [
       settled('failed', { description: undefined, agentType: undefined, lastMessage: 'Exit 2' })
     ]
+    expect(stripRows(children)).toEqual([])
+    expect(sidebarRows(parentWith(children))).toEqual([])
+  })
+
+  it('names an unlabeled running child by the same state on every surface', () => {
+    const children = [view('child', { description: undefined, agentType: undefined })]
     const [sidebar] = sidebarRows(parentWith(children))
     const [strip] = stripRows(children)
-    expect(sidebar.lead).toBe('Failed')
-    expect(strip.lead).toBe('Failed')
-    expect(fullRow(parentWith(children)).text).toContain('Failed')
+    expect(sidebar.lead).toBe('Working')
+    expect(strip.lead).toBe('Working')
+    expect(fullRow(parentWith(children)).text).toContain('Working')
   })
 
   it('shows the monitoring icon on the full sidebar row too', () => {
@@ -524,40 +546,15 @@ describe('sibling child rows keep their own clocks', () => {
     ])
   })
 
-  it('times a settled child from when it ended in the sidebar, and freezes its run in the strip', () => {
-    const [agent] = buildSubagentChildRows({
-      parentEntry: parentWith([settled('succeeded')]),
-      tab,
-      parentIsFresh: true
-    })
-    const text = mount(
-      renderToStaticMarkup(
-        <TooltipProvider>
-          <CompactAgentRow agent={agent} now={NOW} onActivate={() => {}} />
-        </TooltipProvider>
-      )
-    ).textContent
-    expect(text?.endsWith('3m')).toBe(true)
-    const strip = mount(
-      renderToStaticMarkup(
-        <NativeChatBackgroundTasksStatus
-          tasks={[]}
-          settledTasks={[]}
-          childViews={[settled('succeeded')]}
-          supportsTaskStop
-          supportsStopAll
-          stoppingTaskIds={new Set()}
-          stoppingAll={false}
-          indicatorActive
-          isVisible
-          expanded
-          onExpandedChange={() => {}}
-          onStop={() => {}}
-        />
-      )
-    )
-    // Ran from 5m ago until it settled 3m ago; a finished row never ticks.
-    expect(strip.querySelector('li')?.textContent).toMatch(/2m 0s$/)
+  it('leaves a finished child off the sidebar and the strip', () => {
+    expect(
+      buildSubagentChildRows({
+        parentEntry: parentWith([settled('succeeded')]),
+        tab,
+        parentIsFresh: true
+      })
+    ).toEqual([])
+    expect(stripRows([settled('succeeded')])).toEqual([])
   })
 })
 
@@ -609,12 +606,13 @@ describe('the chat strip from views', () => {
   })
 })
 
+// A finished child is on neither surface (`null`: no row for it).
 describe('one lifecycle word for a child, on the sidebar row and the strip header', () => {
-  it.each<[string, AgentChildWorkView[], string, string]>([
-    ['failed', [settled('failed')], 'blocked', 'blocked'],
-    ['cancelled', [settled('cancelled')], 'idle', 'idle'],
-    ['ended, outcome unknown', [settled('unknown')], 'idle', 'idle'],
-    ['finished', [settled('succeeded')], 'done', 'done'],
+  it.each<[string, AgentChildWorkView[], string | null, string | null]>([
+    ['failed', [settled('failed')], null, null],
+    ['cancelled', [settled('cancelled')], null, null],
+    ['ended, outcome unknown', [settled('unknown')], null, null],
+    ['finished', [settled('succeeded')], null, null],
     ['monitoring its own shell', [settled('succeeded'), OWNED_SHELL], 'working', 'monitoring'],
     ['waiting', [view('child', { state: 'waiting' })], 'waiting', 'waiting']
   ])('%s', (_name, children, sidebarState, headerState) => {
@@ -623,9 +621,9 @@ describe('one lifecycle word for a child, on the sidebar row and the strip heade
       tab,
       parentIsFresh: true
     })
-    const [group] = buildBackgroundTaskGroupsFromViews(children)
+    const [group] = buildBackgroundTaskGroupsFromViews(structuredRunningChildWork(children))
     // A CLI row carries monitoring as `working` plus its working mode; every other word is shared.
-    expect(sidebar.state).toBe(sidebarState)
-    expect(group.tasks[0].state).toBe(headerState)
+    expect(sidebar?.state ?? null).toBe(sidebarState)
+    expect(group?.tasks[0].state ?? null).toBe(headerState)
   })
 })

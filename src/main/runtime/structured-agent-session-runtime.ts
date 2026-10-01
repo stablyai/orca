@@ -12,7 +12,6 @@
 
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { DISPATCH_DOUBT_PROVIDER_IDLE } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
@@ -42,10 +41,9 @@ import {
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
-import {
-  AGENT_SESSION_STORE_DIR_NAME,
-  agentSessionStorePath
-} from './agent-session-record-store-file'
+import { legacyAgentSessionStorePath } from './agent-session-record-store-file'
+import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
+import { journalDatabaseHoldsAgentSessions } from '../native-chat/agent-session-journal/journal-database'
 import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
@@ -61,11 +59,25 @@ import {
   type RuntimeAgentAccountHomeResolver
 } from './structured-agent-model-catalog-wiring'
 
+/** Whether this profile holds a structured chat: a record or tab in the journal database, or the
+ *  records file a profile from before it carries while the database still owes its copy. */
 export function hasPersistedStructuredAgentSessionStore(
   stateDirectory: string,
   fileExists: (path: string) => boolean = existsSync
 ): boolean {
-  const filePath = agentSessionStorePath(join(stateDirectory, AGENT_SESSION_STORE_DIR_NAME))
+  const databasePath = journalDatabasePath(stateDirectory)
+  if (fileExists(databasePath)) {
+    try {
+      const holds = journalDatabaseHoldsAgentSessions(databasePath)
+      if (holds !== undefined) {
+        return holds
+      }
+    } catch {
+      // A database that cannot be read cannot say it is empty.
+      return true
+    }
+  }
+  const filePath = legacyAgentSessionStorePath(stateDirectory)
   return fileExists(filePath) || fileExists(`${filePath}.bak`)
 }
 
@@ -194,7 +206,14 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   if (typeof deps.resolveClaudeAuthPolicy !== 'function') {
     throw new Error(CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED)
   }
-  const journalDatabase = openStructuredAgentSessionJournalDatabase(deps.stateDirectory)
+  const journalDatabase = await openStructuredAgentSessionJournalDatabase({
+    stateDirectory: deps.stateDirectory,
+    hostId: deps.hostId,
+    onLegacyRecordImportReport: (report) =>
+      deps.onError
+        ? deps.onError({ scope: 'structured-agent-session-record-import', error: report })
+        : console.warn('[structured-agent-session] importing the chat records file', report)
+  })
   try {
     return await installOnJournal(deps, journalDatabase)
   } catch (error) {
@@ -210,10 +229,7 @@ async function installOnJournal(
 ): Promise<InstalledRuntime> {
   const envResolvers = createStructuredAgentEnvironmentResolvers(deps)
   const { resolveCodexEnvironment, resolveClaudeInheritedEnv } = envResolvers
-  const store = await AgentSessionRecordStore.open({
-    directory: join(deps.stateDirectory, AGENT_SESSION_STORE_DIR_NAME),
-    hostId: deps.hostId
-  })
+  const store = AgentSessionRecordStore.open({ journalDatabase, hostId: deps.hostId })
   let host: StructuredAgentSessionHost | null = null
   const lifecycle = createStructuredAgentSessionLifecycleDelivery({
     handle: (event) => host?.handleAdapterEvent(event),
@@ -232,7 +248,7 @@ async function installOnJournal(
       })
     )
   }
-  // The provider going idle is what re-derives a doubted send: it can no longer be holding it.
+  // The provider going idle is what re-derives a doubted send; a late echo still accepts it.
   const releaseUnansweredDispatches = ({ sessionId }: { sessionId: string }): void => {
     void host
       ?.releaseUnansweredDispatches({
@@ -259,8 +275,6 @@ async function installOnJournal(
     ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     modelCatalog: agentModelCatalogStore,
-    onBackgroundTasksChanged: (sessionId, state) =>
-      host?.publishBackgroundTaskState(sessionId, state),
     onChildWorkEvidence: (sessionId, evidence) =>
       host?.publishChildWorkEvidence(sessionId, evidence),
     onDispatchSettledLate,
@@ -288,8 +302,6 @@ async function installOnJournal(
         }
       : {}),
     onLifecycleEvent: (event) => lifecycle.deliver(event),
-    onBackgroundTasksChanged: (sessionId, state) =>
-      host?.publishBackgroundTaskState(sessionId, state),
     onChildWorkEvidence: (sessionId, evidence) =>
       host?.publishChildWorkEvidence(sessionId, evidence),
     onDispatchSettledLate,
@@ -317,6 +329,10 @@ async function installOnJournal(
       : {}),
     onEventSinkError: ({ sessionId, error }) =>
       deps.onError?.({ scope: `structured-agent-session-journal:${sessionId}`, error }),
+    onLeaseReconcileFailure: (error) =>
+      deps.onError
+        ? deps.onError({ scope: 'structured-agent-session-lease-reconcile', error })
+        : console.warn('[structured-agent-session] reconciling chat leases failed', error),
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),

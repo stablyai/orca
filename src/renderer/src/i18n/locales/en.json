@@ -3986,7 +3986,9 @@
             }
           },
           "tooltip": {
-            "zcode": { "mcp": "MCP" },
+            "zcode": {
+              "mcp": "MCP"
+            },
             "cedb7b99e3": "% used",
             "6d6df77f41": "No data available",
             "7f7f208060": "Monthly",
@@ -8994,7 +8996,8 @@
           "ad5d036ecc": "Could not request microphone permission. Voice dictation was not enabled.",
           "f9a9cf6928": "Microphone permission is required before enabling voice dictation.",
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
-          "cd9fe37556": "Microphone permission granted"
+          "cd9fe37556": "Microphone permission granted",
+          "openAiKeyName": "Your OpenAI transcription key"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -10077,7 +10080,8 @@
               "9a9f8d4910": "Connect Jira Cloud to browse, create, and link issues.",
               "74f3063026": "{{value0}} site{{value1}} connected",
               "statusConnected": "Connected",
-              "statusNotConnected": "Not connected"
+              "statusNotConnected": "Not connected",
+              "jiraTokenName": "Your Jira API token"
             }
           }
         },
@@ -10985,7 +10989,8 @@
                 "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
                 "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it.",
                 "statusConnected": "Connected",
-                "statusNotConnected": "Not connected"
+                "statusNotConnected": "Not connected",
+                "linearTokenName": "Your Linear API token"
               }
             }
           }
@@ -12153,7 +12158,8 @@
               "notConfigured": "Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.",
               "disconnectFailed": "Could not remove the saved Bitbucket credential.",
               "statusLoadFailed": "Could not check for a saved Bitbucket credential.",
-              "replaceCredentials": "Add or replace credentials"
+              "replaceCredentials": "Add or replace credentials",
+              "credentialName": "Your Bitbucket credential"
             }
           }
         },
@@ -12217,6 +12223,9 @@
           "usageLabel": "Usage",
           "noAllowance": "Cursor reported no usage allowance for this account.",
           "staleUsage": "Last known usage — the latest refresh failed: {{reason}}"
+        },
+        "UnsealedCredentialNotice": {
+          "body": "{{credential}} is stored unencrypted — this system has no OS keyring Orca can use. Anyone who can read your disk or a backup of it can read the credential. Install and unlock gnome-keyring or kwallet, then save it again to seal it."
         }
       },
       "right": {
@@ -16680,6 +16689,7 @@
             "done": "Done",
             "idle": "Idle",
             "unverifiable": "No recent update",
+            "unconfirmed": "Couldn’t confirm",
             "permission": "Needs attention"
           },
           "filtersSection": "Filters",
@@ -17459,6 +17469,65 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "failureWords": {
+        "theAgent": "The agent",
+        "providerStartFailed": "{{agent}} stopped before it finished starting.",
+        "runCommandAgain": "Run /{{command}} again.",
+        "sendToTryAgain": "Send your message to try again.",
+        "couldNotStart": "{{agent}} couldn't start.",
+        "couldNotRestart": "{{agent}} couldn't restart.",
+        "notSignedIn": "{{agent}} is not signed in for the selected account.",
+        "signInFirst": "Sign in first.",
+        "signInThenRunCommand": "Sign in, then run /{{command}} again.",
+        "signInThenSend": "Sign in, then send your message again.",
+        "historyTooLarge": "This conversation's history is too large to restore here.",
+        "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
+        "accountSwitchInProgress": "A Claude account switch is in progress. Try again after it finishes.",
+        "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
+        "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
+        "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
+        "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
+        "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
+        "providerExitedRejection": "{{agent}} stopped before this message was sent.",
+        "providerRejected": "The provider did not accept this message.",
+        "providerRejectedQuoted": "The provider did not accept this message: {{detail}}.",
+        "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
+        "attachmentTooLarge": "An image on this message is too large, so the message was not sent.",
+        "attachmentLargerThan": "An image on this message is larger than {{size}} MB, so the message was not sent.",
+        "attachmentTooMany": "This message has too many images, so it was not sent.",
+        "attachmentAtMost": "{{agent}} accepts at most {{limit}} images in one message, so this message was not sent.",
+        "attachmentTotalTooLarge": "The images on this message are too large together, so the message was not sent.",
+        "attachmentTotalMoreThan": "The images on this message add up to more than {{size}} MB, so the message was not sent.",
+        "attachmentUnsupportedType": "{{agent}} accepts only PNG, JPEG, GIF, and WebP images, so this message was not sent.",
+        "attachmentNotAFile": "An image on this message isn't a file, so the message was not sent.",
+        "attachmentNoSource": "An image on this message has no file to send, so the message was not sent.",
+        "attachmentInvalid": "An attachment on this message can't be sent to the agent.",
+        "attachmentUnreadable": "An attachment on this message couldn't be read, so the message was not sent.",
+        "emptyMessage": "This message is empty, so it was not sent.",
+        "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
+        "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent.",
+        "cancelled": "This message was withdrawn before the agent started it.",
+        "chatClosed": "The chat closed before this message was sent.",
+        "hostRestarted": "Orca restarted before this message was sent.",
+        "notDelivered": "This message was not delivered.",
+        "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
+        "commandRefused": "This command didn't run.",
+        "commandRefusedTryAgain": "This command didn't run. Try it again.",
+        "compactionFailed": "Compaction failed.",
+        "compactionFailedQuoted": "Compaction failed: {{detail}}.",
+        "compactionUnconfirmed": "Compaction completion is unconfirmed.",
+        "cancelUnconfirmed": "Cancellation was not confirmed.",
+        "stopRefused": "{{agent}} didn't stop.",
+        "stopRefusedQuoted": "{{agent}} didn't stop: {{detail}}.",
+        "noTurnToStop": "{{agent}} had no turn running to stop.",
+        "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+        "hostFault": "Orca ran into a problem, so this didn't go through.",
+        "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
+        "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
+        "providerRateLimited": "{{agent}} is rate-limited and retrying.",
+        "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
+        "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}."
+      },
       "writeNotice": {
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
         "notDoneSend": "Your message was not sent.",
@@ -17577,6 +17646,7 @@
         "imagePasteFailed": "Image paste failed.",
         "imageSaving": "Saving pasted image…",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
+        "pasteUnavailable": "Can't paste — this chat isn't accepting input right now.",
         "uploadingAttachments": "Uploading {{value0}} file(s) to remote…",
         "model": "Model",
         "effort": "Effort",
@@ -17690,6 +17760,8 @@
         "thinking": "Thinking",
         "workingFor": "Working for {{value0}}",
         "workedFor": "Worked for {{value0}}",
+        "interruptedAfter": "Interrupted after {{value0}}",
+        "failedAfter": "Failed after {{value0}}",
         "toggleDetails": "Toggle turn details"
       },
       "backgroundTasks": {
@@ -17745,7 +17817,8 @@
         "error": {
           "title": "Could not load conversation",
           "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
-          "retryingSubtitle": "The transcript could not be read. Orca keeps trying to load it."
+          "retryingSubtitle": "The transcript could not be read. Orca keeps trying to load it.",
+          "keepsTrying": "Orca keeps trying to load it."
         },
         "reconnecting": "Reconnecting to this chat…",
         "pairHost": "Pair a host to view agent chat history.",
@@ -17823,8 +17896,7 @@
         "unnamed": "Subagent"
       },
       "conversationCommand": {
-        "pendingWork": "Wait for pending work and messages to finish before using this command.",
-        "unconfirmed": "Conversation operation was not confirmed."
+        "pendingWork": "Wait for pending work and messages to finish before using this command."
       },
       "drop": {
         "title": "Drop to attach to this chat",
@@ -17857,6 +17929,9 @@
         "title": "Context",
         "estimated": "Estimated from the last response."
       },
+      "dismissDeliveryNotice": "Dismiss",
+      "messageNotSent": "Message not sent",
+      "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying",
       "queuedMessages": {
         "behindReturnedHold": "Waiting — a message ahead needs attention",
         "awaitingAnswerHold": "Waiting for your answer",
@@ -18133,6 +18208,12 @@
           "unknown": "Unknown host",
           "candidateName": "{{value0}} on {{value1}}"
         }
+      },
+      "creation": {
+        "worktreeReadyToast": "Worktree {{name}} is ready",
+        "workspaceReadyToast": "Workspace {{name}} is ready",
+        "goToWorktree": "Go to worktree",
+        "goToWorkspace": "Go to workspace"
       }
     },
     "agentSessionContinuation": {

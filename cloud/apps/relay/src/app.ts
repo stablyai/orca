@@ -28,6 +28,7 @@ import {
   createRuntimeTokenVerifier
 } from './admin-token-verifier.js'
 import {
+  RelayAssignmentRowBusyError,
   RelayHomeCellUnavailableError,
   type CellFenceAttemptEvidence,
   type RelayAssignment,
@@ -58,6 +59,8 @@ const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
 )
 
 const ASSIGNMENT_REJECTION_LOG_WINDOW_MS = 10_000
+// A release holds the row for about one lock timeout, so one second is enough.
+const ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS = 1
 const REGION_CATALOG_CACHE_MS = 30_000
 // A drain that outlives the roll step it belongs to is an outage, not a pacing win.
 const DRAIN_PACE_WINDOW_MAX_MS = 5 * 60 * 1_000
@@ -362,6 +365,18 @@ export function createRelayApp(
         }
       }
     } catch (error) {
+      if (error instanceof RelayAssignmentRowBusyError) {
+        logAssignmentRejection({
+          route: 'assign',
+          lane,
+          hinted: Boolean(body.data.reconnect),
+          relayHostId: claims.relayHostId,
+          reason: operationError(error)
+        })
+        // The host's own release is settling; its next dial finds the row free.
+        context.header('Retry-After', String(ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS))
+        return context.json({ error: 'assignment_row_busy' }, 503)
+      }
       if (isRelayAssignmentUnavailableError(error) || isRelayDatabaseTransientError(error)) {
         logAssignmentRejection({
           route: 'assign',
@@ -481,6 +496,9 @@ export function createRelayApp(
         })
       }
       if (isRelayAssignmentUnavailableError(error)) {
+        if (error instanceof RelayAssignmentRowBusyError) {
+          context.header('Retry-After', String(ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS))
+        }
         return context.json({ error: operationError(error) }, 503)
       }
       if (isRelayDatabaseTransientError(error)) return rejectPublicAssignment(context)
@@ -1983,7 +2001,8 @@ function isRelayAssignmentUnavailableError(error: unknown): boolean {
     [
       'relay_capacity_exhausted',
       'relay_connection_headroom_exhausted',
-      'relay_home_cell_unavailable'
+      'relay_home_cell_unavailable',
+      'relay_assignment_row_busy'
     ].includes(error.message)
   )
 }

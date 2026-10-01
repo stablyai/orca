@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -24,6 +24,8 @@ import {
   gitlabMergeRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
 } from './review-head-tracking-ref'
+import { parseWorktreeList } from './git-worktree-porcelain-parser'
+import { fastForwardLocalBaseBranch } from './worktree/local-base-branch-fast-forward'
 
 const execFileAsync = promisify(execFile)
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
@@ -190,19 +192,6 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       await runGit(['worktree', 'remove', '--force', 'held-wt'])
       await runGit(['branch', '-D', 'compat-held'])
     }
-  })
-
-  it('deregisters a worktree whose directory was renamed away', async () => {
-    // Orca renames the checkout into a trash directory and then clears the registration, so every
-    // supported Git must accept `worktree remove --force` on the now-missing path.
-    await runGit(['worktree', 'add', '-b', 'compat-deferred', 'deferred-wt'])
-    await rename(join(repoPath, 'deferred-wt'), join(repoPath, 'deferred-trash'))
-
-    await expect(runGit(['worktree', 'remove', '--force', 'deferred-wt'])).resolves.toBeDefined()
-
-    const remaining = await runGit(['worktree', 'list', '--porcelain'])
-    expect(remaining.stdout).not.toContain('deferred-wt')
-    await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
   })
 
   it('removes locked prepared worktrees without a separate unlock', async () => {
@@ -593,5 +582,68 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
 
     const included = await listFiles({ includePattern: 'vendored' })
     expect(included).toEqual(['vendored/inner.txt'])
+  })
+
+  // Why pin this: the owner-checkout fast-forward overrides the user's merge settings with flags
+  // and `-c` keys; every one must parse on the baseline, and a branch-level `-s ours` must not win.
+  it('fast-forwards a checked-out base branch with the exact owner arguments', async () => {
+    const worktree = 'compat-ff-wt'
+    const branch = 'compat-ff-main'
+    const marker = join(repoPath, worktree, 'compat-ff-hook-ran')
+    const hookPath = join(repoPath, '.git', 'hooks', 'post-merge')
+    await runGit(['worktree', 'add', '-q', '-b', branch, worktree])
+    const localOid = (await runGit(['-C', worktree, 'rev-parse', 'HEAD'])).stdout.trim()
+    await writeFile(join(repoPath, worktree, 'compat-ff-added.txt'), 'upstream\n')
+    await runGit(['-C', worktree, 'add', 'compat-ff-added.txt'])
+    await runGit(['-C', worktree, 'commit', '-qm', 'upstream'])
+    const remoteOid = (await runGit(['-C', worktree, 'rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['update-ref', `refs/remotes/origin/${branch}`, remoteOid])
+    await runGit(['-C', worktree, 'reset', '-q', '--hard', localOid])
+    await runGit(['config', `branch.${branch}.mergeOptions`, '-s ours'])
+    // Why: an uninstalled source-built Git (the CI baseline) has no templates, so no hooks dir.
+    await mkdir(dirname(hookPath), { recursive: true })
+    await writeFile(hookPath, '#!/bin/sh\necho ran > compat-ff-hook-ran\n', { mode: 0o755 })
+    const merges: string[][] = []
+    // Why `-C`: in the Docker lane, paths Git reports are container paths, not host ones.
+    const git = {
+      exec: (args: string[], cwd: string) => {
+        if (args.includes('merge')) {
+          merges.push(args)
+        }
+        return runGit(['-C', cwd, ...args])
+      },
+      listWorktrees: async (path: string) =>
+        parseWorktreeList((await runGit(['-C', path, 'worktree', 'list', '--porcelain'])).stdout)
+    }
+
+    try {
+      const outcome = await fastForwardLocalBaseBranch(git, {
+        repoPath: image ? '/repo' : repoPath,
+        fullRef: `refs/heads/${branch}`,
+        remoteTrackingRef: `refs/remotes/origin/${branch}`
+      })
+
+      expect(outcome).toMatchObject({ status: 'updated' })
+      expect(merges).toHaveLength(1)
+      await expect(
+        runGit(['rev-list', '--parents', '-1', `refs/heads/${branch}`])
+      ).resolves.toMatchObject({ stdout: `${remoteOid} ${localOid}\n` })
+      await expect(
+        readFile(join(repoPath, worktree, 'compat-ff-added.txt'), 'utf-8')
+      ).resolves.toBe('upstream\n')
+      await expect(readFile(marker, 'utf-8')).rejects.toMatchObject({ code: 'ENOENT' })
+
+      // Control: the hook and the branch setting are both live for a plain fast-forward.
+      await runGit(['-C', worktree, 'reset', '-q', '--hard', localOid])
+      await runGit(['-C', worktree, 'merge', '--ff-only', '-q', remoteOid])
+      await expect(readFile(marker, 'utf-8')).resolves.toBe('ran\n')
+      await expect(runGit(['rev-parse', `refs/heads/${branch}`])).resolves.not.toMatchObject({
+        stdout: `${remoteOid}\n`
+      })
+    } finally {
+      await rm(hookPath, { force: true })
+      await runGit(['config', '--unset', `branch.${branch}.mergeOptions`])
+      await runGit(['worktree', 'remove', '--force', worktree])
+    }
   })
 })

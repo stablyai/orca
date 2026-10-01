@@ -5,10 +5,9 @@
 //
 // What it cannot skip is work already in flight, which is what every copy of this helper used to
 // get wrong. Two producers reach the session store after the last awaited call has returned — a
-// lease-renewal tick, and the restart the delivery loop wakes for an accepted send — and the store
-// re-creates its own directory before every commit. A commit landing after the test removed its
-// temp directory therefore puts that directory back, and the removal fails with ENOTEMPTY. Quit
-// waits for both, in its `stop-lease-renewal` and `drain-attaches` phases; so does this.
+// lease-renewal tick, and the restart the delivery loop wakes for an accepted send — and a commit
+// landing after the test's cleanup meets a journal database already closed. Quit waits for both,
+// in its `stop-lease-renewal` and `drain-attaches` phases; so does this.
 
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 

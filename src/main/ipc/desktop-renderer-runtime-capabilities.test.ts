@@ -21,11 +21,13 @@ import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
+import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shared/agent-session-background-task-child-views-capability'
 import { supportsAgentLaunch } from '../runtime/rpc/methods/agent-launch'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 
@@ -47,15 +49,19 @@ const REMOTE_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   // Opts into a delta feed in place of the full tab list — a remote-transport concern.
-  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
+  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
+  // Main marks `removing` on its own worktree IPC listings unconditionally; the renderer never
+  // lists its own host's worktrees over runtime RPC, where this capability decides mark vs omit.
+  WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
 ]
 
 /** Gates the renderer must pass against its own main process. The Electron remote list omits all
- *  five; mobile advertises the structured ones, so this is an Electron-remote gap rather than a
+ *  six; mobile advertises the structured ones, so this is an Electron-remote gap rather than a
  *  statement that no remote client wants them. Why it is one is not recorded here. */
 const LOCAL_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY

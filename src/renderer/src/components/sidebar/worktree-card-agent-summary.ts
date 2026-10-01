@@ -15,6 +15,8 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'failed',
   'working',
   'monitoring',
+  'unconfirmed',
+  // Why: a user's Stop is not news, but it is not a finish either.
   'interrupted',
   'done',
   // Why: below every reporting state, above true idle — the pane is still held.
@@ -46,6 +48,8 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
       return 'idle'
     case 'unverifiable':
       return 'not reporting'
+    case 'unconfirmed':
+      return 'unconfirmed'
     case 'permission':
       return 'needs attention'
   }

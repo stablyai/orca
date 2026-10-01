@@ -4,7 +4,7 @@
 // card. From then on only the user's Retry sends it: the unconfirmed probe resending it onto the
 // now-idle session would start a turn the user just stopped.
 
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 
@@ -24,6 +24,9 @@ import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache
 } from './native-chat-draft-cache'
+
+// Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
+afterEach(cleanup)
 
 const TARGET = { kind: 'local' } as const
 const REMOTE = { kind: 'environment', environmentId: 'env-1' } as const

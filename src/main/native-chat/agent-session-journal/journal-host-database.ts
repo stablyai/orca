@@ -10,8 +10,12 @@ import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-
 import type Database from '../../sqlite/sync-database'
 import {
   JOURNAL_SYNCHRONOUS,
+  journalDatabaseMigratesRecords,
+  NO_LEGACY_JOURNAL_RECORDS,
   openJournalDatabase,
+  readJournalDatabaseVersion,
   runJournalTransaction,
+  type JournalLegacyRecordImport,
   type OpenJournalDatabase
 } from './journal-database'
 import { journalOpenRefusalError } from './journal-open-failure'
@@ -28,6 +32,8 @@ export class JournalHostDatabase {
   private connection: Database.Database | null
   /** A newer Orca wrote the database: every chat's history reads, and no chat writes. */
   readonly readOnly: boolean
+  /** The chat records file could not be read this launch, so its copy waits for a later one. */
+  readonly legacyRecordImportOwed: boolean
   /** A failed transaction's ROLLBACK failed too, so the transaction may still be open. */
   private stranded = false
 
@@ -37,13 +43,33 @@ export class JournalHostDatabase {
   ) {
     this.connection = opened.db
     this.readOnly = opened.readOnly
+    this.legacyRecordImportOwed = opened.legacyRecordImportOwed
   }
 
-  static open(stateDirectory: string): JournalHostDatabase {
+  /** `readLegacyRecords` runs only when this open migrates to version 4, before any transaction. */
+  static async open(
+    stateDirectory: string,
+    readLegacyRecords: () => Promise<JournalLegacyRecordImport>
+  ): Promise<JournalHostDatabase> {
+    mkdirSync(stateDirectory, { recursive: true })
+    const migrates = journalDatabaseMigratesRecords(
+      readJournalDatabaseVersion(journalDatabasePath(stateDirectory))
+    )
+    return JournalHostDatabase.openWith(
+      stateDirectory,
+      migrates ? await readLegacyRecords() : NO_LEGACY_JOURNAL_RECORDS
+    )
+  }
+
+  /** The same open with the records file already read; tests pass `NO_LEGACY_JOURNAL_RECORDS`. */
+  static openWith(
+    stateDirectory: string,
+    legacyRecords: JournalLegacyRecordImport
+  ): JournalHostDatabase {
     mkdirSync(stateDirectory, { recursive: true })
     return new JournalHostDatabase(
       stateDirectory,
-      openJournalDatabase(journalDatabasePath(stateDirectory))
+      openJournalDatabase(journalDatabasePath(stateDirectory), legacyRecords)
     )
   }
 

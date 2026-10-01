@@ -14427,6 +14427,7 @@
             "done": "Completado",
             "idle": "Inactivo",
             "unverifiable": "Sin actualizaciones recientes",
+            "unconfirmed": "No se pudo confirmar",
             "permission": "Requiere atención"
           },
           "filtersSection": "Filtros",
@@ -14904,6 +14905,65 @@
   },
   "components": {
     "native-chat": {
+      "failureWords": {
+        "theAgent": "El agente",
+        "providerStartFailed": "{{agent}} se detuvo antes de terminar de iniciarse.",
+        "runCommandAgain": "Vuelva a ejecutar /{{command}}.",
+        "sendToTryAgain": "Envíe su mensaje para volver a intentarlo.",
+        "couldNotStart": "{{agent}} no pudo iniciarse.",
+        "couldNotRestart": "{{agent}} no pudo reiniciarse.",
+        "notSignedIn": "{{agent}} no tiene la sesión iniciada con la cuenta seleccionada.",
+        "signInFirst": "Inicie sesión primero.",
+        "signInThenRunCommand": "Inicie sesión y vuelva a ejecutar /{{command}}.",
+        "signInThenSend": "Inicie sesión y vuelva a enviar su mensaje.",
+        "historyTooLarge": "El historial de esta conversación es demasiado grande para restaurarlo aquí.",
+        "managedAccountEnvOverride": "Este inicio de Claude define sus propias variables de inicio de sesión de Anthropic. Quítelas para usar una cuenta de Claude administrada.",
+        "accountSwitchInProgress": "Hay un cambio de cuenta de Claude en curso. Vuelva a intentarlo cuando termine.",
+        "managedAccountUnsupported": "Mientras haya una cuenta de Claude agregada en WSL, los chats de Claude necesitan una cuenta de Claude de Windows.",
+        "chooseClaudeAccount": "Elija o agregue una en la configuración de Cuentas de Claude.",
+        "chooseClaudeAccountThenRunCommand": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a ejecutar /{{command}}.",
+        "chooseClaudeAccountThenSend": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a enviar su mensaje.",
+        "providerExitedRow": "{{agent}} se detuvo mientras esta respuesta estaba en curso. Puede continuar en esta conversación.",
+        "providerExitedRejection": "{{agent}} se detuvo antes de que se enviara este mensaje.",
+        "providerRejected": "El proveedor no aceptó este mensaje.",
+        "providerRejectedQuoted": "El proveedor no aceptó este mensaje: {{detail}}.",
+        "attachmentEmpty": "Una imagen de este mensaje está vacía, así que el mensaje no se envió.",
+        "attachmentTooLarge": "Una imagen de este mensaje es demasiado grande, así que el mensaje no se envió.",
+        "attachmentLargerThan": "Una imagen de este mensaje supera los {{size}} MB, así que el mensaje no se envió.",
+        "attachmentTooMany": "Este mensaje tiene demasiadas imágenes, así que no se envió.",
+        "attachmentAtMost": "{{agent}} acepta como máximo {{limit}} imágenes por mensaje, así que este mensaje no se envió.",
+        "attachmentTotalTooLarge": "Las imágenes de este mensaje son demasiado grandes en conjunto, así que el mensaje no se envió.",
+        "attachmentTotalMoreThan": "Las imágenes de este mensaje suman más de {{size}} MB, así que el mensaje no se envió.",
+        "attachmentUnsupportedType": "{{agent}} solo acepta imágenes PNG, JPEG, GIF y WebP, así que este mensaje no se envió.",
+        "attachmentNotAFile": "Una imagen de este mensaje no es un archivo, así que el mensaje no se envió.",
+        "attachmentNoSource": "Una imagen de este mensaje no tiene ningún archivo que enviar, así que el mensaje no se envió.",
+        "attachmentInvalid": "Un archivo adjunto de este mensaje no se puede enviar al agente.",
+        "attachmentUnreadable": "No se pudo leer un archivo adjunto de este mensaje, así que el mensaje no se envió.",
+        "emptyMessage": "Este mensaje está vacío, así que no se envió.",
+        "queueFull": "Había demasiados mensajes esperando al agente, así que este no se envió.",
+        "writeFailed": "Orca no pudo entregar este mensaje al agente, así que no se envió.",
+        "cancelled": "Este mensaje se retiró antes de que el agente empezara a procesarlo.",
+        "chatClosed": "El chat se cerró antes de que se enviara este mensaje.",
+        "hostRestarted": "Orca se reinició antes de que se enviara este mensaje.",
+        "notDelivered": "Este mensaje no se entregó.",
+        "notDeliveredSendAgain": "Este mensaje no se entregó. Vuelva a enviarlo para continuar.",
+        "commandRefused": "Este comando no se ejecutó.",
+        "commandRefusedTryAgain": "Este comando no se ejecutó. Vuelva a intentarlo.",
+        "compactionFailed": "La compactación falló.",
+        "compactionFailedQuoted": "La compactación falló: {{detail}}.",
+        "compactionUnconfirmed": "No se confirmó que la compactación haya terminado.",
+        "cancelUnconfirmed": "No se confirmó la cancelación.",
+        "stopRefused": "{{agent}} no se detuvo.",
+        "stopRefusedQuoted": "{{agent}} no se detuvo: {{detail}}.",
+        "noTurnToStop": "{{agent}} no tenía ningún turno en curso que detener.",
+        "answerUnconfirmed": "Su respuesta se registró, pero el agente no la confirmó.",
+        "hostFault": "Orca tuvo un problema, así que esto no se completó.",
+        "hostFaultTryAgain": "Orca tuvo un problema, así que esto no se completó. Vuelva a intentarlo.",
+        "hostStopped": "{{agent}} no terminó de iniciarse, así que Orca lo detuvo.",
+        "providerRateLimited": "{{agent}} alcanzó un límite de solicitudes y está reintentando.",
+        "providerRetrying": "{{agent}} tuvo un problema temporal y está reintentando.",
+        "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}."
+      },
       "writeNotice": {
         "notDoneReadHistory": "No se pudo cargar el historial de este chat.",
         "notDoneSend": "Su mensaje no se envió.",
@@ -14972,6 +15032,7 @@
         "pastedImageLabel": "Imagen pegada",
         "imagePasteFailed": "Error al pegar imagen.",
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
+        "pasteUnavailable": "No se puede pegar — este chat no acepta entradas en este momento.",
         "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…",
         "model": "Modelo",
         "effort": "Esfuerzo",
@@ -15019,7 +15080,9 @@
         "result": "Resultado"
       },
       "status": {
-        "responding": "El agente está respondiendo"
+        "responding": "El agente está respondiendo",
+        "interruptedAfter": "Interrumpido tras {{value0}}",
+        "failedAfter": "Falló tras {{value0}}"
       },
       "jumpToLatest": "Saltar a lo último",
       "toggle": {
@@ -15034,7 +15097,8 @@
         "error": {
           "title": "No se pudo cargar la conversación",
           "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando.",
-          "retryingSubtitle": "No se pudo leer la transcripción. Orca sigue intentando cargarla."
+          "retryingSubtitle": "No se pudo leer la transcripción. Orca sigue intentando cargarla.",
+          "keepsTrying": "Orca sigue intentando cargarlo."
         },
         "reconnecting": "Reconectando con este chat…",
         "pairHost": "Empareje un host para ver el historial de chat del agente.",
@@ -15082,6 +15146,9 @@
         "title": "Contexto",
         "estimated": "Estimado a partir de la última respuesta."
       },
+      "dismissDeliveryNotice": "Descartar",
+      "messageNotSent": "Mensaje no enviado",
+      "deliveryUnconfirmed": "Entrega sin confirmar — revisa el chat antes de reintentar",
       "subagents": {
         "unnamed": "Subagente"
       },
@@ -15135,6 +15202,12 @@
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
         }
+      },
+      "creation": {
+        "worktreeReadyToast": "El worktree {{name}} está listo",
+        "workspaceReadyToast": "El espacio de trabajo {{name}} está listo",
+        "goToWorktree": "Ir al worktree",
+        "goToWorkspace": "Ir al espacio de trabajo"
       }
     },
     "agentSessionContinuation": {

@@ -76,7 +76,7 @@ describe('structured agent session eviction', () => {
 
     await evictStructuredAgentSession(ctx)
 
-    expect(disposeSession).toHaveBeenCalledWith('session-1')
+    expect(disposeSession).toHaveBeenCalledWith('session-1', undefined)
     expect(closeSession).not.toHaveBeenCalled()
   })
 

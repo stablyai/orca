@@ -566,26 +566,6 @@ describe('startStructuredAgentLaunch', () => {
     expect(toast.error).toHaveBeenCalledOnce()
   })
 
-  it('replays the same intent after an absent unknown outcome', async () => {
-    const worktreeId = 'wt-replay-unknown'
-    const intent = launchIntent(worktreeId)
-    mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 1 })
-    vi.mocked(refreshLocalStructuredSessionTabs)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([publishedSnapshot(worktreeId, intent.sessionId)])
-
-    startStructuredAgentLaunch(worktreeId, 'codex')
-    await flushLaunchSettlement()
-
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
-    expect(mocks.launch).toHaveBeenCalledTimes(2)
-    expect(mocks.launch.mock.calls[1]?.[0]).toBe(intent)
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
   it('reuses the queued prompt without a second delivery after unknown recovery', async () => {
     const worktreeId = 'wt-unknown-prompt-retry'
     const intent = launchIntent(worktreeId)

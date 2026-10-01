@@ -1,7 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
-import { writeOutbox } from './structured-agent-session-outbox-storage'
+import {
+  commitStructuredAgentSessionOutbox,
+  getStructuredAgentSessionOutbox
+} from './structured-agent-session-outbox-storage'
 
 const UNCONFIRMED_PROBE_BASE_DELAY_MS = 1_000
 /** No attempt ceiling: a transport outage outlives any fixed budget, and giving up
@@ -16,10 +19,8 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
   outbox: readonly StructuredAgentSessionOutboxEntry[]
   submissions: readonly AgentJournalSubmission[]
   owner: { attached: boolean; ownerChange: number | null; targetKey: string }
-  outboxRef: { current: StructuredAgentSessionOutboxEntry[] }
-  setOutbox: Dispatch<SetStateAction<StructuredAgentSessionOutboxEntry[]>>
 }): void {
-  const { outbox, outboxRef, owner, sessionId, setOutbox, submissions } = args
+  const { outbox, owner, sessionId, submissions } = args
   const probeAttemptsRef = useRef({ id: null as string | null, attempts: 0 })
   useLayoutEffect(() => {
     probeAttemptsRef.current = { id: null, attempts: 0 }
@@ -57,24 +58,13 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
     const timer = setTimeout(
       () => {
         probeAttemptsRef.current = { id: probeId, attempts: attempts + 1 }
-        const next = outboxRef.current.map((entry) =>
+        const next = getStructuredAgentSessionOutbox(sessionId).map((entry) =>
           entry.clientMessageId === probeId ? { ...entry, state: 'queued' as const } : entry
         )
-        outboxRef.current = next
-        setOutbox(next)
-        writeOutbox(sessionId, next)
+        commitStructuredAgentSessionOutbox(sessionId, next)
       },
       Math.min(UNCONFIRMED_PROBE_BASE_DELAY_MS * 2 ** attempts, UNCONFIRMED_PROBE_MAX_DELAY_MS)
     )
     return () => clearTimeout(timer)
-  }, [
-    outboxRef,
-    owner.attached,
-    owner.ownerChange,
-    owner.targetKey,
-    probeId,
-    probeSettled,
-    sessionId,
-    setOutbox
-  ])
+  }, [owner.attached, owner.ownerChange, owner.targetKey, probeId, probeSettled, sessionId])
 }

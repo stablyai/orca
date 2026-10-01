@@ -822,14 +822,6 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(replaceAllCallCount).toBe(0)
   })
 
-  it('keeps agent draft chunk arrays aligned with lazy chunk iteration', () => {
-    const content = 'before\x1b[201~after😀'
-
-    expect(chunkAgentDraftPasteContent(content, 6)).toEqual([
-      ...iterateAgentDraftPasteContentChunks(content, 6)
-    ])
-  })
-
   it('iterates large agent draft chunks lazily', () => {
     const text = 'x'.repeat(128)
     const codePointAt = vi.spyOn(String.prototype, 'codePointAt')

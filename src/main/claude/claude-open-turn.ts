@@ -12,6 +12,7 @@ import {
   type AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionStopCause } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   claudeCurrentTurnIdentity,
   claudeTurnLifecycleItem,
@@ -32,6 +33,9 @@ export type ClaudeOpenTurnDeps = {
 
 export class ClaudeOpenTurn {
   private current: ClaudeCurrentTurn | null = null
+  /** The stop Orca sent, held against the turn it was sent to: it reads only while that turn is open. */
+  private sentStop: { turn: ClaudeCurrentTurn; cause: StructuredAgentSessionStopCause } | null =
+    null
   /** Provider output may not reopen a turn after the session ended or a turn
    *  failed: nothing would ever close the turn it opened, and the row would read
    *  working for the life of the session. Only an accepted send lifts it. */
@@ -86,6 +90,26 @@ export class ClaudeOpenTurn {
     return this.current !== null
   }
 
+  get stop(): StructuredAgentSessionStopCause | null {
+    return this.current && this.sentStop?.turn === this.current ? this.sentStop.cause : null
+  }
+
+  /** Orca is stopping `turnId`. False when that turn is no longer the open one. */
+  recordStop(turnId: string, cause: StructuredAgentSessionStopCause): boolean {
+    if (this.current?.turnId !== turnId) {
+      return false
+    }
+    this.sentStop = { turn: this.current, cause }
+    return true
+  }
+
+  /** The provider refused the stop, so the turn goes on as if none was sent. */
+  withdrawStop(turnId: string): void {
+    if (this.current?.turnId === turnId) {
+      this.sentStop = null
+    }
+  }
+
   /** Whether a turn is open inside a provider request cycle that has already
    *  done work — the state in which the CLI folds an arriving send into it. A
    *  cycle's first send is its opener, never a fold. */
@@ -105,12 +129,17 @@ export class ClaudeOpenTurn {
 
   /** Open a turn, ending whichever one was still open. A new turn starting is the
    *  only end the previous one gets when its result never arrives; settling it
-   *  later would sweep THIS turn. */
+   *  later would sweep THIS turn. The replaced turn is recorded superseded: a newer
+   *  request ended it, whoever sent that request. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.settleChildren(this.groupKey)
-      this.publish(this.current, { state: 'interrupted', completedAt: observedAt })
+      this.publish(this.current, {
+        state: 'interrupted',
+        completedAt: observedAt,
+        outcome: 'superseded'
+      })
     }
     this.current = turn
     this.publish(turn)
@@ -123,7 +152,11 @@ export class ClaudeOpenTurn {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.settleChildren(this.groupKey)
-      this.publish(this.current, { state: 'interrupted', completedAt: turn.startedAt })
+      this.publish(this.current, {
+        state: 'interrupted',
+        completedAt: turn.startedAt,
+        outcome: 'superseded'
+      })
     }
     this.current = turn
     this.deps.sink.setActivity?.(null)

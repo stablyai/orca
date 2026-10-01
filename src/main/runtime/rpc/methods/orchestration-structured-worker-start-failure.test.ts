@@ -104,13 +104,14 @@ function fakes() {
     getTerminalPaneKey: vi.fn(() => 'pane_1'),
     retireStructuredAgentSessionTabFromSnapshot
   } as unknown as OrcaRuntimeService
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start path calls only these three methods.
   const db = {
     createStartingWorkerDispatch: () => ({
       dispatch: { id: 'd_fail', depth: 0 },
       task: { id: 't1', spec: 'do the thing' }
     }),
     recordWorkerStage: () => {},
-    prepareStartingWorkerAuthority: () => 'capability'
+    prepareStartingWorkerAuthority: () => {}
   } as unknown as OrchestrationDb
   return { runtime, db, retireStructuredAgentSessionTabFromSnapshot }
 }

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import {
+  createRootDispatch,
+  reattachDispatchConsumer
+} from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 
 const LEAD = 'tab_lead:22222222-2222-4222-9222-222222222222'
@@ -207,7 +210,7 @@ describe('Run-bound lead mailbox boundaries', () => {
   })
 
   it('does not give a reused process the previous assignee mail', async () => {
-    state.db.mintDispatchCapability({
+    reattachDispatchConsumer(state.db, {
       dispatchId: dispatch.id,
       paneKey: LEAD,
       processIncarnation: 'old:pty:1'

@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { isTerminalLeafId } from '../../../src/shared/stable-pane-id'
+import { isValidHostTerminalTabId } from '../../../src/shared/terminal-tab-id'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
@@ -6,6 +9,7 @@ import {
   AGENT_LAUNCH_UNCONFIRMED_MESSAGE,
   PROMPTED_AGENT_LAUNCH_TIMEOUT_MS,
   launchAgentInExistingWorkspace,
+  reserveMobileAgentLaunch,
   supportsMobileExistingAgentLaunch
 } from './mobile-existing-agent-launch'
 
@@ -93,6 +97,38 @@ describe('supportsMobileExistingAgentLaunch', () => {
     expect(supportsMobileExistingAgentLaunch(['agent.launch.v2'])).toBe(false)
     expect(supportsMobileExistingAgentLaunch([])).toBe(false)
     expect(supportsMobileExistingAgentLaunch(undefined)).toBe(false)
+  })
+})
+
+describe('reserveMobileAgentLaunch', () => {
+  // The host's schema accepting these, and an older one dropping them, is pinned host-side
+  // (agent-launch-params.test.ts) and through the real dispatcher (agent-launch-mobile-replay).
+  it('sends the pane and chat it reserved as the launch params', async () => {
+    const { client, sendRequest } = scriptedClient(launched({}))
+    const reservation = reserveMobileAgentLaunch('claude')
+    await launch(client, { reservation, mintOperationId: () => '1790000000000-' + 'a'.repeat(32) })
+    const params = sendRequest.mock.calls[0]![1]
+
+    expect(params).toMatchObject({
+      paneKey: `${reservation.pane.tabId}:${reservation.pane.leafId}`,
+      sessionId: reservation.sessionId
+    })
+  })
+
+  it('mints a pane the host adopts even where the runtime has no crypto.randomUUID', () => {
+    const native = Object.getOwnPropertyDescriptor(globalThis.crypto, 'randomUUID')
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { value: undefined, configurable: true })
+    try {
+      const { pane } = reserveMobileAgentLaunch('aider')
+      expect(isTerminalLeafId(pane.leafId)).toBe(true)
+      expect(isValidHostTerminalTabId(pane.tabId)).toBe(true)
+      // The same fallback still yields a durable operation id.
+      expect(structuredSessionOperationId(1790000000000)).toMatch(/^1790000000000-[0-9a-f]{32}$/)
+    } finally {
+      if (native) {
+        Object.defineProperty(globalThis.crypto, 'randomUUID', native)
+      }
+    }
   })
 })
 

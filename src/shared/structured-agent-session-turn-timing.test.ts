@@ -382,6 +382,37 @@ describe('a rejected send', () => {
       ],
       [rejected('ran')]
     )
-    expect(settled.get('orca:ran')).toEqual({ startedAt: 10_000, workedSeconds: 4 })
+    expect(settled.get('orca:ran')).toEqual({
+      startedAt: 10_000,
+      workedSeconds: 4,
+      verdict: 'interruption'
+    })
+  })
+
+  // The folded header reads the verdict: a crash nobody asked for, versus a user's stop.
+  it('carries how a settled turn ended, so its header can say a crash cut it off', () => {
+    const ended = (userItemId: string, turn: Parameters<typeof lifecycle>[1]) => [
+      user(userItemId),
+      lifecycle(userItemId, { userItemId, startedAt: 10_000, completedAt: 22_000, ...turn })
+    ]
+    const settled = selectStructuredAgentSettledTurns([
+      ...ended('orca:crashed', { state: 'interrupted' }),
+      ...ended('orca:stopped', { state: 'interrupted', outcome: 'cancellation' }),
+      ...ended('orca:finished', { state: 'completed', outcome: 'success' }),
+      ...ended('orca:unjudged', { state: 'completed' })
+    ])
+    expect(settled.get('orca:crashed')).toEqual({
+      startedAt: 10_000,
+      workedSeconds: 12,
+      verdict: 'interruption'
+    })
+    expect(settled.get('orca:stopped')).toMatchObject({ verdict: 'cancellation' })
+    expect(settled.get('orca:finished')).toMatchObject({ verdict: 'success' })
+    expect(settled.get('orca:unjudged')).toEqual({ startedAt: 10_000, workedSeconds: 12 })
+    const statuses = selectNativeChatTurnStatuses(
+      {},
+      { activeTurnKey: 'orca:crashed', isWorking: false, thinking: false, settledByTurn: settled }
+    )
+    expect(statuses.active).toMatchObject({ workedSeconds: 12, verdict: 'interruption' })
   })
 })

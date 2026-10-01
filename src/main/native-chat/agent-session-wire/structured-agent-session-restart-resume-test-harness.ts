@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { structuredAgentSessionResumableSet } from './structured-agent-session-restart-resume-set'
 
 export const SESSION = 'session-working-1'
@@ -192,6 +193,21 @@ export function submission(
     reason: null,
     submittedAt: NOW,
     resolvedAt: null
+  }
+}
+
+/** A child record as the host's store serves it; live unless the test settles it. */
+export function childRecord(
+  child: Pick<AgentChildWorkView, 'id' | 'kind'> & Partial<AgentChildWorkView>
+): AgentChildWorkView {
+  return {
+    state: 'working',
+    membership: child.state === 'done' || child.state === 'idle' ? 'settled' : 'live',
+    firstObservedAt: NOW,
+    observedAt: NOW,
+    stoppable: false,
+    invocation: { invocationId: `spawn-${child.id}`, generation: 1 },
+    ...child
   }
 }
 

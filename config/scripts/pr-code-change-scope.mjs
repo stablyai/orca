@@ -47,6 +47,7 @@ const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
   'src/shared/git-',
   'src/shared/review-head-tracking-ref',
+  'src/shared/worktree/local-base-branch-fast-forward',
   'src/main/git/',
   'src/relay/git-',
   'config/scripts/git-binary-compatibility'
@@ -286,6 +287,7 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
   'src/main/codex/windows-hook-command.test.ts',
   'src/main/codex/windows-hook-upgrade.test.ts',
+  'src/main/codex/hook-service-managed-install.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
   'src/main/windows/windows-msys-job.win32.test.ts',
   'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',

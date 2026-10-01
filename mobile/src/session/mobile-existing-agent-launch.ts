@@ -7,6 +7,11 @@
  */
 
 import type { AgentLaunchPrompt, AgentLaunchResult } from '../../../src/shared/agent-launch-intent'
+import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../src/shared/agent-launch-pane-already-live'
+import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../src/shared/agent-launch-session-already-exists'
+import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import { makePaneKey } from '../../../src/shared/stable-pane-id'
+import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import { agentLaunchReplayRun } from '../tasks/mobile-workspace-create-operations'
@@ -16,7 +21,10 @@ import {
   readAgentLaunchSupport
 } from '../tasks/agent-launch-request'
 import { sendReplayingAmbiguousDelivery } from '../tasks/replay-on-ambiguous-delivery'
-import { structuredSessionOperationId } from './structured-session-operation-id'
+import {
+  structuredSessionOperationId,
+  structuredSessionRandomUuid
+} from './structured-session-operation-id'
 
 // Why: the host waits up to 60s for a terminal agent to become ready before pasting the prompt,
 // so a prompted launch must outlive that wait or the phone reports a launch that is still running.
@@ -30,6 +38,35 @@ export const AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE = "Could not read this host'
 
 export const AGENT_LAUNCH_UNCONFIRMED_MESSAGE =
   "Couldn't confirm the agent started. Check the workspace before trying again."
+
+// The host started nothing, and the next tap reserves new ids.
+export const AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE = "Couldn't start the agent. Try again."
+
+/**
+ * The tab a launch will create, named by this device before it asks, so it can land there as soon
+ * as the tab is listed rather than when the host replies (which waits for prompt delivery).
+ *
+ * Minted once per launch and sent unchanged on every replay: the host's replay fingerprint covers
+ * both ids. A host that predates either field ignores it; the reply still names what it built.
+ */
+export type MobileAgentLaunchReservation = {
+  /** The terminal pane: its tab and leaf halves, as the host lists them. */
+  pane: { tabId: string; leafId: string }
+  /** Only for an agent the host may start as a chat. */
+  sessionId: string | null
+}
+
+export function reserveMobileAgentLaunch(
+  agent: TuiAgent,
+  randomUuid: () => string = structuredSessionRandomUuid
+): MobileAgentLaunchReservation {
+  return {
+    pane: { tabId: randomUuid(), leafId: randomUuid() },
+    sessionId: isAgentSessionHandleProvider(agent)
+      ? createStructuredAgentSessionId(agent, randomUuid)
+      : null
+  }
+}
 
 export type MobileExistingAgentLaunch =
   /** The host answered. `promptDelivered` is null when no prompt was sent. */
@@ -55,6 +92,7 @@ export async function launchAgentInExistingWorkspace(args: {
   agent: TuiAgent
   prompt?: AgentLaunchPrompt
   launchSource?: string
+  reservation?: MobileAgentLaunchReservation
   // Injected in tests; each call is one new operation, so a later tap never replays this one.
   mintOperationId?: () => string
 }): Promise<MobileExistingAgentLaunch> {
@@ -66,7 +104,13 @@ export async function launchAgentInExistingWorkspace(args: {
     worktreeId: args.worktreeId,
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
     ...(args.prompt ? { prompt: args.prompt } : {}),
-    ...(args.launchSource ? { launchSource: args.launchSource } : {})
+    ...(args.launchSource ? { launchSource: args.launchSource } : {}),
+    ...(args.reservation
+      ? {
+          paneKey: makePaneKey(args.reservation.pane.tabId, args.reservation.pane.leafId),
+          ...(args.reservation.sessionId ? { sessionId: args.reservation.sessionId } : {})
+        }
+      : {})
   })
   let sent
   try {
@@ -120,6 +164,16 @@ function classifyLaunchRefusal(
     error.code === 'agent_session_operation_expired'
   ) {
     return { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
+  }
+  if (
+    error.code === AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE ||
+    error.code === AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
+  ) {
+    // A taken reservation proves nothing started only on the first send; after a replay the pane
+    // or chat holding it may be this launch's own.
+    return replayed
+      ? { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
+      : { kind: 'failed', message: AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE }
   }
   const message = error.message?.trim()
   return { kind: 'failed', message: message || "Couldn't start the agent." }

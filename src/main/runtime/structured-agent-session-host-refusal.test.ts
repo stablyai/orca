@@ -122,7 +122,7 @@ describe('a process whose journal will not open', () => {
     const logged = String(warn.mock.calls[0]?.[1])
     expect(logged).toContain(path)
     expect(logged).toContain('unreleased development build')
-    expect(logged).toContain('move the file aside')
+    expect(logged).toContain('Moving the file aside')
     expect(await digest(path)).toBe(before)
   })
 
@@ -353,19 +353,19 @@ describe('startup and other non-chat work without a structured host', () => {
     ).resolves.toBeUndefined()
     await expect(
       assertLegacyAiVaultResumeCommandAllowed('claude --resume 0f9c1d2e', async () => {
-        throw new Error('the record store would not open')
+        throw new Error('the host would not construct')
       })
-    ).rejects.toThrow('the record store would not open')
+    ).rejects.toThrow('the host would not construct')
     expect(gateRefusal().reason).toBe('journalCorrupt')
   })
 
   it('still fails on an install error that refuses nothing', async () => {
     const { runtime, refreshPtyRecords } = startupRuntime(async () => {
-      throw new Error('the record store would not open')
+      throw new Error('the host would not construct')
     })
 
     await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).rejects.toThrow(
-      'the record store would not open'
+      'the host would not construct'
     )
     expect(refreshPtyRecords).not.toHaveBeenCalled()
   })

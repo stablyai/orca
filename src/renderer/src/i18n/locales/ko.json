@@ -16500,6 +16500,7 @@
             "done": "완료",
             "idle": "유휴",
             "unverifiable": "최근 업데이트 없음",
+            "unconfirmed": "확인하지 못함",
             "permission": "주의 필요"
           },
           "filtersSection": "필터",
@@ -17314,6 +17315,65 @@
       }
     },
     "native-chat": {
+      "failureWords": {
+        "theAgent": "에이전트",
+        "providerStartFailed": "{{agent}}이(가) 시작을 마치기 전에 중지되었습니다.",
+        "runCommandAgain": "/{{command}}을(를) 다시 실행하세요.",
+        "sendToTryAgain": "다시 시도하려면 메시지를 보내세요.",
+        "couldNotStart": "{{agent}}을(를) 시작하지 못했습니다.",
+        "couldNotRestart": "{{agent}}을(를) 다시 시작하지 못했습니다.",
+        "notSignedIn": "{{agent}}이(가) 선택한 계정으로 로그인되어 있지 않습니다.",
+        "signInFirst": "먼저 로그인하세요.",
+        "signInThenRunCommand": "로그인한 다음 /{{command}}을(를) 다시 실행하세요.",
+        "signInThenSend": "로그인한 다음 메시지를 다시 보내세요.",
+        "historyTooLarge": "이 대화의 기록이 너무 커서 여기에서 복원할 수 없습니다.",
+        "managedAccountEnvOverride": "이 Claude 실행은 자체 Anthropic 로그인 변수를 설정합니다. 관리되는 Claude 계정을 사용하려면 해당 변수를 제거하세요.",
+        "accountSwitchInProgress": "Claude 계정 전환이 진행 중입니다. 완료된 후 다시 시도하세요.",
+        "managedAccountUnsupported": "WSL에 Claude 계정이 추가되어 있는 동안에는 Claude 채팅에 Windows Claude 계정이 필요합니다.",
+        "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",
+        "chooseClaudeAccountThenRunCommand": "Claude 계정 설정에서 선택하거나 추가한 다음 /{{command}}을(를) 다시 실행하세요.",
+        "chooseClaudeAccountThenSend": "Claude 계정 설정에서 선택하거나 추가한 다음 메시지를 다시 보내세요.",
+        "providerExitedRow": "이 응답이 진행되는 동안 {{agent}}이(가) 중지되었습니다. 이 대화에서 계속할 수 있습니다.",
+        "providerExitedRejection": "이 메시지가 전송되기 전에 {{agent}}이(가) 중지되었습니다.",
+        "providerRejected": "공급자가 이 메시지를 받아들이지 않았습니다.",
+        "providerRejectedQuoted": "공급자가 이 메시지를 받아들이지 않았습니다: {{detail}}.",
+        "attachmentEmpty": "이 메시지의 이미지가 비어 있어 메시지가 전송되지 않았습니다.",
+        "attachmentTooLarge": "이 메시지의 이미지가 너무 커서 메시지가 전송되지 않았습니다.",
+        "attachmentLargerThan": "이 메시지의 이미지가 {{size}}MB보다 커서 메시지가 전송되지 않았습니다.",
+        "attachmentTooMany": "이 메시지에 이미지가 너무 많아 전송되지 않았습니다.",
+        "attachmentAtMost": "{{agent}}은(는) 메시지 하나에 이미지를 최대 {{limit}}개까지 받을 수 있어 이 메시지가 전송되지 않았습니다.",
+        "attachmentTotalTooLarge": "이 메시지의 이미지 전체 크기가 너무 커서 메시지가 전송되지 않았습니다.",
+        "attachmentTotalMoreThan": "이 메시지의 이미지 합계가 {{size}}MB를 넘어 메시지가 전송되지 않았습니다.",
+        "attachmentUnsupportedType": "{{agent}}은(는) PNG, JPEG, GIF, WebP 이미지만 받을 수 있어 이 메시지가 전송되지 않았습니다.",
+        "attachmentNotAFile": "이 메시지의 이미지가 파일이 아니어서 메시지가 전송되지 않았습니다.",
+        "attachmentNoSource": "이 메시지의 이미지에 보낼 파일이 없어 메시지가 전송되지 않았습니다.",
+        "attachmentInvalid": "이 메시지의 첨부 파일은 에이전트에 보낼 수 없습니다.",
+        "attachmentUnreadable": "이 메시지의 첨부 파일을 읽을 수 없어 메시지가 전송되지 않았습니다.",
+        "emptyMessage": "이 메시지가 비어 있어 전송되지 않았습니다.",
+        "queueFull": "에이전트를 기다리는 메시지가 너무 많아 이 메시지는 전송되지 않았습니다.",
+        "writeFailed": "Orca가 이 메시지를 에이전트에 전달하지 못해 전송되지 않았습니다.",
+        "cancelled": "이 메시지는 에이전트가 처리를 시작하기 전에 철회되었습니다.",
+        "chatClosed": "이 메시지가 전송되기 전에 채팅이 닫혔습니다.",
+        "hostRestarted": "이 메시지가 전송되기 전에 Orca가 다시 시작되었습니다.",
+        "notDelivered": "이 메시지는 전달되지 않았습니다.",
+        "notDeliveredSendAgain": "이 메시지는 전달되지 않았습니다. 계속하려면 다시 보내세요.",
+        "commandRefused": "이 명령이 실행되지 않았습니다.",
+        "commandRefusedTryAgain": "이 명령이 실행되지 않았습니다. 다시 시도하세요.",
+        "compactionFailed": "압축에 실패했습니다.",
+        "compactionFailedQuoted": "압축에 실패했습니다: {{detail}}.",
+        "compactionUnconfirmed": "압축 완료가 확인되지 않았습니다.",
+        "cancelUnconfirmed": "취소가 확인되지 않았습니다.",
+        "stopRefused": "{{agent}}이(가) 중지되지 않았습니다.",
+        "stopRefusedQuoted": "{{agent}}이(가) 중지되지 않았습니다: {{detail}}.",
+        "noTurnToStop": "{{agent}}에 중지할 실행 중인 턴이 없었습니다.",
+        "answerUnconfirmed": "응답이 기록되었지만 에이전트가 확인하지 않았습니다.",
+        "hostFault": "Orca에 문제가 발생하여 이 작업이 완료되지 않았습니다.",
+        "hostFaultTryAgain": "Orca에 문제가 발생하여 이 작업이 완료되지 않았습니다. 다시 시도하세요.",
+        "hostStopped": "{{agent}}이(가) 시작을 마치지 못해 Orca가 중지했습니다.",
+        "providerRateLimited": "{{agent}}이(가) 속도 제한에 걸려 다시 시도하고 있습니다.",
+        "providerRetrying": "{{agent}}에 일시적인 문제가 발생하여 다시 시도하고 있습니다.",
+        "providerRetryingQuoted": "{{agent}}이(가) 다시 시도하고 있습니다: {{detail}}."
+      },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
         "notDoneSend": "메시지가 전송되지 않았습니다.",
@@ -17382,6 +17442,7 @@
         "pastedImageLabel": "붙여넣은 이미지",
         "imagePasteFailed": "이미지 붙여넣기 실패.",
         "worktreeNotReady": "워크트리가 준비되지 않았습니다 — 잠시 후 다시 시도하세요.",
+        "pasteUnavailable": "붙여넣을 수 없습니다 — 이 채팅은 지금 입력을 받을 수 없습니다.",
         "uploadingAttachments": "{{value0}}개 파일을 원격으로 업로드 중…",
         "model": "모델",
         "effort": "추론 수준",
@@ -17508,6 +17569,8 @@
         "thinking": "생각",
         "workingFor": "{{value0}} 작업 중",
         "workedFor": "{{value0}} 작업 완료",
+        "interruptedAfter": "{{value0}} 후 중단됨",
+        "failedAfter": "{{value0}} 후 실패",
         "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
@@ -17523,7 +17586,8 @@
         "error": {
           "title": "대화를 로드할 수 없습니다.",
           "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요.",
-          "retryingSubtitle": "스크립트를 읽을 수 없습니다. Orca가 계속 다시 불러오기를 시도합니다."
+          "retryingSubtitle": "스크립트를 읽을 수 없습니다. Orca가 계속 다시 불러오기를 시도합니다.",
+          "keepsTrying": "Orca가 계속 다시 불러오기를 시도합니다."
         },
         "reconnecting": "이 채팅에 다시 연결하는 중…",
         "pairHost": "호스트를 페어링하여 에이전트 채팅 기록을 확인하세요.",
@@ -17678,8 +17742,7 @@
         "unnamed": "하위 에이전트"
       },
       "conversationCommand": {
-        "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리십시오.",
-        "unconfirmed": "대화 동작이 확인되지 않았습니다."
+        "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리십시오."
       },
       "drop": {
         "title": "이 채팅에 첨부하려면 드롭하세요.",
@@ -17712,6 +17775,9 @@
         "title": "컨텍스트",
         "estimated": "마지막 응답 기준 추정치입니다."
       },
+      "dismissDeliveryNotice": "닫기",
+      "messageNotSent": "메시지가 전송되지 않음",
+      "deliveryUnconfirmed": "전달 확인 안 됨 — 다시 시도하기 전에 채팅을 확인하세요",
       "queuedMessages": {
         "alreadySent": "이 메시지는 이미 전송되었습니다.",
         "editAlreadySent": "이미 전송되었습니다 — 텍스트는 입력창에 남아 있습니다.",
@@ -17988,6 +18054,12 @@
           "unknown": "알 수 없는 호스트",
           "candidateName": "{{value1}}의 {{value0}}"
         }
+      },
+      "creation": {
+        "worktreeReadyToast": "작업 트리 {{name}} 준비 완료",
+        "workspaceReadyToast": "워크스페이스 {{name}} 준비 완료",
+        "goToWorktree": "작업 트리로 이동",
+        "goToWorkspace": "워크스페이스로 이동"
       }
     },
     "agentSessionContinuation": {

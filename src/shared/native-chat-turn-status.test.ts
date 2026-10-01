@@ -39,6 +39,21 @@ describe('describeNativeChatTurnStatus', () => {
     })
   })
 
+  it.each([
+    ['cancellation', 'interruptedAfter'],
+    ['superseded', 'interruptedAfter'],
+    // A turn anything but the user cut short reads as a failure does.
+    ['interruption', 'failedAfter'],
+    ['failure', 'failedAfter'],
+    ['success', 'workedFor'],
+    ['unconfirmed', 'workedFor'],
+    [undefined, 'workedFor']
+  ] as const)('heads a settled %s turn with %s', (verdict, key) => {
+    expect(describeNativeChatTurnStatus({ workedSeconds: 12, elapsedSeconds: 0, verdict })).toEqual(
+      { key, duration: '12s' }
+    )
+  })
+
   it('counts from the first second of the turn', () => {
     expect(describeNativeChatTurnStatus({ workedSeconds: null, elapsedSeconds: 0 })).toEqual({
       key: 'workingFor',

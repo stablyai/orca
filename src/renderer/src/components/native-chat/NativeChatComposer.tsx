@@ -1,5 +1,5 @@
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import { forwardRef, useCallback, useImperativeHandle, useState } from 'react'
+import { forwardRef, useCallback, useState } from 'react'
 import { useAppStore } from '../../store'
 import { useNativeChatComposerInterrupt } from './use-native-chat-composer-interrupt'
 import { useNativeChatContextUsageSummary } from './use-native-chat-context-usage-summary'
@@ -14,7 +14,7 @@ import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft
 import { NativeChatComposerField } from './NativeChatComposerField'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
-import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
+import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
@@ -25,7 +25,6 @@ import { useNativeChatSessionOptionCommand } from './use-native-chat-session-opt
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
-import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
@@ -61,6 +60,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       isWorking = false,
       onStop,
       onOptimisticSend,
+      optimisticSendOutcome,
       onOptimisticSendCanceled,
       onSlashCommand,
       onSwitchToTerminal,
@@ -189,16 +189,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       ? !hasPty || !onStop
       : disabled || hasPendingAttachment || (draft.trim() === '' && imageAttachments.length === 0)
 
-    const { insertTypedText, focus } = useNativeChatTypedInsertion({
-      textareaRef,
-      caret,
-      draft,
-      setDraft,
-      setCaret,
-      setHistory,
-      setActiveSuggestion
-    })
-
     const { attachExternalPaths, resolveAttachmentOwner } = useNativeChatExternalAttachments({
       terminalTabId,
       structuredWorktreeId: structuredTransport?.worktreeId,
@@ -207,25 +197,30 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     })
 
-    const { handlePaste, pasteFromClipboard } = useNativeChatComposerPaste({
+    const handlePasteEvent = useNativeChatComposerHandle(ref, {
+      textareaRef,
+      caret,
+      draft,
+      setDraft,
+      setCaret,
+      setHistory,
+      setActiveSuggestion,
+      targetKey: JSON.stringify([
+        paneKey,
+        targetPtyId,
+        structuredTransport?.sessionId,
+        structuredTransport?.worktreeId,
+        structuredTransport?.runtimeEnvironmentId
+      ]),
       agent,
       disabled,
-      caret,
       resolveAttachmentOwner,
       attachResolvedPaths,
       beginPendingImageAttachment,
       resolvePendingImageAttachment,
       dropPendingImageAttachment,
-      insertTypedText,
-      setCaret,
       setNotice
     })
-
-    useImperativeHandle(
-      ref,
-      () => ({ focus, insertTypedText, handlePasteEvent: handlePaste, pasteFromClipboard }),
-      [focus, insertTypedText, handlePaste, pasteFromClipboard]
-    )
 
     const { pickAttachment } = useNativeChatFileAttachmentActions(paneKey, attachExternalPaths)
     const { toggleDictation, startHoldDictation, stopHoldDictation } =
@@ -277,6 +272,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       resolveTarget,
       classifySend,
       onOptimisticSend,
+      optimisticSendOutcome,
       onSlashCommand,
       sessionOptionsSurface: ptySessionOptionsSurface,
       terminalTabId,
@@ -395,7 +391,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
           flushDraftAppends()
           attachments.flushPendingAttachments()
         }}
-        onPaste={handlePaste}
+        onPaste={handlePasteEvent}
         pickerListboxId={picker.listboxId}
         onChoosePickerItem={goalMode.interceptPick(completeItem)}
         goalMode={goalMode}

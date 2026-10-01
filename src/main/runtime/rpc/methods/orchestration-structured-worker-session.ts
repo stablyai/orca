@@ -188,7 +188,7 @@ export async function discardStructuredWorkerSession(
   }
   try {
     await host.setSessionTabVisibility?.(sessionId, false)
-    await host.close(sessionId)
+    await host.close(sessionId, 'evict')
   } catch (error) {
     console.warn(
       '[orchestration] failed to discard a half-started structured worker',

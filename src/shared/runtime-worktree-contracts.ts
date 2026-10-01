@@ -76,6 +76,8 @@ export type RuntimeWorktreePsSummary = {
   /** Optional discriminator for a working workspace; older clients fall back to ordinary working. */
   workingMode?: AgentWorkingMode
   agents: RuntimeWorktreeAgentRow[]
+  /** See `Worktree.removing`; sent only to clients that advertise background removal. */
+  removing?: true
 }
 
 export type RuntimeGitLocalBranches = {

@@ -94,6 +94,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     scope.statusDotPendingSelector = false
     scope.afterDrainCallbacks = []
     scope.writesDraining = false
+    scope.mouseEncodingKnown = false
     scope.mouseModeScanTail = ''
     scope.trackedMouseTrackingMode = 'none'
     scope.sgrMouseMode = false

@@ -1,6 +1,6 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import { agentTurnStoppedByUser } from '../../../../shared/agent-main-agent-verdict'
+import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
@@ -94,7 +94,7 @@ export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]):
     // Why: history rows keep the verdict, so filter a stopped turn like the current entry.
     if (h.state === 'done' || h.state === 'blocked' || h.state === 'waiting') {
       // Why: Infinity from a corrupted row would pin the worktree atop Class 3 forever; treat non-finite as missing.
-      if (agentTurnStoppedByUser(h) || !Number.isFinite(h.startedAt)) {
+      if (agentTurnEndedOnPurpose(h) || !Number.isFinite(h.startedAt)) {
         continue
       }
       if (h.startedAt > max) {

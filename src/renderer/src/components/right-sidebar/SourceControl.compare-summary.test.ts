@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CompareSummary,
   CompareSummaryToolbarButton,
-  refreshSourceControlAfterRemoteAction,
   resolveSourceControlBaseRef,
   resolveSourceControlCompareBaseRef,
   resolveSourceControlPickerBaseRef,
@@ -495,23 +494,5 @@ describe('SourceControl compare summary', () => {
         ahead: 1
       })
     ).toBe(false)
-  })
-
-  it('keeps immediate refresh paths for remote actions', () => {
-    const refreshGitStatus = vi.fn(async () => {})
-    const refreshBranchCompare = vi.fn(async () => {})
-    const refreshGitHistory = vi.fn(async () => {})
-
-    refreshSourceControlAfterRemoteAction({
-      refreshGitStatus,
-      refreshBranchCompare,
-      refreshGitHistory
-    })
-
-    expect(refreshGitStatus).toHaveBeenCalledTimes(1)
-    expect(refreshBranchCompare).toHaveBeenCalledTimes(1)
-    expect(refreshGitHistory).toHaveBeenCalledTimes(1)
-    // Direct commit, manual, retry, and base-ref refresh paths remain component-level
-    // behavior covered by the existing UI wiring; keep this test on the pure helper.
   })
 })

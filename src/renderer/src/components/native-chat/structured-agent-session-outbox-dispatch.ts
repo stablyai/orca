@@ -20,7 +20,10 @@ import {
   updateStructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
-import { writeOutbox } from './structured-agent-session-outbox-storage'
+import {
+  commitStructuredAgentSessionOutbox,
+  getStructuredAgentSessionOutbox
+} from './structured-agent-session-outbox-storage'
 import {
   getStructuredAgentLaunchPromptDispatch,
   shareStructuredAgentLaunchPromptDispatch
@@ -85,8 +88,6 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
   dispatchGenerationRef: MutableRef<number>
   inFlightIdRef: MutableRef<string | null>
   blockedIdRef: MutableRef<string | null>
-  outboxRef: MutableRef<StructuredAgentSessionOutboxEntry[]>
-  setOutbox: (entries: StructuredAgentSessionOutboxEntry[]) => void
   setError: (error: string | null) => void
   applyDisposition: (disposition: StructuredAgentSessionSendDisposition) => void
   createOperationId: () => string
@@ -98,14 +99,12 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
       args.next.clientMessageId,
       (entry) => stageStructuredAgentSessionOutboxEntryForSend(entry, Date.now())
     )
-    if (!writeOutbox(args.sessionId, staged)) {
+    if (!commitStructuredAgentSessionOutbox(args.sessionId, staged, { onlyIfSaved: true })) {
       args.inFlightIdRef.current = null
       args.blockedIdRef.current = args.next.clientMessageId
       args.setError('Message could not be saved to the outbox')
       return false
     }
-    args.outboxRef.current = staged
-    args.setOutbox(staged)
     // No `finally` release below: `applyDisposition` frees single-flight as part of the state
     // write that re-runs the drain, and a microtask later would leave the queue no trigger.
     try {
@@ -117,7 +116,7 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
       }
       args.applyDisposition(
         disposeStructuredAgentSessionSendResult({
-          entries: args.outboxRef.current,
+          entries: getStructuredAgentSessionOutbox(args.sessionId),
           entry: args.next,
           blockedClientMessageId: args.blockedIdRef.current,
           result,
@@ -140,7 +139,7 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
         return false
       }
       const input = {
-        entries: args.outboxRef.current,
+        entries: getStructuredAgentSessionOutbox(args.sessionId),
         entry: args.next,
         blockedClientMessageId: args.blockedIdRef.current
       }

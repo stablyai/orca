@@ -19,7 +19,8 @@
 
 import {
   stopAgentSessionProviderRoot,
-  type StructuredAgentSessionAdapter
+  type StructuredAgentSessionAdapter,
+  type StructuredAgentSessionStopCause
 } from './structured-agent-session-adapter'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionStopVerdict } from './structured-agent-session-host-types'
@@ -27,6 +28,8 @@ import { withTimeout } from '../../../shared/promise-timeout-fallback'
 
 export type StructuredAgentSessionEvictionContext = {
   sessionId: string
+  /** Why the host stops the child; the adapter settles the turn it cuts with it. */
+  stopCause?: StructuredAgentSessionStopCause
   hasProviderChild?: boolean
   eventSink: DeferredStructuredAgentSessionEventSink
   adapter: StructuredAgentSessionAdapter
@@ -86,7 +89,9 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
         // An adapter with no close has nothing to stop; anything else must PROVE the exit.
         const stop = context.adapter.disposeSession ?? context.adapter.closeSession
         const rootGone = stop
-          ? await stopAgentSessionProviderRoot(() => stop.call(context.adapter, context.sessionId))
+          ? await stopAgentSessionProviderRoot(() =>
+              stop.call(context.adapter, context.sessionId, context.stopCause)
+            )
           : true
         if (!rootGone) {
           throw new Error('provider child exit was not proven')

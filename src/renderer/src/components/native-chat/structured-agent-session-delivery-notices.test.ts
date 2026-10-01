@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import {
   createStructuredAgentSessionOutboxEntry,
+  structuredAgentSessionRejectedFailure,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
@@ -328,6 +329,52 @@ describe('the notice on each message that did not go through', () => {
       [agentJournalSubmissionKey('provider')]:
         'The provider did not accept this message: Image type .bmp.',
       [agentJournalSubmissionKey('stopped')]: 'Claude stopped before this message was sent.'
+    })
+  })
+
+  it("shows the host's sentence when this build cannot read all of a rejection's fact", () => {
+    const reason = "Claude couldn't start. Start a new chat to continue."
+    const copiedReason = 'An image on this message uses a newer check.'
+    // As a newer host sends them: a known code with a new reason, and a new attachment reason.
+    const newerStart = JSON.parse(
+      '{ "kind": "startFailed", "refusal": { "code": "agent_session_conflict", "details": { "reason": "newerReason" } } }'
+    )
+    const newerAttachment = JSON.parse(
+      '{ "kind": "attachmentInvalid", "attachment": { "reason": "newerReason" } }'
+    )
+    expect(
+      texts(
+        [
+          entry('recorded', {
+            state: 'rejected',
+            lastFailure: structuredAgentSessionRejectedFailure({ reason, rejection: newerStart })
+          }),
+          entry('copied', {
+            state: 'rejected',
+            lastFailure: structuredAgentSessionRejectedFailure({
+              reason: copiedReason,
+              rejection: newerAttachment
+            })
+          })
+        ],
+        null,
+        [
+          {
+            clientMessageId: 'recorded',
+            fence: 1,
+            payloadFingerprint: 'fingerprint',
+            dispatchState: 'rejected',
+            providerItemId: null,
+            reason,
+            rejection: newerStart,
+            submittedAt: 1,
+            resolvedAt: 1
+          }
+        ]
+      )
+    ).toEqual({
+      [agentJournalSubmissionKey('recorded')]: reason,
+      [agentJournalSubmissionKey('copied')]: copiedReason
     })
   })
 

@@ -22052,6 +22052,297 @@
       ]
     },
     {
+      "id": "session-create-terminal-agent-launched",
+      "operation": "session.create-terminal",
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1",
+            "agentLaunch": true
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "claude"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "claude",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            },
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "claude_00000000_0000_4000_8000_000000000003"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "terminal",
+                "handle": "terminal-1"
+              },
+              "worktreeId": "wt-1",
+              "receipt": {
+                "mode": "terminal",
+                "preferred": "terminal",
+                "reason": "user_default",
+                "detail": "Started a terminal agent."
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "launched"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-agent-launched-as-chat",
+      "operation": "session.create-terminal",
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1",
+            "agentLaunch": true
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "claude"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "claude",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            },
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "claude_00000000_0000_4000_8000_000000000003"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "structured",
+                "sessionId": "claude_s1",
+                "handle": "h-1"
+              },
+              "worktreeId": "wt-1",
+              "receipt": {
+                "mode": "structured",
+                "preferred": "structured",
+                "reason": "user_default",
+                "detail": "Started a terminal agent."
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "launched"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-diff-notes-launched",
+      "operation": "session.create-terminal",
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1",
+            "agentLaunch": true
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "codex",
+            "initialPrompt": "review these notes",
+            "successToast": "Notes sent"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "codex",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            },
+            "prompt": {
+              "text": "review these notes",
+              "delivery": "submit"
+            },
+            "launchSource": "diff_notes_send",
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "codex_00000000_0000_4000_8000_000000000003"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "terminal",
+                "handle": "terminal-1"
+              },
+              "worktreeId": "wt-1",
+              "receipt": {
+                "mode": "terminal",
+                "preferred": "terminal",
+                "reason": "user_default",
+                "detail": "Started a terminal agent."
+              },
+              "prompt": {
+                "delivery": "submit",
+                "outcome": "handed-to-terminal"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "notes-sent"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-diff-notes-not-delivered",
+      "operation": "session.create-terminal",
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1",
+            "agentLaunch": true
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "codex",
+            "initialPrompt": "review these notes",
+            "successToast": "Notes sent"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "codex",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            },
+            "prompt": {
+              "text": "review these notes",
+              "delivery": "submit"
+            },
+            "launchSource": "diff_notes_send",
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "codex_00000000_0000_4000_8000_000000000003"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "terminal",
+                "handle": "terminal-1"
+              },
+              "worktreeId": "wt-1",
+              "receipt": {
+                "mode": "terminal",
+                "preferred": "terminal",
+                "reason": "user_default",
+                "detail": "Started a terminal agent."
+              },
+              "prompt": {
+                "delivery": "submit",
+                "outcome": "not-delivered"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "notes-kept"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
       "id": "session-terminal-display-mode-auto-take-floor",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",

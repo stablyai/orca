@@ -401,9 +401,20 @@ targeted Terraform plan, and per-cell heartbeat/admission oracle are unchanged.
 sets and the two migration-only US 600/60 cells, C17 and C18, without changing a cell's connection
 shape. Use `canary-apply` for exactly one cell. A successful canary
 seals its commit, target and rollback digests, selector generation, and durable rehome generation;
-`batch-apply` accepts only that same authority and rolls two to four cells sequentially. Each cell is
-isolated, drained to two restart-safe samples, replaced from a targeted saved plan, and restored only
-after a new incarnation reports the exact digest, cap, heartbeat, and rehome protocol. The durable
+`batch-apply` accepts only that same authority and rolls two to four cells sequentially. Both apply
+modes first refuse a cell whose hosts (controls) exceed 80% of the free slots on the other fresh
+general cells, since drained hosts with nowhere to go keep redialling and pin the cell. A cell's free
+slots are its normal admission pause minus the larger of observed connections and enforced units,
+minus outstanding control reservations; each moved host also brings its splices, which the 20%
+margin covers. Each cell is isolated, drained until restart-safe, replaced
+from a targeted saved plan, and restored only after a new incarnation reports the exact digest, cap,
+heartbeat, and rehome protocol. Restart-safe means the cell runtime itself carries nothing live (no
+controls, in-flight connections, reserved connection units, splices, or queued bytes) and no
+migration is open, for a whole drain pace window, which every live restart-safe call must pass.
+Pre-auth and total connections are printed but do not reset the window: they include
+unauthenticated redials that lose nothing on a restart. Director activity leases left by hosts that already went or cannot
+be placed do not hold the restart; every `relay_capacity_transition_restart_progress` sample and
+the final verified line report them under `stranded`. The durable
 worker must remain disabled throughout. The post-restart trust check is application-mediated by the
 director; the workflow never receives or mints a director or stamped-cell runtime token. A failure
 keeps only the selected cell migration-only, while the exact rollback digest remains dispatchable via

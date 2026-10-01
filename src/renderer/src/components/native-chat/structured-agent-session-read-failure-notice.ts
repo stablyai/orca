@@ -5,6 +5,7 @@ import {
   agentSessionReadHistoryRefusalParts,
   agentSessionWriteNotDoneParts
 } from '../../../../shared/agent-session-refusal-notice'
+import { agentSessionNoticeSaysThisChatUnread } from '../../../../shared/agent-session-write-notice-copy'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
 import { isFinalAgentSessionReadRefusal } from '../../../../shared/structured-agent-session-read-refusal'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
@@ -15,6 +16,8 @@ export type StructuredAgentSessionReadFailureNotice = {
   named: boolean
   /** Nothing the read retries gets past it, so the pane no longer says it keeps trying. */
   final: boolean
+  /** The words already say this chat's history didn't load, so the pane need not say it again. */
+  saysUnread: boolean
 }
 
 export function structuredAgentSessionReadFailureNotice(
@@ -27,6 +30,7 @@ export function structuredAgentSessionReadFailureNotice(
   return {
     text: agentSessionWriteNoticeText(parts),
     named: refusal?.details?.reason !== undefined,
-    final: isFinalAgentSessionReadRefusal(refusal)
+    final: isFinalAgentSessionReadRefusal(refusal),
+    saysUnread: agentSessionNoticeSaysThisChatUnread(parts)
   }
 }

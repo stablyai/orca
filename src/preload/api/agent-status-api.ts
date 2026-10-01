@@ -18,6 +18,8 @@ export type AgentStatusApi = {
   inferInterrupt: (request: AgentInterruptInferenceRequest) => Promise<boolean>
   /** Guarded clear for an answered AskUserQuestion wait — the CLI emits no hook at answer time, so the renderer reports the submit keystroke. */
   inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest) => Promise<boolean>
+  /** Whether the host can check this pane's agent process; without that, silence keeps today's cleanup. */
+  hasVerifiableAgentProcess?: (paneKey: string) => Promise<boolean>
   /** Listen for PTYs on a legacy numeric pane key that have registry-backed UUID pane proof. */
   onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
   onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void) => () => void

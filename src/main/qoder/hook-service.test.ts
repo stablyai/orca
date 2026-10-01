@@ -80,16 +80,12 @@ describe('Qoder Windows hook shell', () => {
   it('uses the documented explicit shell without relying on Git Bash or another PowerShell hop', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {
-      const hook = getManagedLifecycleHook(
-        'C:\\Users\\a b\\.orca\\agent-hooks\\qoder-hook.cmd',
-        {
-          configDirName: '.qoder',
-          scriptBaseName: 'qoder-hook',
-          usesWindowsCompatLauncher: true,
-          windowsHookShell: 'powershell'
-        },
-        { gitBashAvailable: true }
-      )
+      const hook = getManagedLifecycleHook('C:\\Users\\a b\\.orca\\agent-hooks\\qoder-hook.cmd', {
+        configDirName: '.qoder',
+        scriptBaseName: 'qoder-hook',
+        usesWindowsCompatLauncher: true,
+        windowsHookShell: 'powershell'
+      })
       expect(hook.shell).toBe('powershell')
       expect(hook.command).toContain('$env:USERPROFILE')
       expect(hook.command).not.toMatch(/EncodedCommand|ExecutionPolicy|\|\|/)

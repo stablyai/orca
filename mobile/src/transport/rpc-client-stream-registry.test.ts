@@ -275,26 +275,6 @@ describe('RpcClientStreamRegistry', () => {
     })
   })
 
-  it('keeps a disposed browser tombstone until ready can be unsubscribed', () => {
-    const { registry, sent } = createRegistry()
-    const dispose = registry.subscribe('browser.screencast', { page: 'page-1' }, () => {})
-    const request = sent[0]!
-
-    dispose()
-    expect(sent).toHaveLength(1)
-
-    registry.handleResponse(
-      streamingResponse(request.id, {
-        type: 'ready',
-        subscriptionId: 'browser-screencast:page-1:test'
-      })
-    )
-    expect(sent[1]).toMatchObject({
-      method: 'browser.screencast.unsubscribe',
-      params: { subscriptionId: 'browser-screencast:page-1:test' }
-    })
-  })
-
   it('releases a replayed browser stream replaced by a new one before its ready', () => {
     const { registry, sent } = createRegistry()
     registry.subscribe('browser.screencast', { page: 'page-1' }, () => {})

@@ -23,6 +23,13 @@ export type AgentSessionConversationCommandRecord = AgentSessionConversationComm
   phase: 'prepared' | 'committed'
 }
 
+/** A newer host may answer with a command this build doesn't know. */
+export function isAgentSessionConversationCommand(
+  value: unknown
+): value is AgentSessionConversationCommand {
+  return value === 'clear' || value === 'compact'
+}
+
 export function isAgentSessionConversationCommandResult(
   value: unknown
 ): value is AgentSessionConversationCommandResult {
@@ -31,7 +38,7 @@ export function isAgentSessionConversationCommandResult(
   }
   const row = value as AgentSessionConversationCommandResult
   return (
-    (row.command === 'clear' || row.command === 'compact') &&
+    isAgentSessionConversationCommand(row.command) &&
     (row.state === 'completed' || row.state === 'unknown') &&
     (row.replacementSessionId === undefined ||
       (typeof row.replacementSessionId === 'string' &&

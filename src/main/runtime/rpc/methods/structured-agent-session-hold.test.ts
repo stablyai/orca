@@ -123,7 +123,7 @@ afterEach(async () => {
 
 describe('the hold surface, for clients that still call it', () => {
   it('answers a hold without starting an agent or registering a cleanup', async () => {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     expect(host.hasSession(SESSION)).toBe(false)
     const registered = vi.spyOn(runtime, 'registerOwnedSubscriptionCleanup')
     const acquiresBefore = acquire.mock.calls.length
@@ -163,7 +163,7 @@ describe('the hold surface, for clients that still call it', () => {
   })
 
   it('answers a hold even when no agent could be started', async () => {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     acquire.mockRejectedValue(new Error('provider unavailable'))
     const acquiresBefore = acquire.mock.calls.length
 
@@ -176,7 +176,7 @@ describe('the hold surface, for clients that still call it', () => {
 
 describe('a stream', () => {
   it('reads a closed conversation without starting its agent', async () => {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     expect(host.hasSession(SESSION)).toBe(false)
     const acquiresBefore = acquire.mock.calls.length
     const frames: unknown[] = []

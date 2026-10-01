@@ -15,8 +15,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-// Why: the installed hook shape depends on whether Git Bash is resolvable on the host, so the
-// install assertions below have to state which host they describe rather than inherit the box's.
+// Mock discovery so registration can be checked with Git Bash both present and absent.
 const { gitBashAvailableMock } = vi.hoisted(() => ({ gitBashAvailableMock: { value: true } }))
 vi.mock('../git-bash', async (importOriginal) => ({
   ...(await importOriginal<typeof GitBashModule>()),
@@ -55,10 +54,10 @@ describe('getWindowsManagedLifecycleHook', () => {
     // Why this is the whole point: the encoded launcher spent a PowerShell start-up per hook
     // event (471ms vs 201ms measured) before the .cmd could reach its ORCA_PANE_KEY guard, and
     // its orphan outlived the hook's timeout kill still holding the stdout the agent reads.
-    const hook = getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH, { gitBashAvailable: true })
+    const hook = getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH)
 
     expect(hook.args).toBeUndefined()
-    expect(hook.command).toBe('C:/Users/alice/.orca/agent-hooks/claude-hook.cmd || echo {}')
+    expect(hook.command).toBe('C:/Users/alice/.orca/agent-hooks/claude-hook.cmd')
     expect(hook.command).not.toMatch(/powershell|-EncodedCommand|conhost/i)
     // Why: Git Bash/MSYS mangles backslash paths and rewrites slash-prefixed switches.
     expect(hook.command).not.toMatch(/\\/)
@@ -66,7 +65,7 @@ describe('getWindowsManagedLifecycleHook', () => {
   })
 
   it('falls back to the encoded launcher when the profile path is not cmd-safe', () => {
-    const hook = getWindowsManagedLifecycleHook(UNSAFE_SCRIPT_PATH, { gitBashAvailable: true })
+    const hook = getWindowsManagedLifecycleHook(UNSAFE_SCRIPT_PATH)
 
     expect(hook.args).toBeUndefined()
     expect(hook.command).toMatch(/\/powershell\.exe -NoProfile -EncodedCommand /)
@@ -79,18 +78,21 @@ describe('getWindowsManagedLifecycleHook', () => {
     expect(decoded).toContain('.orca\\agent-hooks\\claude-hook.cmd')
   })
 
-  it('falls back to the encoded launcher when Git Bash is not resolvable', () => {
-    // Why: without Git Bash, Claude Code hosts the hook in PowerShell, and PowerShell 5.1
-    // rejects `||` as a statement separator (measured) — every event would be a parse error.
-    const hook = getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH, { gitBashAvailable: false })
-
-    expect(hook.command).toMatch(/\/powershell\.exe -NoProfile -EncodedCommand /)
+  it('does not consult Git Bash availability', () => {
+    gitBashAvailableMock.value = false
+    try {
+      expect(getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH).command).toBe(
+        'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'
+      )
+    } finally {
+      gitBashAvailableMock.value = true
+    }
   })
 
   it('is still recognized as managed by createManagedCommandMatcher (#14825)', () => {
     for (const hook of [
-      getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH, { gitBashAvailable: true }),
-      getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH, { gitBashAvailable: false })
+      getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH),
+      getWindowsManagedLifecycleHook(UNSAFE_SCRIPT_PATH)
     ]) {
       expect(isClaudeManagedCommand(hook.command)).toBe(true)
     }
@@ -242,7 +244,7 @@ describe('ClaudeHookService.install', () => {
       // Why: POSIX resolves the profile at runtime (`${HOME-}`, STA-3348). Windows cannot —
       // no single token expands in both Git Bash and cmd.exe — so it registers the absolute
       // path, as Codex/Grok/Devin/Antigravity already do (#18875). A moved profile is caught
-      // by getStatus's exact match and rewritten, and `|| echo {}` keeps a stale entry neutral.
+      // by getStatus's exact match and rewritten; a deleted entry reports an ordinary hook error.
       if (process.platform !== 'win32') {
         expect(JSON.stringify(managedHook)).not.toContain(tmpHome.replaceAll('\\', '/'))
       }
@@ -258,7 +260,12 @@ describe('ClaudeHookService.install', () => {
         true
       )
       const managedScript = readFileSync(
-        join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME),
+        join(
+          tmpHome,
+          '.orca',
+          'agent-hooks',
+          process.platform === 'win32' ? 'claude-hook-impl.cmd' : CLAUDE_SCRIPT_FILE_NAME
+        ),
         'utf-8'
       )
       expect(managedScript).toContain('DEVIN_PROJECT_DIR')
@@ -506,7 +513,7 @@ describe('ClaudeHookService.install', () => {
           readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
         ) as { hooks: Record<string, { hooks: TestHook[] }[]> }
 
-        const expected = `${scriptPath.replaceAll('\\', '/')} || echo {}`
+        const expected = scriptPath.replaceAll('\\', '/')
         for (const { eventName } of CLAUDE_EVENTS) {
           const hook = settings.hooks[eventName]?.[0]?.hooks?.[0]
           expect(hook?.args, eventName).toBeUndefined()
@@ -537,7 +544,9 @@ describe('ClaudeHookService.install', () => {
       try {
         const settingsPath = join(tmpHome, '.claude', 'settings.json')
         mkdirSync(join(tmpHome, '.claude'), { recursive: true })
-        const stale = getWindowsManagedLifecycleHook(scriptPath, { gitBashAvailable: false })
+        const stale = getWindowsManagedLifecycleHook(
+          'C:\\Users\\%name%\\.orca\\agent-hooks\\claude-hook.cmd'
+        )
         writeFileSync(
           settingsPath,
           JSON.stringify({
@@ -605,9 +614,7 @@ describe('ClaudeHookService.install', () => {
           hooks: Record<string, { hooks: TestHook[] }[]>
         }
         expect(JSON.stringify(settings.hooks)).not.toContain('someone-else')
-        expect(settings.hooks.PreToolUse[0].hooks[0].command).toBe(
-          `${scriptPath.replaceAll('\\', '/')} || echo {}`
-        )
+        expect(settings.hooks.PreToolUse[0].hooks[0].command).toBe(scriptPath.replaceAll('\\', '/'))
         expect(new ClaudeHookService().getStatus().state).toBe('installed')
       } finally {
         vi.unstubAllEnvs()
@@ -625,7 +632,7 @@ describe('ClaudeHookService.install', () => {
       try {
         expect(new ClaudeHookService().install().state).toBe('installed')
         const script = readFileSync(
-          join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME),
+          join(tmpHome, '.orca', 'agent-hooks', 'claude-hook-impl.cmd'),
           'utf-8'
         )
         expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
@@ -705,7 +712,10 @@ describe('backgrounded-session pane guard (#9236)', () => {
     vi.stubEnv('USERPROFILE', tmpHome)
     try {
       expect(new ClaudeHookService().install().state).toBe('installed')
-      const script = readFileSync(join(tmpHome, '.orca', 'agent-hooks', 'claude-hook.cmd'), 'utf-8')
+      const script = readFileSync(
+        join(tmpHome, '.orca', 'agent-hooks', 'claude-hook-impl.cmd'),
+        'utf-8'
+      )
       const guard = script.split('\r\n').find((line) => line.includes('CLAUDE_JOB_DIR'))
       expect(guard).toBe('if not "%CLAUDE_JOB_DIR%"=="" exit /b 0')
       // Why: the drain parks in more.com, and a daemon worker is exactly the

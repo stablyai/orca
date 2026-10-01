@@ -1,5 +1,6 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
+import { requestNativeChatCoverPaste } from './native-chat-cover-paste'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { pasteTerminalText } from './terminal-bracketed-paste'
@@ -112,6 +113,9 @@ export const pasteTerminalPaneMenuClipboard = async (
   source: Extract<TerminalPasteSource, 'context-menu' | 'right-click'>
 ): Promise<void> => {
   if (!pane) {
+    return
+  }
+  if (requestNativeChatCoverPaste(pane)) {
     return
   }
   const { tabId, worktreeId, forceBracketedMultilineTextPaste, onPasteError } = context

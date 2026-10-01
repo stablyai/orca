@@ -120,12 +120,30 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   ): void => {
     const dropStatus = session.deferredCommandFinishedStatusDrop
     const reconcile = session.deferredConfirmedShellReconcile
-    session.deferredCommandFinishedStatusDrop = null
     session.deferredConfirmedShellReconcile = null
-    dropStatus?.()
-    if (options.confirmedShell) {
-      reconcile?.()
+    if (options.confirmedShell || !dropStatus) {
+      session.deferredCommandFinishedStatusDrop = null
+      if (options.confirmedShell) {
+        dropStatus?.()
+        reconcile?.()
+      }
+      return
     }
+    // Why: only a pane whose agent process the host can check keeps its row on an unanswered read;
+    // every other pane keeps today's cleanup until the renderer reads the owner record (step 2).
+    // The drop stays armed while main answers, so a new command start still cancels it.
+    const dropUnlessVerifiable = (verifiable: boolean): void => {
+      if (session.deferredCommandFinishedStatusDrop !== dropStatus) {
+        return
+      }
+      session.deferredCommandFinishedStatusDrop = null
+      if (!verifiable) {
+        dropStatus()
+      }
+    }
+    void Promise.resolve(window.api?.agentStatus?.hasVerifiableAgentProcess?.(session.cacheKey))
+      .then((verifiable) => dropUnlessVerifiable(verifiable === true))
+      .catch(() => dropUnlessVerifiable(false))
   }
   const isRemotePtyId = (id: string): boolean =>
     Boolean(isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id))
@@ -167,6 +185,10 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     isRemotePtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
+    getPublishedEntry: () => useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey],
+    // Why lazy: the completion coordinator is installed after this tracker.
+    onAgentProcessRead: (process) =>
+      session.agentCompletionCoordinator?.observeForegroundAgentProcess(process),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
       // Why: a confirmed local shell proves any hibernation record for this pane is stale;
@@ -181,7 +203,13 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       // surviving shell then receives pointer moves as typed SGR reports; the
       // replay guard keeps xterm's auto-replies from leaking to the shell.
       session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
-      if (reason === 'visible-pty') {
+      // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
+      if (reason === 'process-exit') {
+        // Why: reopen the one-shot visible sample so the next agent typed here is identified.
+        session.visibleForegroundSamplePending = false
+        session.visibleForegroundSampleSettled = false
+      }
+      if (reason === 'visible-pty' || reason === 'process-exit') {
         state.clearAgentLaunchConfig(session.cacheKey)
         return
       }
@@ -202,6 +230,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       }
       useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
         agent: foreground.agent,
+        agentEvidence: foreground.agentEvidence,
         routingRevoked: true,
         shellForeground: foreground.shellForeground
       })
@@ -300,6 +329,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     // as a hint, but revoke bytes until one current provider confirmation lands.
     useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
       agent: foreground.agent,
+      agentEvidence: foreground.agentEvidence,
       routingRevoked: true,
       shellForeground: false
     })
@@ -311,6 +341,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     if (session.paneForegroundAgentTracker.hasReadInFlight()) {
       useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
         agent: foreground.agent,
+        agentEvidence: foreground.agentEvidence,
         routingRevoked: true,
         shellForeground: false,
         routingConfirmationPending: true

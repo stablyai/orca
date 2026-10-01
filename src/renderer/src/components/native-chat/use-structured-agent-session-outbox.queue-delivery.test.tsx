@@ -5,7 +5,7 @@
 // `queued` answer spends the entry, and everything else is byte-for-byte
 // today's request — an older host must never see the key at all.
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
 import type { StructuredAgentSessionQueueCapability } from '../../../../shared/structured-agent-session-outbox-delivery'
@@ -30,6 +30,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { readOutbox } from './structured-agent-session-outbox-storage'
+
+// Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
+afterEach(cleanup)
 
 const LOCAL_TARGET = { kind: 'local' } as const
 const QUEUEING = { capability: 'supported', enabled: true } as const

@@ -15,11 +15,13 @@ import {
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
-import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionEndedEvent,
+  StructuredAgentSessionStopCause
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import type {
   AgentModelCatalogSessionAccess,
@@ -78,10 +80,6 @@ export type CodexStructuredSessionAdapterDeps = {
   /** Host capability seam; production uses the native Windows process table. */
   isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
-  onBackgroundTasksChanged?: (
-    sessionId: string,
-    state: AgentSessionBackgroundTaskState | null
-  ) => void
   /** What the session's child work did, delivered after the journal handled the frame. */
   onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   /** A send admitted earlier: its identity once Codex echoes it, or its rejection when the turn
@@ -111,6 +109,8 @@ export type CodexSession = {
   /** First observed child exit survives rejected settlement admission. */
   exitObservedAt?: number
   requestedClose: boolean
+  /** Who asked for the requested close in flight, carried onto its `ended`. */
+  closeStopCause?: StructuredAgentSessionStopCause
   fence: number
   acquisitionGeneration: string
   threadId: string
