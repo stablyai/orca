@@ -301,17 +301,28 @@ export function MobileNativeChatComposer({
                 onPress={dictationMode === 'hold' ? undefined : onMicPress}
                 onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
                 onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
+                // Without onLongPress, react-native-web lets a touch contextmenu terminate the
+                // press, and Android WebView sends one ~500 ms into a hold.
+                onLongPress={dictationMode === 'hold' ? () => {} : undefined}
                 disabled={disabled}
               >
+                {/* The icon swaps on press; as the page's touch target, its removal would send
+                    touchend to a detached node and lose the release. */}
                 {micActive ? (
                   <Square
+                    pointerEvents="none"
                     size={18}
                     color={colors.statusRed}
                     strokeWidth={2.4}
                     fill={colors.statusRed}
                   />
                 ) : (
-                  <Mic size={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Mic
+                    pointerEvents="none"
+                    size={20}
+                    color={colors.textSecondary}
+                    strokeWidth={2}
+                  />
                 )}
               </Pressable>
             ) : null}

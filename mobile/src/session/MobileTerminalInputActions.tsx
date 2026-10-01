@@ -67,6 +67,8 @@ export function MobileTerminalInputActions({
         onPress={dictationMode === 'toggle' ? onDictationToggle : undefined}
         onPressIn={dictationMode === 'hold' ? onDictationPressIn : undefined}
         onPressOut={dictationMode === 'hold' ? onDictationPressOut : undefined}
+        // In hold mode a no-op still matters: without onLongPress, react-native-web lets a touch
+        // contextmenu terminate the press, and Android WebView sends one ~500 ms into a hold.
         onLongPress={
           dictationMode === 'toggle'
             ? () => {
@@ -74,7 +76,7 @@ export function MobileTerminalInputActions({
                   onDictationCancel()
                 }
               }
-            : undefined
+            : () => {}
         }
         accessibilityLabel={
           dictation.isRecording
