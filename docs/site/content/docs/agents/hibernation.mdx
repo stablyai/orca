@@ -26,7 +26,7 @@ Orca only hibernates an agent terminal when **all** of the following are true:
 - No live subagent / teammate roster remains on the pane (provider "done" alone is not enough while children are still attached).
 - The tab hasn't been marked [**Never Hibernate**](#keeping-a-tab-awake).
 
-A terminal that fails any check stays running. If a worktree has multiple agent panes, they hibernate together as a unit so a partially-paused worktree never ships.
+A terminal that fails any check stays running. Each agent pane is evaluated on its own, so one that stays awake (for example because its tab is marked **Never Hibernate**) does not keep its siblings in the same worktree awake.
 
 You can also sleep worktrees manually from the sidebar (including **Sleep with Descendants** when nested children exist). See [Worktrees](/docs/model/worktrees). Manual sleep keeps **finished** and **interrupted** resumable sessions so reopening the worktree can still relaunch with the same resume flags — it does not wipe those session records just because the pane was no longer "live."
 
