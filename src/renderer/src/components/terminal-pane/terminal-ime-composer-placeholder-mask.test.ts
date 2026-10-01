@@ -118,6 +118,11 @@ describe('terminal IME composer placeholder mask', () => {
   it.each([
     ['Codex', codexPlaceholderFrame()],
     ['Codex with shortcut help', `${codexPlaceholderFrame()}\x1b7\x1b[4;1H  ? for shortcuts\x1b8`],
+    ['Codex with localized help', `${codexPlaceholderFrame()}\x1b7\x1b[4;1H  快捷键帮助\x1b8`],
+    [
+      'Codex with multiple help rows',
+      `${codexPlaceholderFrame()}\x1b7\x1b[4;1H  Commands\r\n  Navigation\x1b8`
+    ],
     [
       'Claude',
       `\x1b[2J\x1b[H${'─'.repeat(24)}\r\n❯ \x1b7\x1b[2mTry “fix the failing test”\x1b[22m\x1b8`

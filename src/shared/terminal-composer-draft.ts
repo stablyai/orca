@@ -26,7 +26,6 @@ type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 
 const COMPOSER_FRAME_LINE = /^[─━-]{8,}\s*$/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[·•]\s+\S.*$/i
-const CODEX_SHORTCUT_HELP_LINE = /^\s*(?:← for agents · )?\? for shortcuts\s*$/
 
 function composerContinuationRows(
   context: TerminalCursorContext,
@@ -68,26 +67,26 @@ function composerContinuationRows(
 }
 
 function findCodexFooterIndex(context: TerminalCursorContext): number {
-  for (let index = context.rowsBelow.length - 1; index >= 0; index -= 1) {
-    const row = context.rowsBelow[index] ?? ''
-    if (!row.trim()) {
-      continue
-    }
-    // Codex paints shortcut help below its status row; it is not the status boundary.
-    if (context.rowsBelowWrapped?.[index] === false && CODEX_SHORTCUT_HELP_LINE.test(row)) {
-      continue
-    }
-    const undimmed = context.typedRowsBelow[index] ?? ''
-    const hasFooterGap = index > 0 && !(context.rowsBelow[index - 1] ?? '').trim()
-    const isDimmedFooter =
-      hasFooterGap && !undimmed.trim() && context.rowsBelowWrapped?.[index] === false
-    const isColoredFooter =
-      hasFooterGap &&
-      context.rowsBelowCustomForeground?.[index] === true &&
-      context.rowsBelowWrapped?.[index] === false
-    return isDimmedFooter || isColoredFooter || CODEX_FOOTER_LINE.test(row) ? index : -1
+  let end = context.rowsBelow.length - 1
+  while (end >= 0 && !(context.rowsBelow[end] ?? '').trim()) {
+    end -= 1
   }
-  return -1
+  if (end < 0) {
+    return -1
+  }
+  let start = end
+  while (start > 0 && (context.rowsBelow[start - 1] ?? '').trim()) {
+    start -= 1
+  }
+  // A footer is a separate bottom block; help rows belong to the same block as its status row.
+  const hasFooterGap = start > 0 && !(context.rowsBelow[start - 1] ?? '').trim()
+  const isStyledStatus =
+    !(context.typedRowsBelow[start] ?? '').trim() ||
+    context.rowsBelowCustomForeground?.[start] === true
+  if (hasFooterGap && context.rowsBelowWrapped?.[start] === false && isStyledStatus) {
+    return start
+  }
+  return CODEX_FOOTER_LINE.test(context.rowsBelow[end] ?? '') ? end : -1
 }
 
 function isStockPlaceholder(
