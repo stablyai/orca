@@ -316,6 +316,7 @@ export function MobileNativeChatView({
         activityText={turns.activeActivityText}
       />
     ) : null
+  const listFooter = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
@@ -341,7 +342,10 @@ export function MobileNativeChatView({
               // instead of being swallowed by the dismiss gesture.
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
-              onScrollBeginDrag={beginUserScroll}
+              onScrollBeginDrag={() => {
+                promptJump.cancelPendingJump()
+                beginUserScroll()
+              }}
               onScrollEndDrag={endUserDrag}
               onMomentumScrollBegin={beginMomentum}
               onMomentumScrollEnd={endMomentum}
@@ -365,11 +369,7 @@ export function MobileNativeChatView({
                   </Pressable>
                 ) : null
               }
-              ListFooterComponent={mobileNativeChatListFooter(
-                liveStatus,
-                turns.waitingRows,
-                renderItem
-              )}
+              ListFooterComponent={listFooter}
               ListEmptyComponent={
                 emptyState ? (
                   <View style={styles.center}>

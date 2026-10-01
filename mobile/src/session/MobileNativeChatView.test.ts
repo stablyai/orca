@@ -774,6 +774,47 @@ describe('MobileNativeChatView', () => {
       expect(jumpControls()).toEqual([])
     })
 
+    it.each([0, 120])(
+      'cancels prompt retries when the reader drags after %dms',
+      async (elapsed) => {
+        vi.useFakeTimers()
+        try {
+          const folded = [
+            assistantTurn('earlier', 'earlier'),
+            prompt,
+            assistantTurn('a1', 'long answer')
+          ]
+          await render({ messages: folded, folded })
+          await reportViewable('a1')
+          scrollToIndex.mockImplementation(() => {
+            list().props.onScrollToIndexFailed({
+              index: 1,
+              highestMeasuredFrameIndex: 0,
+              averageItemLength: 100
+            })
+          })
+          await act(async () => {
+            renderer!.root.findByProps({ accessibilityLabel: 'Scroll to prompt' }).props.onPress()
+            vi.advanceTimersByTime(elapsed)
+          })
+          await scrollAwayFromBottom()
+          scrollToIndex.mockClear()
+          scrollToOffset.mockClear()
+          scrollToEnd.mockClear()
+
+          await act(async () => vi.runAllTimers())
+
+          expect(scrollToIndex).not.toHaveBeenCalled()
+          expect(scrollToOffset).not.toHaveBeenCalled()
+          expect(scrollToEnd).not.toHaveBeenCalled()
+          expect(jumpControls()).toEqual(['Scroll to latest'])
+        } finally {
+          scrollToIndex.mockReset()
+          vi.useRealTimers()
+        }
+      }
+    )
+
     it('detaches before jumping so streaming cannot pull the reader back to the tail', async () => {
       const folded = [prompt, assistantTurn('a1', 'long answer')]
       await render({ messages: folded, folded })
