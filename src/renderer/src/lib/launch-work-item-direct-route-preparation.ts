@@ -9,7 +9,6 @@ import type {
 } from '@/lib/agent-session-launch-plan'
 import {
   buildDirectWorkItemStartup,
-  markDirectWorkItemAgentTrusted,
   resolveDirectWorkItemAgent
 } from '@/lib/launch-work-item-direct-agent-routing'
 
@@ -98,17 +97,9 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
           workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
           prompt: args.draftContent,
           promptDelivery: args.promptDelivery,
-          tuiCustomization: { agentArgs: args.agentArgs },
           initialSessionOptions: startupPlan?.sessionOptions
         })
   const structuredLaunch = plan?.route === 'structured-native-chat'
-
-  await markDirectWorkItemAgentTrusted({
-    structuredLaunch,
-    agent: effectiveAgent,
-    workspacePath: args.worktreePath,
-    connectionId: args.repoConnectionId
-  })
 
   return {
     launchConnectionId,

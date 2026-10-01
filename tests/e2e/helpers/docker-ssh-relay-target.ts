@@ -200,6 +200,36 @@ export function blockDockerSshRelayTargetTcpForwarding(target: DockerSshRelayTar
   )
 }
 
+/**
+ * Makes the target unreachable over SSH while the container, its fixtures and `docker exec` stay
+ * up: sshd re-binds to the container's loopback, so the published port stops reaching it. Only new
+ * connections are refused; an established session lives until its client closes it. Returns once
+ * a real ssh client fails to connect, so a config that silently failed to apply surfaces here.
+ */
+export function refuseDockerSshRelayTargetConnections(target: DockerSshRelayTarget): void {
+  // Why HUP, not a restart: see blockDockerSshRelayTargetTcpForwarding — PID 1 is sshd.
+  execDockerSshRelayTargetControlCommand(
+    target,
+    "printf '%s\\n' 'ListenAddress 127.0.0.1' >> /etc/ssh/sshd_config; kill -HUP 1"
+  )
+  const deadline = Date.now() + 60_000
+  let lastProbe = ''
+  while (Date.now() < deadline) {
+    const result = spawnSync('ssh', sshArgs(target, 'true'), {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 15_000
+    })
+    lastProbe = result.stderr || result.stdout || `exit ${result.status}`
+    // Why the auth check: a refusal must look like a dead host, never a credential prompt.
+    if (result.status !== 0 && !/permission denied/i.test(lastProbe)) {
+      return
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500)
+  }
+  throw new Error(`sshd kept accepting connections after ListenAddress 127.0.0.1: ${lastProbe}`)
+}
+
 export function writeDockerSshRelayTargetFile(
   target: DockerSshRelayTarget,
   filePath: string,

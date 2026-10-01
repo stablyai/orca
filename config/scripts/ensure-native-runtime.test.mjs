@@ -87,7 +87,7 @@ describe('ensure-native-runtime', () => {
         const log = readFileSync(logPath, 'utf8')
         expect(log.match(/pnpm exec node-gyp rebuild\n/g)).toHaveLength(2)
         expect(log).toContain(join('node_modules', 'node-pty'))
-        expect(log).toContain(join('node_modules', 'windows-native-registry'))
+        expect(log).toContain(join('node_modules', '@orca', 'windows-registry'))
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
@@ -299,11 +299,11 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   if (process.platform !== 'win32') {
     return
   }
-  const registryDir = join(projectDir, 'node_modules', 'windows-native-registry')
+  const registryDir = join(projectDir, 'node_modules', '@orca', 'windows-registry')
   mkdirSync(registryDir, { recursive: true })
   writeFileSync(
     join(registryDir, 'package.json'),
-    '{"name":"windows-native-registry","version":"3.2.2","main":"index.js"}\n'
+    '{"name":"@orca/windows-registry","version":"1.0.0","main":"index.js"}\n'
   )
   const markerGate = requiresMarker
     ? `if (!require('node:fs').existsSync(process.env.ORCA_NATIVE_TEST_MARKER)) { throw new Error('registry ABI mismatch sentinel') }`

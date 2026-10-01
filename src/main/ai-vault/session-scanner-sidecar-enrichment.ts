@@ -2,6 +2,8 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
 import { generatedSessionTitle } from './session-scanner-accumulator'
 import { readCursorChatMeta, wasCursorChatMetaRefused } from './session-scanner-cursor-chat-meta'
+import { devinSessionsIndexForSidecar } from './session-scanner-devin-db'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 /**
@@ -23,7 +25,7 @@ export type SidecarEnrichment = {
 
 /** True when the sibling only adds metadata, so a change to it needs no re-parse. */
 export function sidecarEnrichesWithoutReparse(candidate: SessionFileCandidate): boolean {
-  return candidate.agent === 'cursor'
+  return candidate.agent === 'cursor' || candidate.agent === 'devin'
 }
 
 export async function enrichSessionFromSidecar(
@@ -31,14 +33,23 @@ export async function enrichSessionFromSidecar(
   foldSession: AiVaultSession | null,
   platform: NodeJS.Platform
 ): Promise<SidecarEnrichment> {
+  if (candidate.agent === 'devin') {
+    return enrichDevinSessionFromDb(candidate.file.sidecar, foldSession, platform)
+  }
   if (candidate.agent !== 'cursor' || !foldSession) {
     return { session: foldSession, refused: false }
   }
   const meta = await readCursorChatMeta(candidate.file.path)
   if (!meta) {
-    return { session: foldSession, refused: wasCursorChatMetaRefused(candidate.file.path) }
+    return {
+      session: foldSession,
+      refused: wasCursorChatMetaRefused(candidate.file.path)
+    }
   }
-  return { session: mergeCursorChatMeta(foldSession, meta, platform), refused: false }
+  return {
+    session: mergeCursorChatMeta(foldSession, meta, platform),
+    refused: false
+  }
 }
 
 /** Fills only what the transcript never recorded; its own records always win. */
@@ -75,5 +86,49 @@ export function mergeCursorChatMeta(
       cwd,
       platform
     })
+  }
+}
+
+/**
+ * Merge the Devin sessions.db row onto the transcript's session. Devin's
+ * sibling is one shared index for the whole transcripts dir rather than a
+ * per-session file, so this also decides membership: a row the user hid in
+ * Devin's UI drops the session from the listing entirely.
+ */
+function enrichDevinSessionFromDb(
+  sidecar: SessionSidecarObservation | undefined,
+  foldSession: AiVaultSession | null,
+  platform: NodeJS.Platform
+): SidecarEnrichment {
+  if (!foldSession) {
+    return { session: foldSession, refused: false }
+  }
+  const { index, unreadable } = devinSessionsIndexForSidecar(sidecar)
+  if (!index) {
+    // An observed-but-unreadable db must not settle as "no enrichment": the
+    // refusal keeps the sidecar unknown so the next scan retries the merge.
+    return { session: foldSession, refused: unreadable }
+  }
+  const row = index.get(foldSession.sessionId)
+  if (!row) {
+    return { session: foldSession, refused: false }
+  }
+  if (row.hidden) {
+    return { session: null, refused: false }
+  }
+  const merged = mergeCursorChatMeta(
+    foldSession,
+    {
+      title: row.title,
+      cwd: row.workingDirectory,
+      createdAt: row.createdAt,
+      updatedAt: row.lastActivityAt
+    },
+    platform
+  )
+  return {
+    session:
+      foldSession.model === null && row.model !== null ? { ...merged, model: row.model } : merged,
+    refused: false
   }
 }

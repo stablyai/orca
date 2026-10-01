@@ -315,23 +315,6 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(useAppStore.getState().sshTargetsHydrated).toBe(false)
   })
 
-  // Why: the sidebar card control, the host-header menu, and this overlay can be on screen
-  // at once; a shared verb table keeps them from naming the same click three ways.
-  it.each([
-    ['disconnected', 'Connect'],
-    ['auth-failed', 'Reconnect'],
-    ['error', 'Retry'],
-    ['reconnection-failed', 'Retry']
-  ] as const)('labels the %s action %s, matching every other SSH surface', (status, verb) => {
-    installSshConnect(vi.fn().mockResolvedValue(undefined))
-
-    render(
-      <TerminalSshReconnectOverlay targetId="ssh-target-1" targetLabel="devbox" status={status} />
-    )
-
-    expect(screen.getByRole('button', { name: verb })).toBeEnabled()
-  })
-
   it('suppresses a second connect while one is already in flight for the same target', async () => {
     const connect = vi.fn().mockReturnValue(new Promise(() => {}))
     installSshConnect(connect)

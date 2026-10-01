@@ -3,13 +3,19 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
+import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
+let restoreViewport = (): void => {}
+beforeAll(() => {
+  restoreViewport = installNativeChatMessageListTestViewport()
+})
+afterAll(() => restoreViewport())
 afterEach(cleanup)
 
 function frame(id: number, status: string, overrides: { kind?: string; truncated?: boolean } = {}) {
@@ -57,13 +63,13 @@ function transcript(messages: NativeChatMessage[], sessionId = 'live-codex') {
         agent: 'codex',
         hasMore: false,
         loadingEarlier: false,
+        olderHistoryGeneration: 0,
         loadEarlier: vi.fn(),
         readPhase: 'ready'
       }}
       isWorking={false}
       expandSignal
       fontScale={1}
-      showTurnStatus={false}
     />
   )
 }
@@ -106,6 +112,8 @@ describe('live Codex checklist frames', () => {
       role: 'assistant',
       timestamp: 1,
       source: 'transcript',
+      // Journalled like the frames it sits between.
+      journalPosition: { sequence: 1, index: 0 },
       blocks: [
         {
           type: 'tool-call',

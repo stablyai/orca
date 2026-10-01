@@ -1,10 +1,9 @@
-import type { RpcMethod } from '../../../core'
 import { ORCHESTRATION_WORKER_CONTROL_METHODS } from './worker-control'
 import { ORCHESTRATION_WORKER_RELEASE_METHODS } from './worker-release'
 import { ORCHESTRATION_WORKER_STOP_METHODS } from './worker-stop'
 import { ORCHESTRATION_WORKER_START_METHODS } from './workers'
 
-export const ORCHESTRATION_WORKER_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_METHODS = [
   ...ORCHESTRATION_WORKER_START_METHODS,
   ...ORCHESTRATION_WORKER_CONTROL_METHODS,
   ...ORCHESTRATION_WORKER_STOP_METHODS,

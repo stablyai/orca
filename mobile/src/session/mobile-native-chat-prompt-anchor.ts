@@ -1,10 +1,11 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
-/** Index of the newest `user` message in the rendered list, or `null` when the
- *  loaded transcript has none (paged in mid-session, or a scrape with no prompts). */
+/** Resolve the newest loaded prompt in the actual list order, excluding pending echoes. */
 export function mobileNativeChatLatestPromptIndex(
-  messages: readonly NativeChatMessage[]
+  messages: readonly NativeChatMessage[],
+  listMessages: readonly NativeChatMessage[] = messages
 ): number | null {
-  const index = messages.findLastIndex((message) => message.role === 'user')
+  const prompt = messages.findLast((message) => message.role === 'user')
+  const index = prompt ? listMessages.findIndex((message) => message.id === prompt.id) : -1
   return index === -1 ? null : index
 }

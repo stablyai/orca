@@ -38,7 +38,11 @@ import { join, resolve } from 'node:path'
 // `node_modules`). If electron-builder ever drops it, promote this to a
 // direct devDependency in package.json.
 import { extractFile, listPackage } from '@electron/asar'
-import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-patterns.mjs'
+import {
+  BUILD_IDENTITY_RE,
+  MINIFIED_TELEMETRY_RE,
+  WRITE_KEY_RE
+} from './telemetry-bundle-constant-patterns.mjs'
 
 // Why resolve from import.meta.url instead of cwd: a release runner (or a
 // developer debugging locally) may invoke this script from a non-root cwd.
@@ -156,8 +160,14 @@ function verifyAsar(asarPath) {
 
   const buildIdentityMatch = BUILD_IDENTITY_RE.exec(indexJs)
   const writeKeyMatch = WRITE_KEY_RE.exec(indexJs)
+  const minifiedTelemetryMatch = MINIFIED_TELEMETRY_RE.exec(indexJs)
 
-  if (!buildIdentityMatch) {
+  // Rolldown renames module-local constants in production output. In that
+  // form, verify the adjacent injected identity/key declaration instead.
+  const verifiedIdentity = buildIdentityMatch?.[1] ?? minifiedTelemetryMatch?.[1]
+  const verifiedWriteKey = writeKeyMatch?.[1] ?? minifiedTelemetryMatch?.[2]
+
+  if (!verifiedIdentity) {
     console.error(`::error::BUILD_IDENTITY constant missing or unexpected value in ${asarPath}`)
     const sample = indexJs.match(/.{0,80}BUILD_IDENTITY.{0,80}/g)?.slice(0, 5) ?? []
     for (const line of sample) {
@@ -165,7 +175,7 @@ function verifyAsar(asarPath) {
     }
     return null
   }
-  if (!writeKeyMatch) {
+  if (!verifiedWriteKey) {
     console.error(`::error::PostHog WRITE_KEY missing from ${asarPath}`)
     const sample = indexJs.match(/.{0,80}WRITE_KEY.{0,80}/g)?.slice(0, 5) ?? []
     for (const line of sample) {
@@ -174,7 +184,7 @@ function verifyAsar(asarPath) {
     return null
   }
 
-  return { asarPath, buildIdentity: buildIdentityMatch[1], writeKey: writeKeyMatch[1] }
+  return { asarPath, buildIdentity: verifiedIdentity, writeKey: verifiedWriteKey }
 }
 
 // Why verify every match (not just the first): macOS dual-arch produces one

@@ -126,9 +126,12 @@ function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): numbe
   let score = 0
   let lastMatchIdx = -1
 
-  for (let ti = 0; ti < file.lowerPath.length && qi < query.length; ti++) {
-    if (file.lowerPath[ti] !== query[qi]) {
-      continue
+  while (qi < query.length) {
+    const next = lastMatchIdx + 1
+    const ti =
+      file.lowerPath[next] === query[qi] ? next : file.lowerPath.indexOf(query[qi], next + 1)
+    if (ti === -1) {
+      return -1
     }
     const gap = lastMatchIdx === -1 ? 0 : ti - lastMatchIdx - 1
     score += gap

@@ -39,6 +39,7 @@ import {
   spawnShellWithFallback,
   validateWorkingDirectory
 } from './local-pty-utils'
+import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 
 const WSL_UNC_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
 const NATIVE_DIR = 'C:\\Users\\jin\\repo'
@@ -264,7 +265,11 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
       cwd: '/work',
       env,
       ptySpawn: ptySpawn as never,
-      launchEnvKeys: Object.keys(zshLaunchEnv),
+      preLaunchEnv: {
+        ZDOTDIR: undefined,
+        ORCA_ORIG_ZDOTDIR: undefined,
+        ORCA_SHELL_FEATURES: undefined
+      },
       getShellReadyConfig: (shell) =>
         shell === '/bin/zsh' ? { args: ['-l'], env: zshLaunchEnv } : { args: null, env: {} }
     })
@@ -273,6 +278,44 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
     expect(env.ZDOTDIR).toBeUndefined()
     expect(env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
     expect(env.HOME).toBe('/home/jin')
+  })
+
+  it.each<[string, Record<string, string>, Record<string, string>]>([
+    [
+      '/opt/homebrew/bin/fish',
+      { XDG_DATA_DIRS: '/opt/a:/opt/b' },
+      getFishXdgDataDirsLaunchEnv('/userdata/wrappers', '/opt/a:/opt/b')
+    ],
+    [
+      '/bin/zsh',
+      { ZDOTDIR: '/home/jin/.zsh' },
+      { ZDOTDIR: '/userdata/shell-ready/zsh', ORCA_SHELL_FEATURES: 'history' }
+    ]
+  ])('hands back the user’s own env when %s falls back', (shellPath, userEnv, launchEnv) => {
+    const preLaunchEnv = Object.fromEntries(
+      Object.keys(launchEnv).map((key) => [key, userEnv[key]])
+    )
+    const env: Record<string, string> = { HOME: '/home/jin', ...userEnv, ...launchEnv }
+    const ptySpawn = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('primary boom')
+      })
+      .mockReturnValue({ pid: 5 })
+
+    const result = spawnShellWithFallback({
+      shellPath,
+      shellArgs: ['-l'],
+      cols: 80,
+      rows: 24,
+      cwd: '/work',
+      env,
+      ptySpawn: ptySpawn as never,
+      preLaunchEnv,
+      getShellReadyConfig: () => ({ args: null, env: {} })
+    })
+
+    expect(env).toEqual({ HOME: '/home/jin', SHELL: result.shellPath, ...userEnv })
   })
 
   it('drops the first fallback’s launch env when a second fallback takes over', () => {
@@ -299,7 +342,7 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
       cwd: '/work',
       env,
       ptySpawn: ptySpawn as never,
-      launchEnvKeys: ['ZDOTDIR'],
+      preLaunchEnv: { ZDOTDIR: undefined },
       getShellReadyConfig: (shell) =>
         shell === '/bin/bash' ? { args: ['--rcfile', '/rc'], env: bashLaunchEnv } : null
     })

@@ -25,8 +25,10 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'thread/closed': 'status-chrome',
     'skills/changed': 'status-chrome',
     'thread/name/updated': 'status-chrome',
-    'thread/goal/updated': 'status-chrome',
-    'thread/goal/cleared': 'status-chrome',
+    // The goal tool call is never emitted as an item, so these two frames are the only
+    // truthful evidence a goal exists; the model's prose about goals can be wrong.
+    'thread/goal/updated': 'timeline-substantive',
+    'thread/goal/cleared': 'timeline-substantive',
     'thread/environment/connected': 'status-chrome',
     'thread/environment/disconnected': 'status-chrome',
     'thread/settings/updated': 'status-chrome',
@@ -147,6 +149,54 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
   }
 } as const satisfies ProviderFrameClassificationTable
 
+/**
+ * Frame kinds a DEDICATED typed translator owns end to end.
+ *
+ * Coverage is a contract, not a label. The catalogue classification alone is
+ * only a hint about where a frame belongs, and `hasProviderError` deliberately
+ * outranks it so an unmodelled failure still reaches the user — which is how a
+ * failed background task ended up rendered by the generic fallback, whose row
+ * text is the wire opcode when the payload carries no key the fallback knows.
+ * A kind listed here is guaranteed no fallback row instead, so its translator
+ * may legitimately emit zero rows for a frame and nothing appears beside it.
+ *
+ * Listing a kind before its translator exists deletes the only report of a
+ * failure, so nothing may be added here except together with the code that
+ * renders it, or that reads it for state while another frame carries its
+ * failure (the Codex thread status, whose fault arrives on `error`).
+ *
+ * A Claude frame of a listed kind that names no task writes nothing. The row it
+ * replaces named no task either — it printed the opcode and a raw payload —
+ * and every frame this protocol sends carries the id its own tracker and
+ * roster have always required.
+ */
+const TYPED_TRANSLATOR_KINDS: ReadonlyMap<string, ReadonlySet<string>> = new Map<
+  keyof ProviderFrameClassificationTable,
+  ReadonlySet<string>
+>([
+  [
+    'claude',
+    new Set([
+      'message:system:task_started',
+      'message:system:task_updated',
+      'message:system:task_progress',
+      'message:system:task_notification',
+      'message:system:background_tasks_changed'
+    ] satisfies ClaudeStreamJsonFrameKind[])
+  ],
+  [
+    'codex',
+    // Every status arm is thread state the translator reads; a fault's sentence arrives on `error`.
+    new Set([
+      'notification:thread/status/changed'
+    ] satisfies `notification:${CodexAppServerNotificationMethod}`[])
+  ]
+])
+
+export function hasTypedProviderFrameTranslator(provider: string, kind: string): boolean {
+  return TYPED_TRANSLATOR_KINDS.get(provider)?.has(kind) === true
+}
+
 const ERROR_VARIANT_KEYS = new Set(['type', 'status', 'state', 'subtype', 'outcome'])
 const ERROR_VALUE_KEYS = new Set(['error', 'failureReason', 'failure_reason'])
 
@@ -204,10 +254,10 @@ const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = 
   // `restoreThread` replays them straight through `items.handle`, which is where
   // the classification earns its keep.
   //
-  // `collabAgentToolCall` is deliberately NOT suppressed with it. Nothing
-  // guarantees a session reports subagent work as `subAgentActivity` at all; one
-  // that only ever emits the collab tool call gets no roster row, and suppressing
-  // that too would leave its fan-out showing nothing.
+  // `collabAgentToolCall` is deliberately NOT suppressed with it. Codex's default
+  // multi-agent mode reports subagent work ONLY as that call, which renders as its
+  // own tool row and never reaches this catalog; were it ever to, suppressing it
+  // would leave that session's fan-out showing nothing.
   [CODEX_SUBAGENT_ITEM_TYPE]: 'status-chrome',
   // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
   // nothing at all. Every other item type this build does not model carries text
@@ -224,7 +274,7 @@ function itemKind(kind: string): string | null {
   return kind.startsWith('item:') ? kind.slice('item:'.length) : null
 }
 
-export function isDeltaShapedProviderFrameKind(kind: string): boolean {
+export function isDeltaProviderFrameKind(kind: string): boolean {
   return notificationKind(kind).toLowerCase().endsWith('delta')
 }
 
@@ -258,7 +308,7 @@ export function classifyProviderFrame(
   if (hasProviderError(payload)) {
     return 'error-surface'
   }
-  if (isDeltaShapedProviderFrameKind(kind)) {
+  if (isDeltaProviderFrameKind(kind)) {
     return 'stream-into-item'
   }
   if (provider === 'claude' && kind === 'message:result') {

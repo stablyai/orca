@@ -1,6 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
-const installed = vi.hoisted(() => ({ deps: null as Record<string, unknown> | null }))
+const installed = vi.hoisted(() => {
+  const state: {
+    deps: Record<string, unknown> | null
+    logger: StructuredAgentSessionLogger | null
+  } = { deps: null, logger: null }
+  return state
+})
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -10,14 +17,18 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./structured-agent-session-runtime', () => ({
-  ensureStructuredAgentSessionHost: vi.fn(async (deps: Record<string, unknown>) => {
-    installed.deps = deps
-  })
+  ensureStructuredAgentSessionHost: vi.fn(
+    async (deps: Record<string, unknown> & { logger: StructuredAgentSessionLogger }) => {
+      installed.deps = deps
+      installed.logger = deps.logger
+    }
+  )
 }))
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { OrcaRuntimeService } from './orca-runtime'
+import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 
 type OrcaRuntimeDeps = NonNullable<ConstructorParameters<typeof OrcaRuntimeService>[2]>
@@ -66,11 +77,23 @@ describe('every host that constructs a runtime wires the agent-status store', ()
       for (const dep of AGENT_STATUS_STORE_DEPS) {
         expect(construction).toContain(`${dep}:`)
       }
+      // A sink without it leaves the host holding no child records for that entry point.
+      expect(construction).toContain('publishChildWork: (subject, evidence, provider) =>')
+      expect(construction).toContain('ingestStructuredChildWork(subject, evidence, provider)')
+      // Without it the summary and the chat strip read no child records on that entry point.
+      expect(construction).toContain(
+        'readChildWork: (subject) => agentHookServer.getStructuredChildWorkViews(subject)'
+      )
     }
   )
 })
 
 describe('structured status sink wiring', () => {
+  afterEach(() => {
+    _resetTracerForTests()
+    vi.restoreAllMocks()
+  })
+
   it('hands the host the sink the runtime was constructed with', async () => {
     installed.deps = null
     const sink: StructuredAgentSessionStatusSink = { publish: vi.fn(), forget: vi.fn() }
@@ -79,6 +102,32 @@ describe('structured status sink wiring', () => {
     await runtime.ensureStructuredAgentSessionHost()
 
     expect(installed.deps?.['statusSink']).toBe(sink)
+  })
+
+  // The runtime class does not typecheck its own calls, so the required logger is pinned here:
+  // a logger that writes nowhere would pass every host test while the desktop dropped failures.
+  it('hands the host the trace-file logger', async () => {
+    installed.logger = null
+    const push = vi.fn()
+    setActiveSink({ push, flush: () => {}, close: () => {} })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const runtime = new OrcaRuntimeService()
+
+    await runtime.ensureStructuredAgentSessionHost()
+    const installedLogger = (): StructuredAgentSessionLogger | null => installed.logger
+    installedLogger()?.warn('renewing a chat lease failed', {
+      scope: 'lease-renewal',
+      sessionId: 'session-1',
+      error: new Error('database is locked')
+    })
+
+    expect(push).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'agentSession.lease-renewal',
+        attributes: expect.objectContaining({ sessionId: 'session-1' }),
+        exit: expect.objectContaining({ _tag: 'Failure' })
+      })
+    )
   })
 
   it('installs without a sink when none was provided', async () => {

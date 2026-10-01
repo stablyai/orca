@@ -1,0 +1,110 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.tabs-stream-health",
+  "family": "session.tabs-stream-health",
+  "namedDeltas": [],
+  "values": {
+    "0cde28482d1a": {
+      "name": "session.tabs.list#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "18295edda482": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tabs": [
+              {
+                "id": "tab-1"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "510d7b10aacf": {
+      "name": "fetch-started",
+      "ordinal": 1,
+      "value": {}
+    },
+    "540a1c1f9afc": {
+      "name": "fetch-succeeded",
+      "ordinal": 4,
+      "value": {
+        "tabs": [
+          {
+            "id": "tab-1"
+          }
+        ]
+      }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "e29309cc10af": {
+      "accepted": {
+        "source": "list",
+        "tabs": [
+          {
+            "id": "tab-1"
+          }
+        ]
+      },
+      "applicationRevision": 0
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-tabs-health-reconciled",
+    "checkpoints": [
+      {
+        "id": "reconciled",
+        "observation": {
+          "sender": ["18295edda482"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "e29309cc10af",
+          "effects": ["510d7b10aacf", "540a1c1f9afc"]
+        }
+      }
+    ]
+  }
+}

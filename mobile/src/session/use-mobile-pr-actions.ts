@@ -10,6 +10,7 @@ import {
   fetchUpdatePRState
 } from './github-pr-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { PrActionsEngine, type PrActionMutations, type PrActionBusyKey } from './pr-actions-engine'
 
 export type { PrActionBusyKey, PrActionMutations } from './pr-actions-engine'
@@ -26,10 +27,7 @@ export type PrActionsInput = {
   mutations?: PrActionMutations
 }
 
-function realMutations(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string
-): PrActionMutations {
+function realMutations(client: RpcOperationSender, worktreeId: string): PrActionMutations {
   return {
     mergePR: (args) => fetchMergePR(client, worktreeId, args),
     setPRAutoMerge: (args) => fetchSetPRAutoMerge(client, worktreeId, args),

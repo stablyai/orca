@@ -159,7 +159,8 @@ describe('registerPtyHandlers', () => {
       leafId,
       ptyId: expect.any(String),
       incarnationId: expect.any(String),
-      hostAdmittedMembership: true
+      hostAdmittedMembership: true,
+      origin: 'spawn'
     })
   })
   it('shuts down a split PTY when its expected source binding was retired', async () => {
@@ -518,7 +519,8 @@ describe('registerPtyHandlers', () => {
       leafId,
       ptyId: 'pty-shared',
       startupCwd: '/tmp',
-      hostAdmittedMembership: true
+      hostAdmittedMembership: true,
+      origin: 'spawn'
     })
   })
 })

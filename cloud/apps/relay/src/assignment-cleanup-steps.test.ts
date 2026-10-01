@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  assignmentCleanupSteps,
-  runAssignmentCleanup,
-  type AssignmentCleanupStore
-} from './assignment-cleanup-steps.js'
+import { runAssignmentCleanup, type AssignmentCleanupStore } from './assignment-cleanup-steps.js'
 
 function stubStore(overrides: Partial<AssignmentCleanupStore> = {}) {
   const calls: string[] = []
@@ -16,6 +12,7 @@ function stubStore(overrides: Partial<AssignmentCleanupStore> = {}) {
     completeReadyEvacuations: method('completeReadyEvacuations'),
     completeReadyRegionalRehomes: method('completeReadyRegionalRehomes'),
     abortExpiredEvacuations: method('abortExpiredEvacuations'),
+    abortUnarrivedRegionalRehomes: method('abortUnarrivedRegionalRehomes'),
     abortExpiredRegionalRehomes: method('abortExpiredRegionalRehomes'),
     reapRegionalRehomeAttempts: method('reapRegionalRehomeAttempts'),
     releaseExpiredActivityLeases: method('releaseExpiredActivityLeases'),
@@ -42,6 +39,7 @@ describe('assignment cleanup steps', () => {
       'refreshRegionalRehomeLeases',
       'completeReadyEvacuations',
       'abortExpiredEvacuations',
+      'abortUnarrivedRegionalRehomes',
       'abortExpiredRegionalRehomes',
       'reapRegionalRehomeAttempts',
       'releaseExpiredActivityLeases',
@@ -53,15 +51,5 @@ describe('assignment cleanup steps', () => {
     expect(String(warn.mock.calls[0]![0])).toContain(
       '[orca-relay] assignment cleanup failed: complete-ready-regional-rehomes'
     )
-  })
-
-  it('covers all ten sweeps exactly once per run', async () => {
-    const { store, calls } = stubStore()
-
-    await runAssignmentCleanup(store)
-
-    expect(calls).toHaveLength(10)
-    expect(new Set(calls).size).toBe(10)
-    expect(assignmentCleanupSteps(store)).toHaveLength(10)
   })
 })

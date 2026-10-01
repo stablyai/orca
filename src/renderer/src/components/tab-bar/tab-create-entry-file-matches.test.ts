@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { prepareQuickOpenFiles, rankQuickOpenFiles } from '../quick-open-search'
 import { findExistingFileMatches } from './tab-create-entry-file-matches'
 import type * as QuickOpenSearch from '../quick-open-search'
+import { compareFileNames } from '../../../../shared/file-name-sort'
 
 const ranking = vi.hoisted(() => ({ calls: 0 }))
 vi.mock('../quick-open-search', async (importOriginal) => {
@@ -28,6 +29,20 @@ it('skips fuzzy ranking when exact matches fill the requested window', () => {
   expect(ranking.calls).toBe(0)
 })
 
+it('selects literal filenames from a large inventory without running fuzzy ranking', () => {
+  const files = prepareQuickOpenFiles([
+    ...Array.from({ length: 100_000 }, (_, index) => `a/s/c/i/i/n/e/m/a/file-${index}.ts`),
+    'docs/asciinema-10.md',
+    'docs/asciinema-2.md'
+  ])
+  ranking.calls = 0
+  expect(findExistingFileMatches('asciinema', files, 2).map((file) => file.relativePath)).toEqual([
+    'docs/asciinema-2.md',
+    'docs/asciinema-10.md'
+  ])
+  expect(ranking.calls).toBe(0)
+})
+
 it('deduplicates exact paths and still fills remaining slots with fuzzy matches', () => {
   const files = prepareQuickOpenFiles(['a.md', 'a.md', 'other/a.md', 'abc.md'])
   expect(findExistingFileMatches('a.md', files, 4)).toEqual([
@@ -37,14 +52,12 @@ it('deduplicates exact paths and still fills remaining slots with fuzzy matches'
   ])
 })
 
-// Why: skipping the ranker is only sound because a fuzzy hit can never outrank an
-// exact one — exact results are concatenated first and dedupe is first-wins, so the
-// exact prefix is exactly what a full ranked-then-sliced list would have returned.
-// This re-runs the pre-skip pipeline and holds the shipped one to it.
+// Sort every literal candidate to check the bounded selection against a full reference.
 function rankThenSlice(
   query: string,
   files: readonly QuickOpenSearch.QuickOpenIndexedFile[],
-  limit: number
+  limit: number,
+  preferLiteralFilenames = false
 ): { kind: string; matchKind: string; relativePath: string }[] {
   const normalized = query.trim().replace(/\\/g, '/')
   if (!normalized || limit <= 0) {
@@ -56,6 +69,12 @@ function rankThenSlice(
     ...files
       .filter((f) => f.lowerFilename === lower)
       .map((f) => ['exact-basename', f.path] as const),
+    ...(preferLiteralFilenames
+      ? files
+          .filter((file) => file.lowerFilename.includes(lower))
+          .sort((a, b) => compareFileNames(a.path, b.path))
+          .map((file) => ['literal-basename', file.path] as const)
+      : []),
     ...rankQuickOpenFiles(normalized, files, limit).map((f) => ['fuzzy', f.path] as const)
   ]
   const seen = new Set<string>()
@@ -65,7 +84,7 @@ function rankThenSlice(
     .slice(0, limit)
 }
 
-it('returns what rank-then-slice would have returned, including at limit 1', () => {
+it('preserves quick-open ordering for explicit file and path queries, including at limit 1', () => {
   const corpus = [
     ['a.md', 'ab.md', 'abc.md', 'deep/nested/a.md'],
     ['ab.md', 'abc.md', 'deep/nested/a.md'],
@@ -74,7 +93,7 @@ it('returns what rank-then-slice would have returned, including at limit 1', () 
     ['README.md', 'docs/readme.md', 'readme.mdx'],
     ['only-fuzzy.md']
   ]
-  const queries = ['a.md', 'index.ts', 'readme.md', 'src/index.ts', 'a', 'nope.md']
+  const queries = ['a.md', 'index.ts', 'readme.md', 'src/index.ts', 'nope.md']
   for (const paths of corpus) {
     const files = prepareQuickOpenFiles(paths)
     for (const query of queries) {
@@ -88,6 +107,46 @@ it('returns what rank-then-slice would have returned, including at limit 1', () 
       }
     }
   }
+})
+
+it('matches the full literal-first reference for bare tokens across limits and input orders', () => {
+  const queries = ['a', 'ab', 'abc', 'BTN', 'button', 'asciinema', '工具', 'é']
+  for (const query of queries) {
+    const paths = [
+      ...Array.from({ length: 12 }, (_, index) => `${[...query].join('/')}/file-${index}.ts`),
+      `docs/${query}-10.md`,
+      `docs/${query}-2.md`,
+      `docs/${query}-2.md`,
+      `docs\\${query.toLowerCase()}-guide.md`,
+      `docs/a${'x'.repeat(120)}-${query.toUpperCase()}.md`,
+      'unrelated.txt'
+    ]
+    for (const corpus of [paths, [...paths, query, `docs/${query}`, query]]) {
+      for (const orderedPaths of [corpus, corpus.toReversed()]) {
+        const files = prepareQuickOpenFiles(orderedPaths)
+        for (const limit of [0, 1, 2, 3, 5, 20]) {
+          expect({
+            query,
+            limit,
+            matches: findExistingFileMatches(` ${query} `, files, limit)
+          }).toEqual({ query, limit, matches: rankThenSlice(query, files, limit, true) })
+        }
+      }
+    }
+  }
+})
+
+it('does not let duplicate literal candidates consume the result limit', () => {
+  const files = prepareQuickOpenFiles([
+    ...Array.from({ length: 10 }, () => 'docs/button-1.md'),
+    'docs/button-2.md'
+  ])
+  ranking.calls = 0
+  expect(findExistingFileMatches('button', files, 2)).toEqual([
+    { kind: 'existing-file', matchKind: 'literal-basename', relativePath: 'docs/button-1.md' },
+    { kind: 'existing-file', matchKind: 'literal-basename', relativePath: 'docs/button-2.md' }
+  ])
+  expect(ranking.calls).toBe(0)
 })
 
 it('takes the exact match at limit 1 without consulting the ranker at all', () => {

@@ -1,3 +1,7 @@
+import {
+  AiVaultSearchRequestSchema,
+  AiVaultSearchStatusRequestSchema
+} from '../../shared/ai-vault-search-contract'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
@@ -112,6 +116,27 @@ export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {
     const info = session.getAiVaultHostInfo()
     return info ? [info] : []
   })
+}
+
+export async function requestActiveSshSessionSearch(
+  targetId: string,
+  method: string,
+  params: unknown
+): Promise<unknown> {
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    throw new Error('SSH target belongs to another runtime')
+  }
+  const session = activeSessions.get(targetId)
+  if (!session) {
+    throw new Error('SSH relay is not ready')
+  }
+  if (method === 'aiVault.searchSessions') {
+    return session.requestSessionSearch(method, AiVaultSearchRequestSchema.parse(params))
+  }
+  if (method === 'aiVault.searchStatus') {
+    return session.requestSessionSearch(method, AiVaultSearchStatusRequestSchema.parse(params))
+  }
+  throw new Error('Unknown session search method')
 }
 
 export async function requestActiveSshAiVaultSessionList(

@@ -45,6 +45,7 @@ import {
   resolveDetectedTuiAgentIds
 } from '../ipc/tui-agent-detection-commands'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
+import { prunePreflightWslCache } from '../preflight-wsl-cache'
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -88,6 +89,7 @@ let cached: PreflightStatus | null = null
 // would report "git not installed" until relaunch; expiring lets it self-heal
 // while still collapsing the burst of calls that made this expensive.
 const WSL_PREFLIGHT_CACHE_TTL_MS = 30_000
+const MAX_WSL_PREFLIGHT_DISTRO_ENTRIES = 128
 const cachedByWslDistro = new Map<string, { result: PreflightStatus; expiresAt: number }>()
 // Collapses concurrent callers (several panes mounting at once) onto one probe
 // set instead of one full set each before the first result lands.
@@ -292,6 +294,12 @@ export async function runPreflightCheck(
 ): Promise<PreflightStatus> {
   const wslTarget = getPreflightWslTarget(context)
   const cacheKey = preflightCacheKey(wslTarget)
+  prunePreflightWslCache(
+    cachedByWslDistro,
+    latestPreflightRun,
+    Date.now(),
+    MAX_WSL_PREFLIGHT_DISTRO_ENTRIES
+  )
 
   if (!force) {
     if (wslTarget) {
@@ -326,6 +334,12 @@ export async function runPreflightCheck(
           result,
           expiresAt: Date.now() + WSL_PREFLIGHT_CACHE_TTL_MS
         })
+        prunePreflightWslCache(
+          cachedByWslDistro,
+          latestPreflightRun,
+          Date.now(),
+          MAX_WSL_PREFLIGHT_DISTRO_ENTRIES
+        )
       } else {
         cached = result
       }

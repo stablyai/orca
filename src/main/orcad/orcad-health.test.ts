@@ -11,13 +11,21 @@ const {
   readDaemonPidRecordMock,
   daemonOwnsFreshPersistentPtysMock
 } = vi.hoisted(() => ({
-  checkDaemonHealthMock: vi.fn<() => Promise<DaemonHealth>>(),
+  checkDaemonHealthMock: vi.fn<(socketPath: string, tokenPath: string) => Promise<DaemonHealth>>(),
   getDaemonEndpointFactsMock: vi.fn<() => unknown>(),
   readDaemonPidRecordMock: vi.fn<() => ParsedDaemonPid | null>(),
   daemonOwnsFreshPersistentPtysMock: vi.fn<() => boolean>()
 }))
 
-vi.mock('../daemon/daemon-health', () => ({ checkDaemonHealth: checkDaemonHealthMock }))
+// The real coverage fallback is per platform; a daemon may also report its own coverage.
+const reportedCoverage = vi.hoisted(() => ({ value: new Array<'pty-spawn' | 'handshake'>() }))
+vi.mock('../daemon/daemon-health', () => ({
+  checkDaemonHealthWithCoverage: async (socketPath: string, tokenPath: string) => ({
+    verdict: await checkDaemonHealthMock(socketPath, tokenPath),
+    coverage:
+      reportedCoverage.value.shift() ?? (process.platform === 'win32' ? 'handshake' : 'pty-spawn')
+  })
+}))
 vi.mock('../daemon/daemon-init', () => ({
   getDaemonEndpointFacts: getDaemonEndpointFactsMock,
   readDaemonPidRecord: readDaemonPidRecordMock,
@@ -43,7 +51,8 @@ const PID_RECORD: ParsedDaemonPid = {
   launchNonce: 'n',
   linuxStartTicks: null,
   bootId: null,
-  spawnerExecPath: null
+  spawnerExecPath: null,
+  cgroupUnit: 'orca-daemon-n.scope'
 }
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -70,6 +79,9 @@ describe('collectTerminalDaemonHealth', () => {
     expect(health.buildVersion).toBe('1.2.2')
     expect(health.entryPath).toBe('/opt/orcad/daemon-entry.js')
     expect(health.protocolVersion).toBe(36)
+    // The daemon's self-detected cgroup scope round-trips through the pid record as-is —
+    // collectTerminalDaemonHealth must not reinterpret or drop it.
+    expect(health.cgroupUnit).toBe('orca-daemon-n.scope')
     // Why assert the coordinates: a self-test that probed some other endpoint would prove
     // nothing about the daemon this process installed.
     expect(checkDaemonHealthMock).toHaveBeenCalledWith(LIVE_FACTS.socketPath, LIVE_FACTS.tokenPath)
@@ -119,6 +131,12 @@ describe('collectTerminalDaemonHealth', () => {
     // green verdict there must not be reported as a PTY round trip.
     expect(health.selfTest.coverage).toBe('handshake')
   })
+
+  it('reports the coverage the daemon says its probe achieved', async () => {
+    reportedCoverage.value.push('handshake')
+    const health = await collectTerminalDaemonHealth()
+    expect(health.selfTest).toMatchObject({ ok: true, coverage: 'handshake' })
+  })
 })
 
 describe('collectOrcadHealth', () => {
@@ -129,6 +147,24 @@ describe('collectOrcadHealth', () => {
     expect(health.nodeAbi).toBe(process.versions.modules)
     expect(health.platform).toBe(process.platform)
     expect(health.terminalDaemon.state).toBe('live')
+  })
+
+  it('includes bounded profile-state authority metadata when supplied', async () => {
+    const health = await collectOrcadHealth('1.2.3', {
+      backend: 'sqlite',
+      classification: 'sqlite-only',
+      authority_mode: 'sqlite-established',
+      runtime: 'orcad',
+      migrated: false
+    })
+
+    expect(health.profileStateAuthority).toEqual({
+      backend: 'sqlite',
+      classification: 'sqlite-only',
+      authority_mode: 'sqlite-established',
+      runtime: 'orcad',
+      migrated: false
+    })
   })
 })
 

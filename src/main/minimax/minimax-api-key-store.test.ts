@@ -120,6 +120,46 @@ describe('minimax-api-key-store', () => {
     warn.mockRestore()
   })
 
+  describe('getMiniMaxApiKeyProtection', () => {
+    it('reports null when nothing is stored', async () => {
+      existsSyncMock.mockReturnValue(false)
+      const store = await loadStore()
+      expect(store.getMiniMaxApiKeyProtection()).toBeNull()
+    })
+
+    it('reports plaintext for a plaintext envelope', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from(envelope('plaintext', 'sk-test-1234567890')))
+      const store = await loadStore()
+      expect(store.getMiniMaxApiKeyProtection()).toBe('plaintext')
+    })
+
+    it('reports sealed for an encrypted envelope', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from(envelope('encrypted', 'sk-test-1234567890')))
+      const store = await loadStore()
+      expect(store.getMiniMaxApiKeyProtection()).toBe('sealed')
+    })
+
+    // Why it must not decrypt: Settings calls this on open, and a decrypt would put a
+    // macOS keychain prompt in front of a user who only opened a settings pane.
+    it('does not decrypt, so opening Settings cannot trigger a keychain prompt', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from(envelope('encrypted', 'sk-test-1234567890')))
+      const store = await loadStore()
+      store.getMiniMaxApiKeyProtection()
+      expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+      expect(safeStorageMock.isEncryptionAvailable).not.toHaveBeenCalled()
+    })
+
+    it('reports null for an unreadable envelope rather than guessing', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from('not-an-orca-envelope'))
+      const store = await loadStore()
+      expect(store.getMiniMaxApiKeyProtection()).toBeNull()
+    })
+  })
+
   it('refuses empty keys', async () => {
     const store = await loadStore()
     expect(() => store.saveMiniMaxApiKey('   ')).toThrow(/required/)

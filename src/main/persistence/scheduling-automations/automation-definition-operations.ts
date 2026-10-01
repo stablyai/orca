@@ -3,6 +3,7 @@ import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree
 import type {
   Automation,
   AutomationCreateInput,
+  AutomationRun,
   AutomationUpdateInput
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -38,6 +39,7 @@ export type AutomationDefinitionOperations = {
   storageAuthority: AutomationStorageAuthority
   flush: () => void
   recordCreated: () => void
+  recordAutomationRunsMutation?: (runs: readonly AutomationRun[]) => void
 }
 
 export function listAutomations(state: PersistedState): Automation[] {
@@ -263,6 +265,7 @@ export function deleteAutomation(
   operations.state.automationRuns = (operations.state.automationRuns ?? []).filter(
     (entry) => entry.automationId !== id
   )
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
   // Why: the automation and its unfinished runs were pinning their workspace; both are gone (#17775).
   invalidateLocalWorktreeMetadataPruneInputs()
   operations.flush()

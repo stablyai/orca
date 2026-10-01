@@ -71,15 +71,17 @@ describe('registerNotificationHandlers', () => {
 
     expect(dispatchMobileNotification).toHaveBeenCalledWith({
       type: 'notification',
+      emittedAt: expect.any(Number),
       source: 'agent-task-complete',
       title: 'feat/notis - Hermes finished',
       body: 'The diff updates notification formatting.',
-      worktreeId: 'repo::wt1'
+      worktreeId: 'repo::wt1',
+      agentState: 'done'
     })
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
-  it('does not dispatch mobile notifications when notifications are disabled', async () => {
+  it('offers disabled desktop events to independently configured phones', async () => {
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
       {
@@ -101,10 +103,12 @@ describe('registerNotificationHandlers', () => {
       reason: 'disabled'
     })
 
-    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+    expect(dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ desktopAllowed: false })
+    )
   })
 
-  it('does not dispatch mobile notifications when the source is disabled', async () => {
+  it('marks a disabled desktop source for phones following desktop settings', async () => {
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
       {
@@ -126,7 +130,9 @@ describe('registerNotificationHandlers', () => {
       reason: 'source-disabled'
     })
 
-    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+    expect(dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ desktopAllowed: false })
+    )
   })
 
   it('dispatches one mobile notification when the active worktree is focused on desktop', async () => {
@@ -173,7 +179,7 @@ describe('registerNotificationHandlers', () => {
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
-  it('does not dispatch mobile notifications for cooldown-suppressed bursts', async () => {
+  it('preserves different mobile event categories before per-phone burst suppression', async () => {
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
       {
@@ -198,7 +204,7 @@ describe('registerNotificationHandlers', () => {
       reason: 'cooldown'
     })
 
-    expect(dispatchMobileNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchMobileNotification).toHaveBeenCalledTimes(2)
     expect(dispatchMobileNotification).toHaveBeenCalledWith(
       expect.objectContaining({ source: 'agent-task-complete', worktreeId: 'repo::wt1' })
     )

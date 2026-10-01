@@ -11,6 +11,7 @@ vi.mock('@/store', () => ({ useAppStore: () => undefined }))
 const STORE_WRITES = 2_000
 
 function storeState(): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selector reads only the slices listed here; the rest of AppState is never touched in this test.
   return {
     repos: [],
     worktreesByRepo: {},
@@ -23,6 +24,7 @@ function storeState(): AppState {
     terminalLayoutsByTabId: {},
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
+    paneForegroundAgentByPaneKey: {},
     folderWorkspaces: [],
     acknowledgedAgentsByPaneKey: {},
     agentStatusEpoch: 0,
@@ -32,7 +34,7 @@ function storeState(): AppState {
 }
 
 // What `useShallow` did before the gate, unwrapped from the hook so it can be
-// driven directly: allocate the 14-key object, then `shallow()` it against the
+// driven directly: allocate the 15-key object, then `shallow()` it against the
 // previous one. Kept here as the comparison baseline.
 let previousShallow: Record<string, unknown> | null = null
 const shallowInputs = (s: AppState): Record<string, unknown> => ({
@@ -47,6 +49,7 @@ const shallowInputs = (s: AppState): Record<string, unknown> => ({
   terminalLayoutsByTabId: s.terminalLayoutsByTabId,
   ptyIdsByTabId: s.ptyIdsByTabId,
   runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+  paneForegroundAgentByPaneKey: s.paneForegroundAgentByPaneKey,
   folderWorkspaces: s.folderWorkspaces,
   acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
   agentStatusEpoch: s.agentStatusEpoch
@@ -65,7 +68,8 @@ function countAllocations(run: () => void): { entries: number; maps: number } {
   const RealMap = globalThis.Map
   let entries = 0
   let maps = 0
-  Object.entries = ((target: object) => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `Object.entries` is an overload set no single arrow can satisfy; this wrapper only counts calls and returns the native result unchanged.
+  Object.entries = ((target: Record<string, unknown>) => {
     entries += 1
     return realEntries(target)
   }) as typeof Object.entries
@@ -91,7 +95,7 @@ afterEach(() => {
 })
 
 describe('agent bucket count input gate', () => {
-  it('allocates nothing on a store write that leaves all fourteen slices alone', () => {
+  it('allocates nothing on a store write that leaves all fifteen slices alone', () => {
     const state = storeState()
     // Prime the gate, then replay the writes an unrelated slice would trigger.
     selectAgentBucketCountState(state)
@@ -148,6 +152,7 @@ describe('agent bucket count input gate', () => {
       'terminalLayoutsByTabId',
       'ptyIdsByTabId',
       'runtimePaneTitlesByTabId',
+      'paneForegroundAgentByPaneKey',
       'folderWorkspaces',
       'acknowledgedAgentsByPaneKey',
       'agentStatusEpoch'

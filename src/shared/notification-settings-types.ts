@@ -1,4 +1,5 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { AgentTurnOutcome } from './agent-turn-outcome'
 
 export type NotificationSettings = {
   enabled: boolean
@@ -33,6 +34,7 @@ export type NotificationDispatchRequest = {
   paneKey?: string
   repoLabel?: string
   worktreeLabel?: string
+  /** Legacy senders may still provide this; project labels are now always shown. */
   hasMultipleActiveRepos?: boolean
   terminalTitle?: string
   isActiveWorktree?: boolean
@@ -42,7 +44,13 @@ export type NotificationDispatchRequest = {
   agentToolName?: string
   agentToolInput?: string
   agentLastAssistantMessage?: string
-  agentInterrupted?: boolean
+  /** The verdict on the turn this notification reports, which picks its wording. */
+  agentTurnOutcome?: AgentTurnOutcome
+  /**
+   * Which lane raised this, so the click handler knows how to reveal the subject. Absent means the
+   * terminal lane, which is every sender that predates structured chat.
+   */
+  surface?: 'terminal' | 'agent-session'
 }
 
 export type NotificationDispatchResult = {

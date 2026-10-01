@@ -57,6 +57,16 @@ export function isTailscaleEndpoint(endpoint: string | null | undefined): boolea
   )
 }
 
+/**
+ * Why: a server already reached over Tailscale fails for tailnet-specific reasons, so "use
+ * Tailscale" would be useless — point at the real causes. Already-paired devices keep their
+ * saved token across server restarts, so re-pairing only matters when adding a new device.
+ */
+const TAILNET_ENDPOINT_HINT =
+  "The server may be offline on your tailnet, or its Tailscale Funnel reverted to tailnet-only. Confirm it's reachable; re-pair only when adding a new device, since already-paired devices reconnect with their saved token."
+
+const OTHER_NETWORK_HINT = `If the server is on another network, connect both devices to Tailscale and pair using its Tailscale address (100.x or a *.ts.net name). See ${TAILSCALE_DOWNLOAD_URL}.`
+
 export function withRemoteRuntimeTailscaleHint(
   message: string,
   endpoint: string | null | undefined
@@ -64,17 +74,11 @@ export function withRemoteRuntimeTailscaleHint(
   if (!REMOTE_RUNTIME_UNREACHABLE_RE.test(message)) {
     return message
   }
-  // Why: keep the hint idempotent so a message routed through this helper twice
-  // (e.g. re-wrapped error response) isn't suffixed with duplicate guidance.
-  if (/tailscale/i.test(message)) {
+  // Why: keep the hint idempotent so a message routed through this helper twice (e.g. a
+  // re-wrapped error response) isn't suffixed with duplicate guidance. Keyed on the hints
+  // themselves, not on the word — messages now carry an endpoint whose host can contain it.
+  if (message.endsWith(TAILNET_ENDPOINT_HINT) || message.endsWith(OTHER_NETWORK_HINT)) {
     return message
   }
-  if (isTailscaleEndpoint(endpoint)) {
-    // Why: a server already reached over Tailscale fails for tailnet-specific
-    // reasons, so "use Tailscale" would be useless — point at the real causes.
-    // Already-paired devices keep their saved token across server restarts, so
-    // re-pairing only matters when adding a new device.
-    return `${message} The server may be offline on your tailnet, or its Tailscale Funnel reverted to tailnet-only. Confirm it's reachable; re-pair only when adding a new device, since already-paired devices reconnect with their saved token.`
-  }
-  return `${message} If the server is on another network, connect both devices to Tailscale and pair using its Tailscale address (100.x or a *.ts.net name). See ${TAILSCALE_DOWNLOAD_URL}.`
+  return `${message} ${isTailscaleEndpoint(endpoint) ? TAILNET_ENDPOINT_HINT : OTHER_NETWORK_HINT}`
 }

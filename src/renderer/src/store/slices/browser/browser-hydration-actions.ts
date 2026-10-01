@@ -257,7 +257,7 @@ export function createBrowserHydrationActions(
             }
           }
         }
-        return {}
+        return s
       })
     }
   }

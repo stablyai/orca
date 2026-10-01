@@ -1,254 +1,194 @@
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import {
-  runningTurnLifecycleRevisions,
-  type StructuredAgentSessionTurnVerdict
-} from './structured-agent-session-stale-turn-verdict'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
-import {
-  boundJournalStatusText,
-  cancelledJournalPromptBody
-} from '../agent-session-journal/journal-prompt-body-bounds'
-import type { StructuredAgentSessionLifecycleEvent } from './structured-agent-session-adapter'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import { releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit } from './structured-agent-session-lease-release'
+import { endProviderChild } from './structured-agent-session-provider-child'
+import {
+  releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit,
+  type StructuredAgentSessionLeaseStore
+} from './structured-agent-session-lease-release'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
+import {
+  captureUnfinishedStructuredAgentSessionWork,
+  MAX_UNEXPECTED_EXIT_REASON_CHARS,
+  settleStructuredAgentSessionDeadGeneration,
+  type DeadGenerationJournal,
+  unfinishedStructuredAgentSessionWorkWasInterrupted
+} from './structured-agent-session-dead-generation-settlement'
+import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
-type UnexpectedExitLifecycleEvent = StructuredAgentSessionLifecycleEvent & {
+type UnexpectedExitLifecycleEvent = StructuredAgentSessionEndedEvent & {
   cause: 'unexpected-exit'
 }
 
-export type StructuredAgentSessionRecoveryTicket = {
-  sessionId: string
-  releasedFence: number
-  deadAcquisitionGeneration: string
-  stableSettlementId: string
-  settlementRetryRequired: boolean
-}
+export type StructuredAgentSessionUnexpectedExitSession = Pick<
+  StructuredAgentSessionHostSession,
+  'child' | 'lastEndedChild'
+> & { journal: DeadGenerationJournal & Pick<AgentSessionJournal, 'cursor' | 'itemBody'> }
 
-export type StructuredAgentSessionUnexpectedExitContext = {
-  store: AgentSessionRecordStore
-  sessions: Map<string, StructuredAgentSessionHostSession>
+export type StructuredAgentSessionUnexpectedExitContext<
+  TSession extends StructuredAgentSessionUnexpectedExitSession = StructuredAgentSessionHostSession
+> = {
+  store: StructuredAgentSessionLeaseStore
+  sessions: Map<string, TSession>
   flushLifecycle: (sessionId: string) => Promise<StructuredAgentSessionSinkBarrier>
-  publishFence: (sessionId: string, session: StructuredAgentSessionHostSession) => void
+  publishFence: (sessionId: string, session: TSession) => void
   publishStatus?: (sessionId: string) => void
-  hasResumeCapableHolder: (sessionId: string) => boolean
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
-  onBarrierError?: (sessionId: string, error: unknown) => void
+  logger: StructuredAgentSessionLogger
 }
 
-export async function settleUnexpectedStructuredAgentSessionExit(
-  context: StructuredAgentSessionUnexpectedExitContext,
-  event: StructuredAgentSessionLifecycleEvent
-): Promise<StructuredAgentSessionRecoveryTicket | null> {
+export async function settleUnexpectedStructuredAgentSessionExit<
+  TSession extends StructuredAgentSessionUnexpectedExitSession
+>(
+  context: StructuredAgentSessionUnexpectedExitContext<TSession>,
+  event: StructuredAgentSessionEndedEvent
+): Promise<void> {
   if (event.cause !== 'unexpected-exit') {
-    return null
+    return
   }
   const unexpectedEvent = event as UnexpectedExitLifecycleEvent
   // Receipt of the exit is the one end time the host may record for a running turn.
   const observedAt = event.observedAt ?? context.now()
   return context.serialize(unexpectedEvent.sessionId, async () => {
     const session = context.sessions.get(unexpectedEvent.sessionId)
+    const child = session?.child
     if (
-      !session?.hasProviderChild ||
-      session.fence !== unexpectedEvent.fence ||
-      session.acquisitionGeneration !== unexpectedEvent.acquisitionGeneration
+      !session ||
+      !child ||
+      child.fence !== unexpectedEvent.fence ||
+      child.generation !== unexpectedEvent.acquisitionGeneration
     ) {
-      return null
+      return
+    }
+    // The host's own phase decides, so a provider that omits the flag still gets a start that
+    // failed told as one: the row says so.
+    const exitedDuringStartup =
+      unexpectedEvent.startupUnproven === true || child.phase === 'starting'
+    const endChild = (): void => {
+      endProviderChild(session, {
+        generation: child.generation,
+        fence: child.fence,
+        cause: 'exit',
+        reason: unexpectedEvent.reason,
+        ...(unexpectedEvent.failure ? { failure: unexpectedEvent.failure } : {}),
+        duringStartup: exitedDuringStartup,
+        // The adapter publishes an exit only once it saw the root go, first-hand or proven.
+        rootGone: true
+      })
+      context.publishStatus?.(unexpectedEvent.sessionId)
     }
     const record = context.store.getRecord(unexpectedEvent.sessionId)
     if (!record || record.lease.handoffStage !== null) {
-      // The handoff coordinator owns an already-started transition.
-      session.hasProviderChild = false
-      context.publishStatus?.(unexpectedEvent.sessionId)
-      return null
+      // An acquisition or recovery already owns this lease's transition.
+      endChild()
+      return
     }
 
-    let settlementRetryRequired = false
-    let settlementFailed = false
     const stableSettlementId = providerExitSettlementId(unexpectedEvent)
-    let released: Awaited<
-      ReturnType<typeof releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit>
-    > | null = null
+    const unfinishedWork = captureUnfinishedStructuredAgentSessionWork(session.journal)
     try {
       try {
         const barrier = await context.flushLifecycle(unexpectedEvent.sessionId)
         if (!barrier.ok) {
-          settlementRetryRequired = true
-          context.onBarrierError?.(unexpectedEvent.sessionId, barrier.error)
+          logExitFailure(context, unexpectedEvent, 'exit-lifecycle-barrier', barrier.error)
         }
       } catch (error) {
-        settlementRetryRequired = true
-        context.onBarrierError?.(unexpectedEvent.sessionId, error)
+        logExitFailure(context, unexpectedEvent, 'exit-lifecycle-barrier', error)
       }
-      try {
-        await session.journal.markPendingSubmissionsUnknown(
-          session.fence,
-          'provider_exited_before_acknowledgement'
-        )
-      } catch (error) {
-        settlementRetryRequired = true
-        context.onBarrierError?.(unexpectedEvent.sessionId, error)
-      }
-      if (unexpectedEvent.settlementRetryRequired || settlementRetryRequired) {
-        const retried = await retryUnexpectedExitSettlement({
-          context,
-          event: unexpectedEvent,
-          session,
-          stableSettlementId,
-          verdict: { state: 'interrupted', completedAt: observedAt }
-        })
-        if (!retried) {
-          settlementFailed = true
-        }
-        if (!settlementFailed) {
-          settlementRetryRequired = false
-        }
-      }
+      await retryUnexpectedExitSettlement({
+        context,
+        event: unexpectedEvent,
+        journal: session.journal,
+        fence: child.fence,
+        stableSettlementId,
+        verdict: { state: 'interrupted', completedAt: observedAt },
+        exitedDuringStartup,
+        failureTextContext: structuredAgentSessionFailureWordsContext(record, session.journal),
+        // A failed start always says why: no response was running to carry the reason.
+        showUnexpectedExitOutcome:
+          exitedDuringStartup ||
+          unfinishedStructuredAgentSessionWorkWasInterrupted(
+            unfinishedWork,
+            session.journal,
+            observedAt
+          )
+      })
     } finally {
       // Provider exit was positively observed, so release the owner even when
       // terminal settlement could not be durably accepted.
+      let released: Awaited<
+        ReturnType<typeof releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit>
+      > | null = null
       try {
         released = await releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit({
           store: context.store,
           sessionId: unexpectedEvent.sessionId,
           expectedFence: unexpectedEvent.fence,
           expectedAcquisitionGeneration: unexpectedEvent.acquisitionGeneration,
-          acquisitionGeneration: session.acquisitionGeneration,
+          acquisitionGeneration: child.generation,
           now: context.now(),
           exitObservedAt: observedAt,
-          ...(settlementFailed
-            ? {
-                settlementRetry: {
-                  settlementId: stableSettlementId,
-                  detail: `provider exited: ${unexpectedEvent.reason}`.slice(0, 512)
-                }
-              }
-            : {})
+          // Bare cause: whatever this settlement could not write is settled from it later (the
+          // settle recording it queues, or the next open or acquire); `exit-observed` says the rest.
+          exitReason: unexpectedEvent.reason.slice(0, MAX_UNEXPECTED_EXIT_REASON_CHARS)
         })
       } catch (error) {
-        context.onBarrierError?.(unexpectedEvent.sessionId, error)
+        logExitFailure(context, unexpectedEvent, 'exit-owner-release', error)
       } finally {
-        session.hasProviderChild = false
-        context.publishStatus?.(unexpectedEvent.sessionId)
+        endChild()
         if (released) {
-          session.fence = released.lease.runtimeFence
           context.publishFence(unexpectedEvent.sessionId, session)
         }
       }
     }
-    if (settlementFailed || !released) {
-      return null
-    }
-    if (!context.hasResumeCapableHolder(unexpectedEvent.sessionId)) {
-      return null
-    }
-    return {
-      sessionId: unexpectedEvent.sessionId,
-      releasedFence: released.lease.runtimeFence,
-      deadAcquisitionGeneration: unexpectedEvent.acquisitionGeneration,
-      stableSettlementId,
-      settlementRetryRequired
-    }
   })
 }
 
-export function isStructuredAgentSessionRecoveryTicketCurrent(
-  context: Pick<
-    StructuredAgentSessionUnexpectedExitContext,
-    'store' | 'sessions' | 'hasResumeCapableHolder'
-  >,
-  ticket: StructuredAgentSessionRecoveryTicket
-): boolean {
-  const session = context.sessions.get(ticket.sessionId)
-  const record = context.store.getRecord(ticket.sessionId)
-  return (
-    !ticket.settlementRetryRequired &&
-    session?.hasProviderChild === false &&
-    session.fence === ticket.releasedFence &&
-    session.acquisitionGeneration === ticket.deadAcquisitionGeneration &&
-    record?.lease.runtimeFence === ticket.releasedFence &&
-    record.lease.claimStatus === 'released' &&
-    record.lease.handoffStage === null &&
-    context.hasResumeCapableHolder(ticket.sessionId)
-  )
-}
-
-export async function retryUnexpectedExitSettlement(input: {
-  context: Pick<StructuredAgentSessionUnexpectedExitContext, 'onBarrierError'>
+async function retryUnexpectedExitSettlement(input: {
+  context: Pick<StructuredAgentSessionUnexpectedExitContext, 'logger'>
   event: UnexpectedExitLifecycleEvent
-  session: Pick<StructuredAgentSessionHostSession, 'journal' | 'fence'>
+  journal: DeadGenerationJournal
+  fence: number
   stableSettlementId: string
   verdict: StructuredAgentSessionTurnVerdict
-}): Promise<boolean> {
-  try {
-    await input.session.journal.markPendingSubmissionsUnknown(
-      input.session.fence,
-      'provider_exited_before_acknowledgement'
-    )
-    const mutations = unexpectedExitFallbackMutations(
-      input.event,
-      input.session,
-      input.stableSettlementId,
-      input.verdict
-    )
-    for (const chunk of partitionJournalLifecycleMutations(input.stableSettlementId, mutations)) {
-      await input.session.journal.appendLifecycleBatch({
-        settlementId: chunk.settlementId,
-        fence: input.session.fence,
-        recovered: true,
-        mutations: chunk.mutations
-      })
-    }
-    return true
-  } catch (error) {
-    input.context.onBarrierError?.(input.event.sessionId, error)
-    return false
-  }
-}
-
-function unexpectedExitFallbackMutations(
-  event: UnexpectedExitLifecycleEvent,
-  session: Pick<StructuredAgentSessionHostSession, 'journal'>,
-  stableSettlementId: string,
-  verdict: StructuredAgentSessionTurnVerdict
-): JournalLifecycleMutationInput[] {
-  const mutations: JournalLifecycleMutationInput[] = []
-  const { items } = session.journal.snapshot()
-  for (const item of items) {
-    const identity = parseAgentJournalItemKey(item.itemId)
-    if (!identity) {
-      continue
-    }
-    const terminal = terminalExitBody(item)
-    if (terminal) {
-      mutations.push({ kind: 'item', identity, body: terminal })
-    }
-  }
-  mutations.push({
-    kind: 'item',
-    identity: { provider: 'orca', clientMessageId: stableSettlementId },
-    body: { kind: 'status', text: boundJournalStatusText(`Provider exited: ${event.reason}`) }
+  exitedDuringStartup: boolean
+  failureTextContext: AgentSessionFailureWordsContext
+  showUnexpectedExitOutcome?: boolean
+}): Promise<void> {
+  const settled = await settleStructuredAgentSessionDeadGeneration({
+    journal: input.journal,
+    sessionId: input.event.sessionId,
+    fence: input.fence,
+    settlementId: input.stableSettlementId,
+    verdict: input.verdict,
+    pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+    showUnexpectedExitOutcome: input.showUnexpectedExitOutcome,
+    ...(input.event.failure ? { exitFailure: input.event.failure } : {}),
+    failureTextContext: input.failureTextContext,
+    ...(input.exitedDuringStartup
+      ? { exitedDuringStartup: { generation: input.event.acquisitionGeneration } }
+      : {})
   })
-  // Lifecycle rows settle last, in place: the turn's endpoints outlive the child.
-  mutations.push(...runningTurnLifecycleRevisions(items, verdict))
-  return mutations
+  if (!settled.ok) {
+    logExitFailure(input.context, input.event, 'exit-settlement', settled.error)
+  }
 }
 
-function terminalExitBody(item: AgentJournalRenderItem): AgentJournalItemBody | null {
-  if (item.body.kind === 'tool-call' && item.body.state === 'running') {
-    return { ...item.body, state: 'failed' }
-  }
-  if (item.body.kind === 'approval' || item.body.kind === 'question') {
-    return item.body.resolution.state === 'pending' ? cancelledJournalPromptBody(item.body) : null
-  }
-  return null
+function logExitFailure(
+  context: Pick<StructuredAgentSessionUnexpectedExitContext, 'logger'>,
+  event: UnexpectedExitLifecycleEvent,
+  scope: string,
+  error: unknown
+): void {
+  context.logger.warn('settling a provider exit did not finish', {
+    scope,
+    sessionId: event.sessionId,
+    error
+  })
 }
 
 function providerExitSettlementId(event: UnexpectedExitLifecycleEvent): string {

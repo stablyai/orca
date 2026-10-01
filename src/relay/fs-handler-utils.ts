@@ -2,11 +2,12 @@
  * Pure helpers and child-process search utilities extracted from fs-handler.ts.
  *
  * Why: oxlint max-lines requires .ts files to stay under 300 lines.
- * These functions depend only on their arguments (plus `rg` being on PATH),
+ * These functions depend only on their arguments (plus a launchable `rg`),
  * so they are straightforward to test independently.
  */
 import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
-import { spawn } from 'node:child_process'
+import { spawnProcess } from '../shared/child-process/run-process'
+import { abortSignalReason } from '../shared/abort-signal-reason'
 import { open } from 'node:fs/promises'
 import {
   buildRgArgs,
@@ -19,11 +20,18 @@ import { IMAGE_FILE_MIME_TYPES } from '../shared/image-file-extensions'
 import type { SearchResult as SharedSearchResult } from '../shared/code-search-types'
 import {
   absorbPendingRipgrepSpawnError,
-  isRipgrepUnavailableAfterLaunchFailure,
+  classifyRipgrepLaunchFailure,
   isRipgrepUnavailableExit,
   killSpawnedRipgrepProcess,
+  ripgrepMissingCwdError,
   RipgrepUnavailableError
 } from '../shared/ripgrep-process-availability'
+import { buildRelayCommandEnv } from './relay-command-env'
+import {
+  pathRipgrepCommand,
+  resolveRelayRipgrepCommand,
+  retryRipgrepOnPathAfterLaunchFailure
+} from './relay-bundled-ripgrep'
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -56,14 +64,18 @@ export function isBinaryBuffer(buffer: Buffer): boolean {
   return false
 }
 
-export async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
+export async function isBinaryFilePrefix(
+  filePath: string,
+  releaseHandle: (handle: Awaited<ReturnType<typeof open>>) => Promise<void> = (handle) =>
+    handle.close()
+): Promise<boolean> {
   const handle = await open(filePath, 'r')
   try {
     const probe = Buffer.alloc(BINARY_PROBE_BYTES)
     const { bytesRead } = await handle.read(probe, 0, probe.length, 0)
     return isBinaryBuffer(probe.subarray(0, bytesRead))
   } finally {
-    await handle.close()
+    await releaseHandle(handle)
   }
 }
 
@@ -76,6 +88,7 @@ export type SearchOptions = {
   includePattern?: string
   excludePattern?: string
   maxResults: number
+  signal?: AbortSignal
 }
 
 export type SearchResult = SharedSearchResult
@@ -97,6 +110,10 @@ export function searchWithRg(
   query: string,
   opts: SearchOptions
 ): Promise<SearchResult> {
+  const { signal } = opts
+  if (signal?.aborted) {
+    return Promise.reject(abortSignalReason(signal))
+  }
   return new Promise((resolve, reject) => {
     const rgArgs = buildRgArgs(query, rootPath, opts)
     const acc = createAccumulator()
@@ -110,10 +127,23 @@ export function searchWithRg(
     // which would leak out of the `new Promise` executor and leave the
     // promise forever pending. Treat a synchronous throw as a clean
     // "no results" fallback, the same way an async 'error' event is handled.
-    let child: ReturnType<typeof spawn>
+    const resolvedRgCommand = resolveRelayRipgrepCommand()
+    // Why not spawn a bare name when this is null: on Windows CreateProcessW searches the spawn
+    // cwd -- the user's repo -- before PATH, so a planted rg.exe would run instead.
+    if (resolvedRgCommand === null) {
+      reject(new RipgrepUnavailableError())
+      return
+    }
+    // Why a second binding: the closures below capture it, and narrowing does not reach them.
+    const command: string = resolvedRgCommand
+    const env = buildRelayCommandEnv()
+    let child: ReturnType<typeof spawnProcess>
     try {
-      child = spawn('rg', rgArgs, {
+      child = spawnProcess({
+        program: command,
+        args: rgArgs,
         cwd: rootPath,
+        env,
         stdio: ['ignore', 'pipe', 'pipe']
       })
     } catch {
@@ -123,55 +153,82 @@ export function searchWithRg(
 
     let killTimeout: ReturnType<typeof setTimeout>
 
-    function resolveOnce(): void {
+    function settle(): boolean {
       if (resolved) {
-        return
+        return false
       }
       resolved = true
+      signal?.removeEventListener('abort', onAbort)
       lines.clear()
       clearTimeout(killTimeout)
       // Why: child.kill() is advisory over SSH; detach listeners if the
       // process ignores timeout kill so old searches cannot retain closures.
-      child.stdout!.off('data', handleStdoutData)
-      child.stderr!.off('data', handleStderrData)
+      child.stdout?.off('data', handleStdoutData)
+      child.stderr?.off('data', handleStderrData)
       child.off('error', handleError)
       child.off('close', handleClose)
       absorbPendingRipgrepSpawnError(child, {
         errorObserved: processErrorObserved,
         unavailableExitObserved
       })
-      resolve(finalize(acc))
+      return true
     }
 
-    function rejectUnavailable(): void {
-      if (resolved) {
-        return
+    function onAbort(): void {
+      if (signal && settle()) {
+        try {
+          killSpawnedRipgrepProcess(child)
+        } catch {
+          // A refused kill must still release the canceled request.
+        }
+        reject(abortSignalReason(signal))
       }
-      resolved = true
-      lines.clear()
-      clearTimeout(killTimeout)
-      child.stdout!.off('data', handleStdoutData)
-      child.stderr!.off('data', handleStderrData)
-      child.off('error', handleError)
-      child.off('close', handleClose)
-      absorbPendingRipgrepSpawnError(child, {
-        errorObserved: processErrorObserved,
-        unavailableExitObserved
-      })
-      reject(new RipgrepUnavailableError())
     }
 
-    function settleLaunchFailure(): void {
+    function resolveOnce(): void {
+      if (settle()) {
+        resolve(finalize(acc))
+      }
+    }
+
+    function settleLaunchFailure(error?: unknown): void {
       if (launchFailureCheck) {
         return
       }
-      launchFailureCheck = isRipgrepUnavailableAfterLaunchFailure(rootPath).then((unavailable) => {
-        if (unavailable) {
-          rejectUnavailable()
-        } else {
-          resolveOnce()
-        }
-      })
+      launchFailureCheck = retryRipgrepOnPathAfterLaunchFailure(command, rootPath, error)
+        .then(async (retryOnPath) => {
+          if (resolved) {
+            return
+          }
+          if (retryOnPath) {
+            // Why: a launch failure produced no output, so rerunning on PATH rg loses nothing.
+            if (settle()) {
+              searchWithRg(rootPath, query, opts).then(resolve, reject)
+            }
+            return
+          }
+          // Why not resolveOnce() on an unreachable root: an empty result reads as "no matches"
+          // and the git/readdir chain never engages, because it only triggers on an unavailable
+          // ripgrep. The workspace moving would otherwise look like a successful empty scan.
+          const failure = await classifyRipgrepLaunchFailure(
+            rootPath,
+            [command, pathRipgrepCommand()],
+            env,
+            signal
+          )
+          if (settle()) {
+            reject(
+              failure === 'cwd-unreachable'
+                ? ripgrepMissingCwdError(rootPath)
+                : new RipgrepUnavailableError()
+            )
+          }
+        })
+        .catch((error: unknown) => {
+          if (settle()) {
+            reject(error)
+          }
+        })
     }
 
     function processLine(line: string): void {
@@ -189,10 +246,10 @@ export function searchWithRg(
       /* drain */
     }
 
-    function handleError(): void {
+    function handleError(error: Error): void {
       processErrorObserved = true
       if (isRipgrepUnavailableExit(child, null, null)) {
-        settleLaunchFailure()
+        settleLaunchFailure(error)
         return
       }
       resolveOnce()
@@ -215,9 +272,9 @@ export function searchWithRg(
       resolveOnce()
     }
 
-    child.stdout!.setEncoding('utf-8')
-    child.stdout!.on('data', handleStdoutData)
-    child.stderr!.on('data', handleStderrData)
+    child.stdout?.setEncoding('utf-8')
+    child.stdout?.on('data', handleStdoutData)
+    child.stderr?.on('data', handleStderrData)
     child.once('error', handleError)
     child.once('close', handleClose)
 
@@ -226,6 +283,10 @@ export function searchWithRg(
       killSpawnedRipgrepProcess(child)
       resolveOnce()
     }, SEARCH_TIMEOUT_MS)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
 }
 

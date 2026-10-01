@@ -7,6 +7,7 @@ import {
 import { resolveSpawn } from './spawn-resolution'
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 
+import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
 
@@ -50,11 +51,19 @@ const BARRIER_UNVERIFIED_EXIT_GRACE_MS = 10_000
  */
 export function spawnProcess(spec: ProcessSpec): ChildProcessWithoutNullStreams {
   const resolved = resolveSpawn(spec, process.platform)
-  return nodeSpawn(
+  // Diagnostics only: uv_spawn runs synchronously on the calling thread, so this
+  // brackets the main-thread block for every child started through the wrapper.
+  const spawnStartedAt = hasSpawnObserver() ? performance.now() : null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveSpawn never sets stdio to 'ignore'/'inherit' for a stream slot, so stdin/stdout/stderr are always pipes.
+  const child = nodeSpawn(
     resolved.file,
     [...resolved.args],
     resolved.options
   ) as ChildProcessWithoutNullStreams
+  if (spawnStartedAt !== null) {
+    notifySpawnObserver(resolved.file, resolved.args, performance.now() - spawnStartedAt)
+  }
+  return child
 }
 
 /**

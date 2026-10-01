@@ -13,7 +13,12 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'codex_read_restore_fixture'
 const WORKSPACE_ID = 'repo-1::/tmp/workspace'
@@ -48,6 +53,12 @@ const store = {
 } as unknown as AgentSessionRecordStore
 
 let journalRoot: string
+const openDeps = () => ({
+  store,
+  journalDatabase: openTestJournalHostDatabase(journalRoot),
+  adapter: {},
+  logger: recordingStructuredAgentSessionLogger().logger
+})
 const opened: AgentSessionJournal[] = []
 
 async function writeRemnant(name: string): Promise<string> {
@@ -66,6 +77,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await Promise.allSettled(opened.splice(0).map((journal) => journal.close()))
+  closeTestJournalHostDatabases()
   await rm(journalRoot, { recursive: true, force: true })
 })
 
@@ -73,29 +85,29 @@ describe('a session whose journal is still the pre-SQLite format', () => {
   it('is published, carrying the message that explains it', async () => {
     const transcript = await writeRemnant('log.jsonl')
 
-    const restored = await restoreStructuredAgentSessionRead(store, journalRoot, SESSION_ID)
+    const restored = await restoreStructuredAgentSessionRead(openDeps(), SESSION_ID)
 
     expect(restored).not.toBeNull()
-    opened.push(restored!.journal)
-    const disclosed = restored!.journal
+    opened.push(restored!.session.journal)
+    const disclosed = restored!.session.journal
       .snapshot()
       .items.map((entry) => (entry.body.kind === 'status' ? entry.body.text : ''))
     expect(disclosed.join('')).toContain(transcript)
     // Publishing it costs no agent process; acquisition still waits for the user.
-    expect(restored!.hasProviderChild).toBe(false)
+    expect(restored!.session.child).toBeNull()
   })
 
   it('is published for a remnant whose log is gone', async () => {
     await writeRemnant('snapshot.json')
 
-    const restored = await restoreStructuredAgentSessionRead(store, journalRoot, SESSION_ID)
+    const restored = await restoreStructuredAgentSessionRead(openDeps(), SESSION_ID)
 
     expect(restored).not.toBeNull()
-    opened.push(restored!.journal)
+    opened.push(restored!.session.journal)
   })
 
   it('still drops a session with neither a journal nor a remnant', async () => {
-    const restored = await restoreStructuredAgentSessionRead(store, journalRoot, SESSION_ID)
+    const restored = await restoreStructuredAgentSessionRead(openDeps(), SESSION_ID)
 
     expect(restored).toBeNull()
   })
@@ -103,7 +115,7 @@ describe('a session whose journal is still the pre-SQLite format', () => {
   it('still drops a session with no record', async () => {
     await writeRemnant('log.jsonl')
 
-    const restored = await restoreStructuredAgentSessionRead(store, journalRoot, 'unknown-session')
+    const restored = await restoreStructuredAgentSessionRead(openDeps(), 'unknown-session')
 
     expect(restored).toBeNull()
   })

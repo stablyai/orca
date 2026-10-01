@@ -135,7 +135,7 @@ export async function connectSshTestTarget(
         if (seedInitialTab && (store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
           store.getState().createTab(worktree.id)
         }
-        store.getState().setActiveTabType('terminal')
+        store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
         return {
           targetId: createdTarget.id,
           repoId: result.repo.id,

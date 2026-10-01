@@ -7,7 +7,7 @@ import {
   throwIfFileListingCancelled
 } from '../shared/file-listing-cancellation'
 import { isQuickOpenReaddirBudgetError } from '../shared/quick-open-readdir-walk'
-import { buildInstallRgMessage, buildRipgrepRequiredMessage } from './fs-handler-install-rg'
+import { buildInstallRgMessage, buildRipgrepRequiredMessage } from '../shared/quick-open-install-rg'
 import { buildRelayCommandEnv } from './relay-command-env'
 import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
 import { QuickOpenPathRanker } from '../shared/quick-open-path-search'

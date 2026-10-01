@@ -98,6 +98,9 @@ vi.mock('../runtime/worktree-teardown', async () =>
 )
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
+// Why: every removal and listing reply now names the catalog it produced or scanned.
+const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
+
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
 
@@ -136,10 +139,17 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
 
     finishRemoval()
-    await expect(Promise.all([first, second])).resolves.toEqual([{}, {}])
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { catalogVersion: anyCatalogVersion },
+      { catalogVersion: anyCatalogVersion }
+    ])
     expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(1)
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledTimes(1)
-    expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+    // One notice when the row starts showing as removing, one after it has left the table.
+    expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
+    expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
   })
 
   it('rejects concurrent deletes for the same worktree id with different options', async () => {
@@ -149,11 +159,13 @@ describe('registerWorktreeHandlers', () => {
     const started = new Promise<void>((resolve) => {
       removalStarted = resolve
     })
-    removeWorktreeMock.mockImplementation(
+    // Held in acceptance: once accepted, a repeat delete joins the background removal instead.
+    killAllProcessesForWorktreeMock.mockImplementation(
       () =>
-        new Promise<void>((resolve) => {
+        new Promise((resolve) => {
           removalStarted()
-          finishRemoval = resolve
+          finishRemoval = () =>
+            resolve({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
         })
     )
 
@@ -170,9 +182,10 @@ describe('registerWorktreeHandlers', () => {
       })
     ).rejects.toThrow('Worktree deletion already in progress')
 
-    expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
     finishRemoval()
-    await expect(first).resolves.toEqual({})
+    await expect(first).resolves.toEqual({ catalogVersion: anyCatalogVersion })
+    expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
   })
 
   it('still rejects forced unregistered delete paths that exist on disk', async () => {

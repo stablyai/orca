@@ -1,4 +1,7 @@
-import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../src/shared/constants'
+import {
+  ONBOARDING_FINAL_STEP,
+  ONBOARDING_FLOW_VERSION
+} from '../../../src/shared/onboarding-defaults'
 import { FEATURE_INTERACTION_IDS } from '../../../src/shared/feature-interactions'
 import { FEATURE_TIP_IDS } from '../../../src/shared/feature-tips'
 

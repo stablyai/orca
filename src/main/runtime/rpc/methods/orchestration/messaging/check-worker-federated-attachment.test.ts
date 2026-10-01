@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import type { RpcContext } from '../../../core'
+import { eraseRpcMethods, type RpcContext } from '../../../core'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
@@ -55,7 +55,9 @@ describe('orchestration.check on a federated attachment across a restart', () =>
   }
 
   function check(ctx: RpcContext, params: Record<string, unknown> = {}): Promise<CheckResult> {
-    const method = ORCHESTRATION_METHODS.find((entry) => entry.name === 'orchestration.check')
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+      (entry) => entry.name === 'orchestration.check'
+    )
     if (!method) {
       throw new Error('orchestration.check is not registered')
     }

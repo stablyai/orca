@@ -22,6 +22,8 @@ import { FOREGROUND_GRID_DRIFT_CHECK_MIN_MS } from './foreground-output-budgets'
 import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreground-output-scan'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isCodexPaneStale } from './codex-pane-stale'
+import { installTerminalSelectionFitGuard } from '../terminal-selection-fit-guard'
+import { initializePaneGeometry, readPaneSize } from './read-pane-size'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -98,6 +100,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
+    // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
+    const inputKind = wasUserInput ? 'driving' : 'query-reply'
     const intent = session.pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
@@ -121,7 +125,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       }
       session.clearPendingTerminalInputIntent()
       const writePromise = session.transport
-        .sendInputAccepted(data)
+        .sendInputAccepted(data, inputKind)
         .then((accepted): boolean | Promise<boolean> | null => {
           if (accepted) {
             // Why: rejected writes use transport recovery and must not arm a parser probe.
@@ -150,7 +154,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     if (intent) {
       session.claimViewportForUserActivity()
-      if (session.transport.sendInput(data)) {
+      if (session.transport.sendInput(data, inputKind)) {
         session.markAcceptedTerminalInputSent()
         session.observeAcceptedShellCommandInput(data)
         session.observeAcceptedTerminalInput(data, intent)
@@ -161,7 +165,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       return
     }
     session.claimViewportForUserActivity()
-    if (session.transport.sendInput(data)) {
+    if (session.transport.sendInput(data, inputKind)) {
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)
       session.observeAcceptedTerminalInput(data)
@@ -192,6 +196,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     capturedTransport: session.transport,
     getCurrentTransport: () => session.deps.paneTransportsRef.current.get(session.pane.id)
   })
+  session.terminalSelectionFitGuard = installTerminalSelectionFitGuard(session.pane.terminal, () =>
+    session.scheduleForegroundGridDriftCheck(true)
+  )
 
   session.shouldSuppressDesktopPtyResize = (): boolean => {
     const currentPtyId = session.transport.getPtyId()
@@ -304,12 +311,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
         if (reattachCols > 0 && reattachRows > 0) {
           session.transport.resize(reattachCols, reattachRows)
         }
-        // Why: POSIX only sends SIGWINCH on an actual dimension change; signal explicitly so restored TUIs repaint at the correct cursor after replay.
         if (!isRemoteRuntimePtyId(reattachPtyId)) {
           window.api.pty.signal(reattachPtyId, 'SIGWINCH')
         }
-        // Why here: a deferred reveal resolves the fit handle as incomplete, so an awaited
-        // reassertion at the call site would never run for that path.
         if (session.deps.isVisibleRef.current) {
           session.ptySizeReassertion.request({ fit: false })
         }
@@ -336,19 +340,21 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       (session.pane.terminal.cols !== proposed.cols || session.pane.terminal.rows !== proposed.rows)
     )
   }
-  session.scheduleForegroundGridDriftCheck = (): void => {
-    // Why: mobile-owned PTYs intentionally keep a non-desktop grid; drift
-    // healing would refit xterm even if resize forwarding is later suppressed.
+  session.scheduleForegroundGridDriftCheck = (force = false): void => {
     if (
       session.disposed ||
       !session.deps.isVisibleRef.current ||
       session.shouldSuppressDesktopPtyResize() ||
-      session.pendingForegroundGridDriftCheckRaf !== null
+      session.pendingForegroundGridDriftCheckRaf !== null ||
+      (!force && session.terminalSelectionFitGuard?.isActive())
     ) {
       return
     }
     const now = performance.now()
-    if (now - session.lastForegroundGridDriftCheckAt < FOREGROUND_GRID_DRIFT_CHECK_MIN_MS) {
+    if (
+      !force &&
+      now - session.lastForegroundGridDriftCheckAt < FOREGROUND_GRID_DRIFT_CHECK_MIN_MS
+    ) {
       return
     }
     session.lastForegroundGridDriftCheckAt = now
@@ -358,31 +364,17 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
         session.disposed ||
         !session.deps.isVisibleRef.current ||
         session.shouldSuppressDesktopPtyResize() ||
+        session.terminalSelectionFitGuard?.isActive() ||
         !session.terminalGridDriftedFromFit()
       ) {
         return
       }
-      // Why: xterm cell metrics can settle after the DOM box stops resizing, so
-      // ResizeObserver never fires even though FitAddon now proposes more cols.
       requestStablePaneFit(session.pane as ManagedPaneInternal, () =>
         session.ptySizeReassertion.request({ fit: false })
       )
     })
   }
 
-  // Why: observe the outer pane as the layout signal for both desktop drift
-  // healing and mobile take-back. Normal desktop panes compare xterm against
-  // the PTY's applied size; mobile-fit panes only report desktop geometry so
-  // the parked phone-sized PTY is not resized. See docs/mobile-fit-hold.md.
-  session.pendingGeometryReportRaf = null
-  session.lastObservedDesktopGrid = null
-  session.readPaneSize = (): { width: number; height: number } | null => {
-    if (typeof session.pane.container.getBoundingClientRect !== 'function') {
-      return null
-    }
-    const rect = session.pane.container.getBoundingClientRect()
-    return { width: rect.width, height: rect.height }
-  }
-  session.lastObservedPaneSize = session.readPaneSize()
-  session.pendingPaneGeometryChanged = false
+  session.readPaneSize = () => readPaneSize(session)
+  initializePaneGeometry(session)
 }

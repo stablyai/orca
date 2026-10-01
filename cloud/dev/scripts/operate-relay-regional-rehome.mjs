@@ -4,6 +4,8 @@ import { inspectAdmissionSelector } from './relay-admission-selector.mjs'
 
 const DIRECTOR_ORIGIN = 'https://relay.onorca.dev'
 const MODES = new Set(['inspect', 'enable', 'pause', 'disable', 'recover-enable'])
+// c1-c99 with no leading zero; a fixed ceiling here once refused a newly general cell.
+const PRODUCTION_CELL_ID = /^production-gce-c[1-9][0-9]?$/
 
 function canonicalCells(value) {
   if (value === 'none') return []
@@ -11,7 +13,7 @@ function canonicalCells(value) {
   if (
     cells.length === 0 ||
     new Set(cells).size !== cells.length ||
-    cells.some((cell) => !/^production-gce-c(?:[1-9]|[12][0-9])$/.test(cell))
+    cells.some((cell) => !PRODUCTION_CELL_ID.test(cell))
   ) throw new Error('selector membership is invalid')
   return cells
 }

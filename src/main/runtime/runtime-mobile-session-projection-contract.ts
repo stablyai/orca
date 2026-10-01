@@ -18,6 +18,7 @@ export type RuntimeMobileSessionProjectionHost = {
   getLiveBrowserTabs(worktreeId: string): Map<string, BrowserTabInfo>
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
+  getStatusSnapshot(): AgentStatusIpcPayload[]
   getLeafKey(tabId: string, leafId: string): string
   findPty(
     worktreeId: string,
@@ -27,7 +28,8 @@ export type RuntimeMobileSessionProjectionHost = {
   getRetainedStatus(
     paneKey: string,
     pty: RuntimePtyWorktreeRecord | null,
-    tab: RuntimeMobileSessionTerminalTab
+    tab: RuntimeMobileSessionTerminalTab,
+    getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null
   getTrackedTitle(ptyId: string | null): string | null
   issuePtyHandle(pty: RuntimePtyWorktreeRecord): string

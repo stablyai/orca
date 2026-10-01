@@ -7,8 +7,9 @@ import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
+import { fetchZcodeRateLimits } from './zcode-usage-fetcher'
 import { readGrokAuthSession } from './grok-auth'
-import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchOpenCodeGoUsage } from './opencode-go-usage-source-selection'
 import {
   deferred,
   errorProvider,
@@ -36,8 +37,16 @@ vi.mock('./kimi-fetcher', () => ({
   fetchKimiRateLimits: vi.fn()
 }))
 
-vi.mock('./opencode-go-usage-fetcher', () => ({
-  fetchOpenCodeGoRateLimits: vi.fn()
+vi.mock('./opencode-go-usage-source-selection', () => ({
+  fetchOpenCodeGoUsage: vi.fn()
+}))
+
+vi.mock('./zcode-usage-fetcher', () => ({
+  fetchZcodeRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
 }))
 
 vi.mock('./minimax/minimax-fetcher', () => ({
@@ -46,6 +55,14 @@ vi.mock('./minimax/minimax-fetcher', () => ({
 
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn()
 }))
 
 vi.mock('./grok-auth', () => ({
@@ -63,6 +80,57 @@ function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<
 describe('RateLimitService', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
+  })
+
+  it('publishes a ZCode quota snapshot alongside the other providers', async () => {
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 8))
+    vi.mocked(fetchZcodeRateLimits).mockResolvedValue(okProvider('zcode', 42))
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    expect(fetchZcodeRateLimits).toHaveBeenCalledTimes(1)
+    expect(service.getState().zcode?.session?.usedPercent).toBe(42)
+    expect(service.getState().codex?.session?.usedPercent).toBe(8)
+  })
+
+  it('does not keep a previous ZCode account quota after a failed account switch', async () => {
+    vi.mocked(fetchZcodeRateLimits)
+      .mockResolvedValueOnce({
+        ...okProvider('zcode', 42),
+        usageMetadata: { source: 'web', authProvenance: 'account-a' }
+      })
+      .mockResolvedValueOnce({
+        ...errorProvider('zcode', 'request failed'),
+        usageMetadata: { source: 'web', authProvenance: 'account-b', failureKind: 'network' }
+      })
+    const service = new RateLimitService()
+
+    await service.refresh()
+    await service.refresh()
+
+    expect(service.getState().zcode?.status).toBe('error')
+    expect(service.getState().zcode?.session).toBeNull()
+  })
+
+  it('keeps a recent ZCode quota after a failed retry for the same account', async () => {
+    vi.mocked(fetchZcodeRateLimits)
+      .mockResolvedValueOnce({
+        ...okProvider('zcode', 42),
+        usageMetadata: { source: 'web', authProvenance: 'account-a' }
+      })
+      .mockResolvedValueOnce({
+        ...errorProvider('zcode', 'request failed'),
+        usageMetadata: { source: 'web', authProvenance: 'account-a', failureKind: 'network' }
+      })
+    const service = new RateLimitService()
+
+    await service.refresh()
+    await service.refresh()
+
+    expect(service.getState().zcode?.status).toBe('error')
+    expect(service.getState().zcode?.session?.usedPercent).toBe(42)
   })
 
   it('does not reread Grok auth when callers read state snapshots', () => {
@@ -112,7 +180,7 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
     expect(fetchCodexRateLimits).not.toHaveBeenCalled()
     expect(fetchGeminiRateLimits).not.toHaveBeenCalled()
-    expect(fetchOpenCodeGoRateLimits).not.toHaveBeenCalled()
+    expect(fetchOpenCodeGoUsage).not.toHaveBeenCalled()
     expect(fetchKimiRateLimits).not.toHaveBeenCalled()
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
@@ -272,9 +340,7 @@ describe('RateLimitService', () => {
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
     vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 30, Date.now()))
-    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
-      okProvider('opencode-go', 40, Date.now())
-    )
+    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValueOnce(okProvider('opencode-go', 40, Date.now()))
     vi.mocked(fetchKimiRateLimits).mockResolvedValueOnce(okProvider('kimi', 50, Date.now()))
     vi.mocked(fetchMiniMaxRateLimits).mockResolvedValueOnce(okProvider('minimax', 60, Date.now()))
     vi.mocked(fetchGrokRateLimits).mockReturnValueOnce(grok.promise)
@@ -365,7 +431,8 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: 'session=abc123',
-      workspaceIdOverride: ''
+      workspaceIdOverride: '',
+      apiKey: ''
     }))
     const networkProxySettings = {
       httpProxyUrl: 'http://proxy.example:8080',
@@ -377,9 +444,7 @@ describe('RateLimitService', () => {
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
     vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 30, Date.now()))
-    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
-      okProvider('opencode-go', 40, Date.now())
-    )
+    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValueOnce(okProvider('opencode-go', 40, Date.now()))
 
     await service.refresh()
 
@@ -395,11 +460,14 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
-    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
-    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith(
-      'session=abc123',
-      undefined,
-      networkProxySettings
+    expect(fetchOpenCodeGoUsage).toHaveBeenCalledTimes(1)
+    expect(fetchOpenCodeGoUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cookie: 'session=abc123',
+        workspaceIdOverride: undefined,
+        settingsApiKey: '',
+        networkProxySettings
+      })
     )
     expect(fetchGrokRateLimits).toHaveBeenCalledWith({
       signal: expect.any(AbortSignal),
@@ -478,9 +546,7 @@ describe('RateLimitService', () => {
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
     vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(geminiWithBuckets)
-    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
-      okProvider('opencode-go', 0, Date.now())
-    )
+    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValueOnce(okProvider('opencode-go', 0, Date.now()))
 
     await service.refresh()
 
@@ -496,15 +562,14 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: '',
-      workspaceIdOverride: ''
+      workspaceIdOverride: '',
+      apiKey: ''
     }))
 
     vi.mocked(fetchClaudeRateLimits).mockRejectedValueOnce(new Error('claude down'))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
     vi.mocked(fetchGeminiRateLimits).mockRejectedValueOnce(new Error('gemini down'))
-    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
-      okProvider('opencode-go', 40, Date.now())
-    )
+    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValueOnce(okProvider('opencode-go', 40, Date.now()))
 
     await service.refresh()
 
@@ -522,23 +587,22 @@ describe('RateLimitService', () => {
     let cookie = 'session=valid'
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: cookie,
-      workspaceIdOverride: ''
+      workspaceIdOverride: '',
+      apiKey: ''
     }))
 
     // 1. Success fetch
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20, Date.now()))
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 30, Date.now()))
-    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(
-      okProvider('opencode-go', 40, Date.now())
-    )
+    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue(okProvider('opencode-go', 40, Date.now()))
 
     await service.refresh()
     expect(service.getState().opencodeGo?.session?.usedPercent).toBe(40)
 
     // 2. Clear cookie -> should become unavailable and LOSE the 40% data
     cookie = ''
-    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue({
+    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue({
       provider: 'opencode-go',
       session: null,
       weekly: null,
@@ -560,27 +624,24 @@ describe('RateLimitService', () => {
     let workspaceId = 'wrk_A'
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: 'session=valid',
-      workspaceIdOverride: workspaceId
+      workspaceIdOverride: workspaceId,
+      apiKey: ''
     }))
 
     // 1. Success fetch for Workspace A
-    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(
-      okProvider('opencode-go', 40, Date.now())
-    )
+    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue(okProvider('opencode-go', 40, Date.now()))
     await service.refresh()
     expect(service.getState().opencodeGo?.session?.usedPercent).toBe(40)
 
     // 2. Change Workspace ID to B -> old data from A should be discarded
     workspaceId = 'wrk_B'
-    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(
-      okProvider('opencode-go', 10, Date.now())
-    )
+    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue(okProvider('opencode-go', 10, Date.now()))
     await service.refresh()
     expect(service.getState().opencodeGo?.session?.usedPercent).toBe(10)
 
     // 3. Clear Workspace ID (automatic) but it fails -> should show error, NOT stale data from B
     workspaceId = ''
-    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue({
+    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue({
       provider: 'opencode-go',
       session: null,
       weekly: null,

@@ -6,12 +6,7 @@
 // so the assembler ranks it below transcript/hook copies of the same turn. See
 // docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (U6).
 
-import type {
-  AgentType,
-  NativeChatMessage,
-  NativeChatSession
-} from '../../../../shared/native-chat-types'
-import { assembleNativeChatSession } from './native-chat-session-assembler'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 
 // Why: replicate (not import) the minimal ANSI/control-sequence strip used by
 // agent-session-fork-context.ts so we don't modify that file. Same three
@@ -89,37 +84,4 @@ export function scrapeScrollbackToMessages(rawScrollback: string): NativeChatMes
     timestamp: null,
     source: 'scrape'
   }))
-}
-
-/** A scrape-derived session plus the always-true `isApproximate` flag the UI
- *  uses to render an "approximate view" banner. Scrape sessions can never be
- *  authoritative, so the flag is structural, not conditional. */
-export type ScrapeNativeChatSession = {
-  session: NativeChatSession
-  isApproximate: true
-}
-
-/**
- * Convenience that assembles a `NativeChatSession` from scrollback scrape.
- * Status is the assembler's derived value: 'empty' for blank scrollback,
- * 'ready' otherwise. `sessionId` is null because scrape has no provider id.
- * Reuses `assembleNativeChatSession` read-only (no edits to the assembler).
- *
- * Remote/SSH: this entry takes an already-serialized scrollback string and is
- * transport-agnostic. The caller obtains it via the runtime-appropriate API —
- * `getMainBufferSnapshot`/serializer for local panes, or the remote serialize
- * RPC (remote-runtime-terminal-multiplexer) for remote panes — so no remote
- * branch is needed inside this fallback.
- */
-export function scrapeNativeChatSession(
-  rawScrollback: string,
-  agent: AgentType
-): ScrapeNativeChatSession {
-  const messages = scrapeScrollbackToMessages(rawScrollback)
-  const session = assembleNativeChatSession({
-    sources: { scrape: messages },
-    sessionId: null,
-    agent
-  })
-  return { session, isApproximate: true }
 }

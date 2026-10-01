@@ -11,6 +11,7 @@ import {
 type CurrentRef<T> = { readonly current: T }
 
 type Args = {
+  readonly agent?: string | null
   readonly client: RpcClient | null
   readonly activeHandle: string | null
   readonly activeHandleRef: CurrentRef<string | null>
@@ -34,6 +35,7 @@ type Args = {
       id: string
       path: string
       previewUri: string
+      contentFingerprint?: string
     }[]
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured agent sessions do not have a terminal paste path. */
@@ -54,6 +56,7 @@ type Args = {
  *  here keeps the already-dense session route to a single wiring point. */
 export function useMobileSessionImageAttachments({
   client,
+  agent,
   activeHandle,
   activeHandleRef,
   canSend,
@@ -77,6 +80,7 @@ export function useMobileSessionImageAttachments({
 } {
   const { attachImage, isAttaching } = useMobileImageAttachment({
     client,
+    agent,
     activeHandle,
     canSend,
     connState,
@@ -89,6 +93,7 @@ export function useMobileSessionImageAttachments({
   })
   const nativeChatImages = useMobileNativeChatImageAttachments({
     client,
+    agent,
     activeHandleRef,
     deviceTokenRef,
     getActiveWorktreeConnectionId,

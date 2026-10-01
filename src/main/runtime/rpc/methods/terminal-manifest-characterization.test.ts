@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { TERMINAL_METHODS } from './terminal'
+import { eraseRpcMethods } from '../core'
 import {
   TerminalMultiplexLegacyAckFrame,
   TerminalMultiplexSourceRangeAckFrame,
@@ -20,6 +21,7 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.agentStatus', { terminal: 'term' }, false],
   ['terminal.rename', { terminal: 'term', title: null }, false],
   ['terminal.clearBuffer', { terminal: 'term' }, false],
+  ['terminal.resetInputModes', { terminal: 'term' }, false],
   ['terminal.send', { terminal: 'term', text: 'x' }, false],
   ['terminal.wait', { terminal: 'term', for: 'exit' }, false],
   ['terminal.create', {}, false],
@@ -46,18 +48,19 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.subscribe', { terminal: 'term' }, true],
   ['terminal.unsubscribe', { subscriptionId: 'term' }, false],
   ['terminal.getAutoRestoreFit', {}, false],
-  ['terminal.setAutoRestoreFit', { ms: null }, false]
+  ['terminal.setAutoRestoreFit', { ms: null }, false],
+  ['terminal.setViewerColors', { colors: { foreground: '#ffffff', background: '#000000' } }, false]
 ]
 
 function schemaFor(name: string) {
-  const method = TERMINAL_METHODS.find((candidate) => candidate.name === name)
+  const method = eraseRpcMethods(TERMINAL_METHODS).find((candidate) => candidate.name === name)
   if (!method?.params) {
     throw new Error(`Missing terminal schema: ${name}`)
   }
   return method.params
 }
 async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntimeService>) {
-  const method = TERMINAL_METHODS.find((candidate) => candidate.name === name)
+  const method = eraseRpcMethods(TERMINAL_METHODS).find((candidate) => candidate.name === name)
   if (!method?.params || 'stream' in method) {
     throw new Error(`Missing unary terminal method: ${name}`)
   }
@@ -66,11 +69,11 @@ async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntim
 
 describe('terminal RPC manifest characterization', () => {
   it('preserves all method names, order, streaming flags, and parseable minimum inputs', () => {
-    expect(TERMINAL_METHODS).toHaveLength(35)
+    expect(TERMINAL_METHODS).toHaveLength(37)
     expect(TERMINAL_METHODS.map((method) => [method.name, 'stream' in method])).toEqual(
       METHOD_CASES.map(([name, _params, stream]) => [name, stream])
     )
-    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(35)
+    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(37)
     for (const [name, params] of METHOD_CASES) {
       expect(() => schemaFor(name).parse(params), name).not.toThrow()
     }

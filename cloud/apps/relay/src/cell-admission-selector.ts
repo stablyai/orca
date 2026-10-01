@@ -38,6 +38,13 @@ type ApplySelectorInput = {
   expectedGeneration: number
   expectedMembershipSha256?: string
   membership: CellAdmissionMembership
+  // Why a marker rather than reading 'migration-only' directly: that state is an
+  // admission class, not a drain signal (orca-relay-operations.md:229-233).
+  // Evacuation targets, Asia `--mode rollback`, a failed wave's re-isolate and
+  // newly registered cells all sit there durably while holding hosts. Only the
+  // same-cap isolate step names cells here; every write out of 'migration-only'
+  // clears the stamp, so a restore cannot leave one behind.
+  rollIsolatedCells?: string[]
 }
 
 const SELECTOR_ID = 'general'
@@ -48,6 +55,12 @@ export function stateFromEnabled(enabled: boolean): CellAdmissionState {
 
 export function enabledForState(state: CellAdmissionState): number {
   return state === 'existing-only' ? 0 : 1
+}
+
+// The narrowing counterpart of parseCellAdmissionState, for readers that must
+// answer "unknown" rather than throw.
+export function isCellAdmissionState(value: unknown): value is CellAdmissionState {
+  return CELL_ADMISSION_STATES.some((state) => state === value)
 }
 
 export function parseCellAdmissionState(value: string): CellAdmissionState {
@@ -122,9 +135,10 @@ export async function setCellAdmissionBeforeBoundary(
   await transaction.query(
     `UPDATE relay_cell_admission
      SET updated_at = CASE WHEN admission_state <> ? THEN ? ELSE updated_at END,
-         admission_state = ?
+         admission_state = ?,
+         roll_isolated_at = CASE WHEN ? = 'migration-only' THEN roll_isolated_at ELSE NULL END
      WHERE cell_id = ?`,
-    [state, now, state, cellId]
+    [state, now, state, state, cellId]
   )
   await synchronizeCellAdmissionBoundary(transaction, now)
 }
@@ -184,14 +198,30 @@ export class RelayCellAdmissionSelector {
         }
       }
       const now = this.now()
+      const rollIsolated = new Set(input.rollIsolatedCells ?? [])
       for (const [state, cellIds] of membershipEntries(membership)) {
         for (const cellId of cellIds) {
+          // Three-way, in the same statement as the state so they cannot tear:
+          // stamp a named isolate (keeping an earlier stamp, so a failed wave's
+          // re-isolate stays marked), clear on any move out of 'migration-only',
+          // and leave an unnamed 'migration-only' cell exactly as it was.
+          const marker =
+            state === 'migration-only'
+              ? rollIsolated.has(cellId)
+                ? 'stamp'
+                : 'keep'
+              : 'clear'
           await transaction.query(
             `UPDATE relay_cell_admission
              SET updated_at = CASE WHEN admission_state <> ? THEN ? ELSE updated_at END,
-                 admission_state = ?
+                 admission_state = ?,
+                 roll_isolated_at = CASE
+                   WHEN ? = 'clear' THEN NULL
+                   WHEN ? = 'stamp' THEN COALESCE(roll_isolated_at, ?)
+                   ELSE roll_isolated_at
+                 END
              WHERE cell_id = ?`,
-            [state, now, state, cellId]
+            [state, now, state, marker, marker, now, cellId]
           )
           await transaction.query(
             `UPDATE relay_cells

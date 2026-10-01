@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   closeMonacoFindWidget,
   closeUnfocusedMonacoFindOrPreventDialogDismiss,
-  isMonacoFindHostFocused,
   isMonacoFindWidgetOpen
 } from './monaco-find-widget'
 
@@ -53,18 +52,6 @@ describe('isMonacoFindWidgetOpen', () => {
     expect(isMonacoFindWidgetOpen(document)).toBe(true)
     dialog.remove()
     backgroundEditor.remove()
-  })
-})
-
-describe('isMonacoFindHostFocused', () => {
-  it('is true only when the event target is inside the host', () => {
-    const host = document.createElement('div')
-    const inside = document.createElement('input')
-    const outside = document.createElement('input')
-    host.append(inside)
-    expect(isMonacoFindHostFocused(host, inside)).toBe(true)
-    expect(isMonacoFindHostFocused(host, outside)).toBe(false)
-    expect(isMonacoFindHostFocused(null, inside)).toBe(false)
   })
 })
 

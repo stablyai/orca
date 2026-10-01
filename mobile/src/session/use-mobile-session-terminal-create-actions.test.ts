@@ -1,14 +1,27 @@
+import { launchedSelection, type PendingSessionSelection } from './pending-session-selection'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { useMobileSessionTerminalCreateActions } from './use-mobile-session-terminal-create-actions'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+
+type PlacementTab = { id: string; parentTabId?: string }
+type PlacementUpdater = (previous: PlacementTab[]) => PlacementTab[]
 
 vi.mock('../platform/haptics', () => ({
   triggerSuccess: vi.fn(),
   triggerError: vi.fn()
 }))
+
+function noPendingSelection(): { current: PendingSessionSelection | null } {
+  return { current: null }
+}
+
+function noCreateLock(): { current: string | null } {
+  return { current: null }
+}
 
 function clientReturning(...responses: unknown[]): RpcClient {
   let responseIndex = 0
@@ -36,17 +49,18 @@ function createScope(client: RpcClient) {
   return {
     worktreeId: 'workspace-1',
     client,
+    hostCapabilities: [],
     connState: 'connected',
     setTerminals: vi.fn(),
     terminalsRef: { current: [] },
-    setSessionTabs: vi.fn(),
+    setSessionTabs: vi.fn<(updater: PlacementUpdater) => void>(),
     defaultTerminalHandlesToLiveInput: vi.fn(),
     setActiveHandle: vi.fn(),
     activeSessionTabId: 'existing-tab',
     activeSessionTabIdRef: { current: 'existing-tab' },
     setActiveSessionTabId: vi.fn(),
     setCreating: vi.fn(),
-    creatingTerminalRef: { current: false },
+    creatingTerminalRef: noCreateLock(),
     creatingBrowser: false,
     creatingMarkdown: false,
     setCreateError: vi.fn(),
@@ -54,8 +68,7 @@ function createScope(client: RpcClient) {
     initializedHandlesRef: { current: new Set<string>() },
     activeHandleRef: { current: 'existing-terminal' },
     activeSessionTabTypeRef: { current: 'terminal' },
-    pendingActiveSessionTabIdRef: { current: null },
-    pendingActiveTerminalHandleRef: { current: null },
+    pendingSelectionRef: noPendingSelection(),
     scheduleDelayedAction: vi.fn(),
     showToast: vi.fn(),
     unsubscribeTerminal: vi.fn(),
@@ -106,9 +119,17 @@ describe('mobile + Codex tab creation routing', () => {
       'session.tabs.createTerminal',
       expect.anything()
     )
-    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('agent-session:codex_session_1')
-    expect(scope.setActiveHandle).toHaveBeenCalledWith(null)
-    expect(scope.unsubscribeTerminal).toHaveBeenCalledWith('existing-terminal')
+    // The chat's tab is found by its session in the next snapshot, never by a predicted id.
+    expect(scope.pendingSelectionRef.current).toEqual(
+      launchedSelection(expect.any(String), { sessionId: 'codex_session_1' })
+    )
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
+    // The open terminal stays live until the chat's tab lands, rather than blanking beside it.
+    expect(scope.setActiveHandle).not.toHaveBeenCalled()
+    expect(scope.unsubscribeTerminal).not.toHaveBeenCalled()
+    expect(scope.activeSessionTabTypeRef.current).toBe('terminal')
+    expect(scope.fetchSessionTabs).toHaveBeenCalledTimes(1)
+    expect(scope.scheduleDelayedAction).not.toHaveBeenCalled()
   })
 
   it('keeps the legacy terminal path when structured support is disabled', async () => {
@@ -261,4 +282,158 @@ describe('mobile + Codex tab creation routing', () => {
       expect(scope.showToast).toHaveBeenCalledWith('create outcome ambiguous', 1800)
     }
   )
+  // Why: pty exhaustion, a disabled agent and an unresolved worktree owner all arrived as the
+  // same 'Failed to create terminal', leaving the empty session with nothing to act on.
+  it('surfaces the host reason instead of a generic terminal-create error', async () => {
+    const client = clientReturning({
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: 'Your system cannot allocate any more pty devices.'
+      }
+    })
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal()
+    })
+
+    expect(scope.setCreateError).toHaveBeenCalledWith(
+      'Your system cannot allocate any more pty devices.'
+    )
+  })
+
+  it('falls back to the generic message when the host gives no reason', async () => {
+    const client = clientReturning({ ok: false, error: { code: 'runtime_error', message: '' } })
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal()
+    })
+
+    expect(scope.setCreateError).toHaveBeenCalledWith('Failed to create terminal')
+  })
+})
+
+describe('optimistic placement of a created tab', () => {
+  let renderer: ReactTestRenderer | undefined
+  afterEach(() => renderer?.unmount())
+
+  async function createTerminal(scope: ReturnType<typeof createScope>) {
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal()
+    })
+  }
+
+  function tabIdsAfterCreate(
+    scope: ReturnType<typeof createScope>,
+    prior: PlacementTab[]
+  ): string[] {
+    const updater = scope.setSessionTabs.mock.calls.at(-1)?.[0]
+    if (!updater) {
+      throw new Error('Expected a session tab updater')
+    }
+    return updater(prior).map((tab) => tab.id)
+  }
+
+  it('paints the created tab after the anchor it asked the host for, not at the end', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
+    await createTerminal(scope)
+
+    expect(scope.setSessionTabs).toHaveBeenCalled()
+    // The request anchored on the active tab, so the paint must land in the same slot the host
+    // splices into; appending here is what made the tab jump on the next snapshot.
+    expect(tabIdsAfterCreate(scope, [{ id: 'existing-tab' }, { id: 'trailing-tab' }])).toEqual([
+      'existing-tab',
+      'terminal-tab-1',
+      'trailing-tab'
+    ])
+  })
+
+  it('paints after the active split parent, matching headed host placement', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
+    scope.activeSessionTabId = 'existing-tab::left'
+    await createTerminal(scope)
+
+    expect(
+      tabIdsAfterCreate(scope, [
+        { id: 'existing-tab::left', parentTabId: 'existing-tab' },
+        { id: 'existing-tab::right', parentTabId: 'existing-tab' },
+        { id: 'trailing-tab' }
+      ])
+    ).toEqual(['existing-tab::left', 'existing-tab::right', 'terminal-tab-1', 'trailing-tab'])
+  })
+
+  it('waits for an older host snapshot instead of guessing its placement', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    scope.activeSessionTabId = 'existing-tab::left'
+    await createTerminal(scope)
+
+    expect(scope.setSessionTabs).not.toHaveBeenCalled()
+    expect(scope.pendingSelectionRef.current).toEqual({
+      kind: 'terminal',
+      handle: 'terminal-1',
+      tabId: 'terminal-tab-1'
+    })
+    expect(scope.subscribeToTerminal).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('sends the same anchor it paints with', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
+    await createTerminal(scope)
+
+    expect(scope.client.sendRequest).toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.objectContaining({ afterTabId: 'existing-tab' })
+    )
+  })
+
+  it('appends when the anchor is not in the client list, matching the host fallback', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
+    await createTerminal(scope)
+
+    expect(tabIdsAfterCreate(scope, [{ id: 'unrelated-tab' }])).toEqual([
+      'unrelated-tab',
+      'terminal-tab-1'
+    ])
+  })
+
+  it('leaves the list alone when the host snapshot already placed the tab', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
+    await createTerminal(scope)
+
+    const prior = [{ id: 'existing-tab' }, { id: 'terminal-tab-1' }, { id: 'trailing-tab' }]
+    expect(tabIdsAfterCreate(scope, prior)).toEqual([
+      'existing-tab',
+      'terminal-tab-1',
+      'trailing-tab'
+    ])
+  })
 })

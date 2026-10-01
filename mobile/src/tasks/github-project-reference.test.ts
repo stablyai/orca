@@ -17,6 +17,17 @@ describe('parseGitHubProjectInput', () => {
     })
   })
 
+  it('accepts Enterprise Managed User owners (`_<shortcode>` suffix)', () => {
+    expect(parseGitHubProjectInput('octocat_acme/1')).toEqual({ owner: 'octocat_acme', number: 1 })
+    expect(parseGitHubProjectInput('https://github.com/users/octocat_acme/projects/1')).toEqual({
+      owner: 'octocat_acme',
+      number: 1,
+      host: 'github.com'
+    })
+    expect(parseGitHubProjectInput('_acme/1')).toBeNull()
+    expect(parseGitHubProjectInput('https://github.com/orgs/_acme/projects/1')).toBeNull()
+  })
+
   it('accepts github.com user Project URLs', () => {
     expect(parseGitHubProjectInput('http://github.com/users/octocat/projects/3')).toEqual({
       owner: 'octocat',

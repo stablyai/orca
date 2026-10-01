@@ -88,6 +88,20 @@ describe('planSourceControlCommitMessageGeneration', () => {
     expect(result.ok && result.commandLabel).toBe('echo issue {linkedIssue}')
   })
 
+  it('omits Pi configured-default sentinel from dry-run command labels', () => {
+    const result = planSourceControlTextGeneration('commitMessage', {
+      agentId: 'pi',
+      model: 'default',
+      commandInputTemplate: '{basePrompt}'
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.commandLabel).not.toContain('--model')
+      expect(result.commandLabel).not.toContain('default')
+    }
+  })
+
   it('shows per-action CLI arguments in dry-run command labels', () => {
     const result = planSourceControlTextGeneration('pullRequest', {
       agentId: 'codex',

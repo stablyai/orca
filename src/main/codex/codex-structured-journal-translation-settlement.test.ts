@@ -25,6 +25,7 @@ import {
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -129,6 +130,7 @@ function deferredTarget(
 
 function hardWatermarkDeferred() {
   return createDeferredStructuredAgentSessionEventSink({
+    ...testEventSinkLogging(),
     watermarks: {
       pauseQueuedBytes: 1,
       maxQueuedBytes: 1,
@@ -270,7 +272,6 @@ describe('codex journal translation', () => {
         kind: 'approval',
         resolution: expect.objectContaining({ state: 'cancelled' })
       }),
-      { kind: 'status', text: 'Provider exited: lost child' },
       expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
     expect(publishes).toHaveLength(2)
@@ -343,9 +344,6 @@ describe('codex journal translation', () => {
           })
         }),
         expect.objectContaining({
-          body: { kind: 'status', text: 'Provider exited: lost child' }
-        }),
-        expect.objectContaining({
           kind: 'item',
           body: expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
         })
@@ -416,11 +414,7 @@ describe('codex journal translation', () => {
           `provider-exit:${SESSION_ID}:7:generation-1:${index + 1}/${batches.length}`
       )
     )
-    expect(flattened).toHaveLength(122)
-    expect(flattened.at(-2)).toMatchObject({
-      kind: 'item',
-      body: { kind: 'status', text: 'Provider exited: lost child' }
-    })
+    expect(flattened).toHaveLength(121)
     expect(flattened.at(-1)).toMatchObject({
       kind: 'item',
       body: { kind: 'turn', state: 'interrupted' }
@@ -559,7 +553,8 @@ describe('codex journal translation', () => {
               userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
               startedAt: expect.any(Number),
               completedAt: expect.any(Number)
-            }
+            },
+            turnScope: { kind: 'thread' }
           }
         ]
       }
@@ -799,8 +794,9 @@ describe('codex journal translation', () => {
 
     const reduced = new Map(tap.rows.map((row) => [row.key, row.body]))
     expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
       kind: 'diff',

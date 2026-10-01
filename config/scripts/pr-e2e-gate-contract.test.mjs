@@ -1,3 +1,4 @@
+import { DEDICATED_E2E_SPECS } from './ci-e2e-job-selection.mjs'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser'
@@ -127,11 +128,10 @@ describe('PR E2E gate contract', () => {
     const successLoop = verifyStep.run.slice(verifyStep.run.indexOf(successMarker))
     expect(successLoop.length).toBeGreaterThan(0)
     expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
-    expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
     for (const job of prWorkflow.jobs.verify.needs) {
       const envVar = job.replaceAll('-', '_').toUpperCase()
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.${job}.result }}`)
-      if (job === 'code_paths' || job === 'root_directory_guard') {
+      if (job === 'code_paths') {
         continue
       }
       expect(successLoop).toContain(`"$${envVar}"`)
@@ -154,7 +154,9 @@ describe('PR E2E gate contract', () => {
 
   it('uses one runner for changed specs and keeps full runs sharded', () => {
     expect(e2eWorkflow.jobs.e2e.if).toBe("inputs.test_files == ''")
-    expect(e2eWorkflow.jobs['changed-e2e'].if).toBe("inputs.test_files != ''")
+    expect(e2eWorkflow.jobs['changed-e2e'].if).toBe(
+      "inputs.test_files != '' && (github.event_name != 'pull_request' || inputs.run_changed_e2e)"
+    )
     expect(e2eWorkflow.jobs['changed-e2e'].strategy).toBeUndefined()
     expect(e2eWorkflow.jobs.e2e.strategy.matrix.include).toEqual(
       Array.from({ length: 14 }, (_, index) => ({
@@ -166,12 +168,12 @@ describe('PR E2E gate contract', () => {
       (step) => step.name === 'Run changed E2E specs'
     )
     expect(changedRun.env.TEST_FILES_JSON).toBe('${{ inputs.test_files }}')
-    expect(changedRun.run).toContain('. != "tests/e2e/ssh-startup-exec-readiness.spec.ts"')
-    expect(changedRun.run).toContain('. != "tests/e2e/paired-startup-exec-readiness.spec.ts"')
-    expect(changedRun.run).toContain(
-      '. != "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts"'
+    expect(DEDICATED_E2E_SPECS).toContain('tests/e2e/ssh-startup-exec-readiness.spec.ts')
+    expect(DEDICATED_E2E_SPECS).toContain('tests/e2e/paired-startup-exec-readiness.spec.ts')
+    expect(DEDICATED_E2E_SPECS).toContain(
+      'tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts'
     )
-    expect(changedRun.run).toContain('. != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts"')
+    expect(DEDICATED_E2E_SPECS).toContain('tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts')
     expect(changedRun.run).toContain('if [ "${#TEST_FILES[@]}" -eq 0 ]')
     expect(changedRun.run).toContain('grep -l \'@headful\' "${TEST_FILES[@]}"')
     expect(changedRun.run).toContain('E2E_PROJECT_ARGS+=(--project=electron-headful)')
@@ -179,6 +181,13 @@ describe('PR E2E gate contract', () => {
       'pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"'
     )
     expect(playwrightConfig).toContain('retries: 0')
+    const steps = e2eWorkflow.jobs.e2e.steps.filter((step) =>
+      step.run?.includes('tests/e2e/worktree-switch-first-paint.spec.ts')
+    )
+    expect(steps).toHaveLength(1)
+    expect(steps[0].if).toBe("matrix.shard == '1/14'")
+    expect(steps[0].run).toContain('xvfb-run --auto-servernum')
+    expect(steps[0].run).toContain('--project=electron-headful --workers=1')
   })
 
   it('keeps startup-exec live parity in the isolated SSH lane', () => {
@@ -232,7 +241,7 @@ describe('PR E2E gate contract', () => {
   })
 
   it('scopes detection to the PR range so base drift cannot false-trigger', () => {
-    expect(filterStep.run).toContain('--merge-base "$BASE" "$HEAD"')
+    expect(filterStep.run).toMatch(/diff-base\.mjs "\$BASE"[\s\S]*"\$DIFF_BASE" HEAD/)
     expect(filterStep.run).toContain('set -euo pipefail')
   })
 
@@ -438,7 +447,7 @@ describe('PR E2E gate contract', () => {
   })
 
   it('scopes the VM rollback oracle to the PR range and recipe schema authorities', () => {
-    expect(rollbackStep.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
+    expect(rollbackStep.run).toMatch(/diff-base\.mjs "\$BASE_SHA"[\s\S]*"\$DIFF_BASE" HEAD --/)
     expect(rollbackStep.run).toContain('src/shared/ephemeral-vm-recipes.ts')
     expect(rollbackStep.run).toContain('src/shared/orca-yaml-hook-types.ts')
     expect(selectPrE2eSpecs(['src/shared/ephemeral-vm-recipes.ts'])).toEqual([
@@ -529,7 +538,8 @@ describe('PR E2E gate contract', () => {
       )
     }
     for (const source of [
-      'src/main/ipc/rg-availability.ts',
+      'src/main/ripgrep/bundled-ripgrep-path.ts',
+      'src/shared/bundled-ripgrep.ts',
       'src/shared/ripgrep-process-availability.ts'
     ]) {
       expect(selectPrE2eSpecs([source]), source).toEqual([
@@ -688,10 +698,7 @@ describe('PR E2E gate contract', () => {
   })
 
   it('keeps the native IME spec out of the lane that would silently skip it', () => {
-    const changedRun = e2eWorkflow.jobs['changed-e2e'].steps.find(
-      (step) => step.name === 'Run changed E2E specs'
-    )
-    expect(changedRun.run).toContain('. != "tests/e2e/terminal-ibus-hangul-native.spec.ts"')
+    expect(DEDICATED_E2E_SPECS).toContain('tests/e2e/terminal-ibus-hangul-native.spec.ts')
     // Why it still has to be routed: the dedicated lane is selected by the same route, so the
     // spec appearing in test_files is how a spec-only edit reaches the real-IME lane at all.
     expect(selectPrE2eSpecs(['src/shared/terminal-unicode-provider.ts'])).toContain(

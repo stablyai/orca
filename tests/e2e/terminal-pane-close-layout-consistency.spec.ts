@@ -179,7 +179,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
   await expect
@@ -200,7 +200,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
     const state = store.getState()
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     state.setActiveTab(targetTabId)
   }, tabId)
   await expect
@@ -274,7 +274,7 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
         const state = store.getState()
         const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
         state.setActiveTab(tab.id)
-        state.setActiveTabType('terminal')
+        state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       },
       { tabId, worktreeId }
     )

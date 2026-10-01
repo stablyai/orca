@@ -36,8 +36,8 @@ describe('saved structured session restoration targets', () => {
   it('prioritizes the visible chat and excludes closed history', () => {
     const saved = session(
       [
-        tab({ id: 'tab-background', structuredSessionId: 'session-background' }),
-        tab({ id: 'tab-visible', structuredSessionId: 'session-visible' })
+        tab({ id: 'tab-background', entityId: 'session-background' }),
+        tab({ id: 'tab-visible', entityId: 'session-visible' })
       ],
       'tab-visible'
     )
@@ -49,16 +49,13 @@ describe('saved structured session restoration targets', () => {
     expect(collectSavedStructuredAgentSessionIds(session([], null))).toEqual([])
   })
 
-  it('keeps restoration on the local execution host and deduplicates adopted tabs', () => {
+  it('keeps restoration on the local execution host and deduplicates repeated sessions', () => {
     const saved = session(
       [
-        tab({ id: 'remote', executionHostId: 'ssh:build', structuredSessionId: 'session-remote' }),
-        tab({ id: 'local-a', structuredSessionId: 'session-local' }),
-        tab({
-          id: 'local-b',
-          contentType: 'terminal',
-          structuredSessionId: 'session-local'
-        })
+        tab({ id: 'remote', executionHostId: 'ssh:build', entityId: 'session-remote' }),
+        tab({ id: 'local-a', entityId: 'session-local' }),
+        tab({ id: 'local-b', entityId: 'session-local' }),
+        tab({ id: 'terminal', contentType: 'terminal', entityId: 'pty-tab-1' })
       ],
       'remote'
     )
@@ -72,12 +69,12 @@ describe('saved structured session restoration targets', () => {
         tab({
           id: 'claude-tab',
           agentSessionAgent: 'claude',
-          structuredSessionId: 'session-claude'
+          entityId: 'session-claude'
         }),
         tab({
           id: 'codex-tab',
           agentSessionAgent: 'codex',
-          structuredSessionId: 'session-codex'
+          entityId: 'session-codex'
         })
       ],
       'claude-tab'

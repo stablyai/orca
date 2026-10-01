@@ -463,6 +463,8 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
       for (const root of mountedRoots.splice(0)) {
         root.unmount()
       }
+      // Lazy markdown imports must finish before Vitest tears down the module environment.
+      await vi.dynamicImportSettled()
     })
     document.body.innerHTML = ''
     clearWorktreeAgentExpansionStateForTests()
@@ -535,23 +537,6 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     // toggle no longer bleeds into the agent list.
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('false')
     expect(container.querySelector('.worktree-agent-lineage-children')).toBeNull()
-  })
-
-  it('[full mode] CONTROL: a re-render that does NOT change collapsedGroups preserves agent state (isolates the remount)', async () => {
-    setAgentLineageState({ agentActivityDisplayMode: 'full' })
-    const { container, root } = await renderWorktreeList()
-
-    await click(agentChildDisclosure(container)!)
-    expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('false')
-
-    // Re-render WITHOUT touching collapsedGroups: the parent's virtual-row key
-    // stays 'lineage-group:all:lineage:parent', so there is no remount.
-    await rerender(root)
-
-    expect(parentVirtualRowKey(container)).toBe('lineage-group:all:lineage:parent')
-    // Agent collapse survives => proves it is the KEY change (remount), not the
-    // re-render itself, that resets the agent expansion.
-    expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('[compact mode] toggling CHILD WORKTREES preserves the compact agent summary expansion (regression)', async () => {

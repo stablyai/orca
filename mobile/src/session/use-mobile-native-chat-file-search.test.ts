@@ -15,6 +15,14 @@ function rpcSuccess(files: string[]): Awaited<ReturnType<RpcClient['sendRequest'
   }
 }
 
+/** The hook reaches only the two members each case supplies, so the rest of the client is a fake. */
+type FileSearchClientParts = { sendRequest: unknown; getGeneration?: () => number }
+
+function fakeClient(parts: FileSearchClientParts): RpcClient {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The hook calls `sendRequest` and `getGeneration` and nothing else on the client; every other member is unreachable from it.
+  return parts as RpcClient
+}
+
 describe('useMobileNativeChatFileSearch', () => {
   let renderer: ReactTestRenderer | null = null
   let state: SearchState | null = null
@@ -42,16 +50,20 @@ describe('useMobileNativeChatFileSearch', () => {
 
   it('coalesces rapid queries and retains only the bounded host result', async () => {
     const sendRequest = vi.fn().mockResolvedValue(rpcSuccess(['src/app.ts', 'src/app.test.ts']))
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(fakeClient({ sendRequest }))
 
     act(() => {
       state?.loadNativeChatFiles('a')
       state?.loadNativeChatFiles('app')
     })
-    await act(async () => vi.advanceTimersByTimeAsync(119))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(119)
+    })
     expect(sendRequest).not.toHaveBeenCalled()
 
-    await act(async () => vi.advanceTimersByTimeAsync(1))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(sendRequest).toHaveBeenCalledWith('files.searchPaths', {
       worktree: 'id:wt-1',
@@ -73,14 +85,18 @@ describe('useMobileNativeChatFileSearch', () => {
       }
       return rpcSuccess(['src/apple.ts', 'docs/readme.md'])
     })
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(fakeClient({ sendRequest }))
 
     act(() => state?.loadNativeChatFiles('apple'))
-    await act(async () => vi.advanceTimersByTimeAsync(120))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
     expect(state?.nativeChatFilePaths).toEqual(['src/apple.ts'])
 
     act(() => state?.loadNativeChatFiles('readme'))
-    await act(async () => vi.advanceTimersByTimeAsync(120))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
     expect(state?.nativeChatFilePaths).toEqual(['docs/readme.md'])
     expect(sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'files.searchPaths',
@@ -92,11 +108,13 @@ describe('useMobileNativeChatFileSearch', () => {
     const sendRequest = vi.fn(async (_method: string, params: { query: string }) =>
       rpcSuccess(params.query === 'app' ? ['src/app.ts'] : ['src/beta.ts'])
     )
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(fakeClient({ sendRequest }))
 
     // Populate the cache for 'app'.
     act(() => state?.loadNativeChatFiles('app'))
-    await act(async () => vi.advanceTimersByTimeAsync(120))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
 
     // Schedule 'beta' (debounced, unresolved), then hit the cache for 'app'.
@@ -107,11 +125,57 @@ describe('useMobileNativeChatFileSearch', () => {
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
 
     // The cancelled 'beta' request must never fire and overwrite the cached result.
-    await act(async () => vi.advanceTimersByTimeAsync(120))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
     expect(
       sendRequest.mock.calls.filter(([, params]) => (params as { query: string }).query === 'beta')
     ).toHaveLength(0)
+  })
+
+  it('reloads the legacy inventory when the logical authority epoch advances', async () => {
+    let generation = 1
+    const inventories = [['src/apple.ts', 'docs/readme.md'], ['docs/guide.md']]
+    const sendRequest = vi.fn(async (method: string) => {
+      if (method === 'files.searchPaths') {
+        return {
+          id: 'missing',
+          ok: false as const,
+          error: { code: 'method_not_found', message: 'Unknown method' },
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      return rpcSuccess(inventories.shift() ?? [])
+    })
+    await mount(fakeClient({ sendRequest, getGeneration: () => generation }))
+
+    const listCalls = (): number =>
+      sendRequest.mock.calls.filter(([method]) => method === 'files.list').length
+    act(() => state?.loadNativeChatFiles('apple'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    expect(state?.nativeChatFilePaths).toEqual(['src/apple.ts'])
+    expect(listCalls()).toBe(1)
+
+    // Control: a fresh query under the same epoch is answered from the inventory already held.
+    act(() => state?.loadNativeChatFiles('readme'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    expect(listCalls()).toBe(1)
+
+    // `migrateTo` advanced the logical authority epoch. The client is the same object and the
+    // workspace did not change, so the epoch in the scope is the only thing that can retire the
+    // inventory the host under the old authority gave us.
+    generation = 2
+    act(() => state?.loadNativeChatFiles('guide'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    expect(listCalls()).toBe(2)
+    expect(state?.nativeChatFilePaths).toEqual(['docs/guide.md'])
   })
 
   it('coalesces overlapping legacy inventory requests on a slow host', async () => {
@@ -130,12 +194,16 @@ describe('useMobileNativeChatFileSearch', () => {
       }
       return listResponse
     })
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(fakeClient({ sendRequest }))
 
     act(() => state?.loadNativeChatFiles('apple'))
-    await act(async () => vi.advanceTimersByTimeAsync(120))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
     act(() => state?.loadNativeChatFiles('readme'))
-    await act(async () => vi.advanceTimersByTimeAsync(120))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120)
+    })
     expect(sendRequest.mock.calls.filter(([method]) => method === 'files.list')).toHaveLength(1)
 
     await act(async () => {

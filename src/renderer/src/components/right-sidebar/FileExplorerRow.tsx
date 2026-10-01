@@ -6,8 +6,10 @@ import { getFileTypeIcon } from '@/lib/file-type-icons'
 import {
   encodeWorkspaceFilePaths,
   WORKSPACE_FILE_PATH_MIME,
-  WORKSPACE_FILE_PATHS_MIME
+  WORKSPACE_FILE_PATHS_MIME,
+  writeWorkspaceFileDragSourceIfResolved
 } from '@/lib/workspace-file-drag'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import { STATUS_LABELS } from './status-display'
 import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
@@ -23,6 +25,7 @@ import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 
 export type FileExplorerRowProps = {
   node: TreeNode
+  displayDepthOffset?: number
   isExpanded: boolean
   isLoading: boolean
   isSelected: boolean
@@ -33,6 +36,9 @@ export type FileExplorerRowProps = {
   isIgnored: boolean
   deleteShortcutLabel: string
   connectionId?: string | null
+  sourceWorkspaceId?: string | null
+  /** Resolved at dragstart so the virtualized list pays nothing per render. */
+  resolveDragSourceHostId?: (paths: readonly string[]) => ExecutionHostId | null
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
   supportsFolderDownload?: boolean
   canOpenInOrcaBrowser: boolean
@@ -62,8 +68,10 @@ export type FileExplorerRowProps = {
   onNativeDragExpandDir: (dirPath: string) => void
 }
 
+/** Offsets visual indentation for a scoped tree without changing the node paths passed to file actions. */
 export function FileExplorerRow({
   node,
+  displayDepthOffset = 0,
   isExpanded,
   isLoading,
   isSelected,
@@ -74,6 +82,8 @@ export function FileExplorerRow({
   isIgnored,
   deleteShortcutLabel,
   connectionId,
+  sourceWorkspaceId,
+  resolveDragSourceHostId,
   runtimeDownloadContext,
   supportsFolderDownload = false,
   canOpenInOrcaBrowser,
@@ -137,7 +147,7 @@ export function FileExplorerRow({
             isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
-          style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          style={{ paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px` }}
           ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
           // Why: marks this draggable row so the wheel-capture handler can rescue
@@ -153,6 +163,11 @@ export function FileExplorerRow({
             if (paths.length > 1) {
               event.dataTransfer.setData(WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(paths))
             }
+            writeWorkspaceFileDragSourceIfResolved(
+              event.dataTransfer,
+              sourceWorkspaceId,
+              resolveDragSourceHostId?.(paths)
+            )
             event.dataTransfer.effectAllowed = 'copyMove'
             onDragSourceChange(node.path)
 
@@ -203,8 +218,8 @@ export function FileExplorerRow({
             </>
           )}
           <span
-            // Why: marks the rename hotspot so the row's click handler can hold
-            // back the directory toggle until the double-click window closes.
+            // Why: marks the rename hotspot so the row's click handler can drop
+            // the directory toggle on the second click of a double-click rename.
             {...{ [RENAME_HOTSPOT_ATTR]: '' }}
             className={cn(
               'truncate',

@@ -6,7 +6,9 @@ export const SESSION_TABS_AGENT_STATUS_HEARTBEAT_SPACING_MS = 50
 
 export type MobileSessionTabsAgentStatusHeartbeat = {
   observeSemanticTitle: (ptyId: string) => void
+  observeWorktreeRefresh: (worktreeId: string) => void
   scheduleDecorativeHeartbeat: (ptyId: string) => void
+  scheduleWorktreeHeartbeat: (worktreeId: string) => void
   removePty: (ptyId: string) => void
   removeWorktree: (worktreeId: string) => void
   cancelPending: () => void
@@ -19,7 +21,7 @@ export function createMobileSessionTabsAgentStatusHeartbeat(
 ): MobileSessionTabsAgentStatusHeartbeat {
   const lastEligibilityCheckAtByPtyId = new Map<string, number>()
   const lastRefreshAtByWorktreeId = new Map<string, number>()
-  const pendingPtyIdsByWorktreeId = new Map<string, Set<string>>()
+  const pendingByWorktreeId = new Map<string, { directObservation: boolean; ptyIds: Set<string> }>()
   let lastGlobalHeartbeatAt: number | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
 
@@ -30,8 +32,16 @@ export function createMobileSessionTabsAgentStatusHeartbeat(
     }
   }
 
+  const observeWorktreeRefresh = (worktreeId: string, observedAt = Date.now()): void => {
+    lastRefreshAtByWorktreeId.set(worktreeId, observedAt)
+    pendingByWorktreeId.delete(worktreeId)
+    if (pendingByWorktreeId.size === 0) {
+      clearTimer()
+    }
+  }
+
   const arm = (): void => {
-    if (timer !== null || pendingPtyIdsByWorktreeId.size === 0) {
+    if (timer !== null || pendingByWorktreeId.size === 0) {
       return
     }
     const now = Date.now()
@@ -44,15 +54,15 @@ export function createMobileSessionTabsAgentStatusHeartbeat(
           )
     timer = setTimeout(() => {
       timer = null
-      const worktreeId = pendingPtyIdsByWorktreeId.keys().next().value
+      const worktreeId = pendingByWorktreeId.keys().next().value
       if (typeof worktreeId !== 'string') {
         return
       }
-      const pendingPtyIds = pendingPtyIdsByWorktreeId.get(worktreeId)
-      pendingPtyIdsByWorktreeId.delete(worktreeId)
+      const pending = pendingByWorktreeId.get(worktreeId)
+      pendingByWorktreeId.delete(worktreeId)
       const emittedAt = Date.now()
       lastRefreshAtByWorktreeId.set(worktreeId, emittedAt)
-      for (const ptyId of pendingPtyIds ?? []) {
+      for (const ptyId of pending?.ptyIds ?? []) {
         lastEligibilityCheckAtByPtyId.set(ptyId, emittedAt)
       }
       lastGlobalHeartbeatAt = emittedAt
@@ -64,18 +74,37 @@ export function createMobileSessionTabsAgentStatusHeartbeat(
     }
   }
 
+  const scheduleWorktreeHeartbeat = (worktreeId: string, ptyId?: string): void => {
+    const now = Date.now()
+    const lastRefreshAt = lastRefreshAtByWorktreeId.get(worktreeId)
+    if (
+      lastRefreshAt !== undefined &&
+      now - lastRefreshAt < SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS
+    ) {
+      return
+    }
+    const pending = pendingByWorktreeId.get(worktreeId) ?? {
+      directObservation: false,
+      ptyIds: new Set<string>()
+    }
+    if (ptyId) {
+      pending.ptyIds.add(ptyId)
+    } else {
+      pending.directObservation = true
+    }
+    pendingByWorktreeId.set(worktreeId, pending)
+    arm()
+  }
+
   return {
     observeSemanticTitle(ptyId: string): void {
       const observedAt = Date.now()
       lastEligibilityCheckAtByPtyId.set(ptyId, observedAt)
       for (const worktreeId of resolveWorktreeIds(ptyId)) {
-        lastRefreshAtByWorktreeId.set(worktreeId, observedAt)
-        pendingPtyIdsByWorktreeId.delete(worktreeId)
-      }
-      if (pendingPtyIdsByWorktreeId.size === 0) {
-        clearTimer()
+        observeWorktreeRefresh(worktreeId, observedAt)
       }
     },
+    observeWorktreeRefresh,
     scheduleDecorativeHeartbeat(ptyId: string): void {
       const now = Date.now()
       const lastEligibilityCheckAt = lastEligibilityCheckAtByPtyId.get(ptyId)
@@ -87,44 +116,36 @@ export function createMobileSessionTabsAgentStatusHeartbeat(
       }
       lastEligibilityCheckAtByPtyId.set(ptyId, now)
       for (const worktreeId of resolveWorktreeIds(ptyId)) {
-        const lastRefreshAt = lastRefreshAtByWorktreeId.get(worktreeId)
-        if (
-          lastRefreshAt === undefined ||
-          now - lastRefreshAt >= SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS
-        ) {
-          const pendingPtyIds = pendingPtyIdsByWorktreeId.get(worktreeId) ?? new Set<string>()
-          pendingPtyIds.add(ptyId)
-          pendingPtyIdsByWorktreeId.set(worktreeId, pendingPtyIds)
-        }
+        scheduleWorktreeHeartbeat(worktreeId, ptyId)
       }
-      arm()
     },
+    scheduleWorktreeHeartbeat,
     removePty(ptyId: string): void {
       lastEligibilityCheckAtByPtyId.delete(ptyId)
-      for (const [worktreeId, pendingPtyIds] of pendingPtyIdsByWorktreeId) {
-        pendingPtyIds.delete(ptyId)
-        if (pendingPtyIds.size === 0) {
-          pendingPtyIdsByWorktreeId.delete(worktreeId)
+      for (const [worktreeId, pending] of pendingByWorktreeId) {
+        pending.ptyIds.delete(ptyId)
+        if (pending.ptyIds.size === 0 && !pending.directObservation) {
+          pendingByWorktreeId.delete(worktreeId)
         }
       }
-      if (pendingPtyIdsByWorktreeId.size === 0) {
+      if (pendingByWorktreeId.size === 0) {
         clearTimer()
       }
     },
     removeWorktree(worktreeId: string): void {
       lastRefreshAtByWorktreeId.delete(worktreeId)
-      pendingPtyIdsByWorktreeId.delete(worktreeId)
-      if (pendingPtyIdsByWorktreeId.size === 0) {
+      pendingByWorktreeId.delete(worktreeId)
+      if (pendingByWorktreeId.size === 0) {
         clearTimer()
       }
     },
     cancelPending(): void {
       clearTimer()
-      pendingPtyIdsByWorktreeId.clear()
+      pendingByWorktreeId.clear()
     },
     dispose(): void {
       clearTimer()
-      pendingPtyIdsByWorktreeId.clear()
+      pendingByWorktreeId.clear()
       lastEligibilityCheckAtByPtyId.clear()
       lastRefreshAtByWorktreeId.clear()
       lastGlobalHeartbeatAt = null

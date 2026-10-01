@@ -188,10 +188,16 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   missingIds: Set<string>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
+  /** Non-minting: a listing must not issue handles, only recognise the ones already bound. */
+  getTerminalHandlesForPty: (ptyId: string) => readonly string[]
   getSummary: SummaryLookup
 }): {
   mirroredWorktreeIdByTabId: Map<string, string>
-  connectedPtyEvidence: { tabIds: Set<string>; paneKeys: Set<string>; ptyIds: Set<string> }
+  connectedPtyEvidence: {
+    tabIds: Set<string>
+    paneKeys: Set<string>
+    ptyIdByTerminalHandle: Map<string, string>
+  }
 } {
   const mirroredWorktreeIdByTabId = new Map<string, string>()
   const sessionsByHostId = new Map<ExecutionHostId, WorkspaceSessionState>()
@@ -244,18 +250,20 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   const connectedPtyEvidence = {
     tabIds: new Set<string>(),
     paneKeys: new Set<string>(),
-    ptyIds: new Set<string>()
+    ptyIdByTerminalHandle: new Map<string, string>()
   }
   for (const pty of args.ptysById.values()) {
     if (!pty.connected) {
       continue
     }
-    connectedPtyEvidence.ptyIds.add(pty.ptyId)
     if (pty.tabId) {
       connectedPtyEvidence.tabIds.add(pty.tabId)
     }
     if (pty.paneKey) {
       connectedPtyEvidence.paneKeys.add(pty.paneKey)
+    }
+    for (const terminalHandle of args.getTerminalHandlesForPty(pty.ptyId)) {
+      connectedPtyEvidence.ptyIdByTerminalHandle.set(terminalHandle, pty.ptyId)
     }
   }
   return { mirroredWorktreeIdByTabId, connectedPtyEvidence }

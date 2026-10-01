@@ -19,6 +19,7 @@ function createState(overrides: Partial<DraftTargetSyncInput> = {}): DraftTarget
     agentPrompt: 'Fix the issue',
     attachmentPaths: ['/tmp/context.txt'],
     baseBranch: 'main',
+    baseBranchNamesWorkspace: true,
     compareBaseRef: 'origin/main',
     eligibleRepos: [],
     fetchSparsePresets: vi.fn<DraftTargetSyncInput['fetchSparsePresets']>(),
@@ -76,6 +77,25 @@ describe('useDraftTargetSync', () => {
       })
     )
     expect(setRepoId).toHaveBeenCalledWith('repo-1')
+  })
+
+  it('persists whether the base ref also names the workspace', () => {
+    const setNewWorkspaceDraft = vi.fn<DraftTargetSyncInput['setNewWorkspaceDraft']>()
+    const state = createState({
+      eligibleRepos: [createRepo('repo-1')],
+      baseBranch: 'release/2.1',
+      baseBranchNamesWorkspace: false,
+      setNewWorkspaceDraft
+    })
+
+    renderHook(() => useDraftTargetSync(state))
+
+    expect(setNewWorkspaceDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseBranch: 'release/2.1',
+        baseBranchNamesWorkspace: false
+      })
+    )
   })
 
   it('does not persist or repair transient quick-composer state', () => {

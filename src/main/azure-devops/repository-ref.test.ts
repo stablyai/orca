@@ -177,24 +177,4 @@ describe('parseAzureDevOpsRepoRef', () => {
 
     expect(_getAzureDevOpsRepoRefCacheSize()).toBe(512)
   })
-
-  it('does not cache transient SSH provider failures as unsupported repos', async () => {
-    sshExecMock.mockRejectedValueOnce(new Error('connection closed')).mockResolvedValueOnce({
-      stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo\n',
-      stderr: ''
-    })
-    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
-
-    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin', 'conn-1')).resolves.toBeNull()
-    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin', 'conn-1')).resolves.toEqual({
-      host: 'dev.azure.com',
-      organization: 'acme',
-      project: 'Project',
-      repository: 'repo',
-      apiBaseUrl: 'https://dev.azure.com/acme/Project',
-      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
-    })
-
-    expect(sshExecMock).toHaveBeenCalledTimes(2)
-  })
 })

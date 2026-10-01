@@ -1,4 +1,7 @@
-import { getVerifiedNativeChatCommands } from './native-chat-agent-profiles'
+import {
+  getHostClaimedNativeChatCommands,
+  getTextDrivenNativeChatCommands
+} from './native-chat-agent-profiles'
 import type { AgentType } from './agent-status-types'
 import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
 import type { SlashCommandSuggestion } from './native-chat-slash-commands'
@@ -34,6 +37,9 @@ export type StructuredAgentSessionComposerOptions = {
   runConversationCommand?: (
     command: AgentSessionConversationCommand
   ) => Promise<{ accepted: boolean; error: string | null }>
+  /** Present only where the host can set this session's goal; otherwise `/goal`
+   *  stays message text the agent acts on itself. */
+  setThreadGoalObjective?: (objective: string) => Promise<boolean>
 }
 
 export type StructuredAgentSessionCommandOutcome = {
@@ -50,30 +56,45 @@ function commandParts(text: string): { name: string; argument: string } | null {
   return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
 }
 
-/** The commands the composer menu offers. Strictly what the dispatcher honors,
- *  so a menu pick is never answered with "not available". */
+/** The commands the composer menu offers when the host reports no catalog of its
+ *  own: the host's own commands, plus the ones this agent acts on from message
+ *  text. Both are honored — the first here, the second by the agent — so a menu
+ *  pick is never answered with "not available". */
 export function structuredSlashCommands(
-  commands: readonly AgentSessionConversationCommand[] = []
+  commands: readonly AgentSessionConversationCommand[] = [],
+  agent?: AgentType | null
 ): readonly SlashCommandSuggestion[] {
-  return [
+  const hostOwned = [
     ...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
     ...CONVERSATION_COMMANDS.filter((entry) =>
       commands.includes(entry.name as AgentSessionConversationCommand)
+    )
+  ]
+  // Why: a host with no catalog to report would otherwise hide the commands the
+  // agent itself implements, e.g. Codex's `/goal`.
+  return [
+    ...hostOwned,
+    ...getTextDrivenNativeChatCommands(agent).filter(
+      (entry) => !hostOwned.some((offered) => offered.name === entry.name)
     )
   ]
 }
 
 /** Wider than the offered menu on purpose: a TUI-only command still has to be
  *  claimed here and answered, or a hand-typed `/clear` reaches the model as
- *  literal prompt text. */
+ *  literal prompt text. Commands the agent itself implements are deliberately
+ *  absent — the profile unclaims those so they pass through as text. */
 function structuredRecognizedCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   return [
     ...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
     ...CONVERSATION_COMMANDS,
-    ...getVerifiedNativeChatCommands(agent)
+    ...getHostClaimedNativeChatCommands(agent)
   ]
 }
 
+/** Whether the chat host, rather than the agent, owns this command. Callers also
+ *  use it to refuse attachments: a host command sends no message, so attachments
+ *  would be silently dropped, whereas a pass-through command is a real send. */
 export function isStructuredAgentSessionComposerCommand(
   text: string,
   agent: AgentType = 'codex'
@@ -82,6 +103,24 @@ export function isStructuredAgentSessionComposerCommand(
   return Boolean(
     command && structuredRecognizedCommands(agent).some((entry) => entry.name === command.name)
   )
+}
+
+/** `/goal …`, which the host answers only where it can set this session's goal. */
+export function isStructuredAgentSessionGoalCommand(text: string): boolean {
+  return commandParts(text)?.name === 'goal'
+}
+
+/** `/goal` with nothing after it: an entrance to goal mode, not an objective. */
+export function isBareStructuredAgentSessionGoalCommand(text: string): boolean {
+  const command = commandParts(text)
+  return command?.name === 'goal' && command.argument === ''
+}
+
+/** The objective a goal-mode draft names. A `/goal …` typed there out of habit
+ *  names the same objective it would outside goal mode, never the literal command. */
+export function structuredAgentSessionGoalObjective(text: string): string {
+  const command = commandParts(text)
+  return command?.name === 'goal' ? command.argument : text.trim()
 }
 
 function unavailable(name: string): StructuredAgentSessionCommandOutcome {
@@ -97,6 +136,17 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   controller: StructuredAgentSessionComposerOptions
 ): Promise<StructuredAgentSessionCommandOutcome> {
   const command = commandParts(text)
+  if (command?.name === 'goal' && controller.setThreadGoalObjective) {
+    if (!command.argument) {
+      return { handled: true, accepted: false, error: 'Describe the goal after /goal.' }
+    }
+    // A refusal reaches the user through the session's own error surface.
+    return {
+      handled: true,
+      accepted: await controller.setThreadGoalObjective(command.argument),
+      error: null
+    }
+  }
   if (!command || !isStructuredAgentSessionComposerCommand(text, controller.agent)) {
     return { handled: false, accepted: false, error: null }
   }

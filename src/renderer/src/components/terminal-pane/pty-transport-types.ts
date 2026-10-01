@@ -10,6 +10,7 @@ import type {
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -145,6 +146,7 @@ export type PtyTransportRecoveryState = {
 }
 
 export type PtyTransport = {
+  getPendingEscapeTailAnsi?: () => string
   connect: (options: {
     url: string
     cols?: number
@@ -164,6 +166,9 @@ export type PtyTransport = {
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
+    /** Taken only as the spawn request is sent; main stops the returned PTY before resolving the
+     *  pane's owner. Never taken on a session reattach, so the caller still holds it. */
+    claimReplacedPtyId?: () => string | null
     /** Reject a stale restored identity before this transport can publish global PTY handlers. */
     admitPtyId?: (ptyId: string) => boolean
     /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
@@ -178,7 +183,7 @@ export type PtyTransport = {
     callbacks: PtyCallbacks
   }) => void
   disconnect: () => void
-  sendInput: (data: string) => boolean
+  sendInput: (data: string, inputKind: TerminalInputKind) => boolean
   // Why: latency-critical terminal query replies (CPR/DSR/DA/OSC color/pixel
   // size) must skip input coalescing — a querying program reads them in raw
   // mode with a short timeout, so a debounced reply lands on the shell prompt
@@ -186,7 +191,7 @@ export type PtyTransport = {
   // this is `sendInput` for them; the remote transport flushes pending input
   // (preserving order) and sends the reply immediately.
   sendInputImmediate: (data: string) => boolean
-  sendInputAccepted?: (data: string) => Promise<boolean>
+  sendInputAccepted?: (data: string, inputKind: TerminalInputKind) => Promise<boolean>
   /** Settles retained pre-connect input when a deferred spawn is abandoned before connect. */
   abandonPreconnectInput?: () => void
   claimViewport?: (cols: number, rows: number) => boolean
@@ -207,6 +212,8 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /** Lets a wrapper retain input when recovery re-enters connect internally. */
+  setConnectForRecovery?: (connect: PtyTransport['connect']) => void
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
   notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null
@@ -232,7 +239,10 @@ export type PtyTransport = {
    *  it also drops the transport's output processor from the pty side-effect memory census,
    *  so a reattached one would run untracked. Create a new transport instead. */
   detach?: (options?: { preserveExitObserver?: boolean }) => void
-  destroy?: () => void | Promise<void>
+  destroy?: (options?: {
+    /** Explicit close can retain retirement intent until an unbound connect settles. */
+    onAbandonedConnect?: (ptyId: string) => boolean
+  }) => void | Promise<void>
 }
 
 export type IpcPtyTransportOptions = {
@@ -265,11 +275,15 @@ export type IpcPtyTransportOptions = {
   activate?: boolean
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution
+  terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
+  /** Asked when a fresh spawn resolves after this transport was destroyed: true keeps the PTY for
+   *  the pane's successor (disposed-spawn-retention.ts); absent or false kills it. */
+  retainDisposedSpawn?: () => boolean
   /** Rebind an existing pane after its provider replaces the PTY identity. */
   onPtyRebind?: (ptyId: string, replacedPtyId: string, incarnationId?: string | null) => void
   onBell?: () => void

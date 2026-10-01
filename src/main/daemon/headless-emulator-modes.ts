@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/headless'
-import type { TerminalMouseModeMirror } from './terminal-mouse-mode-mirror'
+import { readTerminalMouseEncoding } from '../../shared/terminal-mouse-encoding'
 import type { TerminalModes } from './types'
 
 type TerminalWithKittyKeyboard = Terminal & {
@@ -13,18 +13,16 @@ export function readKittyKeyboardFlags(terminal: Terminal): number {
 }
 
 /** Mode state a snapshot must carry so a restored pane behaves like the live one. */
-export function readTerminalModes(
-  terminal: Terminal,
-  mouseModes: TerminalMouseModeMirror
-): TerminalModes {
+export function readTerminalModes(terminal: Terminal): TerminalModes {
   const buffer = terminal.buffer.active
-  const mouseTrackingMode = mouseModes.mouseTrackingMode
+  const mouseTrackingMode = terminal.modes.mouseTrackingMode
+  const mouseEncoding = readTerminalMouseEncoding(terminal)
   return {
     bracketedPaste: terminal.modes.bracketedPasteMode,
     mouseTracking: mouseTrackingMode !== 'none',
     mouseTrackingMode,
-    sgrMouseMode: mouseModes.sgrMouseMode,
-    sgrMousePixelsMode: mouseModes.sgrMousePixelsMode,
+    sgrMouseMode: mouseEncoding === 'sgr',
+    sgrMousePixelsMode: mouseEncoding === 'sgr-pixels',
     applicationCursor: buffer.type === 'normal' ? terminal.modes.applicationCursorKeysMode : false,
     alternateScreen: buffer.type === 'alternate',
     kittyKeyboardFlags: readKittyKeyboardFlags(terminal)

@@ -38,6 +38,101 @@ export function runWorktreeDeleteWithToast(
     ...(options.suppressPreservedBranchToast ? { suppressPreservedBranchToast: true } : {}),
     ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {})
   }
+  const showFailureToast = (
+    error: string,
+    state: ReturnType<typeof getDeleteStateForWorktreeHost>
+  ): void => {
+    const hasKnownChanges =
+      (useAppStore.getState().gitStatusByWorktree[worktreeId]?.length ?? 0) > 0
+    showDeleteWorktreeFailureToast({
+      error,
+      canForceDelete: state?.canForceDelete ?? false,
+      canWaiveArchiveHook: state?.canWaiveArchiveHook === true,
+      forceDeleteReason: state?.forceDeleteReason ?? null,
+      lockReason: state?.lockReason ?? null,
+      hasKnownChanges,
+      onViewChanges: () => viewWorktreeDiff(worktreeId, target.executionHostId),
+      // Why (#19334): re-runs the archive hook and waives the failure this time, so the waiver
+      // is an informed choice made after reading the refusal -- not something `force` implied.
+      onDeleteAnyway: () =>
+        retryFromToast({ force: options.force === true, allowFailedArchiveHook: true }),
+      // The explicit Force Delete retry may waive an unverified PTY-stop proof.
+      onForceDelete: () =>
+        retryFromToast({
+          force: true,
+          allowUnverifiedPtyStop: true,
+          failedTitle: translate(
+            'auto.components.sidebar.delete.worktree.flow.4f3876c0f5',
+            'Force delete failed'
+          ),
+          withViewAction: true
+        }),
+      worktreeId,
+      worktreeName
+    })
+  }
+
+  // Both toast buttons do the same thing: recapture focus (the user may have navigated while the
+  // toast was open), retry with one waiver added, and report a success through `onForceDeleted` so
+  // the caller's bookkeeping runs. Only the waiver and the failure copy differ.
+  const retryFromToast = (retry: {
+    force: boolean
+    allowUnverifiedPtyStop?: boolean
+    allowFailedArchiveHook?: boolean
+    failedTitle?: string
+    withViewAction?: boolean
+  }): void => {
+    const commitRetryFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
+    const viewAction = retry.withViewAction
+      ? {
+          action: {
+            label: translate('auto.components.sidebar.delete.worktree.flow.7488ed8711', 'View'),
+            onClick: () => viewWorktreeDiff(worktreeId, target.executionHostId)
+          }
+        }
+      : {}
+    // Why re-show the full failure toast rather than a bare `toast.error` (#19334): a retry can
+    // fail for a DIFFERENT reason than the one the user just answered. Waiving a failed archive
+    // hook on a dirty checkout lands on the dirty preflight next, and a bare error offers no
+    // buttons — leaving the user stuck one step further in, which is the dead end this gate has
+    // now produced three times. Routing back through the same toast keeps every retry actionable.
+    const failed = (description: string): void => {
+      const retryState = getDeleteStateForWorktreeHost(
+        { id: worktreeId, hostId: target.executionHostId ?? undefined },
+        useAppStore.getState().deleteStateByWorktreeId
+      )
+      if (retryState?.canForceDelete === true || retryState?.canWaiveArchiveHook === true) {
+        showFailureToast(description, retryState)
+        return
+      }
+      toast.error(
+        retry.failedTitle ??
+          translate(
+            'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+            'Failed to delete workspace'
+          ),
+        { description, ...viewAction }
+      )
+    }
+    useAppStore
+      .getState()
+      .removeWorktree(target, retry.force, {
+        ...(retry.allowUnverifiedPtyStop ? { allowUnverifiedPtyStop: true } : {}),
+        ...(retry.allowFailedArchiveHook ? { allowFailedArchiveHook: true } : {})
+      })
+      .then((result) => {
+        if (!result.ok) {
+          failed(result.error)
+          return
+        }
+        commitRetryFocus()
+        // "A retry started from this toast completed the delete" — callers hang their bookkeeping
+        // off it, so without this a batch or Space-panel delete keeps listing what it removed.
+        options.onForceDeleted?.(target)
+      })
+      .catch((err: unknown) => failed(err instanceof Error ? err.message : String(err)))
+  }
+
   const removal =
     Object.keys(removeOptions).length > 0
       ? removeWorktree(target, options.force === true, removeOptions)
@@ -61,73 +156,13 @@ export function runWorktreeDeleteWithToast(
         }
         return true
       }
-      const state = getDeleteStateForWorktreeHost(
-        { id: worktreeId, hostId: target.executionHostId ?? undefined },
-        useAppStore.getState().deleteStateByWorktreeId
+      showFailureToast(
+        result.error,
+        getDeleteStateForWorktreeHost(
+          { id: worktreeId, hostId: target.executionHostId ?? undefined },
+          useAppStore.getState().deleteStateByWorktreeId
+        )
       )
-      const canForceDelete = state?.canForceDelete ?? false
-      const hasKnownChanges =
-        (useAppStore.getState().gitStatusByWorktree[worktreeId]?.length ?? 0) > 0
-      showDeleteWorktreeFailureToast({
-        error: result.error,
-        canForceDelete,
-        forceDeleteReason: state?.forceDeleteReason ?? null,
-        lockReason: state?.lockReason ?? null,
-        hasKnownChanges,
-        onViewChanges: () => viewWorktreeDiff(worktreeId, target.executionHostId),
-        onForceDelete: () => {
-          // Recapture focus because the user may have navigated while the toast was open.
-          const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-          // The explicit Force Delete retry may waive an unverified PTY-stop proof.
-          const forceRemoval = useAppStore
-            .getState()
-            .removeWorktree(target, true, { allowUnverifiedPtyStop: true })
-          forceRemoval
-            .then((forceResult) => {
-              if (!forceResult.ok) {
-                toast.error(
-                  translate(
-                    'auto.components.sidebar.delete.worktree.flow.4f3876c0f5',
-                    'Force delete failed'
-                  ),
-                  {
-                    description: forceResult.error,
-                    action: {
-                      label: translate(
-                        'auto.components.sidebar.delete.worktree.flow.7488ed8711',
-                        'View'
-                      ),
-                      onClick: () => viewWorktreeDiff(worktreeId, target.executionHostId)
-                    }
-                  }
-                )
-                return
-              }
-              commitForceFocus()
-              options.onForceDeleted?.(target)
-            })
-            .catch((err: unknown) => {
-              toast.error(
-                translate(
-                  'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
-                  'Failed to delete workspace'
-                ),
-                {
-                  description: err instanceof Error ? err.message : String(err),
-                  action: {
-                    label: translate(
-                      'auto.components.sidebar.delete.worktree.flow.7488ed8711',
-                      'View'
-                    ),
-                    onClick: () => viewWorktreeDiff(worktreeId, target.executionHostId)
-                  }
-                }
-              )
-            })
-        },
-        worktreeId,
-        worktreeName
-      })
       return false
     })
     .catch((err: unknown) => {

@@ -1,9 +1,15 @@
+import { z } from 'zod'
 import type {
   SshPtyConsumerRecovery,
   SshRemotePtyLease,
+  SshRemoteRuntimeResolution,
   SshTarget
 } from '../../../shared/ssh-types'
-import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../../shared/ssh-types'
+import {
+  LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  SSH_REMOTE_RUNTIME_RUNGS,
+  SSH_REMOTE_RUNTIMES
+} from '../../../shared/ssh-types'
 import { normalizeSshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
 
 export type LegacySshTarget = SshTarget & {
@@ -19,11 +25,17 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
   const systemSshConnectionReuse = target.systemSshConnectionReuse
+  const remoteRuntime = target.remoteRuntime
+  const remoteRuntimeResolution = normalizeSshRemoteRuntimeResolution(
+    target.remoteRuntimeResolution
+  )
   // Why: remote sync now follows the SSH relay lifecycle, so retired per-target sync/grace fields are dropped at disk load.
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
+  delete target.remoteRuntime
+  delete target.remoteRuntimeResolution
   delete target.experimentalPtySourceCreditV1
   // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
@@ -44,7 +56,35 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   if (systemSshConnectionReuse === false) {
     normalized.systemSshConnectionReuse = false
   }
+  // Known values survive, so an explicit Host Node choice outlives a later default flip;
+  // an unknown value from a newer build must not change the runtime.
+  const knownRuntime = SSH_REMOTE_RUNTIMES.find((runtime) => runtime === remoteRuntime)
+  if (knownRuntime) {
+    normalized.remoteRuntime = knownRuntime
+  }
+  if (remoteRuntimeResolution) {
+    normalized.remoteRuntimeResolution = remoteRuntimeResolution
+  }
   return normalized
+}
+
+// Why strict: a malformed cache entry is dropped, which only costs one rung A attempt.
+const SshRemoteRuntimeResolutionSchema = z
+  .object({
+    rung: z.enum(SSH_REMOTE_RUNTIME_RUNGS),
+    pinnedRefusal: z.string().max(64).optional(),
+    glibc: z
+      .string()
+      .regex(/^\d+\.\d+$/)
+      .nullable(),
+    runtimeSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    orcaMajor: z.number().int().nonnegative()
+  })
+  .strict()
+
+function normalizeSshRemoteRuntimeResolution(value: unknown): SshRemoteRuntimeResolution | null {
+  const parsed = SshRemoteRuntimeResolutionSchema.safeParse(value)
+  return parsed.success ? parsed.data : null
 }
 
 // Why: strict whitelist — a record missing or mistyping a required field is dropped rather than partially trusted.
@@ -61,7 +101,7 @@ export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | 
     return null
   }
   const now = Date.now()
-  const pendingKill = normalizeSshPendingPtyKill(raw.pendingKill)
+  const pendingKill = normalizeSshPendingPtyKill(raw.pendingKill, raw.ptyId)
   return {
     targetId: raw.targetId,
     ptyId: raw.ptyId,

@@ -31,7 +31,6 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   structuredSession: Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
   terminalHandle: string
   coordinatorHandle: string
-  dispatchCapability: string
   devMode: boolean | undefined
   requestId: string
   agent: string | null
@@ -47,7 +46,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
   args.onStage('dispatch_input')
-  const promptDelivery = await deliverWorkerDispatchPreamble({
+  const delivery = await deliverWorkerDispatchPreamble({
     runtime,
     structuredSession,
     terminalHandle,
@@ -56,7 +55,6 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     taskId: task.id,
     taskSpec: task.spec,
     coordinatorHandle: args.coordinatorHandle,
-    dispatchCapability: args.dispatchCapability,
     devMode: args.devMode,
     requestId: args.requestId
   })
@@ -71,11 +69,11 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   // The write above was accepted without waiting on provider hooks; now demand the positive
   // evidence the receipt claims is observable. A worker whose turn never starts must not be
   // reported ready — a wedged agent and a working one looked identical before this gate.
-  // A structured preamble send is acknowledged by the provider or throws, so it is already
-  // positive evidence.
-  const turnStart: WorkerTurnStartObservation = structuredSession
-    ? { verdict: 'observed' }
-    : await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery })
+  // A structured preamble send is its own evidence: acknowledged, or still held for its agent.
+  const promptDelivery = delivery.prompt
+  const turnStart: WorkerTurnStartObservation =
+    delivery.structuredTurnStart ??
+    (await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery }))
   const deliveredPrompt = turnStart.prompt ?? promptDelivery
   monitorWorkerSetup({
     runtime,
@@ -89,7 +87,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const currentWorker = db.getWorkerDispatch(args.dispatchId)
   const alreadySettled = currentWorker && currentWorker.state !== 'starting'
   if (turnStart.verdict === 'unobserved' && !alreadySettled) {
-    // Honest `unverifiable`: keep the dispatch capability and the terminal — the worker may
+    // Honest `unverifiable`: keep lifecycle authority and the terminal — the worker may
     // still recover and report (worker-report settlement reconnects a start_unknown worker) —
     // but never claim ready for a turn nobody observed.
     effects.push({
@@ -98,7 +96,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       id: terminalHandle,
       state: 'turn_unobserved'
     })
-    const reason = describeUnobservedWorkerTurnStart(args.agent)
+    const reason = turnStart.reason ?? describeUnobservedWorkerTurnStart(args.agent)
     const worker = db.markWorkerStartUnknown(
       args.dispatchId,
       'turn_start_unobserved',
@@ -122,7 +120,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       residualResources: JSON.parse(worker.residual_resources) as unknown[],
       nextCommands: [
         `orca orchestration worker-show --dispatch ${args.dispatchId} --json`,
-        `orca terminal read --terminal ${terminalHandle} --screen`,
+        // A structured worker has no screen to read.
+        ...(structuredSession ? [] : [`orca terminal read --terminal ${terminalHandle} --screen`]),
         `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
       ],
       ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})

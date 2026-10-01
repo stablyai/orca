@@ -10,7 +10,7 @@ type RankedAgent = {
 const NO_MATCH = Number.POSITIVE_INFINITY
 export const AGENT_PICKER_QUERY_MAX_BYTES = 2 * 1024
 
-export function isAgentPickerQueryTooLarge(
+function isAgentPickerQueryTooLarge(
   query: string,
   maxBytes = AGENT_PICKER_QUERY_MAX_BYTES
 ): boolean {
@@ -87,7 +87,8 @@ function scoreAgent(agent: AgentCatalogEntry, query: string): number {
   return Math.min(
     scoreCandidate(query, agent.label, 0),
     scoreCandidate(query, agent.id, 600),
-    scoreCandidate(query, agent.cmd, 650)
+    scoreCandidate(query, agent.cmd, 650),
+    ...(agent.searchAliases ?? []).map((alias) => scoreCandidate(query, alias, 650))
   )
 }
 

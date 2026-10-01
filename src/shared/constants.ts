@@ -1,6 +1,4 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { NotificationSettings } from './notification-settings-types'
-import type { OnboardingChecklistState, OnboardingState } from './onboarding-state-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
@@ -17,6 +15,13 @@ import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
 import { buildDefaultSettings } from './default-global-settings'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
+import { getDefaultNotificationSettings } from './notification-settings-defaults'
+import { getDefaultOnboardingState } from './onboarding-defaults'
+import {
+  defaultTerminalFontFamily,
+  getDefaultPrimarySelectionMiddleClickPaste,
+  getDefaultTerminalRightClickToPaste
+} from './terminal-platform-defaults'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -40,10 +45,6 @@ export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivity
   return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
 }
 
-// Why: onboarding wizard's last step index, centralized so backfill, clamps, and UI agree on the bound.
-export const ONBOARDING_FINAL_STEP = 5
-export const ONBOARDING_FLOW_VERSION = 4
-
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: inert blank-tab URL shared by main/renderer so the attach policy can allow just this one data URL and reject others.
 export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
@@ -63,26 +64,6 @@ export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   safari: 'Safari',
   manual: 'File'
 }
-
-// Why: only the initial value shown in Settings; buildFontFamily() adds the real cross-platform fallback chain.
-function defaultTerminalFontFamily(): string {
-  const platform = typeof process !== 'undefined' ? process.platform : ''
-  if (platform === 'win32') {
-    return 'Cascadia Mono'
-  }
-  if (platform === 'linux') {
-    return 'DejaVu Sans Mono'
-  }
-  return 'SF Mono' // macOS default
-}
-
-export const getDefaultPrimarySelectionMiddleClickPaste = (
-  platform = typeof process !== 'undefined' ? process.platform : ''
-): boolean => platform === 'linux' || platform === 'darwin'
-
-export const getDefaultTerminalRightClickToPaste = (
-  platform = typeof process !== 'undefined' ? process.platform : ''
-): boolean => platform === 'win32'
 
 /** Why: ProseMirror renders the whole document without virtualization. After the
  *  parser/highlighter work in #17134/#17147/#17158, M-series Electron measurements
@@ -118,41 +99,6 @@ export const REPO_COLORS = [
 
 export const DEFAULT_REPO_BADGE_COLOR = REPO_COLORS[0]
 
-export function getDefaultNotificationSettings(): NotificationSettings {
-  return {
-    enabled: true,
-    agentTaskComplete: true,
-    terminalBell: false,
-    suppressWhenFocused: true,
-    customSoundId: 'system',
-    customSoundPath: null,
-    customSoundVolume: 100
-  }
-}
-
-export function getDefaultOnboardingState(): OnboardingState {
-  return {
-    flowVersion: ONBOARDING_FLOW_VERSION,
-    closedAt: null,
-    outcome: null,
-    lastCompletedStep: -1,
-    checklist: {
-      addedRepo: false,
-      choseAgent: false,
-      ranFirstAgent: false,
-      ranSecondAgentOnSameTask: false,
-      triedCmdJ: false,
-      shapedSidebar: false,
-      reviewedDiff: false,
-      openedPr: false,
-      addedFolder: false,
-      openedFile: false,
-      ranAgentOnFile: false,
-      dismissed: false
-    } satisfies OnboardingChecklistState
-  }
-}
-
 /** The stock worktree root. Exported so callers can tell an untouched default apart
  *  from a workspace directory the user actually chose. */
 export function getDefaultWorkspaceDir(homeDir: string): string {
@@ -173,6 +119,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     notifications: getDefaultNotificationSettings(),
+
     voice: getDefaultVoiceSettings()
   })
 }
@@ -239,6 +186,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
   }
 }
 
+/** Creates fresh UI defaults with completed migration markers so new profiles are not treated as legacy installations. */
 export function getDefaultUIState(): PersistedUIState {
   return {
     lastActiveRepoId: null,
@@ -268,6 +216,8 @@ export function getDefaultUIState(): PersistedUIState {
     hideDetachedHeadWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     alwaysShowDefaultBranchWorkspace: true,
+    _explorerDisplayRootMigrated: true,
+    explorerDisplayRootByWorktree: {},
     showDotfilesByWorktree: {},
     filterRepoIds: [],
     agentsVisibleHostIds: null,
@@ -296,6 +246,7 @@ export function getDefaultUIState(): PersistedUIState {
     usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     dismissedUpdateVersion: null,
+    dismissedUnexpectedSignoutVersion: null,
     lastUpdateCheckAt: null,
     trustedOrcaHooks: {},
     setupScriptPromptDismissedRepoIds: [],

@@ -24,7 +24,7 @@ export function createBrowserHostActions(
           closes,
           Date.now()
         )
-        return next ? { clientHostedBrowserCloseIntentsByEnvironment: next } : {}
+        return next ? { clientHostedBrowserCloseIntentsByEnvironment: next } : s
       })
     },
 
@@ -34,7 +34,7 @@ export function createBrowserHostActions(
           s.clientHostedBrowserCloseIntentsByEnvironment,
           { environmentId, browserPageIds, now: Date.now() }
         )
-        return next ? { clientHostedBrowserCloseIntentsByEnvironment: next } : {}
+        return next ? { clientHostedBrowserCloseIntentsByEnvironment: next } : s
       })
     },
 

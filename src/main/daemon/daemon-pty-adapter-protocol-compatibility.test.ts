@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* DaemonPtyAdapter behaviour that varies with the negotiated daemon protocol version. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
@@ -242,14 +243,27 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('background stream thinning compatibility', () => {
-    it('reports authoritative snapshot support only for the corrected serializer protocol', () => {
+    it('reports authoritative snapshot support only for the corrected serializer protocol', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
-        expect(legacy.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
-        expect(adapter.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
+        expect(legacy.canProvideAuthoritativeBufferSnapshot(id)).toBe(false)
+        expect(adapter.canProvideAuthoritativeBufferSnapshot(id)).toBe(true)
       } finally {
         legacy.dispose()
       }
+    })
+
+    // Why this matters beyond tidiness: getProviderForPty falls back to the local provider for
+    // any id it cannot place, so these ids reach this adapter for real. Answered from the
+    // protocol flag alone they came back `true`, which the renderer caches as a definitive
+    // per-pty licence to unmount a pane whose bytes this daemon never held.
+    it('refuses an authoritative snapshot claim for a session it does not own', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      expect(adapter.canProvideAuthoritativeBufferSnapshot(id)).toBe(true)
+      expect(adapter.canProvideAuthoritativeBufferSnapshot('remote:env-1:pty-1')).toBe(false)
+      expect(adapter.canProvideAuthoritativeBufferSnapshot('never-spawned-session')).toBe(false)
     })
 
     it('reports background state on the authoritative-snapshot protocol', () => {

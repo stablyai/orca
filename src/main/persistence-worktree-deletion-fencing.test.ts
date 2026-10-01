@@ -1,9 +1,15 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  makeTerminalTab
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../shared/constants'
-import { testState, createStore, makeTerminalTab } from './persistence-test-harness'
+
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
@@ -54,7 +60,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
@@ -87,7 +94,7 @@ describe('Store', () => {
       }
     })
 
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: 'wt1',
       tabId: 'tab1',
       leafId: TEST_LEAF_2,
@@ -132,7 +139,7 @@ describe('Store', () => {
       terminalTopologyRevisionByRepoId: { wt1: 1 }
     })
 
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: 'wt1',
       tabId: 'tab1',
       leafId: TEST_LEAF_2,
@@ -179,7 +186,7 @@ describe('Store', () => {
     store.setWorkspaceSession(stale)
     expect(store.getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
 
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: 'wt1',
       tabId: 'fresh-tab',
       leafId: TEST_LEAF_2,
@@ -261,7 +268,7 @@ describe('Store', () => {
     expect(store.getWorkspaceSession().tabsByWorktree[worktreeA]?.[0]?.id).toBe('tab-a')
     expect(store.getWorkspaceSession().tabsByWorktree[worktreeB]?.[0]?.id).toBe('tab-b')
 
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: worktreeB,
       tabId: 'fresh-tab',
       leafId: TEST_LEAF_1,
@@ -281,7 +288,7 @@ describe('Store', () => {
     for (let index = 0; index < 25; index += 1) {
       const worktreeId = `repo::/worktree-${index}`
       store.setWorktreeMeta(worktreeId, { displayName: `Worktree ${index}` })
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId,
         tabId: `tab-${index}`,
         leafId: TEST_LEAF_1,
@@ -364,7 +371,7 @@ describe('Store', () => {
       }
     })
 
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: 'wt1',
       tabId: 'tab1',
       leafId: TEST_LEAF_1,

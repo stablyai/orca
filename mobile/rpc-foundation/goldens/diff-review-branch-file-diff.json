@@ -1,0 +1,111 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.diff-review-load",
+  "family": "session.diff-review",
+  "namedDeltas": [],
+  "values": {
+    "365c17523d76": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "itemKey": "branch:src/app.ts",
+        "kind": "binary"
+      }
+    },
+    "38fb361f406c": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Committed diff is unavailable",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "534cf7badcbc": {
+      "branchCompare": "unloaded",
+      "diff": {
+        "itemKey": "branch:src/app.ts",
+        "kind": "binary"
+      },
+      "snapshot": "unloaded"
+    },
+    "ce804facf021": {
+      "name": "git.branchDiff#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"a1b2c3d4e5f60718293a4b5c6d7e8f9012345678\",\"headOid\":\"f0e1d2c3b4a5968778695a4b3c2d1e0f98765432\",\"mergeBase\":\"0123456789abcdef0123456789abcdef01234567\"}}}"
+    },
+    "d24ea9d9187c": {
+      "name": "git.branchDiff#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchDiff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "compare": {
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "baseRef": "origin/main",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567"
+            },
+            "filePath": "src/app.ts",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "kind": "binary"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "diff-review-branch-file-diff",
+    "checkpoints": [
+      {
+        "id": "branch",
+        "observation": {
+          "sender": ["d24ea9d9187c"],
+          "payloads": ["ce804facf021"],
+          "settlements": {
+            "branch": "365c17523d76"
+          },
+          "state": "534cf7badcbc",
+          "effects": []
+        }
+      },
+      {
+        "id": "no-compare",
+        "observation": {
+          "sender": ["d24ea9d9187c"],
+          "payloads": ["ce804facf021"],
+          "settlements": {
+            "branch": "365c17523d76",
+            "no-compare": "38fb361f406c"
+          },
+          "state": "534cf7badcbc",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

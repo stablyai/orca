@@ -358,7 +358,7 @@ async function main() {
     sampleAggregation: BENCHMARK_SAMPLE_AGGREGATION,
     injectedLoginDelayMs: options.loginDelayMs,
     loginProbePreambleBytes: Buffer.byteLength(probeText.split('__ORCA_PATH__', 1)[0]),
-    guestProcessShape: {
+    guestProcessChain: {
       login: 'sh -> interactive login shell -> git',
       fast: 'env -> git'
     },

@@ -104,6 +104,7 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
     }
     const context: RequestContext = {
       clientId: client.id,
+      transportGeneration: gen,
       isStale: () =>
         client.generation !== gen || !this.clients.has(client.id) || abortController.signal.aborted,
       signal: abortController.signal,
@@ -179,6 +180,7 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
       const gen = client.generation
       handler(notif.params ?? {}, {
         clientId: client.id,
+        transportGeneration: gen,
         isStale: () => client.generation !== gen || !this.clients.has(client.id),
         sessionIdentity: client.sessionIdentity,
         onResponseSettled: () => {

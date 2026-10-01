@@ -6,7 +6,13 @@ const MAX_RETRY_EVENTS = 256
 const MAX_RETRY_BYTES = 8 * 1024 * 1024
 const RETRY_DELAY_MS = 25
 
-type PendingNotification = { method: string; params: unknown; bytes: number; observedAt?: number }
+type PendingNotification = {
+  method: string
+  params: unknown
+  bytes: number
+  observedAt?: number
+  dispatchSequenceAtReceipt?: number
+}
 type RetryState = {
   connection: CodexAppServerConnection
   events: PendingNotification[]
@@ -23,7 +29,8 @@ export function createCodexStructuredNotificationRetry(deps: {
     session: CodexSession,
     method: string,
     params: unknown,
-    observedAt?: number
+    observedAt?: number,
+    dispatchSequenceAtReceipt?: number
   ) => CodexJournalTranslationAdmission
 }) {
   const states = new Map<string, RetryState>()
@@ -54,7 +61,8 @@ export function createCodexStructuredNotificationRetry(deps: {
           session,
           pending.method,
           pending.params,
-          pending.observedAt
+          pending.observedAt,
+          pending.dispatchSequenceAtReceipt
         )
         if (!admission.accepted) {
           if (admission.reason === 'backpressure') {
@@ -105,7 +113,8 @@ export function createCodexStructuredNotificationRetry(deps: {
     connection: CodexAppServerConnection,
     method: string,
     params: unknown,
-    observedAt: number | undefined
+    observedAt: number | undefined,
+    dispatchSequenceAtReceipt: number | undefined
   ): void => {
     const bytes = Buffer.byteLength(JSON.stringify({ method, params }), 'utf8')
     let state = states.get(sessionId)
@@ -123,7 +132,8 @@ export function createCodexStructuredNotificationRetry(deps: {
       method,
       params,
       bytes,
-      ...(observedAt !== undefined ? { observedAt } : {})
+      ...(observedAt !== undefined ? { observedAt } : {}),
+      ...(dispatchSequenceAtReceipt !== undefined ? { dispatchSequenceAtReceipt } : {})
     })
     state.bytes += bytes
     connection.pauseReading?.()
@@ -134,7 +144,8 @@ export function createCodexStructuredNotificationRetry(deps: {
       sessionId: string,
       method: string,
       params: unknown,
-      observedAt?: number
+      observedAt?: number,
+      dispatchSequenceAtReceipt?: number
     ): CodexJournalTranslationAdmission => {
       const session = deps.sessionFor(sessionId)
       if (!session) {
@@ -142,13 +153,27 @@ export function createCodexStructuredNotificationRetry(deps: {
       }
       const state = states.get(sessionId)
       if (state && state.events.length > 0) {
-        enqueue(sessionId, state.connection, method, params, observedAt)
+        enqueue(sessionId, state.connection, method, params, observedAt, dispatchSequenceAtReceipt)
         retry(sessionId, state.connection)
         return { accepted: false, reason: 'backpressure' }
       }
-      const admission = deps.translate(sessionId, session, method, params, observedAt)
+      const admission = deps.translate(
+        sessionId,
+        session,
+        method,
+        params,
+        observedAt,
+        dispatchSequenceAtReceipt
+      )
       if (!admission.accepted) {
-        enqueue(sessionId, session.connection, method, params, observedAt)
+        enqueue(
+          sessionId,
+          session.connection,
+          method,
+          params,
+          observedAt,
+          dispatchSequenceAtReceipt
+        )
         retry(sessionId, session.connection)
       }
       return admission

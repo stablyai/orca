@@ -9,6 +9,7 @@ import {
 } from '../listing/detected-worktree-meta'
 import { shouldDeferActivationTerminalPrep } from './activation-terminal-prep'
 import { deriveActiveSurfaceForWorktree } from '../../tabs/tabs-surface'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 
 export function createSetActiveFolderWorkspace(
   set: WorktreeSliceSet,
@@ -62,6 +63,8 @@ export function createSetActiveFolderWorkspace(
           : s.folderWorkspaces
       }
     })
+    // Why: cleared after the set() so a waiting pane connects against the activated state.
+    clearWorktreeSleepIntent(workspaceKey)
     if (workspace.isUnread) {
       void get().updateFolderWorkspace(
         folderWorkspaceId,

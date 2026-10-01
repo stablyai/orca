@@ -3,6 +3,7 @@ import type {
   EnrichedDetectedPort,
   SshConnectionState,
   SshConnectionStatus,
+  SshPlainSshMode,
   SshProviderEpoch
 } from './ssh-types'
 import { clampUtf8TextPrefix, measureUtf8ByteLength } from './utf8-byte-limits'
@@ -10,6 +11,7 @@ import { clampUtf8TextPrefix, measureUtf8ByteLength } from './utf8-byte-limits'
 export const SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES = 1024
 export const SSH_CONNECTION_ERROR_MAX_UTF8_BYTES = 16 * 1024
 export const SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES = 128
+const SSH_PLAIN_SSH_REASON_MAX_UTF8_BYTES = 64
 export const SSH_DETECTED_PORTS_MAX_ENTRIES = 50
 export const SSH_DETECTED_PORT_HOST_MAX_UTF8_BYTES = 1024
 export const SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES = 4 * 1024
@@ -92,7 +94,26 @@ export function admitSshConnectionState(
     input.remotePlatform === 'darwin' ||
     input.remotePlatform === 'win32'
       ? { remotePlatform: input.remotePlatform }
-      : {})
+      : {}),
+    ...admitSshPlainSshMode(input.plainSsh)
+  }
+}
+
+// Why field-by-field: a malformed optional mode must drop alone, never the whole state.
+function admitSshPlainSshMode(value: unknown): { plainSsh?: SshPlainSshMode } {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  const reason = 'reason' in value ? value.reason : undefined
+  const message = 'message' in value ? value.message : undefined
+  if (typeof reason !== 'string' || typeof message !== 'string' || !reason || !message) {
+    return {}
+  }
+  return {
+    plainSsh: {
+      reason: clampUtf8TextPrefix(reason, SSH_PLAIN_SSH_REASON_MAX_UTF8_BYTES),
+      message: clampUtf8TextPrefix(message, SSH_CONNECTION_ERROR_MAX_UTF8_BYTES)
+    }
   }
 }
 
@@ -117,7 +138,8 @@ export function admitSshConnectionStateForAuthorityReconciliation(
       error: input.error,
       reconnectAttempt: input.reconnectAttempt,
       supportsFolderDownload: input.supportsFolderDownload,
-      remotePlatform: input.remotePlatform
+      remotePlatform: input.remotePlatform,
+      plainSsh: input.plainSsh
     },
     expectedTargetId
   )

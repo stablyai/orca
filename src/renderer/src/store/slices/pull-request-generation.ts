@@ -288,7 +288,7 @@ export const createPullRequestGenerationSlice: StateCreator<
     set((state) => {
       const nextRecord = updater(state.pullRequestGenerationRecords[key] ?? null)
       if (!nextRecord) {
-        return {}
+        return state
       }
       return {
         pullRequestGenerationRecords: {
@@ -312,6 +312,6 @@ export const createPullRequestGenerationSlice: StateCreator<
           changed = true
         }
       }
-      return changed ? { pullRequestGenerationRecords: nextRecords } : {}
+      return changed ? { pullRequestGenerationRecords: nextRecords } : state
     })
 })

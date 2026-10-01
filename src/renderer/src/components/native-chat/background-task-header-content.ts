@@ -166,8 +166,8 @@ export function backgroundTasksHeaderContent(
         : kindCountLabel(group.kind, 1)
     // A still-growing clock on finished work would lie, exactly as on the row.
     const elapsed =
-      group.kind === 'command' && !entry.settled
-        ? backgroundTaskElapsedLabel(entry.task, options.now)
+      group.kind === 'command' && !entry.row.settled
+        ? backgroundTaskElapsedLabel(entry.row.firstObservedAt, options.now)
         : null
     return {
       segments: [{ text: subject, kind: group.kind }],

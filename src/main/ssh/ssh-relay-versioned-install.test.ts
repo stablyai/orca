@@ -1,16 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as DeployHelpers from './ssh-relay-deploy-helpers'
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn()
 }))
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({
+vi.mock('./ssh-relay-deploy-helpers', async (importOriginal) => ({
+  ...(await importOriginal<typeof DeployHelpers>()),
   execCommand: vi.fn()
 }))
 
 vi.mock('./ssh-connection-utils', () => ({
   shellEscape: (s: string) => `'${s}'`
+}))
+
+// The previous-build pin has its own tests; here it names a build that is never a candidate.
+vi.mock('./remote-install-previous-version', () => ({
+  findPreviousRemoteInstall: vi.fn().mockResolvedValue({ state: 'ok', dirName: 'relay-0.1.0+fff' })
 }))
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -909,7 +916,9 @@ describe('gcOldRelayVersions', () => {
       .mockResolvedValueOnce('OWNED')
       .mockRejectedValueOnce(unconfirmed)
 
-    await gcOldRelayVersions(conn, '/home/u', '/home/u/.orca-remote/relay-0.1.0+bbb')
+    await expect(
+      gcOldRelayVersions(conn, '/home/u', '/home/u/.orca-remote/relay-0.1.0+bbb')
+    ).rejects.toBe(unconfirmed)
 
     const releaseCommands = mockExec.mock.calls
       .map(([, command]) => command)

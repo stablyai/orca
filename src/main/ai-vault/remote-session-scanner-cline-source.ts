@@ -6,6 +6,7 @@ import type { RemoteSessionSource } from './remote-session-scanner-types'
 import {
   clineMessagesPathForMetadata,
   isClineSessionMetadataPath,
+  parseClineSessionDocuments,
   parseClineSessionContent
 } from './session-scanner-cline-parser'
 
@@ -20,6 +21,22 @@ export function remoteClineSource(
     filePredicate: isClineSessionMetadataPath,
     contentDependencyPath: clineMessagesPathForMetadata,
     directoryPredicate: (_name, depth) => depth === 0,
+    parseDocument: (file, bytes, context) =>
+      parseClineSessionDocuments(
+        file,
+        bytes,
+        () =>
+          context.provider.readTranscriptBytes!(
+            clineMessagesPathForMetadata(file.path),
+            context.signal
+          ),
+        context.hostPlatform.os,
+        {
+          executionHostId: context.executionHostId,
+          executionHostPlatform: context.hostPlatform.os
+        },
+        context.signal
+      ),
     parse: async (file, content, context) => {
       let messagesContent: string | null = null
       try {

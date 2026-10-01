@@ -1,6 +1,10 @@
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
-import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
+import { parseUnameToRelayPlatform, RELAY_REMOTE_DIR } from '../main/ssh/relay-protocol'
+import { DEFAULT_AI_VAULT_SEARCH_SETTINGS } from '../shared/ai-vault-search-settings'
+import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { installInProcessSessionSearchService } from '../main/ai-vault-search/session-search-in-process-service'
 import type { RelayDispatcher } from './dispatcher'
 import { RelayContext, expandTilde } from './context'
 import { PtyHandler } from './pty-handler'
@@ -28,7 +32,10 @@ export class RelayRuntimeServices {
   readonly fsHandler: FsHandler
   readonly gitHandler: GitHandler
   readonly skillInstallHandler: SkillInstallHandler
+  readonly agentExecHandler: AgentExecHandler
+  private readonly responseStreams: GitResponseStreamRegistry
   private readonly aiVaultService: ReturnType<typeof createRelayAiVaultService> | null
+  private readonly sessionSearch: { dispose(): void } | null
   private readonly registeredHandlers: readonly unknown[]
 
   constructor(
@@ -61,6 +68,7 @@ export class RelayRuntimeServices {
     // so two registries would hand out the same id, and only GitHandler routes the `git.responseAck`
     // credit every pump waits on. A second registry is not an option — see git-response-stream.ts.
     const responseStreams = new GitResponseStreamRegistry()
+    this.responseStreams = responseStreams
     this.fsHandler = new FsHandler(dispatcher, context, undefined, responseStreams)
     const watchRegistry = this.fsHandler.getWatchRegistry()
     this.ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
@@ -72,17 +80,33 @@ export class RelayRuntimeServices {
     this.skillInstallHandler = new SkillInstallHandler(dispatcher)
     const externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
     const portScanHandler = new PortScanHandler(dispatcher)
-    const agentExecHandler = new AgentExecHandler(dispatcher)
+    this.agentExecHandler = new AgentExecHandler(dispatcher)
     const workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
     const relayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
     const hostPlatform = relayPlatform ? getRemoteHostPlatform(relayPlatform) : undefined
     this.aiVaultService = hostPlatform ? createRelayAiVaultService(homedir(), hostPlatform) : null
+    // Why beside the AI Vault sidecar and not inside it: that sidecar runs the
+    // remote scanner, which reads through a filesystem provider and publishes
+    // nothing to the transcript channel the index consumes. This process is the
+    // one that would drive the index's own reads, and the only writer on the file.
+    // Off until something can carry consent to a remote host (see the PR body);
+    // registering it anyway is what makes this host answer `disabled` and not
+    // `no-service`, which is the difference between off and too old.
+    this.sessionSearch = installInProcessSessionSearchService({
+      dataRoot: join(homedir(), RELAY_REMOTE_DIR),
+      roots: { executionHostId: LOCAL_EXECUTION_HOST_ID },
+      settings: DEFAULT_AI_VAULT_SEARCH_SETTINGS,
+      onError: (error) =>
+        relayLogLine(
+          `[relay] session search: ${error instanceof Error ? error.message : String(error)}`
+        )
+    })
     this.registeredHandlers = [
       preflightHandler,
       this.skillInstallHandler,
       externalAutomationsHandler,
       portScanHandler,
-      agentExecHandler,
+      this.agentExecHandler,
       workspaceSessionHandler,
       new AiVaultHandler(dispatcher, {
         hostPlatform,
@@ -98,7 +122,22 @@ export class RelayRuntimeServices {
     this.registerRemoteCliRoutes()
   }
 
+  // Why: the handler work drain ends when a stream's metadata/sentinel is answered; the detached
+  // pumps and file descriptors behind it are only proven gone by these registry drains.
   async disposeOwnedProcesses(): Promise<void> {
+    const failures: unknown[] = []
+    const agents = this.agentExecHandler.dispose().catch((error: unknown) => {
+      failures.push(error)
+    })
+    const responses = this.responseStreams.disposeAllAndWait().catch((error: unknown) => {
+      failures.push(error)
+    })
+    const fileStreams = this.fsHandler.disposeFileStreams().catch((error: unknown) => {
+      failures.push(error)
+    })
+    const watchers = this.fsHandler.disposeWatchers().catch((error: unknown) => {
+      failures.push(error)
+    })
     await this.skillInstallHandler.dispose().catch((error) => {
       relayLogLine(
         `[relay] Skill upload cleanup failed: ${error instanceof Error ? error.message : String(error)}`
@@ -109,9 +148,19 @@ export class RelayRuntimeServices {
         `[relay] AI Vault sidecar shutdown failed: ${error instanceof Error ? error.message : String(error)}`
       )
     })
+    await agents
+    await responses
+    await fileStreams
+    await watchers
+    // Why: an unclosed fd, watcher child or agent child defers shutdown so the next attempt retries
+    // it; skill/AI Vault cleanup stays log-and-continue until a later T2 slice.
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'relay_owned_process_shutdown_incomplete')
+    }
   }
 
   disposeHandlers(): void {
+    this.sessionSearch?.dispose()
     this.fsHandler.dispose()
     this.gitHandler.dispose()
     void this.registeredHandlers

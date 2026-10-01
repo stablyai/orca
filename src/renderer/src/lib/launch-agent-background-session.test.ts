@@ -25,7 +25,6 @@ const mockRegisterEagerPtyBuffer = vi.fn()
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
-const mockMarkTrusted = vi.fn()
 const mockDispatchEvent = vi.fn()
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
 const state = createAgentBackgroundSessionTestState({
@@ -84,7 +83,6 @@ describe('launchAgentBackgroundSession', () => {
       updateTabPtyId: mockUpdateTabPtyId,
       dispatchEvent: mockDispatchEvent,
       kill: mockKill,
-      markTrusted: mockMarkTrusted,
       spawn: mockSpawn,
       write: mockWrite
     })
@@ -345,22 +343,6 @@ describe('launchAgentBackgroundSession', () => {
         tabId: expect.stringMatching(UUID_RE)
       })
     )
-  })
-
-  it('pre-marks trust for agents with first-launch trust prompts', async () => {
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
-
-    expect(mockMarkTrusted).toHaveBeenCalledWith({
-      preset: 'codex',
-      workspacePath: '/repo/worktree'
-    })
-    expect(mockSpawn).toHaveBeenCalled()
   })
 
   it('stamps hidden SSH status from renderer fallback when the kill switch is off', async () => {

@@ -1,3 +1,4 @@
+import { emitPtyListeners } from './daemon-pty-listener-emission'
 import { existsSync } from 'node:fs'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
@@ -259,10 +260,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
   }
 
   protected emitBackgroundStreamEvent(payload: PtyBackgroundStreamEvent): void {
-    // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-    for (const listener of [...this.backgroundStreamListeners]) {
-      listener(payload)
-    }
+    emitPtyListeners(this.backgroundStreamListeners, (listener) => listener(payload))
   }
 
   protected async doRespawn(

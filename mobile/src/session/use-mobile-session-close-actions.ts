@@ -1,3 +1,9 @@
+import { pendingSelectionTabId, withoutPendingHandle } from './pending-session-selection'
+import {
+  sessionTabClose,
+  sessionTerminalClose,
+  sessionTerminalRename
+} from './mobile-session-write-operations'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 
@@ -23,7 +29,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     initializedHandlesRef,
     activeHandleRef,
     activeSessionTabTypeRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     pendingBrowserFocusPageIdRef,
     scheduleDelayedAction,
     unsubscribeTerminal,
@@ -39,11 +45,10 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
 
     try {
       const title = value.trim()
-      const response = await client.sendRequest('terminal.rename', {
-        terminal: target.handle,
-        title
-      })
-      if (response.ok) {
+      const response = sessionTerminalRename.interpret(
+        await sessionTerminalRename.request(client, { terminal: target.handle, title })
+      )
+      if (response.accepted) {
         setTerminals((prev) => {
           const next = prev.map((terminal) =>
             terminal.handle === target.handle
@@ -66,10 +71,10 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     }
 
     try {
-      const response = await client.sendRequest('terminal.close', {
-        terminal: target.handle
-      })
-      if (response.ok) {
+      const response = sessionTerminalClose.interpret(
+        await sessionTerminalClose.request(client, { terminal: target.handle })
+      )
+      if (response.accepted) {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
         initializedHandlesRef.current.delete(target.handle)
@@ -80,7 +85,13 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         if (activeHandleRef.current === target.handle) {
           const replacement = next[0] ?? null
           activeHandleRef.current = replacement?.handle ?? null
-          pendingActiveTerminalHandleRef.current = replacement?.handle ?? null
+          pendingSelectionRef.current = replacement
+            ? {
+                kind: 'terminal',
+                handle: replacement.handle,
+                tabId: pendingSelectionTabId(pendingSelectionRef.current)
+              }
+            : withoutPendingHandle(pendingSelectionRef.current)
           setActiveHandle(replacement?.handle ?? null)
           if (replacement) {
             subscribeToTerminal(replacement.handle)
@@ -97,14 +108,16 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       return
     }
     try {
-      const response = await client.sendRequest('session.tabs.close', {
-        worktree: `id:${worktreeId}`,
-        tabId: tab.id,
-        // Why: a tapped tab close is explicit user intent; older hosts strip
-        // the unknown field and keep their legacy behavior.
-        reason: 'user'
-      })
-      if (response.ok) {
+      const response = sessionTabClose.interpret(
+        await sessionTabClose.request(client, {
+          worktree: `id:${worktreeId}`,
+          tabId: tab.id,
+          // Why: a tapped tab close is explicit user intent; older hosts strip
+          // the unknown field and keep their legacy behavior.
+          reason: 'user'
+        })
+      )
+      if (response.accepted) {
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
         reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {

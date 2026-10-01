@@ -1,12 +1,22 @@
+import type {
+  AgentSessionMutationResult,
+  AgentSessionWireRefusalCode
+} from '../../../src/shared/agent-session-wire'
+import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import {
-  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
-  parseAgentSessionOperationTimestamp
-} from '../../../src/shared/agent-session-host-authority'
-import type { AgentSessionMutationResult } from '../../../src/shared/agent-session-wire'
+  agentSessionRefusalNotice,
+  agentSessionWriteFailureNotice,
+  agentSessionWriteNoticeEnglish,
+  agentSessionWriteNoticeParts
+} from '../../../src/shared/agent-session-refusal-notice'
 import {
-  createStructuredAgentSessionOperationId,
-  structuredAgentSessionPayloadFingerprint
-} from '../../../src/shared/structured-agent-session-mutation'
+  agentSessionRefusalFailure,
+  agentSessionThrownFailure,
+  agentSessionWriteKindForMethod,
+  readAgentSessionErrorRefusal,
+  type AgentSessionWriteKind
+} from '../../../src/shared/agent-session-write-failure'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
@@ -16,8 +26,11 @@ export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
 export type StructuredAgentSessionMutationCallResult<TValue> =
   | { status: 'accepted'; value: TValue }
-  | { status: 'refused'; message: string }
-  | { status: 'failed'; message: string }
+  | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
+  /** `hostRejectedByRequestSchema`: the host's schema turned this request away before running
+   *  it, so the same request can never be accepted there. An auth refusal does not set it:
+   *  it says nothing about an earlier delivery of the same id. */
+  | { status: 'failed'; message: string; hostRejectedByRequestSchema?: true }
   | { status: 'unknown' }
 
 export type StructuredAgentSessionMutationResult<TValue> =
@@ -30,6 +43,39 @@ export type StructuredAgentSessionMutate = <TValue>(
   fingerprintMethod: string,
   fields: Record<string, unknown>
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
+
+class AgentSessionRpcResponseError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    /** A thrown refusal's reason rides here; its message is only the bare code. */
+    readonly data?: unknown
+  ) {
+    super(message)
+  }
+}
+
+/** A failed read of a chat's history as the pane shows it, from a thrown error or a stream's error
+ *  frame (`{ message, error }`): a thrown refusal's message is its bare code, so its words come
+ *  from the refusal in the error's data. */
+export function agentSessionReadFailureText(failure: unknown): string {
+  const refusal = readAgentSessionErrorRefusal(
+    typeof failure === 'object' && failure !== null && 'error' in failure ? failure.error : failure
+  )
+  if (refusal) {
+    return agentSessionWriteNoticeEnglish(
+      agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
+    )
+  }
+  if (failure instanceof Error) {
+    return failure.message
+  }
+  return typeof failure === 'object' && failure !== null
+    ? 'message' in failure
+      ? String(failure.message ?? '')
+      : ''
+    : String(failure)
+}
 
 export async function callAgentSession<TResult>(
   client: RpcClient,
@@ -44,47 +90,13 @@ export async function callAgentSession<TResult>(
     ...(options?.failWhenDisconnected ? { failWhenDisconnected: true } : {})
   })
   if (!response.ok) {
-    throw new Error(response.error.message)
+    throw new AgentSessionRpcResponseError(
+      response.error.code,
+      response.error.message,
+      response.error.data
+    )
   }
   return response.result as TResult
-}
-
-/** React Native has no guaranteed `crypto.randomUUID`; the fallback keeps the same
- *  32-hex entropy shape the durable id and fingerprint helpers validate. */
-export function structuredSessionRandomUuid(): string {
-  return typeof globalThis.crypto?.randomUUID === 'function'
-    ? globalThis.crypto.randomUUID()
-    : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
-}
-
-export function structuredSessionOperationId(): string {
-  return createStructuredAgentSessionOperationId(structuredSessionRandomUuid)
-}
-
-/**
- * Bounded by expiry, never by count: every retained id belongs to a send whose outcome is still
- * unknown, so dropping one turns the user's retry into a second message on the host. Only an id
- * the host would already refuse — unparseable, or past the window in which it can be admitted —
- * is safe to release, which matches the host's own tombstone retention.
- */
-export function retainStructuredSessionOperationId(
-  operationIds: Map<string, string>,
-  key: string,
-  operationId = structuredSessionOperationId(),
-  now: number = Date.now()
-): string {
-  operationIds.delete(key)
-  operationIds.set(key, operationId)
-  for (const [retainedKey, retainedId] of operationIds) {
-    if (retainedKey === key) {
-      continue
-    }
-    const timestamp = parseAgentSessionOperationTimestamp(retainedId)
-    if (timestamp === null || now - timestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
-      operationIds.delete(retainedKey)
-    }
-  }
-  return operationId
 }
 
 export function timeoutForDeadline(deadline: number | undefined): number | null {
@@ -95,6 +107,15 @@ export function timeoutForDeadline(deadline: number | undefined): number | null 
   return timeoutMs >= MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS ? timeoutMs : null
 }
 
+/** A refused phone send goes back into the composer; there is no Retry control. */
+function phoneWriteKind(
+  fingerprintMethod: string,
+  fields: Record<string, unknown>
+): AgentSessionWriteKind {
+  const write = agentSessionWriteKindForMethod(fingerprintMethod, fields)
+  return write === 'send' ? 'composer-send' : write
+}
+
 export async function requestStructuredAgentSessionMutation<TValue>(args: {
   client: RpcClient
   method: string
@@ -103,7 +124,6 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
   expectedRuntimeFence: number
   fields: Record<string, unknown>
   clientOperationId?: string
-  retryUnknown?: boolean
   timeoutMs?: number
 }): Promise<StructuredAgentSessionMutationCallResult<TValue>> {
   const {
@@ -114,7 +134,6 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     expectedRuntimeFence,
     fields,
     clientOperationId,
-    retryUnknown,
     timeoutMs
   } = args
   try {
@@ -132,28 +151,54 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
             fields
           })
         },
-        ...(retryUnknown ? { retryUnknown: true } : {}),
         ...fields
       },
       timeoutMs
     )
     if (
       !result.ok &&
-      method === 'agentSession.conversationCommand' &&
+      (method === 'agentSession.cancel' || method === 'agentSession.conversationCommand') &&
       result.refusal.code === 'agent_session_operation_unknown'
     ) {
       return { status: 'unknown' }
     }
     return result.ok
       ? { status: 'accepted', value: result.value }
-      : { status: 'refused', message: result.refusal.message }
+      : {
+          status: 'refused',
+          code: result.refusal.code,
+          message: agentSessionRefusalNotice(
+            result.refusal,
+            phoneWriteKind(fingerprintMethod, fields)
+          )
+        }
   } catch (error) {
-    if (isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)) {
+    const answered =
+      error instanceof AgentSessionRpcResponseError
+        ? agentSessionThrownFailure(error, error.code)
+        : null
+    if (answered && answered.kind !== 'unconfirmed') {
+      // The host turned the request away before running it; its text is written for a log.
+      return {
+        status: 'failed',
+        message: agentSessionWriteNoticeEnglish(
+          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields))
+        ),
+        ...(error instanceof AgentSessionRpcResponseError && error.code === 'invalid_argument'
+          ? { hostRejectedByRequestSchema: true }
+          : {})
+      }
+    }
+    if (
+      isRpcDeliveryUnknown(error) ||
+      isLogicalClientCutoverError(error) ||
+      error instanceof AgentSessionRpcResponseError
+    ) {
       return { status: 'unknown' }
     }
     return {
       status: 'failed',
-      message: error instanceof Error ? error.message : 'Request not sent'
+      message: agentSessionWriteFailureNotice(phoneWriteKind(fingerprintMethod, fields))
     }
   }
 }

@@ -43,11 +43,19 @@ const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
 
 /** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
-const revealLabel = isMac
-  ? 'Reveal in Finder'
-  : isLinux
-    ? 'Open Containing Folder'
-    : 'Reveal in File Explorer'
+function getRevealLabel(): string {
+  return isMac
+    ? translate('auto.components.right.sidebar.FileExplorerRow.revealInFinder', 'Reveal in Finder')
+    : isLinux
+      ? translate(
+          'auto.components.right.sidebar.FileExplorerRow.openContainingFolder',
+          'Open Containing Folder'
+        )
+      : translate(
+          'auto.components.right.sidebar.FileExplorerRow.revealInFileExplorer',
+          'Reveal in File Explorer'
+        )
+}
 
 function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
@@ -290,7 +298,7 @@ export function FileExplorerRowContextMenu({
         }}
       >
         <ExternalLink />
-        {revealLabel}
+        {getRevealLabel()}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => onStartRename(node)}>

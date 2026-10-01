@@ -1,5 +1,6 @@
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
 import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch'
@@ -116,6 +117,13 @@ function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMo
   throw new RuntimeClientError('invalid_argument', 'Invalid --mode. Use edit, diff, or both.')
 }
 
+// Why: the CLI has no view of its own, so 'caller' moves nothing. --focus sends 'all', but unlike
+// worktree create --activate a file open moves only the host's own window (intended; paired
+// clients are not navigated). Hosts treat a missing field as the legacy switch.
+function getFileOpenNavigation(flags: Map<string, string | boolean>): RuntimeNavigationTarget {
+  return flags.get('focus') === true ? 'all' : 'caller'
+}
+
 function canOpenEntryForEdit(entry: GitStatusEntry): string | null {
   if (entry.status === 'deleted') {
     return 'deleted file has no edit target'
@@ -129,11 +137,13 @@ function canOpenEntryForEdit(entry: GitStatusEntry): string | null {
 async function openFileEdit(
   ctx: HandlerContext,
   worktree: string,
-  path: string
+  path: string,
+  navigation: RuntimeNavigationTarget
 ): Promise<FileOpenRecord> {
   const result = await ctx.client.call<RuntimeFileOpenResult>('files.open', {
     worktree,
-    relativePath: path
+    relativePath: path,
+    navigation
   })
   return {
     path,
@@ -148,12 +158,14 @@ async function openFileDiff(
   ctx: HandlerContext,
   worktree: string,
   path: string,
-  staged: boolean
+  staged: boolean,
+  navigation: RuntimeNavigationTarget
 ): Promise<FileOpenRecord> {
   const result = await ctx.client.call<RuntimeFileOpenResult>('files.openDiff', {
     worktree,
     relativePath: path,
-    staged
+    staged,
+    navigation
   })
   return {
     path,
@@ -198,7 +210,8 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     const relativePath = await resolveFilePath(ctx, worktree, path)
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.open', {
       worktree,
-      relativePath
+      relativePath,
+      navigation: getFileOpenNavigation(ctx.flags)
     })
     printResult(result, ctx.json, formatFileOpen)
   },
@@ -210,7 +223,8 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.openDiff', {
       worktree,
       relativePath,
-      staged
+      staged,
+      navigation: getFileOpenNavigation(ctx.flags)
     })
     printResult(result, ctx.json, formatFileDiff)
   },
@@ -221,6 +235,17 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     const opened: FileOpenRecord[] = []
     const skipped: FileOpenRecord[] = []
     const openedEditPaths = new Set<string>()
+    // Why: switch once — the first tab that actually opens carries --focus; later ones join the now-viewed worktree.
+    let navigation = getFileOpenNavigation(ctx.flags)
+    const openWithFocusOnce = async (
+      open: () => Promise<FileOpenRecord>
+    ): Promise<FileOpenRecord> => {
+      const record = await open()
+      if (record.opened) {
+        navigation = 'caller'
+      }
+      return record
+    }
 
     for (const entry of status.result.entries) {
       if (mode === 'edit' || mode === 'both') {
@@ -235,7 +260,9 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
           })
         } else if (!openedEditPaths.has(entry.path)) {
           openedEditPaths.add(entry.path)
-          const record = await openFileEdit(ctx, worktree, entry.path)
+          const record = await openWithFocusOnce(() =>
+            openFileEdit(ctx, worktree, entry.path, navigation)
+          )
           const records = record.opened ? opened : skipped
           records.push(record)
         }
@@ -253,7 +280,9 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
             reason: 'unresolved conflict may not have a single diff target'
           })
         } else {
-          const record = await openFileDiff(ctx, worktree, entry.path, staged)
+          const record = await openWithFocusOnce(() =>
+            openFileDiff(ctx, worktree, entry.path, staged, navigation)
+          )
           const records = record.opened ? opened : skipped
           records.push(record)
         }

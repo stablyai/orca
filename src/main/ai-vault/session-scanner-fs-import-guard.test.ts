@@ -27,8 +27,12 @@ const ALLOWLIST = new Set([
   // On-demand IPC readers, gated in the STA-4049 follow-up.
   'session-scanner-claude-subagents.ts',
   'session-scanner-omp-subagent-listing.ts',
-  // Test-only fixture builder.
-  'session-scanner-test-fixtures.ts'
+  // Test-only fixture builders: they create the vault a test reads, so the
+  // paths they touch are temp directories this process just made.
+  'session-scanner-test-fixtures.ts',
+  'session-scanner-document-agent-fixtures.ts',
+  'session-scanner-log-agent-fixtures.ts',
+  'session-scanner-opencode-sqlite-fixture.ts'
 ])
 
 const FS_IMPORT = /import\s+([\s\S]*?)\s+from\s+['"]node:fs(?:\/promises)?['"]/g

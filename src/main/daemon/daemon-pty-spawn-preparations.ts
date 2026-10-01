@@ -33,7 +33,14 @@ export class DaemonPtySpawnPreparations {
       clientId,
       requestId
     }
-    this.cancellationByPreparation.set(preparation, Promise.withResolvers<void>())
+    let resolveCancellation!: () => void
+    const cancellation = new Promise<void>((resolve) => {
+      resolveCancellation = resolve
+    })
+    this.cancellationByPreparation.set(preparation, {
+      promise: cancellation,
+      resolve: resolveCancellation
+    })
     if (Number.isSafeInteger(cancelAfterMs) && Number(cancelAfterMs) > 0) {
       preparation.cancelTimer = setTimeout(
         () => this.cancelPreparation(preparation),

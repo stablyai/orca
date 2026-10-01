@@ -1,5 +1,6 @@
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { browserAddressFieldStyles } from './browser-address-field-styles'
 import { compactMobileBrowserFileAddress } from './browser-url'
 
 type Props = {
@@ -27,7 +28,7 @@ export function MobileBrowserAddressField({
   return (
     <View style={styles.field}>
       <TextInput
-        style={styles.input}
+        style={browserAddressFieldStyles.input}
         value={value}
         onChangeText={onChangeText}
         onFocus={onFocus}
@@ -38,6 +39,10 @@ export function MobileBrowserAddressField({
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
+        // Why: `keyboardType` is a native-only enum, so in a browser the URL keyboard is lost and
+        // the field falls back to a plain one. `inputMode` is what a browser reads, and it takes
+        // precedence over `keyboardType`, so it must stay undefined everywhere else.
+        inputMode={Platform.OS === 'web' ? 'url' : undefined}
         numberOfLines={1}
         returnKeyType="go"
         placeholder="URL"
@@ -46,7 +51,11 @@ export function MobileBrowserAddressField({
       />
       {fileLabel ? (
         <View pointerEvents="none" style={styles.fileLabelHost}>
-          <Text style={styles.fileLabel} numberOfLines={1} ellipsizeMode="middle">
+          <Text
+            style={browserAddressFieldStyles.fileLabel}
+            numberOfLines={1}
+            ellipsizeMode="middle"
+          >
             {fileLabel}
           </Text>
         </View>
@@ -61,31 +70,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
     height: 28
   },
-  input: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
-    fontSize: 12,
-    lineHeight: 16,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    fontFamily: typography.monoFamily
-  },
   fileLabelHost: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     borderRadius: radii.input,
     backgroundColor: colors.bgRaised
-  },
-  fileLabel: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    lineHeight: 16,
-    fontFamily: typography.monoFamily
   }
 })

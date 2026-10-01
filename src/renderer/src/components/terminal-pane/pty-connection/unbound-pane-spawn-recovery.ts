@@ -19,7 +19,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 export function settleSpawnThatLeftPaneUnbound(session: ConnectPanePtySession): void {
   // Read before settling: the settle clears the lease this branch tests.
   const directSshRetryOwnsRecovery = Boolean(session.directSshRetryAttempt)
-  session.settleDirectSshPaneRetryAttempt(session.directSshRetryAttempt, 'failed')
+  session.settlePaneAttachAttempt(session.directSshRetryAttempt, 'failed')
   if (directSshRetryOwnsRecovery) {
     return
   }

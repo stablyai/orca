@@ -1,11 +1,12 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { getAllWorktreesFromState } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type { DaemonSession, UnifiedSessionRow } from './resource-usage-merge-types'
 import type { ResourceSessionBindingInputs } from './resource-session-bindings'
@@ -90,6 +91,11 @@ export function useResourceUsageActions({
   // Why: keep popover open on worktree navigation so users can browse; onFocusOutside suppresses the bound-row focus transfer.
   const navigateToWorktree = useCallback((worktreeId: string): void => {
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
+      return
+    }
+    // Why: the target resolve below only knows worktrees, so a folder key never matched; the folder activator owns host and path-status gating.
+    if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
+      activateAndRevealWorkspace(worktreeId)
       return
     }
     const target = resolveResourceManagerWorktreeTarget(

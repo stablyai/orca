@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { PAIRING_OFFER_VERSION, type PairingOffer } from './pairing'
+import { classifyRemotePairingHostname } from './remote-pairing-address'
+import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environment-reconciliation-record'
 
 export const RuntimeAccessEndpointSchema = z.object({
   id: z.string().min(1),
@@ -20,7 +22,38 @@ export type PublicRuntimeAccessEndpoint = z.infer<typeof PublicRuntimeAccessEndp
 export const RuntimeEnvironmentSourceSchema = z.enum(['manual', 'ephemeral-vm'])
 export type RuntimeEnvironmentSource = z.infer<typeof RuntimeEnvironmentSourceSchema>
 
-export const KnownRuntimeEnvironmentSchema = z.object({
+export const RuntimeSshTunnelLinkSchema = z.object({
+  sshTargetId: z.string().min(1),
+  sshTargetGeneration: z.number().int().positive(),
+  localPort: z.number().int().min(1).max(65_535),
+  remotePort: z.number().int().min(1).max(65_535)
+})
+
+export type RuntimeSshTunnelLink = z.infer<typeof RuntimeSshTunnelLinkSchema>
+
+export const RuntimeSshAccessLinkSchema = RuntimeSshTunnelLinkSchema.extend({
+  requestId: z.string().min(1).optional(),
+  targetFingerprint: z.string().min(1).optional(),
+  endpointId: z.string().min(1),
+  previousPreferredEndpointId: z.string().min(1)
+})
+
+export type RuntimeSshAccessLink = z.infer<typeof RuntimeSshAccessLinkSchema>
+
+export const RuntimeSshAccessOperationSchema = RuntimeSshTunnelLinkSchema.omit({ localPort: true })
+  .extend({
+    requestId: z.string().min(1),
+    operation: z.enum(['link', 'unlink']),
+    targetFingerprint: z.string().min(1).optional()
+  })
+  .refine((intent) => intent.operation !== 'link' || !!intent.targetFingerprint, {
+    message: 'Link intent requires a target fingerprint.'
+  })
+
+export type RuntimeSshAccessOperation = z.infer<typeof RuntimeSshAccessOperationSchema>
+
+/** The fields shipped builds read and rewrite in orca-environments.json. */
+export const PersistedRuntimeEnvironmentSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   createdAt: z.number().finite(),
@@ -34,6 +67,46 @@ export const KnownRuntimeEnvironmentSchema = z.object({
   endpoints: z.array(RuntimeAccessEndpointSchema).min(1),
   preferredEndpointId: z.string().min(1)
 })
+
+export type PersistedRuntimeEnvironment = z.infer<typeof PersistedRuntimeEnvironmentSchema>
+
+/**
+ * A persisted environment with its sidecar state overlaid (runtime-environment-sidecar). These
+ * fields never enter orca-environments.json: shipped builds strip unknown keys when they rewrite it.
+ */
+export const KnownRuntimeEnvironmentSchema = PersistedRuntimeEnvironmentSchema.extend({
+  sshAccess: RuntimeSshAccessLinkSchema.optional(),
+  pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
+  reconciliation: RuntimeEnvironmentReconciliationRecordSchema.optional()
+})
+  .refine(
+    ({ pendingSshAccessOperation, sshAccess, connectionDependency }) =>
+      !pendingSshAccessOperation || (!sshAccess && !connectionDependency),
+    {
+      message: 'Pending SSH access operations cannot coexist with active SSH access.',
+      path: ['pendingSshAccessOperation']
+    }
+  )
+  .refine(
+    (environment) => {
+      const access = environment.sshAccess
+      return (
+        !access ||
+        (environment.connectionDependency === 'ssh-tunnel' &&
+          environment.preferredEndpointId === access.endpointId &&
+          access.previousPreferredEndpointId !== access.endpointId &&
+          environment.endpoints.some(
+            (endpoint) => endpoint.id === access.previousPreferredEndpointId
+          ) &&
+          getPreferredLoopbackRuntimePort(environment) === access.localPort)
+      )
+    },
+    {
+      message:
+        'Runtime SSH access must preserve its previous endpoint and prefer its loopback endpoint.',
+      path: ['sshAccess']
+    }
+  )
 
 export type KnownRuntimeEnvironment = z.infer<typeof KnownRuntimeEnvironmentSchema>
 
@@ -52,9 +125,11 @@ export function redactRuntimeEnvironment(
   }
 }
 
+// Why version 1 and the persisted schema: shipped builds accept only this shape, so every
+// T5 field lives in the sidecar and a downgrade rewrite cannot lose or reject it.
 export const RuntimeEnvironmentStoreSchema = z.object({
   version: z.literal(1),
-  environments: z.array(KnownRuntimeEnvironmentSchema)
+  environments: z.array(PersistedRuntimeEnvironmentSchema)
 })
 
 export type RuntimeEnvironmentStore = z.infer<typeof RuntimeEnvironmentStoreSchema>
@@ -119,5 +194,37 @@ export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): 
     deviceToken: endpoint.deviceToken,
     publicKeyB64: endpoint.publicKeyB64,
     ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {})
+  }
+}
+
+/** SSH is an access path for a paired server; managed lifecycle ownership is T6's deployment link. */
+export function getRuntimeSshAccess(
+  environment: Pick<KnownRuntimeEnvironment, 'sshAccess'>
+): RuntimeSshTunnelLink | undefined {
+  return environment.sshAccess
+}
+
+export function getPreferredLoopbackRuntimePort(environment: {
+  endpoints: { id: string; endpoint: string }[]
+  preferredEndpointId: string
+}): number | null {
+  const endpoint = environment.endpoints.find(
+    (entry) => entry.id === environment.preferredEndpointId
+  )
+  if (!endpoint) {
+    return null
+  }
+  try {
+    const url = new URL(endpoint.endpoint)
+    const port = Number(url.port)
+    return (url.protocol === 'ws:' || url.protocol === 'wss:') &&
+      classifyRemotePairingHostname(url.hostname) === 'loopback' &&
+      Number.isInteger(port) &&
+      port >= 1 &&
+      port <= 65_535
+      ? port
+      : null
+  } catch {
+    return null
   }
 }

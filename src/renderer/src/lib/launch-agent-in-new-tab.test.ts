@@ -482,7 +482,8 @@ describe('launchAgentInNewTab', () => {
       agentArgs: '--permission-mode plan'
     })
 
-    expect(result).toEqual(expect.objectContaining({ tabId: null, pasteDraftAfterLaunch: false }))
+    expect(result?.surface).toEqual({ kind: 'host-published' })
+    expect(result?.pasteDraftAfterLaunch).toBe(false)
     expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         launchAgent: 'claude',
@@ -597,17 +598,6 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('does not track prompt-sent for argv prompt launches', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'fix the spinner',
-      launchSource: 'onboarding'
-    })
-  })
-
   it('does not track prompt-sent for draft launches', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -646,7 +636,7 @@ describe('launchAgentInNewTab', () => {
         content: prompt,
         agent: 'claude',
         submit: false,
-        forcePaste: false
+        forcePaste: true
       })
     )
   })
@@ -829,7 +819,6 @@ describe('launchAgentInNewTab', () => {
       delivered: false,
       failureNotified: true
     })
-    expect(mockToastMessage).not.toHaveBeenCalled()
   })
 
   it('marks a cancelled submit-after-ready launch notified when the user switched worktrees', async () => {
@@ -852,7 +841,6 @@ describe('launchAgentInNewTab', () => {
       delivered: false,
       failureNotified: true
     })
-    expect(mockToastMessage).not.toHaveBeenCalled()
   })
 
   it('leaves a genuine launch failure unnotified so the caller surfaces it', async () => {

@@ -49,11 +49,12 @@ export function buildMobileTerminalSurfaceTabs(
       leafIds,
       onSynthesize: (leafCount) =>
         console.warn(
-          `[sync-runtime-graph] synthesized parentLayout for ${leafCount} leaves with no live or saved tree`
+          `[sync-runtime-graph] synthesized a parentLayout split direction for ${leafCount} leaves no live or saved tree placed`
         )
     }),
     activeLeafId,
     expandedLeafId: sanitizedSavedLayout?.expandedLeafId ?? null,
+    ...(sanitizedSavedLayout?.chatLeafId ? { chatLeafId: sanitizedSavedLayout.chatLeafId } : {}),
     ...(Object.keys(savedPtyIdsByLeafId).length > 0 ? { ptyIdsByLeafId: savedPtyIdsByLeafId } : {}),
     ...(sanitizedSavedLayout?.titlesByLeafId
       ? { titlesByLeafId: sanitizedSavedLayout.titlesByLeafId }

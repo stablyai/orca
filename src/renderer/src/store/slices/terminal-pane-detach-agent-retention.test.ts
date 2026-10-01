@@ -129,7 +129,7 @@ function collect(args: {
   terminalHandle?: string
   previousProviderSession?: AgentStatusEntry['providerSession']
   currentProviderSession?: AgentStatusEntry['providerSession']
-  retiredPaneKeys?: Record<string, true>
+  retiredPaneKeys?: Record<string, true | string>
   tabIndex?: Map<string, { tab: TerminalTab }>
 }) {
   return collectRetainedAgentsOnDisappear({

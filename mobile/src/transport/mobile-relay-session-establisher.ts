@@ -6,12 +6,12 @@ import {
   toError
 } from './mobile-endpoint-supervisor-support'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
+import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../src/shared/relay-host-close-reason'
-import type { HostProfile } from './types'
 
 type EstablishResult = { ok: true } | { ok: false; error: Error }
 
@@ -22,8 +22,10 @@ function directWon(logical: StableLogicalRpcClient): boolean {
 // Turns one relay credential into the active runtime session: resolve the cell
 // assignment if the director rejects the cached one, open the cell socket,
 // migrate the logical client onto it, then persist the resume confirmation and
-// re-arm the supervisor's timers.
+// re-arm the supervisor's timers. Owns the relay it dials.
 export class MobileRelaySessionEstablisher {
+  private relay: MobileRelayEndpoint
+
   constructor(
     private readonly args: {
       logical: StableLogicalRpcClient
@@ -33,9 +35,11 @@ export class MobileRelaySessionEstablisher {
       writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
       isActive: () => boolean
       isForeground: () => boolean
-      relay: () => HostProfile['relay']
+      isStopped: () => boolean
+      hostId: string
+      relay: MobileRelayEndpoint
       resolveRelay: MobileEndpointSupervisorDependencies['resolveRelay']
-      persistResolvedRelay: (resolved: MobileRelayEndpoint) => Promise<void>
+      setRelayRouting: MobileEndpointSupervisorDependencies['setRelayRouting']
       bundle: () => MobileRelayCredentialBundle | null
       adoptBundle: (bundle: MobileRelayCredentialBundle) => void
       // Hysteresis stamp + rotation-pending clear + recovery log line.
@@ -46,7 +50,18 @@ export class MobileRelaySessionEstablisher {
       onBookkeepingError: (error: Error) => void
       onDialFailure: (error: Error) => void
     }
-  ) {}
+  ) {
+    this.relay = args.relay
+  }
+
+  async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {
+    // Why: a stopped supervisor's host may be removed or re-paired; its successor owns routing.
+    if (this.args.isStopped()) {
+      return
+    }
+    await this.args.setRelayRouting(this.args.hostId, relay)
+    this.relay = relay
+  }
 
   // Tries each eligible credential until one establishes. Only a grace-repairable
   // failure (BAD_OUTER_CREDENTIAL) moves on to the next credential.
@@ -66,7 +81,7 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      if (!this.args.controller.shouldTryGraceAfterRelayFailure(result.error)) {
+      if (!relayFailureAllowsGraceRetry(result.error)) {
         break
       }
       // Why: a rejected version stays invalid; retry only the grace credential.
@@ -80,10 +95,10 @@ export class MobileRelaySessionEstablisher {
   dial(credential: { token: string; version: number }): Promise<EstablishResult> {
     return dialRelayThroughDirectorFallback({
       resumeToken: credential.token,
-      relay: this.args.relay,
+      relay: () => this.relay,
       dial: () => this.establish(credential),
       resolveRelay: this.args.resolveRelay,
-      persistResolvedRelay: this.args.persistResolvedRelay
+      persistResolvedRelay: (resolved) => this.adoptRelay(resolved)
     })
   }
 
@@ -92,23 +107,21 @@ export class MobileRelaySessionEstablisher {
     version: number
   }): Promise<EstablishResult> {
     const { args } = this
-    const relay = args.relay()
     const bundle = args.bundle()
     // Why: director resolution and grace fallback can finish after background/stop.
-    if (!args.isActive() || !relay || !bundle) {
+    if (!args.isActive() || !bundle) {
       return { ok: false, error: new RelayDialAbortedError() }
     }
     const session = args.openRelay(
-      relay,
+      this.relay,
       credential,
       `confirm-${encodeBase64Url(args.randomBytes(16))}`,
-      // Latched on the logical client, not on the dial result: the close that
-      // carries the reason can land after this dial has already reported its
-      // failure. Clearing is clearAfterConnected's job, so any path that
-      // reaches connected retires it.
+      // Asserted on the controller's latch, not on the dial result: the close
+      // that carries the reason can land after this dial has already reported
+      // its failure. Only a connection retires it.
       (reason) => {
         if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
-          args.logical.setHostSignedOut(true)
+          args.controller.assertHostReachability('signed-out')
         }
       }
     )

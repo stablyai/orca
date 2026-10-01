@@ -4,10 +4,7 @@ import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import {
-  SessionTerminationController,
-  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-} from './session-termination-controller'
+import { SessionTerminationController } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
@@ -15,12 +12,8 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 
-import type {
-  SessionState,
-  ShellReadyState,
-  TakePendingOutputResult,
-  TerminalSnapshot
-} from './types'
+import type * as SessionProtocol from './types'
+import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
@@ -29,7 +22,8 @@ export class Session {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
-  private _state: SessionState = 'running'
+  readonly processNameIsSpawnFile: boolean
+  private _state: SessionProtocol.SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
   private subprocess: SubprocessHandle
@@ -47,6 +41,7 @@ export class Session {
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
+    this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
       cols: opts.cols,
@@ -55,7 +50,8 @@ export class Session {
       wslDistro: opts.wslDistro,
       historySeedChunks: opts.historySeedChunks,
       subprocess: this.subprocess,
-      isAlive: () => !this._disposed && this._state !== 'exited'
+      isAlive: () => !this._disposed && this._state !== 'exited',
+      incarnationId: this.incarnationId
     })
     this.output = pipeline.output
     this.recoveryBarrier = pipeline.recoveryBarrier
@@ -95,11 +91,11 @@ export class Session {
     this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
   }
 
-  get state(): SessionState {
+  get state(): SessionProtocol.SessionState {
     return this._state
   }
 
-  get shellState(): ShellReadyState {
+  get shellState(): SessionProtocol.ShellReadyState {
     return this.shellReady.state
   }
 
@@ -146,13 +142,9 @@ export class Session {
 
     // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
     // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
-    if (this.startupIngress.answerLiveQueryReply(data)) {
-      return
-    }
-
-    // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
-    // direct write would race fresh input ahead of the buffered startup command.
-    if (this.shellReady.tryEnqueue(data)) {
+    // Why the queue: keep queuing during the post-ready flush-gate window ('ready' but not yet
+    // flushed); a direct write would race fresh input ahead of the buffered startup command.
+    if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data)) {
       return
     }
 
@@ -168,16 +160,17 @@ export class Session {
   }
 
   /** Producer-side flow control: stop reading the PTY fd so a flooding child blocks on write.
-   *  Arms the lost-resume failsafe; re-pausing re-arms it. */
-  pauseProducer(): void {
+   *  Arms the lost-resume failsafe; re-pausing re-arms it. onStreamStall bounds a stream pause whose
+   *  consumer never drains and never closes. */
+  pauseProducer(source?: 'stream', onStreamStall?: () => void): void {
     if (this._state === 'exited' || this._disposed) {
       return
     }
-    this.producerPause.pause()
+    this.producerPause.pause(source, this.hasAttachedClients && !this.isTerminating, onStreamStall)
   }
 
-  resumeProducer(): void {
-    this.producerPause.release({ resume: true })
+  resumeProducer(source?: 'stream'): void {
+    this.producerPause.resumeClient(source)
   }
 
   kill(): void {
@@ -194,9 +187,7 @@ export class Session {
     this.termination.scheduleForceDisposeFallback()
   }
 
-  async forceKillAndWaitForExit(
-    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-  ): Promise<void> {
+  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
     await this.termination.forceKillAndWaitForExit(timeoutMs)
   }
 
@@ -221,7 +212,7 @@ export class Session {
     this.producerPause.release({ resume: true })
   }
 
-  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
+  getSnapshot(opts: { scrollbackRows?: number } = {}): SessionProtocol.TerminalSnapshot | null {
     this.startupIngress.snapshotBarrier()
     return this.output.getSnapshot(opts)
   }
@@ -237,7 +228,7 @@ export class Session {
   takePendingOutput(
     includeSnapshot: boolean,
     opts: { teardownSnapshot?: boolean } = {}
-  ): TakePendingOutputResult | null {
+  ): SessionProtocol.TakePendingOutputResult | null {
     if (this._disposed) {
       return null
     }
@@ -250,6 +241,10 @@ export class Session {
 
   getCwd(): string | null {
     return this.output.getCwd()
+  }
+
+  inspectChildProcesses(): PtyChildProcessVerdict {
+    return this.subprocess.inspectChildProcesses?.() ?? 'unverifiable'
   }
 
   getForegroundProcess(options?: { rawFallback?: boolean }): string | null {
@@ -272,6 +267,10 @@ export class Session {
 
   clearScrollback(): void {
     this.output.clearScrollback(this.subprocess, this.shellReady.isGatingWrites)
+  }
+
+  resetInputModes(): void {
+    this.output.applyInputModeGround(this.recoveryBarrier.groundInputModes())
   }
 
   prepareForFinalSnapshot(): string {

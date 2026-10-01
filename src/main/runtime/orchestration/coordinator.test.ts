@@ -3,6 +3,7 @@ import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 import { Coordinator } from './coordinator'
 import type { CoordinatorRuntime } from './coordinator-runtime-contract'
+import { dispatchPreambleSendOptions, type DispatchPreambleSendOptions } from './preamble'
 import { DISPATCH_STALE_THRESHOLD } from './coordinator-stale-base-flag'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
@@ -14,8 +15,10 @@ type DriftResult = {
   recentSubjects: string[]
 } | null
 
+type SentMessage = { handle: string; text: string; options?: DispatchPreambleSendOptions }
+
 function createMockRuntime(): CoordinatorRuntime & {
-  sentMessages: { handle: string; text: string }[]
+  sentMessages: SentMessage[]
   terminals: { handle: string; worktreeId: string; connected: boolean; writable: boolean }[]
   createdTerminals: string[]
   createdTerminalOptions: { title?: string }[]
@@ -25,8 +28,9 @@ function createMockRuntime(): CoordinatorRuntime & {
   setProbeDrift(result: DriftResult): void
   throwProbeDrift: Error | null
 } {
+  const sentMessages: SentMessage[] = []
   const mock = {
-    sentMessages: [] as { handle: string; text: string }[],
+    sentMessages,
     terminals: [] as {
       handle: string
       worktreeId: string
@@ -42,8 +46,8 @@ function createMockRuntime(): CoordinatorRuntime & {
     setProbeDrift(result: DriftResult): void {
       mock.probeDriftResult = result
     },
-    async sendTerminalAgentPrompt(handle: string, prompt: string) {
-      mock.sentMessages.push({ handle, text: prompt })
+    async sendTerminalAgentPrompt(handle: string, text: string, options?: SentMessage['options']) {
+      mock.sentMessages.push({ handle, text, options })
       return { handle, accepted: true, bytesWritten: 0 }
     },
     async listTerminals() {
@@ -159,6 +163,7 @@ describe('Coordinator', () => {
     expect(result.completedTasks).toContain(task.id)
     expect(runtime.sentMessages.length).toBeGreaterThan(0)
     expect(runtime.sentMessages[0].text).toContain('orca-ide orchestration send')
+    expect(runtime.sentMessages[0].options).toEqual(dispatchPreambleSendOptions(expect.any(String)))
   })
 
   it('records the assignee pane key when the runtime can resolve one', async () => {

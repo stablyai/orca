@@ -73,6 +73,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.removeWorktree')
     expect(methods).toContain('git.worktreeIsClean')
     expect(methods).toContain('git.refreshLocalBaseRefForWorktreeCreate')
+    expect(methods).toContain('git.inspectLocalBaseRefForWorktreeCreate')
     expect(methods).toContain('git.markRemoteOrcaCreated')
     expect(methods).toContain('git.renameCurrentBranch')
     expect(methods).toContain('git.forceDeletePreservedBranch')

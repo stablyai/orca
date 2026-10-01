@@ -193,7 +193,7 @@ describe('terminal tail sentinel index', () => {
     expect(tailMayContainBlockedSignal(seeded)).toBe(true)
     const state = computeTerminalTailWaitState(seeded, '', '')
     expect(state.fromTail).toBe(true)
-    expect(state.signal?.reason).toBe('codex-update-prompt')
+    expect(state.signal?.reason).toBe('agent-update-prompt')
 
     const clean = ['boot log', 'no prompt here', 'trailing']
     expect(tailMayContainBlockedSignal(clean)).toBe(false)

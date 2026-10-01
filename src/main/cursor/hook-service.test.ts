@@ -131,6 +131,7 @@ describe('CursorHookService', () => {
       'utf8'
     )
     expect(script).toContain('/hook/cursor')
+    expect(script).toContain('GROK_HOOK_EVENT')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
     } else {

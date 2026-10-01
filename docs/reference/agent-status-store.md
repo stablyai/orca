@@ -2,17 +2,19 @@
 
 ## Status
 
-Proposed on 2026-09-09 as the follow-up to #19217. It lands in four steps, in
-this order, each independently shippable:
+The current boundary is PR 2A: structured sessions use the hook server's fully
+scoped canonical store; unbound PTY/relay evidence remains in an isolated legacy
+adapter. Do not remove the renderer bridge or its publication filters in this
+slice: they still carry native-chat child rows.
+
+The sections below record the original 2026-09-09 rollout. Its PR 1a and PR 1b
+have landed; its proposed PR 2/3 sequence is superseded by that boundary:
 
 1. main-only: every producer writes into one store and `worktree ps` reads it,
    split into 1a (structured sessions join the store) and 1b (the runtime's
    duplicate retained store is deleted);
 2. renderer: the sidebar becomes a subscriber and stops re-deriving rows;
 3. shared: one worktree-status rollup and one freshness rule for every reader.
-
-The PR that carries this document is PR 1a. Sections below are grouped under
-the step that delivers them; only PR 1a has landed.
 
 ## The problem this solves
 
@@ -24,11 +26,11 @@ the structured-session mapping and nothing else.
 An audit on 2026-09-09 found six producers and three consumers, and three
 separate copies of the same row inside the main process alone:
 
-| Main-process copy                      | Keyed by  | Owned by                                                   | Persisted           | Evicted                       |
-| -------------------------------------- | --------- | ---------------------------------------------------------- | ------------------- | ----------------------------- |
-| hook server `lastStatusByPaneKey`      | paneKey   | `src/main/agent-hooks/server.ts`                           | `last-status.json`  | tab close, pty exit, hydrate  |
-| runtime `RuntimeAgentRowStore`         | paneKey   | `src/main/runtime/runtime-agent-row-store.ts`              | no                  | pty exit only                 |
-| structured feed `published`            | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no  | never (a broadcast cache)     |
+| Main-process copy                 | Keyed by  | Owned by                                                                          | Persisted          | Evicted                      |
+| --------------------------------- | --------- | --------------------------------------------------------------------------------- | ------------------ | ---------------------------- |
+| hook server `lastStatusByPaneKey` | paneKey   | `src/main/agent-hooks/server.ts`                                                  | `last-status.json` | tab close, pty exit, hydrate |
+| runtime `RuntimeAgentRowStore`    | paneKey   | `runtime-agent-row-store.ts` (deleted in PR 1b)                                   | no                 | pty exit only                |
+| structured feed `published`       | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no                 | never (a broadcast cache)    |
 
 The second copy is a duplicate write: the OSC status parsed in main is
 forwarded to the hook server _and_ retained in the runtime store from the same
@@ -92,17 +94,29 @@ The structured feed keeps its job of projecting a session's journal into a
 summary and streaming it to subscribers. On every publish it additionally
 ingests the summary into the hook server as a status row:
 
-| Row field         | From                                                          |
-| ----------------- | ------------------------------------------------------------- |
-| `paneKey`         | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it |
-| `tabId`           | `structuredAgentSessionTabId(sessionId)`                      |
-| `worktreeId`      | `summary.workspaceId` (a folder workspace id is a valid value) |
-| `state`           | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared |
-| `structuredHost`  | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it |
-| prompt, tool, last message, model, provider session | the summary's fields    |
+| Row field                                           | From                                                                                                                                                                                                                                    |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paneKey`                                           | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it                                                                                         |
+| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                                                                                                                |
+| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                                                                                                          |
+| `state`                                             | `structuredAgentSessionAgentStatus(summary).state`: the lead's own status folded with the live child records the store holds for the session (not the summary's task list), so a settled lead whose subagent still runs reads `working` |
+| `workingMode`                                       | `'monitoring'` from the same fold when watch loops are the only live child work; omitted otherwise, which clears it on the row                                                                                                          |
+| `mainAgent`                                         | the main agent's own state before the fold, its last-turn verdict (`summary.turnOutcome`, present only while idle) and its own clock; see "The main agent fact" below                                                                   |
+| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it                                                                                                  |
+| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                                                                                                                    |
 
-Sessions with no persisted turn (`status === null`) produce no row, matching
-what the chat shows. When the host revokes live ownership the row is re-set
+Sessions with no request (`status === null`) produce no row. A request is a
+turn record, an assistant message, a user message the provider journaled itself
+(history, an older host), an accepted or unanswered send, or a send the agent or
+its start refused; a send that was withdrawn, or left undelivered by a
+restart or a close, fails nobody and makes nothing listable.
+`summary.turnOutcome` is the latest request's verdict: its turn's outcome, or
+`failure` for a send the agent or its start refused (a send that joined a running
+turn is answered by that turn). A turn the provider gave no outcome reads as its
+host-observed end through `agentTurnVerdict`: `interruption` for an `interrupted`
+lifecycle, `unconfirmed` for an `unverifiable` one. It is derived on each read,
+never journaled. The row also publishes `interrupted` from
+`mainAgent.outcome`, exactly as the hook lanes do. When the host revokes live ownership the row is re-set
 without the flag; when the host closes or evicts the session the row is
 dropped. Both already exist as feed events (`revokeLive` and the roster
 filter in `liveSessionSummaries`); PR 1 turns them into store writes.
@@ -151,7 +165,7 @@ sits at the file-length cap.
 The structured adapter added in #19217 is deleted, and structured rows reach
 `worktree ps` through the same snapshot as every other row. The
 retained-versus-hook reconciliation in `collectRuntimeWorktreePtyAgentSources`
-stays until PR 1b removes the store that feeds it. What this step settles is
+stayed until PR 1b removed the store that fed it. What this step settles is
 the admission gate that decides which rows a worktree listing may show:
 
 - a hook or OSC row needs its tab mirrored or a connected pty, as today, and
@@ -184,24 +198,219 @@ over `agentStatus:set` or `agentStatus:getSnapshot`. The renderer's feed
 bridge still writes those rows itself, and forwarding them too would give one
 pane key two writers. Removing that filter is the first step of PR 2.
 
+### The main agent fact
+
+Claude, Codex and Grok hook rows and structured-session rows publish the combined
+`state` and, beside it, the main agent's own state as `payload.mainAgent`. Other agents'
+rows and terminal-title-only rows carry none, and readers fall back to `state`:
+
+```ts
+mainAgent?: { state: AgentStatusState; outcome?: AgentTurnOutcome; stateStartedAt: number }
+```
+
+`state` still answers "what should the user see" and folds live child work in,
+so a settled main agent whose subagent still runs reads `working`. `mainAgent` answers
+"what is the main agent itself doing", which the fold used to destroy at publish
+time; every guard that reconstructed a fragment of it (`fromChildWork`, the
+persisted `claudeLeadBoundaryChildOnly` flag) now reads `mainAgent` instead of a
+stored copy. A Claude row whose `mainAgent` is `done` while a child agent still
+works (including a child's permission wait) refuses OSC, which carries no child
+identity; the children's own lifecycle hooks settle it. `outcome` is the recorded verdict on
+the main agent's most recent finished turn, present only while `mainAgent.state` is
+`done`. It is reported by the provider, or is a `cancellation` Orca inferred
+from the user's own interrupt keystroke, or a `superseded` the host recorded when
+a newer request replaced a structured Claude turn before it ended (it names no
+sender, and sets no legacy flag), or, on a structured row whose turn the
+provider gave no verdict, is what the host observed of its end: `interruption`
+(a proven death nobody asked for) or `unconfirmed` (an end it cannot prove,
+never success). The journal's turn outcome, by contrast, stores only recorded verdicts: the provider's, a `cancellation`, or the host's `superseded`; `interruption` and `unconfirmed` are derived from the turn's lifecycle state and never stored. A plain end of turn carries none, because absent
+means unknown and a provider that omits its interrupt flag must not turn a
+cancel into a success.
+In the Claude hook lane the cancellation comes primarily from Orca's own
+inferred interrupt (`markClaudeLeadTurnInterrupted`), because current Claude
+sends no hook at all on a cancel and no `is_interrupt` on Stop; that flag on a
+turn boundary remains a secondary source for builds that send it, and
+`StopFailure` maps to `failure`.
+
+Readers decode the verdict through one accessor, `agentMainAgentVerdict`, which
+reads the main agent's own state, not the combined row's: `mainAgent.outcome`
+while `mainAgent.state` is `done`, then the legacy `interrupted` flag as a
+cancellation, which alone needs the combined `done`. So a main agent that
+failed while its subagents still run has a verdict on a `working` row. Every
+copy of a row (state-history entries, sleep records, `worktree ps` rows) takes
+the verdict through `agentVerdictFields`, which carries `interrupted` and the
+whole `mainAgent` (state, outcome and its own clock) together, so a copy agrees
+with the row and can date a failure by `mainAgent.stateStartedAt`.
+
+Display reads the verdict through `agentVerdictDisplayMark`. A fault marks the
+agent failed whatever the combined state, because it is news the user must see
+even while subagents run: a `failure`, and an `interruption`, a turn cut short
+by anything other than the user or a newer request. A user's stop (`cancellation`)
+marks it interrupted, drawn in the muted tone with the row text "Interrupted by user";
+a turn a newer request replaced (`superseded`) marks it interrupted in the same muted
+tone with the row text "Interrupted"; and `unconfirmed` marks it unconfirmed, all only
+on a `done` row, so a stopped
+or finished main agent with live child work still reads working. The folded
+turn header follows the same mark: "Failed after N", "Interrupted after N", or
+"Worked for N".
+Each subagent keeps its own row and state. Container rollups (worktree card,
+terminal tab, Cmd+J) rank a pending question first, then a failure, then live
+work, then an unconfirmed end, then a user's stop, then done. On the worktree
+card, a failure retained after its agent's pane went away has no expiry, so it
+ranks below live work and above an unconfirmed end. Lifecycle waiters keep
+reading the combined `state`.
+
+Policy splits the verdict two ways. Clean-finish policy (hibernation, pane
+ownership, the star-nag value moment) treats a failure, an interruption and an
+unconfirmed end like a cancellation (`agentTurnEndedUncleanly`). Attention
+(completion time, Smart Sort, sticky retention, Cmd+J Recent) demotes only a
+turn ended on purpose, the user's stop or a newer request that replaced it
+(`agentTurnEndedOnPurpose`); a failure, an interruption or
+an unconfirmed end ranks like a completion.
+
+Admission is one function, `normalizeAgentStatusPayload`, on the relay wire,
+IPC and disk. A malformed `mainAgent` drops the field and keeps the row. Old hosts
+send none and readers fall back to `state`. Hook rows persist it inside the
+payload; hydration maps an older row's `claudeLeadBoundaryChildOnly: true`
+onto `mainAgent: { state: 'done' }` when the row has no `mainAgent`, and never writes the
+flag again. Hydration seeds the Claude main agent record straight from a saved
+`mainAgent` that is `done`, so the children's drain can still settle the row after
+a restart. `claudeRunningNonAgentTask` is persisted alongside because it is the one
+child-work fact `mainAgent` cannot express: a shell running beside the main agent,
+whose liveness hydration does not restore. Hydration seeds only a row that says
+`false`; a row silent about it stays unseeded. The row builder pairs the two facts in
+one place: a listener event restates the shell fact, and any other write (an OSC
+repaint, an inferred answer) keeps it only while `mainAgent` is unchanged. A child's
+sticky permission prompt still records the main agent's own progress and background
+evidence in the held row, and pushes the held row to subscribers when `mainAgent` changes.
+
+Every lane, Codex included, combines through the fold. A child waiting on a
+human is a fold input (`childWorkLiveness: 'waiting'`, derived from the child's
+own `waiting` state; a child's `blocked` means it failed and stays live work)
+and makes the row wait whatever the main agent is doing, unless the main agent
+is itself asking. Only the Codex hook lane feeds that input today. Known
+divergences, pinned by name in the parity table
+(`src/shared/main-agent-status-parity.test.ts`) where they are reachable, so a
+reader does not mistake them for drift:
+
+- The Claude hook lane holds a child's permission wait in one slot on the
+  displaced main agent record (`waitingAgentId`, `stateBeforeWait`), not on
+  the child. It publishes the displaced state as `mainAgent`, but the next
+  main agent event overwrites the slot, so the row stops reading `waiting`
+  while the child is still asking, and a second asking child replaces the
+  first.
+- The structured lane has no per-child wait: a child's pending prompt makes
+  the session `attention`, which reads as the main agent's own `blocked`.
+- The Codex hook lane drops its roster on a root `Stop` when it tracks no
+  child transcripts, so a still-running or still-asking child stops holding
+  the row.
+
+How the main agent's turn ended is not a fold input. A cancel is a verdict on
+the main agent, carried as `mainAgent.outcome: 'cancellation'` (and, for
+readers that predate `mainAgent`, as the row's `interrupted` flag on a `done`
+row); it never retires a shell, scheduled check or subagent the turn left
+running. That work leaves the row only when its own inventory omits it or the
+session ends, so a cancelled turn with a still-running shell reads
+`monitoring` in every lane, and the parity table in
+`src/shared/main-agent-status-parity.test.ts` drives that story through all of
+them. The same rule governs the cancel Orca infers from Ctrl+C: for any row
+that publishes `mainAgent`, the inference is admitted only when
+`mainAgent.state` is `working`, so Orca does not treat a Ctrl+C at the idle
+prompt of a row held open by child work as a turn cancel (Codex also keeps the
+child-evidence guard, and a row without `mainAgent` keeps only that guard).
+The keypress itself is not inert, though: measured live, Claude 2.1.280 stops
+its background subagents on a single idle-prompt Ctrl+C (shells survive) and
+Codex 0.156.1 quits outright, so refusing the inference can leave the row
+showing a subagent its CLI already stopped. The synthesized row is the fold
+of the cancelled main agent with the child work the pane's owner can see: the
+local listener's roster for a local pane, the row's own subagents and shell fact
+for a relayed one, whose provider records live on the relay.
+
+The store holds that verdict against restatements that predate it
+(`server-cancel-verdict-latch.ts`), because a relay never learns of a cancel
+the desktop infers and some TUIs emit late same-turn hooks. The hold is read
+off the row (`mainAgent.outcome: 'cancellation'`), never stored beside it, and
+dies on a new turn (a main agent prompt submission, a changed or explicit
+prompt, a session start) or the provider's own settled `mainAgent`. Child and
+replayed events under the hold keep the cancelled main agent and are re-folded
+with their own child evidence.
+
 ## PR 1b: the runtime's retained row store is deleted
 
-Not yet implemented; `RuntimeAgentRowStore` and the retained-versus-hook
-reconciliation it feeds are both still in place after PR 1a.
+Landed. `RuntimeAgentRowStore` is gone, and with it the retained-versus-hook
+reconciliation in `collectRuntimeWorktreePtyAgentSources`. The hook server's
+store is now the only main-process copy of a PTY agent's row.
 
-`RuntimeAgentRowStore` keeps the same payload the hook server already holds.
-Its only extra is the pty id, used to clear rows on exit and as a fallback key
-for the mobile projection. PR 1b will stamp `terminalHandle` on OSC-ingested
-rows from the runtime event's `ptyId`, and rewrite the three readers over the
-hook server's snapshot:
+### The five call sites
 
-- `worktree ps` reads `getStatusSnapshot()` directly;
-- `getFreshExplicit` already consults hook rows; it drops the retained input;
-- `getFreshForMobile` matches on pane key, then on `terminalHandle`.
+| Call site                                                                      | Before                                                          | After                                                                                              |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `orca-runtime-create-terminal-side-effect-command-code-detector.ts` `retain()` | second write of the OSC payload already sent to the hook server | deleted; the event now carries the pane's `terminalHandle` and the hook ingest keeps the only copy |
+| `...command-code-detector.ts` `clearPty()`                                     | drops rows on pty exit                                          | deleted; pane teardown already clears the hook row                                                 |
+| `orca-runtime-get-worktree-ps.ts` `values()`                                   | fed `retainedSnapshots`                                         | deleted; the reader keeps only `hookSnapshots`                                                     |
+| `orca-runtime-serialize-agent-prompt-submission.ts` `getFreshExplicit()`       | retained row first, hook rows second                            | `selectFreshExplicitAgentStatus`, hook rows only                                                   |
+| `orca-runtime-prune-mobile-session-tab-group-layout.ts` `getFreshForMobile()`  | pane key, then pty id                                           | `selectFreshAgentRowForMobileTab`: pane key, then `terminalHandle`                                 |
 
-One behavior change will follow and is intended: a row the user dismisses on
-the desktop disappears from `worktree ps` and the phone at the same time,
-instead of lingering until the pty exits.
+Both readers moved into `runtime-hook-agent-row-selection.ts`, which also owns
+`RuntimeAgentRowSnapshot` now that nothing retains one.
+
+### `terminalHandle` is the row's join back to its terminal
+
+The retained store's only real extra was the pty id, and two readers used it.
+The plan said to stamp the event's `ptyId` into `terminalHandle`; that was
+wrong. A terminal handle (`term_<uuid>`) and a pty id are different
+identifiers, and `getFreshExplicit` was already comparing hook rows against a
+real handle. What landed instead:
+
+- `AgentHookEventPayload` and the runtime's terminal-status event gained an
+  optional `terminalHandle`. The detector resolves it once per chunk through
+  `getAgentStatusTerminalHandleForPaneKey` — the same lookup the renderer-facing
+  IPC boundary already runs for every row, so the two surfaces cannot disagree
+  about which terminal a pane is.
+- `applyNormalizedStatus` carries the handle forward when an incoming event
+  resolves none. Only main's OSC parse can resolve one, so an HTTP hook post for
+  the same pane would otherwise erase it.
+- It is never persisted. A handle belongs to the runtime that issued it, and a
+  hydrated one could only rejoin a row to somebody else's terminal.
+- `toAgentStatusIpcPayload` publishes it, which also makes `getFreshExplicit`'s
+  long-dead handle comparison live: the runtime reads raw snapshot rows, and
+  before this nothing ever stamped the field on them.
+
+`worktree ps` uses it too. `ConnectedPtyEvidence` traded its flat `ptyIds` set
+for `ptyIdByTerminalHandle`, so a row still resolves the connected PTY behind
+it — which is both the working-terminal rollup's match key and the last rescue
+for a row whose pane binding was nulled by a controller incarnation change.
+
+### The change detector had to move with the store
+
+`retain()` was not only a store: its boolean return was the signal that
+republished `session.tabs` for a status-only transition, which no title change
+covers (#7970). `hook-status-session-tabs-invalidation.ts` already mirrors that
+projection change set, including restore provenance and terminal-handle joins,
+so the replacement was to route the signal off the store rather than build a
+second comparator.
+`installHookStatusSessionTabsRepublish` now owns all three arms — enriched
+status, pane clear, and the status-drop tap a dismissal emits — and both hosts
+install it.
+
+### Both hosts, not just the desktop one
+
+`orcad` constructed its runtime with no `onTerminalAgentStatus`, so main's OSC
+parse never reached the store there and the retained copy was the only carrier.
+Deleting it without wiring orcad would have made a headless host list no PTY
+agents at all. `orcad-entry.ts` now binds the producer and installs the
+republish signal, alongside the snapshot and structured sink it already had.
+
+### The intended behavior change
+
+A row the user dismisses on the desktop leaves `worktree ps` and the phone at
+once, instead of lingering until the pty exits. One store means one dismissal.
+
+Legacy numeric pane keys remain a bounded compatibility case. Persisted layouts
+register aliases to their stable leaf owners; an in-process OSC observation may
+also retain a numeric key only when the runtime supplies the matching tab, PTY,
+and terminal handle. HTTP and relay ingress still require a stable key or a
+registered alias, and numeric rows are never persisted.
 
 ## PR 2: the renderer subscribes
 
@@ -211,14 +420,14 @@ unmount cleanup becomes a tab-close signal to the host. The IPC applicator is
 the single writer for observed status. The 2026-09-09 audit sorted the other
 writers:
 
-| Writer                                                          | Disposition                                        |
-| --------------------------------------------------------------- | -------------------------------------------------- |
-| Command Code output seeds, parked-pane seeds, pty-exit removal  | delete; main already emits the same facts          |
-| structured bridge status writes                                 | delete; main now publishes the row                 |
-| launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later |
-| dismissal, acknowledgement, unmount                             | keep; user facts and component lifecycle           |
-| remote-runtime OSC parse (bytes never transit local main)       | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |
-| web-session mirror receipt clock                                | keep; the decay rule needs both clocks from one machine |
+| Writer                                                            | Disposition                                                                                              |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Command Code output seeds, parked-pane seeds, pty-exit removal    | delete; main already emits the same facts                                                                |
+| structured bridge status writes                                   | delete; main now publishes the row                                                                       |
+| launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later                                            |
+| dismissal, acknowledgement, unmount                               | keep; user facts and component lifecycle                                                                 |
+| remote-runtime OSC parse (bytes never transit local main)         | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |
+| web-session mirror receipt clock                                  | keep; the decay rule needs both clocks from one machine                                                  |
 
 The Command Code done-settle window is renderer policy with no main
 equivalent. PR 2 either moves it into main's detector or leaves it, and says
@@ -242,14 +451,79 @@ call it.
 - Hydration honesty: a restored non-done row is `restoredUnconfirmed` and is
   never fresh.
 
+## PR 1b reliability contract
+
+- **Invariant (`agent-session.status-host-ownership`):** each execution host has
+  one agent-status store; OSC, hooks, and structured sessions write it, while
+  desktop, `worktree ps`, and mobile only project it. Dismissal, certified PTY
+  exit, and provider-generation replacement remove the same row everywhere;
+  transport loss alone removes nothing.
+- **Failure source:** the deleted runtime row store duplicated OSC observations,
+  keyed them by a different terminal identity, and outlived a dismissal from the
+  hook store. Relay replay could also make old evidence look fresh when readers
+  used its new delivery timestamp.
+- **Oracle:** one OSC observation appears through the hook snapshot in
+  `worktree ps` and mobile, and one store dismissal removes it from both without
+  stopping the PTY. Focused tests also require leaf/incarnation-handle rejoin,
+  legacy numeric-pane compatibility, certified-exit and provider-generation
+  cleanup, evidence-age freshness, and exactly-once startup/stop teardown.
+- **Gate:** `terminal-performance.osc-status-scan-budget` covers the unchanged
+  bounded OSC parser and the runtime projection. There is not yet a dedicated
+  blocking multi-surface status-store gate; the focused suites below are the
+  accepted gap until they accumulate reliability-gate soak evidence.
+- **Provider/platform coverage:** local and daemon-backed PTYs are covered by
+  runtime tests, and SSH relay loss/replay semantics by relay integration tests.
+  The projection is shared by git worktrees and folder workspaces. WSL uses the
+  same store and admission code but has no live run here; Linux and Windows
+  runtime execution, native mobile clients, and mixed-version paired clients
+  remain validation gaps.
+- **Performance budget:** publication stays event-driven with no new polling or
+  subprocesses. One mobile projection clones the status snapshot once, builds
+  pane/handle indexes once, and has a deterministic call-count test; lifecycle
+  cleanup is bounded by the existing status and handle inventories, and orcad
+  tests prove listeners clean up once on failed startup and repeated stop.
+- **Diagnostics:** existing hook-listener errors name the pane and PTY, while
+  status-store tests pin delivery versus evidence clocks. No new telemetry or
+  raw terminal data is emitted.
+- **Residual gaps:** rendered Electron/mobile behavior, live SSH reconnect, and
+  Linux/Windows/WSL execution require the platform QA pass. The current
+  cross-version gate does not cover `session.tabs` content.
+
 ## Verification
 
 - Unit: ingest a structured summary and read it back through
   `getStatusSnapshot`, `worktree ps`, and the mobile projection; assert the
   serializer never writes a row carrying `structuredHost`; assert a hydrated
   file that somehow contains one is dropped.
-- Unit: the existing `worktree ps` suites pass unchanged, which is the
-  characterization that will show PR 1b's deletion of the retained store
-  changed no listing.
+- Unit: the `worktree ps` suites written against the retained store are rewired
+  to a real `AgentHookServer` (`agent-status-store-wiring.test-fixture.ts`)
+  rather than deleted, so each still asserts the listing behavior it named. The
+  dismissal change is pinned end to end in
+  `orca-runtime-tests/worktree-ps-agent-row-dismissal.spec.ts`, which fails with
+  the retained store restored.
 - Live: the parity check from #19217 (working, done, close, reload) repeated
   against the merged store, with both surfaces read from the one row.
+
+## Retired OMP pane recovery
+
+A desktop renderer retirement carries an optional UUID through the existing
+`agentStatus:retirePaneAuthority` IPC message. The hook server retains it with
+its bounded retirement fence. A validated live OMP new turn consumes that UUID
+and echoes `authorityRestartId` only in the live notification. Cached rows,
+persistence and startup replay never carry the acknowledgement. Older peers
+omit or ignore it and retain explicit attach restoration.
+
+The renderer keeps the UUID in its existing non-persisted retirement tombstone;
+every re-retirement mints a new one. A matching acknowledgement may clear that
+tombstone only with a successful status write for the existing pane and matching
+workspace/connection. Closed tombstones remain `true`, including after the tab
+LRU evicts its entry. Closing a retired physical alias revokes its whole group.
+This is control-plane retirement correlation, not a second agent-status store.
+
+Fallback restores the hook server's recorded status aliases through the existing
+attach-restoration path. The accepted renderer write restores the matching status
+alias routes too, preserving group membership for the next retirement. It does
+not restore orchestration or launch credentials.
+It is scoped to the requesting desktop renderer. A different window's retirement
+UUID cannot be cleared by the acknowledgement, and web mirrors keep their existing
+host-snapshot/attach behavior.

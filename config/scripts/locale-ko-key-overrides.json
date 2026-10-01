@@ -887,9 +887,6 @@
   "auto.components.editor.IpynbViewer.3e4cbf15ea": {
     "ko": "원시"
   },
-  "auto.components.editor.IpynbViewer.59b6cd874b": {
-    "ko": "코드"
-  },
   "auto.components.editor.IpynbViewer.d6f37a640b": {
     "ko": "빈 노트북"
   },
@@ -5077,5 +5074,29 @@
   },
   "dashboardPopout.terminal.close": {
     "ko": "닫기"
+  },
+  "components.native-chat.backgroundTasks.countShellCommandOne": {
+    "ko": "셸 명령 1개"
+  },
+  "components.native-chat.backgroundTasks.countShellMany": {
+    "ko": "셸 {{value0}}개"
+  },
+  "components.native-chat.backgroundTasks.countShellOne": {
+    "ko": "셸 1개"
+  },
+  "components.native-chat.backgroundTasks.groupShell": {
+    "ko": "셸"
+  },
+  "components.native-chat.backgroundTasks.stateWorking": {
+    "ko": "작업 중"
+  },
+  "components.native-chat.status.working": {
+    "ko": "작업 중…"
+  },
+  "components.native-chat.subagents.state.working": {
+    "ko": "작업 중"
+  },
+  "components.workspace.cleanup.browse.agent.working": {
+    "ko": "작업 중"
   }
 }

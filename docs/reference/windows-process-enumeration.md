@@ -339,8 +339,22 @@ straight to the addon drops the duplicate.
 The artifact is optional in `RELAY_ARTIFACTS`: hashed when present, so a relay
 carrying it never shares an immutable directory with one that does not, and
 never probed, because requiring a file only a Windows build machine can produce
-would make a correct relay read as MISSING and redeploy forever. A relay built
-on any other OS keeps using the scan.
+would make a correct relay read as MISSING and redeploy forever. A local build
+on another OS has no addon, so its Windows relays use the scan.
+
+Every desktop package ships relays for Windows hosts, not just the Windows
+installer, and the addon also carries the relay launcher (`spawnOutsideJob`,
+see `windows-edr-posture.md`). So one Windows job,
+`.github/workflows/relay-windows-process-tree.yml`, compiles both arches and
+uploads the `relay-windows-process-tree` artifact. The release and dev-channel
+macOS and Linux packaging jobs download it into `.build/windows-process-tree`
+and set `ORCA_REQUIRE_RELAY_NATIVE_ADDONS=x64,arm64`, as the Windows jobs do.
+`config/scripts/relay-windows-process-tree-staging.mjs` checks each staged
+binary for its PE machine, the missing `ReadProcessMemory` import, and the
+`spawnOutsideJob` export. Without that last check a pre-launcher build from an
+old `.build` dir or cached artifact would pass. A required arch that fails any
+check fails the build. An unrequired one (a local build) is left out, and that
+relay uses the scan and the WMI launch fallback.
 
 ## Why the package is patched
 
@@ -504,7 +518,7 @@ miss exactly the detached, reparented descendants the trackers exist to find
 ## Packaging
 
 The addon is Windows-only, so it follows the same contract as
-`windows-native-registry` (asserted by
+`@orca/windows-registry` (asserted by
 `config/scripts/package-electron-runtime-contract.test.mjs`):
 
 - an `optionalDependency`, so a macOS/Linux install tolerates its absence;
@@ -583,8 +597,8 @@ breakaway hands the whole tree its escape. The per-PTY job therefore omits
 `BREAKAWAY_OK` whenever `msys-2.0.dll` or `cygwin1.dll` sits on the shell's DLL
 search path — beside the executable, or under `usr/bin` for Git's `bin`
 launcher. Native shells keep explicit breakaway. Denying it costs Cygwin
-nothing, because it *pre-checks* the limit rather than retrying, so no spawn
-fails; but a *native* program that passes `CREATE_BREAKAWAY_FROM_JOB` itself
+nothing, because it _pre-checks_ the limit rather than retrying, so no spawn
+fails; but a _native_ program that passes `CREATE_BREAKAWAY_FROM_JOB` itself
 inside such a pane now gets `ERROR_ACCESS_DENIED`. `nohup` and `disown` are
 unaffected — they are Cygwin signal/session concepts, unrelated to job
 membership. The daemon's host job is unchanged.

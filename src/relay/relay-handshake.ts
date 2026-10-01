@@ -12,6 +12,7 @@ import {
   type DecodedFrame
 } from './protocol'
 import { relayLogLine } from './relay-diagnostic-log'
+import { describeRelayRuntime } from './relay-runtime-identity'
 
 // Why: clients treat this exit code as non-retryable; other non-zero exits are transient.
 export const EXIT_CODE_VERSION_MISMATCH = 42
@@ -151,7 +152,13 @@ function handleDaemonHandshakeFrame(
     return false
   }
   process.stderr.write(`[relay] Handshake OK from version=${msg.version}\n`)
-  sock.write(encodeHandshakeFrame({ type: 'orca-relay-handshake-ok', version: launchVersion }))
+  sock.write(
+    encodeHandshakeFrame({
+      type: 'orca-relay-handshake-ok',
+      version: launchVersion,
+      runtime: describeRelayRuntime()
+    })
+  )
   return true
 }
 
@@ -194,7 +201,8 @@ export function runConnectHandshake(
         process.exit(1)
       }
       if (msg.type === 'orca-relay-handshake-ok') {
-        process.stderr.write(`[relay-connect] Handshake OK at version=${msg.version}\n`)
+        const runtime = msg.runtime ? ` runtime=${msg.runtime.kind}/${msg.runtime.version}` : ''
+        process.stderr.write(`[relay-connect] Handshake OK at version=${msg.version}${runtime}\n`)
         handshakeDone = true
         const leftover = decoder.drain()
         sock.removeAllListeners('data')

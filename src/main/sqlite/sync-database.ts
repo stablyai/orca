@@ -1,5 +1,8 @@
 import { existsSync } from 'node:fs'
-import type { DatabaseSync, StatementSync, SQLInputValue } from 'node:sqlite'
+import type { backup, BackupOptions, DatabaseSync, SQLInputValue } from 'node:sqlite'
+import { hasNodeSqliteReaderApi } from './node-sqlite-reader-api'
+import { NodeSqliteStatement } from './node-sqlite-statement'
+import type { SqliteStatement } from './sqlite-statement'
 
 type SqlitePath = ConstructorParameters<typeof DatabaseSync>[0]
 
@@ -13,7 +16,7 @@ type PragmaOptions = {
   simple?: boolean
 }
 
-export type SqliteStatement = StatementSync
+export type { SqliteStatement } from './sqlite-statement'
 
 // Why: dynamic `IN (?,?,…)` clauses mint a new SQL string per arity, so the cache must stay bounded.
 const STATEMENT_CACHE_LIMIT = 256
@@ -32,22 +35,47 @@ function loadDatabaseSync(): typeof DatabaseSync {
   if (typeof process.getBuiltinModule !== 'function') {
     throw new Error('node:sqlite is unavailable in this Node.js runtime')
   }
-  return (process.getBuiltinModule('node:sqlite') as { DatabaseSync: typeof DatabaseSync })
-    .DatabaseSync
+  const sqlite: unknown = process.getBuiltinModule('node:sqlite')
+  if (!hasDatabaseSync(sqlite)) {
+    throw new Error('node:sqlite is unavailable in this Node.js runtime')
+  }
+  return sqlite.DatabaseSync
+}
+
+function hasDatabaseSync(value: unknown): value is { DatabaseSync: typeof DatabaseSync } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'DatabaseSync' in value &&
+    typeof value.DatabaseSync === 'function'
+  )
+}
+
+function hasBackup(value: unknown): value is { backup: typeof backup } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'backup' in value &&
+    typeof value.backup === 'function'
+  )
+}
+
+export function isSqliteAvailable(): boolean {
+  try {
+    const sqlite: unknown = process.getBuiltinModule?.('node:sqlite')
+    return hasNodeSqliteReaderApi(sqlite)
+  } catch {
+    return false
+  }
 }
 
 class SyncDatabase {
   private readonly db: DatabaseSync
-  private readonly statementCache = new Map<string, StatementSync>()
+  private readonly statementCache = new Map<string, SqliteStatement>()
 
   constructor(path: SqlitePath, options: SyncDatabaseOptions = {}) {
-    if (
-      options.fileMustExist &&
-      typeof path === 'string' &&
-      path !== ':memory:' &&
-      !existsSync(path)
-    ) {
-      throw new Error(`SQLite database does not exist: ${path}`)
+    if (options.fileMustExist && path !== ':memory:' && !existsSync(path)) {
+      throw new Error(`SQLite database does not exist: ${String(path)}`)
     }
     const DatabaseSync = loadDatabaseSync()
     this.db = new DatabaseSync(path, {
@@ -64,14 +92,14 @@ class SyncDatabase {
     this.db.exec(sql)
   }
 
-  prepare(sql: string): StatementSync {
+  prepare(sql: string): SqliteStatement {
     const cached = this.statementCache.get(sql)
     if (cached) {
       this.statementCache.delete(sql)
       this.statementCache.set(sql, cached)
       return cached
     }
-    const statement = this.db.prepare(sql)
+    const statement = new NodeSqliteStatement(this.db.prepare(sql))
     if (isStatementCacheable(sql)) {
       if (this.statementCache.size >= STATEMENT_CACHE_LIMIT) {
         const oldest = this.statementCache.keys().next().value
@@ -85,7 +113,7 @@ class SyncDatabase {
   }
 
   pragma(sql: string, options?: PragmaOptions): unknown {
-    const statement = this.db.prepare(`PRAGMA ${sql}`)
+    const statement = this.prepare(`PRAGMA ${sql}`)
     if (options?.simple) {
       const row = statement.get()
       if (!row) {
@@ -98,6 +126,21 @@ class SyncDatabase {
 
   get isTransaction(): boolean {
     return this.db.isTransaction
+  }
+
+  /** Keep the source open until completion. */
+  async backup(path: string, options?: BackupOptions): Promise<void> {
+    if (this.db.isTransaction) {
+      throw new Error('SQLite backup requires an idle database connection')
+    }
+    const sqlite: unknown =
+      typeof process.getBuiltinModule === 'function'
+        ? process.getBuiltinModule('node:sqlite')
+        : undefined
+    if (!hasBackup(sqlite)) {
+      throw new Error('Asynchronous SQLite backup is unavailable in this Node.js runtime')
+    }
+    await sqlite.backup(this.db, path, options ?? {})
   }
 
   close(): void {

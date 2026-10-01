@@ -3,6 +3,8 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type { BrowserPageCommandTarget } from '../../../../../shared/browser-page-command-target'
+import { paneChannel } from '../client-hosted-browser-pane-test-rig'
 import { requestBrowserFocus } from '../host-guest/browser-focus'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { useElementGuestFocus } from './browser-page-guest-focus'
@@ -13,7 +15,7 @@ const WORKSPACE_ID = 'workspace-a'
 const ADDRESS_VALUE = 'about:blank'
 
 let frameCallbacks: FrameRequestCallback[] = []
-let focusAddressBarFromIpc: (() => void) | null = null
+let focusAddressBarFromIpc = paneChannel<BrowserPageCommandTarget>()
 
 function flushFrames(cycles = 8): void {
   for (let index = 0; index < cycles; index += 1) {
@@ -115,7 +117,7 @@ function setPlatformUserAgent(userAgent: string): void {
 describe('useBrowserPageChromeFocus', () => {
   beforeEach(() => {
     frameCallbacks = []
-    focusAddressBarFromIpc = null
+    focusAddressBarFromIpc = paneChannel()
     chromeFocus = null
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
@@ -126,12 +128,8 @@ describe('useBrowserPageChromeFocus', () => {
       configurable: true,
       value: {
         ui: {
-          onFocusBrowserAddressBar: (callback: () => void) => {
-            focusAddressBarFromIpc = callback
-            return () => {
-              focusAddressBarFromIpc = null
-            }
-          }
+          onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) =>
+            focusAddressBarFromIpc.subscribe(callback)
         }
       }
     })
@@ -173,14 +171,6 @@ describe('useBrowserPageChromeFocus', () => {
 
     expect(document.activeElement).not.toBe(addressBar())
     expect(useAppStore.getState().pendingAddressBarFocusByPageId[PAGE_ID]).toBe(true)
-  })
-
-  it('claims a durable palette request aimed at the address bar', () => {
-    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'address-bar' }))
-
-    renderChrome()
-
-    expectAddressBarFocusedAndSelected()
   })
 
   it('releases the address-bar latch once a palette grab has run its frames', () => {
@@ -330,9 +320,30 @@ describe('useBrowserPageChromeFocus', () => {
     renderChrome()
     act(() => guest().focus())
 
-    act(() => focusAddressBarFromIpc?.())
+    act(() => focusAddressBarFromIpc.emit({ browserPageId: PAGE_ID }))
 
     expectAddressBarFocusedAndSelected()
+  })
+
+  it('focuses only the forwarding page when both halves of a split are active', () => {
+    render(
+      <>
+        <ChromeHarness testId="a" chromeShortcutScope="focused" />
+        <ChromeHarness
+          testId="b"
+          browserTabId="page-b"
+          workspaceId="workspace-b"
+          chromeShortcutScope="inactive"
+        />
+      </>
+    )
+    act(() => flushFrames())
+    act(() => guest('b').focus())
+
+    // Why: pane b subscribes last, so an unscoped IPC would leave b's address bar focused.
+    act(() => focusAddressBarFromIpc.emit({ browserPageId: PAGE_ID }))
+
+    expect(document.activeElement).toBe(addressBar('a'))
   })
 
   it('focuses the address bar on Cmd+L from chrome on macOS', () => {
@@ -402,14 +413,5 @@ describe('useBrowserPageChromeFocus', () => {
     })
 
     expect(document.activeElement).toBe(addressBar('b'))
-  })
-
-  it('leaves the chord to the rest of the app while the pane is inactive', () => {
-    renderChrome({ isActive: false })
-    act(() => guest().focus())
-
-    pressFocusAddressBarChord(true)
-
-    expect(document.activeElement).toBe(guest())
   })
 })

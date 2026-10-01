@@ -5,17 +5,23 @@ import type {
   AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { TranscriptMessageSink } from './session-transcript-consumers'
+import type {
+  TranscriptMessageSink,
+  TranscriptSessionIdentity
+} from './session-transcript-consumers'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
+import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  codebuddyProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
   // Why: tests inject a sandbox "real ~/.codex" so real-home attribution
   // (codexHome null → unprefixed resume) is testable without the user's home.
   defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
+  wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
   geminiSessionsDir?: string
   antigravityBrainDir?: string
   copilotSessionsDir?: string
@@ -24,6 +30,8 @@ export type AiVaultScanOptions = {
   // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
   // here so they don't depend on the real ~/.local/share/opencode.
   opencodeDbPaths?: readonly string[]
+  /** Test override for the ZCode CLI's OpenCode-shaped SQLite database. */
+  zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
   hermesSessionsDir?: string
@@ -37,11 +45,12 @@ export type AiVaultScanOptions = {
   droidProjectsDir?: string
   clineSessionsDir?: string
   kimiSessionsDir?: string
+  museSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
-  // the recency cap (see discoverInScopeClaudeFiles).
+  // the recency cap (see discoverInScopeCwdBucketFiles).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
@@ -103,6 +112,9 @@ export type ResumableSessionParseState = {
   consumeLineBytes?(line: Buffer): void
   // Lets a parser terminate an excluded transcript without draining the file.
   shouldStop?(): boolean
+  // What the fold knows about the session right now, for a consumer that has to
+  // commit before the read ends (see TranscriptSessionIdentity).
+  identity?(): TranscriptSessionIdentity | null
   clone(): ResumableSessionParseState
   // Refresh per-scan file metadata (mtime display string) without re-parsing.
   touchFile(file: FileWithMtime): void
@@ -138,6 +150,7 @@ export type SessionAccumulator = {
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).
   queuedMessageCount: number
   subagentTranscriptCount: number
+  earliestTimestampMs: number
   latestTimestampMs: number
 }
 

@@ -1,3 +1,8 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 17 runtime-home specs, not shipped code, and it falls outside the *.test / *.spec / tests glob set.
+   setupRuntimeHomeTest() overrides one probe predicate in ../pty/shell-startup-env; the production
+   readers import it directly across several main-process modules, so an injected seam would have to
+   be threaded through all of them. Inlining the stub into each of the 17 specs would duplicate it 17
+   times and push the largest past the max-lines ratchet. */
 import { expect, vi } from 'vitest'
 import {
   existsSync,

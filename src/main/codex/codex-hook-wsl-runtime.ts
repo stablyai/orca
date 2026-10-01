@@ -1,9 +1,7 @@
 import { win32 as pathWin32 } from 'node:path'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  buildManagedCommandHook,
   createManagedCommandMatcher,
-  MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
   writeManagedScript,
@@ -17,10 +15,15 @@ import {
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
+  buildCodexManagedHook,
   wrapReadablePosixHookCommand,
   writeCodexHooksJson
 } from './codex-hook-definition'
-import { grantManagedCodexHookTrust } from './codex-hook-trust-grant'
+import {
+  grantManagedCodexHookTrust,
+  type CodexManagedTrustGrantPlan
+} from './codex-hook-trust-grant'
+import { removeSelfComputedTrustBeforeGrant } from './codex-managed-trust-grant-plan'
 import { getManagedScript } from './codex-hook-script'
 import {
   removeStaleWslRuntimeManagedHookTrustEntries,
@@ -33,9 +36,9 @@ import type {
   WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
 
-// Why (#16441): the grant inside awaits a codex app-server session, so a
-// concurrent pane launch could write this config.toml between this run's
-// capture and its restore. One lane per file keeps the sequence atomic.
+// Why (#16441): this run clears Orca's computed trust, awaits Codex's grant, and
+// may write computed trust back; a concurrent pane launch must not interleave
+// with that sequence. One lane per file keeps it atomic.
 export function installManagedHooksIntoWslRuntime(
   plan: CodexWslRuntimeHookInstallPlan
 ): Promise<AgentHookInstallStatus> {
@@ -78,9 +81,8 @@ async function installManagedHooksIntoWslRuntimeExclusively(
   for (const eventName of CODEX_EVENTS) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
-    const definition: HookDefinition = {
-      hooks: [buildManagedCommandHook(command)]
-    }
+    const hook = buildCodexManagedHook(command, eventName)
+    const definition: HookDefinition = { hooks: [hook] }
     nextHooks[eventName] = [definition, ...cleaned]
     trustEntries.push({
       sourcePath: plan.trustConfigPath,
@@ -88,7 +90,7 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       groupIndex: 0,
       handlerIndex: 0,
       command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec: hook.timeout
     })
   }
 
@@ -109,14 +111,18 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       trustEntries,
       previousLedgerHome ? [previousLedgerHome] : []
     )
-    const grant = await grantManagedCodexHookTrust({
+    const grantPlan: CodexManagedTrustGrantPlan = {
       runtimeHomePath,
       tomlPath: plan.tomlPath,
       managedCommand: command,
       managedEntries: trustEntries,
       host: { kind: 'wsl', distro: plan.wslDistro, linuxRuntimeHome: plan.linuxRuntimeHome },
       telemetryLane: 'managed'
-    })
+    }
+    // Why: the fallback below writes this trust back if the session fails.
+    const grant = await grantManagedCodexHookTrust(grantPlan, () =>
+      removeSelfComputedTrustBeforeGrant(grantPlan)
+    )
     if (grant.lane === 'fallback') {
       // Why: WSL runtime homes may carry user hook approvals we did not rebuild
       // here; only upsert Orca's entries instead of sweeping the whole source.

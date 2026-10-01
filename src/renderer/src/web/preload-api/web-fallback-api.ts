@@ -4,6 +4,7 @@ export function withFallback<T extends object>(target: T, path: string[]): T {
   return new Proxy(target, {
     get(current, property, receiver) {
       if (property in current) {
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         const value = Reflect.get(current, property, receiver) as unknown
         if (value && typeof value === 'object' && !Array.isArray(value)) {
           return withFallback(value as object, [...path, String(property)])

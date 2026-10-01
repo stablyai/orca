@@ -1,5 +1,5 @@
-import { resolveActiveProjectKey, toAiVaultProjectKey } from './ai-vault-project-key'
-export { toAiVaultProjectKey } from './ai-vault-project-key'
+import { resolveActiveProjectKey } from './ai-vault-project-key'
+import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

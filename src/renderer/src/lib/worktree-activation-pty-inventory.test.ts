@@ -105,9 +105,7 @@ describe('activation inventory census', () => {
     expect(listSessions).toHaveBeenCalledExactlyOnceWith({ connectionId: 'box' })
   })
 
-  // A paired peer's PTYs never enter this client's registry, so refusing to answer would strand the
-  // workspace with no surface at all; the unscoped inventory is the shipped answer for it.
-  it('falls back to the unscoped inventory for a workspace it cannot scope', async () => {
+  it('rejects paired ownership without consulting the client inventory', async () => {
     const listSessions = stubListSessions(async () => [])
     await expect(
       listActivationPtySessions(
@@ -125,11 +123,11 @@ describe('activation inventory census', () => {
         },
         worktreeId
       )
-    ).resolves.toEqual([])
-    expect(listSessions).toHaveBeenCalledExactlyOnceWith()
+    ).rejects.toThrow('Activation PTY inventory is unverifiable')
+    expect(listSessions).not.toHaveBeenCalled()
   })
 
-  it('retries unscoped when the selected relay is detached, and only then', async () => {
+  it('propagates detached and unavailable host errors without a client fallback', async () => {
     const detached = stubListSessions(async (scope) => {
       if (scope) {
         throw new Error(
@@ -140,8 +138,8 @@ describe('activation inventory census', () => {
     })
     await expect(
       listActivationPtySessions({ repos: [{ id: 'repo', executionHostId: 'ssh:box' }] }, worktreeId)
-    ).resolves.toEqual([{ id: 'local-1' }])
-    expect(detached.mock.calls).toEqual([[{ connectionId: 'box' }], []])
+    ).rejects.toThrow('No PTY provider for connection')
+    expect(detached.mock.calls).toEqual([[{ connectionId: 'box' }]])
 
     const refused = stubListSessions(async () => {
       throw new Error('relay unavailable')

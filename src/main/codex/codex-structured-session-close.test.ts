@@ -1,3 +1,5 @@
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
+import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type {
@@ -11,6 +13,7 @@ import {
 } from './codex-structured-session-adapter'
 import { handleCodexSessionExit } from './codex-structured-session-close'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexSession } from './codex-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
@@ -74,7 +77,7 @@ function claudeAdapterStub(): StructuredAgentSessionAdapter {
 }
 
 describe('Codex structured session close lifecycle', () => {
-  it('forwards a one-shot exit when lifecycle admission is rejected', () => {
+  function backpressuredSession(requestedClose: boolean) {
     const connection: CodexAppServerConnection = {
       pid: 4321,
       closed: true,
@@ -84,16 +87,16 @@ describe('Codex structured session close lifecycle', () => {
       respondWithError: () => {},
       close: async () => true
     }
-    const prompts = { clear: vi.fn() } as unknown as CodexSession['prompts']
+    const prompts = new CodexPromptRegistry()
     const translator = {
       handle: vi.fn().mockReturnValueOnce({ accepted: false, reason: 'backpressure' as const }),
       dispose: vi.fn()
     } as unknown as NonNullable<CodexSession['translator']>
-    const session = {
+    const session: CodexSession = {
       connection,
       backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
       ended: false,
-      requestedClose: false,
+      requestedClose,
       fence: 7,
       acquisitionGeneration: 'generation-1',
       threadId: THREAD,
@@ -101,10 +104,17 @@ describe('Codex structured session close lifecycle', () => {
       prompts,
       options: new Map(),
       reportedOptions: {},
-      turnIdWaiters: [],
+      fastModeTierByModel: new Map(),
+      dispatchEchoes: createCodexDispatchEchoes(),
+      turnOpenWaits: createCodexTurnOpenWaits(),
       translator
-    } as CodexSession
-    const sessions = new Map([['session-1', session]])
+    }
+    return { connection, prompts, translator, session, sessions: new Map([['session-1', session]]) }
+  }
+
+  it('forwards a one-shot exit when lifecycle admission is rejected', () => {
+    const { connection, prompts, translator, session, sessions } = backpressuredSession(false)
+    const clearPrompts = vi.spyOn(prompts, 'clear')
     const onEvent = vi.fn()
 
     expect(
@@ -118,14 +128,34 @@ describe('Codex structured session close lifecycle', () => {
       })
     ).toBe(true)
     expect(session.ended).toBe(true)
-    expect(prompts.clear).toHaveBeenCalledOnce()
+    expect(clearPrompts).toHaveBeenCalledOnce()
     expect(onEvent).toHaveBeenCalledOnce()
     expect(translator.dispose).toHaveBeenCalledOnce()
-    expect(onEvent.mock.calls[0]?.[0]).toMatchObject({
-      cause: 'unexpected-exit',
-      settlementRetryRequired: true
-    })
+    expect(onEvent.mock.calls[0]?.[0]).toMatchObject({ cause: 'unexpected-exit' })
     expect(translator.handle).toHaveBeenCalledOnce()
+  })
+
+  it("ends a Stop's wait for its turn to open when a requested close cannot publish its end yet", async () => {
+    const { connection, prompts, session, sessions } = backpressuredSession(true)
+    let released = false
+    void session.turnOpenWaits.wait('turn-1', 60_000).then(() => {
+      released = true
+    })
+
+    expect(
+      handleCodexSessionExit({
+        sessions,
+        sessionId: 'session-1',
+        connection,
+        error: new Error('codex session closed'),
+        closedByOrca: true,
+        prompts
+      })
+    ).toBe(false)
+    await Promise.resolve()
+    // Left for the retry, but the child is gone: nothing waits on a turn it would open.
+    expect(session.ended).toBe(false)
+    expect(released).toBe(true)
   })
 
   it('mints a distinct child generation even when acquisitions share one fence', async () => {

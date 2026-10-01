@@ -21,12 +21,30 @@ function harness() {
   const list = { scrollToIndex: vi.fn(), scrollToOffset: vi.fn() }
   const listRef = { current: list as unknown as FlatList<NativeChatMessage> }
   const seen: Jump[] = []
-  function Probe({ data }: { data: NativeChatMessage[] }): ReactElement | null {
-    seen.push(useMobileNativeChatPromptJump(listRef, data, true))
+  const onLeaveTail = vi.fn()
+  const onReturnToTail = vi.fn()
+  function Probe({
+    data,
+    scopeKey = 'chat-a'
+  }: {
+    data: NativeChatMessage[]
+    scopeKey?: string
+  }): ReactElement | null {
+    seen.push(
+      useMobileNativeChatPromptJump({
+        listRef,
+        data,
+        loadedMessages: data,
+        atBottom: true,
+        onLeaveTail,
+        onReturnToTail,
+        scopeKey
+      })
+    )
     return null
   }
   const latest = (): Jump => seen.at(-1)!
-  return { list, seen, latest, Probe }
+  return { list, seen, latest, Probe, onLeaveTail, onReturnToTail }
 }
 
 describe('useMobileNativeChatPromptJump', () => {
@@ -84,16 +102,18 @@ describe('useMobileNativeChatPromptJump', () => {
       tree = create(createElement(Probe, { data: transcript('user', 'assistant') }))
     })
 
+    latest().onJumpToPrompt()
+    list.scrollToIndex.mockClear()
     latest().onScrollToIndexFailed({
-      index: 5,
-      highestMeasuredFrameIndex: 2,
+      index: 0,
+      highestMeasuredFrameIndex: -1,
       averageItemLength: 100
     })
-    expect(list.scrollToOffset).toHaveBeenCalledWith({ offset: 500, animated: true })
+    expect(list.scrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: true })
     expect(list.scrollToIndex).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(120)
-    expect(list.scrollToIndex).toHaveBeenCalledWith({ index: 5, viewPosition: 0, animated: true })
+    expect(list.scrollToIndex).toHaveBeenCalledWith({ index: 0, viewPosition: 0, animated: true })
   })
 
   it('drops a pending retry when the view unmounts', () => {
@@ -103,9 +123,11 @@ describe('useMobileNativeChatPromptJump', () => {
       tree = create(createElement(Probe, { data: transcript('user', 'assistant') }))
     })
 
+    latest().onJumpToPrompt()
+    list.scrollToIndex.mockClear()
     latest().onScrollToIndexFailed({
-      index: 5,
-      highestMeasuredFrameIndex: 2,
+      index: 0,
+      highestMeasuredFrameIndex: -1,
       averageItemLength: 100
     })
     act(() => tree!.unmount())
@@ -113,5 +135,110 @@ describe('useMobileNativeChatPromptJump', () => {
     vi.advanceTimersByTime(120)
 
     expect(list.scrollToIndex).not.toHaveBeenCalled()
+  })
+
+  it('keeps the same prompt when history is prepended during the retry', () => {
+    vi.useFakeTimers()
+    const { list, latest, Probe } = harness()
+    const data = transcript('user', 'assistant')
+    act(() => {
+      tree = create(createElement(Probe, { data }))
+    })
+    latest().onJumpToPrompt()
+    latest().onScrollToIndexFailed({
+      index: 0,
+      highestMeasuredFrameIndex: 0,
+      averageItemLength: 100
+    })
+    list.scrollToIndex.mockClear()
+
+    act(() => {
+      tree!.update(createElement(Probe, { data: [{ ...data[0], id: 'earlier' }, ...data] }))
+    })
+    vi.advanceTimersByTime(120)
+
+    expect(list.scrollToIndex).toHaveBeenCalledWith({ index: 1, viewPosition: 0, animated: true })
+  })
+
+  it('skips the retry if its prompt disappears', () => {
+    vi.useFakeTimers()
+    const { list, latest, Probe } = harness()
+    act(() => {
+      tree = create(createElement(Probe, { data: transcript('user', 'assistant') }))
+    })
+    latest().onJumpToPrompt()
+    latest().onScrollToIndexFailed({
+      index: 0,
+      highestMeasuredFrameIndex: 0,
+      averageItemLength: 100
+    })
+    list.scrollToIndex.mockClear()
+
+    act(() => {
+      tree!.update(createElement(Probe, { data: transcript('assistant') }))
+    })
+    vi.advanceTimersByTime(120)
+
+    expect(list.scrollToIndex).not.toHaveBeenCalled()
+  })
+  it('retries only once even if the exact retry also fails to measure', () => {
+    vi.useFakeTimers()
+    const { list, latest, Probe } = harness()
+    act(() => {
+      tree = create(createElement(Probe, { data: transcript('user', 'assistant') }))
+    })
+    latest().onJumpToPrompt()
+    const failure = { index: 0, highestMeasuredFrameIndex: -1, averageItemLength: 100 }
+    latest().onScrollToIndexFailed(failure)
+    vi.advanceTimersByTime(120)
+    latest().onScrollToIndexFailed(failure)
+    vi.advanceTimersByTime(120)
+    expect(list.scrollToIndex).toHaveBeenCalledTimes(2)
+    expect(list.scrollToOffset).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels the prompt retry when the reader chooses the latest message', () => {
+    vi.useFakeTimers()
+    const { list, latest, Probe, onReturnToTail } = harness()
+    act(() => {
+      tree = create(createElement(Probe, { data: transcript('user', 'assistant') }))
+    })
+    latest().onJumpToPrompt()
+    latest().onScrollToIndexFailed({
+      index: 0,
+      highestMeasuredFrameIndex: -1,
+      averageItemLength: 100
+    })
+    list.scrollToIndex.mockClear()
+    latest().onScrollToLatest()
+    vi.advanceTimersByTime(120)
+    expect(list.scrollToIndex).not.toHaveBeenCalled()
+    expect(onReturnToTail).toHaveBeenCalledOnce()
+  })
+
+  it('drops visibility and a pending retry across chat surfaces', () => {
+    vi.useFakeTimers()
+    const { list, latest, Probe } = harness()
+    const data = transcript('user', 'assistant')
+    act(() => {
+      tree = create(createElement(Probe, { data }))
+    })
+    act(() => {
+      latest().onViewableItemsChanged({ viewableItems: [] })
+    })
+    expect(latest().showPromptJump).toBe(true)
+    latest().onJumpToPrompt()
+    latest().onScrollToIndexFailed({
+      index: 0,
+      highestMeasuredFrameIndex: -1,
+      averageItemLength: 100
+    })
+    list.scrollToIndex.mockClear()
+    act(() => {
+      tree!.update(createElement(Probe, { data, scopeKey: 'chat-b' }))
+    })
+    vi.advanceTimersByTime(120)
+    expect(list.scrollToIndex).not.toHaveBeenCalled()
+    expect(latest().showPromptJump).toBe(false)
   })
 })

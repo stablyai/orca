@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { asRecord } from './session-scanner-record-value'
@@ -165,14 +166,14 @@ function defaultPrimeAgentSessionsDir(): string {
   return join(homedir(), '.prime', 'agent', 'sessions')
 }
 
-// Why: the CLI expands a leading `~` itself, so a value set outside a shell
-// (config file, plist, quoted assignment) still resolves against the home dir.
-// Returns null for anything that is not an absolute root, since a relative value
-// ('', '.', '..', 'sessions') would resolve against the main-process cwd.
+// Why: the Pi/Prime CLIs expand a leading `~` themselves, so a value set outside a
+// shell (config file, plist, quoted assignment) still resolves against the home dir.
+// That expansion is per-CLI and deliberately not in the shared absolute check — Grok,
+// for one, creates a literal `~` directory instead.
 function absoluteConfiguredDir(rawValue: string): string | null {
   const expanded = rawValue === '~' ? homedir() : rawValue.replace(/^~(?=[\\/])/, homedir())
   const normalized = expanded.replace(/[\\/]+$/, '')
-  return normalized && isAbsolute(normalized) ? normalized : null
+  return resolveAbsoluteDirOverride(normalized, '') || null
 }
 
 // Prime Agent takes PRIME_AGENT_CODING_AGENT_DIR verbatim as its agent config dir

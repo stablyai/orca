@@ -36,10 +36,10 @@ export function normalizeGitUsername(value: string): string {
  * (rate-limit 403 still prints JSON on stdout) so they never become branch names.
  */
 export function isPlausibleHostedLogin(value: string): boolean {
-  // GitHub usernames: 1–39 chars, alphanumerics and single hyphens, no leading/trailing hyphen.
+  // Preserve GitHub's length/separator limits while allowing the EMU _shortcode suffix.
   return (
     /^[A-Za-z0-9]$/.test(value) ||
-    (/^[A-Za-z0-9][A-Za-z0-9-]{0,37}[A-Za-z0-9]$/.test(value) && !value.includes('--'))
+    (/^[A-Za-z0-9][A-Za-z0-9_-]{0,37}[A-Za-z0-9]$/.test(value) && !value.includes('--'))
   )
 }
 
@@ -158,7 +158,7 @@ function parseGhAuthStatusLogin(output: string): string {
   let currentLogin = ''
   let firstLogin = ''
   for (const line of output.split('\n')) {
-    const login = line.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)?.[1]
+    const login = line.match(/Logged in to github\.com account\s+([A-Za-z0-9][A-Za-z0-9_-]*)/)?.[1]
     if (login) {
       currentLogin = login
       if (!firstLogin) {

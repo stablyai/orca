@@ -32,16 +32,16 @@ describe('admission revoked while a session is still open', () => {
 
   it.each(CLEANUP_METHODS)(
     'still serves $method after the host setting is turned off',
-    async ({ method, params, hostCall }) => {
-      const response = await call(method, params, STRUCTURED_CLIENT, SETTING_OFF)
+    async (entry) => {
+      const response = await call(entry.method, entry.params, STRUCTURED_CLIENT, SETTING_OFF)
 
       expect(response).toMatchObject({ ok: true })
-      // `unsubscribe` retires runtime-owned subscriptions rather than calling the host, so its
-      // result payload is the observable effect.
-      if (hostCall === 'unsubscribe') {
-        expect(response).toMatchObject({ result: { unsubscribed: true } })
+      // `unsubscribe` retires runtime-owned subscriptions and `release` is a no-op, so neither
+      // calls the host: the result payload is the observable effect.
+      if (entry.hostCall === null) {
+        expect(response).toMatchObject({ result: entry.result })
       } else {
-        expect(hostCalls[hostCall]).toHaveBeenCalled()
+        expect(hostCalls[entry.hostCall]).toHaveBeenCalled()
       }
     }
   )
@@ -52,7 +52,7 @@ describe('admission revoked while a session is still open', () => {
     })
 
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
-    expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
+    expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
     // The durable tab has to be retired too, or the chat comes back on the next sync.
     expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
   })
@@ -80,7 +80,7 @@ describe('admission revoked while a session is still open', () => {
       )
 
       expect(response).toMatchObject({ ok: true })
-      expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
+      expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
     }
   )
 
@@ -93,7 +93,7 @@ describe('admission revoked while a session is still open', () => {
     )
 
     expect(response).toMatchObject({ ok: true })
-    expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
+    expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
   })
 
   it.each(ADMISSION_METHODS)(

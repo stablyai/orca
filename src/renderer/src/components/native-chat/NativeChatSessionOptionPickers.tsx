@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { SwitchIndicator } from '@/components/ui/switch'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +18,7 @@ import { translate } from '@/i18n/i18n'
 import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
 import {
   sessionOptionDispatchUnconfirmed,
+  sessionOptionValueMarker,
   type SessionOptionDescriptor,
   type SessionOptionsSurface,
   type SessionOptionValue
@@ -30,6 +32,9 @@ import {
   nativeChatSessionOptionLabel
 } from './native-chat-session-option-labels'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import { agentSessionThrownFailure } from '../../../../shared/agent-session-write-failure'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
@@ -140,38 +145,49 @@ function DescriptorMenuRows(props: {
       </DropdownMenuItem>
     )
   }
-  // Why: absolute On/Off only when we have tracked truth. Unknown composed
-  // booleans leave the group unselected so empty radios are not a selection.
+  // Why one switch row and not On/Off: the option is binary, so a single control
+  // carries it. The row owns the label, which is why the caller drops its header.
+  // The value always renders; the marker is what keeps an unpicked one from
+  // reading as confirmed, since the switch itself cannot say "nobody said".
   if (descriptor.kind.type === 'boolean') {
-    const selected =
-      descriptor.kind.currentValue === true
-        ? 'on'
-        : descriptor.kind.currentValue === false
-          ? 'off'
-          : undefined
+    const checked = descriptor.kind.currentValue
+    const label = nativeChatSessionOptionLabel(descriptor)
+    const marker = sessionOptionValueMarker(descriptor)
+    const markerId = `session-option-marker-${descriptor.id}`
     return (
-      <>
-        {selected === undefined ? (
-          <DropdownMenuLabel className="font-normal text-muted-foreground">
-            {translate(
-              'components.native-chat.composer.valueUnknown',
-              'Current value unknown — pick On or Off'
-            )}
-          </DropdownMenuLabel>
-        ) : null}
-        <DropdownMenuRadioGroup value={selected} onValueChange={(next) => setValue(next === 'on')}>
-          <DropdownMenuRadioItem value="on" disabled={!descriptor.settable || pending}>
-            {translate('components.native-chat.composer.optionValue.on', 'On')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="off" disabled={!descriptor.settable || pending}>
-            {translate('components.native-chat.composer.optionValue.off', 'Off')}
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </>
+      <DropdownMenuItem
+        role="switch"
+        aria-checked={checked}
+        // Named explicitly so the marker does not read as part of the control's
+        // label, and described by it so assistive tech still gets the provenance —
+        // hiding it would drop that distinction for screen readers alone.
+        aria-label={label}
+        {...(marker ? { 'aria-describedby': markerId } : {})}
+        disabled={!descriptor.settable || pending}
+        // Keep the menu open: the write is async and its result lands in this row.
+        onSelect={(event) => {
+          event.preventDefault()
+          setValue(!checked)
+        }}
+        className="justify-between gap-2"
+      >
+        <span>{label}</span>
+        <span className="flex items-center gap-1.5">
+          {marker ? (
+            <span id={markerId} className="text-[11px] text-muted-foreground">
+              {marker === 'default'
+                ? translate('components.native-chat.composer.valueIsDefault', 'Default')
+                : translate('components.native-chat.composer.valueNotReported', 'Not reported')}
+            </span>
+          ) : null}
+          <SwitchIndicator checked={checked} />
+        </span>
+      </DropdownMenuItem>
     )
   }
   return (
     <DropdownMenuRadioGroup
+      aria-label={nativeChatSessionOptionLabel(descriptor)}
       value={descriptor.kind.currentValue}
       onValueChange={(value) => setValue(value)}
     >
@@ -191,6 +207,15 @@ function DescriptorMenuRows(props: {
   )
 }
 
+/** A host's error is words for its log, so it gets the table's; a local surface's error is
+ *  already written for the person. */
+function optionUpdateFailureDescription(error: unknown): string {
+  if (error instanceof RuntimeRpcCallError) {
+    return agentSessionWriteFailureText(agentSessionThrownFailure(error, error.code), 'option')
+  }
+  return error instanceof Error ? error.message : String(error)
+}
+
 function runSurfaceCall(
   pendingKey: string,
   setPendingId: (id: string | null) => void,
@@ -201,7 +226,7 @@ function runSurfaceCall(
     .catch((error) => {
       toast.error(
         translate('components.native-chat.composer.optionUpdateFailed', 'Could not update option'),
-        { description: error instanceof Error ? error.message : String(error) }
+        { description: optionUpdateFailureDescription(error) }
       )
     })
     .finally(() => setPendingId(null))
@@ -282,7 +307,11 @@ function NativeChatSessionOptionPickersInner({
               return (
                 <div key={descriptor.id}>
                   {index > 0 ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuLabel>{nativeChatSessionOptionLabel(descriptor)}</DropdownMenuLabel>
+                  {descriptor.kind.type === 'boolean' && !descriptor.action ? null : (
+                    <DropdownMenuLabel>
+                      {nativeChatSessionOptionLabel(descriptor)}
+                    </DropdownMenuLabel>
+                  )}
                   {reason && !descriptor.settable ? (
                     <DropdownMenuLabel className="font-normal">{reason}</DropdownMenuLabel>
                   ) : null}

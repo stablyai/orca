@@ -103,11 +103,11 @@ export type DashboardCard = {
   leafId: string | null
   /** Agent pane that spawned this agent, when both are visible. */
   parentPaneKey?: string
-  /** Direct workspace parent. The map uses it only when both workspace rings are visible. */
+  /** Direct workspace parent. */
   parentWorktreeId?: string
   repoName: string
   worktreeName: string
-  /** Optional for preload compatibility with snapshots produced before Agent Map. */
+  /** Optional for preload compatibility with snapshots produced by older hosts. */
   hostKind?: DashboardCardHostKind
   /** Exact owner used by in-window workspace actions when IDs collide across hosts. */
   executionHostId?: ExecutionHostId

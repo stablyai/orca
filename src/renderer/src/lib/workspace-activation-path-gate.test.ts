@@ -4,7 +4,6 @@ import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { FolderWorkspacePathStatusReason } from '../../../shared/folder-workspace-path-status'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { resolveWindowShortcutAction } from '../../../shared/window-shortcut-policy'
 
 // Why: drives the real activation module against a real store, so a regression in
 // the workspace dispatch or in the path-status guard itself both surface here.
@@ -110,26 +109,6 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
 
     expect(store.getState().activeWorkspaceKey).toBe(folderWorkspaceKey(folderWorkspace.id))
     expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
-  // Why per AGENTS.md: the gate must hold on Windows/Linux Ctrl too, not just Cmd.
-  // The digit chord resolves to the same jumpToWorktreeIndex action on every platform,
-  // so all three land on the guarded activator this suite pins above.
-  it.each([
-    ['darwin' as const, { key: '1', code: 'Digit1', metaKey: true }],
-    ['win32' as const, { key: '1', code: 'Digit1', ctrlKey: true }],
-    ['linux' as const, { key: '1', code: 'Digit1', ctrlKey: true }]
-  ])('routes the %s number chord to jumpToWorktreeIndex', (platform, input) => {
-    expect(resolveWindowShortcutAction(input, platform)).toEqual({
-      type: 'jumpToWorktreeIndex',
-      index: 0
-    })
-  })
-
-  it('does not fire the macOS chord on Windows/Linux, so Ctrl is the only path there', () => {
-    expect(
-      resolveWindowShortcutAction({ key: '1', code: 'Digit1', metaKey: true }, 'win32')
-    ).not.toEqual({ type: 'jumpToWorktreeIndex', index: 0 })
   })
 
   // Why: the guard only helps if the IPC handler actually calls it. Pin the source

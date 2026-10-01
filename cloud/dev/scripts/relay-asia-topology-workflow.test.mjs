@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { relayWorkflowUrl } from './relay-repository.mjs'
 
@@ -35,6 +38,82 @@ test('uses only its exact workflow-bound topology identity', () => {
   assert.match(iam, /assertion\.environment == '\$\{var\.environment\}'/)
 })
 
+test('accepts only the reviewed Asia topology waves', () => {
+  const cases = /case "\$\{TARGET_ENVIRONMENT\}:\$\{TARGET_CELL_IDS\}" in\n([\s\S]*?)\n\s*esac/
+    .exec(workflow)?.[1]
+  assert.ok(cases)
+  assert.deepEqual(
+    [...cases.matchAll(/^\s*([a-z]+:[a-z0-9,-]+)\)(?: target_region=[a-z0-9-]+)? ;;$/gm)]
+      .map((match) => match[1]),
+    [
+      'staging:staging-gce-c4',
+      'production:production-gce-c27,production-gce-c28,production-gce-c29',
+      'production:production-gce-c30',
+      'production:production-gce-c31',
+      'production:production-gce-c32,production-gce-c33'
+    ]
+  )
+})
+
+// Runs the workflow's own region and target blocks, so an Asia wave's targets stay byte-identical.
+function waveTargets(environment, cellIds) {
+  const block = (first, last) => {
+    const start = workflow.indexOf(first)
+    const end = workflow.indexOf(last, start)
+    assert.ok(start !== -1 && end !== -1, first)
+    return workflow.slice(start, end + last.length).replace(/^ {10}/gm, '')
+  }
+  const region = block('target_region=asia-east2\n', '\n          esac')
+  const targets = block('file="${RUNNER_TEMP}/relay-asia-targets"', '\n          done')
+  const temp = mkdtempSync(join(tmpdir(), 'relay-topology-targets-'))
+  try {
+    const result = spawnSync('bash', ['-euo', 'pipefail', '-c',
+      `${region}\nTARGET_REGION="\${target_region}"\n${targets}\n` +
+      'echo "${TARGET_REGION}"; cat "${file}"'], {
+      env: { ...process.env, TARGET_ENVIRONMENT: environment, TARGET_CELL_IDS: cellIds, RUNNER_TEMP: temp },
+      encoding: 'utf8'
+    })
+    assert.equal(result.status, 0, result.stderr)
+    const [waveRegion, ...lines] = result.stdout.trim().split('\n')
+    return { region: waveRegion, targets: lines }
+  } finally {
+    rmSync(temp, { recursive: true, force: true })
+  }
+}
+
+const cellTargets = (cellId) => ['instance_template', 'instance_group_manager', 'backend_service']
+  .map((kind) => `-target=google_compute_${kind}.relay_gce_cell["${cellId}"]`)
+
+test('targets the asia-east2 network for Asia waves and only the cell and URL map for US waves', () => {
+  const asiaNetwork = ['subnetwork', 'router', 'router_nat']
+    .map((kind) => `-target=google_compute_${kind}.relay_gce_additional["asia-east2"]`)
+  const urlMap = '-target=google_compute_url_map.relay_gce[0]'
+  for (const [environment, cellIds] of [
+    ['staging', 'staging-gce-c4'],
+    ['production', 'production-gce-c27,production-gce-c28,production-gce-c29'],
+    ['production', 'production-gce-c30'],
+    ['production', 'production-gce-c31']
+  ]) {
+    assert.deepEqual(waveTargets(environment, cellIds), {
+      region: 'asia-east2',
+      targets: [...asiaNetwork, urlMap, ...cellIds.split(',').flatMap(cellTargets)]
+    }, cellIds)
+  }
+  const usWave = 'production-gce-c32,production-gce-c33'
+  assert.deepEqual(waveTargets('production', usWave), {
+    region: 'us-central1',
+    targets: [urlMap, ...usWave.split(',').flatMap(cellTargets)]
+  })
+})
+
+// The live-image overlay refuses a declared non-target cell with no template, so the two US cells
+// declared together must also plan together; a lone C32 or C33 plan is not a reviewed wave.
+test('plans the two declared US cells as one wave', () => {
+  const cases = /case "\$\{TARGET_ENVIRONMENT\}:\$\{TARGET_CELL_IDS\}" in\n([\s\S]*?)\n\s*esac/
+    .exec(workflow)?.[1]
+  assert.doesNotMatch(cases, /production:production-gce-c3[23]\)/)
+})
+
 test('plans only additive Asia topology and applies the saved plan', () => {
   assert.doesNotMatch(workflow, /manage_artifact_dns/)
   for (const target of [
@@ -52,8 +131,13 @@ test('plans only additive Asia topology and applies the saved plan', () => {
     workflow,
     /\.variables\.relay_gce_additional_region_subnetwork_cidrs\.value/
   )
-  assert.doesNotMatch(workflow, /terraform -chdir=infra\/terraform console/)
-  assert.equal((workflow.match(/-var-file="\$\{TF_VARS\}"/g) ?? []).length, 2)
+  // Console evaluates every output against state and fails while a declared cell has no MIG.
+  assert.doesNotMatch(workflow, /terraform[^\n]*console/)
+  assert.equal(
+    (workflow.match(/-var-file="\$\{TF_VARS\}" -var-file="\$\{\{ steps\.live-images\.outputs\.file \}\}"/g) ?? []).length,
+    2
+  )
+  assert.equal((workflow.match(/-var-file=/g) ?? []).length, 5)
   assert.doesNotMatch(workflow, /terraform[^\n]*apply[^\n]*-target/)
   assert.doesNotMatch(workflow, /google_(?:sql|cloudflare|dns|certificate_manager)/)
 })
@@ -71,6 +155,9 @@ test('checks the connection budget and production live ceiling before planning',
   assert.match(workflow, /select\(\.name == "max_connections"\)/)
   assert.match(workflow, /VERIFIED_DEFAULT_MAX_CONNECTIONS_TIER: db-custom-4-15360/)
   assert.match(workflow, /VERIFIED_DEFAULT_MAX_CONNECTIONS_DATABASE_VERSION: POSTGRES_17/)
+  assert.match(workflow, /VERIFIED_DEFAULT_MAX_CONNECTIONS: '500'/)
+  assert.match(workflow, /live_max="\$\{VERIFIED_DEFAULT_MAX_CONNECTIONS\}"/)
+  assert.doesNotMatch(workflow, /live_max=\d/)
   assert.match(workflow, /live_source=verified-shape-default/)
   assert.match(workflow, /test "\$\(jq -er '\.settings\.tier'/)
   assert.match(workflow, /test "\$\(jq -er '\.databaseVersion'/)
@@ -121,4 +208,35 @@ test('the custom role cannot delete topology or mutate SQL and DNS', () => {
     iam,
     /resource "google_storage_bucket_iam_member" "github_relay_asia_topology_state_list"[\s\S]*?role\s+= google_project_iam_custom_role\.github_relay_asia_topology_state_list\[0\]\.id/
   )
+})
+
+test('plans every non-target cell at its served image, read from state templates only', () => {
+  const step = /- id: live-images\n[\s\S]*?\n\n/.exec(workflow)?.[0]
+  assert.ok(step)
+  assert.match(step, /terraform -chdir=infra\/terraform show -json \| jq -ce '\[/)
+  assert.match(step, /\.type == "google_compute_instance_template" and \.name == "relay_gce_cell"/)
+  assert.match(step, /\{ index, metadata_startup_script: \.values\.metadata_startup_script \}/)
+  assert.match(step, /relay-live-cell-image-overlay\.mjs/)
+  assert.match(step, /--cell-ids "\$\{TARGET_CELL_IDS\}"/)
+  // The committed map comes from a read-only plan over the same targets, never from console.
+  assert.match(step, /mapfile -t targets < "\$\{\{ steps\.targets\.outputs\.file \}\}"/)
+  assert.match(
+    step,
+    /terraform -chdir=infra\/terraform plan -input=false -refresh=false -lock=false \\\n\s+-var-file="\$\{TF_VARS\}" "\$\{targets\[@\]\}" -out="\$\{committed_plan\}" > \/dev\/null/
+  )
+  assert.match(step, /show -json "\$\{committed_plan\}" \\\n\s+\| jq -ce '\.variables\.relay_gce_cells\.value \| objects' > "\$\{cells\}"/)
+  assert.equal((step.match(/terraform -chdir=infra\/terraform (?:plan|apply)/g) ?? []).length, 1)
+  assert.ok(workflow.indexOf('- id: targets') < workflow.indexOf('- id: live-images'))
+  assert.ok(workflow.indexOf('- id: live-images') < workflow.indexOf('- name: Create and validate the saved topology plan'))
+})
+
+test('the deployments output tolerates a cell declared before its topology apply', () => {
+  const outputs = readFileSync(new URL('../../infra/terraform/outputs.tf', import.meta.url), 'utf8')
+  const start = outputs.indexOf('output "relay_gce_cell_deployments" {')
+  const block = outputs.slice(start, outputs.indexOf('\n}\n', start))
+  const lookups = [...block.matchAll(/^\s+\w+\s+=\s+(.*\.relay_gce_cell\[cell_id\].*)$/gm)].map((match) => match[1])
+  assert.equal(lookups.length, 6)
+  for (const lookup of lookups) {
+    assert.match(lookup, /^try\(google_compute_\w+\.relay_gce_cell\[cell_id\]\.\w+, null\)$/)
+  }
 })

@@ -1,7 +1,11 @@
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
+import {
+  buildDispatchPreamble,
+  dispatchPreambleSendOptions
+} from '../../../../orchestration/preamble'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
 import {
   appendFederationSetupEffect,
@@ -24,7 +28,7 @@ import {
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
 
-export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
     name: 'orchestration.federationAttachStart',
     params: FederationAttachStartParams,
@@ -110,6 +114,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             observeSetupCompletion: true,
             createdWithAgent: agent as TuiAgent,
             startupAgent: agent as TuiAgent,
+            startupLaunchSource: 'orchestration',
             ...(launch.preferences ? { startupLaunchPreferences: launch.preferences } : {}),
             activate: false,
             lineage: { noParent: true }
@@ -181,6 +186,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
               // Why: agent ids are not shell commands (`cursor` is the desktop app,
               // its CLI is `cursor-agent`); resolve through the TUI agent config.
               startupAgent: agent as TuiAgent,
+              launchSource: 'orchestration',
               ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
               title: `worker-${params.taskId}`,
               presentation: 'background'
@@ -222,7 +228,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           }
           throw new Error(
             wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
+              ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
               : `Agent did not become ready (${wait.status}).`
           )
         }
@@ -233,7 +239,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         if (!paneKey || !processIncarnation) {
           throw new Error('stable_pane_required')
         }
-        const capability = db.prepareRemoteAttachmentAuthority({
+        db.prepareRemoteAttachmentAuthority({
           dispatchId: params.dispatchId,
           paneKey,
           processIncarnation,
@@ -253,18 +259,13 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             taskSpec: params.taskSpec,
             coordinatorHandle: 'Run home (relayed by Orca)',
             workerHandle: terminalHandle,
-            dispatchCapability: capability,
             devMode: params.devMode,
             // Why the worker host's own setting: enforcement runs here, with this
             // host's code, against this host's cap.
             canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
             cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
           }),
-          {
-            acceptQueued: true,
-            observationTimeoutMs: 0,
-            requestId: orchestrationMutation.requestId
-          }
+          dispatchPreambleSendOptions(orchestrationMutation.requestId)
         )
         effects.push({
           kind: 'dispatch_input',

@@ -28,7 +28,4 @@ export function nativeChatComposerTargetIsRemote(ptyId: string | null): boolean 
   return ptyId !== null && isRemoteRuntimePtyId(ptyId)
 }
 
-export function formatNativeChatFileReference(filePath: string): string {
-  const escaped = filePath.replace(/"/g, '\\"')
-  return /\s/.test(filePath) ? `@"${escaped}"` : `@${filePath}`
-}
+export { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'

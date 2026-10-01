@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
-import { MobileRelayUpgradeHostRemovedError } from './host-store'
+import { RelayRoutingHostRemovedError } from './host-store'
 import {
   createMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
@@ -64,7 +64,7 @@ function dependencies(journal: MobileRelayDirectUpgradeJournal | null = null) {
     }),
     writeBundle: vi.fn(async () => {}),
     deleteBundle: vi.fn(async () => {}),
-    saveHost: vi.fn(async () => {}),
+    setRelayRouting: vi.fn(async () => {}),
     randomBytes: (length: number) => new Uint8Array(length).fill(7)
   }
 }
@@ -113,8 +113,9 @@ describe('existing direct pairing relay upgrade', () => {
       reqId: journal!.reqId,
       newResumeTokenHash: journal!.pendingResumeTokenHash
     })
-    expect(deps.writeBundle).toHaveBeenCalledBefore(deps.saveHost)
-    expect(result?.host.relay).toEqual(relay)
+    expect(deps.writeBundle).toHaveBeenCalledBefore(deps.setRelayRouting)
+    expect(deps.setRelayRouting).toHaveBeenCalledWith(host.id, relay)
+    expect(result?.relay).toEqual(relay)
     expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
   })
 
@@ -153,7 +154,30 @@ describe('existing direct pairing relay upgrade', () => {
     await expect(upgradeDirectMobileRelay({ client, host, dependencies: deps })).resolves.toBeNull()
     expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
     expect(deps.writeBundle).not.toHaveBeenCalled()
-    expect(deps.saveHost).not.toHaveBeenCalled()
+    expect(deps.setRelayRouting).not.toHaveBeenCalled()
+  })
+
+  // Why 'forbidden': a desktop that predates pairing.getEndpoints has it on neither its mobile
+  // allowlist nor its dispatcher, and the allowlist gate answers first — so scope refusal, not
+  // absence, is what an old desktop actually sends. This is the site that reached: keyed on
+  // absence alone the refusal threw into the controller's swallowing catch, so the write-once
+  // journal — and the pending resume secret in it — was never retired. See
+  // pairing-relay-rpc-unavailable.ts.
+  it('cleans pending state and leaves direct access unchanged for a scope-refusing old desktop', async () => {
+    const deps = dependencies()
+    const client = clientWith([
+      {
+        id: 'rpc',
+        ok: false,
+        error: { code: 'forbidden', message: "Method 'pairing.getEndpoints' is not available" },
+        _meta: { runtimeId: 'runtime' }
+      }
+    ])
+
+    await expect(upgradeDirectMobileRelay({ client, host, dependencies: deps })).resolves.toBeNull()
+    expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
+    expect(deps.writeBundle).not.toHaveBeenCalled()
+    expect(deps.setRelayRouting).not.toHaveBeenCalled()
   })
 
   it('retains the durable journal when relay registration is temporarily unavailable', async () => {
@@ -173,8 +197,8 @@ describe('existing direct pairing relay upgrade', () => {
     )
     const committed = installed(journal)
     const deps = dependencies(journal)
-    deps.saveHost.mockRejectedValue(
-      new MobileRelayUpgradeHostRemovedError('mobile relay upgrade host was removed')
+    deps.setRelayRouting.mockRejectedValue(
+      new RelayRoutingHostRemovedError('mobile relay upgrade host was removed')
     )
     const client = clientWith([
       success({
@@ -186,7 +210,7 @@ describe('existing direct pairing relay upgrade', () => {
 
     await expect(
       upgradeDirectMobileRelay({ client, host, dependencies: deps })
-    ).rejects.toBeInstanceOf(MobileRelayUpgradeHostRemovedError)
+    ).rejects.toBeInstanceOf(RelayRoutingHostRemovedError)
     expect(deps.deleteBundle).toHaveBeenCalledWith(host.id)
     expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
   })

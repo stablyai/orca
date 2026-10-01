@@ -9,12 +9,15 @@ import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
+import { setStructuredAgentSessionTeardownTrigger } from '../runtime/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
 import { browserManager } from '../browser/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
+import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'
 import { awaitPackedRefsLockRelease } from '../git/local-repo-ref-maintenance'
+import { stopBackgroundWorktreeRemovals } from '../worktree-background-removal'
 import { settleTeardownWithinDeadline, settleWithinMs } from '../quit-teardown-deadline'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
@@ -105,6 +108,8 @@ function installWillQuitHandler(): void {
     if (!quitTeardownStartGate.tryStart(event)) {
       return
     }
+    // A renderer can veto before-quit; push must survive until quit is committed.
+    state.desktopPushService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
     // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.
@@ -131,6 +136,10 @@ function installWillQuitHandler(): void {
     state.pluginMarketplaceInstaller = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
+    stopCodexAccountSessionBridges()
+    // Why before the stop: teardown stamps each working session's resume marker with why the app
+    // went away, and an update install is a restart the user never chose.
+    setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
     state.pluginService = null
     setUnreadDockBadgeCount(0)
@@ -144,6 +153,8 @@ function installWillQuitHandler(): void {
       REF_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
+    // Why stop, not wait: a delete can run for minutes, and its record makes the next start finish it.
+    stopBackgroundWorktreeRemovals()
     agentHookServer.stop()
     // Why Windows only: POSIX hooks short-circuit on ORCA_PANE_KEY, while Windows must register a
     // bare script path that cannot express the guard and would otherwise keep spawning after quit.
@@ -189,18 +200,32 @@ function installWillQuitHandler(): void {
     browserManager.setBrowserGuestStateChangedListener(null)
     const emulatorShutdown =
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
-    // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
+    // Why immediately before the final store flush with no await in between: beginSshShutdown() marks every
     // active SSH lease detached in memory synchronously, and that flush is what persists it.
     const sshShutdown = beginSshShutdown()
     killAllPty()
     const watcherShutdown = shutdownWatchersOnce()
-    const storeFlush = state.store?.flushAsync() ?? Promise.resolve()
+    const finalStore = state.store
+    const storeFlush = (async () => {
+      if (!finalStore) {
+        return
+      }
+      try {
+        await finalStore.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+        await finalStore.freezeWritesAsync()
+        state.profileStateAdmission?.release()
+        state.profileStateAdmission = undefined
+      } catch (error) {
+        console.error('[persistence] Failed to finalize profile state:', error)
+      }
+    })()
     // Why: usage-cache writes are queued off the main thread, so a quit right after setEnabled or a
     // scan completion would drop the final snapshot. Captured before any await; joins the barrier below.
     const usageCacheFlush = Promise.all([
       state.claudeUsage?.flush(),
       state.codexUsage?.flush(),
-      state.openCodeUsage?.flush()
+      state.openCodeUsage?.flush(),
+      state.museUsage?.flush()
     ]).then(() => {})
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
     const skillUploadShutdown = state.runtime?.disposeSkillUploadSessions() ?? Promise.resolve()

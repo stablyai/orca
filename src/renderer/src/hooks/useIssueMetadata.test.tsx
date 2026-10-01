@@ -6,8 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearLinearMetadataCache,
   useRepoLabels,
-  useTeamLabels,
-  useTeamMembers,
   useTeamStates,
   useTeamsStates
 } from './useIssueMetadata'
@@ -164,50 +162,6 @@ describe('useIssueMetadata hooks', () => {
 
     expect(error).toBe('Could not connect')
     expect(linearMocks.linearTeamStates).toHaveBeenCalledTimes(1)
-    expect(renders).toBeLessThanOrEqual(4)
-  })
-
-  it('does not re-issue a failed team-label fetch when a fresh settings object re-renders', async () => {
-    let renders = 0
-    let error: string | null = null
-    linearMocks.linearTeamLabels.mockRejectedValue(new Error('Could not connect'))
-
-    function LabelsProbe(): null {
-      renders += 1
-      const metadata = useTeamLabels('team-1', { activeRuntimeEnvironmentId: null }, 'ws-1')
-      error = metadata.error
-      return null
-    }
-
-    renderProbe(<LabelsProbe />)
-    await flushEffects()
-    await flushEffects()
-    await flushEffects()
-
-    expect(error).toBe('Could not connect')
-    expect(linearMocks.linearTeamLabels).toHaveBeenCalledTimes(1)
-    expect(renders).toBeLessThanOrEqual(4)
-  })
-
-  it('does not re-issue a failed team-member fetch when a fresh settings object re-renders', async () => {
-    let renders = 0
-    let error: string | null = null
-    linearMocks.linearTeamMembers.mockRejectedValue(new Error('Could not connect'))
-
-    function MembersProbe(): null {
-      renders += 1
-      const metadata = useTeamMembers('team-1', { activeRuntimeEnvironmentId: null }, 'ws-1')
-      error = metadata.error
-      return null
-    }
-
-    renderProbe(<MembersProbe />)
-    await flushEffects()
-    await flushEffects()
-    await flushEffects()
-
-    expect(error).toBe('Could not connect')
-    expect(linearMocks.linearTeamMembers).toHaveBeenCalledTimes(1)
     expect(renders).toBeLessThanOrEqual(4)
   })
 

@@ -26,7 +26,7 @@ describe('terminateCodexAppServerProcessTree', () => {
     const release = Promise.withResolvers<void>()
     const terminateWindowsTree = vi.fn(() => release.promise)
 
-    const teardown = terminateCodexAppServerProcessTree(target, undefined, {
+    const teardown = terminateCodexAppServerProcessTree(target, {
       platform: 'win32',
       terminateWindowsTree
     })
@@ -38,52 +38,12 @@ describe('terminateCodexAppServerProcessTree', () => {
     expect(target.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
-  it('kills exact Linux spawn-token PIDs before the recorded wrapper', async () => {
-    const target = child()
-    const findSpawnTokenProcesses = vi
-      .fn<() => Promise<number[] | null>>()
-      .mockResolvedValueOnce([1234, 2345, 3456])
-      .mockResolvedValueOnce([1234])
-      .mockResolvedValueOnce([1234])
-    const signalPid = vi.fn()
-
-    await expect(
-      terminateCodexAppServerProcessTree(target, 'spawn-1', {
-        platform: 'linux',
-        findSpawnTokenProcesses,
-        signalPid,
-        isPidPresent: () => false,
-        wait: async () => undefined
-      })
-    ).resolves.toBe(true)
-
-    expect(signalPid.mock.calls).toEqual([
-      [2345, 'SIGKILL'],
-      [3456, 'SIGKILL']
-    ])
-    expect(target.kill).toHaveBeenCalledTimes(1)
-    expect(target.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('keeps the wrapper reachable when Linux cannot prove descendant exit', async () => {
-    const target = child()
-
-    await expect(
-      terminateCodexAppServerProcessTree(target, 'spawn-1', {
-        platform: 'linux',
-        findSpawnTokenProcesses: async () => null
-      })
-    ).resolves.toBe(false)
-
-    expect(target.kill).not.toHaveBeenCalled()
-  })
-
   it('waits for an owned POSIX snapshot before killing the wrapper', async () => {
     const target = child()
     const snapshot = { rootPgid: 1234, descendants: [], capturedAtMs: 1 }
     const release = Promise.withResolvers<boolean>()
 
-    const teardown = terminateCodexAppServerProcessTree(target, undefined, {
+    const teardown = terminateCodexAppServerProcessTree(target, {
       platform: 'darwin',
       captureDescendants: async () => snapshot,
       terminateDescendants: () => release.promise
@@ -102,7 +62,7 @@ describe('terminateCodexAppServerProcessTree', () => {
     const signalProcessGroup = vi.fn()
 
     await expect(
-      terminateCodexAppServerProcessTree(target, undefined, {
+      terminateCodexAppServerProcessTree(target, {
         platform: 'darwin',
         dedicatedProcessGroup: true,
         captureDescendants,
@@ -119,7 +79,7 @@ describe('terminateCodexAppServerProcessTree', () => {
     const target = child()
 
     await expect(
-      terminateCodexAppServerProcessTree(target, undefined, {
+      terminateCodexAppServerProcessTree(target, {
         platform: 'linux',
         dedicatedProcessGroup: true,
         signalProcessGroup: () => {
@@ -142,7 +102,7 @@ describe('terminateCodexAppServerProcessTree', () => {
     const target = { pid: UNREACHABLE_PGID, kill: vi.fn(() => true) as ChildProcess['kill'] }
 
     await expect(
-      terminateCodexAppServerProcessTree(target, undefined, {
+      terminateCodexAppServerProcessTree(target, {
         platform: 'darwin',
         captureDescendants: async () => ({
           rootPgid: UNREACHABLE_PGID,
@@ -162,7 +122,7 @@ describe('terminateCodexAppServerProcessTree', () => {
     const signalProcessGroup = vi.fn()
 
     await expect(
-      terminateCodexAppServerProcessTree(target, undefined, {
+      terminateCodexAppServerProcessTree(target, {
         platform: 'darwin',
         captureDescendants: async () => ({ rootPgid: 1234, descendants: [], capturedAtMs: 1 }),
         terminateDescendants: async () => true,
@@ -191,7 +151,7 @@ describe('terminateCodexAppServerProcessTree', () => {
 
     const results = await Promise.all(
       targets.map((target) =>
-        terminateCodexAppServerProcessTree(target, undefined, {
+        terminateCodexAppServerProcessTree(target, {
           platform: 'linux',
           dedicatedProcessGroup: true,
           captureDescendants,

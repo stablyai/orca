@@ -44,7 +44,7 @@ export async function preserveAgentAuthBeforeRestart({
   const storePreservation = store
     ? runWithinLifecycleTimeout(
         'Store persistence',
-        () => store.flushPendingOrThrowAsync(),
+        () => store.flushPendingOrThrowAsync({ drainToStableGeneration: false }),
         remainingLifecycleTime(startedAt)
       )
     : Promise.resolve()

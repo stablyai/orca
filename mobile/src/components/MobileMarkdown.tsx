@@ -1,3 +1,5 @@
+import { openExternalLink } from '../platform/external-link'
+import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
 import { MobileSelectableText } from './MobileSelectableText'
 import {
   Fragment,
@@ -9,14 +11,7 @@ import {
   type ComponentType,
   type ReactNode
 } from 'react'
-import {
-  Linking,
-  Pressable,
-  ScrollView,
-  Text as NativeText,
-  View,
-  type TextProps
-} from 'react-native'
+import { Pressable, ScrollView, Text as NativeText, View, type TextProps } from 'react-native'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { styles } from './mobile-markdown-styles'
 import {
@@ -64,7 +59,9 @@ function MarkdownText(props: TextProps): React.JSX.Element {
 function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void): void {
   const route = routeMarkdownHref(href)
   if (route.kind === 'web') {
-    void Linking.openURL(route.url).catch(() => {})
+    // The seam, not react-native's `Linking`: this module is in the tasks page closure, and inside
+    // the shell's WebView `openURL` resolves without opening anything.
+    openExternalLink(route.url)
     return
   }
   if (route.kind === 'file' && onOpenFile) {
@@ -104,12 +101,15 @@ function renderTextRun(
 
 function renderInline(text: string, onOpenFile?: (pathText: string) => void): ReactNode[] {
   const parts: ReactNode[] = []
-  const pattern =
-    /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
+  const pattern = createMarkdownInlineMatcher(
+    text,
+    /(`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g,
+    true
+  )
   let pendingStart = 0
-  let match: RegExpExecArray | null
+  let match: MarkdownInlineMatch | null
 
-  while ((match = pattern.exec(text))) {
+  while ((match = pattern.exec())) {
     const token = match[0]
     // Intraword `_` runs (snake_case, dunder tails) are literal text per
     // CommonMark; leaving them unflushed keeps surrounding file paths whole

@@ -40,13 +40,13 @@ const OMP_SUBCOMMANDS = [
 ] as const
 
 export function getPosixOmpShellWrapper(): string {
-  const subcommands = OMP_SUBCOMMANDS.join('|')
+  const subcommands = OMP_SUBCOMMANDS.map((value) => `'${value}'`).join('|')
   return `# Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as \`omp config\` keep
 # their normal argv shape.
 __orca_omp_should_skip_extension() {
   case "\${1:-}" in
-    help|--help|-h|--version|-v) return 0 ;;
+    'help'|'--help'|'-h'|'--version'|'-v') return 0 ;;
     ${subcommands}) return 0 ;;
   esac
   return 1

@@ -6,6 +6,7 @@ import { projectSessionTabAgentStatus } from './session-tab-agent-status-project
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
+import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 
 type SessionTabsInventory = {
   snapshots: RuntimeMobileSessionTabsResult[]
@@ -101,8 +102,9 @@ export async function subscribeSessionTabsInventory(
   const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
   const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
   const inventoryController = new AbortController()
-  const abortInventory = (): void => inventoryController.abort()
-  context.signal?.addEventListener('abort', abortInventory, { once: true })
+  // For the stream's whole life, not just the census: a desktop unsubscribe arrives as this abort.
+  const onTransportAbort = (): void => runtime.cleanupSubscription(subscriptionId)
+  context.signal?.addEventListener('abort', onTransportAbort, { once: true })
   let initialized = false
   let closed = false
   const bufferedChanges: { snapshot: SessionTabsChange; changeSequence: number }[] = []
@@ -223,6 +225,7 @@ export async function subscribeSessionTabsInventory(
     subscriptionId,
     () => {
       closed = true
+      context.signal?.removeEventListener('abort', onTransportAbort)
       inventoryController.abort()
       unsubscribe()
       clearBufferedChanges()
@@ -235,11 +238,18 @@ export async function subscribeSessionTabsInventory(
     connectionId
   )
   if (closed) {
-    context.signal?.removeEventListener('abort', abortInventory)
     return
   }
   let collected: Awaited<ReturnType<typeof collectSessionTabsInventory>> | undefined
   try {
+    // Why: restore after registering, so an unsubscribe or socket close while it runs still finds the stream.
+    const restoring = restoreStructuredTabsIfSupported(context)
+    if (restoring) {
+      await restoring
+      if (closed) {
+        return
+      }
+    }
     for (let attempt = 1; !collected; attempt += 1) {
       censusInvalidated = false
       const candidate = await collectSessionTabsInventory(
@@ -261,8 +271,6 @@ export async function subscribeSessionTabsInventory(
   } catch (error) {
     runtime.cleanupSubscription(subscriptionId)
     throw error
-  } finally {
-    context.signal?.removeEventListener('abort', abortInventory)
   }
   if (closed) {
     return

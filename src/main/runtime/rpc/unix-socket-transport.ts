@@ -105,6 +105,7 @@ export class UnixSocketTransport implements RpcTransport {
   private handleConnection(socket: Socket): void {
     this.activeSockets.add(socket)
     let buffer = ''
+    let retainedBytes = 0
     let oversized = false
     // Why: each in-flight dispatch registers its own AbortController here so
     // `socket.on('close')` can abort them all at once. Keeping the set scoped
@@ -134,15 +135,20 @@ export class UnixSocketTransport implements RpcTransport {
         return
       }
       buffer += chunk
+      // setEncoding('utf8') keeps split codepoints intact, so chunk byte lengths add exactly.
+      retainedBytes += Buffer.byteLength(chunk, 'utf8')
       // Why: the Orca runtime lives in Electron main, so it must reject
       // oversized local RPC frames instead of letting a local client grow an
       // unbounded buffer and stall the app.
-      if (Buffer.byteLength(buffer, 'utf8') > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
+      if (retainedBytes > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
         oversized = true
         this.messageHandler?.('', (response) => {
           socket.write(`${response}\n`)
           socket.end()
         })
+        return
+      }
+      if (!chunk.includes('\n')) {
         return
       }
       let newlineIndex = buffer.indexOf('\n')
@@ -154,6 +160,7 @@ export class UnixSocketTransport implements RpcTransport {
         }
         newlineIndex = buffer.indexOf('\n')
       }
+      retainedBytes = Buffer.byteLength(buffer, 'utf8')
     })
   }
 

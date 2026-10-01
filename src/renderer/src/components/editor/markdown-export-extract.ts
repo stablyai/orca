@@ -17,12 +17,18 @@ const DOCUMENT_SUBTREE_SELECTOR = '.ProseMirror, .markdown-body'
 // Why: even after picking the smallest subtree, a few in-document UI leaks
 // can remain. The design doc lists these by name and treats the cloned-scrub
 // pass as a belt-and-suspenders defense so PDF output never shows copy
-// buttons, per-block search highlights, or other transient affordances.
+// buttons, per-block search highlights, annotation controls, or other
+// transient affordances.
 const UI_ONLY_SELECTORS = [
   '.code-block-copy-btn',
   '.markdown-preview-search',
   '[class*="rich-markdown-search"]',
-  '[data-orca-export-hide="true"]'
+  // Why: preview annotation controls (add-note button, composer, note stack)
+  // render inside `.markdown-body`. The source also carries
+  // `data-orca-export-hide`, so the generic rule below covers renames; this
+  // explicit entry covers an attr-strip regression.
+  '.markdown-annotation-controls',
+  '[data-orca-export-hide]'
 ]
 
 function basenameWithoutExt(filePath: string): string {

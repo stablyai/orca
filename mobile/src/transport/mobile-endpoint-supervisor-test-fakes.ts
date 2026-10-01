@@ -2,8 +2,10 @@ import { vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
+import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
 import type { RpcClient } from './rpc-client'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile, RpcResponse } from './types'
 
@@ -26,7 +28,8 @@ export class FakeSession implements RpcClient {
 
   getState = () => this.state
   getReconnectAttempt = () => 0
-  getLastConnectedAt = () => null
+  // Nullable: the escalation suites replace this with a real timestamp.
+  getLastConnectedAt: () => number | null = () => null
   onStateChange = (listener: (state: ConnectionState) => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -134,22 +137,22 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
     }
   })
   isPairingRejected = () => this.pairingRejected
-  private hostSignedOut = false
-  setHostSignedOut = vi.fn((signedOut: boolean) => {
-    if (this.hostSignedOut === signedOut) {
+  private relayHostReachability: RelayHostReachability = 'connecting'
+  setRelayHostReachability = vi.fn((reachability: RelayHostReachability) => {
+    if (this.relayHostReachability === reachability) {
       return
     }
-    this.hostSignedOut = signedOut
+    this.relayHostReachability = reachability
     for (const listener of this.pathListeners) {
       listener()
     }
   })
-  isHostSignedOut = () => this.hostSignedOut
+  getRelayHostReachability = () => this.relayHostReachability
   // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {
       this.pairingRejected = false
-      this.hostSignedOut = false
+      this.relayHostReachability = 'connecting'
     }
     super.publishState(state)
   }
@@ -184,11 +187,6 @@ export const host: HostProfile = {
   deviceToken: 'device-token',
   publicKeyB64: 'A'.repeat(44),
   lastConnected: 1,
-  endpoints: [
-    { id: 'direct-primary', kind: 'lan', url: 'ws://192.168.1.10:6768' },
-    { id: 'relay-primary', kind: 'relay', url: 'wss://relay-c1.onorca.dev/v1/connect/id' }
-  ],
-  relayHostId: relay.relayHostId,
   relay
 }
 export const bundle: MobileRelayCredentialBundle = {
@@ -212,11 +210,12 @@ export function dependencies(
     resolveRelay: vi.fn(async ({ relay }) => relay),
     readBundle: vi.fn(async () => bundle),
     writeBundle: vi.fn(async () => {}),
-    saveHost: vi.fn(async () => {}),
+    setRelayRouting: vi.fn(async () => {}),
+    directPath: 'lan',
     now: Date.now,
     randomBytes: (length) => new Uint8Array(length).fill(1),
-    setTimer: setTimeout,
-    clearTimer: clearTimeout,
+    setTimer: defaultScheduleTimer,
+    clearTimer: defaultCancelTimer,
     ...overrides
   }
 }

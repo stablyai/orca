@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
 import { importFederatedControlMessage } from '../../../../orchestration/federation-control-message'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -8,54 +7,13 @@ import {
   type FederatedLifecycleSettlement
 } from '../../../../orchestration/federation-lifecycle-settlement'
 import { defineMethod, type RpcMethod } from '../../../core'
-import { OptionalFiniteNumber, requiredString } from '../../../schemas'
+import {
+  FederationAckParams,
+  FederationImportParams,
+  FederationPullParams
+} from '../../../../../../shared/rpc-contract/orchestration-federation-relay-params'
 
-const FederationPullParams = z.object({
-  dispatchId: requiredString('Missing Dispatch ID'),
-  afterSequence: OptionalFiniteNumber,
-  replayUnacknowledged: z.boolean().optional(),
-  limit: OptionalFiniteNumber
-})
-
-const FederationAckParams = z.object({
-  dispatchId: requiredString('Missing Dispatch ID'),
-  throughSequence: z.number().int().nonnegative(),
-  settlements: z
-    .array(
-      z.object({
-        sequence: z.number().int().positive(),
-        lifecycle: z.discriminatedUnion('action', [
-          z.object({
-            action: z.enum(['completed', 'failed']),
-            authority: z.literal('run_home')
-          }),
-          z.object({
-            action: z.literal('rejected'),
-            code: z.string(),
-            reason: z.string(),
-            authority: z.literal('run_home')
-          })
-        ])
-      })
-    )
-    .optional()
-})
-
-const FederationImportParams = z.object({
-  dispatchId: requiredString('Missing Dispatch ID'),
-  items: z.array(
-    z.object({
-      dispatch_id: requiredString('Missing item Dispatch ID'),
-      direction: z.literal('to_worker'),
-      sequence: z.number().int().positive(),
-      message_id: requiredString('Missing relay message ID'),
-      kind: requiredString('Missing relay kind'),
-      payload: requiredString('Missing relay payload')
-    })
-  )
-})
-
-export const ORCHESTRATION_FEDERATION_RELAY_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
   defineMethod({
     name: 'orchestration.federationPull',
     params: FederationPullParams,

@@ -69,6 +69,12 @@ PR checks run the capability contract against real Git 2.25.5, 2.38.1, and
 2.49.1 binaries. This spans the pre-2.29 serialized `FETCH_HEAD` fallback, the transitional
 `merge-tree --write-tree` behavior before `--merge-base`, and current Git.
 
+The three lanes run in parallel and each Git call in the container lanes costs a
+container start, so their wall clock is runner contention, not Git. Build the
+2.25.5 binary and pull the images before the lanes start: anything heavy left
+running alongside them is charged to whichever boundary case is in flight and
+surfaces as a Vitest timeout rather than as a slow setup step.
+
 Keep the unit tests alongside that matrix. They cover concurrent probes,
 native/WSL/SSH/relay isolation, and error-stream shapes that a single real
 binary invocation cannot exercise deterministically.

@@ -51,15 +51,12 @@ describe('orchestration skill routing', () => {
     }
   })
 
-  it('keeps external browser routing at the OS/page boundary', () => {
+  it('does not advertise Computer Use or page automation from orchestration discovery', () => {
     const description = readDescription()
 
-    expect(description).toContain(
-      "Use Computer Use for external browser windows, webviews, Orca app UI, or desktop UI outside Orca's embedded browser only when the task requires OS/window-level control such as focus, menus, dialogs, coordinates, or screenshots."
-    )
-    expect(description).toContain(
-      "`orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages."
-    )
+    expect(description).not.toMatch(/Computer Use/iu)
+    expect(description).not.toMatch(/Playwright/iu)
+    expect(description).not.toContain('embedded pages')
   })
 })
 
@@ -321,7 +318,7 @@ describe('owned orchestration references', () => {
     expect(squash(reference)).toContain('An empty `check` never means you were replaced')
   })
 
-  it('keeps heartbeat and worker_done recipes bound to the injected capability', () => {
+  it('keeps heartbeat and worker_done recipes bound to the injected Dispatch', () => {
     const reference = readReference('worker-contract.md')
     const recipes = [...reference.matchAll(/```text\n([\s\S]*?)```/gu)].map((match) => match[1])
     const heartbeat = recipes.find((recipe) => recipe.includes('--type heartbeat'))
@@ -329,7 +326,7 @@ describe('owned orchestration references', () => {
 
     for (const recipe of [heartbeat, workerDone]) {
       expect(recipe).toContain('--from <worker_handle>')
-      expect(recipe).toContain('--dispatch-capability <capability>')
+      expect(recipe).not.toContain('--dispatch-capability')
       expect(recipe).toContain('--task-id <task_id> --dispatch-id <dispatch_id>')
     }
     expect(workerDone).not.toContain('--files-modified')

@@ -3,6 +3,10 @@ import {
   digestPayload
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 
+/** Codex records the user message first in a turn, so a restored submission is
+ *  ordinal 0 of `(threadId, turnId)`. */
+export const CODEX_USER_MESSAGE_ORDINAL = 0
+
 /** Maximum forgotten turn keys retained for late-frame reconciliation. */
 export const MAX_CODEX_TURN_ORDINAL_ENTRIES = 256
 export const MAX_CODEX_TURN_ORDINAL_BYTES = 512 * 1024

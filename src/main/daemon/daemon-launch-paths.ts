@@ -1,7 +1,9 @@
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { connect } from 'node:net'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { ensurePrivateDir } from './daemon-private-file-modes'
+import { scheduleTerminalHistoryPermissionRepair } from './terminal-history-permission-repair'
 import { getDaemonLogFilePath } from '../observability/logs-directory'
 import { DaemonClient } from './client'
 import { daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
@@ -10,13 +12,17 @@ import { PROTOCOL_VERSION, type ListSessionsResult } from './types'
 
 export function getDaemonRuntimeDir(): string {
   const dir = join(getAppEnvironment().getPath('userData'), 'daemon')
-  mkdirSync(dir, { recursive: true })
+  ensurePrivateDir(dir)
   return dir
 }
 
 export function getDaemonHistoryDir(): string {
   const dir = join(getAppEnvironment().getPath('userData'), 'terminal-history')
-  mkdirSync(dir, { recursive: true })
+  ensurePrivateDir(dir)
+  // Why here: the one accessor every history producer goes through, so the backlog sweep is hooked
+  // once per host that owns the files — native, WSL, or a remote SSH server's own main process.
+  // The scheduler defers and de-duplicates, so the several startup calls cost one late sweep.
+  void scheduleTerminalHistoryPermissionRepair(dir)
   return dir
 }
 
@@ -54,7 +60,10 @@ export function probeDaemonSocket(
   socketPath: string,
   timeoutMs = DAEMON_SOCKET_PROBE_TIMEOUT_MS
 ): Promise<boolean> {
-  const { promise, resolve } = Promise.withResolvers<boolean>()
+  let resolve!: (alive: boolean) => void
+  const promise = new Promise<boolean>((settle) => {
+    resolve = settle
+  })
   if (process.platform !== 'win32' && !existsSync(socketPath)) {
     resolve(false)
     return promise

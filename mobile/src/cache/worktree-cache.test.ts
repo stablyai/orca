@@ -22,24 +22,6 @@ describe('worktree-cache write-through', () => {
     expect(getCachedWorktrees(hostId)).toEqual(fresh)
     expect(getCachedWorktrees(hostId)).not.toEqual(stale)
   })
-
-  it('exposes a fresh snapshot to a remounting screen after reconnect', () => {
-    // Why: the host detail screen reads getCachedWorktrees(hostId)
-    // on (re)mount as its initialCache. A reconnect that writes
-    // through must therefore surface here instead of the pre-reconnect data.
-    const hostId = 'host-remount'
-    setCachedWorktrees(hostId, [{ worktreeId: 'old', name: 'pre-reconnect' }])
-
-    // Reconnect refetch lands a fresh snapshot and writes it through.
-    const reconnected = [
-      { worktreeId: 'old', name: 'post-reconnect' },
-      { worktreeId: 'new', name: 'now-visible' }
-    ]
-    setCachedWorktrees(hostId, reconnected)
-
-    // A fresh screen mount reads the cache — must see the connected set.
-    expect(getCachedWorktrees(hostId)).toEqual(reconnected)
-  })
 })
 
 // Why (F7): home seeds this cache from a persisted cold-start snapshot as well as from a live

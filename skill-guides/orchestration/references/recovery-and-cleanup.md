@@ -46,8 +46,8 @@ nothing — only a positive `live` or `exited` verdict does.
 
 A worker started with `--on <environment>` reads `unverifiable` until you
 enumerate with `--include-remote`, which asks its execution host for the
-verdict. Past 100 rows the response pages, so follow `page.nextCursor` with
-`--cursor <value>` until `page.hasMore` is false.
+verdict. Rows come newest first and past 100 the response pages, so follow
+`page.nextCursor` with `--cursor <value>` until `page.hasMore` is false.
 
 ## Stall needs positive evidence
 
@@ -131,7 +131,18 @@ ORCA orchestration worker-abandon --dispatch <dispatch_id> --json
 `worker-stop` closes only the exact proven supervised agent terminal. It never
 deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 `worker-abandon` fences orchestration while accepting that resources may remain
-live; it performs no remote, process, or filesystem action.
+live; it performs no remote, process, or filesystem action. When it settles a
+worker, it retains an owned terminal by the same rule as `worker-retain`, so Orca
+stops owing its release; a release already committed (`releasing`,
+`release_unknown`) is left as it is. An already-settled worker is left untouched.
+
+To cancel a Task, settle its worker with `worker-stop` or `worker-abandon`, then
+record the reason. A cancelled Task is `failed`, so its dependents stay blocked
+until a `--retry-of` replacement completes it:
+
+```text
+ORCA orchestration task-update --id <task_id> --status failed --result cancelled --json
+```
 
 ## Retain and release
 

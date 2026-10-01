@@ -3,6 +3,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 const MINIMAX_API_KEY_FILE = 'minimax-api-key.enc'
 const API_KEY_ENVELOPE_PREFIX = 'orca-minimax-api-key:v1:'
@@ -70,6 +71,25 @@ export function hasMiniMaxApiKey(): boolean {
     }
   }
   return true
+}
+
+/**
+ * How the stored key is protected, or null when none is stored.
+ *
+ * Reads the envelope kind only — no decrypt, so this cannot trigger a keychain prompt
+ * and is safe to call from a status handler.
+ */
+export function getMiniMaxApiKeyProtection(): SecretAtRestProtection | null {
+  const keyPath = getMiniMaxApiKeyPath()
+  if (!existsSync(keyPath)) {
+    return null
+  }
+  try {
+    return decodeApiKeyEnvelope(readFileSync(keyPath)).kind === 'plaintext' ? 'plaintext' : 'sealed'
+  } catch {
+    // An undecodable envelope is a decrypt-time error to report, not a protection claim.
+    return null
+  }
 }
 
 export function saveMiniMaxApiKey(key: string): void {

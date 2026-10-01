@@ -113,6 +113,8 @@ function report(state, final = false) {
       ...readerQueueEvidence.map(({ increaseBytes }) => increaseBytes)
     ),
     readerClosesByCode: state.readerClosesByCode,
+    // Every cell a control connected to, so a canary can prove its load reached the target.
+    assignedCellOrigins: [...state.assignedCellOrigins].sort(),
     controlHeadroom: Math.max(0, state.controls - state.active.size),
     generatorRssMiB: Number(rssMiB.toFixed(1)),
     generatorPeakRssMiB: Number(state.generatorPeakRssMiB.toFixed(1)),
@@ -241,6 +243,7 @@ const state = {
   wedgedReaderSplicesClosed: 0,
   readerEvidence: null,
   readerClosesByCode: {},
+  assignedCellOrigins: new Set(),
   generatorBaselineRssMiB,
   generatorBaselineCpu,
   generatorPeakRssMiB: generatorBaselineRssMiB,
@@ -299,6 +302,8 @@ function observe(type, detail) {
   if (type === 'connected') {
     state.active.add(detail.index)
     state.connected++
+    const cellOrigin = peers.get(detail.index)?.assignedCellUrl()
+    if (cellOrigin) state.assignedCellOrigins.add(cellOrigin)
     state.peakActive = Math.max(state.peakActive, state.active.size)
     recordSteadyMinimum()
   } else if (type === 'closed') {

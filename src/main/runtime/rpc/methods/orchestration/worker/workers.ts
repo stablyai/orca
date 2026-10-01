@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { startFederatedWorker } from '../federation/federated-worker-start'
 import { startLocalWorker } from './local-worker-start'
 import {
@@ -14,13 +14,13 @@ import {
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
 
-export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
     name: 'orchestration.workerStart',
     params: WorkerStartParams,
     handler: async (
       params,
-      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
+      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence, orchestrationCaller }
     ) => {
       if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
         throw new OrchestrationError(
@@ -30,11 +30,12 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
       const db = runtime.getOrchestrationDb()
-      const coordinatorPane = resolveOrchestrationCaller(runtime, {
+      const coordinator = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
-        callerEvidence: orchestrationCompatibilityEvidence
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
       })
-      const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
+      const run = coordinator ? db.getCurrentRunForCoordinator(coordinator) : undefined
       if (!run || (params.run && params.run !== run.id)) {
         throw new OrchestrationError(
           'consumer_fenced',
@@ -62,7 +63,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           db,
           runId: run.id,
           task: existingTask,
-          orchestrationMutation
+          orchestrationMutation,
+          callerSession: orchestrationCaller
         })
         return receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
       }
@@ -71,7 +73,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         runtime,
         db,
         run,
-        coordinatorPane,
+        coordinator,
+        callerSession: orchestrationCaller,
         existingTask,
         orchestrationMutation,
         mode

@@ -30,13 +30,14 @@ const {
   registerRuntimeEnvironmentHandlersMock,
   registerEphemeralVmHandlersMock,
   registerAiVaultHandlersMock,
+  registerAiVaultSearchHandlersMock,
   registerOrcaProfileHandlersMock,
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
-  registerAgentTrustHandlersMock,
   registerClaudeAccountHandlersMock,
   registerMiniMaxCredentialsHandlersMock,
   registerGrokAccountHandlersMock,
+  registerCursorAccountHandlersMock,
   registerClipboardHandlersMock,
   setTrustedClipboardRendererWebContentsIdMock,
   registerUpdaterHandlersMock,
@@ -96,13 +97,14 @@ const {
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
   registerEphemeralVmHandlersMock: vi.fn(),
   registerAiVaultHandlersMock: vi.fn(),
+  registerAiVaultSearchHandlersMock: vi.fn(),
   registerOrcaProfileHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
-  registerAgentTrustHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
   registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerGrokAccountHandlersMock: vi.fn(),
+  registerCursorAccountHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
@@ -136,7 +138,8 @@ const {
 
 vi.mock('electron', () => ({
   app: {
-    getPath: getPathMock
+    getPath: getPathMock,
+    once: vi.fn()
   }
 }))
 
@@ -309,6 +312,10 @@ vi.mock('../ai-vault', () => ({
   registerAiVaultHandlers: registerAiVaultHandlersMock
 }))
 
+vi.mock('../ai-vault-search', () => ({
+  registerAiVaultSearchHandlers: registerAiVaultSearchHandlersMock
+}))
+
 vi.mock('../orca-profiles', () => ({
   registerOrcaProfileHandlers: registerOrcaProfileHandlersMock
 }))
@@ -321,10 +328,6 @@ vi.mock('../agent-hooks', () => ({
   registerAgentHookHandlers: registerAgentHookHandlersMock
 }))
 
-vi.mock('../agent-trust', () => ({
-  registerAgentTrustHandlers: registerAgentTrustHandlersMock
-}))
-
 vi.mock('../claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
 }))
@@ -335,6 +338,10 @@ vi.mock('../minimax-credentials', () => ({
 
 vi.mock('../grok-accounts', () => ({
   registerGrokAccountHandlers: registerGrokAccountHandlersMock
+}))
+
+vi.mock('../cursor-accounts', () => ({
+  registerCursorAccountHandlers: registerCursorAccountHandlersMock
 }))
 
 vi.mock('../../window/attach-main-window-services', () => ({
@@ -387,7 +394,14 @@ vi.mock('../native-chat', () => ({
   registerNativeChatHandlers: registerNativeChatHandlersMock
 }))
 
+import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { recordStructuredAgentSessionHostInstallRefusal } from '../../runtime/structured-agent-session-host-refusal'
 import { registerCoreHandlers } from './register-core-handlers'
+
+let registeredAiVaultOptions: {
+  ensureStructuredSessionOwnership: () => Promise<void>
+}
+let registeredRuntime: { ensureStructuredAgentSessionHost: ReturnType<typeof vi.fn> } | undefined
 
 describe('registerCoreHandlers', () => {
   beforeEach(() => {
@@ -425,7 +439,6 @@ describe('registerCoreHandlers', () => {
     registerOrcaProfileHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
-    registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
     registerMiniMaxCredentialsHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
@@ -458,11 +471,16 @@ describe('registerCoreHandlers', () => {
 
   it('passes the store through to handler registrars that need it', async () => {
     const store = { marker: 'store' }
-    const runtime = { marker: 'runtime', getAgentBrowserBridge: () => null }
+    const runtime = {
+      marker: 'runtime',
+      getAgentBrowserBridge: () => null,
+      ensureStructuredAgentSessionHost: vi.fn()
+    }
     const stats = { marker: 'stats' }
     const claudeUsage = { marker: 'claudeUsage' }
     const codexUsage = { marker: 'codexUsage' }
     const openCodeUsage = { marker: 'openCodeUsage' }
+    const museUsage = { marker: 'museUsage' }
     const codexAccounts = { marker: 'codexAccounts', runtimeHomeService: { marker: 'runtimeHome' } }
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
@@ -477,6 +495,8 @@ describe('registerCoreHandlers', () => {
       claudeUsage as never,
       codexUsage as never,
       openCodeUsage as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only forwards this marker to the mocked usage registrar.
+      museUsage as never,
       codexAccounts as never,
       claudeAccounts as never,
       rateLimits as never,
@@ -491,6 +511,9 @@ describe('registerCoreHandlers', () => {
 
     const aiVaultOptions = registerAiVaultHandlersMock.mock.calls[0]?.[0]
     expect(aiVaultOptions).toBeDefined()
+    // Registration happens once per module: later tests reach these handlers through here.
+    registeredAiVaultOptions = aiVaultOptions
+    registeredRuntime = runtime
 
     callRuntimeEnvironmentMock.mockResolvedValueOnce({
       ok: true,
@@ -500,7 +523,8 @@ describe('registerCoreHandlers', () => {
     expect(registerUsageProviderHandlersMock).toHaveBeenCalledWith({
       claudeUsage,
       codexUsage,
-      openCodeUsage
+      openCodeUsage,
+      museUsage
     })
     expect(registerAppHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(
@@ -517,6 +541,7 @@ describe('registerCoreHandlers', () => {
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
+    expect(registerCursorAccountHandlersMock).toHaveBeenCalled()
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits, codexAccounts)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
@@ -541,7 +566,7 @@ describe('registerCoreHandlers', () => {
     expect(registerLocalhostWorktreeLabelHandlersMock).toHaveBeenCalledWith(store)
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerOrcaProfileHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
-    expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerSessionHandlersMock).toHaveBeenCalledWith(store, runtime)
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store, {
       isDashboardPopoutRenderer: isDashboardPopoutRendererMock
     })
@@ -628,6 +653,31 @@ describe('registerCoreHandlers', () => {
     )
   })
 
+  // Session history and terminal resume are not chats: the refusal chats get leaves them no host
+  // to check, and any other host failure still fails them.
+  it('serves session history while chats are refused', async () => {
+    const aiVaultOptions = registeredAiVaultOptions
+    expect(aiVaultOptions).toBeDefined()
+    const refusal = agentSessionRefusalError(
+      'agent_session_journal_unreadable',
+      { reason: 'journalCorrupt' },
+      'Unable to load this chat.'
+    )
+    recordStructuredAgentSessionHostInstallRefusal(refusal)
+    try {
+      registeredRuntime?.ensureStructuredAgentSessionHost.mockRejectedValueOnce(refusal)
+      await expect(aiVaultOptions.ensureStructuredSessionOwnership()).resolves.toBeUndefined()
+      registeredRuntime?.ensureStructuredAgentSessionHost.mockRejectedValueOnce(
+        new Error('the record store would not open')
+      )
+      await expect(aiVaultOptions.ensureStructuredSessionOwnership()).rejects.toThrow(
+        'the record store would not open'
+      )
+    } finally {
+      recordStructuredAgentSessionHostInstallRefusal(null)
+    }
+  })
+
   it('only registers IPC handlers once but always updates web contents id', () => {
     // The first test already called registerCoreHandlers, so the module-level
     // guard is now set. beforeEach reset all mocks, so call counts are 0.
@@ -637,6 +687,7 @@ describe('registerCoreHandlers', () => {
     const claudeUsage2 = { marker: 'claudeUsage2' }
     const codexUsage2 = { marker: 'codexUsage2' }
     const openCodeUsage2 = { marker: 'openCodeUsage2' }
+    const museUsage2 = { marker: 'museUsage2' }
     const codexAccounts2 = { marker: 'codexAccounts2' }
     const claudeAccounts2 = { marker: 'claudeAccounts2' }
     const rateLimits2 = { marker: 'rateLimits2' }
@@ -648,6 +699,8 @@ describe('registerCoreHandlers', () => {
       claudeUsage2 as never,
       codexUsage2 as never,
       openCodeUsage2 as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only forwards this marker to the mocked usage registrar.
+      museUsage2 as never,
       codexAccounts2 as never,
       claudeAccounts2 as never,
       rateLimits2 as never,

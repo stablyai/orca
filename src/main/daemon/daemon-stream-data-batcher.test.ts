@@ -38,6 +38,30 @@ function nonSentinelWrites(streamSocket: { write: ReturnType<typeof vi.fn> }): P
 }
 
 describe('DaemonStreamDataBatcher', () => {
+  it.each(['', 'x'])('accounts held transformed entries with %s payload data', (data) => {
+    vi.useFakeTimers()
+    let paused = false
+    const { batcher, streamSocket } = createBatcher({
+      onProducerBackpressureChanged: (_sessionId, value) => {
+        paused = value
+      }
+    })
+    try {
+      streamSocket.writableLength = 128 * 1024
+      batcher.enqueue('client-1', 'session-1', 'bulk'.repeat(16 * 1024))
+      for (let seq = 1; seq <= 20_000 && !paused; seq++) {
+        batcher.enqueue('client-1', 'session-1', data, { transformed: true, rawLength: 1, seq })
+      }
+      expect(paused).toBe(true)
+      expect(batcher.queuedCharsForClient('client-1')).toBeLessThan(100 * 1024)
+      batcher.clear()
+      expect(paused).toBe(false)
+    } finally {
+      batcher.clear()
+      vi.useRealTimers()
+    }
+  })
+
   it('coalesces background output before writing daemon stream events', () => {
     vi.useFakeTimers()
     try {
@@ -91,6 +115,20 @@ describe('DaemonStreamDataBatcher', () => {
     expect(JSON.parse(String(streamSocket.write.mock.calls[0]?.[0]))).toMatchObject({
       event: 'data',
       payload: { data: '', rawLength: 9, seq: 17, sequenceChars: 9, transformed: true }
+    })
+  })
+
+  it('preserves PTY incarnation identity through stream serialization', () => {
+    const { batcher, streamSocket } = createBatcher()
+
+    batcher.enqueue('client-1', 'session-1', 'output', {
+      flushImmediately: true,
+      incarnationId: 'incarnation-1'
+    })
+
+    expect(JSON.parse(String(streamSocket.write.mock.calls[0]?.[0]))).toMatchObject({
+      event: 'data',
+      payload: { data: 'output', incarnationId: 'incarnation-1' }
     })
   })
 

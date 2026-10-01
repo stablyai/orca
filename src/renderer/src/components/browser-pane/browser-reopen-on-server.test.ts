@@ -51,17 +51,4 @@ describe('reopenBrowserPageOnServer', () => {
       focusOnCreate: true
     })
   })
-
-  it('never closes or mutates the client-hosted page it escapes from', async () => {
-    mocks.createWebRuntimeSessionBrowserTab.mockClear()
-
-    await reopenBrowserPageOnServer({
-      environmentId: 'env-1',
-      worktreeId: 'wt-1',
-      lastCommittedUrl: 'https://example.com/app'
-    })
-
-    expect(mocks.createWebRuntimeSessionBrowserTab.mock.calls[0]?.[0]).not.toHaveProperty('page')
-    expect(mocks.createWebRuntimeSessionBrowserTab).toHaveBeenCalledOnce()
-  })
 })

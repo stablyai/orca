@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Source validation must finish before a new session claims the provider conversation.
 
 import { mkdtemp, rm, writeFile, truncate } from 'node:fs/promises'
@@ -5,16 +6,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
+import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'codex_adopting_session'
@@ -116,11 +121,12 @@ async function attach(
   sessionAdapter: StructuredAgentSessionAdapter,
   onAttached: AttachFlowInput['onAttached'] = () => {}
 ) {
-  store ??= await AgentSessionRecordStore.open({ directory: join(root!, 'store'), hostId: 'local' })
+  store ??= await openTestAgentSessionRecordStore(root!)
   return performAttach({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: sessionAdapter,
-    journalRoot: root!,
+    openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
     authority: {
       spawnToken: 'spawn-a',
       claimKeyId: 'key-1',
@@ -159,7 +165,7 @@ describe('adopting a provider conversation on create', () => {
       await journal.appendItem(
         { provider: 'legacy', agent: 'codex', sessionId: THREAD, recordId: 'journal-only' },
         { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'not yet in rollout' }] },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       await journal.close()
     })
@@ -210,19 +216,61 @@ describe('adopting a provider conversation on create', () => {
     }
   )
 
-  it('still releases acquisition and closes the provisional journal on an import write failure', async () => {
+  it('still releases acquisition on an import write failure, and leaves the conversation open', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-write-failure-'))
     const transcriptPath = join(root, 'rollout.jsonl')
     await writeCodexRollout(transcriptPath, 'valid source')
     vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems').mockRejectedValueOnce(
       new Error('disk write failed')
     )
-    const close = vi.spyOn(agentSessionJournalCloseRetries, 'closeOrRetain')
     const sessionAdapter = adapter()
     await expect(attach(transcriptPath, sessionAdapter)).rejects.toThrow('disk write failed')
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
     expect(sessionAdapter.releaseAcquisition).toHaveBeenCalledTimes(1)
-    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the conversation writable when the import fails after acquiring', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-adopt-host-failure-'))
+    const transcriptPath = join(root, 'rollout.jsonl')
+    await writeCodexRollout(transcriptPath, 'valid source')
+    store = await openTestAgentSessionRecordStore(root)
+    const host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: adapter(),
+      journalDatabase: openTestJournalHostDatabase(root),
+      claimKeyId: 'key-1',
+      mintSpawnToken: () => 'spawn-a',
+      now: () => NOW
+    })
+    vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems').mockRejectedValueOnce(
+      new Error('disk write failed')
+    )
+    const attached = await host
+      .attach({ callerKey: 'client-1' }, attachParams(transcriptPath))
+      .catch(() => null)
+    expect(attached?.ok).not.toBe(true)
+
+    const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
+    const sent = await host.send(
+      { callerKey: 'client-1' },
+      {
+        envelope: {
+          sessionId: SESSION,
+          clientOperationId: `${NOW}-${'2'.padStart(32, '0')}`,
+          expectedRuntimeFence: null,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.send',
+            sessionId: SESSION,
+            fields: { body }
+          })
+        },
+        body
+      }
+    )
+    // The failed attach kept the conversation's own journal open, so the send is recorded.
+    expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+    await host.flushAllStreamedEvents()
   })
 
   it('prepares a valid source once before acquisition and imports those exact items', async () => {

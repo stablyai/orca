@@ -1,6 +1,6 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 
-export const DIAGNOSTICS_METHODS: RpcMethod[] = [
+export const DIAGNOSTICS_METHODS = [
   defineMethod({
     name: 'diagnostics.memory',
     params: null,

@@ -1,6 +1,5 @@
 import { ensureAgentStartupInTerminal, type LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -19,6 +18,7 @@ import {
   toFolderWorkspaceLinkedTask
 } from './folder-workspace-composer-helpers'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store'
 import {
@@ -140,7 +140,6 @@ export async function submitFolderWorkspaceCreate({
         },
         prompt: launchDraftPrompt ?? note,
         promptDelivery: launchDraftPrompt ? 'draft' : 'auto-submit',
-        tuiCustomization: { agentArgs },
         initialSessionOptions: startupPlan?.sessionOptions
       })
     : null
@@ -167,13 +166,6 @@ export async function submitFolderWorkspaceCreate({
   })
   if (!workspace) {
     return false
-  }
-  if (!structuredLaunch) {
-    await preflightAgentTrust({
-      agent: quickAgent,
-      workspacePath: workspace.folderPath,
-      connectionId: workspace.connectionId ?? projectGroup.connectionId
-    })
   }
   if (startupPlan && !startupPlan.launchToken) {
     // Why: delayed delivery must target the exact pane spawned from this queued
@@ -206,57 +198,30 @@ export async function submitFolderWorkspaceCreate({
       : undefined
   onOpenChange(false)
   try {
-    let activation = activateAndRevealFolderWorkspace(workspace.id, {
-      ...(!structuredLaunch && startup ? { startup } : {}),
-      ...(structuredLaunch ? { providesInitialSurface: true } : {}),
-      runtimeEnvironmentId
-    })
-    let structuredLaunchAccepted = structuredLaunch
-    const settlement =
-      plan?.route === 'structured-native-chat'
-        ? await plan.launch(
-            {
-              legacyFallback: async () => {
-                if (pendingFirstAgentMessageRename) {
-                  await useAppStore
-                    .getState()
-                    .updateFolderWorkspace(workspace.id, { pendingFirstAgentMessageRename: true })
-                    .catch(() => undefined)
-                }
-                await preflightAgentTrust({
-                  agent: quickAgent,
-                  workspacePath: workspace.folderPath,
-                  connectionId: workspace.connectionId ?? projectGroup.connectionId
-                })
-                const fallbackActivation = activateAndRevealFolderWorkspace(workspace.id, {
-                  ...(startup ? { startup } : {}),
-                  runtimeEnvironmentId
-                })
-                return {
-                  activation: fallbackActivation,
-                  primaryTabId:
-                    fallbackActivation === false ? null : fallbackActivation.primaryTabId
-                }
-              }
-            },
-            { worktreeId: folderWorkspaceKey(workspace.id) }
-          )
-        : null
-    if (settlement) {
-      // Why: the workspace exists either way. Unknown keeps reporting false and failed true, as
-      // the boolean did before the loop was shared; the launch layer owns the failure toast.
-      if (settlement.kind === 'visibility-unknown') {
-        return false
-      }
-      if (settlement.kind === 'failed' || settlement.kind === 'cancelled') {
-        return true
-      }
-      if (settlement.kind === 'refused-then-legacy') {
-        structuredLaunchAccepted = false
-        // Why: this flow's own fallback always activates; `??` only satisfies the shared type.
-        activation = settlement.activation ?? false
-      }
+    const activationHolder: {
+      value: ReturnType<typeof activateAndRevealFolderWorkspace>
+    } = { value: false }
+    const revealWorkspace = (): boolean => {
+      activationHolder.value = activateAndRevealFolderWorkspace(workspace.id, {
+        agent: quickAgent,
+        ...(!structuredLaunch && startup ? { startup } : {}),
+        ...(structuredLaunch ? { providesInitialSurface: true } : {}),
+        runtimeEnvironmentId
+      })
+      return activationHolder.value !== false
     }
+    const structuredLaunchAccepted = structuredLaunch
+    if (plan?.route === 'structured-native-chat') {
+      beginStructuredAgentSessionProvisionalLaunch({
+        plan,
+        hooks: {},
+        target: { worktreeId: folderWorkspaceKey(workspace.id) },
+        beforeOpen: revealWorkspace
+      })
+    } else {
+      revealWorkspace()
+    }
+    const activation = activationHolder.value
     if (
       !structuredLaunchAccepted &&
       quickAgent &&

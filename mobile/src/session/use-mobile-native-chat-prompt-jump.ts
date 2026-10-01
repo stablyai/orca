@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { FlatList, ViewToken } from 'react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { mobileNativeChatLatestPromptIndex } from './mobile-native-chat-prompt-anchor'
@@ -11,63 +11,115 @@ type ScrollToIndexFailure = {
   averageItemLength: number
 }
 
-/** Drives the jump-to-prompt control: shown at the bottom of the list while the
- *  newest prompt has scrolled out of view, i.e. under a reply taller than the screen. */
-export function useMobileNativeChatPromptJump(
-  listRef: RefObject<FlatList<NativeChatMessage> | null>,
-  data: readonly NativeChatMessage[],
+/** Offers the newest loaded prompt when it is off screen at the list's tail. */
+export function useMobileNativeChatPromptJump({
+  listRef,
+  data,
+  loadedMessages,
+  atBottom,
+  onLeaveTail,
+  onReturnToTail,
+  scopeKey
+}: {
+  listRef: RefObject<FlatList<NativeChatMessage> | null>
+  data: readonly NativeChatMessage[]
+  loadedMessages: readonly NativeChatMessage[]
   atBottom: boolean
-): {
+  onLeaveTail: () => void
+  onReturnToTail: () => void
+  scopeKey: string
+}): {
   showPromptJump: boolean
   onJumpToPrompt: () => void
+  cancelPendingJump: () => void
+  onScrollToLatest: () => void
   onViewableItemsChanged: (info: { viewableItems: ViewToken[] }) => void
   onScrollToIndexFailed: (info: ScrollToIndexFailure) => void
 } {
-  // Null until the list first reports, so the control cannot flash before layout.
-  const [viewableKeys, setViewableKeys] = useState<ReadonlySet<string> | null>(null)
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (retryTimerRef.current) {
-        clearTimeout(retryTimerRef.current)
-      }
-    },
-    []
+  const [viewable, setViewable] = useState<{ scopeKey: string; keys: ReadonlySet<string> } | null>(
+    null
   )
+  const latestRef = useRef({ data, scopeKey })
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const targetRef = useRef<{ id: string; scopeKey: string } | null>(null)
+  useLayoutEffect(() => {
+    latestRef.current = { data, scopeKey }
+  }, [data, scopeKey])
 
-  // Why a ref: FlatList throws if onViewableItemsChanged changes identity after mount.
+  const cancelPendingJump = useCallback(() => {
+    if (retryTimerRef.current !== null) {
+      clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+    targetRef.current = null
+  }, [])
+  useEffect(() => cancelPendingJump, [cancelPendingJump, scopeKey])
+
+  const onScrollToLatest = useCallback(() => {
+    cancelPendingJump()
+    onReturnToTail()
+  }, [cancelPendingJump, onReturnToTail])
+
+  // FlatList requires one callback identity throughout its lifetime.
   const onViewableItemsChanged = useRef((info: { viewableItems: ViewToken[] }) => {
-    setViewableKeys(new Set(info.viewableItems.map((token) => token.key)))
+    setViewable({
+      scopeKey: latestRef.current.scopeKey,
+      keys: new Set(
+        info.viewableItems.filter((token) => token.isViewable).map((token) => token.key)
+      )
+    })
   }).current
 
-  const promptIndex = mobileNativeChatLatestPromptIndex(data)
+  const promptIndex = mobileNativeChatLatestPromptIndex(loadedMessages, data)
   const promptId = promptIndex === null ? null : data[promptIndex].id
   const showPromptJump =
-    atBottom && promptId !== null && viewableKeys !== null && !viewableKeys.has(promptId)
+    atBottom && promptId !== null && viewable?.scopeKey === scopeKey && !viewable.keys.has(promptId)
 
   const onJumpToPrompt = useCallback(() => {
-    if (promptIndex !== null) {
-      listRef.current?.scrollToIndex({ index: promptIndex, viewPosition: 0, animated: true })
+    cancelPendingJump()
+    if (promptIndex === null || promptId === null) {
+      return
     }
-  }, [listRef, promptIndex])
+    targetRef.current = { id: promptId, scopeKey }
+    onLeaveTail()
+    listRef.current?.scrollToIndex({ index: promptIndex, viewPosition: 0, animated: true })
+  }, [cancelPendingJump, listRef, onLeaveTail, promptId, promptIndex, scopeKey])
 
-  // An off-screen row may not be measured yet: land near it, then retry once laid out.
   const onScrollToIndexFailed = useCallback(
     (info: ScrollToIndexFailure) => {
+      const target = targetRef.current
+      if (!target || target.scopeKey !== latestRef.current.scopeKey) {
+        return
+      }
+      if (retryTimerRef.current !== null) {
+        return
+      }
       listRef.current?.scrollToOffset({
         offset: info.averageItemLength * info.index,
         animated: true
       })
-      if (retryTimerRef.current) {
-        clearTimeout(retryTimerRef.current)
-      }
       retryTimerRef.current = setTimeout(() => {
         retryTimerRef.current = null
-        listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0, animated: true })
+        targetRef.current = null
+        const latest = latestRef.current
+        if (target.scopeKey !== latest.scopeKey) {
+          return
+        }
+        const index = latest.data.findIndex((message) => message.id === target.id)
+        if (index !== -1 && latest.data[index].role === 'user') {
+          listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
+        }
       }, SCROLL_RETRY_MS)
     },
     [listRef]
   )
 
-  return { showPromptJump, onJumpToPrompt, onViewableItemsChanged, onScrollToIndexFailed }
+  return {
+    showPromptJump,
+    onJumpToPrompt,
+    cancelPendingJump,
+    onScrollToLatest,
+    onViewableItemsChanged,
+    onScrollToIndexFailed
+  }
 }

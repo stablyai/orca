@@ -36,6 +36,7 @@ import {
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import { restoreLocalStructuredSessionTabsOnce } from '../runtime/local-structured-session-tabs-sync'
+import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
 
 async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
   try {
@@ -67,6 +68,12 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
 
   // Fetch initial data + hydrate GitHub cache from disk
   useEffect(() => {
+    // Why first and ungated: the local capability set is a static fact the main process can answer
+    // immediately, but its only other writer is the structured-session-tabs sync, which waits for
+    // workspaceSessionReady + terminalStartupRestorationReady + the experimental flag. Every
+    // `resolveAgentLaunchRoute` reader treats "not asked yet" as "unsupported", so leaving the
+    // answer behind those gates degrades a pre-hydration create to a bare terminal (#19154).
+    void ensureLocalRuntimeCapabilities()
     let cancelled = false
     // Why: declared outside the async block so cleanup can abort it — under StrictMode the first (unmounted) pass would otherwise keep spawning PTYs.
     const abortController = new AbortController()
@@ -85,7 +92,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         await timeRendererStartupStep('fetch-settings', () =>
           actions.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
         )
-        // Why: hidden-at-launch PTYs can query OSC 10/11 before any pane mounts; publish view attributes as soon as settings exist so main's silent-until-push responder has data.
+        // Why: hidden-at-launch PTYs can query before any pane mounts; publish view attributes as soon as settings exist so every PTY owner answers from the composed theme.
         publishTerminalViewAttributesAtAppStart(
           useAppStore.getState().settings,
           getSystemPrefersDark()

@@ -3,9 +3,10 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
-  getAgentPromptSubmitDelayMs
+  resolveAgentPromptSubmitDelayForAgent
 } from '../../../shared/agent-prompt-injection'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks.spec'
@@ -146,11 +147,11 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-hooks-review-prompt'
+      blockedReason: 'agent-hooks-review-prompt'
     })
   })
 
-  it('returns a blocked wait result for Codex update prompts', async () => {
+  it('returns an agent-neutral blocked wait result for update prompts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -177,11 +178,11 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-update-prompt'
+      blockedReason: 'agent-update-prompt'
     })
   })
 
-  it('returns a blocked wait result for Codex workspace trust prompts', async () => {
+  it('returns an agent-neutral blocked wait result for workspace trust prompts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -203,7 +204,7 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-trust-workspace'
+      blockedReason: 'agent-trust-workspace'
     })
   })
 
@@ -270,7 +271,7 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('timeout')
   })
 
-  it('returns a blocked wait result for Codex cwd selection prompts', async () => {
+  it('returns an agent-neutral blocked wait result for cwd selection prompts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -297,7 +298,7 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-cwd-prompt'
+      blockedReason: 'agent-cwd-prompt'
     })
   })
 
@@ -359,11 +360,11 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-hooks-review-prompt'
+      blockedReason: 'agent-hooks-review-prompt'
     })
   })
 
-  it('returns a blocked wait result for generic Codex interactive prompts', async () => {
+  it('returns an agent-neutral blocked wait result for generic interactive prompts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -390,7 +391,7 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-interactive-prompt'
+      blockedReason: 'agent-interactive-prompt'
     })
   })
 
@@ -466,7 +467,7 @@ describe('OrcaRuntimeService', () => {
     })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
-    await runtime.sendTerminal(handle, { text: 'continue', enter: true })
+    await runtime.sendTerminal(handle, { text: 'continue', enter: true }, { inputKind: 'driving' })
 
     expect(writes).toEqual(['continue', '\r'])
   })
@@ -489,7 +490,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
       const prompt = 'line one\nline two\x1b[201~'
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
       await vi.runAllTimersAsync()
       const result = await sendPromise
 
@@ -504,6 +505,47 @@ describe('OrcaRuntimeService', () => {
         bytesWritten: Buffer.byteLength(`${pasted}\r`, 'utf8')
       })
       expect(writes).toEqual([pasted, '\r'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    ['claude', true],
+    ['an unknown agent', true],
+    ['codex', false]
+  ] as const)('types the lead line for %s: %s', async (agent, typesLead) => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(
+        `path:${TEST_WORKTREE_PATH}`,
+        agent === 'an unknown agent' ? undefined : { launchAgent: agent }
+      )
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'the brief', {
+        inputKind: 'driving',
+        leadLine: ORCA_DISPATCH_PROMPT_LEAD_LINE
+      })
+      await vi.runAllTimersAsync()
+      await sendPromise
+
+      const paste = buildAgentPromptPasteBytes('the brief')
+      expect(writes).toEqual([
+        typesLead ? `${ORCA_DISPATCH_PROMPT_LEAD_LINE} ${paste}` : paste,
+        '\r'
+      ])
     } finally {
       vi.useRealTimers()
     }
@@ -560,6 +602,7 @@ describe('OrcaRuntimeService', () => {
         const assertAuthority = vi.fn()
 
         const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+          inputKind: 'driving',
           beforeWrite: assertAuthority
         })
         await vi.advanceTimersByTimeAsync(500)
@@ -587,7 +630,7 @@ describe('OrcaRuntimeService', () => {
     (Object.keys(TUI_AGENT_CONFIG) as TuiAgent[]).filter(
       (agent) => agent !== 'claude' && agent !== 'codex'
     )
-  )('holds Enter for the full open-loop submit delay for %s', async (agent) => {
+  )('submits through the agent-specific PTY timing policy for %s', async (agent) => {
     vi.useFakeTimers()
     try {
       const writes: string[] = []
@@ -596,7 +639,11 @@ describe('OrcaRuntimeService', () => {
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: (_ptyId, data) => {
           writes.push(data)
-          acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+          if (agent === 'omp' && data.endsWith('\r')) {
+            runtime.onPtyData('pty-bg', '\x1b]0;Codex working\x07', Date.now())
+          } else {
+            acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+          }
           return true
         },
         kill: () => true,
@@ -606,11 +653,23 @@ describe('OrcaRuntimeService', () => {
         launchAgent: agent
       })
 
-      const submitDelayMs = getAgentPromptSubmitDelayMs(
+      // The agent's own policy, not the byte-only delay: antigravity adds a per-line settle
+      // (#21665), and advancing fake timers by less than the policy waits leaves the submit
+      // pending until the real 30 s timeout.
+      const submitDelayMs = resolveAgentPromptSubmitDelayForAgent(
         process.platform,
-        Buffer.byteLength(buildAgentPromptPasteBytes('review this change'), 'utf8')
+        'review this change',
+        agent
       )
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
+      if (agent === 'omp') {
+        await sendPromise
+        expect(writes).toEqual([`${buildAgentPromptPasteBytes('review this change')}\r`])
+        return
+      }
+
       await vi.advanceTimersByTimeAsync(submitDelayMs - 1)
       expect(writes).not.toContain('\r')
 

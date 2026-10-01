@@ -1,0 +1,36 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "nativeChat.session-option-pick",
+  "family": "nativeChat.session-option-pick",
+  "namedDeltas": [],
+  "values": {
+    "0aa1124bf746": {
+      "settled": "settled"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-session-option-pick-empty",
+    "checkpoints": [
+      {
+        "id": "no-wire",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "empty": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

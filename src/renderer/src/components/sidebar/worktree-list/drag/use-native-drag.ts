@@ -72,6 +72,7 @@ export function useWorktreeNativeDrag(args: {
       setWorktreeDragState({
         draggingWorktreeId: worktreeId,
         sourceGroupKey,
+        lineageDropTargetId: null,
         dropIndex: null,
         dropIndicatorY: null,
         previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,

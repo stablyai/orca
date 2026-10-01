@@ -7,17 +7,17 @@ import { styles } from './mobile-native-chat-view-styles'
  *  message; at the bottom of a reply taller than the screen, it goes up to the
  *  prompt. The two never show together, so they share a slot. */
 export function MobileNativeChatJumpControl({
-  atBottom,
+  showJumpToTail,
   showPromptJump,
   onScrollToLatest,
   onJumpToPrompt
 }: {
-  atBottom: boolean
+  showJumpToTail: boolean
   showPromptJump: boolean
   onScrollToLatest: () => void
   onJumpToPrompt: () => void
 }): React.JSX.Element | null {
-  if (!atBottom) {
+  if (showJumpToTail) {
     return (
       <Pressable
         accessibilityLabel="Scroll to latest"

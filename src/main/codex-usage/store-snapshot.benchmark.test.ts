@@ -37,7 +37,10 @@ function createLargeState(): CodexUsagePersistedState {
     outputTokens: 500,
     reasoningOutputTokens: 50,
     totalTokens: 1_500,
-    hasInferredPricing: false
+    hasInferredPricing: false,
+    longContextInputTokens: 0,
+    longContextCachedInputTokens: 0,
+    longContextOutputTokens: 0
   }))
   const sessions = Array.from({ length: 8_000 }, (_, index) => ({
     sessionId: `session-${index}`,
@@ -56,6 +59,9 @@ function createLargeState(): CodexUsagePersistedState {
     totalReasoningOutputTokens: 50,
     totalTokens: 1_500,
     hasInferredPricing: false,
+    longContextInputTokens: 0,
+    longContextCachedInputTokens: 0,
+    longContextOutputTokens: 0,
     locationBreakdown: [
       {
         locationKey: `worktree:wt-${index % 400}`,
@@ -68,7 +74,10 @@ function createLargeState(): CodexUsagePersistedState {
         outputTokens: 500,
         reasoningOutputTokens: 50,
         totalTokens: 1_500,
-        hasInferredPricing: false
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
       }
     ],
     modelBreakdown: [
@@ -76,6 +85,9 @@ function createLargeState(): CodexUsagePersistedState {
         modelKey: 'gpt-5',
         modelLabel: 'gpt-5',
         hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0,
         eventCount: 3,
         inputTokens: 1_000,
         cachedInputTokens: 250,
@@ -97,7 +109,10 @@ function createLargeState(): CodexUsagePersistedState {
         outputTokens: 500,
         reasoningOutputTokens: 50,
         totalTokens: 1_500,
-        hasInferredPricing: false
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
       }
     ]
   }))

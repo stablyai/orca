@@ -1,0 +1,37 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "nativeChat.image-upload",
+  "family": "nativeChat.image-upload",
+  "namedDeltas": [],
+  "values": {
+    "25716369cd8f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": []
+    },
+    "4ea1010bf65b": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "uploaded": []
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-image-upload-cancelled",
+    "checkpoints": [
+      {
+        "id": "no-wire",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "cancelled": "25716369cd8f"
+          },
+          "state": "4ea1010bf65b",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

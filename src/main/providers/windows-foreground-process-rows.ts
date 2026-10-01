@@ -51,21 +51,7 @@ function projectProcessRows(native: readonly NativeWindowsProcessRow[]): Windows
 }
 
 /**
- * Rows from a scan that starts after this call.
- *
- * PID-identity checks in teardown must not reuse a cached row — it can predate
- * the very recycle it is meant to detect. Rejects when the table is unreadable,
- * so "unavailable" stays distinguishable from "nothing is running".
- *
- * `readonly` because the projection is shared with every other reader of the
- * same snapshot.
- */
-export async function queryWindowsProcessRowsFresh(): Promise<readonly WindowsProcessRow[]> {
-  return projectProcessRows(await readWindowsProcessTableFresh())
-}
-
-/**
- * The same fresh scan for an ancestry walk, which reads only pid/ppid.
+ * A fresh scan for an ancestry walk, which reads only pid/ppid.
  *
  * Returns identity rows so the command line is not merely unused but absent:
  * asking for it costs an `OpenProcess` per process on the box.

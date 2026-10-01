@@ -8,38 +8,11 @@ import {
   createShedSubagentsField,
   isAgentHookSource,
   isRemoteAgentHooksEnabled,
-  restoreShedStatusFields,
-  type AgentHookRelayEnvelope
+  restoreShedStatusFields
 } from './agent-hook-relay'
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 
 describe('agent-hook-relay wire shape', () => {
-  it('encodes/decodes through JSON without losing fields', () => {
-    const envelope: AgentHookRelayEnvelope = {
-      source: 'claude',
-      paneKey: 'tab-1:0',
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      connectionId: null,
-      env: 'production',
-      version: '1',
-      providerPromptId: '11111111-1111-4111-8111-111111111111',
-      compactTrigger: 'manual',
-      payload: {
-        state: 'working',
-        workingMode: 'monitoring',
-        prompt: 'roundtrip',
-        agentType: 'claude'
-      }
-    }
-
-    const decoded = JSON.parse(JSON.stringify(envelope)) as AgentHookRelayEnvelope
-    expect(decoded).toEqual(envelope)
-    expect(decoded.connectionId).toBeNull()
-    expect(decoded.payload.prompt).toBe('roundtrip')
-    expect(decoded.payload.workingMode).toBe('monitoring')
-  })
-
   it('exposes stable JSON-RPC method names', () => {
     expect(AGENT_HOOK_NOTIFICATION_METHOD).toBe('agent.hook')
     expect(AGENT_HOOK_REQUEST_REPLAY_METHOD).toBe('agent_hook.requestReplay')

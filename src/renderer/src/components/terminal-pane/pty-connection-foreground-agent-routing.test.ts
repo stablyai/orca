@@ -287,6 +287,7 @@ describe('connectPanePty', () => {
     await vi.advanceTimersByTimeAsync(1200)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -318,6 +319,7 @@ describe('connectPanePty', () => {
     expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -358,6 +360,7 @@ describe('connectPanePty', () => {
     expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -394,6 +397,7 @@ describe('connectPanePty', () => {
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -405,6 +409,8 @@ describe('connectPanePty', () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
     let foreground = 'bash.exe'
+    // Why both: the pane's process monitor reads the same foreground the confirm read sees.
+    vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
     vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(async () => foreground)
     const pane = createPane(1)
     const ptyId = 'pty-launched-droid-slow'
@@ -440,6 +446,7 @@ describe('connectPanePty', () => {
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })

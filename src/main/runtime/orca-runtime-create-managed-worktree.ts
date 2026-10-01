@@ -8,13 +8,29 @@ import { resolveWorktreeCreateRoute } from '../worktree-create-execution-host-ro
 import { ExecutionHostNotDispatchableError } from '../providers/execution-host-provider-dispatch'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
+import type { PreparationRearmHolder } from '../worktree-create-preparation'
 import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
-import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import { invalidateAuthorizedRootsCacheForRepo } from '../ipc/filesystem-auth'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
 
 export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
+  ): Promise<CreateWorktreeResult> {
+    // Why a holder fired in `finally`: consuming a prepared checkout empties a pool slot, so a
+    // create that fails anywhere after that — include copy, push target, terminal startup — must
+    // still arm the replacement. On success it fires last, once the startup terminals are up.
+    const rearm: PreparationRearmHolder = { fire: () => {} }
+    try {
+      return await this.performManagedWorktreeCreate(args, rearm)
+    } finally {
+      rearm.fire()
+    }
+  }
+
+  private async performManagedWorktreeCreate(
+    args: RuntimeManagedWorktreeCreateArgs,
+    rearm: PreparationRearmHolder
   ): Promise<CreateWorktreeResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -43,12 +59,21 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
             repo,
             args.startupAgent,
             args.startupPrompt,
-            args.startupLaunchPreferences
+            args.startupLaunchPreferences,
+            {
+              ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
+              ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {})
+            }
           )
         : null
     const draftStartup =
       !args.startup && !agentStartup && args.startupDraft
-        ? await this.buildStartupForDraft(repo, args.startupDraft, requestedAgent)
+        ? await this.buildStartupForDraft(
+            repo,
+            args.startupDraft,
+            requestedAgent,
+            args.startupLaunchSource
+          )
         : null
     const effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
     const effectiveStartupFollowup = agentStartup?.followup
@@ -63,12 +88,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     // an `executionHostId: 'ssh:*'`-only repo down the local path, which runs `git worktree add` on
     // the client against a remote path.
     const createRoute = resolveWorktreeCreateRoute(repo)
-    // `null` on a `runtime:` host is deliberate: its nested target is addressable only inside that
-    // environment, so the trust write must not go to a same-named target in this client's table.
-    const sshConnectionId = createRoute.kind === 'ssh' ? createRoute.connectionId : null
     if (isFolderRepo(repo)) {
-      // A folder workspace is a registration, not a filesystem create, so it is host-agnostic —
-      // except for the agent trust write, which must land on the host that will run the agent.
+      // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
       return createRuntimeFolderWorktree({
         request: args,
         repo,
@@ -80,8 +101,6 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
           store: this.store,
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
           createTerminal: (selector, options) => this.createTerminal(selector, options),
-          markTrusted: (agent, path) =>
-            this.markWorkspaceTrustedForAgent(agent, sshConnectionId, path),
           pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
           sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
           invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
@@ -158,7 +177,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         fetchRemote: (path, remote, ...options) =>
           this.fetchRemoteWithCache(path, remote, ...options),
         onWorktreeMetadataPersisted: (persistedWorktree) =>
-          this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
+          this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution),
+        rearm
       })
     const settings = createSettings
     const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
@@ -191,7 +211,11 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     // to authorize paths. Without invalidating it here, CLI-created worktrees
     // are not recognized and all git operations fail with "Access denied:
     // unknown repository or worktree path".
-    invalidateAuthorizedRootsCache()
+    // Scoped to this repo: the global form dirties every owner, so the next
+    // authorization-requiring IPC relists EVERY registered repo — ~58 `git worktree
+    // list` spawns, ~10s of git wall-clock through an admission budget of 4, to
+    // rediscover roots only this repo changed.
+    invalidateAuthorizedRootsCacheForRepo(this.store, repo)
 
     this.notifyWorktreesChanged(repo.id)
     const {
@@ -217,7 +241,6 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       warning,
       ports: {
         canSpawn: Boolean(this.ptyController?.spawn),
-        markTrusted: (agent, path) => this.markLocalWorkspaceTrustedForAgent(agent, path),
         createTerminal: (selector, options) => this.createTerminal(selector, options),
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
         sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),

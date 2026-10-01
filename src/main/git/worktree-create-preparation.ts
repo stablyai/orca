@@ -1,6 +1,7 @@
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import type { AddWorktreeOptions, AddWorktreeResult, GitWorktreeExecOptions } from './worktree'
+import { gitExecOptions, type GitExecOptionsForWorktree } from './worktree-operation-options'
 import {
   configurePushAutoSetupRemote,
   notifyPreparedWorktreeMutation,
@@ -15,22 +16,10 @@ import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 
-function gitExecOptions(
-  cwd: string,
-  options: GitWorktreeExecOptions
-): { cwd: string; wslDistro?: string; signal?: AbortSignal; timeout?: number } {
-  return {
-    cwd,
-    ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-    ...(options.signal ? { signal: options.signal } : {}),
-    ...(options.timeout ? { timeout: options.timeout } : {})
-  }
-}
-
 function gitCleanupOptions(
   cwd: string,
   options: GitWorktreeExecOptions
-): { cwd: string; wslDistro?: string; timeout?: number } {
+): GitExecOptionsForWorktree {
   // Why: cancellation must not strand a partially moved worktree; cleanup is bounded separately.
   return gitExecOptions(cwd, { ...options, signal: undefined })
 }
@@ -201,7 +190,8 @@ export async function finalizePreparedWorktree(
             repoPath,
             baseBranch,
             refreshLocalBaseRef,
-            finalizeGitOptions
+            finalizeGitOptions,
+            branch
           )
           const targetHead =
             baseContext.effectiveBaseOid ??
@@ -222,10 +212,11 @@ export async function finalizePreparedWorktree(
       if (targetResult.status === 'rejected') {
         throw targetResult.reason
       }
+      const { baseContext, targetHead } = targetResult.value
       if (preparedResult.status === 'rejected') {
+        await baseContext.pendingLocalBaseRefRefresh
         throw preparedResult.reason
       }
-      const { baseContext, targetHead } = targetResult.value
       const preparedHeadOutput = preparedResult.value.stdout
       if (preparedHeadOutput.trim() !== targetHead) {
         await gitExecFileAsync(
@@ -286,12 +277,13 @@ export async function finalizePreparedWorktree(
           moved,
           finalizeGitOptions
         )
+        await baseContext.pendingLocalBaseRefRefresh
         throw error
       }
+      // Why: the refresh overlapped the finalize above; it has no bearing on the checkout's content.
+      const localBaseRefRefresh = await baseContext.pendingLocalBaseRefRefresh
       return {
-        ...(baseContext.localBaseRefRefresh
-          ? { localBaseRefRefresh: baseContext.localBaseRefRefresh }
-          : {}),
+        ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
         ...(baseContext.localBaseRefUpdateSuggestion
           ? { localBaseRefUpdateSuggestion: baseContext.localBaseRefUpdateSuggestion }
           : {})

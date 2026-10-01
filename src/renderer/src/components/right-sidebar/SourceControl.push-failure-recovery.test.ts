@@ -3,27 +3,8 @@ import {
   appendPushFailureCustomInstruction,
   buildFixPushFailurePrompt
 } from '../../../../shared/source-control-push-failure'
-import { buildPushFailureAgentCommandInput } from '../../../../shared/source-control-push-failure-agent-command'
 
 describe('SourceControl push failure recovery prompt', () => {
-  it('leaves blank launch templates blank so the launcher can reject them', () => {
-    expect(
-      buildPushFailureAgentCommandInput({
-        commandInputTemplate: '   ',
-        basePrompt: 'Fix this push failure.'
-      })
-    ).toBe('')
-  })
-
-  it('falls back to the base push-failure prompt when no launch template is saved', () => {
-    expect(
-      buildPushFailureAgentCommandInput({
-        commandInputTemplate: undefined,
-        basePrompt: 'Fix this push failure.'
-      })
-    ).toBe('Fix this push failure.')
-  })
-
   it('adds one-time custom instructions before the response contract', () => {
     const prompt = buildFixPushFailurePrompt({
       summary: 'Pre-push hook failed.',

@@ -48,10 +48,8 @@ export class RuntimeWorkspaceSessionController {
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
     const repo = store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
-    // Why: SSH worktrees keep their own `ssh:<targetId>` partition here while the renderer writes
-    // them to 'local'; the shared owner map records that divergence (#12723).
     return repo
-      ? workspaceSessionPartitionHostId(getRepoExecutionHostId(repo), 'host-partition')
+      ? workspaceSessionPartitionHostId(getRepoExecutionHostId(repo))
       : LOCAL_EXECUTION_HOST_ID
   }
 
@@ -107,6 +105,15 @@ export class RuntimeWorkspaceSessionController {
   get(worktreeId: string): WorkspaceSessionState | null {
     const hostId = this.tryGetHostId(worktreeId)
     return hostId ? (this.deps.getStore()?.getWorkspaceSession?.(hostId) ?? null) : null
+  }
+
+  /** The session only when the worktree's own host partition owns it, not a rotated-owner fallback. */
+  getOwnPartition(worktreeId: string): WorkspaceSessionState | null {
+    const store = this.deps.getStore()
+    const hostId = store ? this.getPreferredHostId(worktreeId, store) : null
+    return hostId && hostId === this.tryGetHostId(worktreeId)
+      ? (store?.getWorkspaceSession?.(hostId) ?? null)
+      : null
   }
 
   set(worktreeId: string, session: WorkspaceSessionState): void {

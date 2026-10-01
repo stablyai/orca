@@ -112,58 +112,56 @@ export function SourceControlUncommittedSections(props: {
               isCollapsed={isCollapsed}
               onToggle={() => props.toggleSection(id)}
               actions={
-                <>
-                  <div className="flex items-center">
-                    {canRevertAll && (
-                      <ActionButton
-                        icon={area === 'untracked' ? Trash : Undo2}
-                        title={
-                          area === 'untracked'
-                            ? translate(
-                                'auto.components.right.sidebar.SourceControl.2f609a2e7c',
-                                'Delete all untracked'
-                              )
-                            : translate(
-                                'auto.components.right.sidebar.SourceControl.ce41708855',
-                                'Discard all'
-                              )
-                        }
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          props.requestDiscardAllInArea(area, discardAllPaths)
-                        }}
-                        disabled={props.isExecutingBulk}
-                      />
-                    )}
-                    {canStageAll && (
-                      <ActionButton
-                        icon={Plus}
-                        title={translate(
-                          'auto.components.right.sidebar.SourceControl.24d2598eff',
-                          'Stage all'
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void props.handleStageAllPaths(stageAllPaths)
-                        }}
-                        disabled={props.isExecutingBulk}
-                      />
-                    )}
-                    {canUnstageAll && (
-                      <ActionButton
-                        icon={Minus}
-                        title={translate(
-                          'auto.components.right.sidebar.SourceControl.9339382454',
-                          'Unstage all'
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void props.handleUnstagePaths(unstageAllPaths)
-                        }}
-                        disabled={props.isExecutingBulk}
-                      />
-                    )}
-                  </div>
+                <div className="flex items-center">
+                  {canRevertAll && (
+                    <ActionButton
+                      icon={area === 'untracked' ? Trash : Undo2}
+                      title={
+                        area === 'untracked'
+                          ? translate(
+                              'auto.components.right.sidebar.SourceControl.2f609a2e7c',
+                              'Delete all untracked'
+                            )
+                          : translate(
+                              'auto.components.right.sidebar.SourceControl.ce41708855',
+                              'Discard all'
+                            )
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        props.requestDiscardAllInArea(area, discardAllPaths)
+                      }}
+                      disabled={props.isExecutingBulk}
+                    />
+                  )}
+                  {canStageAll && (
+                    <ActionButton
+                      icon={Plus}
+                      title={translate(
+                        'auto.components.right.sidebar.SourceControl.24d2598eff',
+                        'Stage all'
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void props.handleStageAllPaths(stageAllPaths)
+                      }}
+                      disabled={props.isExecutingBulk}
+                    />
+                  )}
+                  {canUnstageAll && (
+                    <ActionButton
+                      icon={Minus}
+                      title={translate(
+                        'auto.components.right.sidebar.SourceControl.9339382454',
+                        'Unstage all'
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void props.handleUnstagePaths(unstageAllPaths)
+                      }}
+                      disabled={props.isExecutingBulk}
+                    />
+                  )}
                   {sectionViewAction ? (
                     <Button
                       type="button"
@@ -181,7 +179,7 @@ export function SourceControlUncommittedSections(props: {
                       )}
                     </Button>
                   ) : null}
-                </>
+                </div>
               }
             />
             {!isCollapsed && (

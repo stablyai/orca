@@ -1,3 +1,4 @@
+import { _resetPendingWorktreeRemovalsForTests } from '../worktree-background-removal'
 import { vi } from 'vitest'
 
 export type WorktreeRuntimeStub = {
@@ -18,10 +19,15 @@ export type WorktreeRuntimeStub = {
   closeFileWatchersForRemoval: ReturnType<typeof vi.fn>
   acquireFileWatcherRemoval: ReturnType<typeof vi.fn>
   hydrateInferredWorktreeLineage: ReturnType<typeof vi.fn>
+  publishWorktreeRemovalChange: ReturnType<typeof vi.fn>
 }
 
 /** Why: create-flow tests need a minimal runtime; full fetchRemoteWithCache behavior lives in fetch-remote-cache.test.ts. */
-export function createWorktreeRuntimeStub(): WorktreeRuntimeStub {
+export function createWorktreeRuntimeStub(mainWindow?: {
+  webContents: { send: (channel: string, ...args: unknown[]) => unknown }
+}): WorktreeRuntimeStub {
+  // Why here: every harness setup builds a stub, so no removal from an earlier test leaks in.
+  _resetPendingWorktreeRemovalsForTests()
   const runtimeStub: WorktreeRuntimeStub = {
     resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
     hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
@@ -48,7 +54,11 @@ export function createWorktreeRuntimeStub(): WorktreeRuntimeStub {
     notifyWorktreesChangedForRemoteClients: vi.fn(),
     closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
     acquireFileWatcherRemoval: vi.fn(),
-    hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined)
+    hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined),
+    // Mirrors the real runtime notifier, which sends worktrees:changed to the window.
+    publishWorktreeRemovalChange: vi.fn((repoId: string) => {
+      mainWindow?.webContents.send('worktrees:changed', { repoId })
+    })
   }
   runtimeStub.acquireFileWatcherRemoval.mockImplementation(
     async (worktreePath: string, connectionId?: string) => {

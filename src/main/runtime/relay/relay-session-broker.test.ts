@@ -90,6 +90,8 @@ vi.mock('../rpc/relay-transport', () => ({
 
 import { RelaySessionBroker, StaleRelayBrokerError } from './relay-session-broker'
 import { RelayHttpError } from './relay-http-client'
+import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
+import { RELAY_HOST_CLOSE_REASON } from '../../../shared/relay-host-close-reason'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -160,7 +162,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       appVersion: '1.0.0',
       mobileSocketWiring: { attachTransport: vi.fn(() => detachTransport) } as never,
       isCurrent: () => current,
-      refreshAccessToken: async () => null,
+      refreshAccessToken: async () => ({ accessToken: null }),
       onStatus: (status) => statuses.push(status)
     })
     await vi.waitFor(() => expect(fakes.controls).toHaveLength(1))
@@ -604,6 +606,68 @@ describe('RelaySessionBroker lifecycle ownership', () => {
   })
 })
 
+// The race the coordinator alone cannot cover: the broker's own renewal tick is
+// what first reads the lost session, so its close is the only one the cell sees.
+describe('RelaySessionBroker renewal close reason', () => {
+  const signedInContext: RelayAuthContext = {
+    identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
+    accessToken: 'access-token',
+    relayEntitled: true
+  }
+
+  beforeEach(() => {
+    fakes.controls.length = 0
+    fakes.transports.length = 0
+    fakes.controlConnect.mockReset().mockResolvedValue({
+      type: 'host-hello-ack',
+      v: 1,
+      generation: 1,
+      controlResumeSecret: 'A'.repeat(43),
+      leaseExpiresAt: 1_000_000,
+      activeConnIds: [],
+      pendingConns: []
+    } satisfies RelayHostHelloAckMessage)
+    // An already-spent lease makes the renewal tick fire on the next turn.
+    fakes.exchange.mockReset().mockResolvedValue({ relayToken: 'relay-jwt', expiresAt: 0 })
+    fakes.assign.mockReset().mockResolvedValue({
+      cellUrl: 'https://relay.example.test',
+      assignmentEpoch: 1,
+      leaseExpiresAt: 60_000
+    })
+  })
+
+  // Only the renewal's own read observes the loss; nothing reconciles the coordinator.
+  async function closeReasonAfterRenewalReads(
+    secondRead: RelayAuthContext | null
+  ): Promise<unknown[]> {
+    let reads = 0
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => (++reads === 1 ? signedInContext : secondRead),
+      openBroker: ({ context, isCurrent, refreshAccessToken }) =>
+        RelaySessionBroker.connect(
+          brokerOptions({ accessToken: context.accessToken, isCurrent, refreshAccessToken })
+        ),
+      onStatus: vi.fn()
+    })
+    coordinator.reconcile()
+    await vi.waitFor(() => expect(fakes.controls[0]?.closeNow).toHaveBeenCalled())
+    coordinator.stop()
+    return fakes.controls[0]!.closeNow.mock.calls[0]!
+  }
+
+  it('names the sign-out when its renewal reads the lost session first', async () => {
+    await expect(closeReasonAfterRenewalReads(null)).resolves.toEqual([
+      RELAY_HOST_CLOSE_REASON.SIGNED_OUT
+    ])
+  })
+
+  it('stays silent when its renewal finds the entitlement gone but the session alive', async () => {
+    await expect(
+      closeReasonAfterRenewalReads({ ...signedInContext, relayEntitled: false })
+    ).resolves.toEqual([undefined])
+  })
+})
+
 function brokerBasisIds(broker: RelaySessionBroker): string[] {
   const pool = (broker as unknown as { originPool: unknown }).originPool
   return [...(pool as { basisOrigins: Map<string, unknown> }).basisOrigins.keys()]
@@ -627,7 +691,7 @@ function brokerOptions(
     appVersion: '1.0.0',
     mobileSocketWiring: { attachTransport: vi.fn(() => () => {}) } as never,
     isCurrent: () => true,
-    refreshAccessToken: async () => null,
+    refreshAccessToken: async () => ({ accessToken: null }),
     onStatus: vi.fn(),
     now: () => 0,
     random: () => 0,

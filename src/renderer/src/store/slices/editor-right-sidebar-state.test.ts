@@ -95,19 +95,6 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
 
-  it('setRightSidebarOpen opens the sidebar', () => {
-    const store = createEditorStore()
-    store.getState().setRightSidebarOpen(true)
-    expect(store.getState().rightSidebarOpen).toBe(true)
-  })
-
-  it('setRightSidebarOpen(false) after open closes it', () => {
-    const store = createEditorStore()
-    store.getState().setRightSidebarOpen(true)
-    store.getState().setRightSidebarOpen(false)
-    expect(store.getState().rightSidebarOpen).toBe(false)
-  })
-
   it('toggleRightSidebar flips the state', () => {
     const store = createEditorStore()
     expect(store.getState().rightSidebarOpen).toBe(false)

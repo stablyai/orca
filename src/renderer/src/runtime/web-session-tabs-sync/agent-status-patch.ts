@@ -3,6 +3,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
 import { isWebTerminalSurfaceTabId, toWebTerminalSurfaceTabId } from '../web-runtime-session'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -14,6 +15,7 @@ import type {
 } from './state'
 import {
   isClientOwnedAgentStatus,
+  isMirroredAgentStatusOwnedBy,
   isFencedClientAgentStatus,
   hostAgentStatusPiercesClientAuthority,
   isMirroredAgentPaneKeyForTabs,
@@ -60,6 +62,9 @@ export function buildMirroredAgentStatusPatch(
   currentTerminalTabs: readonly TerminalTab[],
   terminalSurfaceTabs: readonly TerminalSurface[],
   mirroredTerminalTabs: readonly MirroredTerminalTab[],
+  environmentId: string,
+  worktreeId: string,
+  retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
 ): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
@@ -100,7 +105,13 @@ export function buildMirroredAgentStatusPatch(
     }
     const existing =
       nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey[hostEntry.paneKey]
-    const entry = withMirroredEvidenceReceipt(hostEntry, existing, now)
+    const entry = withMirroredEvidenceReceipt(
+      hostEntry.connectionId === undefined
+        ? { ...hostEntry, connectionId: environmentId }
+        : hostEntry,
+      existing,
+      now
+    )
     // Why: keep fresher OSC state while taking remapped ownership metadata from the authoritative host snapshot.
     const hostIdentityPredatesCurrentTurn =
       existing !== undefined &&
@@ -149,6 +160,15 @@ export function buildMirroredAgentStatusPatch(
 
   for (const paneKey of batchAgentPaneKeysForTabs(state, mirroredTabIds, batchContext)) {
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
+      continue
+    }
+    if (
+      !isMirroredAgentStatusOwnedBy(state.agentStatusByPaneKey[paneKey], environmentId, worktreeId)
+    ) {
+      continue
+    }
+    // The retirement sweep must see the live row to suppress ghost retention.
+    if (isMirroredAgentPaneKeyForTabs(paneKey, retractedTabIds)) {
       continue
     }
     if (nextByPaneKey.has(paneKey)) {
@@ -202,6 +222,9 @@ export function buildMirroredAgentStatusPatch(
       entry.state === 'done' &&
       agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
     const workingModeChanged = existing?.workingMode !== entry.workingMode
+    // A verdict moves no clock, including a main agent failing while its subagents keep the row working.
+    const verdictChanged =
+      !!existing && agentMainAgentVerdict(existing) !== agentMainAgentVerdict(entry)
     const entrySortRelevantChange =
       !existing ||
       existing.state !== entry.state ||
@@ -211,7 +234,7 @@ export function buildMirroredAgentStatusPatch(
       doneAttentionChanged ||
       isMirroredCommandCodeTurnBump(existing, entry)
     aggregateRelevantChange =
-      aggregateRelevantChange || entrySortRelevantChange || workingModeChanged
+      aggregateRelevantChange || entrySortRelevantChange || workingModeChanged || verdictChanged
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 

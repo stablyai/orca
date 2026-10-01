@@ -83,7 +83,7 @@ describe('buildDispatchPreamble', () => {
   )
 
   it('renders every injected lifecycle command on one cross-shell-safe line', () => {
-    const result = buildDispatchPreamble(baseParams({ dispatchCapability: 'dcap_secret' }))
+    const result = buildDispatchPreamble(baseParams())
     const commandLines = result
       .split('\n')
       .filter((line) => line.trimStart().startsWith('orca orchestration'))
@@ -142,21 +142,24 @@ describe('buildDispatchPreamble', () => {
     expect(result).toMatch(/orchestration send --from term_worker/)
   })
 
-  it('includes ask block with BEHAVIOR RULE #1 forbidding AskUserQuestion', () => {
+  it('includes ask block that steers questions away from AskUserQuestion', () => {
     const result = buildDispatchPreamble(baseParams())
     expect(result).toMatch(/orchestration ask --from term_worker/)
     expect(result).toContain('--question')
     expect(result).toContain('--timeout-ms 600000')
     expect(result).not.toContain('--type decision_gate')
     // Why: the exact phrase is asserted so the rule can't be trimmed away by
-    // accident. BEHAVIOR RULE #1 is the only place AskUserQuestion appears.
-    expect(result).toContain('BEHAVIOR RULE #1')
-    expect(result).toContain('NEVER use AskUserQuestion')
-    // AskUserQuestion must appear ONLY inside the rule text, not anywhere
-    // else (e.g., not in an example payload or header). Count occurrences
-    // of the exact token as a sanity check.
-    const occurrences = (result.match(/AskUserQuestion/g) ?? []).length
-    expect(occurrences).toBe(2)
+    // accident. The ask block is the only place AskUserQuestion appears.
+    expect(result).toContain('Use this instead of AskUserQuestion')
+    expect(result).toContain('Send every question through `ask`')
+    expect((result.match(/AskUserQuestion/g) ?? []).length).toBe(1)
+  })
+
+  it('avoids shouted rules', () => {
+    // Why: Claude workers cited shouted rules when refusing briefs as prompt injection (STA-8200).
+    expect(buildDispatchPreamble(baseParams())).not.toMatch(
+      /MUST NOT VIOLATE|BEHAVIOR RULE|NEVER use/
+    )
   })
 
   it('binds every injected worker command to the dispatched terminal', () => {
@@ -179,27 +182,14 @@ describe('buildDispatchPreamble', () => {
     expect(cadence).toContain('immediately before\n  # you send worker_done')
   })
 
-  it('carries the minted Dispatch capability on lifecycle and question commands', () => {
-    const result = buildDispatchPreamble({
-      ...baseParams(),
-      dispatchCapability: 'dcap_test_secret'
-    })
-
-    expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(4)
-    expect(result).not.toContain('"dispatchCapability"')
-  })
-
-  it('renders capability-bound worker_done and heartbeat recipes', () => {
-    const result = buildDispatchPreamble({
-      ...baseParams(),
-      dispatchCapability: 'dcap_test_secret'
-    })
+  it('renders worker_done and heartbeat recipes bound to the exact Dispatch', () => {
+    const result = buildDispatchPreamble(baseParams())
 
     expect(result).toMatch(
-      /orchestration send --from term_worker --dispatch-capability dcap_test_secret --type worker_done .*?--task-id task_abc123 --dispatch-id ctx_def456/u
+      /orchestration send --from term_worker --type worker_done .*?--task-id task_abc123 --dispatch-id ctx_def456/u
     )
     expect(result).toMatch(
-      /orchestration send --from term_worker --dispatch-capability dcap_test_secret --type heartbeat .*?--task-id task_abc123 --dispatch-id ctx_def456/u
+      /orchestration send --from term_worker --type heartbeat .*?--task-id task_abc123 --dispatch-id ctx_def456/u
     )
   })
 
@@ -260,12 +250,6 @@ describe('buildDispatchPreamble', () => {
     for (const fragment of fragments) {
       expect(fragment).not.toMatch(/orca orchestration/)
     }
-  })
-
-  it('uses orca CLI when devMode is false', () => {
-    const result = buildDispatchPreamble(baseParams({ devMode: false }))
-    expect(result).toContain('orca orchestration send')
-    expect(result).toContain('orca orchestration check')
   })
 
   it('uses the exact orca-ide command for packaged WSL workers', () => {

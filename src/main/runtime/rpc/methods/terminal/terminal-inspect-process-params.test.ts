@@ -6,10 +6,13 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { TERMINAL_QUERY_METHODS } from './terminal-query-methods'
 import { TerminalHandle, TerminalInspectProcess } from './unary-schemas'
+import { eraseRpcMethods } from '../../core'
 
 /** The method as registered, so a schema swap on the definition cannot pass unseen. */
 function inspectProcessMethod() {
-  const method = TERMINAL_QUERY_METHODS.find((entry) => entry.name === 'terminal.inspectProcess')
+  const method = eraseRpcMethods(TERMINAL_QUERY_METHODS).find(
+    (entry) => entry.name === 'terminal.inspectProcess'
+  )
   if (!method) {
     throw new Error('terminal.inspectProcess is not registered')
   }
@@ -25,7 +28,7 @@ async function callRegisteredHandler(
     foregroundProcess: null,
     hasChildProcesses: false
   }))
-  await method.handler(parsed, { runtime: { inspectTerminalProcess } } as never, undefined as never)
+  await method.handler(parsed, { runtime: { inspectTerminalProcess } } as never)
   const [terminal, options] = inspectTerminalProcess.mock.calls[0] as unknown as [string, unknown]
   return { terminal, options }
 }

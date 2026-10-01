@@ -13,7 +13,7 @@ function buildSession(overrides: Record<string, unknown> = {}): never {
     terminalRecoveryGeneration: 2,
     terminalRecoveryInstance: { id: 3 },
     directSshRetryAttempt: undefined,
-    settleDirectSshPaneRetryAttempt: vi.fn(),
+    settlePaneAttachAttempt: vi.fn(),
     ...overrides
   } as never
 }
@@ -37,24 +37,24 @@ describe('settleSpawnThatLeftPaneUnbound', () => {
 
   it('leaves recovery to the direct SSH retry ledger when it holds a lease', () => {
     const attempt = { attemptId: 'attempt-1' }
-    const settleDirectSshPaneRetryAttempt = vi.fn()
+    const settlePaneAttachAttempt = vi.fn()
 
     settleSpawnThatLeftPaneUnbound(
-      buildSession({ directSshRetryAttempt: attempt, settleDirectSshPaneRetryAttempt })
+      buildSession({ directSshRetryAttempt: attempt, settlePaneAttachAttempt })
     )
 
-    expect(settleDirectSshPaneRetryAttempt).toHaveBeenCalledExactlyOnceWith(attempt, 'failed')
+    expect(settlePaneAttachAttempt).toHaveBeenCalledExactlyOnceWith(attempt, 'failed')
     expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
   })
 
   it('settles the spawn as failed before remounting', () => {
-    const settleDirectSshPaneRetryAttempt = vi.fn()
+    const settlePaneAttachAttempt = vi.fn()
 
     settleSpawnThatLeftPaneUnbound(
-      buildSession({ deps: { tabId: 'tab-settle' }, settleDirectSshPaneRetryAttempt })
+      buildSession({ deps: { tabId: 'tab-settle' }, settlePaneAttachAttempt })
     )
 
-    expect(settleDirectSshPaneRetryAttempt).toHaveBeenCalledExactlyOnceWith(undefined, 'failed')
+    expect(settlePaneAttachAttempt).toHaveBeenCalledExactlyOnceWith(undefined, 'failed')
     expect(requestTerminalPaneRecovery).toHaveBeenCalledOnce()
   })
 

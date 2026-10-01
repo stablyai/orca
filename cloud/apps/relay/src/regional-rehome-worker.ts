@@ -1,4 +1,7 @@
-import { z } from 'zod'
+import {
+  IdleRegionalRehomeResponseSchema,
+  isGlobalIdleRegionalRehomeDeferral
+} from '@orca-cloud/relay-contract'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
@@ -20,13 +23,6 @@ export type RegionalRehomeWorker = {
   stop: () => void
 }
 
-const RegionalHostDrainResponseSchema = z
-  .object({
-    v: z.literal(1),
-    outcome: z.enum(['accepted', 'already-accepted', 'host-not-connected'])
-  })
-  .strict()
-
 export function startRegionalRehomeWorker(
   config: RelayConfig,
   assignments: RelayAssignmentStore,
@@ -42,7 +38,6 @@ export function startRegionalRehomeWorker(
   }
   const audience = config.rehomeAudience
   const safetySnapshot = options.safetySnapshot
-  const now = options.now ?? Date.now
   const fetchImpl = options.fetch ?? fetch
   const tokenProvider =
     options.identityToken ??
@@ -52,64 +47,76 @@ export function startRegionalRehomeWorker(
   const run = async (): Promise<void> => {
     if (stopped || inFlight) return
     inFlight = true
-    let attemptId: string | null = null
     try {
-      const processSafety = safetySnapshot()
-      const attempt = await assignments.claimRegionalRehome(processSafety)
-      if (!attempt) return
-      attemptId = attempt.attemptId
+      const candidates = await assignments.selectIdleRegionalRehomeCandidates(safetySnapshot())
+      if (candidates.length === 0) return
       const token = await tokenProvider(audience)
-      const response = await fetchImpl(
-        new URL('/v1/admin/host-drain', attempt.sourceCellUrl),
-        {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${token}`,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({
-            v: 1,
-            attemptId: attempt.attemptId,
-            userId: attempt.userId,
-            relayHostId: attempt.relayHostId,
-            sourceCellId: attempt.sourceCellId,
-            sourceCellIncarnation: attempt.sourceCellIncarnation,
-            sourceAssignmentEpoch: attempt.previousEpoch,
-            graceMs: attempt.drainGraceMs
-          }),
-          signal: AbortSignal.timeout(options.requestTimeoutMs ?? 10_000)
+      const outcomes: Record<string, number> = {}
+      const tally = (key: string) => {
+        outcomes[key] = (outcomes[key] ?? 0) + 1
+      }
+      let stoppedBy: string | null = null
+      for (const candidate of candidates) {
+        if (stopped) break
+        const { sourceCellUrl, ...request } = candidate
+        try {
+          const response = await fetchImpl(new URL('/v1/admin/host-idle-rehome', sourceCellUrl), {
+            method: 'POST',
+            headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+            body: JSON.stringify({
+              ...request,
+              cohortPercent: config.regionCorrectionCohortPercent ?? 0,
+              directorSafety: safetySnapshot()
+            }),
+            signal: AbortSignal.timeout(options.requestTimeoutMs ?? 10_000)
+          })
+          if (!response.ok) throw new Error(`regional_rehome_source_${response.status}`)
+          const body = IdleRegionalRehomeResponseSchema.parse(await response.json())
+          tally(body.reason ? `${body.outcome}:${body.reason}` : body.outcome)
+          if (body.outcome === 'committed') {
+            console.warn(
+              JSON.stringify({
+                event: 'orca_relay_idle_rehome_committed',
+                sourceCellId: candidate.sourceCellId,
+                targetCellId: candidate.targetCellId
+              })
+            )
+            stoppedBy = 'committed'
+            break
+          }
+          // Every remaining candidate would re-read the same durable row and
+          // answer the same way, so the rest of this page is wasted POSTs.
+          // A source on an older image sends no reason and keeps the old walk.
+          if (body.outcome === 'deferred' && isGlobalIdleRegionalRehomeDeferral(body.reason)) {
+            stoppedBy = body.reason
+            break
+          }
+        } catch (error) {
+          tally('failed')
+          // The source may have committed; its durable outcome owns recovery.
+          console.warn(
+            JSON.stringify({
+              event: 'orca_relay_idle_rehome_request_failed',
+              reason: error instanceof Error ? error.message : 'unknown'
+            })
+          )
         }
-      )
-      if (!response.ok) throw new Error(`regional_rehome_source_${response.status}`)
-      const body = RegionalHostDrainResponseSchema.safeParse(await response.json())
-      if (!body.success) throw new Error('regional_rehome_source_invalid_response')
-      await assignments.recordRegionalRehomeDrainReceipt(
-        attempt.attemptId,
-        body.data.outcome
-      )
+      }
+      // One line per poll that dispatched: silence used to be the only signal
+      // that 100+ candidates all came back deferred.
       console.warn(
         JSON.stringify({
-          event: 'orca_relay_regional_rehome_dispatched',
-          sourceCellId: attempt.sourceCellId,
-          targetCellId: attempt.targetCellId,
-          outcome: body.data.outcome,
-          sendAttempts: attempt.sendAttempts
+          event: 'orca_relay_idle_rehome_dispatch_summary',
+          candidates: candidates.length,
+          dispatched: Object.values(outcomes).reduce((total, count) => total + count, 0),
+          stoppedBy,
+          outcomes
         })
       )
     } catch (error) {
-      // Only a claimed attempt was drained. A poll that failed before the claim
-      // - a pool timeout on the once-a-second control read - dispatched nothing,
-      // so it must not spend the budget that latches the durable control off.
-      if (attemptId) {
-        await assignments
-          .recordRegionalRehomeDispatchFailure(attemptId)
-          .catch(() => undefined)
-      }
       console.warn(
         JSON.stringify({
-          event: attemptId
-            ? 'orca_relay_regional_rehome_dispatch_failed'
-            : 'orca_relay_regional_rehome_poll_failed',
+          event: 'orca_relay_regional_rehome_poll_failed',
           reason: error instanceof Error ? error.message : 'unknown'
         })
       )
@@ -119,7 +126,8 @@ export function startRegionalRehomeWorker(
   }
   const timer = setInterval(
     () => void run(),
-    options.intervalMs ?? jitteredSweepIntervalMs(1_000, options.random)
+    // Match the initial ten-moves/minute budget without replanning the join every second.
+    options.intervalMs ?? jitteredSweepIntervalMs(6_000, options.random)
   )
   timer.unref()
   void run()

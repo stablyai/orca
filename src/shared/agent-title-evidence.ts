@@ -165,7 +165,8 @@ function agentForBareName(text: string): TuiAgent | null {
   const stripped = stripBareNameDecoration(trimmed)
   // Why labels too: an agent may write its own display name as the entire title (`⠐ Claude Code`).
   // That is the same claim as a bare token, just spelled the way the vendor spells it.
-  const label = DISPLAY_LABELS.find(([text]) => text === stripped.toLowerCase())
+  const normalized = stripped.toLowerCase()
+  const label = DISPLAY_LABELS.find(([text]) => text === normalized)
   if (label) {
     return label[1]
   }
@@ -182,7 +183,8 @@ function agentForWholeTitle(text: string): TuiAgent | null {
     return null
   }
   const stripped = stripBareNameDecoration(trimmed)
-  const label = DISPLAY_LABELS.find(([text]) => text === stripped.toLowerCase())
+  const normalized = stripped.toLowerCase()
+  const label = DISPLAY_LABELS.find(([text]) => text === normalized)
   if (label) {
     return label[1]
   }
@@ -255,9 +257,8 @@ function namesConsumedByAnchoredLabels(
 ): Set<TuiAgent> {
   const consumed = new Set<TuiAgent>()
   for (const segment of segments) {
-    const label = DISPLAY_LABELS.find(
-      ([text]) => text === stripBareNameDecoration(segment).toLowerCase()
-    )
+    const normalized = stripBareNameDecoration(segment).toLowerCase()
+    const label = DISPLAY_LABELS.find(([text]) => text === normalized)
     if (label && anchoredNames.has(label[1])) {
       for (const name of namesIn(label[0])) {
         consumed.add(name)

@@ -5,7 +5,8 @@ import {
   FakeLogicalClient,
   FakeRelaySession,
   FakeSession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -27,7 +28,7 @@ describe('mobile endpoint supervisor direct probe', () => {
     const direct = new FakeSession('connecting')
     const openRelay = vi.fn(() => new FakeRelaySession('connected'))
     const deps = dependencies({ openDirect: vi.fn(() => direct), openRelay })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     // Foreground return: the probe dials direct at once, the dead LAN answers with

@@ -1,3 +1,4 @@
+import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { PtyTransport } from './pty-transport'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from './replay-guard'
@@ -65,6 +66,8 @@ export type PtyConnectionDeps = {
   /** Releases a deferred split's detach fence when its initial spawn yields no PTY. */
   onDeferredCwdSpawnFailed?: () => void
   startup?: PtyPaneStartup
+  /** The pane's previous PTY; main stops it before this connection's first fresh spawn. */
+  replacesPtyId?: string
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   /** Park intent sampled at render time, before the host disposes the tab's
@@ -107,8 +110,8 @@ export type PtyConnectionDeps = {
     directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
   ) => void
   markWorktreeUnread: (worktreeId: string) => void
-  markTerminalTabUnread: (tabId: string) => void
-  markTerminalPaneUnread: (paneKey: string) => void
+  markTerminalTabUnread: (tabId: string, reason: AgentAttentionUnreadReason) => void
+  markTerminalPaneUnread: (paneKey: string, reason: AgentAttentionUnreadReason) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
@@ -122,7 +125,6 @@ export type PtyConnectionDeps = {
     terminalTitle?: string
     paneKey?: string
     agentStatusSnapshot?: AgentCompletionStatusSnapshot
-    suppressOsNotification?: boolean
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void

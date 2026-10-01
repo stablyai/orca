@@ -1,4 +1,5 @@
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 export const PTY_PRECONNECT_INPUT_MAX_ENTRIES = 1024
 // Why: a retention budget, not the 16MB single-write ceiling. The deferral lasts
@@ -12,6 +13,7 @@ export type PtyPreconnectInputKind = 'ordinary' | 'immediate' | 'accepted'
 export type PtyPreconnectInputEntry = {
   data: string
   kind: PtyPreconnectInputKind
+  inputKind: TerminalInputKind
 }
 
 type BufferedInput = PtyPreconnectInputEntry & {
@@ -20,20 +22,23 @@ type BufferedInput = PtyPreconnectInputEntry & {
 
 type PreconnectInputWriter = {
   isCurrent: () => boolean
-  sendInput: (data: string) => boolean
+  sendInput: (data: string, inputKind: TerminalInputKind) => boolean
   sendInputImmediate: (data: string) => boolean
-  sendInputAccepted?: (data: string) => Promise<boolean>
+  sendInputAccepted?: (data: string, inputKind: TerminalInputKind) => Promise<boolean>
 }
 
 export type PtyPreconnectInputBuffer = {
   isBuffering: () => boolean
+  hasPendingInput: () => boolean
   enqueue: (
     data: string,
     kind: 'ordinary' | 'immediate',
+    inputKind: TerminalInputKind,
     onRetained?: (entry: PtyPreconnectInputEntry) => void
   ) => boolean
   enqueueAccepted: (
     data: string,
+    inputKind: TerminalInputKind,
     onRetained?: (entry: PtyPreconnectInputEntry) => void
   ) => Promise<boolean>
   flush: (writer: PreconnectInputWriter) => Promise<void>
@@ -70,14 +75,15 @@ export function createPtyPreconnectInputBuffer(
   const createInput = (
     data: string,
     kind: PtyPreconnectInputKind,
+    inputKind: TerminalInputKind,
     resolve?: BufferedInput['resolve']
-  ): BufferedInput => ({ data, kind, ...(resolve ? { resolve } : {}) })
+  ): BufferedInput => ({ data, kind, inputKind, ...(resolve ? { resolve } : {}) })
   const notifyRetained = (
     onRetained: ((entry: PtyPreconnectInputEntry) => void) | undefined,
     input: BufferedInput
   ): void => {
     try {
-      onRetained?.({ data: input.data, kind: input.kind })
+      onRetained?.({ data: input.data, kind: input.kind, inputKind: input.inputKind })
     } catch {
       // Handoff capture is advisory; a callback failure must not reject input admission.
     }
@@ -86,7 +92,7 @@ export function createPtyPreconnectInputBuffer(
   // Seeded entries came from a predecessor transport and must not be reported
   // back to that predecessor's handoff owner as newly typed input.
   for (const entry of initialEntries) {
-    retain(createInput(entry.data, entry.kind))
+    retain(createInput(entry.data, entry.kind, entry.inputKind))
   }
   const clear = (): void => {
     const dropped = pending
@@ -124,8 +130,8 @@ export function createPtyPreconnectInputBuffer(
             accepted = await Promise.race([
               Promise.resolve(
                 writer.sendInputAccepted
-                  ? writer.sendInputAccepted(input.data)
-                  : writer.sendInput(input.data)
+                  ? writer.sendInputAccepted(input.data, input.inputKind)
+                  : writer.sendInput(input.data, input.inputKind)
               ),
               flushStopped.then(() => null)
             ])
@@ -152,7 +158,7 @@ export function createPtyPreconnectInputBuffer(
         const accepted =
           input.kind === 'immediate'
             ? writer.sendInputImmediate(input.data)
-            : writer.sendInput(input.data)
+            : writer.sendInput(input.data, input.inputKind)
         if (!accepted) {
           clear()
           return
@@ -186,17 +192,18 @@ export function createPtyPreconnectInputBuffer(
 
   return {
     isBuffering: () => buffering,
-    enqueue(data, kind, onRetained) {
-      const input = createInput(data, kind)
+    hasPendingInput: () => pending.length > 0 || activeAcceptedInput !== null,
+    enqueue(data, kind, inputKind, onRetained) {
+      const input = createInput(data, kind, inputKind)
       const retained = retain(input)
       if (retained) {
         notifyRetained(onRetained, input)
       }
       return retained
     },
-    enqueueAccepted(data, onRetained) {
+    enqueueAccepted(data, inputKind, onRetained) {
       return new Promise<boolean>((resolve) => {
-        const input = createInput(data, 'accepted', resolve)
+        const input = createInput(data, 'accepted', inputKind, resolve)
         if (!retain(input)) {
           resolve(false)
           return

@@ -47,8 +47,8 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
       {/* Auth failed: a latched relay rejection must reach the same re-pair affordance. */}
       {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
         <AuthFailedBanner
-          canRetry={!!hostId}
-          onRetry={() => hostId && void forceReconnectHost(hostId)}
+          canRetry={!!hostId && forceReconnectHost !== null}
+          onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
           onRepair={() => router.push('/pair-scan')}
           onRemove={() => state.setConfirmRemoveHost(true)}
         />
@@ -70,6 +70,16 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         <HostRouteNoticeBanner
           message={routeNotice}
           onDismiss={() => setDismissedNotice(noticeParam ?? null)}
+        />
+      )}
+
+      {/* An action that did not happen. Above the list and dismissible, because the list, the
+          header and the confirm it re-opens all have to stay on screen. */}
+      {state.actionError !== '' && (
+        <HostRouteNoticeBanner
+          message={state.actionError}
+          tone="failure"
+          onDismiss={() => state.setActionError('')}
         />
       )}
 

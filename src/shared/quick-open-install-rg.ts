@@ -75,23 +75,16 @@ function readOsReleaseValue(rawValue: string): string {
     : trimmed
 }
 
-export async function buildInstallRgMessage(
-  cause: unknown,
-  host: 'local' | 'remote' = 'local'
-): Promise<string> {
+// Why remote-only: the local side always has Orca's bundled rg, so only a remote host an upload
+// never reached can still fall back to the capped git/readdir listing these messages explain.
+export async function buildInstallRgMessage(cause: unknown): Promise<string> {
   const reason = cause instanceof Error ? cause.message : String(cause)
-  const cmd = await detectInstallCommand()
-  const location = host === 'local' ? 'on the host running the Quick Open scan' : 'on the remote'
   return (
     `Quick Open scan too large (${reason}). ` +
-    `Install ripgrep ${location} to enable fast, gitignore-aware listing: ${cmd}`
+    `Install ripgrep on the remote to enable fast, gitignore-aware listing: ${await detectInstallCommand()}`
   )
 }
 
-export async function buildRipgrepRequiredMessage(
-  host: 'local' | 'remote' = 'local'
-): Promise<string> {
-  const cmd = await detectInstallCommand()
-  const location = host === 'local' ? 'on the host running Quick Open' : 'on the remote'
-  return `Quick Open search requires ripgrep ${location} to stay resource-bounded. Install it with: ${cmd}`
+export async function buildRipgrepRequiredMessage(): Promise<string> {
+  return `Quick Open search requires ripgrep on the remote to stay resource-bounded. Install it with: ${await detectInstallCommand()}`
 }

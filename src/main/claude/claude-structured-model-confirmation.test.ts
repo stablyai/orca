@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
-import { PROVIDER_SESSION_ID, acquired, fakeClaude } from './claude-structured-session-test-support'
+import {
+  PROVIDER_SESSION_ID,
+  USER_MESSAGE,
+  acquired,
+  fakeClaude
+} from './claude-structured-session-test-support'
 
 /** Verbatim rows from Claude Code 2.1.258's list_models response. */
 const CATALOG = [
@@ -147,6 +152,13 @@ describe('Claude model confirmation', () => {
       routes: { list_models: () => CATALOG }
     })
     const adapter = await acquired(claude)
+    // The model is confirmed by a cycle's init frame, so start one.
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'seed-cycle',
+      body: USER_MESSAGE,
+      fence: 7
+    })
 
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'high', fence: 7 })
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
@@ -168,6 +180,7 @@ describe('Claude effort the settings readback cannot report', () => {
     calls: string[] = []
   ): { session: ClaudeSession; calls: string[] } {
     return {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every session member the option paths under test read.
       session: {
         options: new Map<string, string>([['model', 'sonnet']]),
         reportedOptions: {},
@@ -189,7 +202,8 @@ describe('Claude effort the settings readback cannot report', () => {
               sources: {}
             }
           }
-        }
+        },
+        startup: { state: 'proven' }
       } as unknown as ClaudeSession,
       calls
     }

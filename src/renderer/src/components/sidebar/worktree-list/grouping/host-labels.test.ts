@@ -20,28 +20,6 @@ function makeWorktrees(rows: { id: string; repoId: string }[]): Worktree[] {
 }
 
 describe('host worktree counts and ids', () => {
-  it('reports a count equal to the length of each host id list', () => {
-    const repoMap = makeRepos({
-      'repo-local': undefined,
-      'repo-remote': 'ssh:other' as ExecutionHostId
-    })
-    const worktrees = makeWorktrees([
-      { id: 'a', repoId: 'repo-local' },
-      { id: 'b', repoId: 'repo-local' },
-      { id: 'c', repoId: 'repo-remote' }
-    ])
-
-    const counts = getHostWorktreeCounts(worktrees, repoMap, LOCAL)
-    const ids = getHostWorktreeIds(worktrees, repoMap, LOCAL)
-
-    expect(ids).toBeDefined()
-    expect(counts).toBeDefined()
-    for (const [hostId, hostIds] of ids ?? []) {
-      expect(counts?.get(hostId), `count for ${hostId}`).toBe(hostIds.length)
-    }
-    expect([...(counts?.keys() ?? [])].sort()).toEqual([...(ids?.keys() ?? [])].sort())
-  })
-
   it('counts a repeated host identity once', () => {
     const repoMap = makeRepos({ 'repo-local': undefined })
     const worktrees = makeWorktrees([

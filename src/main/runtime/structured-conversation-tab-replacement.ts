@@ -1,3 +1,4 @@
+import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
 
@@ -30,7 +31,7 @@ export function replaceConversationInSnapshot(
               id,
               sessionId: replacement.sessionId,
               agent: replacement.agent,
-              title: replacement.agent === 'claude' ? 'Claude Chat' : 'Codex Chat',
+              title: defaultAgentChatLabel(replacement.agent),
               replacesSessionId: replacement.sourceSessionId
             }
           : tab

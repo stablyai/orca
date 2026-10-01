@@ -36,11 +36,11 @@ export function useNativeChatComposerRevealFocus({
   const claimedRef = useRef(false)
 
   useEffect(() => {
-    if (!revealed) {
+    if (!revealed || !composerReady) {
       claimedRef.current = false
       return
     }
-    if (claimedRef.current || !composerReady) {
+    if (claimedRef.current) {
       return
     }
     let cancelled = false

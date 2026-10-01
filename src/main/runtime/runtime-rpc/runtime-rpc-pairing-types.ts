@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { RpcAnyMethod } from '../rpc/core'
+import type { RpcAnyMethodDeclaration } from '../rpc/core'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketTransportMetadata } from '../rpc/mobile-socket-wiring'
@@ -36,6 +36,8 @@ export type OrcaRuntimeRpcServerOptions = {
   wsPort?: number
   // Why: true when the caller pinned a port (`orca serve --port`) so bind order prefers it over a stale STA-1511 fallback (#8535).
   preferPinnedWsPort?: boolean
+  // Why: a managed SSH tunnel forwards exactly this port, so a fallback bind must fail startup instead.
+  requirePinnedWsPort?: boolean
   // Why: STA-2370 — bind the WS listener to all interfaces at startup instead of loopback-until-paired.
   // Only `orca serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
   exposeNetworkByDefault?: boolean
@@ -56,7 +58,7 @@ export type OrcaRuntimeRpcServerOptions = {
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
   // Why: tests may inject inert protocol stages before production authorization registers them.
-  methods?: readonly RpcAnyMethod[]
+  methods?: readonly RpcAnyMethodDeclaration[]
 }
 
 export type PairingOfferUnavailableReason =

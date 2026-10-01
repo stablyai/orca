@@ -143,6 +143,34 @@ describe('hosted review RPC methods', () => {
     })
   })
 
+  it('refuses a provider token this build cannot create with, on both create methods', async () => {
+    // The params schema is open because the token is the host's own and a client repeats back what
+    // a newer host named. A build that does not know the arm has to answer, not reject the params.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the refusal is answered before the dispatcher reads the runtime, and asserting neither creator ran is what proves it; the interface has 1047 members and no narrower stand-in exists.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createHostedReview: vi.fn(),
+      createStackedHostedReview: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+    const create = {
+      repo: 'repo-1',
+      provider: 'codeberg',
+      base: 'main',
+      title: 'Create PR'
+    }
+
+    for (const method of ['hostedReview.create', 'hostedReview.createStacked']) {
+      const response = await dispatcher.dispatch(makeRequest(method, create))
+      expect(response).toMatchObject({
+        ok: true,
+        result: { ok: false, code: 'unsupported_provider' }
+      })
+    }
+    expect(runtime.createHostedReview).not.toHaveBeenCalled()
+    expect(runtime.createStackedHostedReview).not.toHaveBeenCalled()
+  })
+
   it('dispatches create requests to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

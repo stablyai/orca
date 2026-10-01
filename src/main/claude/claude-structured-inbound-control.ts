@@ -1,25 +1,10 @@
 import type { CanUseTool, OnUserDialog, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
-
-export const CLAUDE_CAN_USE_TOOL_SUBTYPE = 'can_use_tool'
-export const CLAUDE_REQUEST_USER_DIALOG_SUBTYPE = 'request_user_dialog'
-
-/**
- * The blocking control requests Orca answers, each mapped to the SDK consumer callback that
- * answers it. This is the stable surface a real turn can block on: `can_use_tool` through
- * `canUseTool` and `request_user_dialog` through `onUserDialog`. Every other control-request
- * subtype the SDK routes (elicitation, oauth/host token refresh, mcp_message, hook_callback)
- * is either not surfaced to this consumer or fails closed inside the SDK; adding a new
- * blocking control Orca must answer means adding its callback here, and the catalog test
- * fails if a named callback is missing.
- */
-export const CLAUDE_BLOCKING_CONTROL_CALLBACKS = {
-  [CLAUDE_CAN_USE_TOOL_SUBTYPE]: 'canUseTool',
-  [CLAUDE_REQUEST_USER_DIALOG_SUBTYPE]: 'onUserDialog'
-} as const
-
-export type ClaudeBlockingControlSubtype = keyof typeof CLAUDE_BLOCKING_CONTROL_CALLBACKS
+import {
+  claudePermissionPresentation,
+  claudePermissionSubject
+} from './claude-permission-presentation'
 
 export type ClaudePermissionCallbackDeps = {
   sessionId: string
@@ -36,7 +21,7 @@ function denySafeResult(toolUseId: string | undefined): PermissionResult {
 }
 
 /**
- * Build the SDK permission callbacks from the durable prompt registry.
+ * Build the SDK permission callbacks from the session-local prompt registry.
  *
  * A decodable `can_use_tool` becomes a durable prompt whose `settle` resolves this callback;
  * a malformed one is denied without registering. The SDK's abort signal fires on
@@ -51,19 +36,28 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
 } {
   const canUseTool: CanUseTool = (toolName, input, options) =>
     new Promise<PermissionResult | null>((resolve) => {
+      let cancel = (): void => {}
+      const settle = (response: PermissionResult | null): void => {
+        options.signal.removeEventListener('abort', cancel)
+        resolve(response)
+      }
+      // Classify first so later permission-mode policy cannot swallow a plan proposal.
+      const subject = claudePermissionSubject(toolName, input)
       const prompt = deps.prompts.register({
+        ...claudePermissionPresentation(options),
+        ...(subject ? { subject } : {}),
         requestId: options.requestId,
         toolName,
         toolUseId: options.toolUseID,
         input,
         suggestions: options.suggestions ?? [],
-        settle: resolve as (response: Record<string, unknown> | null) => void
+        settle
       })
       if (!prompt) {
-        resolve(denySafeResult(options.toolUseID))
+        settle(denySafeResult(options.toolUseID))
         return
       }
-      const cancel = (): void => {
+      cancel = (): void => {
         if (deps.prompts.forgetIfPending(prompt)) {
           deps.emit({
             type: 'prompt-cancelled',
@@ -72,7 +66,7 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
           })
           // Null is the SDK's "no response written" sentinel: a cancelled request must not
           // be answered, only forgotten.
-          resolve(null)
+          settle(null)
         }
       }
       if (options.signal.aborted) {

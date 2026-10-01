@@ -9,28 +9,29 @@
  *
  * Coordinators are in scope here, unlike the PTY lane's reasoning: a PTY coordinator blocks in
  * `check --wait`, where a waiter preempts pointer delivery, but a structured coordinator is a chat
- * session whose turn ends — so nothing else would ever wake it for its own `run:` mail.
+ * session whose turn ends — so nothing else would ever prompt it for its own `run:` mail.
  */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
+import type { OrchestrationCliCommand } from './cli-command'
 import {
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
-import { resolveStructuredPointerOperation } from './structured-pointer-operation-id'
 import {
-  decideStructuredPointerDelivery,
+  resolveStructuredPointerOperation,
+  type StructuredPointerSubmission
+} from './structured-pointer-operation-id'
+import {
   decideStructuredSessionPointerDelivery,
   retainReasonForDispatch,
-  retainWaitsForJournalEdge,
   structuredDispatchDelivered,
   type StructuredDispatchState,
   type StructuredPointerRetainReason,
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
-import type { AgentSessionPtyWriteRefusal } from '../../../shared/agent-session-pty-write-admission'
 
 export type StructuredPointerTarget = {
   sessionId: string
@@ -40,8 +41,6 @@ export type StructuredPointerTarget = {
    * the operation-ledger budget — so a worker between dispatches is nudged, not dropped.
    */
   dispatchId: string | null
-  /** Present only for an adopted pane, where a PTY write was refused in favour of this owner. */
-  refusal?: AgentSessionPtyWriteRefusal
 }
 
 type ParkedPointerDelivery = {
@@ -53,9 +52,14 @@ export type StructuredPointerSendOutcome =
   | { kind: 'sent'; state: StructuredDispatchState }
   | { kind: 'unattached' }
 
+export type StructuredPointerGateFacts = StructuredSessionGateFacts & {
+  /** Every send the session recorded, oldest first: what the lane's own sends settled as. */
+  submissions: readonly StructuredPointerSubmission[]
+}
+
 export type StructuredMailboxPointerHost = {
-  /** The idle gate, read off the session's full reduced timeline; `null` when it is not attached. */
-  readGateFacts: (sessionId: string) => StructuredSessionGateFacts | null
+  /** The idle gate, read off the session's full reduced timeline; `null` when it cannot be read. */
+  readGateFacts: (sessionId: string) => Promise<StructuredPointerGateFacts | null>
   send: (input: {
     sessionId: string
     dispatchId: string | null
@@ -74,14 +78,12 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
   /**
    * The session a mailbox must be nudged through, or null when a live PTY can take the bytes.
    *
-   * Two shapes reach here. A NATIVE-BORN worker carries no refusal: it never had a PTY. An
-   * ADOPTED one does — its pane is bound to a session a native owner holds, so the PTY write is
-   * refused and the refusal is what proves the owner is settled enough to redirect to.
-   *
    * The mailbox is a `dispatch:` address or the worker's own bearer handle; the second is how
    * agents mail each other outside a dispatch, and no other lane can serve it.
    */
   resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
+  /** The CLI name the PTY lane types for a local agent, so both lanes send the same pointer. */
+  getCliCommand: () => OrchestrationCliCommand
   host: StructuredMailboxPointerHost
   onRetain?: (input: {
     mailboxHandle: string
@@ -104,6 +106,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
    * edge until the next explicit check.
    */
   private readonly parkedUntilJournalEdge = new Map<string, ParkedPointerDelivery>()
+  /** The operation id this lane last sent per mailbox: a row holding any other id outlived the
+   *  process that minted it. A fact, not a clock reading, so no clock step can fake it. */
+  private readonly sentOperationIds = new Map<string, string>()
 
   constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {}
 
@@ -185,6 +190,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     }
   }
 
+  // A session whose agent is not running needs nothing first: an accepted send starts it.
   private async attempt(
     db: OrchestrationDb,
     mailboxHandle: string,
@@ -193,16 +199,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     reservedTypes: ReadonlySet<string> | undefined
   ): Promise<void> {
     const sessionId = target.sessionId
-    const session = this.deps.host.readGateFacts(sessionId)
-    // `target.refusal` is the snapshot the resolver already admitted, so this branch re-runs the
-    // owner test on frozen input and can only agree with it. What actually fences an owner that
-    // changed since resolution is `expectedRuntimeFence` below: a handoff bumps the lease fence,
-    // so the send is refused rather than landing in a lease on its way back to a TUI. The branch
-    // stays because the policy module is the one place that decides, and a later caller may pass
-    // an owner it did not pre-screen.
-    const decision = target.refusal
-      ? decideStructuredPointerDelivery({ session, refusal: target.refusal })
-      : decideStructuredSessionPointerDelivery({ session })
+    const session = await this.deps.host.readGateFacts(sessionId)
+    const decision = decideStructuredSessionPointerDelivery({ session })
     if (!decision.deliver) {
       this.retain(mailboxHandle, sessionId, decision.retain, reservedTypes)
       return
@@ -215,7 +213,12 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     const body: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
-      blocks: [{ type: 'text', text: formatMessagePointer(unread.length, mailboxHandle).trim() }]
+      blocks: [
+        {
+          type: 'text',
+          text: formatMessagePointer(unread.length, mailboxHandle, this.deps.getCliCommand()).trim()
+        }
+      ]
     }
     const staged = unread.map((message) => message.id)
     const operation = resolveStructuredPointerOperation({
@@ -223,8 +226,22 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       mailboxHandle,
       sessionId,
       body,
-      messageIds: staged
+      messageIds: staged,
+      submissions: session?.submissions ?? [],
+      sentByThisProcess: this.sentOperationIds.get(mailboxHandle)
     })
+    if (operation.kind === 'stamp') {
+      // A send this lane gave up waiting on ran after all.
+      db.markAsDelivered(staged)
+      db.deleteStructuredPointerOperation(mailboxHandle)
+      this.sentOperationIds.delete(mailboxHandle)
+      return
+    }
+    if (operation.kind === 'park') {
+      this.retain(mailboxHandle, sessionId, 'turn-unsettled', reservedTypes)
+      return
+    }
+    this.sentOperationIds.set(mailboxHandle, operation.operationId)
     const outcome = await this.deps.host.send({
       sessionId,
       dispatchId: target.dispatchId,
@@ -238,21 +255,25 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       return
     }
     if (!structuredDispatchDelivered(outcome.state)) {
-      this.retain(
-        mailboxHandle,
-        sessionId,
-        retainReasonForDispatch(outcome.state as Exclude<StructuredDispatchState, 'accepted'>),
-        reservedTypes
-      )
+      // The row stays: resending under its id replays this verdict and starts nothing.
+      this.retain(mailboxHandle, sessionId, retainReasonForDispatch(outcome.state), reservedTypes)
       return
     }
     db.markAsDelivered(staged)
     // The nudge landed as its own turn, so the next settle edge is the natural retry point for
     // anything that arrives while it runs.
     db.deleteStructuredPointerOperation(mailboxHandle)
+    this.sentOperationIds.delete(mailboxHandle)
   }
 
-  /** No `markAsUndelivered` is owed: rows are marked delivered only after an accepted dispatch. */
+  /**
+   * No `markAsUndelivered` is owed: rows are marked delivered only after an accepted dispatch.
+   *
+   * Every reason parks for the session's next journal edge. `unknown` may mean the nudge already
+   * sits in the provider's input queue, so an immediate retry can stack duplicate nudges;
+   * `session-not-attached` and `dispatch-rejected` park because nothing else notices the re-attach
+   * or the moved lease, and the dispatch preamble tells workers not to poll.
+   */
   private retain(
     mailboxHandle: string,
     sessionId: string,
@@ -260,8 +281,6 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     reservedTypes: ReadonlySet<string> | undefined
   ): void {
     this.deps.onRetain?.({ mailboxHandle, sessionId, reason })
-    if (retainWaitsForJournalEdge(reason)) {
-      this.parkedUntilJournalEdge.set(mailboxHandle, { sessionId, reservedTypes })
-    }
+    this.parkedUntilJournalEdge.set(mailboxHandle, { sessionId, reservedTypes })
   }
 }

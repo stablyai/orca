@@ -55,8 +55,14 @@ it.each([
   const adapter = adapterFor(claude)
   try {
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const described = commands[0]?.description
     expect(adapter.readCommands('session-1')).toEqual(
-      commands.map(({ name }) => ({ name, kind: 'command', kindUnspecified: true }))
+      commands.map(({ name, description }) => ({
+        name,
+        kind: 'command',
+        kindUnspecified: true,
+        ...(description ? { description } : {})
+      }))
     )
     expect(claude.connections[0].sent).toEqual([])
     expect(claude.connections[0].calls.map(({ subtype }) => subtype)).toEqual([
@@ -70,7 +76,10 @@ it.each([
       slash_commands: ['project:check'],
       skills: ['project:check']
     })
-    expect(adapter.readCommands('session-1')).toEqual([{ name: 'project:check', kind: 'skill' }])
+    // The stream init classifies the name; the control seed's text survives it.
+    expect(adapter.readCommands('session-1')).toEqual([
+      { name: 'project:check', kind: 'skill', ...(described ? { description: described } : {}) }
+    ])
   } finally {
     await adapter.closeSession('session-1')
   }

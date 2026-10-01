@@ -1,3 +1,4 @@
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import type { WebContents } from 'electron'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import { isWatcherRemovalInProgressError } from './watcher-removal-gate'
@@ -8,7 +9,10 @@ import {
   watcherLifecycleState
 } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
-import { clearRemoteWatcherResync } from './filesystem-watcher-listener-lifecycle'
+import {
+  clearRemoteWatcherResync,
+  registerWatcherSenderCleanup
+} from './filesystem-watcher-listener-lifecycle'
 import { isCurrentDesiredRemoteWatcher } from './filesystem-watcher-remote-desired'
 
 export type InstallRemoteWatcher = (
@@ -44,6 +48,9 @@ export function scheduleRemoteWatcherRetryCore(
   resyncOnInstall = false
 ): void {
   const key = getRemoteWatcherKey(connectionId, worktreePath)
+  if (watcherLifecycleState.remoteWatchersClosed || !isCurrentDesiredRemoteWatcher(key, sender)) {
+    return
+  }
   const existingRetry = watcherLifecycleState.pendingRemoteWatcherRetryListeners.get(key)
   if (existingRetry) {
     if (!sender.isDestroyed()) {
@@ -89,15 +96,24 @@ export function scheduleRemoteWatcherRetryCore(
     const listeners = Array.from(retry.listeners.values()).filter(
       (listener) => !listener.isDestroyed() && isCurrentDesiredRemoteWatcher(key, listener)
     )
+    const signals = listeners.map(registerWatcherSenderCleanup)
+    const liveListeners = () =>
+      listeners.filter((listener, index) => isCurrentWatcherSender(listener, signals[index]))
     void Promise.all(
       listeners.map((listener) => dependencies.install(listener, connectionId, worktreePath))
     )
       .then((results) => {
+        if (liveListeners().length === 0) {
+          return
+        }
         if (retry.resyncOnInstall) {
           dependencies.requestResync(
             key,
             worktreePath,
-            listeners.filter((_, index) => results[index] === 'installed')
+            listeners.filter(
+              (listener, index) =>
+                results[index] === 'installed' && isCurrentWatcherSender(listener, signals[index])
+            )
           )
         }
         // Why capacity leaves the fast window: the relay is refusing on a full watch-root cap, and a
@@ -108,7 +124,7 @@ export function scheduleRemoteWatcherRetryCore(
         }
         // Why: don't re-arm on 'cancelled' (renderer stopped watching) — it would fire a stale overflow when the 60s window expires.
         if (results.some((result) => result === 'unavailable')) {
-          for (const listener of listeners) {
+          for (const listener of liveListeners()) {
             scheduleRemoteWatcherRetryCore(
               listener,
               connectionId,
@@ -124,7 +140,7 @@ export function scheduleRemoteWatcherRetryCore(
         if (isWatcherRemovalInProgressError(error)) {
           return
         }
-        for (const listener of listeners) {
+        for (const listener of liveListeners()) {
           scheduleRemoteWatcherRetryCore(
             listener,
             connectionId,

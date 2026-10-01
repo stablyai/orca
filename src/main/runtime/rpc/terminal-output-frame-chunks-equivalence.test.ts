@@ -132,10 +132,10 @@ function* legacyIterateTerminalOutputFrameChunks(
   }
 }
 
-type FrameShape = { base64: string; seq: number | 'undefined'; opcode: number | 'undefined' }
+type FrameSummary = { base64: string; seq: number | 'undefined'; opcode: number | 'undefined' }
 
-function describeFrames(frames: Iterable<TerminalOutputFrameChunk>): FrameShape[] {
-  const out: FrameShape[] = []
+function describeFrames(frames: Iterable<TerminalOutputFrameChunk>): FrameSummary[] {
+  const out: FrameSummary[] = []
   for (const frame of frames) {
     out.push({
       base64: Buffer.from(frame.bytes).toString('base64'),
@@ -170,10 +170,10 @@ const SURROGATE_EDGES = [
   '\udfff\udc00'
 ]
 
-// Meta shapes exercised against every fixture: no meta, seq-preserved (rawLength ===
+// Meta variants exercised against every fixture: no meta, seq-preserved (rawLength ===
 // data.length), the delayed-final-seq path (rawLength !== data.length -> OutputSpan),
 // transformed, and cwd-only.
-function metaShapesFor(data: string): { label: string; meta: TerminalOutputMeta | undefined }[] {
+function metaVariantsFor(data: string): { label: string; meta: TerminalOutputMeta | undefined }[] {
   return [
     { label: 'no-meta', meta: undefined },
     { label: 'seq-only', meta: { seq: 5_000_000 } },
@@ -187,8 +187,8 @@ function metaShapesFor(data: string): { label: string; meta: TerminalOutputMeta 
 }
 
 function sweepAll(data: string, label: string): void {
-  for (const shape of metaShapesFor(data)) {
-    expectEquivalent(data, shape.meta, `${label} [${shape.label}]`)
+  for (const variant of metaVariantsFor(data)) {
+    expectEquivalent(data, variant.meta, `${label} [${variant.label}]`)
   }
 }
 

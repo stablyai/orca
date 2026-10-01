@@ -42,9 +42,8 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
     browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
   },
   getSession: (partition) => session.fromPartition(partition),
-  setupPolicies: ({ partition, browserProfileId }) => {
-    browserSessionRegistry.setupRoutePartitionPolicies(partition, browserProfileId)
-  },
+  setupPolicies: ({ partition, browserProfileId }) =>
+    browserSessionRegistry.setupRoutePartitionPolicies(partition, browserProfileId),
   clearPolicies: ({ partition }) => {
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
   },

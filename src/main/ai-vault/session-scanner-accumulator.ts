@@ -23,7 +23,11 @@ import {
   normalizePreviewText,
   timestampMs
 } from './session-scanner-values'
-import { NO_TRANSCRIPT_MESSAGES, type TranscriptMessageSink } from './session-transcript-consumers'
+import {
+  NO_TRANSCRIPT_MESSAGES,
+  type TranscriptMessageSink,
+  type TranscriptSessionIdentity
+} from './session-transcript-consumers'
 import {
   boundedText,
   transcriptMessageRole,
@@ -60,7 +64,30 @@ export function createAccumulator(args: {
     lastUserPrompt: null,
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
+    earliestTimestampMs: 0,
     latestTimestampMs: 0
+  }
+}
+
+/**
+ * The session identity a fold holds right now. Null until it has an id, which
+ * every supported format writes in the opening lines of the transcript.
+ */
+export function accumulatorSessionIdentity(
+  accumulator: SessionAccumulator
+): TranscriptSessionIdentity | null {
+  const sessionId = accumulator.sessionId.trim()
+  if (!sessionId) {
+    return null
+  }
+  return {
+    sessionId,
+    cwd: accumulator.cwd,
+    // The generated fallback is `finalizeSession`'s, not this one's: a title
+    // that is still absent mid-read is better said to be absent.
+    title: accumulator.title ?? accumulator.fallbackTitle,
+    createdAt: accumulator.createdAt,
+    updatedAt: accumulator.updatedAt
   }
 }
 
@@ -77,6 +104,7 @@ export function accumulatorFoldResumeState(
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => consumeRecordLine(accumulator, line),
+    identity: () => accumulatorSessionIdentity(accumulator),
     clone: () =>
       accumulatorFoldResumeState(cloneSessionAccumulator(accumulator), consumeRecordLine),
     touchFile: (file) => {
@@ -164,10 +192,12 @@ export function updateTimeline(accumulator: SessionAccumulator, timestamp: unkno
     return
   }
   const iso = new Date(parsed).toISOString()
-  if (!accumulator.createdAt || parsed < Date.parse(accumulator.createdAt)) {
+  if (!accumulator.createdAt || parsed < accumulator.earliestTimestampMs) {
     accumulator.createdAt = iso
+    accumulator.earliestTimestampMs = Math.trunc(parsed)
   }
-  if (!accumulator.updatedAt || parsed >= Date.parse(accumulator.updatedAt)) {
+  // ISO serialization truncates fractional milliseconds; latestTimestampMs retains them.
+  if (!accumulator.updatedAt || parsed >= Math.trunc(accumulator.latestTimestampMs)) {
     accumulator.updatedAt = iso
     accumulator.latestTimestampMs = parsed
   }

@@ -26,16 +26,8 @@ vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
-  '../ipc/rg-availability',
-  async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
-)
-vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
-)
-vi.mock(
-  '../ipc/filesystem-search-git',
-  async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
@@ -64,6 +56,7 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       true,
+      undefined,
       undefined
     )
     expect(result).toEqual({
@@ -86,6 +79,7 @@ describe('RuntimeFileCommands', () => {
       'wt-1',
       '/repo/docs/readme.md',
       'docs/readme.md',
+      undefined,
       undefined
     )
     expect(result).toEqual({
@@ -108,6 +102,7 @@ describe('RuntimeFileCommands', () => {
       'wt-1',
       '/repo/assets/logo.png',
       'assets/logo.png',
+      undefined,
       undefined
     )
     expect(result).toEqual({
@@ -116,6 +111,33 @@ describe('RuntimeFileCommands', () => {
       kind: 'image',
       opened: true
     })
+  })
+
+  it('passes the caller navigation target to the renderer host', async () => {
+    const openFile = vi.fn()
+    const openDiff = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile, openDiff })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/docs/readme.md')
+    statMock.mockResolvedValue({ isDirectory: () => false })
+
+    await commands.openMobileFile('id:wt-1', 'docs/readme.md', 'all')
+    await commands.openMobileDiff('id:wt-1', 'docs/readme.md', false, 'host')
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      undefined,
+      'all'
+    )
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      false,
+      undefined,
+      'host'
+    )
   })
 
   it('leaves non-previewable binaries unavailable on mobile', async () => {

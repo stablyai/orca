@@ -2,13 +2,32 @@ import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { requireSameEvidenceCode } from './relay-evidence-code-provenance.mjs'
 
+// Migration-only by policy: zero hosts and no reservation, so a wave rolls one without
+// displacing anybody. It enters and must leave migration-only, never general.
+// C32 and C33 stay here until each one's canary promotes it; that follow-up moves it to general.
+export const SAME_CAP_MIGRATION_ONLY_CELLS = [
+  'production-gce-c17', 'production-gce-c18', 'production-gce-c32', 'production-gce-c33'
+]
+
 export const SAME_CAP_CELLS = [
   'production-gce-c7', 'production-gce-c8', 'production-gce-c9', 'production-gce-c10',
   'production-gce-c13', 'production-gce-c14', 'production-gce-c15', 'production-gce-c16',
   'production-gce-c19', 'production-gce-c20', 'production-gce-c21', 'production-gce-c22',
   'production-gce-c23', 'production-gce-c24', 'production-gce-c25', 'production-gce-c26',
-  'production-gce-c27', 'production-gce-c28', 'production-gce-c29'
+  'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
+  'production-gce-c31',
+  ...SAME_CAP_MIGRATION_ONLY_CELLS
 ]
+
+// A general cell's wave isolates and restores it, advancing the selector twice; a
+// migration-only cell's isolate and restore are both no-ops, so its wave advances nothing.
+export function selectorWaveDelta(cellId) {
+  return SAME_CAP_MIGRATION_ONLY_CELLS.includes(cellId) ? 0 : 2
+}
+
+export function entryAdmission(cellId) {
+  return SAME_CAP_MIGRATION_ONLY_CELLS.includes(cellId) ? 'migration-only' : 'general'
+}
 
 function digest(value, name) {
   if (!/^sha256:[a-f0-9]{64}$/.test(value ?? '')) throw new Error(`${name} is invalid`)
@@ -19,10 +38,15 @@ function cells(value) {
   const parsed = value.split(',').map((cell) => cell.trim()).filter(Boolean)
   if (
     parsed.length < 1 ||
-    parsed.length > 4 ||
+    parsed.length > 10 ||
     new Set(parsed).size !== parsed.length ||
     parsed.some((cell) => !SAME_CAP_CELLS.includes(cell))
   ) throw new Error('same-cap wave cells are invalid')
+  // Every later cell offsets from one per-wave selector delta, and the two classes
+  // have different ones, so a mixed wave has no single offset any cell could use.
+  if (new Set(parsed.map(selectorWaveDelta)).size > 1) {
+    throw new Error('same-cap wave cells must be all general or all migration-only')
+  }
   return parsed
 }
 
@@ -37,8 +61,9 @@ export function validateSameCapWave(input) {
   if (input.mode === 'canary-apply' && selected.length !== 1) {
     throw new Error('canary mode requires exactly one cell')
   }
-  if (input.mode === 'batch-apply' && (selected.length < 2 || selected.length > 4)) {
-    throw new Error('batch mode requires two to four cells')
+  // Ten is the wave workflow's statically declared serial cell-job chain, cell_1..cell_10.
+  if (input.mode === 'batch-apply' && (selected.length < 2 || selected.length > 10)) {
+    throw new Error('batch mode requires two to ten cells')
   }
   // Later waves expect the selector to advance by exactly 2 per predecessor,
   // which a resumed rollback cell (isolate skipped, +1) violates.
@@ -81,24 +106,37 @@ export function canaryAuthority(input) {
     cellId: wave.cells[0],
     targetDigest: wave.targetDigest,
     rollbackDigest: wave.rollbackDigest,
-    selectorGeneration: selectorGeneration + 2,
+    selectorGeneration: selectorGeneration + selectorWaveDelta(wave.cells[0]),
     rehomeGeneration
   }
 }
 
 export function verifyCanaryAuthority(authority, expected, repositoryRoot) {
+  const selectorGeneration = Number(expected.selectorGeneration)
+  // A mixed wave is already rejected, so the batch's first cell names the whole batch's class.
+  const batchAdmission = entryAdmission(cells(expected.cellIds ?? '')[0])
   if (
     authority?.v !== 1 ||
     !/^[0-9a-f]{40}$/.test(authority.commitSha ?? '') ||
     authority.runId !== expected.runId ||
     authority.targetDigest !== expected.targetDigest ||
     authority.rollbackDigest !== expected.rollbackDigest ||
-    authority.selectorGeneration !== Number(expected.selectorGeneration) ||
+    !Number.isSafeInteger(authority.selectorGeneration) ||
+    authority.selectorGeneration < 0 ||
+    !Number.isSafeInteger(selectorGeneration) ||
+    selectorGeneration < authority.selectorGeneration ||
     authority.rehomeGeneration !== Number(expected.rehomeGeneration) ||
     !SAME_CAP_CELLS.includes(authority.cellId)
   ) throw new Error('canary authority does not match this batch')
-  // The batch dispatch resolves main after the canary sealed, so bind to the same code, not the
-  // same SHA; every field above still pins this batch to that exact canary.
+  // A migration-only cell carries no hosts and a different cap, so rolling it proves nothing
+  // about a general batch, and its wave advances a different selector delta.
+  if (entryAdmission(authority.cellId) !== batchAdmission) {
+    throw new Error(
+      `canary authority cell ${authority.cellId} is ${entryAdmission(authority.cellId)}, ` +
+      `but this batch is ${batchAdmission}`
+    )
+  }
+  // Each cell checks exact live selector state; later batches may reuse this control epoch's canary.
   requireSameEvidenceCode({
     sealedSha: authority.commitSha,
     currentSha: expected.commitSha,
@@ -148,10 +186,20 @@ export function main(argv = process.argv.slice(2)) {
     }))}\n`)
     return
   }
+  if (command === 'cell-class') {
+    const cellId = input['cell-id']
+    if (!SAME_CAP_CELLS.includes(cellId)) throw new Error('same-cap wave cells are invalid')
+    process.stdout.write(`${JSON.stringify({
+      entryAdmission: entryAdmission(cellId),
+      selectorWaveDelta: selectorWaveDelta(cellId)
+    })}\n`)
+    return
+  }
   if (command === 'verify-canary') {
     verifyCanaryAuthority(JSON.parse(readFileSync(input.file, 'utf8')), {
       commitSha: input['commit-sha'],
       runId: input['run-id'],
+      cellIds: input['cell-ids'],
       targetDigest: input['target-digest'],
       rollbackDigest: input['rollback-digest'],
       selectorGeneration: input['selector-generation'],

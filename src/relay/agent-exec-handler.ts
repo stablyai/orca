@@ -1,3 +1,4 @@
+import { mergeCommandEnvironment } from '../shared/command-environment'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
@@ -5,6 +6,7 @@ import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
 import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
+import { RelayAgentProcessLifetime } from './relay-agent-process-lifetime'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
@@ -108,6 +110,7 @@ type ExecResult = {
  * and a clean exit code instead of an interactive session.
  */
 export class AgentExecHandler {
+  private readonly processLifetime = new RelayAgentProcessLifetime()
   // Why: commit-message and PR-field generation can run together for one cwd;
   // operation lanes let cancel target only the user-visible job that stopped.
   private inFlightByLane = new Map<string, InFlightExec>()
@@ -123,6 +126,10 @@ export class AgentExecHandler {
     dispatcher.onRequest('agent.cancelExec', (p) => this.cancel(p as CancelParams))
   }
 
+  dispose(): Promise<void> {
+    return this.processLifetime.dispose()
+  }
+
   private async cancel(params: CancelParams): Promise<{ canceled: boolean }> {
     const cwd = typeof params.cwd === 'string' ? params.cwd : ''
     const entry = this.inFlightByLane.get(this.laneKey(cwd, params.operation))
@@ -134,6 +141,7 @@ export class AgentExecHandler {
   }
 
   private async exec(params: ExecParams, context?: RequestContext): Promise<ExecResult> {
+    this.processLifetime.assertAdmission()
     const binary = typeof params.binary === 'string' ? params.binary : ''
     if (!binary) {
       throw new Error('agent.execNonInteractive: binary is required')
@@ -148,10 +156,17 @@ export class AgentExecHandler {
       params.env && typeof params.env === 'object' && !Array.isArray(params.env)
         ? (params.env as Record<string, string>)
         : null
-    const spawnEnv = mergeGitConfigEnvProtocol(process.env, extraEnv ?? undefined) as Record<
-      string,
-      string
-    >
+    const baseEnv = mergeCommandEnvironment(
+      process.env,
+      extraEnv ? {} : undefined,
+      process.platform
+    )
+    const overrides = mergeCommandEnvironment({}, extraEnv ?? undefined, process.platform)
+    const spawnEnv = Object.fromEntries(
+      Object.entries(mergeGitConfigEnvProtocol(baseEnv ?? process.env, overrides)).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string'
+      )
+    )
     // Why: this RPC has no interactive terminal, regardless of which wrapper
     // launches the agent or hook command.
     applyTerminalGitCredentialPromptGuard(spawnEnv, {
@@ -180,6 +195,7 @@ export class AgentExecHandler {
         return
       }
 
+      this.processLifetime.track(child)
       let stdout = ''
       let stderr = ''
       let stdoutBytes = 0

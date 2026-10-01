@@ -105,16 +105,35 @@ finds is published in `status.get`'s `degradations[]` under `terminal_unavailabl
 
 **4. Ship the binary, built from patched sources.**
 [`config/scripts/build-orcad-prebuilds.mjs`](../../config/scripts/build-orcad-prebuilds.mjs)
-(`pnpm run build:orcad-prebuilds`, after `build:orcad`) compiles node-pty for the current
-host and files it under `out/orcad/prebuilds/<slot>/`, where a slot is
-`linux-{x64,arm64}-{glibc,musl}` or `darwin-{x64,arm64}`. libc is part of the slot name
-because node-pty's own loader falls back to `prebuilds/<platform>-<arch>` and cannot tell
-glibc from musl — a glibc binary parked there is loaded on Alpine and dies at `dlopen`.
+(`pnpm run build:orcad-prebuilds`, before `build:orcad`, which copies its target's slot into
+the package's `node_modules/node-pty/build/Release`) compiles node-pty for the current
+host against the pinned Node's hash-verified headers at N-API 8, and files it under
+`out/orcad-prebuilds/<slot>/`, where a slot is `linux-{x64,arm64}-{glibc,musl}`,
+`darwin-{x64,arm64}` or `win32-{x64,arm64}`. Its `manifest.json` records each file's
+sha256, the N-API level and, for glibc slots, the highest `GLIBC_` version the binary
+needs; the loader checks N-API, libc, arch and that glibc version before it installs a
+slot. glibc slots are built in a `manylinux_2_28` (AlmaLinux 8) container and pass the
+same gate at a **glibc 2.28 / `GLIBCXX_3.4.25`** floor instead of the desktop's 2.31, because
+the pinned Node they ship beside already runs on 2.28 and a 2.31 slot would leave 2.28–2.30
+hosts with a runtime but no terminal (design D6). The container's gcc-toolset supplies C++20
+and links newer libstdc++ symbols statically, so the slot needs only RHEL 8's system
+libstdc++. musl slots skip the gate, since they never meet glibc's libraries. libc is part
+of the slot name because node-pty's own loader falls back to `prebuilds/<platform>-<arch>`
+and cannot tell glibc from musl — a glibc binary parked there is loaded on Alpine and dies at `dlopen`.
 The script refuses to compile a tree where `config/patches/node-pty@1.1.0.patch` is not
 applied: without the patch the prebuilt is a #9902 crash shipped as an artifact rather
 than a first-connect error. CI runs it once per slot inside the matching container
 (`--slot=` forces the label), merges the trees, and `--require-slots` fails a release with
-a hole in the matrix.
+a hole in the matrix; `--require-slots <slot>` checks one slot's files against their
+hashes and `--smoke` loads it under the pinned Node and spawns a PTY
+(`.github/workflows/node-server-tests.yml` runs both on every slot's runner).
+
+The opt-in `linux-x64-glibc217` compat slot (rung B, not part of the default matrix) is
+built in `manylinux2014_x86_64` (glibc 2.17, devtoolset C++20) with `-static-libstdc++`,
+gated at a glibc 2.17 floor, refused if `libstdc++.so`/`libgcc_s.so` remains in
+`DT_NEEDED`, and smoked under the unofficial glibc-217 Node pinned in
+`NODE_RUNTIME_COMPAT_ASSETS`. Nothing installs it yet: the loader and the SSH deploy
+still choose only default slots.
 
 ## Adding or upgrading a native dependency
 
@@ -131,3 +150,33 @@ a hole in the matrix.
 
   No strong `GLIBC_` node may exceed `2.31`, and no `GLIBCXX_`/`CXXABI_` node may
   exceed `3.4.28`/`1.3.12` — what stock Ubuntu 20.04 ships.
+
+## Runtime floor: the `environ` race below glibc 2.41 (Electron ≥ 43.7.0)
+
+Separate from the build floor above, one glibc runtime bug constrains which
+Electron we may ship. Before glibc 2.41, `setenv`/`unsetenv` reallocate the
+`environ` array and **free** the old one, so a concurrent `getenv()` on another
+thread reads freed memory. Ubuntu 20.04–24.04 (2.31–2.39) are all below that
+line, so every Linux target we support is exposed.
+
+Electron 43.5.0 made that latent race reachable on every launch: it started
+setting `GDK_GL=disable` around `gtk_init()` and unsetting it right after, while
+in the same change moving FontConfig warm-up onto a thread-pool thread that runs
+concurrently and calls `getenv()` constantly
+([electron#53070](https://github.com/electron/electron/pull/53070)). The result
+is a browser-process use-after-free about a second into startup — no window, no
+GPU child involved, and the corruption surfaces wherever the next allocation
+lands, which is why reports name unrelated frames (`gtk_widget_realize`,
+libxcb-dri3, FontConfig/expat). Orca 1.4.199/1.4.200 shipped that runtime and
+died on launch on Ubuntu + NVIDIA/X11
+([#20081](https://github.com/stablyai/orca/issues/20081)).
+
+Electron 43.7.0 fixes it by overriding `setenv`/`unsetenv`/`putenv`/`clearenv`
+so a published `environ` is never freed, deferring to glibc on 2.41+
+([electron#53491](https://github.com/electron/electron/pull/53491), backported
+to 42/43/44/45). **Do not downgrade Electron below 43.7.0, or move to another
+line, without confirming that backport is in the target release** —
+`config/scripts/electron-runtime-floor.test.ts` fails the suite if the pin drops
+below the floor. Orca itself writes `process.env` during early startup
+(`patchPackagedProcessPath`, `configureOrcaUserDataPathEnv`,
+`hydrate-shell-path`), so it is a first-class trigger, not just a bystander.

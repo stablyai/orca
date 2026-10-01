@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { parseScrcpyVideoFrames, parseScrcpyVideoMeta } from './scrcpy-video-frame-parser'
+import { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
+import {
+  MAX_PENDING_CHUNKS,
+  parseScrcpyVideoFrames,
+  parseScrcpyVideoMeta
+} from './scrcpy-video-frame-parser'
 
 const CONFIG = 1n << 63n
 const KEY = 1n << 62n
@@ -28,7 +33,9 @@ describe('parseScrcpyVideoMeta', () => {
 describe('parseScrcpyVideoFrames', () => {
   it('extracts config and key frames with their flags and data', () => {
     const stream = Buffer.concat([frame(CONFIG, [0, 0, 0, 1]), frame(KEY | 123n, [1, 2, 3])])
-    const { frames, pending } = parseScrcpyVideoFrames(Buffer.alloc(0), stream)
+    const pending = new RelayFrameBuffer()
+    pending.append(stream)
+    const frames = parseScrcpyVideoFrames(pending)
     expect(pending.length).toBe(0)
     expect(frames).toHaveLength(2)
     expect(frames[0]).toMatchObject({ config: true, keyFrame: false })
@@ -39,19 +46,89 @@ describe('parseScrcpyVideoFrames', () => {
 
   it('buffers a partial frame across chunks', () => {
     const full = frame(5n, [9, 9, 9, 9])
-    const r1 = parseScrcpyVideoFrames(Buffer.alloc(0), full.subarray(0, 14))
-    expect(r1.frames).toHaveLength(0)
-    expect(r1.pending.length).toBe(14)
-    const r2 = parseScrcpyVideoFrames(r1.pending, full.subarray(14))
-    expect(r2.frames).toHaveLength(1)
-    expect([...r2.frames[0].data]).toEqual([9, 9, 9, 9])
-    expect(r2.pending.length).toBe(0)
+    const pending = new RelayFrameBuffer()
+    pending.append(full.subarray(0, 14))
+    expect(parseScrcpyVideoFrames(pending)).toHaveLength(0)
+    expect(pending.length).toBe(14)
+    pending.append(full.subarray(14))
+    const frames = parseScrcpyVideoFrames(pending)
+    expect(frames).toHaveLength(1)
+    expect([...frames[0].data]).toEqual([9, 9, 9, 9])
+    expect(pending.length).toBe(0)
+  })
+
+  it('does not retain a consumed large packet behind a one-byte pending suffix', () => {
+    const first = Buffer.alloc(4 * 1024 * 1024 + 12, 7)
+    first.writeBigUInt64BE(123n, 0)
+    first.writeUInt32BE(first.length - 12, 8)
+    const second = frame(KEY | 456n, [1, 2, 3])
+    const chunk = Buffer.concat([first, second.subarray(0, 1)])
+    const pending = new RelayFrameBuffer()
+    pending.append(chunk)
+
+    const frames = parseScrcpyVideoFrames(pending)
+    expect(frames).toHaveLength(1)
+    expect(frames[0]).toMatchObject({ config: false, keyFrame: false, pts: 123n })
+    expect(frames[0].data.equals(first.subarray(12))).toBe(true)
+    expect(pending.length).toBe(1)
+    expect(pending.peek(1)).toEqual(second.subarray(0, 1))
+    expect(pending.peek(1).buffer === chunk.buffer).toBe(false)
+    expect(pending.peek(1).buffer.byteLength).toBeLessThan(chunk.length)
+
+    chunk.fill(0xff)
+    pending.append(second.subarray(1))
+    expect(parseScrcpyVideoFrames(pending)).toEqual([
+      { config: false, keyFrame: true, pts: 456n, data: Buffer.from([1, 2, 3]) }
+    ])
+    expect(pending.length).toBe(0)
+  })
+
+  it('keeps mostly live chunk storage instead of recopying a large pending frame', () => {
+    const first = frame(123n, [1, 2, 3])
+    const second = Buffer.alloc(4 * 1024 * 1024 + 12, 7)
+    second.writeBigUInt64BE(KEY | 456n, 0)
+    second.writeUInt32BE(second.length - 12, 8)
+    const split = 3 * 1024 * 1024
+    const chunk = Buffer.concat([first, second.subarray(0, split)])
+    const pending = new RelayFrameBuffer()
+    pending.append(chunk)
+
+    expect(parseScrcpyVideoFrames(pending)).toHaveLength(1)
+    expect(pending.length).toBe(split)
+    expect(pending.peek(1).buffer === chunk.buffer).toBe(true)
+
+    pending.append(second.subarray(split))
+    const frames = parseScrcpyVideoFrames(pending)
+    expect(frames).toHaveLength(1)
+    expect(frames[0]).toMatchObject({ config: false, keyFrame: true, pts: 456n })
+    expect(frames[0].data.equals(second.subarray(12))).toBe(true)
+    expect(pending.length).toBe(0)
+  })
+
+  it('bounds queued fragment count for a large frame delivered one byte at a time', () => {
+    const full = Buffer.alloc(256 * 1024 + 12, 7)
+    full.writeBigUInt64BE(KEY | 789n, 0)
+    full.writeUInt32BE(full.length - 12, 8)
+    const pending = new RelayFrameBuffer()
+    let maxChunks = 0
+    let frames: ReturnType<typeof parseScrcpyVideoFrames> = []
+    for (const byte of full) {
+      pending.append(Buffer.from([byte]))
+      frames = parseScrcpyVideoFrames(pending)
+      maxChunks = Math.max(maxChunks, pending.chunkCount)
+    }
+    expect(maxChunks).toBeLessThanOrEqual(MAX_PENDING_CHUNKS)
+    expect(frames).toHaveLength(1)
+    expect(frames[0]).toMatchObject({ config: false, keyFrame: true, pts: 789n })
+    expect(frames[0].data.equals(full.subarray(12))).toBe(true)
+    expect(pending.length).toBe(0)
   })
 
   it('holds an incomplete header until more bytes arrive', () => {
-    const result = parseScrcpyVideoFrames(Buffer.alloc(0), Buffer.from([0, 1, 2]))
-    expect(result.frames).toHaveLength(0)
-    expect(result.pending.length).toBe(3)
+    const pending = new RelayFrameBuffer()
+    pending.append(Buffer.from([0, 1, 2]))
+    expect(parseScrcpyVideoFrames(pending)).toHaveLength(0)
+    expect(pending.length).toBe(3)
   })
 
   it('throws on a desynced frame size instead of buffering toward OOM', () => {
@@ -59,6 +136,8 @@ describe('parseScrcpyVideoFrames', () => {
     // never be satisfied, leaving the whole buffer pending forever.
     const header = Buffer.alloc(12)
     header.writeUInt32BE(64 * 1024 * 1024, 8)
-    expect(() => parseScrcpyVideoFrames(Buffer.alloc(0), header)).toThrow(/desynced/)
+    const pending = new RelayFrameBuffer()
+    pending.append(header)
+    expect(() => parseScrcpyVideoFrames(pending)).toThrow(/desynced/)
   })
 })

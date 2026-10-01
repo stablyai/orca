@@ -1,5 +1,6 @@
 import {
   PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
+  PTY_CONSUMER_RESUME_CLIENT_METHOD,
   PtyConsumerSession,
   type PtyConsumerSessionAdmission,
   type PtyConsumerSessionGrant
@@ -27,6 +28,7 @@ export class SshPtyConsumerSessionAdapter {
   private readonly session: PtyConsumerSession
   private readonly sourceCredit: SshPtySourceCreditAdapter
   private readonly pausedDeliveryByPty = new Map<string, PtySourceDeliveryIdentity>()
+  private readonly pendingPublications = new Set<PtyConsumerSessionAdmission>()
 
   constructor(
     private readonly dispatcher: RelayDispatcher,
@@ -58,6 +60,9 @@ export class SshPtyConsumerSessionAdapter {
     )
     dispatcher.onRequest(SSH_PTY_OPEN_CLIENT_METHOD, (params, context) =>
       this.openClient(params, context)
+    )
+    dispatcher.onRequest(PTY_CONSUMER_RESUME_CLIENT_METHOD, (params, context) =>
+      this.openClient(params, context, true)
     )
     dispatcher.onClientDetached((clientId, cause) => {
       const connectionKey = String(clientId)
@@ -214,9 +219,35 @@ export class SshPtyConsumerSessionAdapter {
     return sshPtyDeliveryMode(this.session.activeGrant(String(clientId)))
   }
 
+  activeSessionOwner(
+    clientId: number
+  ): Readonly<{ ownerGeneration: number; ownerLease: string }> | null {
+    const grant = this.session.activeGrant(String(clientId))
+    const ownerGeneration = grant?.ownerGeneration
+    if (
+      grant?.role !== 'session-owner' ||
+      typeof ownerGeneration !== 'number' ||
+      !Number.isSafeInteger(ownerGeneration) ||
+      !grant.ownerLease
+    ) {
+      return null
+    }
+    return Object.freeze({
+      ownerGeneration,
+      ownerLease: grant.ownerLease
+    })
+  }
+
+  assertOwnerPublicationSettled(): void {
+    if (this.pendingPublications.size > 0) {
+      throw new Error('pty_consumer_owner_publication_pending')
+    }
+  }
+
   private async openClient(
     rawParams: Record<string, unknown>,
-    context: RequestContext
+    context: RequestContext,
+    resumeOnly = false
   ): Promise<PtyConsumerSessionGrant> {
     const params = parseOpenClientParams(rawParams)
     if (params.protocolVersion !== PTY_CONSUMER_SESSION_PROTOCOL_VERSION) {
@@ -225,24 +256,38 @@ export class SshPtyConsumerSessionAdapter {
       )
     }
     const identity = requireIdentity(context)
-    const admission = this.session.admit(params, {
+    const authenticate = {
       connectionId: String(context.clientId),
       principal: identity.principal,
       authenticated: identity.authenticated,
       allowSessionOwner: identity.allowSessionOwner
-    })
+    }
+    const admission = resumeOnly
+      ? this.session.admitResumed(params, authenticate)
+      : this.session.admit(params, authenticate)
     if (!context.onResponseSettled) {
       admission.rollbackPublication()
       throw new Error('SSH PTY consumer response publication fence is unavailable')
     }
-    context.onResponseSettled((result) => {
-      if (!result.ok) {
-        admission.rollbackPublication()
-        return
-      }
-      admission.commitPublication()
-      this.closeDisplacedOwner(admission.displacedOwner)
-    })
+    this.pendingPublications.add(admission)
+    try {
+      context.onResponseSettled((result) => {
+        try {
+          if (!result.ok) {
+            admission.rollbackPublication()
+            return
+          }
+          admission.commitPublication()
+          this.closeDisplacedOwner(admission.displacedOwner)
+        } finally {
+          this.pendingPublications.delete(admission)
+        }
+      })
+    } catch (error) {
+      this.pendingPublications.delete(admission)
+      admission.rollbackPublication()
+      throw error
+    }
     return admission.grant
   }
 

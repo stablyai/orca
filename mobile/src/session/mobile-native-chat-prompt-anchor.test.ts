@@ -37,4 +37,18 @@ describe('mobileNativeChatLatestPromptIndex', () => {
   it('ignores system turns, which are not prompts the user wrote', () => {
     expect(mobileNativeChatLatestPromptIndex(transcript('system', 'assistant'))).toBeNull()
   })
+
+  it('ignores pending echoes and resolves the loaded prompt in the rendered order', () => {
+    const loaded = transcript('user', 'assistant', 'user', 'assistant')
+    const pending = { ...loaded[0], id: 'pending' }
+    expect(
+      mobileNativeChatLatestPromptIndex(loaded, [loaded[2], loaded[3], loaded[0], pending])
+    ).toBe(0)
+    expect(mobileNativeChatLatestPromptIndex([loaded[1]], [loaded[1], pending])).toBeNull()
+  })
+
+  it('stays hidden when the newest loaded prompt is drawn outside the list', () => {
+    const loaded = transcript('user', 'assistant', 'user')
+    expect(mobileNativeChatLatestPromptIndex(loaded, loaded.slice(0, 2))).toBeNull()
+  })
 })

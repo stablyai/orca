@@ -13,7 +13,7 @@ import {
 // Not an intersection with ErrorConstructor: both fields have to stay optional
 // so the absent-captureStackTrace platform can be simulated.
 type ErrorWithCapture = {
-  captureStackTrace?: (target: object, constructorOpt?: unknown) => void
+  captureStackTrace?: (target: { stack?: string }, constructorOpt?: unknown) => void
   stackTraceLimit?: number
 }
 const errorWithCapture = Error as unknown as ErrorWithCapture

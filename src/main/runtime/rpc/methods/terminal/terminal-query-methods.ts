@@ -1,4 +1,4 @@
-import { defineMethod, type RpcAnyMethod } from '../../core'
+import { defineMethod } from '../../core'
 import {
   TerminalHandle,
   TerminalInspectProcess,
@@ -10,7 +10,7 @@ import {
   TerminalResolvePane
 } from './unary-schemas'
 
-export const TERMINAL_QUERY_METHODS: RpcAnyMethod[] = [
+export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.list',
     params: TerminalListParams,
@@ -120,6 +120,13 @@ export const TERMINAL_QUERY_METHODS: RpcAnyMethod[] = [
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       clear: await runtime.clearTerminalBuffer(params.terminal)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.resetInputModes',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      reset: await runtime.resetTerminalInputModes(params.terminal)
     })
   })
 ]

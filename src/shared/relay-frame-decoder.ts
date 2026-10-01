@@ -143,12 +143,22 @@ export class FrameDecoder {
         const framed = this.buffer.take(totalLength)
         frames += 1
         bytes += totalLength
-        this.onFrame({
-          type: framed[0],
-          id: framed.readUInt32BE(1),
-          ack: framed.readUInt32BE(5),
-          payload: framed.subarray(HEADER_LENGTH, totalLength)
-        })
+        // Why contain here and not in the caller: feed() runs straight from a socket 'data'
+        // handler, so a frame owner that throws on the first turn would escape as an
+        // uncaughtException and take the whole process — and every connection it serves — down.
+        // The continuation path already contains this; the synchronous path must match it, so
+        // one bad frame costs one connection (the owner's onError closes it), never the process.
+        try {
+          this.onFrame({
+            type: framed[0],
+            id: framed.readUInt32BE(1),
+            ack: framed.readUInt32BE(5),
+            payload: framed.subarray(HEADER_LENGTH, totalLength)
+          })
+        } catch (error) {
+          // reset() bumps the generation, which ends this turn and drops the residue.
+          containFrameDecoderContinuation(() => this.reset(), this.onError, error)
+        }
       }
     } finally {
       this.draining = false

@@ -5,6 +5,11 @@ import {
 } from '../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import {
+  isAgentStatusHooksEnabled,
+  isAgentStatusHooksEnabledForAgent
+} from '../../shared/agent-status-hooks-setting'
+import { probeClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
@@ -12,11 +17,15 @@ import {
   MANAGED_AGENT_HOOK_REMOVERS,
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
   MANAGED_AGENT_HOOK_STATUS_READERS,
-  type ManagedAgentHookInstaller
+  type ManagedAgentHookInstaller,
+  type ManagedAgentHookInstallOptions
 } from './managed-agent-hook-registry'
 
 export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
-export { prepareManagedCodexHomeBeforeShellLaunch } from '../codex/managed-home-shell-preflight'
+export {
+  isAgentStatusHooksEnabled,
+  isAgentStatusHooksEnabledForAgent
+} from '../../shared/agent-status-hooks-setting'
 
 type ManagedHookSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
@@ -33,12 +42,6 @@ type InstallOptions = {
 
 type RemoveOptions = {
   agents?: readonly AgentHookTarget[]
-}
-
-export function isAgentStatusHooksEnabled(
-  settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
-): boolean {
-  return settings?.agentStatusHooksEnabled !== false
 }
 
 export type StartupManagedHookAction = 'install' | 'skip'
@@ -58,10 +61,7 @@ export function shouldInstallStartupManagedAgentHook(
   settings: ManagedHookSettings,
   agent: AgentHookTarget
 ): boolean {
-  return (
-    resolveStartupManagedHookAction(settings) === 'install' &&
-    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
-  )
+  return isAgentStatusHooksEnabledForAgent(settings, agent)
 }
 
 export function shouldContinueManagedHookStartup(
@@ -69,11 +69,7 @@ export function shouldContinueManagedHookStartup(
   settings: ManagedHookSettings,
   agent: AgentHookTarget
 ): boolean {
-  return (
-    !isQuitting &&
-    isAgentStatusHooksEnabled(settings) &&
-    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
-  )
+  return !isQuitting && isAgentStatusHooksEnabledForAgent(settings, agent)
 }
 
 function errorStatus(agent: AgentHookTarget, error: unknown): AgentHookInstallStatus {
@@ -112,11 +108,11 @@ function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookI
 async function runInstaller(
   entry: ManagedAgentHookInstaller,
   onInstallError: InstallOptions['onInstallError'],
-  userInitiated?: boolean
+  options: ManagedAgentHookInstallOptions
 ): Promise<AgentHookInstallStatus> {
   const [agent, install] = entry
   try {
-    return await install({ userInitiated })
+    return await install(options)
   } catch (error) {
     console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     try {
@@ -200,7 +196,16 @@ export async function installManagedAgentHooks(
       )
       continue
     }
-    results.push(await runInstaller(entry, options.onInstallError, options.userInitiated))
+    const cliVersion =
+      agent === 'claude' && presence.executablePath
+        ? await probeClaudeCliVersion(presence.executablePath)
+        : null
+    results.push(
+      await runInstaller(entry, options.onInstallError, {
+        ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),
+        ...(cliVersion ? { cliVersion } : {})
+      })
+    )
   }
   return results
 }

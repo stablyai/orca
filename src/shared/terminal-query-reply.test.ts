@@ -9,6 +9,26 @@ import {
 import { PtyStartupIngress } from './pty-startup-ingress'
 
 describe('isTerminalQueryReply', () => {
+  it('routes complete Kitty graphics acknowledgements as replies', () => {
+    const ok = '\x1b_Gi=31;OK\x1b\\'
+    const error = '\x1b_Gi=31,p=2;ENOENT:image not found\x1b\\'
+    expect(isTerminalQueryReply(ok)).toBe(true)
+    expect(isTerminalQueryReply(error)).toBe(true)
+    expect(extractOnlyTerminalQueryReplies(ok + error)).toEqual([ok, error])
+    expect(needsCookedEchoSafeQueryReply(ok)).toBe(false)
+    for (const input of [
+      '\x1b_',
+      '\x1b_Gi=31;OK',
+      '\x1b_Gi=31;OK\x07',
+      '\x1b_Gi=31;hello\x1b\\',
+      '\x1b_Ga=q,i=31;AAAA\x1b\\',
+      `${ok}typed`
+    ]) {
+      expect(isTerminalQueryReply(input)).toBe(false)
+      expect(extractOnlyTerminalQueryReplies(input)).toBeNull()
+    }
+  })
+
   it('matches synthetic query replies that must be sent immediately', () => {
     // CPR cursor position report (answer to CSI 6n) — the #7329 culprit.
     expect(isTerminalQueryReply('\x1b[3;1R')).toBe(true)

@@ -1,5 +1,12 @@
 import type { AgentJournalTurnLifecycle } from '../../shared/agent-session-journal-types'
-import type { CodexTurnOrdinals } from './codex-structured-item-translation'
+import { readCodexThreadItem, type CodexTurnOrdinals } from './codex-structured-item-translation'
+import type { CodexJournalCompactions } from './codex-structured-journal-compactions'
+import type { CodexJournalItems } from './codex-structured-journal-items'
+import {
+  readCodexNotificationThreadItem,
+  readCodexSubagentAnnouncements
+} from './codex-subagent-activity'
+import type { CodexSubagentExecutions } from './codex-subagent-executions'
 import {
   readCodexJournalRecord,
   readCodexJournalString
@@ -7,9 +14,37 @@ import {
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import {
   codexTurnLifecycleState,
+  codexTurnOutcome,
   codexTurnUserItemId
 } from './codex-structured-journal-translation-turns'
 import { readCodexTurnDurationMs, readCodexTurnStatus } from './codex-structured-thread-facts'
+
+type CodexHistoryItemEvent = { threadId: string; method: string; params: unknown }
+
+/** One replayed item. History never runs the live item router, so a helper the replay announces
+ *  is registered here for its name and membership only: `register` starts no execution, so no
+ *  strip entry, record or roster row claims it runs until a live turn of its own says so. */
+export function restoreCodexHistoryItem(
+  event: CodexHistoryItemEvent,
+  input: {
+    primaryThreadId: string | null
+    compactions: Pick<CodexJournalCompactions, 'handle'>
+    items: Pick<CodexJournalItems, 'handle'>
+    executions: Pick<CodexSubagentExecutions, 'register'>
+  }
+): CodexJournalTranslationAdmission {
+  const item = readCodexNotificationThreadItem(event.params, readCodexThreadItem)
+  const announcements = item ? readCodexSubagentAnnouncements(item, input.primaryThreadId) : []
+  for (const announcement of announcements) {
+    input.executions.register(announcement.agentThreadId, announcement.label, undefined)
+  }
+  const compaction = input.compactions.handle(event)
+  if (compaction) {
+    return compaction
+  }
+  const translated = input.items.handle(event, 'history')
+  return translated.handled ? translated.admission : { accepted: false, reason: 'untranslated' }
+}
 
 /** Old providers may return the complete thread from resume. Keep that fallback
  * bounded before admitting any rows to the asynchronous sink. */
@@ -21,11 +56,7 @@ export function restoreCodexJournalThread(input: {
   thread: Record<string, unknown>
   currentTurnIds: Map<string, Set<string>>
   ordinals: CodexTurnOrdinals
-  handleItem: (event: {
-    threadId: string
-    method: string
-    params: unknown
-  }) => CodexJournalTranslationAdmission
+  handleItem: (event: CodexHistoryItemEvent) => CodexJournalTranslationAdmission
   /** Absent when the caller has no session identity to key lifecycle rows by. */
   restoreTurnLifecycle?: (
     turnLifecycle: AgentJournalTurnLifecycle
@@ -58,6 +89,17 @@ export function restoreCodexJournalThread(input: {
     if (!turnId) {
       continue
     }
+    // Ahead of the turn's items, as the live path writes it: readers credit every
+    // row to the nearest turn record before it.
+    const lifecycle = input.restoreTurnLifecycle
+      ? historicalTurnLifecycle(input.threadId, turn)
+      : null
+    if (lifecycle) {
+      const admission = input.restoreTurnLifecycle?.(lifecycle) ?? { accepted: true }
+      if (!admission.accepted) {
+        return admission
+      }
+    }
     input.currentTurnIds.set(input.threadId, new Set([turnId]))
     for (const item of Array.isArray(turn.items) ? turn.items : []) {
       const admission = input.handleItem({
@@ -71,15 +113,6 @@ export function restoreCodexJournalThread(input: {
     }
     input.currentTurnIds.delete(input.threadId)
     input.ordinals.forgetTurn(input.threadId, turnId)
-    const lifecycle = input.restoreTurnLifecycle
-      ? historicalTurnLifecycle(input.threadId, turn)
-      : null
-    if (lifecycle) {
-      const admission = input.restoreTurnLifecycle?.(lifecycle) ?? { accepted: true }
-      if (!admission.accepted) {
-        return admission
-      }
-    }
   }
   input.flush()
   return { accepted: true }
@@ -103,9 +136,12 @@ function historicalTurnLifecycle(
     return null
   }
   const durationMs = readCodexTurnDurationMs(turn)
+  const status = readCodexTurnStatus(turn)
+  const outcome = codexTurnOutcome(status)
   return {
     turnId,
-    state: codexTurnLifecycleState(readCodexTurnStatus(turn)),
+    state: codexTurnLifecycleState(status),
+    ...(outcome ? { outcome } : {}),
     userItemId: codexTurnUserItemId(threadId, turnId),
     startedAt: startedAt * 1000,
     completedAt: completedAt * 1000,

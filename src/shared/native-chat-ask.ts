@@ -19,7 +19,7 @@ export function registerQuestionTool(toolName: string, parser: InteractiveQuesti
   QUESTION_TOOL_PARSERS.set(toolName, parser)
 }
 
-function parseQuestionsShape(input: unknown): AskPrompt | null {
+function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
   if (!input || typeof input !== 'object') {
     return null
   }
@@ -73,12 +73,12 @@ function parseOptions(raw: unknown): AskOption[] {
 }
 
 for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) {
-  QUESTION_TOOL_PARSERS.set(name, parseQuestionsShape)
+  QUESTION_TOOL_PARSERS.set(name, parseCanonicalQuestionsInput)
 }
 
 function parseToolInput(toolName: string | undefined, input: unknown): AskPrompt | null {
   const parser = toolName ? QUESTION_TOOL_PARSERS.get(toolName) : undefined
-  return (parser ? parser(input) : null) ?? parseQuestionsShape(input)
+  return (parser ? parser(input) : null) ?? parseCanonicalQuestionsInput(input)
 }
 
 export function parseAskFromStatus(
@@ -93,6 +93,18 @@ export function parseAskFromStatus(
   } catch {
     return null
   }
+}
+
+/** Parse a question tool call's own input, through the same registered-parser
+ *  dispatch live status uses. Codex delivers arguments as a JSON string, so a
+ *  string input is decoded rather than treated as prose. */
+export function parseAskFromToolInput(
+  toolName: string | undefined,
+  input: unknown
+): AskPrompt | null {
+  return typeof input === 'string'
+    ? parseAskFromStatus(input, toolName)
+    : parseToolInput(toolName, input)
 }
 
 /** Resolve the newest question tool that has not received its FIFO tool result.

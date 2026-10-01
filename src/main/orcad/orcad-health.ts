@@ -11,12 +11,14 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import process from 'node:process'
-import { checkDaemonHealth, type DaemonHealth } from '../daemon/daemon-health'
+import { checkDaemonHealthWithCoverage, type DaemonHealth } from '../daemon/daemon-health'
 import {
   daemonOwnsFreshPersistentPtys,
   getDaemonEndpointFacts,
   readDaemonPidRecord
 } from '../daemon/daemon-init'
+import type { OrcadProfileStateAuthoritySelection } from './orcad-profile-state-telemetry'
+import { ORCAD_STOP_REQUESTS_CAPABILITY } from '../../shared/orcad-stop-request'
 
 /**
  * How much a green self-test actually proves.
@@ -47,6 +49,9 @@ export type TerminalDaemonHealth = {
   buildVersion: string | null
   entryPath: string | null
   protocolVersion: number | null
+  /** The systemd scope unit the daemon self-detected landing in (see daemon-cgroup-scope.ts),
+   *  or null when it ran unscoped — the case a combined-unit `systemctl restart` still reaps. */
+  cgroupUnit: string | null
   selfTest: PtySelfTest
 }
 
@@ -61,6 +66,13 @@ export type OrcadHealth = {
   arch: string
   pid: number
   terminalDaemon: TerminalDaemonHealth
+  /** The low-cardinality profile-state authority selected during startup, when available. */
+  profileStateAuthority?: OrcadProfileStateAuthoritySelection
+  /**
+   * Present when this build consumes stop-request files and answers the managed-stop commands.
+   * Absent on older builds, which a client must keep stopping with SIGTERM.
+   */
+  stopRequests?: typeof ORCAD_STOP_REQUESTS_CAPABILITY
 }
 
 /**
@@ -94,14 +106,18 @@ export async function runTerminalDaemonSelfTest(
   now: () => number = () => Date.now()
 ): Promise<PtySelfTest> {
   const startedAt = now()
-  // Why: `checkPtySpawnHealth` returns immediately on win32 without spawning anything, so a
-  // green verdict there covers the handshake only. Say so instead of overclaiming.
-  const coverage: PtySelfTestCoverage = process.platform === 'win32' ? 'handshake' : 'pty-spawn'
   const facts = getDaemonEndpointFacts()
   if (!facts) {
+    // Why: `checkPtySpawnHealth` returns immediately on win32 without spawning anything, so a
+    // green verdict there covers the handshake only. Say so instead of overclaiming.
+    const coverage: PtySelfTestCoverage = process.platform === 'win32' ? 'handshake' : 'pty-spawn'
     return { ok: false, coverage, verdict: 'no-daemon', durationMs: now() - startedAt }
   }
-  const verdict = await checkDaemonHealth(facts.socketPath, facts.tokenPath)
+  // The daemon reports what its probe actually did; an older daemon falls back by platform.
+  const { verdict, coverage } = await checkDaemonHealthWithCoverage(
+    facts.socketPath,
+    facts.tokenPath
+  )
   return { ok: verdict === 'healthy', coverage, verdict, durationMs: now() - startedAt }
 }
 
@@ -116,6 +132,7 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
       buildVersion: null,
       entryPath: null,
       protocolVersion: null,
+      cgroupUnit: null,
       selfTest
     }
   }
@@ -137,11 +154,15 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
     buildVersion: record?.appVersion ?? null,
     entryPath: record?.entryPath ?? null,
     protocolVersion: facts.protocolVersion,
+    cgroupUnit: record?.cgroupUnit ?? null,
     selfTest
   }
 }
 
-export async function collectOrcadHealth(buildVersion: string): Promise<OrcadHealth> {
+export async function collectOrcadHealth(
+  buildVersion: string,
+  profileStateAuthority?: OrcadProfileStateAuthoritySelection
+): Promise<OrcadHealth> {
   return {
     buildHash: computeOrcadBuildHash(),
     buildVersion,
@@ -150,6 +171,8 @@ export async function collectOrcadHealth(buildVersion: string): Promise<OrcadHea
     platform: process.platform,
     arch: process.arch,
     pid: process.pid,
-    terminalDaemon: await collectTerminalDaemonHealth()
+    terminalDaemon: await collectTerminalDaemonHealth(),
+    ...(profileStateAuthority ? { profileStateAuthority } : {}),
+    stopRequests: ORCAD_STOP_REQUESTS_CAPABILITY
   }
 }

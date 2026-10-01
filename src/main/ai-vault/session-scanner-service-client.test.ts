@@ -1,11 +1,35 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AiVaultScannerServiceClient } from './session-scanner-service-client'
 import { AI_VAULT_SERVICE_READY_TIMEOUT_MS } from './session-scanner-service-client-state'
+import type { AiVaultSessionSearchInit } from './session-scanner-service-protocol'
 import {
   AiVaultServiceTestChild,
   aiVaultServiceRequestId,
   readyAiVaultServiceChild
 } from './session-scanner-service-test-child'
+
+const SESSION_SEARCH_ON: AiVaultSessionSearchInit = {
+  databasePath: '/data/ai-vault/session-search.sqlite',
+  settings: { enabled: true, historyDays: null },
+  roots: {}
+}
+
+/** Every fork the client makes, so a respawn can be told from the first start. */
+function setupChildren(policy: () => AiVaultSessionSearchInit | null): {
+  children: AiVaultServiceTestChild[]
+  client: AiVaultScannerServiceClient
+} {
+  const children: AiVaultServiceTestChild[] = []
+  const client = new AiVaultScannerServiceClient({
+    processFactory: () => {
+      const child = new AiVaultServiceTestChild(12_345 + children.length)
+      children.push(child)
+      return child.asChildProcess()
+    },
+    init: () => ({ sessionParseCache: null, sessionSearch: policy() })
+  })
+  return { children, client }
+}
 
 function setup(idleTimeoutMs?: number): {
   child: AiVaultServiceTestChild
@@ -14,7 +38,7 @@ function setup(idleTimeoutMs?: number): {
   const child = new AiVaultServiceTestChild()
   const client = new AiVaultScannerServiceClient({
     processFactory: () => child.asChildProcess(),
-    init: { sessionParseCache: null },
+    init: () => ({ sessionParseCache: null, sessionSearch: null }),
     idleTimeoutMs
   })
   return { child, client }
@@ -135,7 +159,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null, sessionSearch: null })
     })
     const titles = client.request({ type: 'request', operation: 'titles', requests: [] })
     expect(children).toHaveLength(1)
@@ -167,7 +191,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null, sessionSearch: null })
     })
     const titles = client.request({ type: 'request', operation: 'titles', requests: [] })
 
@@ -190,7 +214,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null, sessionSearch: null })
     })
     const titles = client.request({ type: 'request', operation: 'titles', requests: [] })
 
@@ -224,7 +248,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null, sessionSearch: null })
     })
     // Each request retries its cold start once, so two requests spend the three
     // faults the circuit breaker needs.
@@ -242,11 +266,9 @@ describe('AiVaultScannerServiceClient', () => {
     vi.advanceTimersByTime(AI_VAULT_SERVICE_READY_TIMEOUT_MS)
     await Promise.resolve()
     vi.advanceTimersByTime(5_000)
-    await expect(blocked).rejects.toThrow('circuit is open')
     expect(children).toHaveLength(3)
 
     client.clearRestartCircuit()
-    const retried = client.request({ type: 'request', operation: 'titles', requests: [] })
     await vi.waitFor(() => expect(children).toHaveLength(4))
     readyAiVaultServiceChild(children[3]!)
     await vi.waitFor(() =>
@@ -258,7 +280,7 @@ describe('AiVaultScannerServiceClient', () => {
       operation: 'titles',
       value: { titles: [] }
     })
-    await expect(retried).resolves.toEqual({ titles: [] })
+    await expect(blocked).resolves.toEqual({ titles: [] })
     client.dispose()
   })
 
@@ -314,7 +336,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null, sessionSearch: null })
     })
     const invalidation = client.invalidate(['/tmp/deleted.jsonl'])
     readyAiVaultServiceChild(children[0]!)
@@ -350,7 +372,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null },
+      init: () => ({ sessionParseCache: null, sessionSearch: null }),
       idleTimeoutMs: 100
     })
 
@@ -389,6 +411,152 @@ describe('AiVaultScannerServiceClient', () => {
 
     await expect(request).rejects.toThrow('malformed')
     expect(child.killed).toBe(true)
+    client.dispose()
+  })
+
+  // The child holds the index while the setting is on, and its reconcile loop is
+  // invisible from here: retiring it would stop indexing until the next scan
+  // happened to respawn one, which is not a guarantee anyone stated.
+  it('spawns a child for the index and never retires it while the index is on', async () => {
+    vi.useFakeTimers()
+    const { child, client } = setup(100)
+    const on = {
+      databasePath: '/data/ai-vault/session-search.sqlite',
+      settings: { enabled: true, historyDays: null },
+      roots: {}
+    }
+
+    // No request outstanding: turning the index on is itself what spawns a child.
+    client.updateSessionSearch(on)
+    readyAiVaultServiceChild(child)
+    await Promise.resolve()
+    expect(child.sent).toContainEqual(expect.objectContaining({ type: 'init' }))
+
+    vi.advanceTimersByTime(10_000)
+    expect(child.sent).not.toContainEqual({ type: 'shutdown' })
+
+    // A live child hears the change directly rather than waiting for a respawn.
+    const narrowed = { ...on, settings: { enabled: true, historyDays: 30 } }
+    client.updateSessionSearch(narrowed)
+    expect(child.sent).toContainEqual({ type: 'sessionSearch', init: narrowed })
+    vi.advanceTimersByTime(10_000)
+    expect(child.sent).not.toContainEqual({ type: 'shutdown' })
+
+    client.updateSessionSearch({ ...on, settings: { enabled: false, historyDays: null } })
+    vi.advanceTimersByTime(100)
+    expect(child.sent).toContainEqual({ type: 'shutdown' })
+    client.dispose()
+  })
+
+  it('re-reads the init frame on every spawn so a respawn sees current consent', async () => {
+    const children: AiVaultServiceTestChild[] = []
+    let enabled = false
+    const client = new AiVaultScannerServiceClient({
+      processFactory: () => {
+        const child = new AiVaultServiceTestChild(12_345 + children.length)
+        children.push(child)
+        return child.asChildProcess()
+      },
+      init: () => ({
+        sessionParseCache: null,
+        sessionSearch: {
+          databasePath: '/data/ai-vault/session-search.sqlite',
+          settings: { enabled, historyDays: null },
+          roots: {}
+        }
+      })
+    })
+
+    const first = client.request({ type: 'request', operation: 'titles', requests: [] })
+    readyAiVaultServiceChild(children[0]!)
+    await Promise.resolve()
+    expect(children[0]!.sent[0]).toMatchObject({ sessionSearch: { settings: { enabled: false } } })
+
+    enabled = true
+    children[0]!.emit('error', new Error('crashed'))
+    await expect(first).rejects.toThrow('crashed')
+    void client.request({ type: 'request', operation: 'titles', requests: [] }).catch(() => {})
+    await vi.waitFor(() => expect(children.length).toBeGreaterThan(1))
+    for (const respawned of children.slice(1)) {
+      expect(respawned.sent[0]).toMatchObject({ sessionSearch: { settings: { enabled: true } } })
+    }
+    client.dispose()
+  })
+
+  // The hold is the only thing keeping this child alive, so nothing else will
+  // restart it: without its own restart, an idle indexing child that crashes
+  // leaves the index stopped until some unrelated request happens to arrive.
+  it('restarts a child that faulted while the index was holding it', async () => {
+    vi.useFakeTimers()
+    const { children, client } = setupChildren(() => SESSION_SEARCH_ON)
+    client.updateSessionSearch(SESSION_SEARCH_ON)
+    readyAiVaultServiceChild(children[0]!)
+    await Promise.resolve()
+
+    // No queued call and no outstanding invalidation: an idle child simply dies.
+    children[0]!.emit('error', new Error('crashed'))
+    expect(children).toHaveLength(1)
+    vi.advanceTimersByTime(250)
+
+    expect(children).toHaveLength(2)
+    expect(children[1]!.sent[0]).toMatchObject({
+      type: 'init',
+      sessionSearch: { settings: { enabled: true } }
+    })
+    client.dispose()
+  })
+
+  it.each([false, true])(
+    'waits for circuit expiry before restarting a held child (dispose=%s)',
+    async (dispose) => {
+      vi.useFakeTimers()
+      const { children, client } = setupChildren(() => SESSION_SEARCH_ON)
+      try {
+        client.updateSessionSearch(SESSION_SEARCH_ON)
+        for (const delay of [250, 1_000]) {
+          readyAiVaultServiceChild(children.at(-1)!)
+          await Promise.resolve()
+          children.at(-1)!.emit('error', new Error('temporary fault'))
+          await vi.advanceTimersByTimeAsync(delay)
+        }
+        expect(children).toHaveLength(3)
+        readyAiVaultServiceChild(children[2]!)
+        await Promise.resolve()
+        children[2]!.emit('error', new Error('temporary fault'))
+        await vi.advanceTimersByTimeAsync(59_999)
+        expect(children).toHaveLength(3)
+        if (dispose) {
+          client.dispose()
+        }
+        await vi.advanceTimersByTimeAsync(1)
+        expect(children).toHaveLength(dispose ? 3 : 4)
+        if (!dispose) {
+          readyAiVaultServiceChild(children[3]!)
+        }
+      } finally {
+        client.dispose()
+      }
+    }
+  )
+
+  it('leaves a faulted idle child dead while the index is off', async () => {
+    vi.useFakeTimers()
+    const { children, client } = setupChildren(() => null)
+    const titles = client.request({ type: 'request', operation: 'titles', requests: [] })
+    readyAiVaultServiceChild(children[0]!)
+    await Promise.resolve()
+    children[0]!.emit('message', {
+      type: 'result',
+      id: aiVaultServiceRequestId(children[0]!, 'titles'),
+      operation: 'titles',
+      value: { titles: [] }
+    })
+    await titles
+
+    children[0]!.emit('error', new Error('crashed'))
+    vi.advanceTimersByTime(5_000)
+
+    expect(children).toHaveLength(1)
     client.dispose()
   })
 

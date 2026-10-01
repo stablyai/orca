@@ -16,6 +16,7 @@ export function buildRelayHookEnvelope(
 ): AgentHookRelayEnvelope {
   return {
     source,
+    agentPresence: event.agentPresence,
     paneKey: event.paneKey,
     ...(event.launchToken ? { launchToken: event.launchToken } : {}),
     tabId: event.tabId,
@@ -25,6 +26,7 @@ export function buildRelayHookEnvelope(
     promptInteractionKey: event.promptInteractionKey,
     hookEventName: event.hookEventName,
     providerPromptId: event.providerPromptId,
+    grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
     toolAgentId: event.toolAgentId,

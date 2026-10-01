@@ -160,35 +160,47 @@ function waitForCaptureEnqueue(client: PostHog, event: EventName, uuid: string):
   })
 }
 
+/** Lets producers avoid preparing usage payloads when transmission is disabled. */
+export function isTelemetryEnabled(): boolean {
+  return (
+    (testTransportEnabled || (IS_OFFICIAL_BUILD && TELEMETRY_ENABLED)) &&
+    !shuttingDown &&
+    posthog !== null &&
+    commonProps !== null &&
+    storeRef !== null &&
+    resolveConsent(storeRef.getSettings()).effective === 'enabled'
+  )
+}
+
 // No-op in contributor / non-official builds; only official stable/rc builds (CI-injected `ORCA_BUILD_IDENTITY` + `ORCA_POSTHOG_WRITE_KEY`) transmit.
-export function track<N extends EventName>(name: N, props: EventProps<N>): void {
+export function track<N extends EventName>(name: N, props: EventProps<N>): boolean {
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
-    return
+    return false
   }
 
   // (1) Shutdown gate: late IPC arrivals must not enqueue against a flushing client.
   if (shuttingDown) {
-    return
+    return false
   }
   if (!posthog || !commonProps || !storeRef) {
-    return
+    return false
   }
 
   // (2) Burst cap before consent: the O(1) cap drops floods before the costly settings read, so a compromised opted-out renderer can't burn CPU.
   if (!consumeBurstToken(name)) {
-    return
+    return false
   }
 
   // (3) Consent resolve — reads live settings every call so it can't drift from persisted state / env-var precedence.
   const consent = resolveConsent(storeRef.getSettings())
   if (consent.effective !== 'enabled') {
-    return
+    return false
   }
 
   // (4) Validator — single enforcement point for schema, enum, key set, and length caps.
   const result = validate(name, props)
   if (!result.ok) {
-    return
+    return false
   }
 
   // (5) Capture. `$process_person_profile: false` stops posthog-node creating a person per install_id (no init-time equivalent).
@@ -201,6 +213,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): void 
       $process_person_profile: false
     }
   })
+  return true
 }
 
 export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {

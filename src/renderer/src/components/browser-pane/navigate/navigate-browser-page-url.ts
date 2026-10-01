@@ -122,7 +122,7 @@ export function navigateBrowserPageToUrl({
         }
 
         // Why: file:// notebooks in the browser are otherwise rendered as raw JSON by Chromium.
-        store.setActiveTabType('editor')
+        store.setActiveTabType('editor', worktreeId)
         store.openFile(
           {
             filePath: notebookPath,

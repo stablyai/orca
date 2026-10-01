@@ -1,18 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
+import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 
 const mocks = vi.hoisted(() => ({
-  markCodexProjectTrusted: vi.fn(),
-  markCopilotFolderTrusted: vi.fn(),
-  markCursorWorkspaceTrusted: vi.fn(),
   detectRemoteAgents: vi.fn(),
   detectInstalledAgentsWithShellPathHydration: vi.fn()
-}))
-
-vi.mock('../agent-trust-presets', () => ({
-  markCodexProjectTrusted: mocks.markCodexProjectTrusted,
-  markCopilotFolderTrusted: mocks.markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted: mocks.markCursorWorkspaceTrusted
 }))
 
 vi.mock('../preflight/agent-detection', () => ({
@@ -22,8 +14,7 @@ vi.mock('../preflight/agent-detection', () => ({
 
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft,
-  markLocalWorktreeTrusted
+  buildWorktreeStartupForDraft
 } from './runtime-worktree-agent-startup'
 
 function makeRepo(fields: Partial<Repo>): Repo {
@@ -80,6 +71,41 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
   it('keeps the rename for a runtime host with no nested SSH target', () => {
     expect(launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca-ide')
   })
+
+  it('uses per-launch arguments and preserves launch telemetry', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'claude',
+      agentArgs: '--model opus',
+      launchSource: 'source_control_recovery',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+
+    expect(result.startup.command).toContain("'--model'")
+    expect(result.startup.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: 'source_control_recovery',
+      request_kind: 'new'
+    })
+  })
+
+  it('attributes a startup agent whose caller named no surface as unknown', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'claude',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+
+    expect(result.startup.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'new'
+    })
+  })
 })
 
 describe('buildWorktreeStartupForDraft agent detection', () => {
@@ -113,31 +139,32 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
     expect(mocks.detectRemoteAgents).not.toHaveBeenCalled()
     expect(result?.agent).toBe('claude')
   })
-})
 
-describe('markLocalWorktreeTrusted', () => {
-  it('waits for the Codex trust write before resolving', async () => {
-    let finish!: () => void
-    mocks.markCodexProjectTrusted.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finish = resolve
+  // The host picks and launches this agent itself, so it is attributed like any other it builds,
+  // whether the draft rides the launch command or is pasted once the agent is up.
+  it.each([
+    ['claude', 'cli', 'cli', false],
+    ['claude', undefined, 'unknown', false],
+    ['claude-agent-teams', 'orchestration', 'orchestration', true],
+    ['claude-agent-teams', undefined, 'unknown', true]
+  ] as const)(
+    'attributes a %s draft launch named %s as %s',
+    async (agent, launchSource, expected, pasted) => {
+      const result = await buildWorktreeStartupForDraft({
+        repo: makeRepo({}),
+        settings,
+        draft: 'ship it',
+        requestedAgent: agent,
+        getLaunchPlatform: () => 'linux',
+        ...(launchSource ? { launchSource } : {})
       })
-    )
-    let settled = false
-    const marking = markLocalWorktreeTrusted('codex', '/workspace/app').then(() => {
-      settled = true
-    })
 
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    finish()
-    await marking
-    expect(mocks.markCodexProjectTrusted).toHaveBeenCalledWith('/workspace/app')
-  })
-
-  it('contains a rejected Codex trust write', async () => {
-    mocks.markCodexProjectTrusted.mockRejectedValueOnce(new Error('write failed'))
-
-    await expect(markLocalWorktreeTrusted('codex', '/workspace/app')).resolves.toBeUndefined()
-  })
+      expect(result?.draftPaste !== undefined).toBe(pasted)
+      expect(result?.startup.telemetry).toEqual({
+        agent_kind: tuiAgentToAgentKind(agent),
+        launch_source: expected,
+        request_kind: 'new'
+      })
+    }
+  )
 })

@@ -2,8 +2,9 @@ import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { formatDiffComments } from '@/lib/diff-comments-format'
-import { useAppStore } from '@/store'
-import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
+import { describeClipboardWriteFailure } from '@/lib/clipboard-write-failure'
+import type { DiffCommentsClearOptions } from '@/store/slices/diffComments'
+import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
 import {
   countPendingDiffCommentsClear,
   formatPendingDiffCommentsClearDescription,
@@ -22,13 +23,15 @@ export function useSourceControlDiffCommentNotes({
   clearDiffCommentsForFile
 }: {
   activeWorktreeId: string | null
-  clearDiffComments: (worktreeId: string) => Promise<boolean>
-  clearDiffCommentsForFile: (worktreeId: string, filePath: string) => Promise<boolean>
+  clearDiffComments: (worktreeId: string, options?: DiffCommentsClearOptions) => Promise<boolean>
+  clearDiffCommentsForFile: (
+    worktreeId: string,
+    filePath: string,
+    options?: DiffCommentsClearOptions
+  ) => Promise<boolean>
 }) {
-  // Why: pass activeWorktreeId even when null so the selector returns its stable empty sentinel; an inline [] would break Zustand's Object.is and churn.
-  const diffCommentsForActive = useAppStore((s) =>
-    selectWorktreeDiffCommentsOrEmpty(s, activeWorktreeId)
-  )
+  const { comments: diffCommentsForActive, markdownReviewNotesEnabled } =
+    useVisibleWorktreeDiffComments(activeWorktreeId)
   const diffCommentCount = diffCommentsForActive.length
   // Why: compute per-file comment counts once per render so rows don't each re-filter the full list.
   const diffCommentCountByPath = useMemo(() => {
@@ -61,8 +64,16 @@ export function useSourceControlDiffCommentNotes({
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
       showDiffCommentsCopied(true)
-    } catch {
-      // Why: swallow — clipboard write can fail when unfocused; best-effort copy needs no error surface.
+    } catch (error) {
+      // Why report: the write can reject (untrusted sender, 16MiB size guard) and silence here
+      // reads as a successful copy — the user finds out on paste.
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.SourceControl.diffCommentNotesCopyFailed',
+          'Failed to copy notes'
+        ),
+        { description: describeClipboardWriteFailure(error) }
+      )
     }
   }, [diffCommentsForActive, diffCommentsPrompt, showDiffCommentsCopied])
 
@@ -100,11 +111,12 @@ export function useSourceControlDiffCommentNotes({
       return
     }
     setIsClearingDiffComments(true)
+    const clearOptions = { keepMarkdownNotes: !markdownReviewNotesEnabled }
     try {
       const ok =
         pending.kind === 'all'
-          ? await clearDiffComments(pending.worktreeId)
-          : await clearDiffCommentsForFile(pending.worktreeId, pending.filePath)
+          ? await clearDiffComments(pending.worktreeId, clearOptions)
+          : await clearDiffCommentsForFile(pending.worktreeId, pending.filePath, clearOptions)
       if (ok) {
         setPendingDiffCommentsClear(null)
       } else {
@@ -123,6 +135,7 @@ export function useSourceControlDiffCommentNotes({
     clearDiffComments,
     clearDiffCommentsForFile,
     isClearingDiffComments,
+    markdownReviewNotesEnabled,
     resolvedPendingDiffCommentsClear,
     pendingDiffCommentsClearCount
   ])

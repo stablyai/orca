@@ -53,7 +53,8 @@ describe('native chat locale copy', () => {
         'sessionOptions',
         'chooseInAgentPicker',
         'toggleOption',
-        'valueUnknown',
+        'valueIsDefault',
+        'valueNotReported',
         'sentNotConfirmed'
       ] as const) {
         expect(composer[key].trim()).not.toBe('')
@@ -62,10 +63,6 @@ describe('native chat locale copy', () => {
       for (const key of ['fast', ...localizedEffortValues] as const) {
         expect(composer.optionValue[key].trim()).not.toBe('')
         expect(composer.optionValue[key]).not.toBe(englishComposer.optionValue[key])
-      }
-      // Why: On/Off loanwords are valid translations; only require non-empty.
-      for (const key of ['on', 'off'] as const) {
-        expect(composer.optionValue[key].trim()).not.toBe('')
       }
     }
   )
