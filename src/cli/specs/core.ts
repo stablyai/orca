@@ -240,10 +240,11 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'stop'],
     hidden: true,
     summary: 'Deprecated compatibility command for stopping terminal processes',
-    usage: 'orca terminal stop --worktree <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    usage: 'orca terminal stop --worktree <selector> [--json] | orca terminal stop --all [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'all'],
     notes: [
-      'Deprecated: use terminal close --worktree <selector> --all to stop the processes and durably remove their terminal surfaces.'
+      'Deprecated: use terminal close --worktree <selector> --all to stop the processes and durably remove their terminal surfaces.',
+      '--all talks directly to the local terminal daemon, so it works after the Orca app/runtime has exited.'
     ]
   },
   {
