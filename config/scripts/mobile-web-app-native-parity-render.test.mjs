@@ -47,7 +47,7 @@ const ENGINES = [
 const PAGE_ENTRY = `
 import { createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
-const { StyleSheet, TextInput, View } = require('react-native')
+const { StyleSheet, Text, TextInput, View } = require('react-native')
 const styles = StyleSheet.create({
   separatorBox: { paddingTop: 10.1, width: 12, backgroundColor: '#ffffff' },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#000000' },
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   input: { height: 40 }
 })
 createRoot(document.getElementById('root')).render(
-  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }))
+  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }), h(Text, { testID: 'plain-text' }, 'row'), h(Text, { testID: 'selectable-text', selectable: true }, 'message'))
 )
 `
 
@@ -164,6 +164,28 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
         return { focused: document.activeElement === input, style: style.outlineStyle }
       })
       expect(outline).toEqual({ focused: true, style: 'none' })
+    } finally {
+      await page.close()
+    }
+  })
+
+  it('leaves only selectable text and editable fields selectable, as native does', async () => {
+    // The iOS shell keeps WebKit text interaction on so fields take text, and a hold on plain text
+    // would otherwise raise WebKit's selection over the page's own long press.
+    const page = await openPage(engine)
+    try {
+      await page.type('[data-testid="input"]', 'typed')
+      const measured = await page.evaluate(() => {
+        const select = (id) => getComputedStyle(document.querySelector(`[data-testid="${id}"]`))
+        const read = (id) => select(id).webkitUserSelect || select(id).userSelect
+        return {
+          plain: read('plain-text'),
+          selectable: read('selectable-text'),
+          input: read('input'),
+          value: document.querySelector('[data-testid="input"]').value
+        }
+      })
+      expect(measured).toEqual({ plain: 'none', selectable: 'text', input: 'text', value: 'typed' })
     } finally {
       await page.close()
     }
