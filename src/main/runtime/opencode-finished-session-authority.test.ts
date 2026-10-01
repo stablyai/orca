@@ -30,7 +30,7 @@ vi.mock('../git/worktree', () => ({
       isMainWorktree: false
     }
   ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([
+  listWorktreesFromMembershipStrict: vi.fn().mockResolvedValue([
     {
       path: '/tmp/worktree-a',
       head: 'abc',

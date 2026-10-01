@@ -73,6 +73,7 @@ vi.mock('electron', () => ({
 vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock,
+  listWorktreesFromMembershipStrict: listWorktreesMock,
   listWorktreesSharedStrict: listWorktreesMock,
   listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
   describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),

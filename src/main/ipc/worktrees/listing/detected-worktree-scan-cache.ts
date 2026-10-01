@@ -5,6 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { listRepoWorktreesForDetectedScan } from '../../../repo-worktrees'
+import { isWorktreeMembershipModelBacked } from '../../../git/worktree-membership/worktree-membership-store'
 import {
   getRegisteredWorktreeRootsRevision,
   registerWorktreeRootsForRepo
@@ -26,7 +27,8 @@ import {
 } from '../../../local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
 
-// Why: absorb renderer polling bursts while bounding external worktree-change lag to one short refresh window.
+// Why: absorb renderer polling bursts while bounding external worktree-change lag to one short refresh
+// window. Only for repos Git answers; repos whose model reads Git's files are fresh on every read.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
 
 export type DetectedWorktreeScanCacheEntry = {
@@ -131,7 +133,10 @@ export async function listDetectedGitWorktrees(
   }
 
   const cacheKey = getDetectedWorktreeScanCacheKey(repo.id, localWorktreeGitOptions)
-  const cached = detectedWorktreeScanCache.get(cacheKey)
+  // A repo whose model reads Git's files keeps no rows here: the model re-validates on every read.
+  const modelBacked = (): boolean =>
+    isWorktreeMembershipModelBacked(repo.path, localWorktreeGitOptions.wslDistro)
+  const cached = modelBacked() ? undefined : detectedWorktreeScanCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
     return {
       gitWorktrees: cached.worktrees,
@@ -197,7 +202,7 @@ export async function listDetectedGitWorktrees(
       cacheKey
     // Why: a create/remove notification can invalidate mid-scan; don't let that stale scan repopulate the cache afterward.
     const generationCurrent = isLocalWorktreeScanGenerationCurrent(repo.id, generation)
-    if (!scan.invalidated && routingUnchanged && generationCurrent) {
+    if (!scan.invalidated && routingUnchanged && generationCurrent && !modelBacked()) {
       detectedWorktreeScanCache.set(cacheKey, {
         worktrees: gitWorktrees,
         expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,

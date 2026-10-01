@@ -20,10 +20,14 @@ import {
 } from './paired-client-navigation-test-harness'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn(),
-  listWorktreesStrict: vi.fn()
-}))
+vi.mock('../git/worktree', () => {
+  const listWorktreesStrict = vi.fn()
+  return {
+    listWorktrees: vi.fn(),
+    listWorktreesStrict,
+    listWorktreesFromMembershipStrict: listWorktreesStrict
+  }
+})
 
 const initialWorktreePath = join(tmpdir(), 'repo')
 const externalWorktreePath = join(tmpdir(), 'external-worktree')

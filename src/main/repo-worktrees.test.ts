@@ -10,6 +10,7 @@ vi.mock('./git/worktree', () => ({
   listWorktreeGraph: listWorktreeGraphMock,
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesStrictMock,
+  listWorktreesFromMembershipStrict: listWorktreesStrictMock,
   listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesStrictMock
 }))
 

@@ -4,8 +4,8 @@ import type { GitWorktreeInfo } from '../shared/worktree/types'
 import {
   listWorktreeGraph,
   listWorktrees,
-  listWorktreesSharedStrictAllowingTrueEmpty,
-  listWorktreesStrict
+  listWorktreesFromMembershipStrict,
+  listWorktreesSharedStrictAllowingTrueEmpty
 } from './git/worktree'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
@@ -141,7 +141,7 @@ export async function listLocalRepoWorktreesStrict(
     return [createFolderWorktree(repo)]
   }
   const worktrees = hasLocalRepoWorktreeListOptions(options)
-    ? await listWorktreesStrict(repo.path, options)
-    : await listWorktreesStrict(repo.path)
+    ? await listWorktreesFromMembershipStrict(repo.path, options)
+    : await listWorktreesFromMembershipStrict(repo.path)
   return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }

@@ -15,6 +15,12 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
+vi.mock('./worktree-membership/worktree-membership-store', async (importOriginal) =>
+  (await import('./worktree-membership-store-git-answered-mock')).gitAnsweredMembershipStoreMock(
+    await importOriginal()
+  )
+)
+
 import { listWorktreeGraph, WORKTREE_LIST_TIMEOUT_MS } from './worktree'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 

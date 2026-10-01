@@ -10,7 +10,6 @@ import {
   readCheckedOutBranchRef,
   readRepoCommonDirFromGit,
   readRepoLocation,
-  readTranslatedWorktreeGraph,
   readWorktreeHeadOid,
   readWorktreeList
 } from './worktree-list-reader'
@@ -22,20 +21,52 @@ import {
   normalizeLocalBranchRef
 } from './worktree-operation-options'
 import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
-import { detectSparseCheckoutCached } from './worktree-sparse-checkout-cache'
+import { annotateSparseCheckoutStatus } from './worktree-sparse-annotation'
 import { resolveGitDir } from './source-control/resolve-git-dir'
+import {
+  MissingRepoPathError,
+  readWorktreeMembership,
+  type WorktreeMembershipReadOptions
+} from './worktree-membership/worktree-membership-store'
 
-const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
+// Row arrays the model produced; they already carry `isSparse`, so the annotation pass skips them.
+const membershipModelRowSets = new WeakSet<GitWorktreeInfo[]>()
+
+/** True for rows the membership model answered, which need no sparse annotation. */
+export function isMembershipModelRows(rows: GitWorktreeInfo[]): boolean {
+  return membershipModelRowSets.has(rows)
+}
+
+/**
+ * Rows from the repo's worktree membership model, which re-validates Git's admin files by stat
+ * instead of running `git worktree list` per read. Git answers directly only for a layout the model
+ * cannot resolve from files; those rows still need the sparse annotation.
+ */
+async function readMembershipRows(
+  repoPath: string,
+  options: WorktreeMembershipReadOptions,
+  annotateSparse: boolean
+): Promise<GitWorktreeInfo[]> {
+  const { rows, fromModel } = await readWorktreeMembership(repoPath, options)
+  // Copies: the model's rows are its memo, and callers may edit what they get.
+  const visible = rows
+    .filter(
+      (worktree) => options.includeCreatePreparations || !isWorktreeCreatePreparation(worktree)
+    )
+    .map((worktree) => ({ ...worktree }))
+  if (fromModel) {
+    membershipModelRowSets.add(visible)
+    return visible
+  }
+  return annotateSparse ? annotateSparseCheckoutStatus(repoPath, visible, options) : visible
+}
 
 export async function listWorktreeGraph(
   repoPath: string,
-  options: GitWorktreeExecOptions = {}
+  options: WorktreeMembershipReadOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   try {
-    const worktrees = await readTranslatedWorktreeGraph(repoPath, options)
-    return options.includeCreatePreparations
-      ? worktrees
-      : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
+    return await readMembershipRows(repoPath, options, false)
   } catch (err) {
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
@@ -47,14 +78,10 @@ export async function listWorktreeGraph(
 
 export async function listWorktreesUnshared(
   repoPath: string,
-  options: GitWorktreeExecOptions = {}
+  options: WorktreeMembershipReadOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   try {
-    const worktrees = await readTranslatedWorktreeGraph(repoPath, options)
-    const visibleWorktrees = options.includeCreatePreparations
-      ? worktrees
-      : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-    return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
+    return await readMembershipRows(repoPath, options, true)
   } catch (err) {
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
@@ -65,11 +92,23 @@ export async function listWorktreesUnshared(
   }
 }
 
+/** Strict rows from the membership model: a failed listing rejects, including a missing repo. */
+export function listWorktreesFromMembershipStrict(
+  repoPath: string,
+  options: WorktreeMembershipReadOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return readMembershipRows(repoPath, options, true)
+}
+
 /**
  * The two failures where an empty listing is the repo's true answer, not a broken scan: the repo
  * path is gone, or it is not a Git repo. Every other failure means the scan could not read Git.
  */
 async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promise<boolean> {
+  if (err instanceof MissingRepoPathError) {
+    console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
+    return true
+  }
   if (getErrorCode(err) === 'ENOENT') {
     try {
       await stat(repoPath)
@@ -107,45 +146,16 @@ export async function listWorktreesStrict(
  */
 export async function listWorktreesStrictAllowingTrueEmpty(
   repoPath: string,
-  options: GitWorktreeExecOptions = {}
+  options: WorktreeMembershipReadOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   try {
-    return await listWorktreesStrict(repoPath, options)
+    return await listWorktreesFromMembershipStrict(repoPath, options)
   } catch (err) {
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
     }
     throw err
   }
-}
-
-export async function annotateSparseCheckoutStatus(
-  repoPath: string,
-  worktrees: GitWorktreeInfo[],
-  options: GitWorktreeExecOptions = {}
-): Promise<GitWorktreeInfo[]> {
-  const annotated = [...worktrees]
-  let nextIndex = 0
-
-  async function detectNext(): Promise<void> {
-    while (nextIndex < worktrees.length) {
-      const index = nextIndex
-      nextIndex += 1
-      const worktree = worktrees[index]
-      if (!worktree || worktree.isBare || worktree.isSparse) {
-        continue
-      }
-      const isSparse = await detectSparseCheckoutCached(repoPath, worktree.path, options)
-      if (isSparse) {
-        annotated[index] = { ...worktree, isSparse }
-      }
-    }
-  }
-
-  // Why: cap concurrency so status-poll refreshes don't fan out many sparse-checkout filesystem probes at once.
-  const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, worktrees.length)
-  await Promise.all(Array.from({ length: workerCount }, () => detectNext()))
-  return annotated
 }
 
 /**

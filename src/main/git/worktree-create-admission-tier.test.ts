@@ -9,6 +9,12 @@ const gitExecFileAsyncMock = vi.hoisted(() => vi.fn<GitExec>())
 
 vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
+vi.mock('./worktree-membership/worktree-membership-store', async (importOriginal) =>
+  (await import('./worktree-membership-store-git-answered-mock')).gitAnsweredMembershipStoreMock(
+    await importOriginal()
+  )
+)
+
 import { addWorktree } from './worktree-add'
 import { listWorktreesSharedStrict } from './worktree-scan-cache'
 

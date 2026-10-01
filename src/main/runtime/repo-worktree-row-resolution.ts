@@ -28,9 +28,6 @@ import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 /**
  * Per-repo budget for one resolution pass. Why: mobile startup shares this path, so one slow repo
  * degrades its own metadata instead of blocking all session loading.
- *
- * Exported because the Git-admin fingerprint probe derives its own timeout by subtracting a fallback
- * allowance from this, and that invariant only holds with a single source of truth.
  */
 export const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
 

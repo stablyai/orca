@@ -1,3 +1,4 @@
+import { markWorktreeMembershipDirty } from './worktree-membership/worktree-membership-store'
 import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
   getBranchCleanupTargetRefs
@@ -82,6 +83,7 @@ async function deleteLocalBranchAfterWorktreeRemoval(
   try {
     // Why: only pay for `worktree prune` when a stale admin record may be blocking `branch -d`.
     await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options))
+    markWorktreeMembershipDirty(repoPath)
   } catch (error) {
     console.warn(`[git] Failed to prune worktrees before deleting branch "${branchName}"`, error)
     return 'checked-out'

@@ -5,7 +5,8 @@ import { OrcaRuntimeService } from './orca-runtime'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
+  listWorktreesStrict: vi.fn().mockResolvedValue([]),
+  listWorktreesFromMembershipStrict: vi.fn().mockResolvedValue([])
 }))
 
 vi.mock('../hooks', () => ({

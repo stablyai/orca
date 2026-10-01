@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../shared/repo-types'
+import { markWorktreeMembershipDirty } from '../../../git/worktree-membership/worktree-membership-store'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -252,6 +253,7 @@ async function finishLocalWorktreeRemoval({
           cwd: repo.path,
           ...localWorktreeGitOptions
         }).catch(() => {})
+        markWorktreeMembershipDirty(repo.path)
         await cleanupUnusedWorktreePushTargetRemote(
           repo.path,
           args.worktreeId,

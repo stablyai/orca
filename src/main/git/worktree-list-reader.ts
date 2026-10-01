@@ -195,6 +195,17 @@ export async function readWorktreeList(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
+  return (await readWorktreeListWithForm(repoPath, options)).worktrees
+}
+
+/**
+ * The listing plus which porcelain form produced it. Only the `-z` form (Git >= 2.36) is known to
+ * carry `locked` and `prunable`; the line form's are missing on older Git or probed by existence.
+ */
+export async function readWorktreeListWithForm(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<{ worktrees: GitWorktreeInfo[]; nulDelimited: boolean }> {
   const execOptions = {
     cwd: repoPath,
     ...options,
@@ -203,18 +214,19 @@ export async function readWorktreeList(
   return withLocalGitCapabilityCacheForExecution(
     { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
     (capabilities) =>
-      capabilities.runWithFallback(
+      capabilities.runWithFallback<{ worktrees: GitWorktreeInfo[]; nulDelimited: boolean }>(
         'worktree-list-z',
         async () => {
           const { stdout } = await gitExecFileAsync(
             ['worktree', 'list', '--porcelain', '-z'],
             execOptions
           )
-          return normalizeMainWorktreePath(
+          const worktrees = await normalizeMainWorktreePath(
             repoPath,
             parseWorktreeList(stdout, { nulDelimited: true }),
             options
           )
+          return { worktrees, nulDelimited: true }
         },
         async () => {
           // Why: `-z` preserves worktree paths with newlines but Git <2.36 rejects it; fall back to the line parser.
@@ -229,7 +241,8 @@ export async function readWorktreeList(
           )
           // Why: Git <2.31 emits no `prunable`, so probe each linked path for existence instead of trusting
           // stale registrations; a harmless backstop on 2.31–2.35 where parseWorktreeList already set it (#8389).
-          return annotatePrunableByExistence(normalized, repoPath, options)
+          const worktrees = await annotatePrunableByExistence(normalized, repoPath, options)
+          return { worktrees, nulDelimited: false }
         },
         isUnsupportedWorktreeListZError
       )

@@ -20,7 +20,7 @@ vi.mock('../git/worktree', () => {
   ]
   return {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    listWorktreesFromMembershipStrict: vi.fn().mockResolvedValue(worktrees)
   }
 })
 

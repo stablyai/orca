@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { resolveGitDir } from './status'
+import { parseGitConfigFlag } from './git-config-file-entries'
 
 export async function detectSparseCheckout(
   worktreePath: string,
@@ -27,6 +28,29 @@ export async function detectSparseCheckout(
     // subprocess fan-out PR #1290 removed, and it reads git's config files directly (no
     // subprocess) so it stays cheap and needs no exec options.
     return await isSparseCheckoutEnabled(gitDir)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * {@link detectSparseCheckout} for a caller that already knows the worktree's gitdir and has read the
+ * shared repo config, so a listing of hundreds of worktrees reads each shared file once.
+ */
+export async function detectSparseCheckoutInGitDir(
+  gitDir: string,
+  sharedConfig: { sparseCheckout: boolean | undefined; worktreeConfig: boolean }
+): Promise<boolean> {
+  try {
+    const stats = await stat(join(gitDir, 'info', 'sparse-checkout'))
+    if (!stats.isFile() || stats.size === 0) {
+      return false
+    }
+    if (!sharedConfig.worktreeConfig) {
+      return sharedConfig.sparseCheckout ?? false
+    }
+    const worktreeConfig = await readGitConfigText(join(gitDir, 'config.worktree'))
+    return parseCoreSparseCheckoutFlag(worktreeConfig) ?? sharedConfig.sparseCheckout ?? false
   } catch {
     return false
   }
@@ -77,67 +101,4 @@ async function readGitConfigText(configPath: string): Promise<string> {
 // assignment wins, and a `[core "subsection"]` header is intentionally not treated as `[core]`.
 export function parseCoreSparseCheckoutFlag(configContent: string): boolean | undefined {
   return parseGitConfigFlag(configContent, 'core', 'sparsecheckout')
-}
-
-// A section header may be followed on the same line by further headers and then one assignment
-// (`[core] sparseCheckout = true` is legal git config); the value runs to end of line, so at most
-// one assignment can share a line and the last header before it decides the section.
-const GIT_CONFIG_SECTION_HEADER = /^\[\s*([A-Za-z0-9.-]+)(\s+"(?:[^"\\]|\\.)*")?\s*\]/
-const GIT_CONFIG_ASSIGNMENT = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$/
-
-// `section` and `key` must be lowercase: git config names are case-insensitive.
-function parseGitConfigFlag(
-  configContent: string,
-  section: string,
-  key: string
-): boolean | undefined {
-  let inSection = false
-  let value: boolean | undefined
-  for (const rawLine of configContent.split(/\r?\n/)) {
-    let rest = stripGitConfigComment(rawLine).trim()
-    for (
-      let header = rest.match(GIT_CONFIG_SECTION_HEADER);
-      header;
-      header = rest.match(GIT_CONFIG_SECTION_HEADER)
-    ) {
-      inSection = header[1].toLowerCase() === section && header[2] === undefined
-      rest = rest.slice(header[0].length).trim()
-    }
-    if (!inSection || rest.length === 0) {
-      continue
-    }
-    const assignment = rest.match(GIT_CONFIG_ASSIGNMENT)
-    if (!assignment || assignment[1].toLowerCase() !== key) {
-      continue
-    }
-    value = parseGitConfigBoolean(assignment[2])
-  }
-  return value
-}
-
-// Drop a trailing `#`/`;` comment that is not inside a double-quoted value.
-function stripGitConfigComment(line: string): string {
-  let inQuotes = false
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index]
-    if (char === '"' && line[index - 1] !== '\\') {
-      inQuotes = !inQuotes
-    } else if ((char === '#' || char === ';') && !inQuotes) {
-      return line.slice(0, index)
-    }
-  }
-  return line
-}
-
-// Git treats a valueless boolean (`sparseCheckout` with no `=`) as true and only true/yes/on/1 as
-// true otherwise; everything else (including the disable-written `false`) is false.
-function parseGitConfigBoolean(raw: string | undefined): boolean {
-  if (raw === undefined) {
-    return true
-  }
-  const value = raw
-    .trim()
-    .replace(/^"(.*)"$/, '$1')
-    .toLowerCase()
-  return value === 'true' || value === 'yes' || value === 'on' || value === '1'
 }

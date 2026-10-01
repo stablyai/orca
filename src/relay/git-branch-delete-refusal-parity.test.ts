@@ -24,6 +24,12 @@ vi.mock('../main/git/runner', () => ({
   translateWslOutputPaths: (output: string) => output
 }))
 
+vi.mock('../main/git/worktree-membership/worktree-membership-store', async (importOriginal) =>
+  (
+    await import('../main/git/worktree-membership-store-git-answered-mock')
+  ).gitAnsweredMembershipStoreMock(await importOriginal())
+)
+
 vi.mock('../main/git/status', () => ({
   resolveGitDir: resolveGitDirMock,
   runWithGitReadCacheInvalidation: <T>(run: () => Promise<T>) => run()

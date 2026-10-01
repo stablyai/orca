@@ -23,6 +23,12 @@ vi.mock('./worktree-list-reader', () => ({
   readWorktreeList: readWorktreeListMock
 }))
 
+vi.mock('./worktree-membership/worktree-membership-store', async (importOriginal) =>
+  (await import('./worktree-membership-store-git-answered-mock')).gitAnsweredMembershipStoreMock(
+    await importOriginal()
+  )
+)
+
 import { _resetWorktreeScanCacheForTests, listWorktreeGraph, listWorktrees } from './worktree'
 import { __resetSparseCheckoutStateCacheForTests } from './worktree-sparse-checkout-cache'
 

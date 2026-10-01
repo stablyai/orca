@@ -1,4 +1,5 @@
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
+import { markWorktreeMembershipDirty } from './git/worktree-membership/worktree-membership-store'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
 import { areWorktreePathsEqual, formatWorktreeRemovalError } from './ipc/worktree-logic'
@@ -84,6 +85,7 @@ async function removeRequiredGitWorktreeRegistration(
       cwd: args.repoPath,
       ...args.localWorktreeGitOptions
     })
+    markWorktreeMembershipDirty(args.repoPath)
     result = preservedBranchResult(args.registeredWorktree, args.deleteBranch)
   } catch (error) {
     removalError = error

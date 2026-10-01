@@ -6,10 +6,14 @@ export {
 } from './worktree-add'
 export { forceDeleteLocalBranch } from './worktree-branch-removal'
 export { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
-// Unshared by design: verification-after-mutation callers must not join an
-// in-flight scan that predates a raw `git worktree prune` or an external client.
-// Opt into coalescing with `listWorktreesSharedStrict`.
-export { describeCreatedWorktree, listWorktreesStrict } from './worktree-listing'
+// `listWorktreesStrict` runs Git and is unshared by design: the removal chain must not join an
+// in-flight scan that predates a raw `git worktree prune` or an external client. Everything else
+// reads the membership model (`listWorktreesFromMembershipStrict`, or the shared variants below).
+export {
+  describeCreatedWorktree,
+  listWorktreesFromMembershipStrict,
+  listWorktreesStrict
+} from './worktree-listing'
 export { moveWorktree } from './worktree-move'
 export {
   WORKTREE_ADD_TIMEOUT_MAX_MS,

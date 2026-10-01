@@ -14,9 +14,9 @@ import { detectSparseCheckout } from './worktree-sparse-state'
 //    `config.worktree`, which the git-common-dir watcher already classifies as structural and
 //    routes through notifyWorktreesChanged -> the invalidator this module registers (repo-scoped).
 //  - External toggle with extensions.worktreeConfig off, or a bare pattern-file edit: unwitnessed
-//    by the watcher (same blind spot `readRepoWorktreeAdminFingerprint` already documents and
-//    accepts). Past the reconcile window below, a read still returns instantly from the stale entry
-//    but also kicks a deduplicated background re-detect; a flip fires the change listener (wired to
+//    by the watcher (the membership model leaves the same blind spot to its 5 min floor). Past the
+//    reconcile window below, a read still returns instantly from the stale entry but also kicks a
+//    deduplicated background re-detect; a flip fires the change listener (wired to
 //    the existing worktrees-changed notification) so the visible staleness window collapses from the
 //    interval to one refresh cycle instead of blocking the listing that noticed it. That notification
 //    itself runs the invalidator registered below, so a flip is immediately followed by a full clear

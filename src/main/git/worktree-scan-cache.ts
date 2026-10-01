@@ -1,10 +1,12 @@
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import {
-  annotateSparseCheckoutStatus,
+  isMembershipModelRows,
   listWorktreeGraph as listWorktreeGraphUnshared,
-  listWorktreesStrict as listWorktreesStrictUnshared,
+  listWorktreesFromMembershipStrict,
   listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared
 } from './worktree-listing'
+import { annotateSparseCheckoutStatus } from './worktree-sparse-annotation'
+import { markWorktreeMembershipDirty } from './worktree-membership/worktree-membership-store'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from './worktree-operation-options'
 import { resolveGitAdmissionTier } from './command-runner/git-operation-executor'
@@ -28,6 +30,8 @@ function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
 }
 
 export function bumpWorktreeScanGeneration(repoPath: string): void {
+  // Before the early return: the membership model must re-derive after every mutation, scan or not.
+  markWorktreeMembershipDirty(repoPath)
   // Why: generations only prevent joining a pre-mutation scan; with no active scan, keeping the repo path just leaks completed mutation keys.
   if (!hasInFlightWorktreeScanForRepo(repoPath)) {
     return
@@ -94,25 +98,25 @@ function shareWorktreeScan(
 }
 
 /**
- * Sparse annotation layered over the shared graph scan rather than its own `git worktree list`.
- *
- * Both paths soften a Git failure to `[]`, so they can share one listing; only this one pays the
- * per-worktree sparse probe. That lets a caller which reads just `worktree.path` skip the probes
- * without costing a second subprocess when it overlaps a badge reader — the two ran Git twice
- * before. Strict stays on its own scan because it must be able to reject.
+ * Sparse annotation layered over the shared graph read rather than its own read, so a path-only
+ * caller and a badge reader that overlap share one listing. Model rows already carry `isSparse`;
+ * only rows Git answered directly pay the per-worktree probe. Strict stays separate because it must
+ * be able to reject.
  */
 async function runAnnotatedWorktreeScan(
   repoPath: string,
   options: GitWorktreeExecOptions
 ): Promise<GitWorktreeInfo[]> {
   const worktrees = await listWorktreeGraph(repoPath, options)
-  return annotateSparseCheckoutStatus(repoPath, worktrees, options)
+  return isMembershipModelRows(worktrees)
+    ? worktrees
+    : annotateSparseCheckoutStatus(repoPath, worktrees, options)
 }
 
 /**
- * List all worktrees for a git repo at the given path. Concurrent calls for
- * the same repo share one scan (unless the caller passes an AbortSignal,
- * which must only cancel its own scan). Git failures soften to `[]`.
+ * List all worktrees for a git repo at the given path, from the repo's membership model. Concurrent
+ * calls for the same repo share one read (unless the caller passes an AbortSignal, which must only
+ * cancel its own read). Failures soften to `[]`.
  */
 export function listWorktrees(
   repoPath: string,
@@ -122,8 +126,8 @@ export function listWorktrees(
 }
 
 /**
- * List the worktree graph without sparse-checkout probes. Concurrent callers share the same
- * generation-fenced scan, while callers with an AbortSignal retain an isolated subprocess.
+ * The worktree graph for callers that read only paths: Git-answered rows skip the sparse probes.
+ * Concurrent callers share one generation-fenced read; an AbortSignal caller keeps its own.
  */
 export function listWorktreeGraph(
   repoPath: string,
@@ -133,14 +137,14 @@ export function listWorktreeGraph(
 }
 
 /**
- * `listWorktreesStrict` through the same in-flight map, so callers that must see a Git failure
+ * Strict membership rows through the same in-flight map, so callers that must see a failure
  * (worktree-create verification) still coalesce with a concurrent refresh (#16520).
  */
 export function listWorktreesSharedStrict(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
-  return shareWorktreeScan(repoPath, options, 'strict', listWorktreesStrictUnshared)
+  return shareWorktreeScan(repoPath, options, 'strict', listWorktreesFromMembershipStrict)
 }
 
 /**

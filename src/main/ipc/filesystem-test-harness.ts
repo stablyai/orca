@@ -109,7 +109,8 @@ export const gitIgnoredPathsMock = { checkIgnoredPaths: checkIgnoredPathsMock }
 export const gitWorktreeMock = {
   listWorktreeGraph: listWorktreesMock,
   listWorktrees: listWorktreesMock,
-  listWorktreesStrict: listWorktreesMock
+  listWorktreesStrict: listWorktreesMock,
+  listWorktreesFromMembershipStrict: listWorktreesMock
 }
 
 const PROVIDER_UNAVAILABLE_MESSAGE =

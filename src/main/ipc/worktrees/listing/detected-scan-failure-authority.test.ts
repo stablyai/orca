@@ -13,6 +13,12 @@ vi.mock('../../../git/runner', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+vi.mock('../../../git/worktree-membership/worktree-membership-store', async (importOriginal) =>
+  (
+    await import('../../../git/worktree-membership-store-git-answered-mock')
+  ).gitAnsweredMembershipStoreMock(await importOriginal())
+)
+
 const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provider-listing')
 const { __resetDetectedWorktreeScanCacheForTests } = await import('./detected-worktree-scan-cache')
 const { _resetWorktreeScanCacheForTests } = await import('../../../git/worktree-scan-cache')

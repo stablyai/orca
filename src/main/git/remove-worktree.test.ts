@@ -27,6 +27,20 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
+const membershipReads = vi.hoisted(() => ({ count: 0 }))
+vi.mock('./worktree-membership/worktree-membership-store', async (importOriginal) => {
+  const store = (
+    await import('./worktree-membership-store-git-answered-mock')
+  ).gitAnsweredMembershipStoreMock(await importOriginal())
+  return {
+    ...store,
+    readWorktreeMembership: (...args: Parameters<typeof store.readWorktreeMembership>) => {
+      membershipReads.count += 1
+      return store.readWorktreeMembership(...args)
+    }
+  }
+})
+
 vi.mock('./status', () => ({
   resolveGitDir: resolveGitDirMock,
   runWithGitReadCacheInvalidation: <T>(run: () => Promise<T>) => run()
@@ -107,6 +121,27 @@ branch refs/heads/main
     )
     expect(calls).not.toContain('git worktree prune')
     expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git branch -d -- feature/test')
+  })
+
+  it('looks the removed worktree up with Git, not the shared membership read', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      }
+    })
+    membershipReads.count = 0
+
+    await removeWorktree('/repo', '/repo-feature')
+
+    expect(getGitCalls()).toContain('git branch -d -- feature/test')
+    expect(membershipReads.count).toBe(0)
   })
 
   it('preserves the branch when requested for a pre-existing local branch checkout', async () => {

@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../shared/worktree/types'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
@@ -7,12 +7,20 @@ import {
   headIdentityEntryKey,
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
+import {
+  parseRefFileContent,
+  createPackedRefLookup,
+  readTrimmedAdminFile as readTrimmedFile,
+  resolveRefToOid,
+  UNREADABLE,
+  type PackedRefLookup,
+  type Unreadable
+} from '../git/worktree-membership/worktree-admin-file-reads'
 
 // Why: the whole point of this reader is replacing `git worktree list` fanout
 // with bounded metadata-file reads, so head freshness never re-creates the
 // spawn pressure that stalled terminal input. Keep it spawn-free.
 
-const MAX_SYMREF_DEPTH = 5
 // Head identity refreshes run on every git-common poll. Keep metadata reads
 // bounded while avoiding a serial round trip per linked worktree (especially
 // noticeable on WSL/UNC and network-backed worktrees).
@@ -54,96 +62,11 @@ export type GitCommonHeadIdentityRead = {
 /** ref → oid resolved during one pass; null means the ref no longer resolves. */
 type ResolvedRefOids = Map<string, string | null>
 
-// Why: a read that failed for any reason other than absence is an UNKNOWN, not
-// an absence — the same distinction AGENTS.md draws for the SSH verdict
-// vocabulary. Collapsing the two evicts identities Orca still knows and turns a
-// single EMFILE into a full re-read of every worktree on the next pass.
-const UNREADABLE = Symbol('unreadable')
-type Unreadable = typeof UNREADABLE
-
-async function readTrimmedFile(path: string): Promise<string | null | Unreadable> {
-  try {
-    return (await readFile(path, 'utf8')).trim()
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : UNREADABLE
-  }
-}
-
-// packed-refs lines are `<oid> <ref>`; `#` headers and `^` peel lines skipped.
-async function readPackedRefs(commonDirPath: string): Promise<Map<string, string> | Unreadable> {
-  const refs = new Map<string, string>()
-  const content = await readTrimmedFile(join(commonDirPath, 'packed-refs'))
-  if (content === UNREADABLE) {
-    return UNREADABLE
-  }
-  // No packed-refs file at all is a fact: every ref is loose.
-  if (content === null) {
-    return refs
-  }
-  for (const line of content.split('\n')) {
-    if (!line || line.startsWith('#') || line.startsWith('^')) {
-      continue
-    }
-    const separator = line.indexOf(' ')
-    if (separator <= 0) {
-      continue
-    }
-    refs.set(line.slice(separator + 1).trim(), line.slice(0, separator))
-  }
-  return refs
-}
-
-// Why: ref content comes from repo files an attacker can craft. Git forbids
-// `\` and `:` in ref names, and on Windows `join` also treats `\` as a
-// separator — both must be rejected before splicing the ref into a file path.
-function isSafeRefName(ref: string): boolean {
-  if (ref.length === 0 || ref.includes('\\') || ref.includes(':')) {
-    return false
-  }
-  return !ref.split('/').some((part) => part === '..' || part === '')
-}
-
-// SHA-1 (40) or SHA-256 (64) object id. Anything else read from disk is not a
-// head and must never be emitted — this also caps what any path escape could leak.
-const OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
-
-function asObjectId(value: string | null | undefined): string | null {
-  return value != null && OBJECT_ID_PATTERN.test(value) ? value : null
-}
-
-async function resolveRefToOid(
-  commonDirPath: string,
-  ref: string,
-  packedRefs: () => Promise<Map<string, string> | Unreadable>
-): Promise<string | null | Unreadable> {
-  let current = ref
-  for (let depth = 0; depth < MAX_SYMREF_DEPTH; depth++) {
-    if (!isSafeRefName(current)) {
-      return null
-    }
-    // Branch refs are shared repo state, so loose files live in the common dir.
-    const loose = await readTrimmedFile(join(commonDirPath, ...current.split('/')))
-    if (loose === UNREADABLE) {
-      return UNREADABLE
-    }
-    if (loose === null) {
-      const packed = await packedRefs()
-      return packed === UNREADABLE ? UNREADABLE : asObjectId(packed.get(current))
-    }
-    if (loose.startsWith('ref: ')) {
-      current = loose.slice('ref: '.length).trim()
-      continue
-    }
-    return asObjectId(loose)
-  }
-  return null
-}
-
 async function readHeadIdentity(
   commonDirPath: string,
   headFilePath: string,
   worktreePath: string,
-  packedRefs: () => Promise<Map<string, string> | Unreadable>,
+  packedRef: PackedRefLookup,
   resolved: ResolvedRefOids
 ): Promise<WorktreeHeadIdentity | null | Unreadable> {
   const head = await readTrimmedFile(headFilePath)
@@ -153,29 +76,29 @@ async function readHeadIdentity(
   if (!head) {
     return null
   }
-  if (head.startsWith('ref: ')) {
-    const ref = head.slice('ref: '.length).trim()
-    const oid = await resolveRefToOid(commonDirPath, ref, packedRefs)
+  const parsed = parseRefFileContent(head)
+  if ('symref' in parsed) {
+    const resolution = await resolveRefToOid(commonDirPath, parsed.symref, packedRef)
     // Only definite outcomes are replayed onto siblings; an unknown must not
     // evict every other worktree that shares this branch.
-    if (oid === UNREADABLE) {
+    if (resolution === UNREADABLE) {
       return UNREADABLE
     }
-    resolved.set(ref, oid)
+    // Why the chain's last name: Git reports the branch a symref chain ends at.
+    resolved.set(resolution.ref ?? parsed.symref, resolution.oid)
     // Unborn branches (no commit yet) stay covered by the structural listing.
-    if (!oid) {
+    if (!resolution.oid || !resolution.ref) {
       return null
     }
-    return { worktreePath, head: oid, branch: ref }
+    return { worktreePath, head: resolution.oid, branch: resolution.ref }
   }
-  const detachedOid = asObjectId(head)
-  return detachedOid ? { worktreePath, head: detachedOid, branch: null } : null
+  return 'oid' in parsed ? { worktreePath, head: parsed.oid, branch: null } : null
 }
 
 async function readLinkedEntryIdentity(
   commonDirPath: string,
   entryName: string,
-  packedRefs: () => Promise<Map<string, string> | Unreadable>,
+  packedRef: PackedRefLookup,
   resolved: ResolvedRefOids
 ): Promise<WorktreeHeadIdentity | null | Unreadable> {
   const entryPath = join(commonDirPath, 'worktrees', entryName)
@@ -193,7 +116,7 @@ async function readLinkedEntryIdentity(
     commonDirPath,
     join(entryPath, 'HEAD'),
     dirname(gitdirAbsolute),
-    packedRefs,
+    packedRef,
     resolved
   )
 }
@@ -269,9 +192,7 @@ export async function readGitCommonHeadIdentities(
   cache: WorktreeHeadIdentityCache = createWorktreeHeadIdentityCache(),
   scope: WorktreeHeadIdentityScope = FULL_HEAD_IDENTITY_SCOPE
 ): Promise<GitCommonHeadIdentityRead> {
-  let packedRefsPromise: Promise<Map<string, string> | Unreadable> | null = null
-  const packedRefs = (): Promise<Map<string, string> | Unreadable> =>
-    (packedRefsPromise ??= readPackedRefs(commonDirPath))
+  const packedRef = createPackedRefLookup(commonDirPath)
   const resolved: ResolvedRefOids = new Map()
 
   // Only the standard `<checkout>/.git` layout maps a common dir back to its
@@ -283,7 +204,7 @@ export async function readGitCommonHeadIdentities(
       commonDirPath,
       join(commonDirPath, 'HEAD'),
       dirname(commonDirPath),
-      packedRefs,
+      packedRef,
       resolved
     )
     cache.primaryUnverified = primary === UNREADABLE
@@ -346,7 +267,7 @@ export async function readGitCommonHeadIdentities(
   // Bounded fan-out so a burst cannot flood the libuv threadpool; publication
   // order comes from `entryNames` below, not from completion order.
   const reads = await mapWithConcurrency(staleNames, HEAD_IDENTITY_READ_CONCURRENCY, (name) =>
-    readLinkedEntryIdentity(commonDirPath, name, packedRefs, resolved)
+    readLinkedEntryIdentity(commonDirPath, name, packedRef, resolved)
   )
   staleNames.forEach((name, index) => {
     const identity = reads[index]

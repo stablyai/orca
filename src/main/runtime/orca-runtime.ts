@@ -62,8 +62,4 @@ export type {
   ApplyLayoutResult,
   RuntimeRendererReloadFence
 } from './orca-runtime-core'
-export {
-  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
-  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
-} from './orca-runtime-postlude'
+export { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './orca-runtime-postlude'

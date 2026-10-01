@@ -10,6 +10,12 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: (output: string) => output
 }))
 
+vi.mock('./worktree-membership/worktree-membership-store', async (importOriginal) =>
+  (await import('./worktree-membership-store-git-answered-mock')).gitAnsweredMembershipStoreMock(
+    await importOriginal()
+  )
+)
+
 import { clearGitCapabilityStateForTests } from './git-capability-state'
 import { listWorktrees } from './worktree'
 

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import * as repoWorktreeAdminFingerprint from '../repo-worktree-admin-fingerprint'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -331,12 +330,8 @@ describe('OrcaRuntimeService', () => {
 
   it('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
     vi.mocked(listWorktrees).mockClear()
-    // TTL reads Date.now(). Flushing the timer queue also runs scans earlier tests left
-    // scheduled, and a real git dir can prove "unchanged" and skip the rescan entirely.
+    // TTL reads Date.now(). Flushing the timer queue also runs scans earlier tests left scheduled.
     vi.useFakeTimers({ now: 0 })
-    const fingerprint = vi
-      .spyOn(repoWorktreeAdminFingerprint, 'readRepoWorktreeAdminFingerprint')
-      .mockResolvedValue(null)
     try {
       const repos = [
         { ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' },
@@ -356,14 +351,12 @@ describe('OrcaRuntimeService', () => {
       await runtime.listDetectedManagedWorktrees('id:repo-a')
       await runtime.listDetectedManagedWorktrees('id:repo-b')
 
-      expect(fingerprint).toHaveBeenCalled()
       expect(vi.mocked(listWorktrees).mock.calls.map((call) => call[0])).toEqual([
         '/tmp/repo-a',
         '/tmp/repo-b',
         '/tmp/repo-a'
       ])
     } finally {
-      fingerprint.mockRestore()
       vi.useRealTimers()
     }
   })

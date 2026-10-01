@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithGetRuntimeId } from './orca-runtime-get-runtime-id'
+import { retainWorktreeMembershipModels } from '../git/worktree-membership/worktree-membership-store'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
@@ -273,7 +274,15 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     this.worktreeLifecycleEvents.emit(event)
   }
 
+  /** A removed repo's membership model dies with it; a re-added repo rebuilds one on first read. */
+  protected retainWorktreeMembershipModelsForRegisteredRepos(): void {
+    if (this.store) {
+      retainWorktreeMembershipModels(this.store.getRepos().map((repo) => repo.path))
+    }
+  }
+
   protected notifyReposChanged(): void {
+    this.retainWorktreeMembershipModelsForRegisteredRepos()
     wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })

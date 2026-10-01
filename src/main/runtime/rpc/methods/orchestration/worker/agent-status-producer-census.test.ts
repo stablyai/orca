@@ -20,7 +20,8 @@ const { listWorktreesStrict } = vi.hoisted(() => ({ listWorktreesStrict: vi.fn()
 // The git binary is the external boundary for worktree.ps; everything above it stays real.
 vi.mock('../../../../../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict
+  listWorktreesStrict,
+  listWorktreesFromMembershipStrict: listWorktreesStrict
 }))
 // The push path reaches the dashboard popout window, whose electron re-export cannot load here.
 vi.mock('@electron-toolkit/utils', () => ({

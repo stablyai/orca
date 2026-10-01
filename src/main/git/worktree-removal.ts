@@ -1,5 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree/submodule-removal'
@@ -9,13 +10,14 @@ import { parseWslPath } from '../wsl'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
+import { listWorktreesStrict } from './worktree-listing'
 import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 import type { RemoveWorktreeOptions } from './worktree-operation-options'
 import { getErrorCode, gitExecOptions, normalizeLocalBranchRef } from './worktree-operation-options'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
-import { bumpWorktreeScanGeneration, listWorktrees } from './worktree-scan-cache'
+import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
 import { invalidateSparseCheckoutState } from './worktree-sparse-checkout-cache'
 import { runUnderWorktreeDeleteLimit } from './worktree-delete-limit'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
@@ -48,15 +50,29 @@ export async function removeWorktree(
   }
 }
 
+async function listRemovalWorktrees(
+  repoPath: string,
+  options: RemoveWorktreeOptions
+): Promise<GitWorktreeInfo[]> {
+  try {
+    return await listWorktreesStrict(repoPath, options)
+  } catch (error) {
+    // No row means no branch cleanup; Git's own `worktree remove` still refuses what it must.
+    console.warn(`[git/worktree] listing before removal failed for ${repoPath}:`, error)
+    return []
+  }
+}
+
 async function performRemoveWorktree(
   repoPath: string,
   worktreePath: string,
   force = false,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
+  // Git, unshared, like the rest of the removal chain: the row decides which branch gets deleted.
   const removedWorktree =
     options.knownRemovedWorktree ??
-    (await listWorktrees(repoPath, options)).find((worktree) =>
+    (await listRemovalWorktrees(repoPath, options)).find((worktree) =>
       areWorktreePathsEqual(worktree.path, worktreePath)
     )
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')

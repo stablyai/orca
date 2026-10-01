@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { adminEntryKey } from '../git/worktree-membership/worktree-admin-file-reads'
 
 // Which slice of a Git common dir's head identities a watcher burst can have
 // moved. Absence of a scope always means "unknown" and must resolve to the full
@@ -45,11 +45,9 @@ export const LISTING_HEAD_IDENTITY_SCOPE: WorktreeHeadIdentityScope = Object.fre
   entryNames: NO_ENTRY_NAMES
 })
 
-// Why: the watcher reports the admin dir name the OS gave it while the reader
-// uses its own `readdir` name. Fold NFC/NFD and case so the two always agree —
-// over-matching only costs one redundant read, under-matching loses an update.
+// The watcher's admin dir name and the reader's `readdir` name, folded to agree.
 export function headIdentityEntryKey(name: string): string {
-  return normalizeRuntimePathForComparison(name).toLowerCase()
+  return adminEntryKey(name)
 }
 
 export function headIdentityScopeForEntry(name: string): WorktreeHeadIdentityScope {

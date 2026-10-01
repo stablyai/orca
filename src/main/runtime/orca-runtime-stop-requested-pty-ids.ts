@@ -92,9 +92,6 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
 
   protected worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
 
-  /** Repos whose Git-admin probe has not settled yet; caps abandoned fs work at one per repo. */
-  protected worktreeAdminFingerprintProbes = new Set<string>()
-
   protected readonly worktreeLineage = new RuntimeWorktreeLineageController({
     getStore: () => this.store,
     getCachedWorktrees: () => this.resolvedWorktrees.peek()?.worktrees ?? null,

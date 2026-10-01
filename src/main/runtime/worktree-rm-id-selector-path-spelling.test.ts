@@ -31,7 +31,8 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesStrictMock
+  listWorktreesStrict: listWorktreesStrictMock,
+  listWorktreesFromMembershipStrict: listWorktreesStrictMock
 }))
 
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
