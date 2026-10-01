@@ -1,6 +1,6 @@
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
@@ -11,6 +11,7 @@ import {
   authorizeExternalPath,
   resolveAuthorizedPath
 } from './filesystem-auth'
+import { isDescendantOrEqual } from './filesystem-path-containment'
 
 const fsMocks = vi.hoisted(() => ({
   jsRealpath: vi.fn((path: string) => path),
@@ -36,8 +37,9 @@ const mappedDrive = resolve('/mapped-drive')
 const shareRoot = resolve('/nas-share')
 
 function toShare(path: string): string {
-  const rel = relative(mappedDrive, path)
-  return rel.startsWith('..') || isAbsolute(rel) ? path : join(shareRoot, rel)
+  return isDescendantOrEqual(path, mappedDrive)
+    ? join(shareRoot, relative(mappedDrive, path))
+    : path
 }
 fsMocks.nativeRealpath.mockImplementation(toShare)
 
