@@ -54,7 +54,10 @@ describe('public assignment reconnect lane', () => {
     )
 
     expect(reconnected.status).toBe(200)
-    expect(resolve).toHaveBeenCalledWith({ userId: 'user-1', relayHostId: reconnecting })
+    expect(resolve).toHaveBeenCalledWith(
+      { userId: 'user-1', relayHostId: reconnecting },
+      { classifyHomeRollIsolation: true }
+    )
     expect(assign).toHaveBeenCalledWith({ userId: 'user-1', relayHostId: reconnecting })
     expect(outcomes).toContain('sticky')
 

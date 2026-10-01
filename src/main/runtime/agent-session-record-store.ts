@@ -2,7 +2,11 @@
  *  journal database. */
 
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
+import {
+  commitConversationClearRecord,
+  commitConversationCommandRecord,
+  type AgentSessionConversationClear
+} from './agent-session-conversation-command-record'
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 
 import {
@@ -151,6 +155,10 @@ export class AgentSessionRecordStore {
       commitConversationCommandRecord(draft, sessionId, fence, command)
     )
   }
+
+  /** A committed /clear and the at-rest conversation it continues in, in one write. */
+  commitConversationClear = (clear: AgentSessionConversationClear): Promise<void> =>
+    this.transact((draft) => commitConversationClearRecord(draft, clear))
 
   /** Unfenced on purpose: the name is a durable note, so writing it never contends with the
    *  writer lease. `null` clears it. */

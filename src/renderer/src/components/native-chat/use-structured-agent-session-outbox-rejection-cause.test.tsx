@@ -111,7 +111,6 @@ describe('a send the host rejected because the agent never started', () => {
     // Settled as not delivered: it waits for Retry and holds no later message up.
     expect(result.current.error).toBeNull()
     expect(result.current.outbox[0]?.state).toBe('rejected')
-    expect(result.current.blockedClientMessageId).toBeNull()
   })
 
   it('sends a new message past one the host could not start the agent for, without resending it', async () => {
@@ -184,7 +183,6 @@ describe('a send the host rejected because the agent never started', () => {
     await waitFor(() => expect(result.current.outbox[0]?.state).toBe('rejected'))
     expect(shownFailure(result.current.outbox[0])).toBe(reason)
     expect(result.current.error).toBeNull()
-    expect(result.current.blockedClientMessageId).toBeNull()
 
     // Retry is a new message with the same text: a fresh id, sent once.
     act(() => result.current.retry(id))
@@ -401,7 +399,8 @@ function submission(
   }
 }
 
-// An older host: it restarts the agent inside the send, so a new fence is its word to send again.
+// An older host restarts the agent inside the send. A send it refused was shown as not sent, so it
+// waits for the user's Retry even once the agent has a new owner, as on every host.
 describe('a send refused while its agent restarted', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -414,7 +413,7 @@ describe('a send refused while its agent restarted', () => {
   })
 
   // The live order: the restart takes seconds, so the journal settles the resend before its reply.
-  it('leaves no error behind once a send refused before an agent restart is delivered', async () => {
+  it('waits for its Retry across an agent restart, and leaves no error once that Retry lands', async () => {
     mocks.call
       .mockResolvedValueOnce({
         ok: false,
@@ -440,8 +439,13 @@ describe('a send refused while its agent restarted', () => {
       expect(shownFailure(result.current.outbox[0])).toBe('Your message was not sent.')
     )
 
-    // The pane learns the new owner and sends the same message again.
+    // The pane learns the new owner; the message still waits for its Retry.
     rerender({ fence: 3, submissions: [] })
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)))
+    expect(mocks.call).toHaveBeenCalledTimes(1)
+    expect(shownFailure(result.current.outbox[0])).toBe('Your message was not sent.')
+
+    act(() => result.current.retry(result.current.outbox[0]!.clientMessageId))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     expect(result.current.outbox[0]).toMatchObject({ state: 'dispatching' })
     expect(shownFailure(result.current.outbox[0])).toBeUndefined()
@@ -451,7 +455,7 @@ describe('a send refused while its agent restarted', () => {
     rerender({ fence: 3, submissions: [submission(id, 'accepted')] })
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
     expect(result.current.error).toBeNull()
-    expect(result.current.blockedClientMessageId).toBeNull()
+    expect(mocks.call).toHaveBeenCalledTimes(2)
   })
 })
 

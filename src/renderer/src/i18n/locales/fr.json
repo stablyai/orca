@@ -999,6 +999,17 @@
         "symlink": "Les liens symboliques ne peuvent pas être attachés.",
         "permissionDenied": "Autorisation refusée.",
         "unsupported": "Type de fichier non pris en charge."
+      },
+      "dropTempCopyFailure": {
+        "changed": "Le fichier a changé pendant qu'Orca le copiait. Réessayez de le déposer.",
+        "outOfSpace": "Espace disque insuffisant pour copier les fichiers déposés.",
+        "storageUnavailable": "Orca n'a pas pu créer l'espace de stockage des fichiers déposés.",
+        "storageNotPrivate": "L'espace de stockage d'Orca pour les fichiers déposés est lisible par d'autres utilisateurs ; rien n'a été copié.",
+        "timedOut": "La copie a pris trop de temps. Réessayez de déposer les fichiers.",
+        "busy": "Trop de dépôts sont encore en cours de copie. Patientez un instant, puis réessayez.",
+        "tooLarge": "Trop volumineux pour être copié : Orca n'a pas pu le transmettre à l'agent.",
+        "storageFull": "L'espace de stockage d'Orca pour les fichiers déposés est plein : Orca n'a pas pu le transmettre à l'agent.",
+        "generic": "Réessayez de déposer les fichiers."
       }
     },
     "hooks": {
@@ -1033,7 +1044,10 @@
         "nativeDropPathsTooLarge": "La liste de chemins du dépôt est trop grande.",
         "ownerChanged": "Impossible de vérifier quel hôte possède cet espace de travail. Réessayez après sa reconnexion.",
         "nativeDropUnresolvedPathsDescription": "Enregistrez-les d'abord sur le disque, puis déposez les fichiers enregistrés.",
-        "nativeDropUnresolvedPaths": "Orca n'a pas pu lire le chemin des fichiers supprimés."
+        "nativeDropUnresolvedPaths": "Orca n'a pas pu lire le chemin des fichiers supprimés.",
+        "nativeDropTempCopyFailed": "Orca n'a pas pu copier {{count}} fichiers déposés.",
+        "nativeDropTempCopyFailed_one": "Orca n'a pas pu copier {{count}} fichier déposé.",
+        "nativeDropTempCopyFailed_other": "Orca n'a pas pu copier {{count}} fichiers déposés."
       },
       "useIpcEvents": {
         "0e3cf53060": "Onglet de navigateur {{value0}} introuvable",
@@ -5515,6 +5529,7 @@
           "bdd23b4e07": "Issues GitHub",
           "44713a5d04": "Issues Linear",
           "jiraIssues": "Tickets Jira",
+          "host": "Hôte",
           "cc17bd443b": "Détaillé",
           "0f9b959b31": "PR",
           "e029a2d775": "Statut",
@@ -7234,9 +7249,9 @@
           "80c454e8a6": "Alignez cette durée sur le TTL de cache de votre fournisseur."
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "Afficher les contrôles des notes markdown locales en mode éditeur enrichi et dans les actions de passation aux agents.",
+          "f80603d293": "Afficher les contrôles des notes markdown dans toutes les vues markdown et inclure ces notes dans les actions de passation aux agents.",
           "4edc104f0f": "Notes de revue Markdown",
-          "5f02e6fb21": "Afficher les contrôles des notes de revue markdown locales en mode éditeur enrichi.",
+          "5f02e6fb21": "Afficher les contrôles des notes de revue markdown locales dans les fichiers markdown.",
           "51161d1647": "Afficher la minimap lors de l'édition d'un fichier.",
           "6690b1ffb9": "Minimap",
           "5a1ea6eaa2": "Masquée",
@@ -15871,6 +15886,7 @@
             "4300f38145": "Téléchargement depuis {{value0}}{{value1}}",
             "31375046b7": "Télécharger depuis {{value0}}",
             "acbe79fd01": "Capturer un élément de la page ({{value0}})",
+            "cc4a071d3a": "Annoter un élément de la page ({{value0}})",
             "572046436a": "Navigateur distant",
             "b313a7275b": "Ouverture du navigateur distant",
             "5f66313863": "annotation",
@@ -17436,7 +17452,8 @@
         "hostStopped": "{{agent}} n'a jamais fini de démarrer, Orca l'a donc arrêté.",
         "providerRateLimited": "{{agent}} est limité en débit et réessaie.",
         "providerRetrying": "{{agent}} a rencontré un problème temporaire et réessaie.",
-        "providerRetryingQuoted": "{{agent}} réessaie : {{detail}}."
+        "providerRetryingQuoted": "{{agent}} réessaie : {{detail}}.",
+        "previousExitUnverifiable": "Orca n'a pas pu confirmer que le processus précédent de {{agent}} s'est arrêté. Les messages attendent d'être envoyés jusqu'à ce qu'Orca confirme son arrêt."
       },
       "writeNotice": {
         "notDoneReadHistory": "L'historique de ce chat n'a pas pu être chargé.",

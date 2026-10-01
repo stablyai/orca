@@ -1,8 +1,3 @@
-import {
-  AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS,
-  AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
-  parseAgentSessionOperationTimestamp
-} from '../../../src/shared/agent-session-host-authority'
 import type {
   AgentSessionMutationResult,
   AgentSessionWireRefusalCode
@@ -36,11 +31,7 @@ export type StructuredAgentSessionMutationCallResult<TValue> =
    *  it, so the same request can never be accepted there. An auth refusal does not set it:
    *  it says nothing about an earlier delivery of the same id. */
   | { status: 'failed'; message: string; hostRejectedByRequestSchema?: true }
-  /** `hostReportedOperationUnknown` separates a host answer about the id from doubt
-   *  about the effect. Whether that id can still be retried is the method's own
-   *  question: a plan that recovers an unknown ledger row replays or reruns it, one
-   *  that does not refuses the same id until the row expires. */
-  | { status: 'unknown'; hostReportedOperationUnknown?: true }
+  | { status: 'unknown' }
 
 export type StructuredAgentSessionMutationResult<TValue> =
   | { status: 'accepted'; value: TValue; sameFence: boolean }
@@ -108,42 +99,6 @@ export async function callAgentSession<TResult>(
   return response.result as TResult
 }
 
-function isReplayableStructuredSessionOperationId(operationId: string, now: number): boolean {
-  const timestamp = parseAgentSessionOperationTimestamp(operationId)
-  return (
-    timestamp !== null &&
-    timestamp <= now + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS &&
-    now - timestamp <= AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS
-  )
-}
-
-/**
- * Retains transient non-send mutation ids while the host can still replay them. Structured sends
- * use the durable journal because delivery ambiguity itself does not expire.
- */
-export function retainStructuredSessionOperationId(
-  operationIds: Map<string, string>,
-  key: string,
-  operationId?: string,
-  now: number = Date.now()
-): string {
-  const retainedOperationId =
-    operationId && isReplayableStructuredSessionOperationId(operationId, now)
-      ? operationId
-      : structuredSessionOperationId(now)
-  operationIds.delete(key)
-  operationIds.set(key, retainedOperationId)
-  for (const [retainedKey, retainedId] of operationIds) {
-    if (retainedKey === key) {
-      continue
-    }
-    if (!isReplayableStructuredSessionOperationId(retainedId, now)) {
-      operationIds.delete(retainedKey)
-    }
-  }
-  return retainedOperationId
-}
-
 export function timeoutForDeadline(deadline: number | undefined): number | null {
   if (deadline === undefined) {
     return STRUCTURED_SEND_TIMEOUT_MS
@@ -205,7 +160,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       (method === 'agentSession.cancel' || method === 'agentSession.conversationCommand') &&
       result.refusal.code === 'agent_session_operation_unknown'
     ) {
-      return { status: 'unknown', hostReportedOperationUnknown: true }
+      return { status: 'unknown' }
     }
     return result.ok
       ? { status: 'accepted', value: result.value }

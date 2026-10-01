@@ -20,6 +20,7 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../shared/agent-session-host-authority'
 import { refuse } from '../../shared/agent-session-wire-refusals'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
@@ -41,6 +42,7 @@ import {
   resetProviderFaults,
   type FakeConnection
 } from './structured-chat-coordinator-fake-codex-fixture'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const COORDINATOR = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 const PEER_CHAT = '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
@@ -97,9 +99,13 @@ async function openChat(sessionId: string): Promise<FakeConnection> {
 const threadBySession = new Map<string, string>()
 
 function connectionFor(sessionId: string): FakeConnection {
-  const connection = codex.connections.findLast(
-    (candidate) => candidate.threadId === threadBySession.get(sessionId)
+  // A cleared chat's successor starts on its first message; its record then names its thread.
+  const head = agentSessionProviderHandleChainHead(
+    host.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
   )
+  const thread =
+    threadBySession.get(sessionId) ?? (head?.handle.provider === 'codex' && head.handle.threadId)
+  const connection = codex.connections.findLast((candidate) => candidate.threadId === thread)
   if (!connection) {
     throw new Error(`no app-server for ${sessionId}`)
   }
@@ -233,8 +239,14 @@ async function clearChat(sessionId: string): Promise<string> {
   // The surface swaps the tab over to the session that continues the chat.
   await host.setSessionTabVisibility(sessionId, false)
   await host.setSessionTabVisibility(successor, true)
-  threadBySession.set(successor, codex.connections.at(-1)!.threadId!)
   return successor
+}
+
+/** A cleared chat's successor runs once the user writes to it; only then can its agent act. */
+async function startSuccessor(successor: string): Promise<void> {
+  expect(await sendUserMessage(successor, 'hello')).toMatchObject({ ok: true })
+  await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(1), WAIT)
+  await settleTurn(successor, 0)
 }
 
 beforeEach(async () => {
@@ -244,6 +256,7 @@ beforeEach(async () => {
   db = new OrchestrationDb(':memory:')
   runtime = startRuntime()
   host = await ensureStructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
@@ -743,15 +756,19 @@ describe('a /clear keeps the chat its orchestration address', () => {
     const { runId, taskId } = await coordinatorRunAndTask()
     const generation = db.getRunRaw(runId)!.consumer_generation
     const successor = await clearChat(COORDINATOR)
-    const next = connectionFor(successor)
+    const opened = codex.connections.length
 
+    // The worker's result is the successor's first message, which starts it on a new thread.
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(1), WAIT)
+    const next = connectionFor(successor)
+    expect(codex.connections.slice(opened)).toEqual([next])
+    expect(next.methods.filter((method) => method.startsWith('thread/'))).toEqual(['thread/start'])
+    expect(next.turns[0]!.text).toMatch(POINTER)
+    await settleTurn(successor, 0)
     await expect(
       call('orchestration.runCurrent', {}, { sessionId: successor })
     ).resolves.toMatchObject({ run: { id: runId } })
-    await finishWorker(taskId)
-    await vi.waitFor(() => expect(next.turns).toHaveLength(1), WAIT)
-    expect(next.turns[0]!.text).toMatch(POINTER)
-    await settleTurn(successor, 0)
     await expect(call('orchestration.check', {}, { sessionId: successor })).resolves.toMatchObject({
       runId,
       count: 1,
@@ -764,9 +781,31 @@ describe('a /clear keeps the chat its orchestration address', () => {
     })
   })
 
+  it('points mail the cleared chat never took at the successor, with no message from the user', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    // The provider dies before it runs the pointer, so the mail is still unpointed at the /clear.
+    chat.handlers.onExit?.(new Error('provider died before the echo'))
+    await vi.waitFor(() =>
+      expect(host.deps.store.getRecord(COORDINATOR)?.lease.claimStatus).toBe('released')
+    )
+    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+
+    const successor = await clearChat(COORDINATOR)
+    await vi.waitFor(() => expect(connectionFor(successor).turns[0]?.text).toMatch(POINTER), WAIT)
+    await settleTurn(successor, 0)
+    await vi.waitFor(
+      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
+      WAIT
+    )
+  })
+
   it("stores the successor's own Run under the conversation's address, through a chain of clears", async () => {
     await openChat(COORDINATOR)
     const middle = await clearChat(COORDINATOR)
+    await startSuccessor(middle)
     const created = await call(
       'orchestration.runCreate',
       { objective: 'next' },
@@ -775,7 +814,7 @@ describe('a /clear keeps the chat its orchestration address', () => {
     const runId = idOf(created.run)
     expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
     const successor = await clearChat(middle)
-    runtime.onStructuredSessionStatusForMail({ sessionId: successor, status: 'idle' })
+    await startSuccessor(successor)
 
     await expect(
       call('orchestration.runCurrent', {}, { sessionId: successor })
@@ -786,10 +825,10 @@ describe('a /clear keeps the chat its orchestration address', () => {
     await expect(
       call(
         'orchestration.send',
-        { to: `session:${PEER_CHAT}`, subject: 'hi' },
+        { to: `orca_session_id:${PEER_CHAT}`, subject: 'hi' },
         { sessionId: successor }
       )
-    ).resolves.toMatchObject({ message: { from_handle: `session:${COORDINATOR}` } })
+    ).resolves.toMatchObject({ message: { from_handle: `orca_session_id:${COORDINATOR}` } })
   })
 
   it("binds a Run a cleared chat creates or uses to the conversation's root, at the Run's current generation", async () => {
@@ -798,6 +837,7 @@ describe('a /clear keeps the chat its orchestration address', () => {
       currentRunCoordinatorOrcaSessionId(db.getRunRaw(runId)!)
     await openChat(COORDINATOR)
     const middle = await clearChat(COORDINATOR)
+    await startSuccessor(middle)
     const first = idOf(
       (await call('orchestration.runCreate', { objective: 'first' }, { sessionId: middle })).run
     )
@@ -812,6 +852,7 @@ describe('a /clear keeps the chat its orchestration address', () => {
     expect(boundOrcaSessionId(first)).toBeNull()
 
     const successor = await clearChat(middle)
+    await startSuccessor(successor)
     await call('orchestration.runUse', { id: first }, { sessionId: successor })
     const rebound = db.getRunRaw(first)!
     expect(rebound.coordinator_orca_session_id).toBe(root)
@@ -826,16 +867,15 @@ describe('a /clear keeps the chat its orchestration address', () => {
     await openChat(PEER_CHAT)
     const middle = await clearChat(PEER_CHAT)
     const successor = await clearChat(middle)
-    const next = connectionFor(successor)
-
+    // The first ping starts the live session, which neither clear did.
     for (const [index, spelling] of [PEER_CHAT, middle, successor].entries()) {
       const sent = await call('orchestration.send', {
         from: 'term_worker',
-        to: `session:${spelling}`,
+        to: `orca_session_id:${spelling}`,
         subject: `ping ${index}`
       })
-      expect(sent).toMatchObject({ message: { to_handle: `session:${PEER_CHAT}` } })
-      await vi.waitFor(() => expect(next.turns).toHaveLength(index + 1), WAIT)
+      expect(sent).toMatchObject({ message: { to_handle: `orca_session_id:${PEER_CHAT}` } })
+      await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(index + 1), WAIT)
       await settleTurn(successor, index)
     }
     await expect(call('orchestration.check', {}, { sessionId: successor })).resolves.toMatchObject({
@@ -845,19 +885,19 @@ describe('a /clear keeps the chat its orchestration address', () => {
 })
 
 describe('any live session is addressable by its id', () => {
-  it('lands mail sent to `session:<id>` as a turn in that chat, which a flagless check reads', async () => {
+  it('lands mail sent to `orca_session_id:<id>` as a turn in that chat, which a flagless check reads', async () => {
     const peer = await openChat(PEER_CHAT)
 
     const sent = await call('orchestration.send', {
       from: 'term_worker',
-      to: `session:${PEER_CHAT}`,
+      to: `orca_session_id:${PEER_CHAT}`,
       subject: 'ping'
     })
-    expect(sent).toMatchObject({ message: { to_handle: `session:${PEER_CHAT}` } })
+    expect(sent).toMatchObject({ message: { to_handle: `orca_session_id:${PEER_CHAT}` } })
 
     await vi.waitFor(() => expect(peer.turns).toHaveLength(1), WAIT)
     // Direct mail is not in a Run, so the pointer names no `--run`.
-    expect(turnText(peer.turns[0]!)).toBe(ptyPointer(`session:${PEER_CHAT}`))
+    expect(turnText(peer.turns[0]!)).toBe(ptyPointer(`orca_session_id:${PEER_CHAT}`))
     await settleTurn(PEER_CHAT, 0)
     const checked = await call('orchestration.check', {}, { sessionId: PEER_CHAT })
     expect(checked).toMatchObject({ count: 1, messages: [{ subject: 'ping' }] })
@@ -869,7 +909,7 @@ describe('any live session is addressable by its id', () => {
     const response = await dispatcher.dispatch(
       request('orchestration.send', {
         from: 'term_worker',
-        to: `session:${PEER_CHAT}`,
+        to: `orca_session_id:${PEER_CHAT}`,
         subject: 'ping'
       })
     )

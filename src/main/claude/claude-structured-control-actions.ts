@@ -58,12 +58,9 @@ export async function cancelClaudeTurn(
     }
     return { cancelled: true }
   } catch (error) {
+    // The CLI refused. Any other error leaves the interrupt's effect unknown. Either way the Stop
+    // ends the child next, so the stop recorded on the turn stands.
     if (error instanceof ClaudeControlRequestError) {
-      // The CLI refused, so the turn runs on and its own end means what it says. Any other error
-      // leaves the interrupt's effect unknown, and the stop the user asked for stands.
-      if (stopped) {
-        session.translator?.withdrawTurnStop(stopped.turnId)
-      }
       return { cancelled: false }
     }
     throw error

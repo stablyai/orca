@@ -67,5 +67,11 @@ export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
         'Agent activity'
       )
     }
+  },
+  {
+    id: 'host',
+    get label() {
+      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.host', 'Host')
+    }
   }
 ]

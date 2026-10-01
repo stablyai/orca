@@ -79,8 +79,8 @@ vi.mock('./use-structured-agent-session', async () => {
         loadOlder: vi.fn(),
         prompts: mocks.promptItems,
         outbox: outbox.outbox,
+        failedHere: outbox.failedHere,
         submissions: mocks.submissions,
-        blockedClientMessageId: outbox.blockedClientMessageId,
         send: outbox.send,
         retry: outbox.retry,
         isWorking: false,
@@ -183,6 +183,7 @@ vi.mock('./NativeChatQuestionCard', () => ({
 }))
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { appendStructuredAgentSessionOutboxMessage } from './structured-agent-session-outbox-storage'
 
 describe('NativeChatStructuredSession delivery', () => {
   afterEach(() => {
@@ -768,4 +769,44 @@ describe('NativeChatStructuredSession delivery', () => {
       vi.useRealTimers()
     }
   }, 30000)
+
+  // A cause seen while the chat was open is worded in full; one read back after the chat is
+  // reopened may have cleared, until a Retry it still stops brings it back.
+  it('words a refusal seen here in full, and after a reopen only once its Retry is refused', async () => {
+    const newerOrca =
+      'Chats were saved by a newer Orca. Your message was not sent. Update Orca to keep using them.'
+    mocks.mode = 'outbox'
+    mocks.call.mockResolvedValue({
+      ok: false,
+      refusal: {
+        code: 'agent_session_journal_unreadable',
+        message: 'newer',
+        details: { reason: 'journalWrittenByNewerOrca' }
+      }
+    })
+    const view = (): React.JSX.Element => (
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="tab-held"
+        sessionId="session-held"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const first = render(view())
+    // The composer's own enqueue.
+    act(() => {
+      expect(appendStructuredAgentSessionOutboxMessage('session-held', 'hello')).not.toBeNull()
+    })
+    await waitFor(() => expect(screen.getByText(newerOrca)).toBeTruthy())
+    first.unmount()
+
+    render(view())
+    await waitFor(() => expect(screen.getByText('Your message was not sent.')).toBeTruthy())
+    expect(mocks.call).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByText(newerOrca)).toBeTruthy())
+  })
 })

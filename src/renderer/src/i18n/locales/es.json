@@ -733,6 +733,23 @@
             "totalTooLarge": "{{fileName}} superaría el total de {{maxSize}} de archivos adjuntos."
           }
         }
+      },
+      "dropSkipReason": {
+        "missing": "Ya no está en su ruta original.",
+        "symlink": "Los enlaces simbólicos no se pueden adjuntar.",
+        "permissionDenied": "Permiso denegado.",
+        "unsupported": "Tipo de archivo no compatible."
+      },
+      "dropTempCopyFailure": {
+        "changed": "El archivo cambió mientras Orca lo copiaba. Vuelve a soltarlo.",
+        "outOfSpace": "No hay suficiente espacio en disco para copiar los archivos soltados.",
+        "storageUnavailable": "Orca no pudo crear el almacenamiento para los archivos soltados.",
+        "storageNotPrivate": "Otros usuarios pueden leer el almacenamiento de Orca para archivos soltados, así que no se copió nada.",
+        "timedOut": "La copia tardó demasiado. Vuelve a soltar los archivos.",
+        "busy": "Todavía se están copiando demasiados archivos soltados. Espera un momento y vuelve a intentarlo.",
+        "tooLarge": "Es demasiado grande para copiarlo, así que Orca no pudo pasárselo al agente.",
+        "storageFull": "El almacenamiento de Orca para archivos soltados está lleno, así que Orca no pudo pasárselo al agente.",
+        "generic": "Vuelve a soltar los archivos."
       }
     },
     "hooks": {
@@ -761,7 +778,12 @@
         "nativeDropTooManyPaths": "Has soltado demasiados archivos.",
         "nativeDropPathsTooLargeDescription": "Suelta menos archivos o usa una lista de rutas más corta.",
         "nativeDropPathsTooLarge": "La lista de rutas soltadas es demasiado grande.",
-        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects."
+        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects.",
+        "nativeDropUnresolvedPathsDescription": "Guárdalos primero en el disco y luego suelta los archivos guardados.",
+        "nativeDropUnresolvedPaths": "Orca no pudo leer una ruta para los archivos soltados.",
+        "nativeDropTempCopyFailed": "Orca no pudo copiar {{count}} archivos soltados.",
+        "nativeDropTempCopyFailed_one": "Orca no pudo copiar {{count}} archivo soltado.",
+        "nativeDropTempCopyFailed_other": "Orca no pudo copiar {{count}} archivos soltados."
       },
       "useIpcEvents": {
         "0e3cf53060": "Pestaña del navegador {{value0}} no encontrada",
@@ -4603,6 +4625,7 @@
           "bdd23b4e07": "Issues de GitHub",
           "44713a5d04": "Issues de Linear",
           "jiraIssues": "Issues de Jira",
+          "host": "Host",
           "cc17bd443b": "Detallado",
           "0f9b959b31": "PR",
           "e029a2d775": "Estado",
@@ -6113,9 +6136,9 @@
           "80c454e8a6": "Haz que esto coincida con el TTL de caché de tu proveedor."
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "Muestra controles de notas Markdown locales en modo de editor enriquecido y acciones de handoff de agentes.",
+          "f80603d293": "Muestra controles de notas Markdown en todas las vistas Markdown e incluye esas notas en las acciones de handoff de agentes.",
           "4edc104f0f": "Notas Markdown de revisión",
-          "5f02e6fb21": "Muestra controles de notas Markdown locales en modo de editor enriquecido.",
+          "5f02e6fb21": "Muestra controles de notas Markdown locales en archivos Markdown.",
           "51161d1647": "Muestra la vista general del minimapa al editar un archivo.",
           "6690b1ffb9": "Minimapa",
           "5a1ea6eaa2": "Oculto",
@@ -13872,6 +13895,7 @@
             "4300f38145": "Descargando desde {{value0}}{{value1}}",
             "31375046b7": "Descargar desde {{value0}}",
             "acbe79fd01": "Tomar elemento de página ({{value0}})",
+            "cc4a071d3a": "Anotar elemento de la página ({{value0}})",
             "572046436a": "Navegador remoto",
             "b313a7275b": "Abrir navegador remoto",
             "5f66313863": "anotación",
@@ -14962,7 +14986,8 @@
         "hostStopped": "{{agent}} no terminó de iniciarse, así que Orca lo detuvo.",
         "providerRateLimited": "{{agent}} alcanzó un límite de solicitudes y está reintentando.",
         "providerRetrying": "{{agent}} tuvo un problema temporal y está reintentando.",
-        "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}."
+        "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}.",
+        "previousExitUnverifiable": "Orca no pudo confirmar que el proceso anterior de {{agent}} terminó. Los mensajes esperan para enviarse hasta que Orca confirme que terminó."
       },
       "writeNotice": {
         "notDoneReadHistory": "No se pudo cargar el historial de este chat.",

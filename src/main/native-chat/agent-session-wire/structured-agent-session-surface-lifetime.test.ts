@@ -76,6 +76,10 @@ function openHost(
   probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
 ): void {
   host = new StructuredAgentSessionHost({
+    logger: {
+      warn: (_message, fields) => hostErrors.push(fields.error),
+      error: (_message, fields) => hostErrors.push(fields.error)
+    },
     store,
     adapter: adapter(),
     journalDatabase: openTestJournalHostDatabase(root),
@@ -83,7 +87,6 @@ function openHost(
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     idleSweep: { intervalMs: SWEEP_MS, idleMs: IDLE_MS },
     now: () => clock,
-    onEventSinkError: ({ error }) => hostErrors.push(error),
     statusSink,
     ...(probeOwner ? { probeOwner } : {})
   })

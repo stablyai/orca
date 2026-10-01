@@ -15,6 +15,7 @@ import {
   readProfileStateSnapshot
 } from './profile-state-documents'
 import {
+  runProfileStateBackup,
   runProfileStateBackupWorker,
   resolveProfileStateBackupWorkerPath
 } from './profile-state-backup-worker'
@@ -227,6 +228,48 @@ describe('profile state backup worker', () => {
     expect(dispatch).toHaveBeenCalledOnce()
     expect(profileStateDatabaseBackups(job.databasePath)).toHaveLength(1)
     rmSync(directory, { recursive: true })
+  })
+
+  describe.skipIf(!!process.versions.electron)('under plain Node', () => {
+    it('uses the bundled worker whenever its entry exists', async () => {
+      const { directory, job } = fixture()
+      const marker = script(
+        directory,
+        `
+        const { parentPort, workerData } = require('node:worker_threads')
+        require('node:fs').writeFileSync(workerData.targetPath, 'worker thread')
+        parentPort.postMessage({ ok: true })
+      `
+      )
+      await runProfileStateBackup(job, undefined, marker)
+      expect(readFileSync(job.targetPath, 'utf8')).toBe('worker thread')
+    })
+
+    it('runs the built entry off-thread and publishes a readable backup', async () => {
+      const { job } = fixture()
+      await runProfileStateBackup(job, undefined, workerPath)
+      const snapshot = openProfileStateDatabaseReadOnly(job.targetPath, job.profileId)
+      try {
+        expect(JSON.parse(readProfileStateSnapshot(snapshot.db).json)).toEqual({
+          settings: { theme: 'dark' }
+        })
+      } finally {
+        snapshot.db.close()
+      }
+    })
+
+    it('falls back to inline validation only when no entry was bundled', async () => {
+      const { directory, job } = fixture()
+      await runProfileStateBackup(job, undefined, join(directory, 'missing.js'))
+      const snapshot = openProfileStateDatabaseReadOnly(job.targetPath, job.profileId)
+      try {
+        expect(JSON.parse(readProfileStateSnapshot(snapshot.db).json)).toEqual({
+          settings: { theme: 'dark' }
+        })
+      } finally {
+        snapshot.db.close()
+      }
+    })
   })
 
   it('finds entries beside the launcher and above Rollup shared chunks', () => {

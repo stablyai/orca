@@ -900,6 +900,17 @@
         "symlink": "심볼릭 링크는 첨부할 수 없습니다.",
         "permissionDenied": "액세스가 거부되었습니다.",
         "unsupported": "지원되지 않는 파일 형식입니다."
+      },
+      "dropTempCopyFailure": {
+        "changed": "Orca가 복사하는 동안 파일이 변경되었습니다. 다시 드롭해 보세요.",
+        "outOfSpace": "드롭한 파일을 복사할 디스크 공간이 부족합니다.",
+        "storageUnavailable": "Orca가 드롭한 파일을 위한 저장 공간을 만들지 못했습니다.",
+        "storageNotPrivate": "드롭한 파일을 위한 Orca 저장 공간을 다른 사용자가 읽을 수 있어 아무것도 복사하지 않았습니다.",
+        "timedOut": "복사하는 데 너무 오래 걸렸습니다. 다시 드롭해 보세요.",
+        "busy": "아직 복사 중인 드롭이 너무 많습니다. 잠시 후 다시 시도하세요.",
+        "tooLarge": "너무 커서 복사할 수 없어 Orca가 에이전트에 전달하지 못했습니다.",
+        "storageFull": "드롭한 파일을 위한 Orca 저장 공간이 가득 차서 Orca가 에이전트에 전달하지 못했습니다.",
+        "generic": "다시 드롭해 보세요."
       }
     },
     "hooks": {
@@ -934,7 +945,10 @@
         "nativeDropPathsTooLarge": "드롭 경로 목록이 너무 큽니다.",
         "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects.",
         "nativeDropUnresolvedPathsDescription": "먼저 디스크에 저장한 다음 저장된 파일을 삭제하세요.",
-        "nativeDropUnresolvedPaths": "Orca가 삭제된 파일의 경로를 읽을 수 없습니다."
+        "nativeDropUnresolvedPaths": "Orca가 삭제된 파일의 경로를 읽을 수 없습니다.",
+        "nativeDropTempCopyFailed": "Orca가 드롭한 파일 {{count}}개를 복사하지 못했습니다.",
+        "nativeDropTempCopyFailed_one": "Orca가 드롭한 파일 {{count}}개를 복사하지 못했습니다.",
+        "nativeDropTempCopyFailed_other": "Orca가 드롭한 파일 {{count}}개를 복사하지 못했습니다."
       },
       "useIpcEvents": {
         "0e3cf53060": "브라우저 탭 {{value0}}을(를) 찾을 수 없습니다",
@@ -5361,6 +5375,7 @@
           "bdd23b4e07": "GitHub 이슈",
           "44713a5d04": "Linear 이슈",
           "jiraIssues": "Jira 이슈",
+          "host": "호스트",
           "cc17bd443b": "상세한",
           "0f9b959b31": "PR",
           "e029a2d775": "상태",
@@ -7116,9 +7131,9 @@
           "80c454e8a6": "이를 공급자의 캐시 TTL과 일치시킵니다."
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "리치 에디터 모드 및 agent 전달 작업에서 로컬 markdown 메모 컨트롤을 표시합니다.",
+          "f80603d293": "모든 markdown 보기에서 markdown 메모 컨트롤을 표시하고 agent 전달 작업에 해당 메모를 포함합니다.",
           "4edc104f0f": "Markdown 리뷰 노트",
-          "5f02e6fb21": "리치 에디터 모드에서 로컬 markdown 리뷰 노트 컨트롤을 표시합니다.",
+          "5f02e6fb21": "markdown 파일에서 로컬 markdown 리뷰 노트 컨트롤을 표시합니다.",
           "51161d1647": "파일을 편집할 때 미니맵 개요를 표시합니다.",
           "6690b1ffb9": "미니맵",
           "5a1ea6eaa2": "숨겨진",
@@ -15767,6 +15782,7 @@
             "4300f38145": "{{value0}}{{value1}}에서 다운로드 중",
             "31375046b7": "{{value0}}에서 다운로드",
             "acbe79fd01": "페이지 요소 가져오기({{value0}})",
+            "cc4a071d3a": "페이지 요소에 주석 달기({{value0}})",
             "572046436a": "원격 브라우저",
             "b313a7275b": "원격 브라우저 열기",
             "5f66313863": "주석",
@@ -17372,7 +17388,8 @@
         "hostStopped": "{{agent}}이(가) 시작을 마치지 못해 Orca가 중지했습니다.",
         "providerRateLimited": "{{agent}}이(가) 속도 제한에 걸려 다시 시도하고 있습니다.",
         "providerRetrying": "{{agent}}에 일시적인 문제가 발생하여 다시 시도하고 있습니다.",
-        "providerRetryingQuoted": "{{agent}}이(가) 다시 시도하고 있습니다: {{detail}}."
+        "providerRetryingQuoted": "{{agent}}이(가) 다시 시도하고 있습니다: {{detail}}.",
+        "previousExitUnverifiable": "Orca가 {{agent}}의 이전 프로세스가 종료되었는지 확인하지 못했습니다. Orca가 종료를 확인할 때까지 메시지는 전송을 기다립니다."
       },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
@@ -17565,7 +17582,7 @@
       },
       "status": {
         "responding": "Agent이 응답 중입니다.",
-        "working": "일하고 있는…",
+        "working": "작업 중…",
         "thinking": "생각",
         "workingFor": "{{value0}} 작업 중",
         "workedFor": "{{value0}} 작업 완료",
@@ -17683,9 +17700,9 @@
         "detailsUnavailable": "이 세션에서는 작업 세부정보를 사용할 수 없습니다.",
         "countAgentsOne": "에이전트 1명",
         "countAgentsMany": "{{value0}} 에이전트",
-        "countShellOne": "껍질 1개",
-        "countShellMany": "{{value0}} 껍질",
-        "countShellCommandOne": "1개의 쉘 명령",
+        "countShellOne": "셸 1개",
+        "countShellMany": "셸 {{value0}}개",
+        "countShellCommandOne": "셸 명령 1개",
         "countMonitorsOne": "모니터 1개",
         "countMonitorsMany": "{{value0}} 모니터",
         "countWorkflowsOne": "워크플로우 1개",
@@ -17693,7 +17710,7 @@
         "countTasksOne": "작업 1개",
         "countTasksMany": "{{value0}} 작업",
         "headerTotal": "{{value0}} 백그라운드 작업",
-        "stateWorking": "일하고 있는",
+        "stateWorking": "작업 중",
         "stateMonitoring": "모니터링",
         "stateWaiting": "대기 중",
         "stateBlocked": "막힌",
@@ -17704,7 +17721,7 @@
         "reasonUnverifiable": "연락 없음",
         "reasonBlocked": "실패한",
         "groupAgents": "에이전트",
-        "groupShell": "껍데기",
+        "groupShell": "셸",
         "groupMonitors": "모니터",
         "groupWorkflows": "워크플로",
         "groupTasks": "작업"
@@ -17723,7 +17740,7 @@
       "subagents": {
         "state": {
           "completed": "완전한",
-          "working": "일하고 있는",
+          "working": "작업 중",
           "idle": "idle",
           "failed": "실패한",
           "stopped": "중지됨",
@@ -17977,7 +17994,7 @@
             "unknown": "체크하지 않음"
           },
           "agent": {
-            "working": "일하고 있는",
+            "working": "작업 중",
             "permission": "당신을 기다리고 있습니다",
             "idle": "게으른"
           },

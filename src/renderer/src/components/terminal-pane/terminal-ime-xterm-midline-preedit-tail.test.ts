@@ -165,6 +165,19 @@ describe('composition overlays the grid without copying the row tail', () => {
     expect(rig.compositionView.style.direction).toBe('ltr')
     expect(rig.compositionView.style.display).toBe('flex')
     expect(rig.compositionView.style.justifyContent).toBe('flex-end')
+    const cursorX = rig.terminal.buffer.active.cursorX
+    const sent: string[] = []
+    const subscription = rig.terminal.onData((data) => sent.push(data))
+    rig.textarea.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, code: 'Escape', key: 'Escape' })
+    )
+    await nextEventLoop()
+    expect(rig.compositionView.classList.contains('active')).toBe(false)
+    expect(rig.compositionView.children).toHaveLength(0)
+    expect(rig.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe('안녕하세요')
+    expect(rig.terminal.buffer.active.cursorX).toBe(cursorX)
+    expect(sent).toEqual([])
+    subscription.dispose()
   })
 
   it('does not copy the tail as the preedit grows', async () => {

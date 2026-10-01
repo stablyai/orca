@@ -35,7 +35,6 @@ jobs:
       should_run: ${{ steps.filter.outputs.should_run }}
       reused_run_id: ${{ steps.readiness.outputs.run_id }}
       # A proven success masks required work only; advisory routing still uses the full diff.
-      native_cache_changed: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.native_cache_changed }}
       mobile_dependencies: ${{ steps.filter.outputs.mobile_dependencies }}
       mobile_web_app: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.mobile_web_app }}
       static_analysis: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.static_analysis }}
@@ -52,6 +51,8 @@ jobs:
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
+      e2e_run_changed: ${{ steps.e2e_filter.outputs.e2e_run_changed }}
+      e2e_needs_build: ${{ steps.e2e_filter.outputs.e2e_needs_build }}
       ssh_source_changed: ${{ steps.e2e_filter.outputs.ssh_source_changed }}
       native_ime_source_changed: ${{ steps.e2e_filter.outputs.native_ime_source_changed }}
       wsl_source_changed: ${{ steps.e2e_filter.outputs.wsl_source_changed }}
@@ -75,6 +76,7 @@ jobs:
             /config/scripts/check-readme-local-links.mjs
             /config/scripts/pr-code-change-scope.mjs
             /config/scripts/pr-e2e-source-routing.mjs
+            /config/scripts/ci-e2e-job-selection.mjs
             /config/scripts/pr-ready-check-reuse.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
@@ -134,6 +136,7 @@ jobs:
           SSH_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --ssh-source)"
           echo "ssh_source_changed=$SSH_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
           echo "SSH source changed: $SSH_SOURCE_CHANGED"
+          printf '%s\n' "$TEST_FILES_JSON" | E2E_SSH_SOURCE_CHANGED="$SSH_SOURCE_CHANGED" node config/scripts/ci-e2e-job-selection.mjs --job-outputs >> "$GITHUB_OUTPUT"
           # Why its own signal: the real-IME lane is a whole ibus session, not a spec, so it must
           # trigger on IME source rather than on a spec name in some route's list.
           NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
@@ -181,11 +184,13 @@ jobs:
         if: needs.code_paths.outputs.mobile_dependencies != 'true'
         with:
           native-runtime: node
+          node-version: '24'
 
       - uses: ./.github/actions/install-node-dependencies
         if: needs.code_paths.outputs.mobile_dependencies == 'true'
         with:
           native-runtime: node
+          node-version: '24'
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
@@ -266,6 +271,9 @@ jobs:
 
       - name: Enforce runtime Electron-import ratchet
         run: pnpm run check:runtime-electron-ratchet
+
+      - name: Check Node runtime pin
+        run: pnpm run check:node-runtime-pin
 
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
@@ -348,11 +356,14 @@ jobs:
     if: needs.code_paths.outputs.typecheck == 'true'
     # Typechecking uses no native runtime, so it can use the free public ARM runner.
     runs-on: ubuntu-24.04-arm
+    outputs:
+      shards: ${{ steps.unit-plan.outputs.shards }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          fetch-depth: 2
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -369,7 +380,23 @@ jobs:
           restore-keys: |
             tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
 
+      # Planning shares setup and stays off the compiler's critical path.
+      - name: Plan unit selection
+        id: unit-plan
+        background: true
+        env:
+          ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+        run: node config/scripts/ci-unit-plan.mjs
+
       - run: pnpm run typecheck
+
+      - wait: unit-plan
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: unit-selection-attempt-${{ github.run_attempt }}
+          path: ci-shards/unit-selection.json
+          retention-days: 14
 
   git_compatibility:
     name: Git compatibility
@@ -642,6 +669,7 @@ jobs:
             src/main/pty/codex-shell-no-daemon.test.ts \
             src/main/pty/omp-shell-wrapper-alias-safety.test.ts \
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            src/main/fish-xdg-data-dirs-handoff.test.ts \
             src/main/shell-startup-feature-channel.test.ts \
             src/main/terminal-history-fish-session.node-pty.test.ts \
             src/main/zsh-scoped-histfile.live-shell.test.ts \
@@ -654,51 +682,20 @@ jobs:
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
-  # Cache-key input changes would otherwise make every shard compile the same
-  # native addon concurrently. Prime the supported Node ABI before the matrix fans out.
-  test_native_cache:
-    name: prepare test native cache node 24
-    needs: [code_paths]
-    if: needs.code_paths.outputs.native_cache_changed == 'true'
-    runs-on: ubuntu-24.04-arm
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: node
-          node-version: '24'
-
-  # Why hoisted out of unit-tests.yml: a caller's `needs` gate the whole called workflow, so
-  # while planning lived in there it queued behind static analysis and typecheck and the shards
-  # then queued behind it. Planning needs none of their output, so running it against
-  # code_paths alone overlaps it with the gate. Measured a median 93s off the matrix's start.
-  unit_plan:
-    needs: [code_paths]
-    if: needs.code_paths.outputs.test == 'true'
-    uses: ./.github/workflows/unit-plan.yml
-    with:
-      selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
-
+  # Static analysis saves the Node cache; typecheck publishes the plan before tests fan out.
   test:
-    needs: [code_paths, unit_plan, test_native_cache, static_analysis, typecheck]
-    # Honor cancellation while allowing the optional native-cache primer to skip.
+    needs: [code_paths, static_analysis, typecheck]
+    # Cancellation and failed prerequisites stop the expensive matrix.
     if: >-
       !cancelled() &&
       needs.code_paths.outputs.test == 'true' &&
-      needs.unit_plan.result == 'success' &&
       needs.static_analysis.result == 'success' &&
-      needs.typecheck.result == 'success' &&
-      (needs.test_native_cache.result == 'success' || needs.test_native_cache.result == 'skipped')
+      needs.typecheck.result == 'success'
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
       runner: ubuntu-24.04-arm
-      shards: ${{ needs.unit_plan.outputs.shards }}
+      shards: ${{ needs.typecheck.outputs.shards }}
 
   # Why a sibling and not part of the test workflow: it is advisory, so it must not delay the
   # gate. Inside unit-tests.yml a caller's `needs: test` waited for it, holding verify ~36s
@@ -849,6 +846,20 @@ jobs:
         with:
           native-runtime: node
 
+      # R1: an upgrade from the newest release must adopt its live terminal daemon.
+      - name: Daemon protocol crossing against newest release
+        run: pnpm run check:daemon-protocol-crossing
+
+      # R3: a runtime launcher swap must not also bump the daemon protocol (D7.1).
+      # The label is read from the event payload, so push again after applying it.
+      - name: Runtime launcher change does not bump daemon protocol
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          ORCA_ALLOW_RUNTIME_LAUNCHER_PROTOCOL_BUMP: ${{ contains(github.event.pull_request.labels.*.name, 'allow-runtime-launcher-protocol-bump') }}
+        run: |
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          pnpm run check:runtime-launcher-protocol-ratchet -- --base "$DIFF_BASE"
+
       # A path filter that matches nothing exits 1 ("No test files found"), so this
       # lane cannot report success while running zero tests.
       - name: Old/new client and server compatibility journeys
@@ -862,6 +873,7 @@ jobs:
           tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
           tests/e2e/cross-version-wire/agent-session-resume-marker-downgrade.unit.test.ts
+          tests/e2e/cross-version-wire/agent-session-stop-event-downgrade.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-worktree-ps-verdict.unit.test.ts
 
   managed_hook_node18:
@@ -912,6 +924,12 @@ jobs:
           restore-keys: |
             electron-builder-linux-
 
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        id: daemon-fixture-cache
+        background: true
+        with:
+          fixture: daemon-shutdown-descendants
+
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
@@ -924,9 +942,12 @@ jobs:
       - uses: ./.github/actions/install-mobile-dependencies
 
       # The checkout must pass without depending on a historical baseline that leaks.
+      - wait: daemon-fixture-cache
+
       - name: Verify Linux daemon shutdown descendant cleanup
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_DAEMON_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.daemon-fixture-cache.outputs.image }}
         run: node config/scripts/run-daemon-shutdown-descendants-docker.mjs
 
       # Why --no-file-parallelism: every file here launches a full Electron stack twice, and each
@@ -1152,6 +1173,8 @@ jobs:
           src/main/ipc/pty-codex-account-attribution.test.ts
           src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
           src/relay/windows-port-scan.win32.test.ts
+          src/main/ssh/ssh-relay-upload-stage-windows-identity.test.ts
+          src/main/ssh/remote-node-runtime-store-windows.test.ts
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package
@@ -1220,6 +1243,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
       test_files: ${{ needs.code_paths.outputs.test_files }}
       ssh_source_changed: ${{ needs.code_paths.outputs.ssh_source_changed }}
+      run_changed_e2e: ${{ needs.code_paths.outputs.e2e_run_changed != 'false' }}
+      needs_build: ${{ needs.code_paths.outputs.e2e_needs_build != 'false' }}
 
   # Why this is not in verify's needs: it is the first PR-gate run of a harness whose reliability
   # is only known from nightly main runs (20/20 green, 2026-08-09..2026-08-29, p50 3m25s). It

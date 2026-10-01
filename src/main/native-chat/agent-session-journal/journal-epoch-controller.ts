@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
 import { replaceJournalEpoch, type JournalReplacementItem } from './journal-epoch-replacement'
+import type { JournalQueuePauseRestatement } from './queued-message-pause'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import type { JournalLoad } from './journal-open'
 import type { AgentJournalEpochReason } from './journal-row-schema'
@@ -20,6 +21,8 @@ export class JournalEpochController {
       readOnly: () => boolean
       setReadOnly: (readOnly: boolean) => void
       highestFence: () => number
+      /** What of the live epoch's Stop and Resume a replacement restates. */
+      queuePauseRestatement: () => JournalQueuePauseRestatement
       cursor: () => AgentJournalCursor
       adopt: (loaded: JournalLoad) => void
     }
@@ -67,6 +70,7 @@ export class JournalEpochController {
         reason,
         fence,
         items,
+        queuePause: this.deps.queuePauseRestatement(),
         now: this.deps.now,
         mintEpoch: this.deps.mintEpoch,
         onPublished: this.deps.adopt

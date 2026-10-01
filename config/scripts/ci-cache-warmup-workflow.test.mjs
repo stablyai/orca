@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { BUN_PERSISTENCE_RUNNERS } from './bun-profile-qualification.mjs'
+import { NODE_SERVER_RUNNERS } from './node-server-qualification.mjs'
 
 const readWorkflow = (name) =>
   parse(readFileSync(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8'))
@@ -13,7 +13,7 @@ it('warms the same Linux Node runtime the PR shards restore', () => {
   const install = arm.steps.find(
     (step) => step.uses === './.github/actions/install-node-dependencies'
   )
-  const primer = readWorkflow('pr').jobs.test_native_cache
+  const primer = readWorkflow('pr').jobs.static_analysis
   expect(arm['runs-on']).toBe(primer['runs-on'])
   expect(arm.steps.at(-1).run).toBe('node config/scripts/ensure-native-runtime.mjs --check-only')
   expect(install.with).toMatchObject(primer.steps.find((step) => step.uses === install.uses).with)
@@ -66,7 +66,7 @@ it('bounds warming to the required platforms and validates changes without grant
 it('warms and probes both Windows images with the persistence job runtime', () => {
   const job = workflow.jobs['warm-windows']
   expect(job.strategy.matrix.os).toEqual(
-    BUN_PERSISTENCE_RUNNERS.filter((os) => os.startsWith('windows-'))
+    NODE_SERVER_RUNNERS.filter((os) => os.startsWith('windows-'))
   )
   expect(job['runs-on']).toBe('${{ matrix.os }}')
   expect(job.strategy['fail-fast']).toBe(false)

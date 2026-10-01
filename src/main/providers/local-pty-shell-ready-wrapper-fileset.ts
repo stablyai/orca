@@ -3,6 +3,10 @@
  * caller-supplied root so the tree can be content-addressed (see
  * shell-wrapper-content-address.ts).
  */
+import {
+  buildFishVendorConfWrapperFile,
+  getFishVendorConfSnippetPath
+} from '../fish-xdg-data-dirs-handoff'
 import { ZSH_WRAPPER_DIR_MARKER_CONTENT, ZSH_WRAPPER_DIR_MARKER_FILE } from '../shell-templates'
 import type { ShellWrapperFile } from '../shell-wrapper-file-writer'
 import { buildZshStartupHook, type ZshStartupHookSpec } from '../zsh-startup-wrapper-builder'
@@ -12,7 +16,12 @@ import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 /** Paths in the generated tree, kept separate so existence checks do not rebuild wrapper bytes. */
 export function getLocalShellReadyWrapperPaths(root: string): readonly string[] {
   const zshDir = `${root}/zsh`
-  return [`${zshDir}/.zshenv`, `${zshDir}/${ZSH_WRAPPER_DIR_MARKER_FILE}`, `${root}/bash/rcfile`]
+  return [
+    `${zshDir}/.zshenv`,
+    `${zshDir}/${ZSH_WRAPPER_DIR_MARKER_FILE}`,
+    `${root}/bash/rcfile`,
+    getFishVendorConfSnippetPath(root)
+  ]
 }
 
 export function getLocalZshWrapperSpec(): ZshStartupHookSpec {
@@ -45,6 +54,7 @@ export function buildLocalShellReadyWrapperFiles(root: string): readonly ShellWr
   return [
     [zshEnvPath, buildZshStartupHook(getLocalZshWrapperSpec())],
     [zshMarkerPath, ZSH_WRAPPER_DIR_MARKER_CONTENT],
-    [bashRcfilePath, getBashShellReadyRcfileContent()]
+    [bashRcfilePath, getBashShellReadyRcfileContent()],
+    buildFishVendorConfWrapperFile(root)
   ]
 }

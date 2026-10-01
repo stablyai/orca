@@ -18,6 +18,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const SWEEP_MS = 5
 const RETRY_GAP_MS = 10 * 60_000
@@ -77,6 +78,7 @@ beforeEach(async () => {
     setOption: async () => undefined
   }
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
     journalDatabase: openTestJournalHostDatabase(root),

@@ -28,6 +28,7 @@ import {
 import { journalDirectoryFor, legacyJournalDatabaseFile } from './journal-paths'
 import { importPerSessionJournal } from './journal-per-session-import'
 import { readJournalSessionEpoch, type JournalStoredRow } from './journal-row-table'
+import { createStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
@@ -221,6 +222,7 @@ describe('importing a per-chat journal', () => {
 
     const journal = await openChat()
     const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
+      logger: createStructuredAgentSessionLogger(),
       sessions: new Map([[IDENTITY.sessionId, { journal, child: null }]]),
       now: () => clock,
       enqueue: (operation) => operation()
@@ -331,23 +333,21 @@ describe('importing a per-chat journal', () => {
       })
     )
     const between: number[] = []
-    let copying = true
     const tick = (): void => {
       // What a live chat's append would commit under, between two copy batches.
       between.push(synchronous())
-      if (copying) {
-        setImmediate(tick)
-      }
+      pending = setImmediate(tick)
     }
 
-    setImmediate(tick)
+    let pending = setImmediate(tick)
     await importPerSessionJournal({
       database,
       identity: IDENTITY,
       legacyDirectory: legacyDir(),
       batchRows: 1
     })
-    copying = false
+    // A flag would still let the queued tick read the database after teardown closes it.
+    clearImmediate(pending)
 
     // 2 is FULL, 1 is NORMAL.
     expect(commits.slice(0, rows.length)).toEqual(rows.map(() => 1))

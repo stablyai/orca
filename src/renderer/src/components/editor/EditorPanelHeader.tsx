@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
+import { useVisibleWorktreeDiffComments } from '../diff-comments/use-visible-worktree-diff-comments'
 import type { OpenFile } from '@/store/slices/editor'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import EditorViewToggle, {
@@ -90,9 +90,7 @@ export function EditorPanelHeader({
   onExportMarkdownToPdf,
   createMarkdownArtifactRequest
 }: EditorPanelHeaderProps): React.JSX.Element {
-  const diffComments = useAppStore((s) =>
-    selectWorktreeDiffCommentsOrEmpty(s, activeFile.worktreeId)
-  )
+  const { comments: diffComments } = useVisibleWorktreeDiffComments(activeFile.worktreeId)
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)

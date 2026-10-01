@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
@@ -603,6 +604,32 @@ describe('mobile structured queued messages', () => {
         expect(await hook!.queued.send('draft-1')).toBe(true)
       })
       expect(requestOf('agentSession.queuedMessageSend').params.messageId).toBe('draft-1')
+    })
+
+    it('each press of a card action carries its own id, even while an earlier press is unanswered', async () => {
+      const held = Promise.withResolvers<RpcResponse>()
+      sendRequest.mockImplementation(async (method) =>
+        method === 'agentSession.queuedMessageSend' || method === 'agentSession.queuedMessageDelete'
+          ? held.promise
+          : method === 'agentSession.options'
+            ? ok({ models: [], current: {} })
+            : ok({})
+      )
+      await mountSession(CAPABLE)
+      const presses: Promise<boolean>[] = []
+      act(() => {
+        presses.push(hook!.queued.send('draft-1'), hook!.queued.send('draft-1'))
+        presses.push(hook!.queued.delete('draft-1'), hook!.queued.delete('draft-1'))
+      })
+      await act(async () => {
+        held.resolve(ok({}))
+        await Promise.all(presses)
+      })
+      for (const method of ['agentSession.queuedMessageSend', 'agentSession.queuedMessageDelete']) {
+        expect(requestOf(method, 1).envelope.clientOperationId).not.toBe(
+          requestOf(method, 0).envelope.clientOperationId
+        )
+      }
     })
 
     it('Delete reads the union result: a dispatched draft was already sent', async () => {

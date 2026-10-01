@@ -287,8 +287,11 @@ describe('the accessor', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const logged = (): unknown[] =>
       warn.mock.calls
-        .filter(([line]) => line === '[agent-session] opening the conversation for a read failed:')
-        .map(([, error]) => error)
+        .filter(
+          ([line]) =>
+            line === '[agent-session] open-for-read: opening the conversation for a read failed'
+        )
+        .map(([, fields]) => fields?.error)
     const reconnect = async (): Promise<RpcResponse[]> => [
       ...(await call('agentSession.subscribe', { sessionId: SESSION })),
       ...(await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }))

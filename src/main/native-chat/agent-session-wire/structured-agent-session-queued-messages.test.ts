@@ -14,7 +14,10 @@ import {
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
-import { rotateStructuredAgentSessionHostInstanceForTests } from './structured-agent-session-queued-pause'
+import {
+  rotateStructuredAgentSessionHostInstanceForTests,
+  structuredQueuePauses
+} from './structured-agent-session-queued-pause'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -512,19 +515,23 @@ describe('Stop and Delete', () => {
     })
   })
 
-  it('a Stop whose pause record fails still interrupts; only the pause is lost, and it is reported', async () => {
+  it('a Stop whose event fails to write still interrupts; only the pause is lost, and it is reported', async () => {
     await workingSend()
     const queued = await send('kept by the stop', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
       throw new Error('expected a queued receipt')
     }
     const record = vi
-      .spyOn(JournalQueuedMessages.prototype, 'recordPause')
+      .spyOn(AgentSessionJournal.prototype, 'appendStopEvent')
       .mockRejectedValueOnce(new Error('disk full'))
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
       expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
-      expect(warned).toHaveBeenCalledWith(expect.stringContaining('queue pause'), expect.anything())
+      expect(rig.cancelTurn).toHaveBeenCalledTimes(1)
+      expect(warned).toHaveBeenCalledWith(
+        expect.stringContaining("Stop's event row"),
+        expect.anything()
+      )
     } finally {
       record.mockRestore()
       warned.mockRestore()
@@ -674,7 +681,7 @@ describe('/clear', () => {
     }
     expect(await drafts(replacementId)).toHaveLength(0)
     const journal = host.collaboratorsForTests().sessions.get(replacementId)?.journal
-    expect(journal?.queuedMessages.pause()).toBeNull()
+    expect(journal && structuredQueuePauses(journal)).toEqual([])
   })
 
   it('a returned card carries over as a plain waiting draft on the paused replacement', async () => {
@@ -728,6 +735,8 @@ describe('/clear', () => {
     if (!replacementId) {
       throw new Error('expected a replacement session')
     }
+    // Nothing to carry, so nothing opened the new conversation.
+    expect(host.hasSession(replacementId)).toBe(false)
     expect(await drafts(replacementId)).toHaveLength(0)
   })
 })

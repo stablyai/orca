@@ -1,6 +1,10 @@
 // One replay suite for every agent whose readiness its live screen decides (terminal-wait-detection.ts).
 import { describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID,
+  waitForTranscriptIdle
+} from './agent-transcript-pane-test-harness'
 import {
   finalReadProjection,
   finalReplayFrame,
@@ -96,8 +100,11 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
       async (fixture) => {
         const { runtime, handle } = await pane(fixture)
         await expect(
-          runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: READY_TIMEOUT_MS })
-        ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+          waitForTranscriptIdle({ runtime, handle }, READY_TIMEOUT_MS)
+        ).resolves.toMatchObject({
+          condition: 'tui-idle',
+          satisfied: true
+        })
       },
       READY_TIMEOUT_MS + PANE_SETUP_SLACK_MS
     )
@@ -106,9 +113,9 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
       '$name: a tui-idle wait does not settle ready',
       async (fixture) => {
         const { runtime, handle } = await pane(fixture)
-        const result = await runtime
-          .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: REFUSAL_TIMEOUT_MS })
-          .catch((error: unknown) => ({ satisfied: false, error: String(error) }))
+        const result = await waitForTranscriptIdle({ runtime, handle }, REFUSAL_TIMEOUT_MS).catch(
+          (error: unknown) => ({ satisfied: false, error: String(error) })
+        )
         expect(result.satisfied).toBe(false)
       },
       REFUSAL_TIMEOUT_MS + PANE_SETUP_SLACK_MS
@@ -128,9 +135,9 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
         const { runtime, handle } = await createTranscriptPane(options)
         await runtime.readTerminal(handle, { screen: true })
         options.size = { cols: fixture.cols, rows: fixture.rows }
-        const result = await runtime
-          .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: READY_TIMEOUT_MS })
-          .catch(() => ({ satisfied: false }))
+        const result = await waitForTranscriptIdle({ runtime, handle }, READY_TIMEOUT_MS).catch(
+          () => ({ satisfied: false })
+        )
         expect(result.satisfied).toBe(suite.readyWithoutScreen.includes(fixture.name))
       },
       READY_TIMEOUT_MS + PANE_SETUP_SLACK_MS
@@ -157,9 +164,9 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
         // Why: an echo of the reflowed size sends no SIGWINCH, so nothing repaints.
         runtime.onExternalPtyResize(TRANSCRIPT_PANE_PTY_ID, firstReady.cols, firstReady.rows)
         await runtime.readTerminal(handle, { screen: true })
-        const result = await runtime
-          .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: READY_TIMEOUT_MS })
-          .catch(() => ({ satisfied: false }))
+        const result = await waitForTranscriptIdle({ runtime, handle }, READY_TIMEOUT_MS).catch(
+          () => ({ satisfied: false })
+        )
         expect(result.satisfied).toBe(suite.readyWithoutScreen.includes(firstReady.name))
       },
       READY_TIMEOUT_MS + PANE_SETUP_SLACK_MS
@@ -184,9 +191,9 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
         nextCursor: null,
         source: 'screen'
       })
-      const result = await runtime
-        .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_500 })
-        .catch(() => ({ satisfied: false }))
+      const result = await waitForTranscriptIdle({ runtime, handle }, 2_500).catch(() => ({
+        satisfied: false
+      }))
       // Presence precondition: the visible-screen probe actually ran.
       expect(read).toHaveBeenCalled()
       return result.satisfied === true
@@ -207,6 +214,33 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
       },
       15_000
     )
+
+    it('waits for quiet again after a ready pane repaints', async () => {
+      const { runtime, handle } = await pane(firstReady)
+      vi.useFakeTimers({
+        toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+      })
+      try {
+        const settled = vi.fn()
+        const waiting = runtime.waitForTerminal(handle, {
+          condition: 'tui-idle',
+          timeoutMs: READY_TIMEOUT_MS
+        })
+        void waiting.then(settled, () => {})
+        await vi.advanceTimersByTimeAsync(2_000)
+        expect(settled).not.toHaveBeenCalled()
+
+        runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, readRuntimeFixture(firstReady.name), Date.now())
+        await runtime.readTerminal(handle, { screen: true })
+        await vi.advanceTimersByTimeAsync(2_000)
+        expect(settled).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(2_000)
+        await expect(waiting).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   it('never reads the screen for another agent', async () => {

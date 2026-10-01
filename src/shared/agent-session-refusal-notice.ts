@@ -156,7 +156,9 @@ const REASON_WORDS = {
     spawnIdentityMismatch: codeWords('hostFinding'),
     notResumable: codeWords('retry'),
     noProviderChild: codeWords('retry'),
-    conversationHeldElsewhere: codeWords('retry')
+    conversationHeldElsewhere: codeWords('retry'),
+    // Trying again retries the stop that could not prove the exit.
+    previousExitUnverifiable: causeWords('ownerUnproven', 'retry')
   },
   agent_session_conflict: {
     chatStarting: AGENT_STARTING,

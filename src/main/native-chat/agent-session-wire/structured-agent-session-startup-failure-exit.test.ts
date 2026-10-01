@@ -10,6 +10,7 @@ import {
   type StructuredAgentSessionUnexpectedExitContext,
   type StructuredAgentSessionUnexpectedExitSession
 } from './structured-agent-session-unexpected-exit'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const SESSION = 'session-1'
 const GENERATION = 'generation-1'
@@ -47,6 +48,7 @@ function contextFor(session: StructuredAgentSessionUnexpectedExitSession) {
     })
   )
   const context: StructuredAgentSessionUnexpectedExitContext<typeof session> = {
+    logger: recordingStructuredAgentSessionLogger().logger,
     store: {
       getRecord: () => record,
       transitionHandoff: async (

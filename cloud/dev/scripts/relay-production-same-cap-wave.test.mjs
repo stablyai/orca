@@ -56,12 +56,28 @@ test('requires one canary or a bounded reviewed batch', () => {
     rollbackDigest,
     confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c30`
   }).cells, ['production-gce-c30'])
-  assert.throws(() => validateSameCapWave({
+  assert.deepEqual(validateSameCapWave({
     mode: 'canary-apply',
     cellIds: 'production-gce-c31',
     targetDigest,
     rollbackDigest,
     confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c31`
+  }).cells, ['production-gce-c31'])
+  for (const cellId of ['production-gce-c32', 'production-gce-c33']) {
+    assert.deepEqual(validateSameCapWave({
+      mode: 'canary-apply',
+      cellIds: cellId,
+      targetDigest,
+      rollbackDigest,
+      confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${cellId}`
+    }).cells, [cellId])
+  }
+  assert.throws(() => validateSameCapWave({
+    mode: 'canary-apply',
+    cellIds: 'production-gce-c34',
+    targetDigest,
+    rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c34`
   }), /cells/)
 })
 
@@ -107,9 +123,12 @@ test('the wave workflow chains exactly ten serial cell jobs', () => {
   assert.doesNotMatch(dispatch, /\n  cell_11:/)
 })
 
-test('lists only C17 and C18 as migration-only now that C30 is promoted', () => {
-  assert.deepEqual(SAME_CAP_MIGRATION_ONLY_CELLS, ['production-gce-c17', 'production-gce-c18'])
+test('lists C32 and C33 as migration-only beside C17 and C18 until their canaries promote them', () => {
+  assert.deepEqual(SAME_CAP_MIGRATION_ONLY_CELLS, [
+    'production-gce-c17', 'production-gce-c18', 'production-gce-c32', 'production-gce-c33'
+  ])
   assert.equal(SAME_CAP_CELLS.includes('production-gce-c30'), true)
+  assert.equal(SAME_CAP_CELLS.includes('production-gce-c31'), true)
 })
 
 test('rolls the migration-only cells but never mixes the two classes in one wave', () => {
@@ -152,6 +171,38 @@ test('rolls the migration-only cells but never mixes the two classes in one wave
     targetDigest,
     rollbackDigest,
     confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${asiaMixed}`,
+    canaryRunId: '42'
+  }), /all general or all migration-only/)
+  // C31 is general since its 2026-10-01 promotion, so it rolls beside C30 but never C17/C18.
+  assert.equal(entryAdmission('production-gce-c31'), 'general')
+  assert.equal(selectorWaveDelta('production-gce-c31'), 2)
+  const asiaPromoted = 'production-gce-c30,production-gce-c31'
+  assert.deepEqual(validateSameCapWave({
+    mode: 'batch-apply',
+    cellIds: asiaPromoted,
+    targetDigest,
+    rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${asiaPromoted}`,
+    canaryRunId: '42'
+  }).cells, ['production-gce-c30', 'production-gce-c31'])
+  const c31Mixed = 'production-gce-c31,production-gce-c18'
+  assert.throws(() => validateSameCapWave({
+    mode: 'batch-apply',
+    cellIds: c31Mixed,
+    targetDigest,
+    rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${c31Mixed}`,
+    canaryRunId: '42'
+  }), /all general or all migration-only/)
+  // Until its canary promotes it, a same-cap restore must hand a US 3,000 cell back isolated.
+  assert.equal(entryAdmission('production-gce-c32'), 'migration-only')
+  const usUnpromoted = 'production-gce-c26,production-gce-c32'
+  assert.throws(() => validateSameCapWave({
+    mode: 'batch-apply',
+    cellIds: usUnpromoted,
+    targetDigest,
+    rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${usUnpromoted}`,
     canaryRunId: '42'
   }), /all general or all migration-only/)
   // A mixed wave has no single selector delta for its later cells to offset from.
@@ -367,137 +418,6 @@ test('a batch trusts a canary sealed by identical code at an ancestor commit', a
   }
 })
 
-// Why: the break-glass override is the one input that removes a safety check, so
-// a partial or mismatched one must fail before the gate job reaches a mutation.
-test('accepts only a complete digest-bound monitor gate override', () => {
-  const reason = 'rolling the measured Cloud SQL stall fix'
-  const confirmation = `SKIP_RELAY_MONITOR_GATE ${targetDigest}`
-  const wave = {
-    mode: 'canary-apply',
-    cellIds: 'production-gce-c7',
-    targetDigest,
-    rollbackDigest,
-    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c7`
-  }
-  assert.deepEqual(
-    validateSameCapWave({
-      ...wave,
-      gateOverrideReason: reason,
-      gateOverrideConfirmation: confirmation
-    }).gateOverride,
-    { reason, confirmation }
-  )
-  // An ordinary wave carries no override at all.
-  assert.equal(validateSameCapWave(wave).gateOverride, null)
-  assert.equal(
-    validateSameCapWave({ ...wave, gateOverrideReason: '', gateOverrideConfirmation: '' })
-      .gateOverride,
-    null
-  )
-  assert.throws(
-    () => validateSameCapWave({ ...wave, gateOverrideConfirmation: confirmation }),
-    /gate override reason/
-  )
-  assert.throws(
-    () => validateSameCapWave({ ...wave, gateOverrideReason: reason }),
-    /gate override confirmation/
-  )
-  // Bound to the digest this wave installs, not to any digest.
-  assert.throws(
-    () => validateSameCapWave({
-      ...wave,
-      gateOverrideReason: reason,
-      gateOverrideConfirmation: `SKIP_RELAY_MONITOR_GATE ${rollbackDigest}`
-    }),
-    /gate override confirmation/
-  )
-  assert.throws(
-    () => validateSameCapWave({
-      ...wave,
-      gateOverrideReason: 'too short',
-      gateOverrideConfirmation: confirmation
-    }),
-    /gate override reason/
-  )
-  // The reason is rendered into the run summary, so it stays printable and single-line.
-  assert.throws(
-    () => validateSameCapWave({
-      ...wave,
-      gateOverrideReason: `${reason}\n| injected | row |`,
-      gateOverrideConfirmation: confirmation
-    }),
-    /gate override reason/
-  )
-  assert.throws(
-    () => validateSameCapWave({
-      ...wave,
-      mode: 'verify',
-      confirmation: '',
-      gateOverrideReason: reason,
-      gateOverrideConfirmation: confirmation
-    }),
-    /verify does not accept a monitor gate override/
-  )
-})
-
-test('a rollback wave may break the glass on its own target digest', () => {
-  const reason = 'getting off the bad image during an incident'
-  assert.deepEqual(
-    validateSameCapWave({
-      mode: 'rollback',
-      cellIds: 'production-gce-c7',
-      targetDigest,
-      rollbackDigest,
-      confirmation: `ROLL_BACK_RELAY_SAME_CAP ${rollbackDigest} production-gce-c7`,
-      gateOverrideReason: reason,
-      gateOverrideConfirmation: `SKIP_RELAY_MONITOR_GATE ${targetDigest}`
-    }).gateOverride,
-    { reason, confirmation: `SKIP_RELAY_MONITOR_GATE ${targetDigest}` }
-  )
-})
-
-// Why: the canary authority never carried a monitor run ID, so a batch can reuse
-// a canary rolled under an override. Recording it keeps the audit trail in the
-// sealed artifact without making it part of what verification demands.
-test('seals the override into the canary authority as audit trail only', () => {
-  const sealed = {
-    cellIds: 'production-gce-c7',
-    targetDigest,
-    rollbackDigest,
-    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c7`,
-    commitSha: 'f'.repeat(40),
-    runId: '42',
-    selectorGeneration: '11',
-    rehomeGeneration: '4'
-  }
-  const expected = {
-    commitSha: 'f'.repeat(40),
-    runId: '42',
-    cellIds: 'production-gce-c8,production-gce-c9',
-    targetDigest,
-    rollbackDigest,
-    selectorGeneration: '21',
-    rehomeGeneration: '4'
-  }
-  const overridden = canaryAuthority({
-    ...sealed,
-    gateOverrideReason: 'rolling the measured Cloud SQL stall fix',
-    gateOverrideConfirmation: `SKIP_RELAY_MONITOR_GATE ${targetDigest}`,
-    actor: 'Jinwoo-H'
-  })
-  assert.deepEqual(overridden.gateOverride, {
-    reason: 'rolling the measured Cloud SQL stall fix',
-    confirmation: `SKIP_RELAY_MONITOR_GATE ${targetDigest}`,
-    actor: 'Jinwoo-H'
-  })
-  assert.equal(canaryAuthority(sealed).gateOverride, null)
-  // Neither shape changes what a batch verifies.
-  assert.equal(verifyCanaryAuthority(overridden, expected).cellId, 'production-gce-c7')
-  assert.equal(
-    verifyCanaryAuthority(canaryAuthority(sealed), expected).cellId,
-    'production-gce-c7'
-  )
-})
 
 function sealedCanary(cellId) {
   return canaryAuthority({

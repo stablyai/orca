@@ -1,9 +1,9 @@
 /**
- * An agent session named as a recipient: `session:<id>`, or a bare Orca session id. Any session on
+ * An agent session named as a recipient: `orca_session_id:<id>`, or a bare Orca session id. Any session on
  * this host can be addressed, not only one that coordinates a Run: an agent's id is its public
  * address, and a user telling one agent to message another's id is a supported workflow.
  *
- * Mail that no Run or Dispatch owns is stored at the conversation's `session:<root id>` and pointed
+ * Mail that no Run or Dispatch owns is stored at the conversation's `orca_session_id:<root id>` and pointed
  * at its live session as a turn, so any session of a `/clear` lineage is a valid spelling. A
  * released lease is not a refusal (the pointer's send starts its agent); a closed chat, another host,
  * and an unknown id are, before anything is stored.
@@ -53,7 +53,7 @@ export function readSessionRecipient(
       ? { sessionId, address: formatOrcaSessionAddress(sessionId) }
       : {
           code: CODES.unknown,
-          message: `${recipient} does not name an Orca agent session id. No message was sent.`
+          message: `${recipient} does not name an Orca session ID. No message was sent.`
         }
   }
   const sessionId = isOrcaSessionId(recipient) ? recipient : null
@@ -113,6 +113,6 @@ export function refuseUndeliverableSessionRecipient(
 function providerIdRefusal(id: string, orcaSessionId: string): SessionRecipientRefusal {
   return {
     code: CODES.providerId,
-    message: `${id} is the provider's own session id, which changes on /clear. This session's Orca address is ${ORCA_SESSION_ADDRESS_PREFIX}${orcaSessionId}; use that instead. No message was sent.`
+    message: `${id} is the provider's own session id, which changes on /clear. This session's Orca session ID is ${ORCA_SESSION_ADDRESS_PREFIX}${orcaSessionId}; address it by that instead. No message was sent.`
   }
 }

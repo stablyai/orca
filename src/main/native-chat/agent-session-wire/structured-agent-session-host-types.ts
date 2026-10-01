@@ -17,6 +17,7 @@ import type {
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 import type { AgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
@@ -37,9 +38,13 @@ export type StructuredAgentSessionProviderChildIdentity = {
   readonly fence: number
 }
 
-/** A wind-down still owed, with the cause of the stop that owes it: a retry finishes that stop. */
+/** A wind-down still owed, with the stop that owes it: a retry finishes that stop. */
 export type StructuredAgentSessionOwedWindDown = StructuredAgentSessionProviderChildIdentity & {
   readonly cause: StructuredAgentSessionStopCause
+  /** Where the journal stood when the stop was asked for; the child's end is ordered there. */
+  readonly requestedAt: AgentJournalCursor
+  /** Where it stood once the newest pass failed: a message accepted by then waited through a retry. */
+  readonly failedAt?: AgentJournalCursor
 }
 
 /** The provider process behind a conversation. Written only in
@@ -73,7 +78,8 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     duringStartup: boolean
     startedFor?: string
     /** Where the conversation's journal stood when the child ended, to order the end against a
-     *  message's acceptance. */
+     *  message's acceptance. A stop's end stands where it was asked for: a message accepted while
+     *  retries proved the exit waited on it, and came after it. */
     endedAt: AgentJournalCursor
   }
 
@@ -121,11 +127,9 @@ export type StructuredAgentSessionHostDeps = {
   idleSweep?: { intervalMs?: number; idleMs?: number }
   /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */
   hasOpenDispatch?: (record: AgentSessionRecord) => boolean
-  onEventSinkError?: (input: { sessionId: string; error: unknown }) => void
-  /** Lease bookkeeping run for startup or a read (the reconcile, or resolving a chat's recovery)
-   *  that refused or threw, once per distinct failure. Startup and the read carry on: the next
-   *  attach or send reconciles and resolves recovery again before it acts. */
-  onLeaseReconcileFailure?: (failure: unknown) => void
+  /** Where every failure the host carries on past is reported. Required: a host without one would
+   *  drop exactly the failures nobody sees in the UI. */
+  logger: StructuredAgentSessionLogger
   /** Every status projection this host publishes. `replay` marks a re-projection of state the host
    *  already knew (restore, an arriving subscriber) rather than a fresh journal edge. */
   onSessionStatusChanged?: (

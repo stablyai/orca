@@ -107,19 +107,6 @@ describe('the words written beside a failure fact', () => {
     }
   })
 
-  it('names /clear as the next step for the start a /clear needed', () => {
-    const clear = (kind: AgentSessionFailureKind) =>
-      agentSessionFailureSentence({ kind }, 'row', { agentName: 'Codex', command: 'clear' })
-    expect(clear('notSignedIn')).toBe(
-      'Codex is not signed in for the selected account. Sign in, then run /clear again.'
-    )
-    expect(clear('startFailed')).toBe("Codex couldn't start. Run /clear again.")
-    expect(clear('restartFailed')).toBe("Codex couldn't restart. Run /clear again.")
-    expect(clear('providerStartFailed')).toBe(
-      'Codex stopped before it finished starting. Run /clear again.'
-    )
-  })
-
   it('names /compact as the next step for the start a /compact needed', () => {
     const compact = (kind: AgentSessionFailureKind) =>
       agentSessionFailureSentence({ kind }, 'rejection', {

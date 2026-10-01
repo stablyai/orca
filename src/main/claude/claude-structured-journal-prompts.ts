@@ -202,6 +202,18 @@ export class ClaudeJournalPrompts {
     this.deletePrompt(promptKey)
   }
 
+  /** The host records the card itself, so nothing here writes it any more. The returned undo hands
+   *  it back when that record fails, so Claude's own withdrawal can still close it. */
+  handOver(promptKey: string): () => void {
+    const entry = this.items.get(promptKey)
+    this.deletePrompt(promptKey)
+    return () => {
+      if (entry && !this.items.has(promptKey)) {
+        this.items.set(promptKey, { items: entry.items, cancellationPending: false })
+      }
+    }
+  }
+
   clear(): void {
     this.items.clear()
     this.pendingCancellationTotal = 0

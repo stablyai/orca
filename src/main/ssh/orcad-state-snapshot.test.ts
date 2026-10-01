@@ -4,12 +4,15 @@ import {
   ORCAD_SNAPSHOT_EXCLUDED,
   ORCAD_SNAPSHOT_MEMBERS,
   captureOrcadStateSnapshotCommand,
+  clearOrcadStateSnapshotMembersCommand,
   compareOrcadStateSnapshotCommand,
   newestStateMtimeCommand,
   orcadSnapshotDirName,
   parseNewestStateMtimeSeconds,
   parseOrcadSnapshotCapture,
+  parseOrcadSnapshotPresence,
   parseOrcadSnapshotRestore,
+  probeOrcadStateSnapshotCommand,
   restoreOrcadStateSnapshotCommand
 } from './orcad-state-snapshot'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
@@ -60,9 +63,11 @@ describe('capturing the pre-activation snapshot', () => {
 })
 
 describe('restoring the snapshot', () => {
-  it('clears the members before extracting, so files the new build added do not survive', () => {
+  it('proves the archive extracts before clearing the live members', () => {
     const command = restoreOrcadStateSnapshotCommand(posix, ROOT, SNAP)
-    expect(command.indexOf('rm -rf')).toBeLessThan(command.indexOf('tar -C'))
+    const extract = command.indexOf(`tar -C '${ROOT}/.orcad-state-restore-stage'`)
+    expect(extract).toBeGreaterThan(-1)
+    expect(extract).toBeLessThan(command.indexOf(`rm -rf '${ROOT}'/'profiles'`))
   })
 
   it('reports a missing archive instead of extracting nothing and claiming success', () => {
@@ -70,6 +75,15 @@ describe('restoring the snapshot', () => {
     expect(parseOrcadSnapshotRestore('MISSING')).toBe('missing')
     expect(parseOrcadSnapshotRestore('RESTORED')).toBe('restored')
     expect(parseOrcadSnapshotRestore('FAILED')).toBe('failed')
+  })
+
+  it.each([
+    ['PRESENT', 'present'],
+    ['ABSENT', 'absent'],
+    ['', 'unverifiable'],
+    ['bash: tar: command not found', 'unverifiable']
+  ])('reads snapshot presence %j as %s, never treating silence as absence', (out, expected) => {
+    expect(parseOrcadSnapshotPresence(out)).toBe(expected)
   })
 })
 
@@ -94,6 +108,8 @@ describe('Windows hosts', () => {
   it.each([
     ['capture', () => captureOrcadStateSnapshotCommand(windows, ROOT, SNAP)],
     ['restore', () => restoreOrcadStateSnapshotCommand(windows, ROOT, SNAP)],
+    ['clear', () => clearOrcadStateSnapshotMembersCommand(windows, ROOT)],
+    ['presence', () => probeOrcadStateSnapshotCommand(windows, SNAP)],
     ['compare', () => compareOrcadStateSnapshotCommand(windows, ROOT, SNAP)],
     ['mtime', () => newestStateMtimeCommand(windows, ROOT)]
   ])('refuses %s rather than emitting a POSIX command', (_label, build) => {

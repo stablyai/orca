@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   controller: null as RuntimeMobileNotificationController | null,
   registry: null as DeviceRegistry | null,
   rpcStarted: false,
+  profileStartupErrors: new Array<Error>(),
   browserProvider: vi.fn(async () => null),
   register: vi.fn(async () => ({ ok: true, registrationId: 'headless-registration' })),
   send: vi.fn(async () => ({ ok: true, results: [] }))
@@ -24,7 +25,13 @@ vi.mock('./orcad-app-paths', () => ({
   resolveUserDataPath: () => state.root
 }))
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: state.browserProvider }))
-vi.mock('./orcad-instance-lock', () => ({ acquireOrcadInstanceLock: () => ({ release() {} }) }))
+vi.mock('./orcad-instance-lock', () => ({
+  acquireOrcadInstanceLock: () => ({
+    path: join(state.root, 'orcad.lock'),
+    record: { pid: process.pid, startedAtMs: null, nonce: 'headless-instance' },
+    release() {}
+  })
+}))
 vi.mock('./orcad-daemon-supervision', () => ({
   startOrcadDaemon: async () => {},
   stopOrcadDaemon: async () => {}
@@ -37,20 +44,26 @@ vi.mock('../ipc/pty', () => ({
   getSshPtyProvider: () => null
 }))
 vi.mock('./orcad-profile-state-startup', () => ({
-  createOrcadProfileStateStartup: async () => ({
-    store: {
-      getSettings: () => ({}),
-      flushFinalOrThrowAsync: async () => {},
-      freezeWritesAsync: async () => {}
-    },
-    authority: {
-      backend: 'sqlite',
-      classification: 'neither',
-      authority_mode: 'sqlite-candidate',
-      runtime: 'orcad',
-      migrated: false
+  createOrcadProfileStateStartup: async () => {
+    const error = state.profileStartupErrors.shift()
+    if (error) {
+      throw error
     }
-  })
+    return {
+      store: {
+        getSettings: () => ({}),
+        flushFinalOrThrowAsync: async () => {},
+        freezeWritesAsync: async () => {}
+      },
+      authority: {
+        backend: 'sqlite',
+        classification: 'neither',
+        authority_mode: 'sqlite-candidate',
+        runtime: 'orcad',
+        migrated: false
+      }
+    }
+  }
 }))
 vi.mock('../orca-profiles/profile-index-store', () => ({
   initOrcaProfilePaths() {},
@@ -74,6 +87,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     rehydrateClientHostedBrowserPages() {}
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
+    async stopLegacyWorkerTerminalRecovery() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {
@@ -122,6 +136,7 @@ vi.mock('../runtime/push/push-gateway-client', () => ({
 
 afterEach(() => {
   rmSync(state.root, { recursive: true, force: true })
+  state.profileStartupErrors.length = 0
   vi.clearAllMocks()
 })
 
@@ -179,9 +194,28 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
 
 it('releases admission when host setup fails before a runtime exists', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-setup-failure-'))
-  state.browserProvider.mockRejectedValueOnce(new Error('browser setup failed'))
+  state.profileStartupErrors.push(new Error('profile startup failed'))
   const { startOrcad } = await import('./orcad-entry')
-  await expect(startOrcad()).rejects.toThrow('browser setup failed')
+  await expect(startOrcad()).rejects.toThrow('profile startup failed')
   expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
   acquireProfileStateMaintenance(state.root).release()
+})
+
+it('serves RPC without waiting for browser discovery', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-browser-pending-'))
+  let finishDiscovery!: () => void
+  state.browserProvider.mockReturnValueOnce(
+    new Promise<null>((resolve) => {
+      finishDiscovery = () => resolve(null)
+    })
+  )
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  expect(host.managedStop).toMatchObject({
+    runtimeId: 'headless-runtime',
+    instance: { pid: process.pid, nonce: 'headless-instance' }
+  })
+  finishDiscovery()
+  await host.stop()
+  expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
 })

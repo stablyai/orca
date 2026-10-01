@@ -69,13 +69,13 @@ describe('PR workflow parallelism', () => {
     expect(workflow.permissions).toEqual({ contents: 'read' })
   })
 
-  it('runs all eight shards on ARM for PRs and both Node versions on x86 daily', () => {
+  it('runs PR shards on ARM and both Node versions on x86 daily', () => {
     const sharedTest = unitTestWorkflow.jobs.test
     const testStep = sharedTest.steps.find((step) => step.name === 'Test shard')
     const installStep = sharedTest.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
-    const primerInstall = workflow.jobs.test_native_cache.steps.find(
+    const staticInstall = workflow.jobs.static_analysis.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
     const nodeNextPrimerInstall = nodeNextWorkflow.jobs.test_native_cache.steps.find(
@@ -87,7 +87,7 @@ describe('PR workflow parallelism', () => {
     expect(nodeNextWorkflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
     expect(JSON.parse(nodeNextWorkflow.jobs.test.with.node_versions)).toEqual(['24', '26'])
     expect(workflow.jobs.test.with.runner).toBe('ubuntu-24.04-arm')
-    expect(workflow.jobs.test_native_cache['runs-on']).toBe('ubuntu-24.04-arm')
+    expect(workflow.jobs.static_analysis['runs-on']).toBe('ubuntu-24.04-arm')
     expect(sharedTest['runs-on']).toBe('${{ inputs.runner }}')
     expect(unitTestWorkflow.on.workflow_call.inputs.runner.default).toBe('ubuntu-latest')
     expect(nodeNextWorkflow.jobs.test.with.runner).toBeUndefined()
@@ -105,8 +105,7 @@ describe('PR workflow parallelism', () => {
     expect(nodeNextWorkflow.on.workflow_dispatch).toBeNull()
     expect(sharedTest.strategy.matrix.node).toBe('${{ fromJSON(inputs.node_versions) }}')
     expect(sharedTest.strategy.matrix.shard).toBe('${{ fromJSON(inputs.shards) }}')
-    // The shard matrix no longer needs an in-workflow plan job: planning moved to
-    // unit-plan.yml so it can run before the static-analysis gate clears.
+    // PR planning overlaps typecheck; the daily suite keeps its separate planner.
     expect(sharedTest.needs).toBeUndefined()
     expect(unitTestWorkflow.jobs.plan).toBeUndefined()
     expect(unitTestWorkflow.on.workflow_call.inputs.shards.required).toBe(true)
@@ -116,9 +115,10 @@ describe('PR workflow parallelism', () => {
     for (const testFile of nativeShellContractFiles) {
       expect(UNIT_EXCLUDE).toContain(testFile)
     }
-    expect(primerInstall.with['native-runtime']).toBe('node')
-    expect(primerInstall.with['node-version']).toBe('24')
-    expect(workflow.jobs.test.needs).toContain('test_native_cache')
+    expect(staticInstall.with['native-runtime']).toBe('node')
+    expect(staticInstall.with['node-version']).toBe('24')
+    expect(workflow.jobs.test.needs).toContain('static_analysis')
+    expect(workflow.jobs.test_native_cache).toBeUndefined()
     expect(nodeNextPrimerInstall.with['native-runtime']).toBe('node')
     expect(nodeNextPrimerInstall.with['node-version']).toBe('${{ matrix.node }}')
     expect(nodeNextWorkflow.jobs.test.needs).toEqual(['test_native_cache', 'unit_plan'])
@@ -300,6 +300,9 @@ describe('PR workflow parallelism', () => {
       steps.findIndex((step) => step.name === 'Install dependencies')
     )
     expect(steps[restoreIndex].uses).toBe('actions/cache/restore@v5')
+    expect(steps[restoreIndex].if).toBe(
+      "github.event_name == 'pull_request' && (runner.os != 'Windows' || runner.arch != 'X64' || !contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml'))"
+    )
   })
 
   it('uses the repository package-manager version for every direct pnpm setup', () => {
@@ -359,7 +362,7 @@ describe('PR workflow parallelism', () => {
     expect(dependencyAction.inputs['persist-native-cache'].default).toBe('true')
     expect(
       dependencyAction.runs.steps.find((step) => step.name === 'Use external node-gyp').if
-    ).toBe("runner.os == 'Linux' && inputs.native-runtime != 'none'")
+    ).toBe("runner.os == 'Linux' && inputs.native-runtime == 'node'")
     const dependencyInstall = dependencyAction.runs.steps.find(
       (step) => step.name === 'Install dependencies'
     )

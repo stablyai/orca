@@ -196,7 +196,7 @@ test.describe('Onboarding flow', () => {
     // agents are detected, otherwise behind the "Show N more agents" details
     // expander — open it if codex isn't visible.
     const targetAgent: TuiAgent = 'codex'
-    const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+    const codexButton = orcaPage.getByRole('button', { name: 'Codex', exact: true })
     // Why: isVisible() is a one-shot probe — on slow renderer paint it would
     // race the wizard mount and falsely take the "show more agents" branch.
     // waitFor with a small timeout actually retries until the button paints.
@@ -348,7 +348,7 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
-    const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+    const codexButton = orcaPage.getByRole('button', { name: 'Codex', exact: true })
     const codexVisible = await codexButton
       .first()
       .waitFor({ state: 'visible', timeout: 1_000 })
@@ -583,7 +583,7 @@ test.describe('Onboarding flow', () => {
       timeout: 15_000
     })
 
-    const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+    const codexButton = orcaPage.getByRole('button', { name: 'Codex', exact: true })
     const codexVisible = await codexButton
       .first()
       .waitFor({ state: 'visible', timeout: 1_000 })

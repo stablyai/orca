@@ -315,7 +315,7 @@ async function attemptedQueueSend() {
     { initialProps: { capability: SUPPORTED } }
   )
   expect(view.result.current.send('follow-up')).toBe(true)
-  await waitFor(() => expect(view.result.current.blockedClientMessageId).not.toBeNull())
+  await waitFor(() => expect(view.result.current.outbox[0]?.lastFailure).toBeDefined())
   expect(mocks.call.mock.calls[0]?.[2]?.delivery).toBe('queue-if-active')
   mocks.call.mockImplementation(() => new Promise(() => {}))
   return view

@@ -1,7 +1,6 @@
 // Per-draft holds: what keeps one card from auto-sending, stored on its row. A
-// Stop or a restart pauses the whole queue instead (`queued-message-pause-table.ts`,
-// and the host instance each row records); a per-draft hold is only a
-// conversion that failed, which an explicit Send releases.
+// Stop or a restart pauses the queue instead (`queued-message-pause.ts`, derived);
+// a per-draft hold is only a conversion that failed, which an explicit Send releases.
 
 import type Database from '../../sqlite/sync-database'
 import type { QueuedMessageHoldReason } from './queued-message-table'

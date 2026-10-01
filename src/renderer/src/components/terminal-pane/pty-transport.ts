@@ -105,13 +105,26 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
     storedCallbacks = callbacks
   }
+  const dropPreconnectInput = (reason: string): void => {
+    if (preconnectInputBuffer?.hasPendingInput()) {
+      console.warn(
+        `[pty-transport] dropped keys typed while the terminal was connecting: ${reason}`
+      )
+    }
+    preconnectInputBuffer?.clear()
+  }
   const flushPreconnectInput = async (): Promise<void> => {
     if (!preconnectInputBuffer?.isBuffering()) {
       return
     }
     const id = ptyId
     if (destroyed || !connected || !id) {
-      preconnectInputBuffer.clear()
+      // Why: a closed pane's keys have no owner; only a failed attach is worth reporting.
+      if (destroyed) {
+        preconnectInputBuffer.clear()
+      } else {
+        dropPreconnectInput('the terminal did not attach')
+      }
       return
     }
     await preconnectInputBuffer.flush({
@@ -178,7 +191,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     abandonPreconnectInput() {
-      preconnectInputBuffer?.clear()
+      dropPreconnectInput('its pending connection was abandoned')
     },
 
     disconnect() {

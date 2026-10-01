@@ -22,6 +22,7 @@ import {
   indexedStatusFeedSession,
   statusFeedChildView as childView
 } from './structured-agent-session-status-feed-test-session'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const SESSION = 'status-session'
 const USER_IDENTITY = {
@@ -75,6 +76,7 @@ async function feedWithChildren(provider: AgentSessionHandleProvider = 'codex') 
   }
   let now = 1_000
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, indexedStatusFeedSession({ journal, provider })]]),
     getRecord: () => null,
     now: () => (now += 1),

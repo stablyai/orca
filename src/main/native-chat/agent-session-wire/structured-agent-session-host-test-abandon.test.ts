@@ -19,6 +19,7 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -66,6 +67,7 @@ describe('abandoning a structured agent-session host', () => {
       setOption: async () => undefined
     }
     const host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
       probeOwner: async () => ({

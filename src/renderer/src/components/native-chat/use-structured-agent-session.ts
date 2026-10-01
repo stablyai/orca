@@ -152,30 +152,16 @@ export function useStructuredAgentSession(args: {
     transportState.turnId !== null ||
     (stopsConversation &&
       (transportState.isWorking ||
-        hasUnsentStructuredAgentSessionOutboxEntry(
-          outbox,
-          transportState.submissions,
-          outboxController.blockedClientMessageId
-        )))
+        hasUnsentStructuredAgentSessionOutboxEntry(outbox, transportState.submissions)))
   // A queued send is a card, never a transcript bubble.
   const isWorking = transportState.isWorking
   const transcriptOutbox = useMemo(
     () =>
-      outboxOutsideQueuedCards(
-        outbox,
-        queuedMessageIds,
-        isWorking,
-        outboxController.blockedClientMessageId,
-        { capability: queueCapability, enabled: queueFollowUps }
-      ),
-    [
-      isWorking,
-      outbox,
-      outboxController.blockedClientMessageId,
-      queueCapability,
-      queueFollowUps,
-      queuedMessageIds
-    ]
+      outboxOutsideQueuedCards(outbox, queuedMessageIds, isWorking, {
+        capability: queueCapability,
+        enabled: queueFollowUps
+      }),
+    [isWorking, outbox, queueCapability, queueFollowUps, queuedMessageIds]
   )
   const messages = useStructuredAgentSessionMessages(
     transportState.journalItems,
@@ -227,9 +213,9 @@ export function useStructuredAgentSession(args: {
     loadOlder,
     prompts,
     outbox,
+    failedHere: outboxController.failedHere,
     /** The journal's rows for sent messages, which carry a rejected message's whole fact. */
     submissions: transportState.submissions,
-    blockedClientMessageId: outboxController.blockedClientMessageId,
     // A message typed during a command queues behind it on the host.
     send: (...input: Parameters<typeof outboxController.send>) =>
       // Legacy: an older host refuses sends while a command runs; removable once those hosts age out.
@@ -257,8 +243,8 @@ export function useStructuredAgentSession(args: {
     },
     queuedMessages: queuedController,
     cancel: async (turnId: string, prompt?: StructuredPromptCancelTarget) => {
-      // Capability negotiation must complete before mutate constructs the payload
-      // fingerprint and operation id: older hosts reject the strict prompt field.
+      // Capability negotiation must complete before mutate fingerprints the payload:
+      // older hosts reject the strict prompt field.
       const promptSupported =
         prompt !== undefined && (await supportsStructuredAgentSessionPromptCancel(target))
       return mutate('agentSession.cancel', 'agentSession.cancel', {

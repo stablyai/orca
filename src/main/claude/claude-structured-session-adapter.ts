@@ -28,6 +28,7 @@ import {
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 import { closeAllClaudeSessions, closeClaudeSession } from './claude-structured-session-close'
+import { claudeStoppedRequestEndWait } from './claude-request-end-wait'
 import {
   drainClaudeObservedExits,
   observeClaudeSessionExit,
@@ -38,10 +39,11 @@ import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session
 import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
 import { drainClaudeChildWork } from './claude-child-work-evidence'
 import {
-  admitClaudePromptCancellation,
   answerClaudeStructuredPrompt,
-  cancelClaudeStructuredTurn
+  cancelClaudeStructuredTurn,
+  dismissClaudeStructuredPrompt
 } from './claude-structured-prompt-ownership'
+import { claudePromptCancelRoute } from './claude-structured-prompt-replies'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 export type {
@@ -63,6 +65,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   private readonly exitLifecycle: ClaudeExitLifecycle
 
   constructor(private readonly deps: ClaudeStructuredSessionAdapterDeps) {
+    this.atRestCommands = deps.atRestCommands
     this.exitLifecycle = {
       sessions: this.sessions,
       exits: this.exits,
@@ -173,12 +176,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   bindPromptItemId(sessionId: string, journalItemId: string, promptKey: string): void {
-    const session = this.sessions.get(sessionId)
-    session?.prompts.bindJournalItemId(
-      journalItemId,
-      promptKey,
-      session.translator?.currentTurnId ?? null
-    )
+    this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, promptKey)
   }
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
@@ -191,12 +189,17 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     cancelClaudeStructuredTurn({
       request,
       sessions: this.sessions,
-      admitPromptCancellation: (session, promptKey) =>
-        admitClaudePromptCancellation(session, promptKey),
       onDispatchSettledLate: (settlement) =>
         this.deps.onDispatchSettledLate?.({ sessionId: request.sessionId, ...settlement }),
       ...(this.deps.requestTimeoutMs === undefined ? {} : { timeoutMs: this.deps.requestTimeoutMs })
     })
+  // Stop is a session boundary for Claude: an interrupt can answer while background work keeps the
+  // CLI running, and a refused one leaves the turn running.
+  stopEndsSession = (): boolean => true
+  awaitStoppedRequestEnd = claudeStoppedRequestEndWait(this.sessions)
+  routePromptCancel = claudePromptCancelRoute
+  dismissPrompt: StructuredAgentSessionAdapter['dismissPrompt'] = (request) =>
+    dismissClaudeStructuredPrompt({ request, sessions: this.sessions })
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = async (
     input
   ) => {
@@ -232,6 +235,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     this.sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands
+  readonly atRestCommands: ClaudeStructuredSessionAdapterDeps['atRestCommands']
   holdsDispatch = (sessionId: string): boolean => {
     const session = this.sessions.get(sessionId)
     return session ? claudeHoldsDispatch(session) : false

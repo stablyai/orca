@@ -132,7 +132,6 @@ describe('an outbox entry the host handed off as a queued draft', () => {
       ]
     })
     await waitFor(() => expect(view.result.current.outbox).toHaveLength(0))
-    expect(view.result.current.blockedClientMessageId).toBeNull()
     expect(readNativeChatDraftCache('scope')).toBe('')
   })
 
@@ -199,7 +198,6 @@ describe('an outbox entry the host handed off as a queued draft', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)))
     expect(view.result.current.outbox).toEqual([])
-    expect(view.result.current.blockedClientMessageId).toBeNull()
     expect(view.result.current.error).toBeNull()
     expect(readNativeChatDraftCache('scope')).toBe('')
     act(() => {

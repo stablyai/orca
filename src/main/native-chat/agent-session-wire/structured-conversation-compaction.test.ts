@@ -749,3 +749,23 @@ it('never lets a provider echo alias the command entry', async () => {
     true
   )
 })
+
+it('refuses a /compact pressed again under a new id while one runs, and runs one pressed after it ended', async () => {
+  await attach()
+  await state.host.conversationCommand(CALLER, compactParams())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+
+  expect(await state.host.conversationCommand(CALLER, compactParams())).toMatchObject({
+    ok: false,
+    refusal: { details: { reason: 'turnActive' } }
+  })
+  expect(compact).toHaveBeenCalledOnce()
+
+  finish({ outcome: 'success' })
+  await vi.waitFor(async () =>
+    expect(await state.host.conversationCommand(CALLER, compactParams())).toMatchObject({
+      ok: true
+    })
+  )
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledTimes(2))
+})

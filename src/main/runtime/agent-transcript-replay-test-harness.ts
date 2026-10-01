@@ -32,7 +32,7 @@ export async function* replayTranscript(
   rows: number,
   resize?: TranscriptReplayResize
 ): AsyncGenerator<TranscriptReplayFrame> {
-  const chunks = typeof data === 'string' ? splitIntoChunks(data) : data
+  const chunks = typeof data === 'string' ? splitTranscriptIntoChunks(data) : data
   const emulator = new HeadlessEmulator({ cols, rows })
   let lines: string[] = []
   let partialLine = ''
@@ -85,7 +85,7 @@ export async function finalReadProjection(
 ): Promise<{ lines: string[]; draft?: string }> {
   const emulator = new HeadlessEmulator({ cols, rows })
   try {
-    for (const chunk of splitIntoChunks(readRuntimeFixture(name))) {
+    for (const chunk of splitTranscriptIntoChunks(readRuntimeFixture(name))) {
       await emulator.write(chunk)
     }
     return projectTerminalVisibleLines(emulator)
@@ -94,7 +94,8 @@ export async function finalReadProjection(
   }
 }
 
-function splitIntoChunks(data: string): string[] {
+/** The fixed-size chunks a string transcript replays as, for suites driving their own sink. */
+export function splitTranscriptIntoChunks(data: string): string[] {
   const chunks: string[] = []
   for (let offset = 0; offset < data.length; offset += DEFAULT_CHUNK_CHARS) {
     chunks.push(data.slice(offset, offset + DEFAULT_CHUNK_CHARS))

@@ -41,7 +41,8 @@ export type StructuredAgentSessionOutboxEntry = {
    *  what that request carries. */
   sentDelivery?: 'queue-if-active' | null
   /** Why the last attempt did not go through. Lives on the message so it goes when the message
-   *  is sent again or delivered, instead of outliving it as a separate error. */
+   *  is sent again or delivered, instead of outliving it as a separate error. On a `queued` entry
+   *  it is also the hold (structured-agent-session-outbox-admission). */
   lastFailure?: StructuredAgentSessionAttemptFailure
 }
 
@@ -160,6 +161,19 @@ export function stageStructuredAgentSessionOutboxEntryForSend(
   return { ...entry, state: 'dispatching', lastAttemptAt: now }
 }
 
+/** The host forgot this message's id, a day after it was made, and refuses it for good: only a new
+ *  id sends it. The id was kept because an earlier attempt under it may already be in the chat; a
+ *  first attempt's was replaced when it was refused. */
+export function structuredAgentSessionEntryIdExpired(
+  entry: StructuredAgentSessionOutboxEntry
+): boolean {
+  return (
+    entry.state === 'queued' &&
+    entry.lastFailure?.kind === 'refused' &&
+    entry.lastFailure.code === 'agent_session_operation_expired'
+  )
+}
+
 export function requeueStructuredAgentSessionSendRefusal(
   entry: StructuredAgentSessionOutboxEntry,
   refusal: AgentSessionWriteRefusal,
@@ -168,7 +182,7 @@ export function requeueStructuredAgentSessionSendRefusal(
 ): StructuredAgentSessionOutboxEntry {
   const refusalSettled = agentSessionRefusalOperationState(refusal.code) === 'settled-rejected'
   // An exited owner runs nothing under the old id, so a new one can't collide; the message still
-  // holds the head, since nothing recorded it.
+  // waits for its Retry, since nothing recorded it.
   const ownerExited =
     refusal.code === 'agent_session_ownership_unknown' &&
     agentSessionOwnerVerdictAllowsFreshOperationId(refusal.details?.ownerVerdict)
@@ -181,8 +195,8 @@ export function requeueStructuredAgentSessionSendRefusal(
     return { ...entry, state: 'queued' }
   }
   // Only here may the id rotate: an earlier attempt under this id, or one whose delivery was in
-  // doubt, may have landed, so those stay queued behind the block. Only a settled refusal proves
-  // the message never landed and so releases the queue.
+  // doubt, may have landed, so those keep it. Only a settled refusal proves the message never
+  // landed.
   return {
     ...entry,
     clientMessageId: createOperationId(),
@@ -209,7 +223,12 @@ export function reconcileStructuredAgentSessionOutbox(
       return []
     }
     if (submission?.dispatchState === 'pending') {
-      return entry.state === 'dispatching' ? [entry] : [{ ...entry, state: 'dispatching' as const }]
+      if (entry.state === 'dispatching') {
+        return [entry]
+      }
+      // The host has it, so no failure of an earlier attempt describes it now.
+      const { lastFailure: _landed, ...landed } = entry
+      return [{ ...landed, state: 'dispatching' as const }]
     }
     // Accepted, then not delivered — the agent never started, or its start was refused. The text
     // and why stay here for the user's Retry, and nothing queues behind it. `unconfirmed` is how a
@@ -231,45 +250,12 @@ export function reconcileStructuredAgentSessionOutbox(
       entry.retryAfterUnknownSubmittedAt !== -1 &&
       entry.retryAfterUnknownSubmittedAt !== submission.submittedAt
     ) {
-      return [{ ...entry, state: 'unconfirmed' as const }]
+      // In doubt now, not failed: the probe's resend decides it, as for any unconfirmed send.
+      const { lastFailure: _superseded, ...inDoubt } = entry
+      return [{ ...inDoubt, state: 'unconfirmed' as const }]
     }
     return [entry]
   })
-}
-
-export type StructuredAgentSessionOutboxAdmission =
-  | { state: 'dispatch'; entry: StructuredAgentSessionOutboxEntry }
-  | { state: 'blocked'; entry: StructuredAgentSessionOutboxEntry }
-  | { state: 'idle'; entry: null }
-
-/**
- * What the queue does next. The drain and the Retry affordance both read it, so neither can
- * disagree with the other about which entry is holding the queue.
- *
- * A `dispatching` entry is not a barrier: the host appended its journal row inside the
- * per-session serialize chain before dispatching, so nothing behind it can overtake it, and
- * waiting for its echo costs delivery of everything queued behind it. An `unconfirmed` entry,
- * or one the user must act on, is a barrier — sending past either would reorder around a
- * message that may yet land.
- */
-export function admitStructuredAgentSessionOutboxEntry(
-  entries: readonly StructuredAgentSessionOutboxEntry[],
-  blockedClientMessageId: string | null
-): StructuredAgentSessionOutboxAdmission {
-  for (const entry of entries) {
-    // It can no longer land, so nothing it could be reordered around; it waits for Retry.
-    if (entry.state === 'rejected') {
-      continue
-    }
-    if (entry.state === 'unconfirmed' || entry.clientMessageId === blockedClientMessageId) {
-      return { state: 'blocked', entry }
-    }
-    // A queue send a Stop outlived goes again only on the user's Retry.
-    if (entry.state === 'queued') {
-      return { state: entry.outlivedStop === true ? 'blocked' : 'dispatch', entry }
-    }
-  }
-  return { state: 'idle', entry: null }
 }
 
 export function parseStructuredAgentSessionOutboxEntry(

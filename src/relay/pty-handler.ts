@@ -129,6 +129,8 @@ import {
 } from './terminal-history'
 import { isFlattenedNodePtyLoaderMessage } from '../main/orcad/node-pty-loader-diagnosis'
 import { collectNodePtyUnavailableDiagnosis } from './node-pty-binding-survey'
+import { describeRelayRuntime } from './relay-runtime-identity'
+import { relayConptyDllSpawnOptions } from './relay-windows-conpty'
 import {
   formatNodePtyUnavailableMessage,
   toTerminalUnavailableCause
@@ -642,6 +644,10 @@ export class PtyHandler {
       this.lastPtyLoadError = error
       return null
     }
+  }
+
+  private conptyDllSpawnOptions(): { useConptyDll: true } | Record<string, never> {
+    return relayConptyDllSpawnOptions(this.relayNodePtyDir(), describeRelayRuntime().kind)
   }
 
   /** Where the relay's own node-pty lives — the deployed bundle dir, never cwd. */
@@ -2043,7 +2049,8 @@ export class PtyHandler {
           ...spawnEnv,
           [SHELL_STARTUP_FEATURE_ENV]: '',
           ...shellLaunch.env
-        }
+        },
+        ...this.conptyDllSpawnOptions()
       })
     } catch (error) {
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
@@ -3167,7 +3174,8 @@ export class PtyHandler {
           ...spawnEnv,
           [SHELL_STARTUP_FEATURE_ENV]: '',
           ...shellLaunch.env
-        }
+        },
+        ...this.conptyDllSpawnOptions()
       })
     } catch (error) {
       // Why skip rather than retry the host default shell: the stored override

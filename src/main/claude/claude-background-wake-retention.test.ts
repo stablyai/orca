@@ -15,6 +15,7 @@ import { backgroundWakeCapture } from './claude-captured-fold-steer-frames.test-
 import { MOVED_TO_BACKGROUND } from './claude-captured-task-frames.test-fixture'
 import { hostWithParent, parent, producer } from './claude-child-work-producer-harness.test-fixture'
 import { PROVIDER_SESSION_ID } from './claude-structured-session-test-support'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -40,6 +41,7 @@ async function wiredSession() {
     })
   }
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
       [
         parent.sessionId,

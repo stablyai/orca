@@ -31,6 +31,7 @@ import {
   childEndCauseOfEndedEvent,
   turnVerdictForChildEnd
 } from './structured-agent-session-stale-turn-verdict'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CUT_TURN = { provider: 'codex' as const, threadId: THREAD, turnId: 'cut-turn', ordinal: 1 }
 
@@ -51,6 +52,7 @@ beforeEach(() => {
   exitObservedFirst = false
   closeCalls = 0
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store: state.store,
     adapter: {
       ...adapter(),

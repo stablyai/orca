@@ -80,14 +80,14 @@ export function requeueInterruptedStructuredAgentSessionDispatches(
 
 export function dispatchStructuredAgentSessionOutboxEntry(args: {
   next: StructuredAgentSessionOutboxEntry
-  persisted: readonly StructuredAgentSessionOutboxEntry[]
+  /** The outbox to stage `next` in: the latest, so a hold only memory keeps survives it. */
+  entries: readonly StructuredAgentSessionOutboxEntry[]
   sessionId: string
   target: RuntimeClientTarget
   fence: number
   dispatchGeneration: number
   dispatchGenerationRef: MutableRef<number>
   inFlightIdRef: MutableRef<string | null>
-  blockedIdRef: MutableRef<string | null>
   setError: (error: string | null) => void
   applyDisposition: (disposition: StructuredAgentSessionSendDisposition) => void
   createOperationId: () => string
@@ -95,13 +95,22 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
   const start = async (): Promise<boolean> => {
     args.inFlightIdRef.current = args.next.clientMessageId
     const staged = updateStructuredAgentSessionOutboxEntry(
-      args.persisted,
+      args.entries,
       args.next.clientMessageId,
       (entry) => stageStructuredAgentSessionOutboxEntryForSend(entry, Date.now())
     )
     if (!commitStructuredAgentSessionOutbox(args.sessionId, staged, { onlyIfSaved: true })) {
       args.inFlightIdRef.current = null
-      args.blockedIdRef.current = args.next.clientMessageId
+      // Held for Retry. Saved if storage takes this one write; otherwise only the open chat's
+      // outbox holds it.
+      commitStructuredAgentSessionOutbox(
+        args.sessionId,
+        updateStructuredAgentSessionOutboxEntry(
+          getStructuredAgentSessionOutbox(args.sessionId),
+          args.next.clientMessageId,
+          (entry) => ({ ...entry, lastFailure: { kind: 'failed' } })
+        )
+      )
       args.setError('Message could not be saved to the outbox')
       return false
     }
@@ -118,7 +127,6 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
         disposeStructuredAgentSessionSendResult({
           entries: getStructuredAgentSessionOutbox(args.sessionId),
           entry: args.next,
-          blockedClientMessageId: args.blockedIdRef.current,
           result,
           createOperationId: args.createOperationId
         })
@@ -138,11 +146,7 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
       if (args.dispatchGenerationRef.current !== args.dispatchGeneration) {
         return false
       }
-      const input = {
-        entries: getStructuredAgentSessionOutbox(args.sessionId),
-        entry: args.next,
-        blockedClientMessageId: args.blockedIdRef.current
-      }
+      const input = { entries: getStructuredAgentSessionOutbox(args.sessionId), entry: args.next }
       const thrown = readAgentSessionErrorRefusal(caught)
       const refusal = thrown ? agentSessionRefusalFailure(thrown) : undefined
       args.applyDisposition(

@@ -19,20 +19,13 @@
  * pre-activation snapshot rather than against a version comparison.
  */
 import type { OrcadActivationRecord } from './orcad-activation-record'
+import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
+import {
+  assessOrcadLiveDaemonCrossing,
+  type OrcadDaemonProtocolFacts
+} from './orcad-daemon-protocol-crossing'
 
-export type OrcadTerminalCensus = {
-  /**
-   * Sessions the live daemon owns right now. `null` means the probe could not answer —
-   * never treated as zero, because loss of contact is not evidence of process death
-   * (docs/reference/ssh-execution-boundary.md).
-   */
-  liveSessions: number | null
-  /**
-   * Of those, how many started at or after `record.activatedAt`. These are the sessions the
-   * pre-activation snapshot does not describe.
-   */
-  startedSinceActivation: number | null
-}
+export type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 
 export type OrcadUpdateDecision =
   | { action: 'noop'; reason: string }
@@ -47,6 +40,8 @@ export type OrcadUpdateDecision =
 export type OrcadUpdateDeferCode =
   | 'orcad_update_terminals_running'
   | 'orcad_update_terminal_census_unavailable'
+  | 'orcad_update_strands_live_terminals'
+  | 'orcad_update_daemon_protocol_unverifiable'
 
 /**
  * Decide whether to restart orcad onto `candidateVersion`.
@@ -60,6 +55,8 @@ export function planOrcadUpdate(input: {
   record: OrcadActivationRecord
   candidateVersion: string
   census: OrcadTerminalCensus
+  /** The candidate's daemon protocol and the older ones it can still attach to. */
+  candidateDaemonProtocol: OrcadDaemonProtocolFacts
   force?: boolean
 }): OrcadUpdateDecision {
   if (input.record.active === input.candidateVersion) {
@@ -68,7 +65,29 @@ export function planOrcadUpdate(input: {
       reason: `${input.candidateVersion} is already the active version; nothing to restart.`
     }
   }
+  const crossing = assessOrcadLiveDaemonCrossing(input.census, input.candidateDaemonProtocol)
+  // Why force cannot override: the operator can accept a mixed pair, not unreachable terminals.
+  if (crossing === 'strands-live-terminals') {
+    return {
+      action: 'defer',
+      code: 'orcad_update_strands_live_terminals',
+      reason:
+        `The live terminal daemon speaks protocol ${String(input.census.daemonProtocolVersion)}, ` +
+        `which orcad ${input.candidateVersion} cannot attach to. Restarting now would leave ` +
+        'every running terminal unreachable. Update when no terminals are running.'
+    }
+  }
   const { liveSessions } = input.census
+  if (input.force && crossing === 'unverifiable') {
+    return {
+      action: 'defer',
+      code: 'orcad_update_daemon_protocol_unverifiable',
+      reason:
+        'The terminal daemon did not report its protocol, so this update cannot show that ' +
+        `orcad ${input.candidateVersion} will reach the terminals it is forced past. Retry ` +
+        'when the daemon answers.'
+    }
+  }
   if (liveSessions === null) {
     if (!input.force) {
       return {
@@ -136,6 +155,9 @@ export type OrcadRollbackUnsafeCode =
   | 'orcad_rollback_snapshot_missing'
   | 'orcad_rollback_orphans_live_terminals'
   | 'orcad_rollback_census_unavailable'
+  | 'orcad_rollback_snapshot_unverifiable'
+  | 'orcad_rollback_strands_live_terminals'
+  | 'orcad_rollback_daemon_protocol_unverifiable'
 
 /**
  * How safe it is to switch back to `record.previous`.
@@ -156,9 +178,11 @@ export type OrcadRollbackUnsafeCode =
  */
 export function assessOrcadRollback(input: {
   record: OrcadActivationRecord
-  /** Whether the snapshot named by the record is actually still on the host. */
-  snapshotPresent: boolean
+  /** Whether the snapshot is still on the host; `null` means the probe was unverifiable. */
+  snapshotPresent: boolean | null
   census: OrcadTerminalCensus
+  /** The rollback target's daemon protocol facts, from the client's copy of its bytes. */
+  targetDaemonProtocol: OrcadDaemonProtocolFacts
   /**
    * Whether the shared store has been written since activation, from its mtime against
    * `record.activatedAt`. `null` means unknown, which is treated as "yes" — claiming a
@@ -174,6 +198,15 @@ export function assessOrcadRollback(input: {
       reason:
         'This host has no previous orcad version recorded, so there is nothing to roll back ' +
         'to. Deploy a known-good build instead.'
+    }
+  }
+  if (input.record.snapshot && input.snapshotPresent === null) {
+    return {
+      safety: 'unsafe',
+      code: 'orcad_rollback_snapshot_unverifiable',
+      reason:
+        'The host did not give a trustworthy answer about the pre-activation snapshot. Retry ' +
+        'when the host is reachable; loss of contact is not evidence the snapshot is gone.'
     }
   }
   if (!input.record.snapshot || !input.snapshotPresent) {
@@ -207,6 +240,26 @@ export function assessOrcadRollback(input: {
         'after this version was activated. The daemon survives the rollback and would keep ' +
         'owning them, but the restored snapshot predates them, so nothing would be able to ' +
         'reattach. Close them (or let them exit) and roll back then.'
+    }
+  }
+  const crossing = assessOrcadLiveDaemonCrossing(input.census, input.targetDaemonProtocol)
+  if (crossing === 'unverifiable') {
+    return {
+      safety: 'unsafe',
+      code: 'orcad_rollback_daemon_protocol_unverifiable',
+      reason:
+        'The terminal daemon did not report its protocol, so this rollback cannot show that ' +
+        `${target} would reach the terminals still running. Retry when the daemon answers.`
+    }
+  }
+  if (crossing === 'strands-live-terminals') {
+    return {
+      safety: 'unsafe',
+      code: 'orcad_rollback_strands_live_terminals',
+      reason:
+        `The live terminal daemon speaks protocol ${String(input.census.daemonProtocolVersion)}, ` +
+        `which ${target} does not list. Rolling back now would leave every running terminal ` +
+        'unreachable. Roll back when no terminals are running, or deploy forward.'
     }
   }
   if (input.stateWritesSinceActivation === false) {

@@ -1,29 +1,28 @@
 // One structured-session mutation, fenced and idempotent.
 //
-// The client operation id is keyed on (session, method, payload) so a retry of
-// the same request reuses it and the host upserts one row instead of two (a
-// payload naming no target gets a new one on every call), and
-// every result is discarded unless the runtime fence it was issued against is
-// still the current one; the reply to the conversation command a pane still
-// waits on is kept, since that command may move the fence itself. A write that
-// did not happen is reported once, in the person's words, by the caller that
-// knows where to say it; nothing latches.
+// Every call is its own action with its own client operation id, so a press is never answered
+// from an earlier one. The host answers a second Stop of a named turn or task quietly; against an
+// older host that does not, this client joins one still on its way instead of stopping twice.
+// Every result is discarded unless the runtime fence it was issued against is still the current
+// one, except the reply to the conversation command a pane still waits on, since that command may
+// move the fence itself. A write that did not happen is reported once, in the person's words, by
+// the caller that knows where to say it; nothing latches.
 
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import * as conversationCommands from './structured-conversation-command-send'
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session-wire'
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
   agentSessionWriteKindForMethod as writeKind
 } from '../../../../shared/agent-session-write-failure'
-import { agentSessionRefusalOperationState } from '../../../../shared/agent-session-refusal-retry'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
-import { structuredAgentSessionWriteNamesItsTarget } from '../../../../shared/structured-agent-session-operation-identity'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import {
+  callStructuredAgentSession,
+  supportsStructuredAgentSessionQuietRepeatedStop
+} from '@/runtime/structured-agent-session-client'
 import { structuredSessionOperationId } from './use-structured-agent-session-outbox'
 import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 
@@ -34,12 +33,7 @@ export type StructuredAgentSessionWriteOutcome<T> =
   /** Settled for an owner or session this pane no longer shows; there is nothing to say. */
   | { kind: 'dropped' }
 
-type WriteArgs = [
-  method: string,
-  fingerprintMethod: string,
-  fields: Record<string, unknown>,
-  operationIdOverride?: string | null
-]
+type WriteArgs = [method: string, fingerprintMethod: string, fields: Record<string, unknown>]
 
 export type StructuredAgentSessionWrite = <T>(
   ...args: WriteArgs
@@ -47,6 +41,17 @@ export type StructuredAgentSessionWrite = <T>(
 
 /** A write whose failure is shown as a toast; the control that sent it is the way to try again. */
 export type StructuredAgentSessionMutate = <T>(...args: WriteArgs) => Promise<T | null>
+
+/** A Stop naming its turn or task; one naming neither acts on whatever runs when the host reaches
+ *  it, so a second press is a Stop of its own. */
+function namesWhatItStops(fingerprintMethod: string, fields: Record<string, unknown>): boolean {
+  if (fingerprintMethod !== 'agentSession.cancel') {
+    return false
+  }
+  return fields.scope === 'background-tasks'
+    ? fields.taskId !== undefined
+    : fields.turnId !== undefined
+}
 
 export function useStructuredAgentSessionMutate(args: {
   sessionId: string
@@ -60,7 +65,9 @@ export function useStructuredAgentSessionMutate(args: {
   mutate: StructuredAgentSessionMutate
 } {
   const { enabled = true, sessionId, stateRef, target } = args
-  const operationIds = useRef(new Map<string, string>())
+  const inFlightStops = useRef(
+    new Map<string, Promise<StructuredAgentSessionWriteOutcome<unknown>>>()
+  )
   const enabledRef = useRef(enabled)
   // The conversation command this pane still waits on; only its reply may outlive a fence move. A
   // newer command replaces it, and disabling the pane forgets it.
@@ -71,17 +78,18 @@ export function useStructuredAgentSessionMutate(args: {
     commandInFlight.current = null
   }, [enabled, sessionId])
 
-  const write = useCallback(
+  const send = useCallback(
     async <T>(
       method: string,
       fingerprintMethod: string,
       fields: Record<string, unknown>,
-      operationIdOverride?: string | null
+      /** The fence when the press happened, read before any await, so a write never retargets. */
+      pressedFence: number | null = stateRef.current.fence
     ): Promise<StructuredAgentSessionWriteOutcome<T>> => {
-      if (!enabled || !enabledRef.current || stateRef.current.fence === null) {
+      if (!enabled || !enabledRef.current || pressedFence === null) {
         return { kind: 'dropped' }
       }
-      const targetFence = stateRef.current.fence
+      const targetFence = pressedFence
       const request = {}
       if (fingerprintMethod === 'agentSession.conversationCommand') {
         commandInFlight.current = request
@@ -97,23 +105,12 @@ export function useStructuredAgentSessionMutate(args: {
         }
         return enabledRef.current && (stateRef.current.fence === targetFence || waitedOn)
       }
-      const key = `${sessionId}:${fingerprintMethod}:${JSON.stringify(fields)}`
-      // A write naming no target acts on whatever is in flight when the host reaches it, so every
-      // press is its own write; one naming its target keeps its id for a retry to replay.
-      const namesTarget = structuredAgentSessionWriteNamesItsTarget(fingerprintMethod, fields)
-      const clientOperationId =
-        operationIdOverride ??
-        (namesTarget ? operationIds.current.get(key) : undefined) ??
-        structuredSessionOperationId()
-      if (namesTarget) {
-        operationIds.current.set(key, clientOperationId)
-      }
       let result: AgentSessionMutationResult<T>
       try {
         result = await callStructuredAgentSession<AgentSessionMutationResult<T>>(target, method, {
           envelope: {
             sessionId,
-            clientOperationId,
+            clientOperationId: structuredSessionOperationId(),
             expectedRuntimeFence: targetFence,
             payloadFingerprint: structuredAgentSessionPayloadFingerprint({
               method: fingerprintMethod,
@@ -138,15 +135,6 @@ export function useStructuredAgentSessionMutate(args: {
           : { kind: 'dropped' }
       }
       if (!result.ok) {
-        const operationState = agentSessionRefusalOperationState(result.refusal.code)
-        // Cancel's plan recovers no unknown ledger row, so a kept id would earn the same refusal
-        // until it expires, and Stop for that turn would do nothing.
-        if (
-          operationState === 'settled-rejected' ||
-          (operationState === 'unknown' && fingerprintMethod === 'agentSession.cancel')
-        ) {
-          operationIds.current.delete(key)
-        }
         return settlesHere()
           ? {
               kind: 'not-done',
@@ -160,12 +148,47 @@ export function useStructuredAgentSessionMutate(args: {
       if (!settlesHere()) {
         return { kind: 'dropped' }
       }
-      if (!conversationCommands.isUnconfirmedConversationCommand(fingerprintMethod, result.value)) {
-        operationIds.current.delete(key)
-      }
       return { kind: 'done', value: result.value }
     },
     [enabled, sessionId, stateRef, target]
+  )
+
+  const write = useCallback(
+    async <T>(
+      method: string,
+      fingerprintMethod: string,
+      fields: Record<string, unknown>
+    ): Promise<StructuredAgentSessionWriteOutcome<T>> => {
+      const pressedFence = stateRef.current.fence
+      if (
+        !namesWhatItStops(fingerprintMethod, fields) ||
+        (await supportsStructuredAgentSessionQuietRepeatedStop(target))
+      ) {
+        return send<T>(method, fingerprintMethod, fields, pressedFence)
+      }
+      // Temporary, for a host that predates the quiet repeated Stop: remove once none is supported.
+      const key = `${sessionId}:${method}:${JSON.stringify(fields)}`
+      const joined = inFlightStops.current.get(key)
+      if (joined) {
+        // The first press reports a failure; the one that joined it stays quiet.
+        return joined.then((outcome) =>
+          outcome.kind === 'not-done'
+            ? { kind: 'dropped' }
+            : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key names the method and fields, so the joined promise is this very call and settles to its T.
+              (outcome as StructuredAgentSessionWriteOutcome<T>)
+        )
+      }
+      const stopping = send<T>(method, fingerprintMethod, fields, pressedFence)
+      inFlightStops.current.set(key, stopping)
+      // Gone once it settles, so the next press is a new Stop.
+      void stopping.finally(() => {
+        if (inFlightStops.current.get(key) === stopping) {
+          inFlightStops.current.delete(key)
+        }
+      })
+      return stopping
+    },
+    [send, sessionId, stateRef, target]
   )
 
   const mutate = useCallback(

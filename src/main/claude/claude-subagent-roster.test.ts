@@ -14,6 +14,7 @@ import {
   type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { ClaudeSubagentRoster } from './claude-subagent-roster'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const TURN_1 = 'claude-session:turn-1'
 
@@ -462,7 +463,7 @@ describe('ClaudeSubagentRoster — through the real sink queue', () => {
       },
       appendTombstone: async () => ({ epoch: 'e', sequence: 0 })
     } as unknown as AgentSessionJournal
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({
       journal,
       fence: 1,

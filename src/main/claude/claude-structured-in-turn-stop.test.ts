@@ -1,5 +1,6 @@
-// A user's Stop inside a live Claude chat interrupts the turn and keeps the session. The turn's end
-// then comes from the CLI's result frame, which CLIs before 2.1.91 send with no terminal_reason.
+// A user's Stop inside a live Claude chat interrupts the turn before the host ends its child. The
+// turn's end then comes from the CLI's result frame, which CLIs before 2.1.91 send with no
+// terminal_reason.
 
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
@@ -155,11 +156,12 @@ describe("a user's Stop inside a live Claude chat", () => {
     expect(settled(bodies, nextTurnId)).toMatchObject({ state: 'completed', outcome: 'failure' })
   })
 
+  // The Stop ends the child next, so the turn it was asked for reads Interrupted however it ends.
   it.each([
     ['naming the turn', true],
     ['naming no turn', false]
   ] as const)(
-    'keeps a failure the turn reaches after the CLI refused the interrupt, %s',
+    'reads a turn the CLI refused to interrupt as the user stopping it, %s',
     async (_label, named) => {
       const claude = fakeClaude({
         routes: {
@@ -175,8 +177,8 @@ describe("a user's Stop inside a live Claude chat", () => {
       ).resolves.toEqual({ cancelled: false })
       connection.handlers.onMessage?.(CUT_SHORT)
 
-      expect(settled(bodies, turnId)).toMatchObject({ state: 'completed', outcome: 'failure' })
-      expect(providerRows(bodies)).toHaveLength(1)
+      expect(settled(bodies, turnId)).toMatchObject({ outcome: 'cancellation' })
+      expect(providerRows(bodies)).toHaveLength(0)
     }
   )
 })

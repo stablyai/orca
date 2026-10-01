@@ -9,7 +9,10 @@ const NULLABLE_COLUMNS: readonly (readonly [name: string, type: string])[] = [
   ['returned_rejection', 'TEXT'],
   ['settled_at', 'INTEGER'],
   ['settled_by_op', 'TEXT'],
-  ['consumed_as', 'TEXT']
+  ['consumed_as', 'TEXT'],
+  ['carried_from', 'TEXT'],
+  ['queued_epoch', 'TEXT'],
+  ['queued_sequence', 'INTEGER']
 ]
 
 /**
@@ -37,6 +40,9 @@ CREATE TABLE IF NOT EXISTS queued_messages (
   settled_at      INTEGER,
   settled_by_op   TEXT,
   consumed_as     TEXT,
+  carried_from    TEXT,
+  queued_epoch    TEXT,
+  queued_sequence INTEGER,
   PRIMARY KEY (session_id, message_id)
 );
 `)
@@ -61,12 +67,5 @@ CREATE TABLE IF NOT EXISTS queued_messages (
   db.exec(`
 CREATE UNIQUE INDEX IF NOT EXISTS queued_messages_consumed_as
   ON queued_messages (session_id, consumed_as) WHERE consumed_as IS NOT NULL;
-CREATE TABLE IF NOT EXISTS queued_message_pauses (
-  session_id  TEXT    PRIMARY KEY,
-  reason      TEXT    NOT NULL,
-  epoch       TEXT    NOT NULL,
-  sequence    INTEGER NOT NULL,
-  recorded_at INTEGER NOT NULL
-);
 `)
 }

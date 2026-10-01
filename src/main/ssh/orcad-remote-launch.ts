@@ -21,11 +21,14 @@ import {
 } from './orcad-remote-host-support'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
+import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
 
 /** Stdout of the launched candidate: exactly one `orca_server_ready` line, then nothing. */
 export const ORCAD_READINESS_FILENAME = '.orcad-readiness'
 /** Stderr, including the bind-exposure line and every supervision message. */
 export const ORCAD_LOG_FILENAME = 'orcad.log'
+// Why a cap: the readiness file is candidate-written stdout, and a runaway writer must not be read whole.
+const ORCAD_READINESS_MAX_BYTES = 256 * 1024
 export { ORCAD_PID_FILENAME, OrcadRemoteLaunchUnsupportedError } from './orcad-remote-host-support'
 
 export type OrcadLaunchSpec = {
@@ -61,6 +64,8 @@ export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSp
     // Why truncate: a re-launch into a dir that already holds a previous readiness line would
     // otherwise let the deploy activate on the OLD process's health payload.
     `: > ${readiness} &&`,
+    // A stop request the previous process never consumed must not stop this one.
+    `rm -f ${shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_STOP_REQUEST_FILENAME))} &&`,
     'umask 077 &&',
     `ORCA_VERSION=${shellEscape(spec.fullVersion)}`,
     `ORCA_USER_DATA=${shellEscape(spec.userDataDir)}`,
@@ -78,7 +83,8 @@ export function readOrcadReadinessCommand(
 ): string {
   assertPosixHost(host)
   const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
-  return `cat ${readiness} 2>/dev/null || true`
+  // One byte over the cap is enough to tell an oversized payload from a full one.
+  return `head -c ${ORCAD_READINESS_MAX_BYTES + 1} ${readiness} 2>/dev/null || true`
 }
 
 /**
@@ -134,19 +140,23 @@ export type OrcadReadinessParse =
  * not `malformed` — reporting a parse failure for a race would fail deploys that were fine.
  */
 export function parseOrcadReadinessOutput(raw: string): OrcadReadinessParse {
+  if (Buffer.byteLength(raw, 'utf8') > ORCAD_READINESS_MAX_BYTES) {
+    return { state: 'malformed', reason: 'readiness payload exceeds the 256 KiB limit' }
+  }
   const lines = raw.split('\n')
-  let sawCandidate = false
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     const trimmed = line.trim()
     if (!trimmed.startsWith('{')) {
       continue
     }
-    sawCandidate = true
     let parsed: unknown
     try {
       parsed = JSON.parse(trimmed)
     } catch {
-      continue
+      // Only the unterminated last line can still be mid-write; a finished bad line will stay bad.
+      return index === lines.length - 1
+        ? { state: 'pending' }
+        : { state: 'malformed', reason: 'readiness line is not valid JSON' }
     }
     if (typeof parsed !== 'object' || parsed === null) {
       continue
@@ -160,7 +170,7 @@ export function parseOrcadReadinessOutput(raw: string): OrcadReadinessParse {
     }
     return { state: 'ready', readiness: toServeReadiness(payload as Record<string, unknown>) }
   }
-  return sawCandidate ? { state: 'pending' } : { state: 'pending' }
+  return { state: 'pending' }
 }
 
 function toServeReadiness(payload: Record<string, unknown>): ServeReadiness {

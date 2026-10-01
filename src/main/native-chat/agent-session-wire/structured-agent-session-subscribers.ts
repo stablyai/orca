@@ -206,6 +206,24 @@ export class AgentSessionSubscribers {
     }
   }
 
+  /** Re-sends the `/` surface to each subscriber whose view of it is out of date. */
+  republishCommands(): void {
+    const hostNow = this.now()
+    for (const sessionId of this.bySession.keys()) {
+      for (const subscriber of this.subscribers(sessionId)) {
+        if ((this.hooks.readCommands?.(sessionId) ?? null) !== subscriber.commands) {
+          this.emit(subscriber, {
+            type: 'batch',
+            sessionId,
+            batch: emptyAgentSessionBatch(subscriber.cursor),
+            fence: subscriber.fence,
+            hostNow
+          })
+        }
+      }
+    }
+  }
+
   private subscribers(sessionId: string): Subscriber[] {
     return [...(this.bySession.get(sessionId)?.values() ?? [])]
   }

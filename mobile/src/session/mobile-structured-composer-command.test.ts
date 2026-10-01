@@ -24,9 +24,7 @@ function setup() {
     client: { sendRequest } as unknown as RpcClient,
     sessionId: 'session',
     fence: 1,
-    sessionKey: 'session:1',
     pending: { current: false },
-    operationIds: new Map(),
     controller: {
       agent: 'codex',
       snapshot: [],
@@ -61,41 +59,34 @@ describe('mobile structured conversation commands', () => {
         expect.objectContaining({ command: text.slice(1) }),
         expect.anything()
       )
-      expect(input.operationIds.size).toBe(0)
     }
   )
-  it('retains the exact operation ID after an unknown response', async () => {
-    const { input, sendRequest } = setup()
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: { ok: true, value: { command: 'compact', state: 'unknown' } }
-    })
-    expect(await dispatchMobileStructuredCommand(input)).toBe('unknown')
-    expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
-    expect(sendRequest.mock.calls[0]?.[1]).toEqual(sendRequest.mock.calls[1]?.[1])
-  })
-  it('retains operation identity when the host explicitly reports an unknown ledger outcome', async () => {
-    const { input, sendRequest } = setup()
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: {
-        ok: false,
-        refusal: { code: 'agent_session_operation_unknown', message: 'unconfirmed' }
+  it.each([
+    [
+      'the host reports the command unconfirmed',
+      { ok: true, result: { ok: true, value: { command: 'compact', state: 'unknown' } } }
+    ],
+    [
+      'the host cannot say what became of it',
+      {
+        ok: true,
+        result: {
+          ok: false,
+          refusal: { code: 'agent_session_operation_unknown', message: 'unconfirmed' }
+        }
       }
-    } as never)
-    expect(await dispatchMobileStructuredCommand(input)).toBe('unknown')
-    expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
-    expect(sendRequest.mock.calls[0]?.[1]).toEqual(sendRequest.mock.calls[1]?.[1])
-  })
-  it('retains operation identity when the host fails after starting the command', async () => {
+    ],
+    [
+      'the host fails after starting it',
+      { ok: false, error: { code: 'runtime_error', message: 'settlement failed' } }
+    ]
+  ])('sends the next press as a new command after %s', async (_case, answer) => {
     const { input, sendRequest } = setup()
-    sendRequest.mockResolvedValueOnce({
-      ok: false,
-      error: { code: 'runtime_error', message: 'settlement failed' }
-    } as never)
+    sendRequest.mockResolvedValueOnce(answer)
     expect(await dispatchMobileStructuredCommand(input)).toBe('unknown')
     expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
-    expect(sendRequest.mock.calls[0]?.[1]).toEqual(sendRequest.mock.calls[1]?.[1])
+    // Only the operation id differs between the two requests.
+    expect(sendRequest.mock.calls[1]?.[1]).not.toEqual(sendRequest.mock.calls[0]?.[1])
   })
   it.each(['attachments', 'old host', 'arguments', 'pending work'])(
     'guards %s without provider dispatch',

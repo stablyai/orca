@@ -18,6 +18,7 @@ vi.mock('./structured-agent-session-read-restore', () => ({
 }))
 
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 // The restore under test is mocked; the host database only fills the deps' shape.
 const stateDirectory = mkdtempSync(join(tmpdir(), 'orca-restart-restore-'))
@@ -29,7 +30,8 @@ afterAll(() => {
 const NO_OPEN_DEPS = {
   store: { getRecord: () => null, listRecords: () => [] },
   journalDatabase: openTestJournalHostDatabase(stateDirectory),
-  adapter: {}
+  adapter: {},
+  logger: recordingStructuredAgentSessionLogger().logger
 }
 
 describe('restart journal restoration', () => {

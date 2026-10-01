@@ -80,7 +80,9 @@ runs:
     # PR-local stores compete with reusable build caches for the repository quota.
     - name: Resolve pnpm download store
       id: pnpm-store
-      if: github.event_name == 'pull_request'
+      if: >-
+        github.event_name == 'pull_request' &&
+        (runner.os != 'Windows' || runner.arch != 'X64' || !contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml'))
       shell: bash
       env:
         LOCKFILE_HASH: ${{ hashFiles(inputs.cache-dependency-path) }}
@@ -92,8 +94,11 @@ runs:
         printf 'arch=%s\n' "$(node -p 'require("node:os").arch()')" >> "$GITHUB_OUTPUT"
 
     # Match setup-node's key and path so existing default-branch stores remain reusable.
+    # Hosted Windows x64 mixed installs cost less than restoring their root/mobile store.
     - name: Restore pnpm download store without saving
-      if: github.event_name == 'pull_request'
+      if: >-
+        github.event_name == 'pull_request' &&
+        (runner.os != 'Windows' || runner.arch != 'X64' || !contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml'))
       uses: actions/cache/restore@v5
       with:
         path: ${{ steps.pnpm-store.outputs.path }}
@@ -237,9 +242,9 @@ runs:
           node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
         key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
 
-    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
+    # pnpm's bundled gyp_main.py is not executable; Electron rebuild uses its own node-gyp API.
     - name: Use external node-gyp
-      if: runner.os == 'Linux' && inputs.native-runtime != 'none'
+      if: runner.os == 'Linux' && inputs.native-runtime == 'node'
       shell: bash
       env:
         NATIVE_RUNTIME: ${{ inputs.native-runtime }}

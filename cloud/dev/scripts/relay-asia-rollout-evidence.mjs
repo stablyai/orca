@@ -8,10 +8,23 @@ const ADMISSION_WORKFLOW = relayWorkflowPath('operate-relay-asia-admission.yml')
 const STAGING_WORKFLOW = relayWorkflowPath('prove-relay-asia-staging.yml')
 const STAGING_CELL = 'staging-gce-c4'
 const C27 = 'production-gce-c27'
+const ASIA_REGION = 'asia-east2'
+const US_REGION = 'us-central1'
 // Each canary proves its own cell under production load; C28/C29 promotion consumes only C27's.
 const PRODUCTION_CANARIES = {
-  [C27]: { kind: 'production-c27-canary', origin: 'https://c27.relay.onorca.dev' },
-  'production-gce-c30': { kind: 'production-c30-canary', origin: 'https://c30.relay.onorca.dev' }
+  [C27]: { kind: 'production-c27-canary', origin: 'https://c27.relay.onorca.dev', region: ASIA_REGION },
+  'production-gce-c30': {
+    kind: 'production-c30-canary', origin: 'https://c30.relay.onorca.dev', region: ASIA_REGION
+  },
+  'production-gce-c31': {
+    kind: 'production-c31-canary', origin: 'https://c31.relay.onorca.dev', region: ASIA_REGION
+  },
+  'production-gce-c32': {
+    kind: 'production-c32-canary', origin: 'https://c32.relay.onorca.dev', region: US_REGION
+  },
+  'production-gce-c33': {
+    kind: 'production-c33-canary', origin: 'https://c33.relay.onorca.dev', region: US_REGION
+  }
 }
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/
 const SHA_PATTERN = /^[a-f0-9]{40}$/
@@ -85,7 +98,12 @@ export function buildStagingEvidence(input) {
   }
   assertLoadReports(launch, expectedLoad)
   const metrics = runtimeMetrics(input.logs, start, end, STAGING_CELL)
-  assertPassingRuntimeMetrics(metrics, 'staging proof', 1)
+  assertPassingRuntimeMetrics(metrics, 'staging proof')
+  // Staging is quiet, so its one intentional sticky fallback must be the only one.
+  if (
+    number(metrics.regionFallbacks, 'regionFallbacks') !== 1 ||
+    number(metrics.usRegionFallbacks, 'usRegionFallbacks') !== 1
+  ) throw new Error('staging proof regionFallbacks did not match the intentional probes')
   const minimumConcurrentSplices = expectedLoad.splices - expectedLoad.wedgedReaders
   if (
     metrics.targetControlsMax < expectedLoad.controls ||
@@ -301,8 +319,19 @@ export function buildProductionCanaryEvidence(input) {
   const load = object(input.loadReport, `${canary.label} load report`)
   assertCanaryLoad(load, input.cellId)
   // Directors show a steady relay_cells lock and pool-wait baseline unrelated to the canary cell.
-  const metrics = runtimeMetrics(input.logs, start, end, input.cellId, { gateDirectorDatabase: false })
-  assertPassingRuntimeMetrics(metrics, `${canary.label} canary`)
+  const metrics = runtimeMetrics(input.logs, start, end, input.cellId, {
+    gateDirectorDatabase: false, region: canary.region
+  })
+  assertPassingRuntimeMetrics(metrics, `${canary.label} canary`, canary.region)
+  // Fallbacks are keyed by the host's target region. US-targeted ones come from unhinted or
+  // US-preferring hosts an Asia cell cannot cause, so they are recorded but not gated. A US
+  // cell gates neither: the US-targeted baseline is nonzero while the US fleet is full.
+  if (
+    canary.region === ASIA_REGION &&
+    number(metrics.asiaRegionFallbacks, 'asiaRegionFallbacks') !== 0
+  ) {
+    throw new Error(`${canary.label} canary asiaRegionFallbacks must be zero`)
+  }
   metrics.cloudSqlBackendsMax = cloudSqlMaximum(input.cloudSql, start, end)
   assertPassingCanary(metrics, input.cellId)
   return {
@@ -327,7 +356,7 @@ function assertCanaryLoad(report, cellId) {
     report.configuredSplices !== 1 || report.peakActiveSplices !== 1 ||
     report.completedSplices !== 1 || report.failedSplices !== 0
   ) throw new Error(`${label} control and splice canary did not match`)
-  // Placement picks the least-loaded general Asia cell, so the canary's own control must be on it.
+  // Placement picks the least-loaded general cell in the canary's region, so the control lands on it.
   if (JSON.stringify(report.assignedCellOrigins) !== JSON.stringify([origin])) {
     throw new Error(`${label} canary load was not placed only on ${label}`)
   }
@@ -344,13 +373,15 @@ function assertCanaryLoad(report, cellId) {
   ) throw new Error(`${label} load cleanup is incomplete`)
 }
 
-function runtimeMetrics(logs, start, end, targetCellId, { gateDirectorDatabase = true } = {}) {
+function runtimeMetrics(
+  logs, start, end, targetCellId, { gateDirectorDatabase = true, region = ASIA_REGION } = {}
+) {
   const entries = logs.map((entry) => object(entry, 'runtime metric entry'))
   const directorEntries = entries.filter((entry) => entry.jsonPayload?.role === 'director')
   const cellEntries = entries.filter((entry) =>
     entry.jsonPayload?.role === 'cell' &&
     entry.jsonPayload?.cellId === targetCellId &&
-    entry.jsonPayload?.region === 'asia-east2'
+    entry.jsonPayload?.region === region
   )
   assertCoverage(directorEntries.map((entry) => entry.timestamp), start, end, 'director metrics')
   assertCoverage(cellEntries.map((entry) => entry.timestamp), start, end, `${targetCellId} metrics`)
@@ -370,6 +401,12 @@ function runtimeMetrics(logs, start, end, targetCellId, { gateDirectorDatabase =
     regionFallbacks: directorPayloads.reduce(
       (total, payload) => total + sumMap(payload.regionFallbacksDelta, 'region fallbacks'), 0
     ),
+    asiaRegionFallbacks: directorPayloads.reduce(
+      (total, payload) => total + number(
+        payload.regionFallbacksDelta?.['asia-east2'] ?? 0,
+        'Asia region fallbacks'
+      ), 0
+    ),
     usRegionFallbacks: directorPayloads.reduce(
       (total, payload) => total + number(
         payload.regionFallbacksDelta?.['us-central1'] ?? 0,
@@ -378,7 +415,15 @@ function runtimeMetrics(logs, start, end, targetCellId, { gateDirectorDatabase =
     ),
     unavailableRegions: directorPayloads.reduce(
       (total, payload) => total + sumMap(payload.unavailableRegionsDelta, 'unavailable regions'), 0
-    )
+    ),
+    // Only a US canary reads US selections, so Asia evidence keeps its exact field set.
+    ...(region === US_REGION ? {
+      usSelections: directorPayloads.reduce(
+        (total, payload) =>
+          total + number(payload.selectedRegionsDelta?.[US_REGION] ?? 0, 'US selections'),
+        0
+      )
+    } : {})
   }
   // Director before cell per metric keeps the old validation order.
   const split = (read) => ({ director: read(directorPayloads), cell: read(cellPayloads) })
@@ -424,15 +469,14 @@ function runtimeMetrics(logs, start, end, targetCellId, { gateDirectorDatabase =
   }
 }
 
-function assertPassingRuntimeMetrics(metrics, label, expectedRegionFallbacks = 0) {
-  if (number(metrics.asiaSelections, 'Asia selections') < 1) {
+// Fleet-level proof that director metrics flowed; the placement check proves the cell itself.
+function assertPassingRuntimeMetrics(metrics, label, region = ASIA_REGION) {
+  if (region === US_REGION) {
+    if (number(metrics.usSelections, 'US selections') < 1) {
+      throw new Error(`${label} observed no US selections`)
+    }
+  } else if (number(metrics.asiaSelections, 'Asia selections') < 1) {
     throw new Error(`${label} observed no Asia selections`)
-  }
-  if (
-    number(metrics.regionFallbacks, 'regionFallbacks') !== expectedRegionFallbacks ||
-    number(metrics.usRegionFallbacks, 'usRegionFallbacks') !== expectedRegionFallbacks
-  ) {
-    throw new Error(`${label} regionFallbacks did not match the intentional probes`)
   }
   for (const key of [
     'unavailableRegions', 'relaySqlFailures', 'databasePoolWaitingMax'

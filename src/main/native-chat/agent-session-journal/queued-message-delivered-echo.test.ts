@@ -139,14 +139,6 @@ describe("a waiting draft whose 'never delivered' claim an echo disproves", () =
     expect(journal.queuedMessages.get('draft-1')?.state).toBe('waiting')
   })
 
-  it('retires the pause in the per-row hook when that echo withdraws the last card it holds back', async () => {
-    const journal = await withdrawnDraft('did it land?')
-    expect(await journal.queuedMessages.recordPause('stopped')).toBe(true)
-    await echo(journal, 'echo-1', 'did it land?')
-    expect(journal.queuedMessages.get('draft-1')?.state).toBe('withdrawn')
-    expect(journal.queuedMessages.pause()).toBeNull()
-  })
-
   it('stays waiting for an echo of some other text', async () => {
     const journal = await withdrawnDraft('did it land?')
     await echo(journal, 'echo-1', 'something else')

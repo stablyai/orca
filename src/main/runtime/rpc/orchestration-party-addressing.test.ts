@@ -312,7 +312,7 @@ describe('no writer stores a structured worker under its session address', () =>
       .prepare(
         `SELECT m.id FROM messages AS m JOIN dispatch_contexts AS d
            ON d.assignee_orca_session_id IS NOT NULL
-          AND 'session:' || d.assignee_orca_session_id IN (m.to_handle, m.from_handle)`
+          AND 'orca_session_id:' || d.assignee_orca_session_id IN (m.to_handle, m.from_handle)`
       )
       .all()
     expect(h.db.getInbox(100).length).toBeGreaterThanOrEqual(7)

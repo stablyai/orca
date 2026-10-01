@@ -334,18 +334,6 @@ describe("a user's Stop inside a live turn", () => {
     expect(providerRows(state.items)).toBe(1)
   })
 
-  it('forgets a Stop the CLI refused', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-    translator.handle(userTurn('user-1'))
-
-    translator.recordTurnStop('user-1', 'user-stop')
-    translator.withdrawTurnStop('user-1')
-    translator.handle({ type: 'message', sessionId: 'orca-session', message: cutShort })
-
-    expect(settledTurn(state.items, 'user-1')).toMatchObject({ outcome: 'failure' })
-  })
-
   it('does not read a host stop as the user asking', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })

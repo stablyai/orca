@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { createTranscriptPane } from './agent-transcript-pane-test-harness'
+import { createTranscriptPane, waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
 import {
   readRuntimeFixture,
   replayTranscript,
@@ -435,21 +435,24 @@ describe('through the runtime', () => {
   // Why 0.158 alone: its header carries no `model:`, so only this lane settles it.
   const CODEX_0158 = 'codex-0-158-0-timed-turn'
   async function pane(name: string, launchAgent: TuiAgent, size?: { cols: number; rows: number }) {
-    return createTranscriptPane({
+    const created = await createTranscriptPane({
       paneTitle: 'Terminal',
       foregroundProcess: launchAgent,
       launchAgent,
       data: readRuntimeFixture(name),
       size
     })
+    await created.runtime.readTerminal(created.handle, { screen: true })
+    return created
   }
 
   // Why 8s: quiescence (3s) plus the 2s poll re-reading the grid.
   it('codex 0.158: a tui-idle wait settles once the composer is quiet', async () => {
     const { runtime, handle } = await pane(CODEX_0158, 'codex', { cols: 120, rows: 40 })
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 8_000 })
-    ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+    await expect(waitForTranscriptIdle({ runtime, handle }, 8_000)).resolves.toMatchObject({
+      condition: 'tui-idle',
+      satisfied: true
+    })
   }, 15_000)
 
   it('keeps a Claude pane showing the same screen pending', async () => {
@@ -457,8 +460,6 @@ describe('through the runtime', () => {
       cols: 120,
       rows: 40
     })
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 6_000 })
-    ).rejects.toThrow(/timeout/)
+    await expect(waitForTranscriptIdle({ runtime, handle }, 6_000)).rejects.toThrow(/timeout/)
   }, 15_000)
 })

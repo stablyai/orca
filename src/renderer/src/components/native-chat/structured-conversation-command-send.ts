@@ -82,10 +82,3 @@ function conversationCommandFailureText(
     sayAgentSessionFailureTranslated
   )
 }
-
-export function isUnconfirmedConversationCommand(method: string, value: unknown): boolean {
-  return (
-    method === 'agentSession.conversationCommand' &&
-    (value as AgentSessionConversationCommandResult).state === 'unknown'
-  )
-}

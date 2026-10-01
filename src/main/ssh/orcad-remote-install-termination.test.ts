@@ -9,6 +9,9 @@ vi.mock('./ssh-relay-install-transfers', () => ({
   uploadRelayDirectory: vi.fn(),
   writeRelayFile: vi.fn()
 }))
+vi.mock('./orcad-remote-node-runtime', () => ({
+  ensureRemoteOrcadNodeRuntime: vi.fn().mockResolvedValue(undefined)
+}))
 
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
@@ -49,7 +52,14 @@ describe.each([
   ]
   const install = (signal?: AbortSignal): Promise<void> =>
     installOrcadBundle(
-      { conn, host, localOrcadDir: '/local/orcad', signal },
+      {
+        conn,
+        host,
+        localOrcadDir: '/local/orcad',
+        target: host.os === 'win32' ? 'win32-x64' : 'linux-x64-glibc',
+        nodeRuntimeArchive: async () => '/cache/node-archive',
+        signal
+      },
       fullVersion,
       remoteDir
     )

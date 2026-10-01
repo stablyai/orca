@@ -103,13 +103,6 @@ export class ClaudeOpenTurn {
     return true
   }
 
-  /** The provider refused the stop, so the turn goes on as if none was sent. */
-  withdrawStop(turnId: string): void {
-    if (this.current?.turnId === turnId) {
-      this.sentStop = null
-    }
-  }
-
   /** Whether a turn is open inside a provider request cycle that has already
    *  done work — the state in which the CLI folds an arriving send into it. A
    *  cycle's first send is its opener, never a fold. */

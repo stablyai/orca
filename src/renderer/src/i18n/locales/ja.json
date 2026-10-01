@@ -900,6 +900,17 @@
         "symlink": "シンボリックリンクは接続できません。",
         "permissionDenied": "アクセスが拒否されました。",
         "unsupported": "サポートされていないファイル形式です。"
+      },
+      "dropTempCopyFailure": {
+        "changed": "コピー中にファイルが変更されました。もう一度ドロップしてください。",
+        "outOfSpace": "ドロップされたファイルをコピーするためのディスク容量が足りません。",
+        "storageUnavailable": "ドロップされたファイル用の保存先を Orca で作成できませんでした。",
+        "storageNotPrivate": "ドロップされたファイル用の Orca の保存先が他のユーザーから読み取れる状態のため、何もコピーしませんでした。",
+        "timedOut": "コピーに時間がかかりすぎました。もう一度ドロップしてください。",
+        "busy": "コピー中のドロップが多すぎます。しばらく待ってから、もう一度お試しください。",
+        "tooLarge": "サイズが大きすぎてコピーできないため、Orca は Agent に渡せませんでした。",
+        "storageFull": "ドロップされたファイル用の Orca の保存先がいっぱいのため、Orca は Agent に渡せませんでした。",
+        "generic": "もう一度ドロップしてください。"
       }
     },
     "hooks": {
@@ -934,7 +945,10 @@
         "nativeDropPathsTooLarge": "ドロップされたパス一覧が大きすぎます。",
         "ownerChanged": "このワークスペースを所有するホストを確認できませんでした。再接続してから、もう一度お試しください。",
         "nativeDropUnresolvedPathsDescription": "まずそれらをディスクに保存してから、保存したファイルをドロップします。",
-        "nativeDropUnresolvedPaths": "Orca はドロップされたファイルのパスを読み取ることができませんでした。"
+        "nativeDropUnresolvedPaths": "Orca はドロップされたファイルのパスを読み取ることができませんでした。",
+        "nativeDropTempCopyFailed": "ドロップされた {{count}} 個のファイルを Orca でコピーできませんでした。",
+        "nativeDropTempCopyFailed_one": "ドロップされた {{count}} 個のファイルを Orca でコピーできませんでした。",
+        "nativeDropTempCopyFailed_other": "ドロップされた {{count}} 個のファイルを Orca でコピーできませんでした。"
       },
       "useIpcEvents": {
         "0e3cf53060": "ブラウザタブ {{value0}} が見つかりません",
@@ -5361,6 +5375,7 @@
           "bdd23b4e07": "GitHub Issue",
           "44713a5d04": "Linear Issue",
           "jiraIssues": "Jira Issue",
+          "host": "ホスト",
           "cc17bd443b": "詳細",
           "0f9b959b31": "PR",
           "e029a2d775": "状態",
@@ -7116,9 +7131,9 @@
           "80c454e8a6": "これをプロバイダーのキャッシュ TTL と一致させます。"
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "リッチエディターモードと Agent のハンドオフ 操作でローカルの markdown ノートコントロールを表示します。",
+          "f80603d293": "すべての markdown ビューで markdown ノートコントロールを表示し、Agent のハンドオフ 操作にそれらのノートを含めます。",
           "4edc104f0f": "Markdown レビューノート",
-          "5f02e6fb21": "リッチエディターモードでローカル markdown レビューノートコントロールを表示します。",
+          "5f02e6fb21": "markdown ファイルでローカル markdown レビューノートコントロールを表示します。",
           "51161d1647": "ファイルの編集時にミニマップの概要を表示します。",
           "6690b1ffb9": "ミニマップ",
           "5a1ea6eaa2": "隠れた",
@@ -15767,6 +15782,7 @@
             "4300f38145": "{{value0}}{{value1}} からダウンロードしています",
             "31375046b7": "{{value0}} からダウンロード",
             "acbe79fd01": "ページ要素の取得 ({{value0}})",
+            "cc4a071d3a": "ページ要素に注釈を付ける ({{value0}})",
             "572046436a": "リモートブラウザ",
             "b313a7275b": "リモートブラウザを開く",
             "5f66313863": "注釈",
@@ -17372,7 +17388,8 @@
         "hostStopped": "{{agent}} の起動が完了しなかったため、Orca が停止しました。",
         "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
         "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
-        "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。"
+        "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。",
+        "previousExitUnverifiable": "Orca は {{agent}} の前のプロセスが終了したことを確認できませんでした。Orca が終了を確認するまで、メッセージは送信を待機します。"
       },
       "writeNotice": {
         "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",

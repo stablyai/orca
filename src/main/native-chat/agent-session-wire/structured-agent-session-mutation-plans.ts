@@ -173,7 +173,6 @@ export function cancelPlan(params: {
   scope?: 'background-tasks'
   taskId?: string
   prompt?: { itemId: string; expectedRevision: number }
-  stopChild?: () => Promise<void>
   /** The session's child records, which name the tasks a background Stop reaches. */
   childWork?: () => readonly AgentChildWorkView[] | undefined
 }): MutationPlan<AgentSessionCancelResult> {
@@ -196,7 +195,6 @@ export function cancelPlan(params: {
         ...(params.scope ? { scope: params.scope } : {}),
         ...(params.taskId ? { taskId: params.taskId } : {}),
         ...(params.prompt ? { prompt: params.prompt } : {}),
-        ...(params.stopChild ? { stopChild: params.stopChild } : {}),
         ...(params.childWork ? { childWork: params.childWork } : {})
       }),
     // Interrupting twice would kill a turn the client never asked to stop, so a

@@ -14,6 +14,7 @@ import {
   accountDaemonStreamEntry,
   releaseDaemonStreamEntry
 } from './daemon-stream-entry-accounting'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 // A control entry carries a whole pre-shaped stream event (background marker,
 // data gap, transient fact) that must ride at its exact position in the
@@ -27,6 +28,7 @@ export type StreamQueueEntry = {
   sequenceChars?: number
   seq?: number
   transformed?: boolean
+  incarnationId?: PtyIncarnationId
   control?: DaemonEvent
   retainedBytes?: number
 }

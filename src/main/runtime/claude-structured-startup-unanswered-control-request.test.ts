@@ -6,7 +6,6 @@
 // the saved choice stays saved for the next start to retry. Against
 // the production runtime, adapter, record store and host, with only the CLI process scripted.
 
-import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
@@ -79,16 +78,24 @@ async function statusRows(host: StructuredAgentSessionHost): Promise<string[]> {
 }
 
 async function send(host: StructuredAgentSessionHost, text: string): Promise<void> {
+  await sendTo(host, SESSION, text)
+}
+
+async function sendTo(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  text: string
+): Promise<void> {
   const body = hostTestMessage(text)
   await expect(
     host.send(CALLER, {
       envelope: {
-        sessionId: SESSION,
-        clientOperationId: `${Date.now()}-${(++operations).toString(16).padStart(32, '0')}`,
-        expectedRuntimeFence: record(host)?.lease.runtimeFence ?? 0,
+        sessionId,
+        clientOperationId: operationId(),
+        expectedRuntimeFence: host.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
         payloadFingerprint: computeAgentSessionPayloadFingerprint({
           method: 'agentSession.send',
-          sessionId: SESSION,
+          sessionId,
           fields: { body }
         })
       },
@@ -149,12 +156,8 @@ describe('a Claude start whose CLI answers initialize but not a control request'
   })
 
   it('replays the unanswered saved model after a turn reports another model, another option changes, and the chat is cleared', async () => {
-    const clearOperation = operationId()
-    const replacement = `clear-${createHash('sha256')
-      .update(JSON.stringify([SESSION, CALLER.callerKey, clearOperation]))
-      .digest('hex')
-      .slice(0, 40)}`
-    claude = createScriptedClaudeRuntime([SESSION, replacement])
+    const sessions = [SESSION]
+    claude = createScriptedClaudeRuntime(sessions)
     const behavior = { optionWritesHang: true, controlTimeoutMs: DEADLINE_MS }
     claude.behave(SESSION, behavior)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -187,7 +190,7 @@ describe('a Claude start whose CLI answers initialize but not a control request'
       command: 'clear',
       envelope: {
         sessionId: SESSION,
-        clientOperationId: clearOperation,
+        clientOperationId: operationId(),
         expectedRuntimeFence: record(host)?.lease.runtimeFence ?? 0,
         payloadFingerprint: computeAgentSessionPayloadFingerprint({
           method: 'agentSession.conversationCommand',
@@ -198,10 +201,20 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     })
     expect(cleared, JSON.stringify(cleared)).toMatchObject({
       ok: true,
-      value: { replacementSessionId: replacement }
+      value: { replacementSessionId: expect.any(String) }
     })
-    // The cleared chat's start replays the saved model rather than the one the turn reported.
+    const replacement = cleared.ok ? cleared.value.replacementSessionId! : ''
+    sessions.push(replacement)
+    // The cleared chat starts nothing until its first message.
+    expect(claude.children(replacement)).toEqual([])
+    await sendTo(host, replacement, 'first message')
+    // Started fresh under its own derived id, and it replays the saved model rather than the one
+    // the turn reported.
     await vi.waitFor(() => expect(claude.child(replacement).calls).toContain('set_model'))
+    expect(claude.child(replacement).launch.options).toMatchObject({
+      sessionId: claudeSessionIdForOrcaSession(replacement)
+    })
+    expect(claude.child(replacement).launch.options.resume).toBeUndefined()
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(replacement)?.options).toEqual({
         model: 'sonnet',

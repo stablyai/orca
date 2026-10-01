@@ -52,7 +52,9 @@ describe('a Codex Stop that names no turn', () => {
         detail: {
           text: 'expected active turn id turn-journal but found turn-1',
           audience: 'person'
-        }
+        },
+        // An invalid-request refusal: the named turn is not the one Codex is running.
+        turnNotRunning: true
       }
     })
     expect(rig.interrupts().map((call) => call.params?.turnId)).toEqual(['turn-journal'])

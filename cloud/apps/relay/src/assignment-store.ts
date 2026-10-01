@@ -136,6 +136,10 @@ export type RelayAssignment = AssignmentIdentity & {
   region?: RelayRegion
 }
 
+// Set only by reconnect verification, for a host whose home cell is isolated for
+// a roll right now: its next assign re-places it rather than re-granting the pin.
+export type ResolvedRelayAssignment = RelayAssignment & { homeCellRollIsolated?: true }
+
 export type RelayRegionCatalogEntry = {
   region: RelayRegion
   probeOrigins: string[]
@@ -1318,33 +1322,68 @@ export class RelayAssignmentStore {
     return outcome.assignment
   }
 
-  async resolve(identity: AssignmentIdentity): Promise<RelayAssignment | null> {
+  async resolve(
+    identity: AssignmentIdentity,
+    // Director reconnect verification only: the same read classifies a host whose
+    // home is roll-isolated, so the drain-return lane costs no extra query.
+    options: { classifyHomeRollIsolation?: boolean } = {}
+  ): Promise<ResolvedRelayAssignment | null> {
+    const classify = options.classifyHomeRollIsolation === true
     const rows = await this.database.query(
-      `SELECT assignment.*, cell.cell_url, region.region
+      `SELECT assignment.*, cell.cell_url, region.region${
+        classify
+          ? `, home_admission.admission_state AS home_admission_state,
+         home_admission.roll_isolated_at AS home_roll_isolated_at,
+         CASE WHEN home_admission.roll_isolated_at IS NULL THEN 0
+           WHEN EXISTS (
+             SELECT 1 FROM relay_assignment_migrations migration
+             WHERE migration.user_id = assignment.user_id
+               AND migration.relay_host_id = assignment.relay_host_id
+               AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+           ) THEN 1 ELSE 0 END AS home_open_migrations`
+          : ''
+      }
        FROM relay_assignments assignment
        JOIN relay_cells cell ON cell.cell_id = assignment.cell_id
-       LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id${
+         classify
+           ? `
+       LEFT JOIN relay_cell_admission home_admission
+         ON home_admission.cell_id = assignment.cell_id`
+           : ''
+       }
        WHERE assignment.user_id = ? AND assignment.relay_host_id = ?`,
       [identity.userId, identity.relayHostId]
     )
     const row = rows[0]
-    if (
-      row &&
-      this.requireLiveCells &&
-      !(await this.cellIsLive(this.database, text(row, 'cell_id'), this.now()))
-    ) {
+    const now = this.now()
+    if (!row) return null
+    if (this.requireLiveCells && !(await this.cellIsLive(this.database, text(row, 'cell_id'), now))) {
       return null
     }
-    return row
-      ? {
-          ...identity,
-          cellId: text(row, 'cell_id'),
-          cellUrl: text(row, 'cell_url'),
-          region: optionalRelayRegion(row, 'region') ?? RELAY_DEFAULT_REGION,
-          assignmentEpoch: integer(row, 'assignment_epoch'),
-          leaseExpiresAt: integer(row, 'lease_expires_at')
-        }
-      : null
+    const homeAdmissionState = row['home_admission_state']
+    return {
+      ...identity,
+      cellId: text(row, 'cell_id'),
+      cellUrl: text(row, 'cell_url'),
+      region: optionalRelayRegion(row, 'region') ?? RELAY_DEFAULT_REGION,
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      leaseExpiresAt: integer(row, 'lease_expires_at'),
+      ...(classify &&
+      isCellAdmissionState(homeAdmissionState) &&
+      // A migration owns this epoch; the sticky path keeps the pin, so it is not a drain return.
+      integer(row, 'migration_leases') === 0 &&
+      integer(row, 'home_open_migrations') === 0 &&
+      rollIsolationIsCurrent(
+        {
+          state: homeAdmissionState,
+          rollIsolatedAt: optionalInteger(row, 'home_roll_isolated_at')
+        },
+        now
+      )
+        ? { homeCellRollIsolated: true }
+        : {})
+    }
   }
 
   async setCellEnabled(cellId: string, enabled: boolean): Promise<void> {
@@ -7749,10 +7788,7 @@ export class RelayAssignmentStore {
     // the single-row read.
     if (admission && admission.get(cellId) !== ROLL_ISOLATED_ADMISSION) return false
     const pinned = pinnedAdmission ?? (await this.pinnedCellAdmission(database, cellId))
-    if (pinned?.state !== ROLL_ISOLATED_ADMISSION || pinned.rollIsolatedAt === undefined) {
-      return false
-    }
-    if (now - pinned.rollIsolatedAt >= ROLL_ISOLATION_STAMP_MAX_AGE_MS) return false
+    if (!rollIsolationIsCurrent(pinned, now)) return false
     if (integer(existing, 'migration_leases') > 0) return false
     // A migration owns this assignment's epoch on both sides, and its durable
     // row outlives the 15-minute lease that the counter above tracks, so the
@@ -8395,6 +8431,17 @@ export class RelayAssignmentStore {
       leaseExpiresAt
     }
   }
+}
+
+// One predicate for "isolated for a roll in progress", shared by re-placement and
+// the reconnect classification so the drain-return lane admits the hosts the
+// re-placement rule would move.
+function rollIsolationIsCurrent(admission: PinnedCellAdmission | undefined, now: number): boolean {
+  return (
+    admission?.state === ROLL_ISOLATED_ADMISSION &&
+    admission.rollIsolatedAt !== undefined &&
+    now - admission.rollIsolatedAt < ROLL_ISOLATION_STAMP_MAX_AGE_MS
+  )
 }
 
 type PinnedCellAdmission = {

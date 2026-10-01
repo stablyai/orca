@@ -1,4 +1,5 @@
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
+import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
@@ -152,6 +153,7 @@ export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
+export * from './agent-session-stop-capabilities'
 export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 // Older launch schemas reject unknown fields; advertise before clients send keyboard support.
@@ -172,11 +174,6 @@ export const AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY =
 // mobile client lacks the capability; mobile must first show a rejected message in place.
 export const AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY =
   'agent-session.accepted-send.v1' as const
-// Why: `agentSession.cancel` params are strict and older hosts require `turnId`. A host advertising
-// this takes a cancel naming no turn as "stop what the conversation has in flight", which is the
-// only Stop a client can send before the provider has opened a turn.
-export const AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY =
-  'agent-session.conversation-stop.v1' as const
 // Why: `agentSession.send`'s params are strict, so an older host rejects `delivery`; and only a
 // capable client can render the `queued` result arm, the draft list, and returned cards. DARK ON
 // PURPOSE — not in RUNTIME_CAPABILITIES: advertising still requires the integrated Codex steer
@@ -230,10 +227,6 @@ export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1'
 export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' as const
 export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
   'agent-session.background-task-stop.v1' as const
-// Why: agentSession.cancel has a strict schema, so clients must not send prompt identity to an
-// older host that would reject the whole cancellation instead of falling back to turn stop.
-export const AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY =
-  'agent-session.prompt-cancel.v1' as const
 // Why: agentSession.respondToQuestion has a strict schema, so clients must not send structured
 // `answers` to an older host; they fall back to the answer packed into `optionId`.
 export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
@@ -353,6 +346,7 @@ export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
@@ -411,7 +405,6 @@ export const RUNTIME_CAPABILITIES = [
   // The host side: it accepts a send before any agent has it, and a Stop with no writer before a
   // turn starts, so a client may gate on either.
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
@@ -420,7 +413,6 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
-  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,

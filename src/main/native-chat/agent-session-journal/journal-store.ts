@@ -58,7 +58,11 @@ import type {
   ResolveDispatchInput
 } from './journal-store-contracts'
 import { queuedMessageConsumeHook, type JournalQueuedMessages } from './journal-queued-messages'
-import type { AgentJournalEpochReason } from './journal-row-schema'
+import {
+  journalQueueResumeRowBuilder,
+  journalStopEventRowBuilder
+} from './journal-stop-and-resume-rows'
+import type { AgentJournalEpochReason, JournalStopEvent } from './journal-row-schema'
 import type { JournalRowWriter } from './journal-row-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
@@ -305,6 +309,16 @@ export class AgentSessionJournal {
     return this.rowWriter.append(
       journalTombstoneRowBuilder(() => this.state, itemId, options.fence)
     )
+  }
+
+  /** A Stop that took effect, timed by its row (`JournalStopEvent`). */
+  appendStopEvent(event: Omit<JournalStopEvent, 'at'>, fence: number): Promise<AgentJournalCursor> {
+    return this.rowWriter.append(journalStopEventRowBuilder(() => this.state, event, fence))
+  }
+
+  /** A person's Resume of the queue. */
+  appendQueueResume(fence: number): Promise<AgentJournalCursor> {
+    return this.rowWriter.append(journalQueueResumeRowBuilder(() => this.state, fence))
   }
 
   appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {

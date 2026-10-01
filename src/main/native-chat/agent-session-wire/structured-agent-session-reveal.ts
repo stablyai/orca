@@ -72,7 +72,7 @@ export function createStructuredAgentSessionHostRestore(
   restoreReadableSessions: (sessionIds?: readonly string[]) => Promise<void>
 } {
   const { reconcileLeases, resolveRecovery, ...rest } = wiring
-  const failures = reportEachFailureOnce(deps.onLeaseReconcileFailure)
+  const failures = reportEachFailureOnce(deps.logger)
   const reconcile = createReaderReconcile(reconcileLeases, failures)
   const restorer = new StructuredAgentSessionReadableRestorer({
     openDeps: deps,

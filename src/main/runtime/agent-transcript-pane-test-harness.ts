@@ -91,3 +91,22 @@ export async function createTranscriptPane(
   }
   return { runtime, handle: terminal.handle }
 }
+
+/** Advance readiness deadlines after real pane creation and emulator drains. */
+export async function waitForTranscriptIdle(
+  pane: Awaited<ReturnType<typeof createTranscriptPane>>,
+  timeoutMs: number
+) {
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+  })
+  try {
+    const waiting = pane.runtime.waitForTerminal(pane.handle, { condition: 'tui-idle', timeoutMs })
+    // Expected refusals must have a rejection handler before advancing their deadline.
+    void waiting.catch(() => {})
+    await vi.advanceTimersByTimeAsync(timeoutMs)
+    return await waiting
+  } finally {
+    vi.useRealTimers()
+  }
+}

@@ -12,6 +12,7 @@ import {
   type StructuredAgentSessionRevisionResolver
 } from './structured-agent-session-event-sink'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
 
 const ROW: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'row' }
 
@@ -61,7 +62,7 @@ const appendSuffix =
 describe('resolved revisions', () => {
   it('reads the row as the journal holds it when each queued revision runs', async () => {
     const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('abc'))
     for (const suffix of ['a', 'b', 'c']) {
       expect(
@@ -81,7 +82,7 @@ describe('resolved revisions', () => {
 
   it('skips a revision that resolves to nothing', async () => {
     const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.sink.tryReviseResolvedItem?.(1_000, () => null, {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
@@ -93,7 +94,7 @@ describe('resolved revisions', () => {
 
   it('publishes a revision in the operation that writes it, within the same reservation', async () => {
     const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
     deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, appendSuffix('a'), {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
@@ -114,7 +115,7 @@ describe('resolved revisions', () => {
 
   it('refuses a resolved write larger than the reservation it was admitted with', async () => {
     const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
     deferred.sink.tryReviseResolvedItem?.(
       bytes,

@@ -38,7 +38,7 @@ export type StructuredAgentSessionConversationOpenDeps = {
   store: Pick<AgentSessionRecordStore, 'getRecord'>
   adapter: Pick<StructuredAgentSessionAdapter, 'historyFilePath'>
   journalDatabase: JournalHostDatabase
-  onEventSinkError?: StructuredAgentSessionHostDeps['onEventSinkError']
+  logger: StructuredAgentSessionHostDeps['logger']
 }
 
 /** An acquisition's own open: its reserve cleared the record's death evidence, so it settles
@@ -104,7 +104,11 @@ export async function openStructuredAgentSessionConversationJournal(
     // one is only doubt, which provider history decides under a won lease.
     await opened.journal.markPendingSubmissionsUnknown(fence)
   } catch (error) {
-    deps.onEventSinkError?.({ sessionId, error })
+    deps.logger.warn('marking pending sends unknown on open failed', {
+      scope: 'open-pending-unknown',
+      sessionId,
+      error
+    })
   }
   // No child in this process writes to a journal nobody had open, so whatever it shows running
   // belongs to a generation that is gone, whatever the lease still claims. Settled before any
@@ -135,7 +139,7 @@ export async function resettleOpenStructuredAgentSessionConversation(
 }
 
 async function settleGoneGeneration(
-  deps: Pick<StructuredAgentSessionConversationOpenDeps, 'onEventSinkError'>,
+  deps: Pick<StructuredAgentSessionConversationOpenDeps, 'logger'>,
   record: AgentSessionRecord,
   journal: AgentSessionJournal
 ): Promise<void> {
@@ -150,7 +154,11 @@ async function settleGoneGeneration(
     })
   } catch (error) {
     // Best effort: the next open or acquire re-derives it.
-    deps.onEventSinkError?.({ sessionId: record.sessionId, error })
+    deps.logger.warn("settling a gone agent's work on open failed", {
+      scope: 'open-dead-generation',
+      sessionId: record.sessionId,
+      error
+    })
   }
 }
 

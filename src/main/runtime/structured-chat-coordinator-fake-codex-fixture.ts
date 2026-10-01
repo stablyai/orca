@@ -6,6 +6,7 @@ import type {
   CodexAppServerConnectionHandlers,
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
+import { refuseUnroutedSteer } from '../codex/codex-structured-dispatch-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { isRecord } from './rpc/orchestration-session-caller-test-fixture'
@@ -16,6 +17,8 @@ export type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closed: boolean
   handlers: CodexAppServerConnectionHandlers
   threadId: string | null
+  /** Every JSON-RPC method the adapter called, in order. */
+  methods: string[]
   turns: { clientUserMessageId: string; text: string }[]
 }
 
@@ -56,10 +59,12 @@ export function fakeCodex() {
     const connection: FakeConnection = {
       handlers,
       threadId: null,
+      methods: [],
       turns: [],
       pid: 4321,
       closed: false,
       request: async (method, params) => {
+        connection.methods.push(method)
         const input = isRecord(params) ? params : {}
         if (method === 'thread/start') {
           connection.threadId = `thread-${connections.length}`
@@ -107,6 +112,9 @@ export function fakeCodex() {
             ],
             nextCursor: null
           }
+        }
+        if (method === 'turn/steer') {
+          return refuseUnroutedSteer(undefined)
         }
         return {}
       },

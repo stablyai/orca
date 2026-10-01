@@ -13,12 +13,15 @@ import {
   RESUME_MARKER_RECORD_TIMEOUT_MS,
   structuredAgentSessionHostTeardownPhases
 } from './structured-agent-session-host-teardown'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const noop = async (): Promise<void> => undefined
 
 describe('structured agent-session host teardown', () => {
   it('names every phase, so the quit-path order is pinned rather than incidental', () => {
     const phases = structuredAgentSessionHostTeardownPhases({
+      logger: createStructuredAgentSessionLogger(),
       idleSweep: { dispose: noop },
       runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
       tasks: { drainAttaches: noop },
@@ -62,6 +65,7 @@ describe('structured agent-session host teardown', () => {
   it('ends child eviction as soon as every chat has closed, not at its bound', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const evict = structuredAgentSessionHostTeardownPhases({
+      logger: createStructuredAgentSessionLogger(),
       idleSweep: { dispose: noop },
       runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
       tasks: { drainAttaches: noop },
@@ -86,11 +90,12 @@ describe('structured agent-session host teardown', () => {
 
   it('bounds stalled recovery publication without preventing later cleanup', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const log = recordingStructuredAgentSessionLogger()
     const pending = Promise.withResolvers<void>()
     const cleaned = vi.fn(async () => {})
     const flush = vi.fn(async () => cleaned())
     const phases = structuredAgentSessionHostTeardownPhases({
+      logger: log.logger,
       idleSweep: { dispose: cleaned },
       runtimeState: { stopLeaseRenewal: () => {}, flushAllEventSinks: flush },
       tasks: { drainAttaches: cleaned },
@@ -107,13 +112,10 @@ describe('structured agent-session host teardown', () => {
       await vi.advanceTimersByTimeAsync(2000)
       await teardown
       expect(cleaned).toHaveBeenCalledTimes(4)
-      expect(warning).toHaveBeenCalledWith(
-        '[structured-agent-session] recording recovery capsule failed'
-      )
+      expect(log.scopes()).toEqual(['teardown-recovery-capsule'])
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       pending.resolve()
-      warning.mockRestore()
       vi.useRealTimers()
     }
   })

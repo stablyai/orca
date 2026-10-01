@@ -17,6 +17,7 @@ import {
 import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach } from './structured-agent-session-attach-flow'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -82,6 +83,7 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
   const input = {
     store,
     adapter,
+    logger: createStructuredAgentSessionLogger(),
     journalDatabase: openTestJournalHostDatabase(root),
     openConversation: openTestAttachConversation(openTestJournalHostDatabase(root)),
     authority: {
@@ -157,8 +159,11 @@ describe('a create that fails before any process spawns', () => {
     }
     // What failed is kept for the log.
     expect(warn).toHaveBeenCalledWith(
-      '[agent-session] provider start failed:',
-      expect.objectContaining({ message: raw })
+      '[agent-session] provider-start: starting the provider failed',
+      expect.objectContaining({
+        scope: 'provider-start',
+        error: expect.objectContaining({ message: raw })
+      })
     )
   })
 

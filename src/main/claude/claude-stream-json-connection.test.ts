@@ -21,6 +21,7 @@ import { readClaudeStructuredSessionOptions } from './claude-structured-session-
 import type { ClaudeSession } from './claude-structured-session-state'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 // These drive the real SDK against the scripted fake CLI, so every assertion is
 // about the environment, argv and frames a real child actually saw.
@@ -385,7 +386,7 @@ describe('Claude stream-json connection', () => {
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({ journal, fence: 1, publish: vi.fn() })
     const translator = createClaudeJournalTranslator({ sink: deferred.sink })
     let settled = false

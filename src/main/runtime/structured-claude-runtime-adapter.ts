@@ -16,6 +16,7 @@ import {
 } from './agent-session-provider-handle-transition'
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
@@ -73,6 +74,9 @@ export function createStructuredClaudeRuntimeAdapter(
 ): ClaudeStructuredSessionAdapter {
   const { store } = deps
   return new ClaudeStructuredSessionAdapter({
+    atRestCommands: new ClaudeAtRestCommandCatalog({
+      resolveWorkspacePath: deps.resolveWorkspacePath
+    }),
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,

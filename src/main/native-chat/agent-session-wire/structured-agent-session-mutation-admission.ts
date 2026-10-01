@@ -38,6 +38,7 @@ import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import { runSettledAgentSessionMutation } from './structured-agent-session-operation-settlement'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 // The code is shared with the client so a read that refuses this way can be told apart from a
 // transcript that failed to load; the two must never drift apart.
@@ -61,6 +62,7 @@ export type AgentSessionMutationSessionPreparation =
 export type AgentSessionMutationRequest<TValue> = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
+  logger: StructuredAgentSessionLogger
   callerKey: string
   envelope: AgentSessionMutationEnvelope
   plan: MutationPlan<TValue>
@@ -127,7 +129,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     admitted = await request.store.admitMutationOperation(operation)
   } catch (error) {
     if (plan.runsWithoutLedgerRow) {
-      admitted = admitWithoutLedgerRow(request.store, operation, error)
+      admitted = admitWithoutLedgerRow(request, operation, error)
       ledgerRowWritten = false
     } else if (
       isAgentSessionRefusalError(error) ||
@@ -198,13 +200,14 @@ export async function admitAndRunAgentSessionMutation<TValue>(
 
 /** The committed ledger's admission, placing nothing: a failed commit left memory as it was. */
 function admitWithoutLedgerRow(
-  store: AgentSessionRecordStore,
+  { store, logger }: Pick<AgentSessionMutationRequest<unknown>, 'store' | 'logger'>,
   operation: AgentSessionMutationOperationAdmission,
   error: unknown
 ): AgentSessionMutationOperationDecision {
-  console.warn("[agent-session] Stop's ledger row skipped:", {
+  logger.warn("writing Stop's ledger row failed; Stop runs without it", {
+    scope: 'stop-ledger-row',
     sessionId: operation.envelope.sessionId,
-    error: error instanceof Error ? error.message : String(error)
+    error
   })
   const evaluated = store.evaluateMutationOperation(operation)
   if (!evaluated) {
@@ -231,6 +234,7 @@ function turnContext<TValue>(
     journal,
     fence,
     adapter: request.adapter,
+    logger: request.logger,
     ...(persistedOptions ? { persistedOptions } : {}),
     persistOptions: (options) =>
       request.store

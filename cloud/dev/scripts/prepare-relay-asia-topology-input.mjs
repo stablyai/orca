@@ -5,23 +5,30 @@ const BOOT_IMAGE = 'https://www.googleapis.com/compute/v1/projects/cos-cloud/glo
 const SHAPES = {
   staging: {
     project: 'onorca-cloud-staging',
-    databasePoolMax: 10,
+    databasePoolMax: { 'asia-east2': 10 },
     cells: { 'staging-gce-c4': 'asia-east2-a' },
     waves: [['staging-gce-c4']]
   },
   production: {
     project: 'onorca-cloud',
-    databasePoolMax: 16,
+    // 16 covers asia-east2's round trip to us-central1 Postgres; US cells keep the default.
+    databasePoolMax: { 'asia-east2': 16, 'us-central1': 10 },
     cells: {
       'production-gce-c27': 'asia-east2-a',
       'production-gce-c28': 'asia-east2-b',
       'production-gce-c29': 'asia-east2-c',
-      'production-gce-c30': 'asia-east2-a'
+      'production-gce-c30': 'asia-east2-a',
+      'production-gce-c31': 'asia-east2-b',
+      'production-gce-c32': 'us-central1-a',
+      'production-gce-c33': 'us-central1-b'
     },
     // The launch set, then each later additive cell; a plan targets one wave, never live cells.
     waves: [
       ['production-gce-c27', 'production-gce-c28', 'production-gce-c29'],
-      ['production-gce-c30']
+      ['production-gce-c30'],
+      ['production-gce-c31'],
+      // Declared together, so they plan together: a lone C32 plan would hit C33's missing template.
+      ['production-gce-c32', 'production-gce-c33']
     ]
   }
 }
@@ -82,15 +89,17 @@ export function prepareRelayAsiaTopologyInput({
   }
   const additions = Object.fromEntries(expected.map((cellId) => {
     const hostname = cellId.split('-').at(-1)
+    const zone = shape.cells[cellId]
+    const region = zone.slice(0, zone.lastIndexOf('-'))
     return [cellId, {
       hostname,
-      region: 'asia-east2',
-      zone: shape.cells[cellId],
+      region,
+      zone,
       machine_type: 'e2-standard-4',
       boot_disk_gb: 30,
       boot_image: BOOT_IMAGE,
       capacity_requests: 6_000,
-      database_pool_max: shape.databasePoolMax,
+      database_pool_max: shape.databasePoolMax[region],
       image,
       initially_enabled: false,
       connection_hard_cap: 3_000,

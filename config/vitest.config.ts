@@ -17,8 +17,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    // Bun's external-module cache otherwise loses Zod named exports across mocked graphs.
-    ...(process.versions.bun ? { server: { deps: { inline: ['zod'] } } } : {}),
     ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
       ? {
           sequence: { sequencer: TimingSequencer },

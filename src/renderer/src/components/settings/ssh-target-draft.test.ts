@@ -220,6 +220,18 @@ describe('getEditingTargetForSshTarget', () => {
     expect(draft.systemSshConnectionReuse).toBe(false)
   })
 
+  it('maps the stored runtime onto the Auto / Orca-managed / Host Node choice', () => {
+    const base = { id: 'ssh-1', label: 'S', host: 's.example.com', port: 22, username: 'u' }
+    expect(getEditingTargetForSshTarget(base).remoteRuntime).toBe('auto')
+    const pinned = getEditingTargetForSshTarget({ ...base, remoteRuntime: 'pinned-node' })
+    expect(pinned.remoteRuntime).toBe('pinned-node')
+    expect(getEditingTargetForSshTarget({ ...base, remoteRuntime: 'legacy' }).remoteRuntime).toBe(
+      'legacy'
+    )
+    expect(hasAdvancedConnectionValues(pinned)).toBe(true)
+    expect(isSshTargetFormDirty(pinned, getEditingTargetForSshTarget(base))).toBe(true)
+  })
+
   it('uses the default persistence for targets without an explicit grace period', () => {
     const draft = getEditingTargetForSshTarget({
       id: 'ssh-1',

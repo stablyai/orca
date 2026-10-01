@@ -51,16 +51,13 @@ describe('a queued draft handed off under a fresh submission id', () => {
   it('answers the send in flight and leaves nothing a Stop would withdraw', () => {
     expect(journalAnswersInFlightSend([handOff('pending')], 'draft')).toBe(true)
     expect(journalAnswersInFlightSend([handOff('pending')], null)).toBe(false)
-    expect(hasUnsentStructuredAgentSessionOutboxEntry([entry], [handOff('pending')], null)).toBe(
-      false
-    )
+    expect(hasUnsentStructuredAgentSessionOutboxEntry([entry], [handOff('pending')])).toBe(false)
   })
 
   it('settles a replayed send answered with the hand-off, with no notice', () => {
     const disposition = disposeStructuredAgentSessionSendResult({
       entries: [entry],
       entry,
-      blockedClientMessageId: null,
       createOperationId: () => 'rotated',
       result: {
         ok: true,
@@ -70,6 +67,6 @@ describe('a queued draft handed off under a fresh submission id', () => {
         value: { clientMessageId: 'hand-off', submission: handOff('rejected') }
       }
     })
-    expect(disposition).toEqual({ entries: [], error: null, blockedClientMessageId: null })
+    expect(disposition).toEqual({ entries: [], error: null })
   })
 })

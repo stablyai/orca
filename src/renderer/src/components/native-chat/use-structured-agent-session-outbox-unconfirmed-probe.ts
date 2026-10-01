@@ -9,8 +9,7 @@ import {
 const UNCONFIRMED_PROBE_BASE_DELAY_MS = 1_000
 /** No attempt ceiling: a transport outage outlives any fixed budget, and giving up
  *  restores the wedge this fixes. Growth caps the rate at one status query per 16s.
- *  A refusal that blocks the head still ends probing until a manual Retry (or, on an older
- *  host, a fence change), because the entry leaves `unconfirmed`. */
+ *  A refusal still ends probing until a manual Retry, because the entry leaves `unconfirmed`. */
 const UNCONFIRMED_PROBE_MAX_DELAY_MS = 16_000
 
 /** Re-queues the entry holding the outbox in `unconfirmed`, with backoff, until the journal answers it. */
@@ -58,9 +57,14 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
     const timer = setTimeout(
       () => {
         probeAttemptsRef.current = { id: probeId, attempts: attempts + 1 }
-        const next = getStructuredAgentSessionOutbox(sessionId).map((entry) =>
-          entry.clientMessageId === probeId ? { ...entry, state: 'queued' as const } : entry
-        )
+        const next = getStructuredAgentSessionOutbox(sessionId).map((entry) => {
+          if (entry.clientMessageId !== probeId) {
+            return entry
+          }
+          // A saved failure would hold it for a Retry instead of resending it.
+          const { lastFailure: _probed, ...probed } = entry
+          return { ...probed, state: 'queued' as const }
+        })
         commitStructuredAgentSessionOutbox(sessionId, next)
       },
       Math.min(UNCONFIRMED_PROBE_BASE_DELAY_MS * 2 ** attempts, UNCONFIRMED_PROBE_MAX_DELAY_MS)

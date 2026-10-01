@@ -3,6 +3,7 @@ import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
+import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
 import {
   buildRemovedSshTargetTombstone,
   readoptOrphanedWorkspacesForTarget
@@ -84,8 +85,22 @@ export class SshConnectionStore {
     return next
   }
 
+  /** Exclusive managed-orcad ownership of a target; see ssh-target-orcad-claims. */
+  getOrcadRuntimeClaims(): SshTargetOrcadClaims {
+    return new SshTargetOrcadClaims(this.store)
+  }
+
   updateTarget(id: string, updates: Partial<Omit<SshTarget, 'id'>>): SshTarget | null {
-    const updated = this.store.updateSshTarget(id, updates)
+    const existing = this.store.getSshTarget(id)
+    // Why: a new runtime choice or endpoint must re-run the ladder, not replay the old rung.
+    const changed = (key: 'remoteRuntime' | 'host' | 'port' | 'configHost'): boolean =>
+      key in updates && existing?.[key] !== updates[key]
+    const resetsRuntime =
+      changed('remoteRuntime') || changed('host') || changed('port') || changed('configHost')
+    const updated = this.store.updateSshTarget(
+      id,
+      resetsRuntime ? { ...updates, remoteRuntimeResolution: undefined } : updates
+    )
     if (updated) {
       // Why: actively editing a target reclaims its alias from the deleted set,
       // so an edit can never leave the host tombstoned.
@@ -152,6 +167,7 @@ export class SshConnectionStore {
       const alias = normalizeSshConfigAlias(existing.configHost ?? existing.label)
       if (
         existing.source === 'manual' ||
+        isRuntimeOwnedSshTarget(existing) ||
         (existing.source === undefined && !isLegacyConfigImportTarget(existing))
       ) {
         manualAliases.add(alias)
@@ -244,7 +260,7 @@ export function getRuntimeOwnedSshTargetId(runtimeId: string): string {
 }
 
 export function isRuntimeOwnedSshTarget(target: SshTarget): boolean {
-  return target.owner?.type === 'on-demand-runtime'
+  return target.owner !== undefined || target.orcadProvisioning !== undefined
 }
 
 function isLegacyConfigImportTarget(target: SshTarget): boolean {

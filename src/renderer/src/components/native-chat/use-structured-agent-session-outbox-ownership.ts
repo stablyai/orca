@@ -18,7 +18,6 @@ export function useStructuredAgentSessionOutboxOwnership(args: {
   submissions: readonly AgentJournalSubmission[]
   /** Ids of the host's published drafts; an entry with one of these ids is host-owned. */
   queuedMessageIds: readonly string[] | undefined
-  blockedIdRef: { current: string | null }
   /** The send in flight and its generation: a host that holds that send answered it. */
   inFlightIdRef: { current: string | null }
   dispatchGenerationRef: { current: number }
@@ -27,7 +26,7 @@ export function useStructuredAgentSessionOutboxOwnership(args: {
   /** Stop's local step, before its RPC, so the drain has nothing left to send after it. */
   withdrawUnsent: () => void
 } {
-  const { blockedIdRef, queuedMessageIds, restoreWithdrawn, sessionId } = args
+  const { queuedMessageIds, restoreWithdrawn, sessionId } = args
   const { dispatchGenerationRef, inFlightIdRef, submissions } = args
 
   const withdrawUnsent = useCallback((): void => {
@@ -35,7 +34,6 @@ export function useStructuredAgentSessionOutboxOwnership(args: {
     const next = withdrawUnsentStructuredAgentSessionOutboxEntries(
       current,
       submissions,
-      blockedIdRef.current,
       inFlightIdRef.current
     )
     if (next.length === current.length && next.every((entry, index) => entry === current[index])) {
@@ -45,7 +43,7 @@ export function useStructuredAgentSessionOutboxOwnership(args: {
     const kept = new Set(next.map((entry) => entry.clientMessageId))
     restoreWithdrawn.byStop(current.filter((entry) => !kept.has(entry.clientMessageId)))
     commitStructuredAgentSessionOutbox(sessionId, next)
-  }, [blockedIdRef, inFlightIdRef, restoreWithdrawn, sessionId, submissions])
+  }, [inFlightIdRef, restoreWithdrawn, sessionId, submissions])
 
   // Drop host-owned entries without a restore: the published card is the text now.
   const retire = useCallback(

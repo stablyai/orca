@@ -62,6 +62,7 @@ import {
   type RpcReply
 } from './versioned-agent-session-wire'
 import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
@@ -475,6 +476,7 @@ describe('cross-version structured agent sessions', () => {
       root = await mkdtemp(join(tmpdir(), 'orca-cross-version-ai-vault-'))
       store = await openTestAgentSessionRecordStore(root)
       const host = new StructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         store,
         adapter: {
           acquire: async ({ fence }) => ({
@@ -701,6 +703,7 @@ describe('cross-version structured agent sessions', () => {
     async function bootHost(generation: string): Promise<StructuredAgentSessionHost> {
       store = await openTestAgentSessionRecordStore(root)
       const host = new StructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         store,
         adapter: adapter(),
         journalDatabase: openTestJournalHostDatabase(root),

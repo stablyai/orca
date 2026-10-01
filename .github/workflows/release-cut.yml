@@ -1149,6 +1149,19 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Design D2: every desktop build ships the orcad template (server JS plus every target's
+  # addons), merged from the node-server lanes that qualified each slot at this tag. It needs no
+  # signing quota, so it runs beside the release gates instead of behind them.
+  orcad-template:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      build_template: true
+
   # Why: artifact jobs submit Windows binaries to SignPath. Keep every
   # quota-consuming build behind all blocking release gates so a late test
   # failure cannot create signing requests that can never be published.
@@ -1171,12 +1184,29 @@ jobs:
       - name: Confirm blocking release gates passed
         run: echo "All blocking release gates passed; artifact builds may start."
 
+  # Why its own job: every desktop package ships Windows relays, but only a
+  # Windows runner compiles the addon that launches one outside sshd's job.
+  # Needs only cut, so it overlaps the release gates instead of extending them.
+  relay-windows-process-tree:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/relay-windows-process-tree.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
   build:
     needs:
       - cut
       - create-release
+      - orcad-template
       - release-preflight
+      - relay-windows-process-tree
     if: needs.cut.outputs.should_release == 'true'
+    env:
+      # beforePack and afterPack fail the package when the template is absent.
+      ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -1381,19 +1411,15 @@ jobs:
           echo "identity=$identity" >>"$GITHUB_OUTPUT"
           echo "Classified $TAG as $identity"
 
-      # Why here and not in build:relay: only a Windows runner can compile it, and
-      # arm64 cross-compiles from this same x64 agent. Mirrors dev-channel-win-build.yml,
-      # which had it while release-cut did not — so every stable installer through
-      # v1.4.203 shipped Windows relays with no windows-process-tree.node, silently
-      # falling back to the PowerShell scan on every Windows SSH host.
-      # Why no run_attempt guard, unlike the artifact steps below: Build app is ungated,
-      # so a rerun would reach the required-addon check with nothing staged and fail.
-      - name: Build Windows process-table addon for the relay
-        if: matrix.platform == 'win'
-        shell: bash
-        run: |
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+      # Why every leg: each package ships relays for Windows SSH hosts. v1.4.203 and
+      # earlier shipped Windows relays with no windows-process-tree.node, and mac and
+      # Linux packages shipped none until the addon moved to its own Windows job.
+      # Why no run_attempt guard: Build app is ungated, so a rerun needs it staged too.
+      - name: Collect the Windows process-table addons for the relay
+        uses: actions/download-artifact@v8
+        with:
+          name: relay-windows-process-tree
+          path: .build/windows-process-tree
 
       # Why an explicit step rather than trusting the runner image: the packaged
       # CLI launcher is a native Rust binary, and a Windows host without cargo
@@ -1431,9 +1457,16 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
-          # Fail the release rather than ship a relay that silently falls back to
-          # the PowerShell scan on every Windows SSH host.
-          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: ${{ matrix.platform == 'win' && 'x64,arm64' || '' }}
+          # Fail the release rather than ship a relay that cannot launch outside
+          # sshd's job for a standard user on a Windows SSH host.
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
+
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
 
       - name: Gate runtime file-watcher process isolation
         if: runner.os == 'Linux'
@@ -1584,6 +1617,11 @@ jobs:
             Where-Object { $_.Extension -in '.exe', '.dll', '.node' } |
             ForEach-Object {
               $relative = [System.IO.Path]::GetRelativePath($root, $_.FullName)
+              # The orcad template's Linux/macOS addons are data for SSH hosts, not PE files.
+              if ($relative -match '^resources[\\/]orcad-template[\\/]targets[\\/](?!win32-)') {
+                $skipped.Add("$relative  <non-Windows orcad template payload>")
+                return
+              }
               $signature = Get-AuthenticodeSignature -FilePath $_.FullName
               if ($signature.Status -eq 'Valid') {
                 $skipped.Add("$relative  <already signed: $($signature.SignerCertificate.Subject)>")
@@ -1763,6 +1801,13 @@ jobs:
             $failures | ForEach-Object { Write-Host "::error::$_" }
             throw "Signed inner artifact did not round-trip cleanly ($($failures.Count) failures)."
           }
+
+      # Why: SignPath rewrote the template's Windows binaries, and the client materializer checks
+      # each file against the template manifest, so it must record the signed bytes.
+      - name: Reseal the orcad template over its signed binaries
+        id: reseal-orcad-template
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success'
+        run: node config/scripts/packaged-orcad-template.cjs --reseal-signed dist/win-unpacked inner-signing-list.txt
 
       # The uninstaller must return signed before rebuilding the installer.
       - name: Restore signed uninstaller for the installer rebuild
@@ -2257,7 +2302,10 @@ jobs:
     needs:
       - cut
       - create-release
+      - orcad-template
       - release-preflight
+      # release-mac-build.yml downloads the relay addons from this run.
+      - relay-windows-process-tree
     if: needs.cut.outputs.should_release == 'true'
     # Why: SignPath requires every job in this signing workflow to be
     # GitHub-hosted. The actual mac build runs in release-mac-build.yml so

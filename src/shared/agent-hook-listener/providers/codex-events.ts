@@ -26,7 +26,7 @@ import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 import {
   codexMainAgentStatusForPayload,
-  codexOutcomeRestatedByStop,
+  codexLeadOutcomeForEvent,
   getOrCreateCodexSubagentRoster,
   getOrCreateCodexSubagentTranscriptState,
   hasCodexTranscriptSubagents,
@@ -162,7 +162,7 @@ export function normalizeCodexEvent(
       ? 'working'
       : eventName === 'PermissionRequest' || isUserInputPreTool
         ? 'waiting'
-        : eventName === 'Stop'
+        : eventName === 'Stop' || eventName === 'Interrupt'
           ? 'done'
           : null
   if (!stateName) {
@@ -233,7 +233,7 @@ export function normalizeCodexEvent(
   const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
   const record = setCodexMainAgentTurnState(state, paneKey, {
     state: ownedState,
-    ...codexOutcomeRestatedByStop(previousLead, ownedState),
+    ...codexLeadOutcomeForEvent(eventName, previousLead, ownedState),
     model:
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
       (eventName === 'SessionStart' ? undefined : previousLead?.model)

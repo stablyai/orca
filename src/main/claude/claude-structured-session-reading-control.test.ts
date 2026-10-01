@@ -20,6 +20,7 @@ import {
   identityFor,
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 function controlledSink(): {
   sink: StructuredAgentSessionEventSink
@@ -212,6 +213,7 @@ describe('Claude structured reading control', () => {
     const persisted = new Map<string, AgentJournalItemBody>()
     const target = persistedTarget(persisted)
     const deferred = createDeferredStructuredAgentSessionEventSink({
+      ...testEventSinkLogging(),
       watermarks: {
         pauseQueuedOperations: 1,
         maxQueuedOperations: 4,

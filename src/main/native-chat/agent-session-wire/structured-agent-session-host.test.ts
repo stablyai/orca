@@ -28,6 +28,7 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -132,6 +133,7 @@ describe('attach', () => {
         }
       }))
     host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: { ...adapter(), acquire },
       journalDatabase: openTestJournalHostDatabase(root),
@@ -413,16 +415,17 @@ describe('respondToPrompt', () => {
     })
   })
 
-  it('refuses a second answer to one prompt and says which answer won', async () => {
+  it('tells a second answer with the same choice that it holds, and asks the provider once', async () => {
     await attach()
     const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
-    await host.respondToPrompt(CALLER, {
+    const first = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),
       kind: 'approval',
       ...fields
     })
-    const loser = await host.respondToPrompt(
+    // Another device, or a re-click after a lost reply: a new operation making the same choice.
+    const second = await host.respondToPrompt(
       { callerKey: 'client-2' },
       {
         envelope: envelope('agentSession.respondTo:approval', fields),
@@ -430,12 +433,11 @@ describe('respondToPrompt', () => {
         ...fields
       }
     )
-    expect(loser).toMatchObject({
-      ok: false,
-      refusal: {
-        code: 'agent_session_item_revision_stale',
-        resolution: { selectedOptionId: 'allow' }
-      }
+    expect(first.ok).toBe(true)
+    expect(second).toEqual({ ...first, replayed: false })
+    expect(second).toMatchObject({
+      ok: true,
+      value: { resolution: { selectedOptionId: 'allow', resolvedBy: 'client-1' } }
     })
     expect(answerPrompt).toHaveBeenCalledTimes(1)
   })
@@ -562,6 +564,7 @@ describe('restart', () => {
   ) {
     store = await openTestAgentSessionRecordStore(root)
     host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: { ...adapter(), ...adapterOverrides },
       journalDatabase: openTestJournalHostDatabase(root),

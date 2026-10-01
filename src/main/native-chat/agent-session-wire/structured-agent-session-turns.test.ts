@@ -8,6 +8,7 @@ import type { AgentChildWorkView } from '../../../shared/agent-status-child-work
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performCancel, type AgentSessionTurnContext } from './structured-agent-session-turns'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -49,6 +50,7 @@ describe('performCancel', () => {
     )
     const cancelTurn = vi.fn(async () => ({ cancelled: true }))
     const ctx: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
@@ -103,6 +105,7 @@ describe('performCancel', () => {
       }
     )
     const ctx: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
@@ -148,6 +151,7 @@ describe('performCancel', () => {
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const ctx: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
@@ -172,8 +176,7 @@ describe('performCancel', () => {
         kind: 'status',
         text: 'Agent is working…',
         turnLifecycle: { turnId: 'turn-1', state: 'running' }
-      },
-      { kind: 'status', text: 'The provider had already finished this turn.' }
+      }
     ])
   })
 
@@ -183,6 +186,7 @@ describe('performCancel', () => {
     const cancelTurn = vi.fn(async () => ({ cancelled: true }))
     const stopBackgroundTasks = vi.fn(async () => ({ cancelled: true }))
     const ctx: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
@@ -221,6 +225,7 @@ describe('performCancel', () => {
     const cancelTurn = vi.fn(async () => ({ cancelled: true }))
     const stopBackgroundTasks = vi.fn(async () => ({ cancelled: true }))
     const ctx: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
@@ -300,6 +305,7 @@ describe('what a conversation Stop reports when the provider stopped nothing', (
       await openTurn()
     }
     const ctx: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
@@ -350,9 +356,6 @@ describe('what a conversation Stop reports when the provider stopped nothing', (
       { turnId: 'turn-0', withdrewQueued: true },
       'lands-on-flush'
     )
-    expect(reported).toEqual({
-      cancelled: false,
-      rows: ['The provider had already finished this turn.']
-    })
+    expect(reported).toEqual({ cancelled: false, rows: [] })
   })
 })

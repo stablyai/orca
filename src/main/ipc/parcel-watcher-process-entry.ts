@@ -118,7 +118,7 @@ async function startCanary(getStableActivityRevision: () => number | null): Prom
 function main(): void {
   const send = (message: WatcherToHostMessage): void => {
     try {
-      process.send?.(message)
+      process.send?.(message, () => undefined)
     } catch {
       // Host is gone; the disconnect handler below exits this process.
     }

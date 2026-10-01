@@ -13,6 +13,7 @@ import {
   type CodexStructuredLaunch,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
 
 export const THREAD_ID = 'thread-abc'
 
@@ -104,7 +105,9 @@ export function answerWithOpenedTurn(
 export function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = []
+  events: CodexStructuredSessionEvent[] = [],
+  /** Host wiring the runtime adds, such as the late dispatch settlement. */
+  deps: Partial<CodexStructuredSessionAdapterDeps> = {}
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
   return new CodexStructuredSessionAdapter({
@@ -120,7 +123,8 @@ export function adapterFor(
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
-    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`
+    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
+    ...deps
   })
 }
 

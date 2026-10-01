@@ -28,6 +28,7 @@ import {
   inspectWindowsProcessTreeAddon,
   nodeGypRebuildInvocation,
   stageWindowsProcessTreeNodeAddonApiHeaders,
+  windowsProcessTreeAddonHasRelayLauncher,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
 
@@ -122,6 +123,21 @@ function assertPatchApplied() {
     if (!present) {
       throw new Error(
         `${relativePath} does not contain the process creation-time patch (${expected}). ` +
+          'Run pnpm install before building the relay addon.'
+      )
+    }
+  }
+  // Without the launcher a standard-user SSH host cannot start a relay that outlives the session.
+  const requiredLauncherSources = [
+    ['binding.gyp', '"src/process_launch.cc"'],
+    ['src/addon.cc', 'exports.Set("spawnOutsideJob"'],
+    ['src/process_launch.cc', 'CREATE_BREAKAWAY_FROM_JOB']
+  ]
+  for (const [relativePath, expected] of requiredLauncherSources) {
+    const filePath = join(PACKAGE_DIR, relativePath)
+    if (!existsSync(filePath) || !readFileSync(filePath, 'utf8').includes(expected)) {
+      throw new Error(
+        `${relativePath} does not contain the relay launcher patch (${expected}). ` +
           'Run pnpm install before building the relay addon.'
       )
     }
@@ -442,6 +458,12 @@ function main() {
         : 'node-gyp ignored --arch; a relay would get a binary its host cannot load.'
     throw new Error(
       `Built binary is ${describePeMachine(machine)}, expected 0x${PE_MACHINE[arch].toString(16)} for ${arch}. ${cause}`
+    )
+  }
+  if (!windowsProcessTreeAddonHasRelayLauncher(built)) {
+    throw new Error(
+      'The built addon does not export spawnOutsideJob. A relay would fall back to WMI, ' +
+        'which refuses to launch it for a standard user.'
     )
   }
 

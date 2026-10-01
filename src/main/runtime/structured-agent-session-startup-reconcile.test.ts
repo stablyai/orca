@@ -21,6 +21,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const writes = vi.hoisted(() => ({ failing: false }))
 
@@ -62,7 +63,7 @@ async function seedChat(options: { newer?: boolean } = {}) {
   return { path: journalDatabasePath(root), sessionId: record.sessionId }
 }
 
-function startupRuntime(onError?: (input: { scope: string; error: unknown }) => void) {
+function startupRuntime(log = recordingStructuredAgentSessionLogger()) {
   const runtime = new OrcaRuntimeService()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the runtime's own protected members; the test roots the host at `root` and stubs the PTY daemon.
   const internal = runtime as unknown as {
@@ -73,13 +74,13 @@ function startupRuntime(onError?: (input: { scope: string; error: unknown }) => 
   internal.hasPersistedStructuredAgentSessionStore = () => true
   internal.ensureStructuredAgentSessionHost = () =>
     ensureStructuredAgentSessionHost({
+      logger: log.logger,
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
-      ...(onError ? { onError } : {})
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
     })
   internal.refreshMobileSessionPtyRecords = async () => new Set<string>()
   return runtime
@@ -88,13 +89,13 @@ function startupRuntime(onError?: (input: { scope: string; error: unknown }) => 
 it('finishes startup over records a newer Orca wrote, reads them, and writes nothing', async () => {
   const { path, sessionId } = await seedChat({ newer: true })
   const bytes = await readFile(path)
-  const onError = vi.fn()
-  const runtime = startupRuntime(onError)
+  const log = recordingStructuredAgentSessionLogger()
+  const runtime = startupRuntime(log)
 
   // What the renderer's startup awaits through `app:prepareTerminalStartupRestoration`.
   await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
 
-  expect(onError).not.toHaveBeenCalled()
+  expect(log.entries).toEqual([])
   const host = getStructuredAgentSessionHost()
   expect(host?.sessionAgent(sessionId)).toBe('claude')
   // Adjudicated in memory only: the verdict is re-derived at the next start.
@@ -105,45 +106,32 @@ it('finishes startup over records a newer Orca wrote, reads them, and writes not
 
 it('finishes startup when the reconcile cannot write, and reports it', async () => {
   const { sessionId } = await seedChat()
-  const onError = vi.fn()
-  const runtime = startupRuntime(onError)
+  const log = recordingStructuredAgentSessionLogger()
+  const runtime = startupRuntime(log)
   writes.failing = true
 
   await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
 
-  expect(onError).toHaveBeenCalledOnce()
-  expect(onError).toHaveBeenCalledWith({
-    scope: 'structured-agent-session-lease-reconcile',
-    error: expect.objectContaining({ message: 'disk I/O error' })
-  })
+  expect(log.entries).toEqual([
+    expect.objectContaining({
+      fields: {
+        scope: 'lease-reconcile',
+        error: expect.objectContaining({ message: 'disk I/O error' })
+      }
+    })
+  ])
   expect(getStructuredAgentSessionHost()?.sessionAgent(sessionId)).toBe('claude')
-})
-
-// The desktop installs its host with no error sink, so the failure is logged rather than dropped.
-it('logs the failure when the host has no error sink', async () => {
-  await seedChat()
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  writes.failing = true
-
-  await expect(
-    startupRuntime().prepareStructuredAgentSessionStartupRestoration()
-  ).resolves.toBeUndefined()
-
-  expect(warn).toHaveBeenCalledWith(
-    '[structured-agent-session] reconciling chat leases failed',
-    expect.objectContaining({ message: 'disk I/O error' })
-  )
 })
 
 // Closing a chat tab drops it from the restore index, which a newer Orca's records refuse: the
 // close is reported and goes on, since bookkeeping never keeps a tab open.
 it('closes a chat tab over records a newer Orca wrote, reporting the index it cannot write', async () => {
   const { sessionId } = await seedChat({ newer: true })
-  const runtime = startupRuntime(vi.fn())
+  const log = recordingStructuredAgentSessionLogger()
+  const runtime = startupRuntime(log)
   await runtime.prepareStructuredAgentSessionStartupRestoration()
   const host = getStructuredAgentSessionHost()
   const close = vi.spyOn(host!, 'close')
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's own protected close path, reached with the one field it reads.
   const internal = runtime as unknown as {
     closeStructuredAgentSessionTab(tab: { sessionId: string }, cause: 'user-close'): Promise<void>
@@ -153,11 +141,16 @@ it('closes a chat tab over records a newer Orca wrote, reporting the index it ca
     internal.closeStructuredAgentSessionTab({ sessionId }, 'user-close')
   ).resolves.toBeUndefined()
 
-  expect(warn).toHaveBeenCalledWith(
-    '[structured-agent-session] recording a closed chat tab failed',
-    expect.objectContaining({
-      refusal: expect.objectContaining({ details: { reason: 'journalWrittenByNewerOrca' } })
-    })
-  )
+  expect(log.entries).toContainEqual({
+    level: 'warn',
+    message: 'recording a closed chat tab failed',
+    fields: {
+      scope: 'tab-visibility-close',
+      sessionId,
+      error: expect.objectContaining({
+        refusal: expect.objectContaining({ details: { reason: 'journalWrittenByNewerOrca' } })
+      })
+    }
+  })
   expect(close).toHaveBeenCalledWith(sessionId, 'user-close')
 })

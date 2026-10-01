@@ -900,6 +900,17 @@
         "symlink": "无法附加符号链接。",
         "permissionDenied": "没有访问权限。",
         "unsupported": "不支持的文件类型。"
+      },
+      "dropTempCopyFailure": {
+        "changed": "Orca 复制时文件发生了变化。请重新拖放。",
+        "outOfSpace": "磁盘空间不足，无法复制拖放的文件。",
+        "storageUnavailable": "Orca 无法为拖放的文件创建存储位置。",
+        "storageNotPrivate": "Orca 用于拖放文件的存储位置可被其他用户读取，因此未复制任何内容。",
+        "timedOut": "复制耗时过长。请重新拖放。",
+        "busy": "仍有太多拖放正在复制。请稍候再试。",
+        "tooLarge": "文件太大，无法复制，因此 Orca 无法将其交给代理。",
+        "storageFull": "Orca 用于拖放文件的存储空间已满，因此 Orca 无法将其交给代理。",
+        "generic": "请重新拖放。"
       }
     },
     "hooks": {
@@ -934,7 +945,10 @@
         "nativeDropPathsTooLarge": "拖放的路径列表过大。",
         "ownerChanged": "无法确认哪个主机拥有此工作区。请在它重新连接后重试。",
         "nativeDropUnresolvedPathsDescription": "首先将它们保存到磁盘，然后删除保存的文件。",
-        "nativeDropUnresolvedPaths": "Orca 无法读取已删除文件的路径。"
+        "nativeDropUnresolvedPaths": "Orca 无法读取已删除文件的路径。",
+        "nativeDropTempCopyFailed": "Orca 无法复制 {{count}} 个拖放的文件。",
+        "nativeDropTempCopyFailed_one": "Orca 无法复制 {{count}} 个拖放的文件。",
+        "nativeDropTempCopyFailed_other": "Orca 无法复制 {{count}} 个拖放的文件。"
       },
       "useIpcEvents": {
         "0e3cf53060": "未找到浏览器选项卡 {{value0}}",
@@ -5361,6 +5375,7 @@
           "bdd23b4e07": "GitHub 议题",
           "44713a5d04": "Linear 议题",
           "jiraIssues": "Jira 议题",
+          "host": "主机",
           "cc17bd443b": "详细的",
           "0f9b959b31": "PR",
           "e029a2d775": "状态",
@@ -7116,9 +7131,9 @@
           "80c454e8a6": "将此与您的提供商的缓存 TTL 相匹配。"
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "在富文本编辑器模式和智能体切换操作中显示本地 Markdown 注释控件。",
+          "f80603d293": "在所有 Markdown 视图中显示 Markdown 注释控件，并在智能体切换操作中包含这些注释。",
           "4edc104f0f": "Markdown 评审笔记",
-          "5f02e6fb21": "在富文本编辑器模式下显示本地 Markdown 评审笔记控件。",
+          "5f02e6fb21": "在 Markdown 文件中显示本地 Markdown 评审笔记控件。",
           "51161d1647": "编辑文件时显示小地图概述。",
           "6690b1ffb9": "小地图",
           "5a1ea6eaa2": "隐藏",
@@ -15767,6 +15782,7 @@
             "4300f38145": "从 {{value0}}{{value1}} 下载",
             "31375046b7": "从 {{value0}} 下载",
             "acbe79fd01": "抓取页面元素 ({{value0}})",
+            "cc4a071d3a": "注释页面元素 ({{value0}})",
             "572046436a": "远程浏览器",
             "b313a7275b": "打开远程浏览器",
             "5f66313863": "注释",
@@ -17337,7 +17353,8 @@
         "hostStopped": "{{agent}} 始终未完成启动，因此 Orca 已将其停止。",
         "providerRateLimited": "{{agent}} 已被限流，正在重试。",
         "providerRetrying": "{{agent}} 遇到临时问题，正在重试。",
-        "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。"
+        "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。",
+        "previousExitUnverifiable": "Orca 无法确认 {{agent}} 的上一个进程已结束。在 Orca 确认其已结束之前，消息会等待发送。"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录。",

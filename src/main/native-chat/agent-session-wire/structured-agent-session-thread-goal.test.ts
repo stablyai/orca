@@ -16,6 +16,7 @@ import {
   threadGoalPlan
 } from './structured-agent-session-thread-goal'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -68,6 +69,7 @@ function context(
   flushStreamedEvents: () => Promise<void> = async () => undefined
 ): AgentSessionTurnContext {
   return {
+    logger: createStructuredAgentSessionLogger(),
     sessionId: 'session-1',
     journal,
     fence: 1,

@@ -19,7 +19,7 @@ import {
 } from './journal-row-table'
 import { JOURNAL_REPAIR_DISCLOSURE_ITEM_ID } from './journal-repair-disclosure'
 import { pendingJournalRepairSequence } from './journal-repair-marker'
-import { parseJournalRow, type JournalRow } from './journal-row-schema'
+import { isJournalStopOrResumeRow, parseJournalRow, type JournalRow } from './journal-row-schema'
 
 /** Every epoch row is sequence 1, and no compaction moves that floor. */
 const FIRST_JOURNAL_SEQUENCE = 1
@@ -120,7 +120,8 @@ export function startJournalRowFold(input: JournalRowFoldInput): {
     }
     applyJournalRow(state, row)
     const disclosure = row.kind === 'item' && row.itemId === JOURNAL_REPAIR_DISCLOSURE_ITEM_ID
-    if (!disclosure) {
+    // A Stop or Resume is no history, so it never reads as a rebuilt or provider-backed epoch.
+    if (!disclosure && !isJournalStopOrResumeRow(row)) {
       repairHasContent ||= repairedFrom !== null && row.seq >= repairedFrom
       providerHasContent ||= row.seq >= FIRST_JOURNAL_SEQUENCE + 1
     }

@@ -98,6 +98,49 @@ export function inspectWindowsProcessTreeAddon(addonPath) {
   return readFileSync(addonPath).includes(FLAGGED_IMPORT) ? 'unpatched' : 'clean'
 }
 
+/** Only an addon built with the relay launcher patch registers this export. */
+const RELAY_LAUNCHER_EXPORT = 'spawnOutsideJob'
+
+/**
+ * Does this compiled addon carry the relay launcher?
+ *
+ * A byte search like the import check: the export name is a string literal in
+ * the image. A pre-launcher build is otherwise clean and loadable, so a stale
+ * `.build` dir or cached artifact would ship and the relay would fall back to
+ * WMI, which refuses a standard user.
+ */
+export function windowsProcessTreeAddonHasRelayLauncher(addonPath) {
+  return readFileSync(addonPath).includes(RELAY_LAUNCHER_EXPORT)
+}
+
+/**
+ * Why this binary cannot ship as the `arch` relay addon, or null when it can.
+ *
+ * @param {string} addonPath
+ * @param {'x64' | 'arm64'} arch
+ * @returns {string | null}
+ */
+export function relayWindowsProcessTreeAddonDefect(addonPath, arch) {
+  const state = inspectWindowsProcessTreeAddon(addonPath)
+  if (state === 'missing') {
+    return 'it is missing'
+  }
+  if (state === 'unpatched') {
+    return `it imports ${FLAGGED_IMPORT}, so it was built from the unpatched command-line reader`
+  }
+  const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.meta.url)(
+    './windows-pe-machine.cjs'
+  )
+  const machine = readPeMachine(addonPath)
+  if (machine !== PE_MACHINE[arch]) {
+    return `it is ${describePeMachine(machine)}, not ${arch} (0x${PE_MACHINE[arch].toString(16)})`
+  }
+  if (!windowsProcessTreeAddonHasRelayLauncher(addonPath)) {
+    return `it does not export ${RELAY_LAUNCHER_EXPORT}, so it predates the relay launcher patch`
+  }
+  return null
+}
+
 export function assertWindowsProcessTreeCreationTimePatch(
   packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR
 ) {

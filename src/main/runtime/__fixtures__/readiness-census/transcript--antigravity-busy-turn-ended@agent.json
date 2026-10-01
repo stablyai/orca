@@ -1,0 +1,17 @@
+{
+  "description": "antigravity recording at 120x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-23: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "24: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "25-55: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "56: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start"
+    ],
+    "clockless": [
+      "0-23: verdict=pending:closed wait=pending",
+      "24: verdict=ready-strong wait=ready@start",
+      "25-55: verdict=pending:closed wait=pending",
+      "56: verdict=ready-strong wait=ready@start"
+    ]
+  }
+}

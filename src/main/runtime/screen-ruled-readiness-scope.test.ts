@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane } from './agent-transcript-pane-test-harness'
+import { createTranscriptPane, waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
 import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 
 vi.mock('electron', () => ({
@@ -24,8 +24,9 @@ describe('screen-rule trust stays with screen-ruled agents', () => {
     const { runtime, handle } = await createTranscriptPane(options)
     await runtime.readTerminal(handle, { screen: true })
     options.size = { cols: 100, rows: 30 }
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 8_000 })
-    ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+    await expect(waitForTranscriptIdle({ runtime, handle }, 8_000)).resolves.toMatchObject({
+      condition: 'tui-idle',
+      satisfied: true
+    })
   }, 20_000)
 })

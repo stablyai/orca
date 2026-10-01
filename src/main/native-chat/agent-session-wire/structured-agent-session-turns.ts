@@ -41,6 +41,7 @@ import {
   isJournalWrittenByNewerOrca,
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 export { performCancel } from './structured-agent-session-turns-cancel'
@@ -50,6 +51,7 @@ export type AgentSessionTurnContext = {
   journal: AgentSessionJournal
   fence: number
   adapter: StructuredAgentSessionAdapter
+  logger: StructuredAgentSessionLogger
   persistedOptions?: Readonly<Record<string, string>>
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
   /** Opaque client identity recorded as the resolver of a prompt. */

@@ -10,12 +10,15 @@ import {
   AgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 function context(): StructuredAgentSessionEvictionContext & { order: string[] } {
   const order: string[] = []
   return {
     order,
     sessionId: 'session-1',
+    logger: createStructuredAgentSessionLogger(),
     eventSink: {
       unbind: vi.fn(() => order.push('unbind')),
       drained: vi.fn(async () => {
@@ -44,9 +47,11 @@ function context(): StructuredAgentSessionEvictionContext & { order: string[] } 
 }
 
 function runtimeState(): StructuredAgentSessionHostRuntimeState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: eviction against the sink cache reads only the sinks and the logger; store and adapter are never reached.
   return new StructuredAgentSessionHostRuntimeState({
-    store: {} as never,
-    adapter: {} as never
+    store: {},
+    adapter: {},
+    logger: recordingStructuredAgentSessionLogger().logger
   } as never)
 }
 
@@ -146,6 +151,7 @@ describe('rows the provider emits while closing', () => {
 
     await evictStructuredAgentSession({
       sessionId,
+      logger: recordingStructuredAgentSessionLogger().logger,
       eventSink: sink,
       adapter: {
         closeSession: async () => {
@@ -227,6 +233,7 @@ describe('eviction against the real sink cache', () => {
     const sessionId = 'session-reattach'
     await evictStructuredAgentSession({
       sessionId,
+      logger: recordingStructuredAgentSessionLogger().logger,
       eventSink: state.eventSinkFor(sessionId),
       adapter: { closeSession: async () => true } as never,
       discardSink: () => state.discardEventSink(sessionId),

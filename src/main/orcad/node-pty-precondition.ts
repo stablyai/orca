@@ -357,7 +357,7 @@ export function formatNodePtyPreconditionReport(
         ? `No shipped prebuilt matches slot ${verdict.slot}.`
         : verdict.prebuilt.why === 'no-prebuilds-dir'
           ? 'This install ships no prebuilds directory.'
-          : `Shipped prebuilds are unusable here: ${verdict.prebuilt.detail ?? 'ABI mismatch'}.`
+          : `Shipped prebuilds are unusable here: ${verdict.prebuilt.detail ?? verdict.prebuilt.why}.`
     )
   }
   if (toolchainHints.length > 0) {

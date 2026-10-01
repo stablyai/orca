@@ -78,7 +78,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         deps.store.getRecord(sessionId),
         sessions.get(sessionId)?.journal
       ),
-    onError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error }),
+    logger: deps.logger,
     record: (sessionId) => deps.store.getRecord(sessionId),
     readChildWork: input.clientDelivery.readChildWork,
     flushStreamedEvents: input.flushStreamedEvents,
@@ -116,7 +116,11 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       })
       .catch((error: unknown) => {
         wakesQueued.delete(sessionId)
-        deps.onEventSinkError?.({ sessionId, error })
+        deps.logger.warn('waking the delivery loop after a commit failed', {
+          scope: 'delivery-wake',
+          sessionId,
+          error
+        })
       })
   }
   // A chat open before its owner's death was proven revises what its open settled. Queued, never
@@ -129,7 +133,13 @@ export function createStructuredAgentSessionConversationDelivery(input: {
             resettleOpenStructuredAgentSessionConversation(deps, sessionId, sessions.get(sessionId))
           )
         )
-        .catch((error: unknown) => deps.onEventSinkError?.({ sessionId, error }))
+        .catch((error: unknown) =>
+          deps.logger.warn('resettling an open chat after its owner died failed', {
+            scope: 'death-evidence-resettle',
+            sessionId,
+            error
+          })
+        )
     }
   })
   return {
@@ -158,8 +168,12 @@ async function settleInterruptedCommands(
 ): Promise<void> {
   const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
   try {
-    await recoverStructuredRewind(deps.store, sessionId, session.journal, fence)
+    await recoverStructuredRewind(deps, sessionId, session.journal, fence)
   } catch (error) {
-    deps.onEventSinkError?.({ sessionId, error })
+    deps.logger.warn('settling an interrupted rewind on open failed', {
+      scope: 'rewind-recovery',
+      sessionId,
+      error
+    })
   }
 }

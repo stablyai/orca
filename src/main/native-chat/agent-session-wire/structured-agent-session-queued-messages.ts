@@ -28,8 +28,10 @@ import type { QueuedMessageRow } from '../agent-session-journal/queued-message-t
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
   structuredAgentSessionHostInstance,
-  structuredQueuePause
+  structuredQueuePauses
 } from './structured-agent-session-queued-pause'
+import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-pause'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** Budget at accept, in the send schema's own unit (`Buffer.byteLength` of the
  *  serialized blocks); refused readably rather than trimmed. */
@@ -57,27 +59,18 @@ export function pendingPromptExists(journal: Pick<AgentSessionJournal, 'visitIte
   return pending
 }
 
-/** Waiting, not held on its own, not positioned behind a returned card, and the
- *  queue not paused. The admission rule (§accept) and the drain's selection
- *  both read it. */
+/** Waiting, not held on its own, and not positioned behind a returned card or a
+ *  card the queue's pause holds: the queue never reorders. The admission rule
+ *  (§accept) and the drain's selection both read it. */
 function oldestActionableQueuedMessage(
-  journal: Pick<AgentSessionJournal, 'queuedMessages' | 'cursor' | 'wroteBeforeOpen'>
+  journal: Pick<AgentSessionJournal, 'queuedMessages'>
 ): QueuedMessageRow | null {
   const rows = journal.queuedMessages.list()
   // Nothing waiting costs no pause derivation: this runs on every journal publish.
-  if (!rows.some((row) => row.state === 'waiting') || structuredQueuePause(journal) !== null) {
+  if (!rows.some((row) => row.state === 'waiting')) {
     return null
   }
-  for (const row of rows) {
-    if (row.state === 'returned') {
-      // A returned card blocks everything after it until the user acts.
-      return null
-    }
-    if (row.state === 'waiting' && row.holdReason === null) {
-      return row
-    }
-  }
-  return null
+  return nextSendableQueuedCard(structuredQueuePauses(journal), rows)
 }
 
 /**
@@ -263,7 +256,7 @@ export type QueuedMessageDrainDeps = {
   conversationFence: (sessionId: string) => number
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
-  onError: (sessionId: string, error: unknown) => void
+  logger: StructuredAgentSessionLogger
 }
 
 /**
@@ -312,7 +305,11 @@ export class StructuredAgentSessionQueuedMessageDrain {
       })
       .catch((error: unknown) => {
         this.scheduled.delete(sessionId)
-        this.deps.onError(sessionId, error)
+        this.deps.logger.warn('draining queued messages failed', {
+          scope: 'queued-drain',
+          sessionId,
+          error
+        })
       })
   }
 
@@ -326,7 +323,11 @@ export class StructuredAgentSessionQueuedMessageDrain {
     if (journal.queuedMessages.settlementOwed() || journal.queuedMessages.deliveredByEchoOwed()) {
       // A live per-row hook was skipped; heal now, before a draft sends, rather than at reopen.
       await journal.queuedMessages.settleOwed().catch((error: unknown) => {
-        this.deps.onError(sessionId, error)
+        this.deps.logger.warn('settling owed queued-message bookkeeping failed', {
+          scope: 'queued-settle-owed',
+          sessionId,
+          error
+        })
       })
     }
     const next = oldestActionableQueuedMessage(journal)
@@ -358,12 +359,13 @@ export class StructuredAgentSessionQueuedMessageDrain {
           messageId: next.messageId,
           expect: 'waiting',
           settledByOp: null,
-          hostInstance: structuredAgentSessionHostInstance()
+          hostInstance: structuredAgentSessionHostInstance(),
+          yieldsToPause: { hostInstance: structuredAgentSessionHostInstance() }
         }
       )
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {
-        // Lost a race with a Send-now or Delete; their transition stands.
+        // Lost a race with a Send-now, a Delete or a Stop; their transition stands.
         return
       }
       // Pre-consume failure: the draft stays waiting, held with the marker on
