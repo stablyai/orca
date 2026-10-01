@@ -6,6 +6,11 @@ import {
   tailGainedNewerBlockedReason,
   type TerminalTailWaitState
 } from './orca-runtime'
+import {
+  clearMirroredLeafWaitStamps,
+  resolveWaitBlockedAt,
+  tailSettledReadyClearsBlockedWait
+} from './terminal-wait-tail-state'
 
 // These tests pin the onPtyData wait-detection memoization: caching the
 // post-append wait state and reusing it as the next chunk's pre-append state
@@ -50,9 +55,12 @@ function stepMemoized(sim: TailSim, chunk: string, at: number, compute: Compute)
     sim.tailRedrawCursor
   )
   const nextWaitState = compute(nextTail.lines, nextTail.partialLine, sim.preview)
-  if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, chunk)) {
-    sim.waitBlockedAt = at
-  }
+  sim.waitBlockedAt = resolveWaitBlockedAt(
+    sim.waitBlockedAt,
+    tailGainedNewerBlockedReason(previousWaitState, nextWaitState, chunk),
+    nextWaitState,
+    at
+  )
   sim.tailWaitState = nextWaitState
   sim.tailBuffer = nextTail.lines
   sim.tailPartialLine = nextTail.partialLine
@@ -71,9 +79,12 @@ function stepReference(sim: TailSim, chunk: string, at: number, compute: Compute
     sim.tailRedrawCursor
   )
   const nextWaitState = compute(nextTail.lines, nextTail.partialLine, sim.preview)
-  if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, chunk)) {
-    sim.waitBlockedAt = at
-  }
+  sim.waitBlockedAt = resolveWaitBlockedAt(
+    sim.waitBlockedAt,
+    tailGainedNewerBlockedReason(previousWaitState, nextWaitState, chunk),
+    nextWaitState,
+    at
+  )
   sim.tailBuffer = nextTail.lines
   sim.tailPartialLine = nextTail.partialLine
   sim.tailRedrawCursor = nextTail.redrawCursor
@@ -207,6 +218,88 @@ describe('onPtyData tail wait memoization', () => {
 
     expect(memoOut).toEqual(refOut)
     expect(memoSim.waitBlockedAt).not.toBeNull()
+  })
+
+  it('clears a blocked stamp on a settled ready tail and keeps a later blocked tail', () => {
+    const chunks = [
+      'Update available! Press Enter to continue.\n',
+      'OpenAI Codex\n',
+      'model: gpt\n',
+      'directory: /repo\n',
+      'Hooks need review\nPress enter to confirm or esc to go back\n',
+      'still waiting on the dialog\n'
+    ]
+    const { memoized, reference } = runBoth(chunks)
+
+    expect(memoized).toEqual(reference)
+    expect(memoized).toEqual([1, 1, 1, null, 5, 5])
+  })
+
+  it('clears a mirrored leaf stamp on the deferred check without another chunk', () => {
+    const tail = ['OpenAI Codex']
+    const otherTail = ['other']
+    const matching = { tailBuffer: tail, waitBlockedAt: 4 }
+    const other = { tailBuffer: otherTail, waitBlockedAt: 4 }
+
+    clearMirroredLeafWaitStamps(4, null, tail, [matching, other])
+
+    expect(matching.waitBlockedAt).toBeNull()
+    expect(other.waitBlockedAt).toBe(4)
+    clearMirroredLeafWaitStamps(null, null, tail, [other])
+    expect(other.waitBlockedAt).toBe(4)
+  })
+
+  it('leaves a clear stamp clear and clears a set stamp on a settled ready tail', () => {
+    const settled = {
+      waitText: 'OpenAI Codex\nmodel: gpt\ndirectory: /repo',
+      signal: null,
+      fromTail: true
+    } as const
+    expect(resolveWaitBlockedAt(null, false, settled, 9)).toBeNull()
+    expect(resolveWaitBlockedAt(3, false, settled, 9)).toBeNull()
+  })
+
+  it('does not treat an empty, preview, plain, or still-blocked tail as settled ready', () => {
+    expect(tailSettledReadyClearsBlockedWait({ waitText: '', signal: null, fromTail: true })).toBe(
+      false
+    )
+    expect(
+      tailSettledReadyClearsBlockedWait({
+        waitText: 'OpenAI Codex\nmodel: gpt\ndirectory: /repo',
+        signal: null,
+        fromTail: false
+      })
+    ).toBe(false)
+    expect(
+      tailSettledReadyClearsBlockedWait({
+        waitText: 'OpenAI Codex\nmodel: gpt',
+        signal: null,
+        fromTail: true
+      })
+    ).toBe(false)
+    expect(
+      tailSettledReadyClearsBlockedWait({
+        waitText: 'building...\ncompiled ok',
+        signal: null,
+        fromTail: true
+      })
+    ).toBe(false)
+    expect(
+      tailSettledReadyClearsBlockedWait({
+        waitText:
+          'Update available! Press Enter to continue.\nOpenAI Codex\nmodel: gpt\ndirectory: /repo',
+        signal: { reason: 'agent-update-prompt', index: 0 },
+        fromTail: true
+      })
+    ).toBe(false)
+    expect(
+      tailSettledReadyClearsBlockedWait({
+        waitText:
+          'Update available! Press Enter to continue.\nOpenAI Codex\nmodel: gpt\ndirectory: /repo',
+        signal: null,
+        fromTail: true
+      })
+    ).toBe(true)
   })
 
   it('does roughly half the wait-state computations of the recompute reference', () => {
