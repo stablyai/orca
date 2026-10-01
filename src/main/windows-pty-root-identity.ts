@@ -6,7 +6,7 @@ export type WindowsTreeKillTarget = 'own' | 'absent' | 'foreign' | 'unknown'
 
 export const WINDOWS_ROOT_IDENTITY_TIMEOUT_MS = 3_000
 
-// Allow the extra winpty-agent hop used below Windows build 18309.
+// Allow the extra winpty-agent hop used below Windows build 17763 when useConptyDll is on.
 const MAX_ANCESTOR_HOPS = 4
 
 type ProcessLink = { pid: number; ppid: number }
