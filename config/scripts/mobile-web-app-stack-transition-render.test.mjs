@@ -311,7 +311,8 @@ describeRender('the host stack transition on the page', () => {
     await sampleFrames(page, 'push', { followUp: 'pushOther', afterFrames: 6 })
     await sampleFrames(page, 'back')
     const frames = await sampleFrames(page, 'back')
-    expect(frames.find((frame) => frame.from !== null)?.from).toBe('translateX(0)')
+    // getKeyframes() reports the keyframe normalized, as translateX(0px).
+    expect(frames.find((frame) => frame.from !== null)?.from).toMatch(/^translateX\(0(px)?\)$/)
     expect(frames.at(-1)).toEqual(LIST_SETTLED)
     expect(errors).toEqual([])
     await page.close()
