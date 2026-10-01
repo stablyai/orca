@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/speech-types'
+import type {
+  CustomSttEndpointReachability,
+  SpeechModelManifest,
+  VoiceSettings
+} from '../../../../shared/speech-types'
 import type { CustomSttEndpointTestState } from './CustomSttEndpointDialog'
 import { translate } from '@/i18n/i18n'
 
@@ -35,6 +39,7 @@ export function useCustomSttEndpoint({
   discovering: boolean
   modelSuggestions: string[]
   testResult: CustomSttEndpointTestState | null
+  reachability: CustomSttEndpointReachability
   setDialogOpen: (open: boolean) => void
   setBaseUrlDraft: (value: string) => void
   setModelDraft: (value: string) => void
@@ -55,10 +60,13 @@ export function useCustomSttEndpoint({
   const [testing, setTesting] = useState(false)
   const [discovering, setDiscovering] = useState(false)
   const [modelSuggestions, setModelSuggestions] = useState<string[]>([])
+  const [reachability, setReachability] = useState<CustomSttEndpointReachability>('unknown')
   const [testResult, setTestResult] = useState<CustomSttEndpointTestState | null>(null)
 
   // Why: once a base URL is typed, ask the endpoint what it supports so the Model
-  // field can suggest real names. A miss is harmless — the field stays free text.
+  // field can suggest real names AND show whether the URL actually answers. A miss
+  // of the model list is harmless — the field stays free text — but a failure to
+  // answer at all is worth a red mark.
   useEffect(() => {
     if (!dialogOpen) {
       return
@@ -66,6 +74,7 @@ export function useCustomSttEndpoint({
     const baseUrl = baseUrlDraft.trim()
     if (!baseUrl) {
       setModelSuggestions([])
+      setReachability('unknown')
       return
     }
     let cancelled = false
@@ -76,11 +85,13 @@ export function useCustomSttEndpoint({
         .then((result) => {
           if (!cancelled) {
             setModelSuggestions(result.ok ? result.models : [])
+            setReachability(result.reachability)
           }
         })
         .catch(() => {
           if (!cancelled) {
             setModelSuggestions([])
+            setReachability('unreachable')
           }
         })
         .finally(() => {
@@ -101,6 +112,8 @@ export function useCustomSttEndpoint({
     setLanguageDraft('')
     setApiKeyDraft('')
     setTestResult(null)
+    setReachability('unknown')
+    setModelSuggestions([])
   }, [])
 
   // Why: opening the dialog must not change any setting — the endpoint model is
@@ -256,6 +269,7 @@ export function useCustomSttEndpoint({
     discovering,
     modelSuggestions,
     testResult,
+    reachability,
     setDialogOpen,
     setBaseUrlDraft,
     setModelDraft,

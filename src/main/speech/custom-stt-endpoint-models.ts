@@ -1,6 +1,9 @@
+import type { CustomSttEndpointReachability } from '../../shared/speech-types'
+
 export type CustomSttModelDiscoveryResult = {
   ok: boolean
   models: string[]
+  reachability: CustomSttEndpointReachability
   /** Where the list came from, for diagnostics. */
   source?: 'openai-models' | 'health' | 'models'
   detail?: string
@@ -28,7 +31,12 @@ export async function discoverCustomSttModels(
 ): Promise<CustomSttModelDiscoveryResult> {
   const base = normalizeBase(input.baseUrl)
   if (!base) {
-    return { ok: false, models: [], detail: 'Enter a base URL first.' }
+    return {
+      ok: false,
+      models: [],
+      reachability: 'unknown',
+      detail: 'Enter a base URL first.'
+    }
   }
 
   // Why: a base URL may already name the transcription path or the version segment;
@@ -41,17 +49,38 @@ export async function discoverCustomSttModels(
     { url: `${root}/models`, source: 'models' }
   ]
 
+  let sawResponse = false
   for (const candidate of candidates) {
-    const models = await tryFetchModels(candidate.url, input.apiKey ?? null)
-    if (models && models.length > 0) {
-      return { ok: true, models, source: candidate.source }
+    const probe = await tryFetchModels(candidate.url, input.apiKey ?? null)
+    if (probe.responded) {
+      // Why: any HTTP response — including 401/403 — proves the endpoint is there.
+      // A token-protected server is "reachable, needs a key", not "broken".
+      sawResponse = true
+    }
+    if (probe.models && probe.models.length > 0) {
+      return {
+        ok: true,
+        models: probe.models,
+        reachability: 'reachable',
+        source: candidate.source
+      }
     }
   }
 
-  return { ok: false, models: [], detail: 'No model list found on this endpoint.' }
+  return {
+    ok: false,
+    models: [],
+    reachability: sawResponse ? 'reachable' : 'unreachable',
+    detail: sawResponse
+      ? 'Endpoint reachable, but it did not advertise a model list.'
+      : 'No model list found on this endpoint.'
+  }
 }
 
-async function tryFetchModels(url: string, apiKey: string | null): Promise<string[] | null> {
+async function tryFetchModels(
+  url: string,
+  apiKey: string | null
+): Promise<{ responded: boolean; models: string[] | null }> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT_MS)
   try {
@@ -60,13 +89,10 @@ async function tryFetchModels(url: string, apiKey: string | null): Promise<strin
       headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
       signal: controller.signal
     })
-    if (!response.ok) {
-      return null
-    }
     const data = (await response.json().catch(() => null)) as unknown
-    return extractModelIds(data)
+    return { responded: true, models: response.ok ? extractModelIds(data) : null }
   } catch {
-    return null
+    return { responded: false, models: null }
   } finally {
     clearTimeout(timeout)
   }

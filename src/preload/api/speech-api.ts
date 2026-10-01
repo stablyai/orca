@@ -46,6 +46,7 @@ export type SpeechApi = {
   discoverCustomEndpointModels: (input: { baseUrl: string; apiKey?: string }) => Promise<{
     ok: boolean
     models: string[]
+    reachability: 'reachable' | 'unreachable' | 'unknown'
     source?: 'openai-models' | 'health' | 'models'
     detail?: string
   }>
