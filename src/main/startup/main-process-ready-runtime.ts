@@ -149,7 +149,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
         new CliInstaller({
           syncWindowsPowerShellProfile: true,
           windowsDocumentsPath: app.getPath('documents')
-        }).syncWindowsPowerShellCliShim()
+        }).syncWindowsPowerShellCliShim({ requireInstalled: true })
       )
       .catch((error: unknown) => {
         console.warn('[cli] failed to refresh the Windows PowerShell UTF-8 shim:', error)

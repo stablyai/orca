@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   installWindowsPowerShellCliShim,
   ORCA_POWERSHELL_SHIM_BEGIN,
+  ORCA_POWERSHELL_SHIM_END,
   profileHasUserOrcaFunction,
   removeWindowsPowerShellCliShim,
   renderOrcaPowerShellCliShim,
@@ -31,6 +32,22 @@ describe('windows powershell cli shim', () => {
     expect(upsertManagedProfileBlock(`Write-Host 'keep'\n\n${managed}`, 'NEXT')).toBe(
       "Write-Host 'keep'\n\nNEXT\n"
     )
+  })
+
+  it('preserves profile text outside the managed block', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ps-whitespace-'))
+    const profilePath = windowsPowerShell51ProfilePath(root)
+    await mkdir(join(root, 'WindowsPowerShell'), { recursive: true })
+    const user = "Write-Host 'keep'   \n\n\nfunction other {}\n"
+    await writeFile(profilePath, user, 'utf8')
+    await removeWindowsPowerShellCliShim({
+      documentsPath: root,
+      shimPath: join(root, 'missing.ps1')
+    })
+    expect(await readFile(profilePath, 'utf8')).toBe(user)
+
+    const managed = `${ORCA_POWERSHELL_SHIM_BEGIN}\n. 'shim.ps1'\n${ORCA_POWERSHELL_SHIM_END}\n`
+    expect(upsertManagedProfileBlock(`${user}${managed}`, 'NEXT')).toBe(`${user}NEXT\n`)
   })
 
   it('refuses a launcher path that would break the profile script', async () => {
@@ -62,7 +79,8 @@ describe('windows powershell cli shim', () => {
     const script = renderOrcaPowerShellCliShim("C:\\Orca\\it's\\orca.exe")
     expect(script).toContain('function global:orca {')
     expect(script).toContain("$launcher = 'C:\\Orca\\it''s\\orca.exe'")
-    expect(script).toContain('Get-Command -Name orca.exe -CommandType Application')
+    expect(script).toContain('Orca CLI launcher is missing')
+    expect(script).not.toContain('Get-Command')
     expect(script).not.toContain('[CmdletBinding(')
     expect(script).not.toContain('$global:OutputEncoding')
   })

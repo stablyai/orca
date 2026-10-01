@@ -399,6 +399,9 @@ describe('CliInstaller', () => {
       }
     })
 
+    await installer.syncWindowsPowerShellCliShim({ requireInstalled: true })
+    await expect(readFile(profilePath)).rejects.toThrow()
+
     await installer.install()
     const profile = await readFile(profilePath)
     expect(profile.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]))

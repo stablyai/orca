@@ -1,6 +1,7 @@
-import { execFile } from 'node:child_process'
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { runProcess } from '../../shared/child-process/run-process'
+import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
 import type { CliInstallerOptions } from './cli-installer-contracts'
 
 export const ORCA_POWERSHELL_SHIM_BEGIN = '# >>> orca cli utf-8 shim >>>'
@@ -48,14 +49,10 @@ export function renderOrcaPowerShellCliShim(launcherPath: string): string {
     'function global:orca {',
     `  $launcher = ${quotedLauncher}`,
     '  if (-not (Test-Path -LiteralPath $launcher)) {',
-    '    $fallback = Get-Command -Name orca.exe -CommandType Application -ErrorAction SilentlyContinue',
-    '    if ($fallback) {',
-    '      $launcher = $fallback.Source',
-    '    } else {',
-    '      [Console]::Error.WriteLine("Orca CLI launcher is missing at $launcher")',
-    '      $global:LASTEXITCODE = 1',
-    '      return',
-    '    }',
+    '    # Why no PATH search: another orca.exe would receive the pipe (#24428).',
+    '    [Console]::Error.WriteLine("Orca CLI launcher is missing at $launcher")',
+    '    $global:LASTEXITCODE = 1',
+    '    return',
     '  }',
     '  if ($MyInvocation.ExpectingInput) {',
     '    $OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
@@ -81,20 +78,31 @@ export function profileHasUserOrcaFunction(profile: string): boolean {
   return USER_ORCA_FUNCTION.test(removeManagedProfileBlock(profile))
 }
 
-export function removeManagedProfileBlock(profile: string): string {
-  const pattern = new RegExp(
+function managedBlockPattern(): RegExp {
+  return new RegExp(
     `${escapeRegExp(ORCA_POWERSHELL_SHIM_BEGIN)}[\\s\\S]*?${escapeRegExp(ORCA_POWERSHELL_SHIM_END)}\\r?\\n?`,
     'g'
   )
-  return profile.replace(pattern, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')
 }
 
-export function upsertManagedProfileBlock(profile: string, block: string): string | 'skipped-user-function' {
+export function removeManagedProfileBlock(profile: string): string {
+  return profile.replace(managedBlockPattern(), '')
+}
+
+export function upsertManagedProfileBlock(profile: string, block: string): string {
   if (profileHasUserOrcaFunction(profile)) {
     return 'skipped-user-function'
   }
-  const without = removeManagedProfileBlock(profile).trim()
-  return without.length === 0 ? `${block}\n` : `${without}\n\n${block}\n`
+  const pattern = managedBlockPattern()
+  if (pattern.test(profile)) {
+    pattern.lastIndex = 0
+    return profile.replace(pattern, `${block}\n`)
+  }
+  if (profile.trim().length === 0) {
+    return `${block}\n`
+  }
+  const separator = profile.endsWith('\n') ? '\n' : '\n\n'
+  return `${profile}${separator}${block}\n`
 }
 
 export async function installWindowsPowerShellCliShim(input: {
@@ -118,6 +126,9 @@ export async function installWindowsPowerShellCliShim(input: {
   await mkdir(dirname(input.shimPath), { recursive: true })
   // Why BOM: Windows PowerShell 5.1 reads a no-BOM .ps1 as the ANSI code page.
   await writeFile(input.shimPath, encodeProfile(renderOrcaPowerShellCliShim(input.launcherPath), 'utf8-bom'))
+  if (existing?.text === next) {
+    return 'installed'
+  }
   await mkdir(dirname(profilePath), { recursive: true })
   await writeFile(profilePath, encodeProfile(next, existing?.encoding ?? 'utf8-bom'))
   return 'installed'
@@ -133,50 +144,37 @@ export async function removeWindowsPowerShellCliShim(input: {
   if (!existing || existing === 'undecodable') {
     return
   }
-  const next = removeManagedProfileBlock(existing.text).trim()
-  if (next.length === 0) {
+  const next = removeManagedProfileBlock(existing.text)
+  if (next.trim().length === 0) {
     await unlinkIfExists(profilePath)
     return
   }
-  if (next === existing.text.trim()) {
+  if (next === existing.text) {
     return
   }
-  await writeFile(profilePath, encodeProfile(`${next}\n`, existing.encoding))
+  await writeFile(profilePath, encodeProfile(next.endsWith('\n') ? next : `${next}\n`, existing.encoding))
 }
 
 /**
  * Why base64: the folder name can be non-ASCII, and this process's stdout
  * encoding would otherwise replace those characters before Node reads them.
  */
-export function resolveWindowsMyDocumentsPath(): Promise<string> {
-  const powershell = join(
-    process.env.SystemRoot ?? 'C:\\Windows',
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe'
-  )
+export async function resolveWindowsMyDocumentsPath(): Promise<string> {
   const command =
     "[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([Environment]::GetFolderPath('MyDocuments')))"
-  return new Promise((resolve, reject) => {
-    execFile(
-      powershell,
-      ['-NoProfile', '-NonInteractive', '-Command', command],
-      { windowsHide: true, timeout: 20_000, encoding: 'utf8' },
-      (error, stdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        const path = Buffer.from(stdout.trim(), 'base64').toString('utf8').trim()
-        if (!path) {
-          reject(new Error('Windows MyDocuments folder is empty'))
-          return
-        }
-        resolve(path)
-      }
-    )
+  const result = await runProcess({
+    program: windowsPowerShellPath(),
+    args: ['-NoProfile', '-NonInteractive', '-Command', command],
+    timeoutMs: 20_000
   })
+  if (result.timedOut || result.code !== 0) {
+    throw new Error(result.stderr.trim() || 'Failed to resolve the Windows MyDocuments folder')
+  }
+  const path = Buffer.from(result.stdout.trim(), 'base64').toString('utf8').trim()
+  if (!path) {
+    throw new Error('Windows MyDocuments folder is empty')
+  }
+  return path
 }
 
 function powershellSingleQuote(value: string): string {
@@ -242,6 +240,6 @@ function isMissingFile(error: unknown): boolean {
     typeof error === 'object' &&
     error !== null &&
     'code' in error &&
-    (error as { code?: string }).code === 'ENOENT'
+    error.code === 'ENOENT'
   )
 }

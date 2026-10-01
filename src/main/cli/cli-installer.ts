@@ -217,11 +217,16 @@ export class CliInstaller extends CliPathRegistration {
    * Why on startup, not only install(): Windows `install()` is not run every
    * launch, and an already-registered `orca.exe` would keep the ASCII pipe (#24428).
    */
-  async syncWindowsPowerShellCliShim(): Promise<void> {
+  async syncWindowsPowerShellCliShim(options: { requireInstalled?: boolean } = {}): Promise<void> {
     if (!this.syncWindowsPowerShellProfile || this.platform !== 'win32') {
       return
     }
     try {
+      // Why: the bundled exe survives CLI removal, so startup must not put the
+      // function back into a profile the user already cleared (#24428).
+      if (options.requireInstalled && (await this.getStatus()).state !== 'installed') {
+        return
+      }
       const launcherPath = await this.resolveLauncherPath()
       // Why .exe only: a .cmd launcher is itself a native pipe target, so it
       // would recode the UTF-8 stdin this function just produced (#24428).
