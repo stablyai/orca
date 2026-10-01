@@ -110,7 +110,7 @@ describe('useMobileNativeChatPromptJump', () => {
       highestMeasuredFrameIndex: -1,
       averageItemLength: 100
     })
-    expect(list.scrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: true })
+    expect(list.scrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: false })
     expect(list.scrollToIndex).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(120)
@@ -182,20 +182,85 @@ describe('useMobileNativeChatPromptJump', () => {
 
     expect(list.scrollToIndex).not.toHaveBeenCalled()
   })
-  it('retries only once even if the exact retry also fails to measure', () => {
+  it('keeps retrying when the first exact retry is still unmeasured', () => {
     vi.useFakeTimers()
     const { list, latest, Probe } = harness()
     act(() => {
-      tree = create(createElement(Probe, { data: transcript('user', 'assistant') }))
+      tree = create(
+        createElement(Probe, { data: transcript('user', 'assistant', 'user', 'assistant') })
+      )
+    })
+    const failure = { index: 2, highestMeasuredFrameIndex: 0, averageItemLength: 100 }
+    list.scrollToIndex.mockImplementationOnce(() => latest().onScrollToIndexFailed(failure))
+    list.scrollToIndex.mockImplementationOnce(() => latest().onScrollToIndexFailed(failure))
+    latest().onJumpToPrompt()
+    vi.runAllTimers()
+    expect(list.scrollToIndex).toHaveBeenCalledTimes(3)
+    expect(list.scrollToIndex).toHaveBeenLastCalledWith({
+      index: 2,
+      viewPosition: 0,
+      animated: true
+    })
+  })
+
+  it('bounds failed retries and restores tail-following when the target cannot be measured', () => {
+    vi.useFakeTimers()
+    const { list, latest, Probe, onReturnToTail } = harness()
+    act(() => {
+      tree = create(
+        createElement(Probe, { data: transcript('user', 'assistant', 'user', 'assistant') })
+      )
+    })
+    const failure = { index: 2, highestMeasuredFrameIndex: 0, averageItemLength: 100 }
+    list.scrollToIndex.mockImplementation(() => latest().onScrollToIndexFailed(failure))
+    latest().onJumpToPrompt()
+    vi.runAllTimers()
+    expect(list.scrollToIndex).toHaveBeenCalledTimes(5)
+    expect(list.scrollToOffset).toHaveBeenCalledTimes(4)
+    expect(onReturnToTail).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('forgets a successful jump when its prompt becomes visible', () => {
+    vi.useFakeTimers()
+    const { list, latest, Probe } = harness()
+    const data = transcript('user', 'assistant', 'user', 'assistant')
+    act(() => {
+      tree = create(createElement(Probe, { data }))
     })
     latest().onJumpToPrompt()
-    const failure = { index: 0, highestMeasuredFrameIndex: -1, averageItemLength: 100 }
-    latest().onScrollToIndexFailed(failure)
+    act(() => {
+      latest().onViewableItemsChanged({
+        viewableItems: [{ key: 'm2', index: 2, item: data[2], isViewable: true }]
+      })
+    })
+    latest().onScrollToIndexFailed({
+      index: 2,
+      highestMeasuredFrameIndex: 0,
+      averageItemLength: 100
+    })
+    vi.runAllTimers()
+    expect(list.scrollToIndex).toHaveBeenCalledOnce()
+    expect(list.scrollToOffset).not.toHaveBeenCalled()
+  })
+
+  it('cancels later retries when the reader returns to the latest message', () => {
+    vi.useFakeTimers()
+    const { list, latest, Probe, onReturnToTail } = harness()
+    act(() => {
+      tree = create(
+        createElement(Probe, { data: transcript('user', 'assistant', 'user', 'assistant') })
+      )
+    })
+    const failure = { index: 2, highestMeasuredFrameIndex: 0, averageItemLength: 100 }
+    list.scrollToIndex.mockImplementation(() => latest().onScrollToIndexFailed(failure))
+    latest().onJumpToPrompt()
     vi.advanceTimersByTime(120)
-    latest().onScrollToIndexFailed(failure)
-    vi.advanceTimersByTime(120)
+    latest().onScrollToLatest()
+    vi.runAllTimers()
     expect(list.scrollToIndex).toHaveBeenCalledTimes(2)
-    expect(list.scrollToOffset).toHaveBeenCalledTimes(1)
+    expect(onReturnToTail).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('cancels the prompt retry when the reader chooses the latest message', () => {

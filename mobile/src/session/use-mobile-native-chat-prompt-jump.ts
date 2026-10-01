@@ -4,6 +4,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { mobileNativeChatLatestPromptIndex } from './mobile-native-chat-prompt-anchor'
 
 const SCROLL_RETRY_MS = 120
+const MAX_SCROLL_RETRIES = 4
 
 type ScrollToIndexFailure = {
   index: number
@@ -41,7 +42,7 @@ export function useMobileNativeChatPromptJump({
   )
   const latestRef = useRef({ data, scopeKey })
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const targetRef = useRef<{ id: string; scopeKey: string } | null>(null)
+  const targetRef = useRef<{ id: string; scopeKey: string; retries: number } | null>(null)
   useLayoutEffect(() => {
     latestRef.current = { data, scopeKey }
   }, [data, scopeKey])
@@ -62,9 +63,15 @@ export function useMobileNativeChatPromptJump({
 
   // FlatList requires one callback identity throughout its lifetime.
   const onViewableItemsChanged = useRef((info: { viewableItems: ViewToken[] }) => {
+    const keys = new Set(
+      info.viewableItems.filter((item) => item.isViewable).map((item) => item.key)
+    )
+    if (targetRef.current && keys.has(targetRef.current.id) && retryTimerRef.current === null) {
+      cancelPendingJump()
+    }
     setViewable({
       scopeKey: latestRef.current.scopeKey,
-      keys: new Set(info.viewableItems.filter((item) => item.isViewable).map((item) => item.key))
+      keys
     })
   }).current
 
@@ -78,7 +85,7 @@ export function useMobileNativeChatPromptJump({
     if (promptIndex === null || promptId === null) {
       return
     }
-    targetRef.current = { id: promptId, scopeKey }
+    targetRef.current = { id: promptId, scopeKey, retries: 0 }
     onLeaveTail()
     listRef.current?.scrollToIndex({ index: promptIndex, viewPosition: 0, animated: true })
   }, [cancelPendingJump, listRef, onLeaveTail, promptId, promptIndex, scopeKey])
@@ -92,24 +99,34 @@ export function useMobileNativeChatPromptJump({
       if (retryTimerRef.current !== null) {
         return
       }
+      if (target.retries >= MAX_SCROLL_RETRIES) {
+        cancelPendingJump()
+        onReturnToTail()
+        return
+      }
+      targetRef.current = { ...target, retries: target.retries + 1 }
       listRef.current?.scrollToOffset({
         offset: info.averageItemLength * info.index,
-        animated: true
+        animated: false
       })
-      retryTimerRef.current = setTimeout(() => {
-        retryTimerRef.current = null
-        targetRef.current = null
-        const latest = latestRef.current
-        if (target.scopeKey !== latest.scopeKey) {
-          return
-        }
-        const index = latest.data.findIndex((message) => message.id === target.id)
-        if (index !== -1 && latest.data[index].role === 'user') {
-          listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
-        }
-      }, SCROLL_RETRY_MS)
+      retryTimerRef.current = setTimeout(
+        () => {
+          retryTimerRef.current = null
+          const latest = latestRef.current
+          if (target.scopeKey !== latest.scopeKey) {
+            return
+          }
+          const index = latest.data.findIndex((message) => message.id === target.id)
+          if (index !== -1 && latest.data[index].role === 'user') {
+            listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
+          } else {
+            cancelPendingJump()
+          }
+        },
+        SCROLL_RETRY_MS * 2 ** target.retries
+      )
     },
-    [listRef]
+    [cancelPendingJump, listRef, onReturnToTail]
   )
 
   return {
