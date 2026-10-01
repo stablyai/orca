@@ -85,9 +85,12 @@ export function registerSpeechHandlers(store: Store): void {
     return { baseUrl: '', model: '', language: '', apiKeyConfigured: false }
   })
 
-  ipcMain.handle('speech:testCustomEndpoint', async () => {
-    return testCustomSttEndpoint()
-  })
+  ipcMain.handle(
+    'speech:testCustomEndpoint',
+    async (_event, probe?: { baseUrl: string; model: string; language: string }) => {
+      return testCustomSttEndpoint(probe)
+    }
+  )
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
     const manager = getSpeechModelManager(store)
