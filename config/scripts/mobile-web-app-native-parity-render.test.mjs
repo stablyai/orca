@@ -47,7 +47,7 @@ const ENGINES = [
 const PAGE_ENTRY = `
 import { createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
-const { StyleSheet, Text, TextInput, View } = require('react-native')
+const { Modal, StyleSheet, Text, TextInput, View } = require('react-native')
 const styles = StyleSheet.create({
   separatorBox: { paddingTop: 10.1, width: 12, backgroundColor: '#ffffff' },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#000000' },
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   input: { height: 40 }
 })
 createRoot(document.getElementById('root')).render(
-  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }), h(Text, { testID: 'plain-text' }, 'row'), h(Text, { testID: 'selectable-text', selectable: true }, 'message'))
+  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }), h(Text, { testID: 'plain-text' }, 'row'), h(Text, { testID: 'selectable-text', selectable: true }, 'message'), location.hash === '#modal' ? h(Modal, { visible: true, transparent: true }, h(View, null, h(Text, { testID: 'modal-text' }, 'sheet row'), h(TextInput, { testID: 'modal-input', style: styles.input }))) : null)
 )
 `
 
@@ -111,9 +111,9 @@ afterAll(async () => {
   }
 })
 
-async function openPage(engine) {
+async function openPage(engine, hash = '') {
   const page = await browsers.get(engine.name).newPage(engine.pageOptions)
-  await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${origin}/${hash}`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('[data-testid="input"]')
   return page
 }
@@ -211,6 +211,36 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
         return input.selectionEnd - input.selectionStart
       })
       expect(selectedInField).toBeGreaterThan(0)
+    } finally {
+      await page.close()
+    }
+  })
+
+  it('applies the same to text a modal portals outside #root, and keeps its fields selectable', async () => {
+    // react-native-web's Modal appends to document.body, so a rule on #root would miss sheets.
+    // The fields' callout exemption goes unmeasured: desktop WebKit lacks the property.
+    const page = await openPage(engine, '#modal')
+    try {
+      await page.waitForSelector('[data-testid="modal-text"]')
+      const measured = await page.evaluate(() => {
+        const text = document.querySelector('[data-testid="modal-text"]')
+        const input = document.querySelector('[data-testid="modal-input"]')
+        const read = (node) =>
+          getComputedStyle(node).webkitUserSelect || getComputedStyle(node).userSelect
+        return {
+          outsideRoot: !document.getElementById('root').contains(text),
+          text: read(text),
+          input: read(input)
+        }
+      })
+      expect(measured).toEqual({
+        outsideRoot: true,
+        text: 'none',
+        input: 'text'
+      })
+      await page.evaluate(() => window.getSelection()?.removeAllRanges())
+      await page.dblclick('[data-testid="modal-text"]')
+      expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
     } finally {
       await page.close()
     }

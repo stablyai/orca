@@ -1,7 +1,7 @@
 /**
  * Scratch routes for the held-press check: the surfaces whose press must outlive Android WebView's
  * long-press. Each mounts the shipped component with stubbed effects; what is under test is the
- * press responder and the touchstart guard, so handlers only count.
+ * press responder, so handlers only count.
  */
 
 /** RN Web renders `nativeID` as the DOM `id`; the check touches each mic through it. */

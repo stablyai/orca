@@ -1,2 +1,2 @@
-// Held presses set it: RNW then refuses contextmenu's termination; no selection, no touchcancel.
+// RNW holds a press past contextmenu only with onLongPress; body user-select:none stops touchcancel
 export function keepHeldPressThroughLongPress(): void {}
