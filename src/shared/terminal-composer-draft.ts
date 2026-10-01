@@ -26,6 +26,7 @@ type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 
 const COMPOSER_FRAME_LINE = /^[─━-]{8,}\s*$/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[·•]\s+\S.*$/i
+const CODEX_SHORTCUT_HELP_LINE = /^\s*(?:← for agents · )?\? for shortcuts\s*$/
 
 function composerContinuationRows(
   context: TerminalCursorContext,
@@ -70,6 +71,10 @@ function findCodexFooterIndex(context: TerminalCursorContext): number {
   for (let index = context.rowsBelow.length - 1; index >= 0; index -= 1) {
     const row = context.rowsBelow[index] ?? ''
     if (!row.trim()) {
+      continue
+    }
+    // Codex paints shortcut help below its status row; it is not the status boundary.
+    if (context.rowsBelowWrapped?.[index] === false && CODEX_SHORTCUT_HELP_LINE.test(row)) {
       continue
     }
     const undimmed = context.typedRowsBelow[index] ?? ''

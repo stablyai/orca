@@ -117,6 +117,7 @@ describe('terminal IME composer placeholder mask', () => {
 
   it.each([
     ['Codex', codexPlaceholderFrame()],
+    ['Codex with shortcut help', `${codexPlaceholderFrame()}\x1b7\x1b[4;1H  ? for shortcuts\x1b8`],
     [
       'Claude',
       `\x1b[2J\x1b[H${'─'.repeat(24)}\r\n❯ \x1b7\x1b[2mTry “fix the failing test”\x1b[22m\x1b8`
@@ -148,6 +149,21 @@ describe('terminal IME composer placeholder mask', () => {
 
     rig.compose()
 
+    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
+  })
+
+  it('masks shortcut-footer placeholders during Chinese preedit and commits only once', async () => {
+    const rig = openTerminal()
+    await rig.write(`${codexPlaceholderFrame()}\x1b7\x1b[4;1H  ? for shortcuts\x1b8`)
+    const input = vi.fn()
+    rig.terminal.onData(input)
+
+    rig.compose('ni')
+    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
+    expect(input).not.toHaveBeenCalled()
+
+    await rig.endComposition('你')
+    expect(input).toHaveBeenCalledExactlyOnceWith('你')
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
   })
 
