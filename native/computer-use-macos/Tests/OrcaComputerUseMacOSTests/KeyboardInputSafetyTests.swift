@@ -20,4 +20,9 @@ final class KeyboardInputSafetyTests: XCTestCase {
             )
         }
     }
+
+    func testSyntheticUnicodeIsAttachedOnlyToKeyDown() {
+        XCTAssertEqual(KeyboardInputSafety.unicodeUnitCount(forKeyDown: true), 1)
+        XCTAssertEqual(KeyboardInputSafety.unicodeUnitCount(forKeyDown: false), 0)
+    }
 }

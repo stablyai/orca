@@ -10,4 +10,10 @@ public enum KeyboardInputSafety {
         }
         return restoreWindowRequested ? .targetNotFocusedAfterRestore : .targetNotFocused
     }
+
+    /// How many UTF-16 units a synthetic key event should carry.
+    /// Key-up stays empty: Electron contentEditable inserts the payload of both events.
+    public static func unicodeUnitCount(forKeyDown keyDown: Bool) -> Int {
+        keyDown ? 1 : 0
+    }
 }
