@@ -253,8 +253,22 @@ describe('OpenCode 1 serve + attach', () => {
       now: () => Date.now(),
       dbPath: () => dbPath,
       listPanes: () => [
-        { paneKey: PANE_A, directory: DIR, worktreeId: `repo::${DIR}`, shellPid: 111 },
-        { paneKey: PANE_B, directory: DIR, worktreeId: `repo::${DIR}`, shellPid: 211 }
+        {
+          paneKey: PANE_A,
+          directory: DIR,
+          worktreeId: `repo::${DIR}`,
+          shellPid: 111,
+          lastInputAtMs: null,
+          previousInputAtMs: null
+        },
+        {
+          paneKey: PANE_B,
+          directory: DIR,
+          worktreeId: `repo::${DIR}`,
+          shellPid: 211,
+          lastInputAtMs: null,
+          previousInputAtMs: null
+        }
       ],
       sweep: async () => [
         { pid: 112, ppid: 111, startedAtMs, executable: 'opencode', argv: ['opencode', 'serve'] },

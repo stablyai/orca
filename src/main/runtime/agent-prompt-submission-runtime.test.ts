@@ -77,7 +77,9 @@ describe('agent prompt submission runtime', () => {
         }
       })
 
-      const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+      const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+        inputKind: 'driving'
+      })
       await vi.runAllTimersAsync()
 
       await expect(submission).resolves.toMatchObject({ accepted: true })
@@ -107,7 +109,9 @@ describe('agent prompt submission runtime', () => {
           runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
         }
       })
-      const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+      const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+        inputKind: 'driving'
+      })
       const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
 
       await vi.runAllTimersAsync()

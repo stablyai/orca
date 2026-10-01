@@ -23,7 +23,7 @@ function writePtyInput(data: string, ptyId: string = PTY_ID) {
   return createPtyWriteInput({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture is only read through isDestroyed(), webContents.isDestroyed() and webContents.send, all three of which it provides; Electron's BrowserWindow cannot be constructed outside a running app.
     mainWindow: mainWindow as never
-  }).writePtyInput({ id: ptyId, data })
+  }).writePtyInput({ id: ptyId, data, inputKind: 'driving' })
 }
 
 /** Prompt activity the OpenCode session binder reads; absent until one arrives. */
