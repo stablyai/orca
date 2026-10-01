@@ -162,9 +162,9 @@ async function openList({
  * Runs `action` on the probe, then reads both screens' left edge once per animation frame.
  * A hidden screen (display: none, or unmounted) reads as null.
  */
-function sampleFrames(page, action, { then = null, afterFrames = 0 } = {}) {
+function sampleFrames(page, action, { followUp = null, afterFrames = 0 } = {}) {
   return page.evaluate(
-    ([name, sampleMs, followUp, followAt]) =>
+    ([name, sampleMs, nextAction, followAt]) =>
       new Promise((resolve) => {
         const leftOf = (id) => {
           const node = document.querySelector(`[data-testid="${id}"]`)
@@ -175,8 +175,8 @@ function sampleFrames(page, action, { then = null, afterFrames = 0 } = {}) {
         const start = performance.now()
         globalThis.__orcaStackProbe[name]()
         const tick = () => {
-          if (followUp !== null && frames.length === followAt) {
-            globalThis.__orcaStackProbe[followUp]()
+          if (nextAction !== null && frames.length === followAt) {
+            globalThis.__orcaStackProbe[nextAction]()
           }
           frames.push({ list: leftOf('stack-probe-list'), session: leftOf('stack-probe-session') })
           if (performance.now() - start < sampleMs) {
@@ -187,7 +187,7 @@ function sampleFrames(page, action, { then = null, afterFrames = 0 } = {}) {
         }
         requestAnimationFrame(tick)
       }),
-    [action, SAMPLE_MS, then, afterFrames]
+    [action, SAMPLE_MS, followUp, afterFrames]
   )
 }
 
@@ -248,7 +248,7 @@ describeRender('the host stack transition on the page', () => {
     const { errors, page } = await openList()
     await sampleFrames(page, 'push')
     const pushed = await nodeCount(page)
-    const frames = await sampleFrames(page, 'back', { then: 'push', afterFrames: 3 })
+    const frames = await sampleFrames(page, 'back', { followUp: 'push', afterFrames: 3 })
     expect(frames.slice(0, 3).some((frame) => between(frame.session))).toBe(true)
     expect(frames.at(-1)).toEqual({ list: null, session: 0 })
     expect(await nodeCount(page)).toBe(pushed)
