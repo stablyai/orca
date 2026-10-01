@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
+import type { ClaudeOauthRefreshOutcome } from './oauth-refresh'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 export const hostPlatform = process.platform
@@ -40,9 +41,19 @@ export function createElectronMock() {
 // to "not expiring" so the proactive switch-in refresh never fires here and
 // existing expectations hold; individual tests can override these mocks.
 export function createOauthRefreshMock() {
+  const refreshClaudeOauthCredentials = vi.fn(
+    async (_credentialsJson: string): Promise<string | null> => null
+  )
   return {
     isOauthTokenExpiring: vi.fn(() => false),
-    refreshClaudeOauthCredentials: vi.fn(async () => null)
+    refreshClaudeOauthCredentials,
+    // Why: delegates so existing tests keep steering refresh through refreshClaudeOauthCredentials.
+    refreshClaudeOauthCredentialsWithOutcome: vi.fn(
+      async (credentialsJson: string): Promise<ClaudeOauthRefreshOutcome> => {
+        const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
+        return refreshed ? { kind: 'refreshed', credentialsJson: refreshed } : { kind: 'failed' }
+      }
+    )
   }
 }
 

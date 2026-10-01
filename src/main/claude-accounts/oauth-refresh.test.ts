@@ -4,7 +4,8 @@ import {
   isOauthTokenExpiring,
   parseClaudeOauthBlob,
   readRefreshToken,
-  refreshClaudeOauthCredentials
+  refreshClaudeOauthCredentials,
+  refreshClaudeOauthCredentialsWithOutcome
 } from './oauth-refresh'
 
 const { netFetchMock } = vi.hoisted(() => ({
@@ -182,5 +183,77 @@ describe('refreshClaudeOauthCredentials', () => {
   it('returns null when the request throws (never rejects)', async () => {
     netFetchMock.mockRejectedValue(new Error('network down'))
     await expect(refreshClaudeOauthCredentials(credentials(), NOW)).resolves.toBeNull()
+  })
+})
+
+describe('refreshClaudeOauthCredentialsWithOutcome', () => {
+  let warn: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    warn.mockRestore()
+  })
+
+  it('returns the rotated credentials on success', async () => {
+    netFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ access_token: 'fresh-access', refresh_token: 'fresh-refresh' })
+    })
+
+    const outcome = await refreshClaudeOauthCredentialsWithOutcome(credentials(), NOW)
+
+    expect(outcome.kind).toBe('refreshed')
+    expect(
+      outcome.kind === 'refreshed' && parseClaudeOauthBlob(outcome.credentialsJson)?.refreshToken
+    ).toBe('fresh-refresh')
+  })
+
+  it.each([400, 401])('reports a dead refresh token on %i invalid_grant', async (status) => {
+    netFetchMock.mockResolvedValue({
+      ok: false,
+      status,
+      json: async () => ({ error: 'invalid_grant' })
+    })
+
+    expect(await refreshClaudeOauthCredentialsWithOutcome(credentials(), NOW)).toEqual({
+      kind: 'rejected'
+    })
+  })
+
+  it.each([
+    ['a throttle', 429, async () => ({ error: 'invalid_grant' })],
+    ['a different OAuth error', 400, async () => ({ error: 'invalid_request' })],
+    [
+      'an unreadable error body',
+      400,
+      async () => {
+        throw new Error('not json')
+      }
+    ]
+  ])('treats %s as transient', async (_label, status, json) => {
+    netFetchMock.mockResolvedValue({ ok: false, status, json })
+
+    expect(await refreshClaudeOauthCredentialsWithOutcome(credentials(), NOW)).toEqual({
+      kind: 'failed'
+    })
+  })
+
+  it('treats a thrown request as transient', async () => {
+    netFetchMock.mockRejectedValue(new Error('network down'))
+
+    expect(await refreshClaudeOauthCredentialsWithOutcome(credentials(), NOW)).toEqual({
+      kind: 'failed'
+    })
+  })
+
+  it('does not call the endpoint without a refresh token', async () => {
+    expect(
+      await refreshClaudeOauthCredentialsWithOutcome(credentials({ refreshToken: undefined }), NOW)
+    ).toEqual({ kind: 'failed' })
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 })

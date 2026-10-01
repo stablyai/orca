@@ -5,9 +5,12 @@ import {
   confirmSeededClaudeLivePtys,
   endClaudeAuthSwitch,
   hasLiveClaudePtys,
+  hasLiveClaudePtysHoldingAccount,
   isClaudeAuthSwitchInProgress,
   markClaudePtyExited,
   markClaudePtySpawned,
+  markClaudeStructuredChildExited,
+  markClaudeStructuredChildSpawned,
   onLiveClaudePtysDrained,
   seedLiveClaudePtysFromPersistence
 } from './live-pty-gate'
@@ -138,5 +141,49 @@ describe('Claude live PTY gate', () => {
 
     markClaudePtyExited('live-claude-pty')
     expect(removeClaudeLivePtySessionId).toHaveBeenCalledWith('live-claude-pty')
+  })
+
+  describe('account lineage', () => {
+    afterEach(() => {
+      markClaudeStructuredChildExited('structured-child')
+    })
+
+    it('scopes a managed launch to the account it launched under', () => {
+      markClaudePtySpawned('live-claude-pty', 'managed:account-1')
+
+      expect(hasLiveClaudePtysHoldingAccount('account-1')).toBe(true)
+      expect(hasLiveClaudePtysHoldingAccount('account-2')).toBe(false)
+      expect(hasLiveClaudePtys()).toBe(true)
+    })
+
+    it.each([
+      ['system default', 'system'],
+      ['WSL managed', 'managed:account-2:wsl:Ubuntu'],
+      ['WSL system default', 'wsl:Ubuntu:system'],
+      ['missing', undefined]
+    ])('treats a %s launch as holding every account', (_label, provenance) => {
+      markClaudePtySpawned('live-claude-pty', provenance)
+
+      expect(hasLiveClaudePtysHoldingAccount('account-2')).toBe(true)
+    })
+
+    it('treats sessions seeded after a restart as holding every account', () => {
+      seedLiveClaudePtysFromPersistence(['seeded-pty-1'])
+
+      expect(hasLiveClaudePtysHoldingAccount('account-2')).toBe(true)
+    })
+
+    it('treats structured Claude children as holding every account', () => {
+      markClaudeStructuredChildSpawned('structured-child')
+
+      expect(hasLiveClaudePtysHoldingAccount('account-2')).toBe(true)
+    })
+
+    it('reports no holder once every session is gone', () => {
+      markClaudePtySpawned('live-claude-pty', 'managed:account-2')
+      markClaudePtyExited('live-claude-pty')
+
+      expect(hasLiveClaudePtysHoldingAccount('account-2')).toBe(false)
+    })
   })
 })

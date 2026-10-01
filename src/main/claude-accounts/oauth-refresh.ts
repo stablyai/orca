@@ -114,6 +114,16 @@ export function applyRefreshedToken(
 }
 
 /**
+ * `rejected` means the token endpoint answered `invalid_grant`: the stored
+ * refresh token is dead and only a fresh sign-in can recover the account.
+ * Anything else that fails is `failed`, which callers treat as transient.
+ */
+export type ClaudeOauthRefreshOutcome =
+  | { kind: 'refreshed'; credentialsJson: string }
+  | { kind: 'rejected' }
+  | { kind: 'failed' }
+
+/**
  * Refresh the OAuth token for a stored credentials blob.
  *
  * Returns the updated credentials JSON (with the rotated refresh token and new
@@ -125,9 +135,18 @@ export async function refreshClaudeOauthCredentials(
   credentialsJson: string,
   now: number = Date.now()
 ): Promise<string | null> {
+  const outcome = await refreshClaudeOauthCredentialsWithOutcome(credentialsJson, now)
+  return outcome.kind === 'refreshed' ? outcome.credentialsJson : null
+}
+
+/** Same as refreshClaudeOauthCredentials, but tells a dead refresh token apart. */
+export async function refreshClaudeOauthCredentialsWithOutcome(
+  credentialsJson: string,
+  now: number = Date.now()
+): Promise<ClaudeOauthRefreshOutcome> {
   const refreshToken = readRefreshToken(credentialsJson)
   if (!refreshToken) {
-    return null
+    return { kind: 'failed' }
   }
 
   await ensureElectronProxyFromEnvironment({
@@ -156,15 +175,32 @@ export async function refreshClaudeOauthCredentials(
       // Callers keep the existing credentials on null — a transient 429 just
       // means the still-valid token is reused until the next attempt.
       console.warn(`[claude-oauth-refresh] token endpoint returned ${res.status}`)
-      return null
+      return (await isInvalidGrantResponse(res)) ? { kind: 'rejected' } : { kind: 'failed' }
     }
     const data = (await res.json()) as TokenEndpointResponse
-    return applyRefreshedToken(credentialsJson, data, now)
+    const refreshed = applyRefreshedToken(credentialsJson, data, now)
+    return refreshed ? { kind: 'refreshed', credentialsJson: refreshed } : { kind: 'failed' }
   } catch (error) {
     console.warn(
       '[claude-oauth-refresh] token refresh request failed:',
       error instanceof Error ? error.message : error
     )
-    return null
+    return { kind: 'failed' }
+  }
+}
+
+// Why: only an explicit invalid_grant proves the refresh token is dead; an
+// unreadable error body stays transient so a flaky endpoint never blocks a switch.
+async function isInvalidGrantResponse(res: Response): Promise<boolean> {
+  if (res.status !== 400 && res.status !== 401) {
+    return false
+  }
+  try {
+    const body: unknown = await res.json()
+    return (
+      typeof body === 'object' && body !== null && 'error' in body && body.error === 'invalid_grant'
+    )
+  } catch {
+    return false
   }
 }
