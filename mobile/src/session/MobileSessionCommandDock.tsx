@@ -10,13 +10,13 @@ import {
   Smartphone
 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
-import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
+import { MobileTerminalAccessoryKey } from './MobileTerminalAccessoryKey'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
@@ -183,41 +183,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               </Pressable>
             )}
             {visibleBuiltInAccessoryKeys.map((key) => (
-              <Pressable
+              <MobileTerminalAccessoryKey
                 key={key.id}
-                style={({ pressed }) => [
-                  styles.accessoryKey,
-                  pressed && styles.accessoryKeyPressed,
-                  !canSend && styles.accessoryKeyDisabled
-                ]}
-                disabled={!canSend}
-                onPressIn={() => {
-                  if (!key.repeatable) {
-                    return
-                  }
-                  const input = createTerminalLiveAccessoryInput(key)
-                  void handleAccessoryKey(input)
-                  startAccessoryRepeat(input)
-                }}
-                onPressOut={() => {
-                  if (key.repeatable) {
-                    stopAccessoryRepeat()
-                  }
-                }}
-                onPress={() => {
-                  if (key.repeatable) {
-                    return
-                  }
-                  void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
-                }}
-                accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
-              >
-                <Text
-                  style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}
-                >
-                  {key.label}
-                </Text>
-              </Pressable>
+                accessoryKey={key}
+                canSend={canSend}
+                onSend={(input) => void handleAccessoryKey(input)}
+                onRepeatStart={startAccessoryRepeat}
+                onRepeatStop={stopAccessoryRepeat}
+              />
             ))}
             {customKeys.map((key) => (
               <Pressable
