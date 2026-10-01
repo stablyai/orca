@@ -288,7 +288,14 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         pending={customEndpoint.pending}
         testing={customEndpoint.testing}
         testResult={customEndpoint.testResult}
-        onOpenChange={customEndpoint.setDialogOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            customEndpoint.setDialogOpen(true)
+          } else {
+            // Why: Esc / outside-click is a cancel — leave the profile untouched.
+            customEndpoint.cancel()
+          }
+        }}
         onBaseUrlDraftChange={customEndpoint.setBaseUrlDraft}
         onModelDraftChange={customEndpoint.setModelDraft}
         onLanguageDraftChange={customEndpoint.setLanguageDraft}
@@ -296,6 +303,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onSave={() => void customEndpoint.save()}
         onClear={() => void customEndpoint.clear()}
         onTest={() => void customEndpoint.test()}
+        onCancel={() => customEndpoint.cancel()}
       />
     </div>
   )

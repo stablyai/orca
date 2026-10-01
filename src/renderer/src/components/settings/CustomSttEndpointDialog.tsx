@@ -42,6 +42,7 @@ type CustomSttEndpointDialogProps = {
   onSave: (options?: { allowInvalid?: boolean }) => void
   onClear: () => void
   onTest: () => void
+  onCancel: () => void
 }
 
 export function CustomSttEndpointDialog({
@@ -64,7 +65,8 @@ export function CustomSttEndpointDialog({
   onApiKeyDraftChange,
   onSave,
   onClear,
-  onTest
+  onTest,
+  onCancel
 }: CustomSttEndpointDialogProps): React.JSX.Element {
   const canSave = baseUrlDraft.trim() !== '' && modelDraft.trim() !== ''
   const canTest = baseUrlDraft.trim() !== ''
@@ -196,6 +198,9 @@ export function CustomSttEndpointDialog({
           <Button variant="outline" disabled={pending || testing || !canTest} onClick={onTest}>
             {testing ? <Loader2 className="size-4 animate-spin" /> : null}
             {translate('auto.components.settings.CustomSttEndpointDialog.test', 'Test')}
+          </Button>
+          <Button variant="outline" disabled={pending} onClick={onCancel}>
+            {translate('auto.components.settings.CustomSttEndpointDialog.cancel', 'Cancel')}
           </Button>
           <Button disabled={pending || !canSave || blocked} onClick={() => onSave()}>
             {pending ? <Loader2 className="size-4 animate-spin" /> : null}
