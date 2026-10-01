@@ -263,7 +263,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     setCustomTesting(true)
     setCustomTestResult(null)
     try {
-      const result = await window.api.speech.testCustomEndpoint()
+      const result = await window.api.speech.testCustomEndpoint({
+        baseUrl: customBaseUrlDraft,
+        model: customModelDraft,
+        language: customLanguageDraft
+      })
       if (mountedRef.current) {
         setCustomTestResult(result)
       }

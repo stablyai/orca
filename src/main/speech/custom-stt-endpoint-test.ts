@@ -13,56 +13,121 @@ export type CustomSttEndpointTestResult = {
 const TEST_TIMEOUT_MS = 10_000
 const MAX_ERROR_BODY_CHARS = 300
 
+/** Inline values from the settings dialog, so Test reflects what is on screen. */
+export type CustomSttEndpointProbe = {
+  baseUrl: string
+  model: string
+  language: string
+}
+
 /**
- * Probe the configured endpoint with a tiny silent WAV. The goal is a fast
- * reachability/auth check for the settings UI — a 400/422 decode rejection still
- * proves the URL resolved and the server answered, so only transport failures and
- * 401/403 are treated as errors.
+ * Probe the endpoint with a tiny silent WAV. The goal is a fast reachability/auth
+ * check for the settings UI — a 400/422 decode rejection still proves the URL
+ * resolved and the server answered, so only transport failures and 401/403 are
+ * treated as errors.
+ *
+ * `probe` carries the dialog's current draft; when omitted the saved config is used.
  */
-export async function testCustomSttEndpoint(): Promise<CustomSttEndpointTestResult> {
-  const config = readCustomSttEndpointConfig()
-  if (!config) {
-    return { ok: false, detail: 'No custom endpoint is configured.' }
+export async function testCustomSttEndpoint(
+  probe?: CustomSttEndpointProbe
+): Promise<CustomSttEndpointTestResult> {
+  const saved = readCustomSttEndpointConfig()
+  const baseUrl = probe?.baseUrl?.trim() || saved?.baseUrl
+  const model = probe?.model?.trim() || saved?.model
+  const language = (probe?.language ?? saved?.language ?? '').trim()
+
+  if (!baseUrl) {
+    return { ok: false, detail: 'Enter a base URL first.' }
+  }
+  if (!model) {
+    return { ok: false, detail: 'Enter a model first.' }
   }
 
-  const url = resolveCustomSttTranscriptionUrl(config.baseUrl)
+  // Why: a bad base URL is the most common mistake; reject it here rather than
+  // sending the user through a generic transport failure.
+  try {
+    const parsed = new URL(baseUrl)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { ok: false, detail: 'Base URL must start with http:// or https://.' }
+    }
+  } catch {
+    return { ok: false, detail: 'Base URL is not a valid URL.' }
+  }
+
+  const url = resolveCustomSttTranscriptionUrl(baseUrl)
   const apiKey = readCustomSttEndpointApiKey()
+
+  // Why: undici reuses keep-alive connections, and servers like uvicorn close idle
+  // ones — a reused dead socket fails the POST with a bare "fetch failed". GET
+  // requests are auto-retried by undici but POST is not, so retry once ourselves.
+  let lastError: unknown
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS)
+    try {
+      const response = await postProbe(url, model, language, apiKey, controller.signal)
+      if (response.ok) {
+        return { ok: true, detail: `Reachable (HTTP ${response.status}).` }
+      }
+      if (response.status === 401 || response.status === 403) {
+        return { ok: false, detail: `Authentication failed (HTTP ${response.status}).` }
+      }
+      // Any other status means the server is up and parsed the request shape.
+      const body = (await response.text().catch(() => '')).slice(0, MAX_ERROR_BODY_CHARS)
+      return {
+        ok: true,
+        detail: `Reachable (HTTP ${response.status})${body ? `: ${body}` : ''}`
+      }
+    } catch (error) {
+      lastError = error
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  return { ok: false, detail: `Could not reach endpoint: ${describeFetchError(lastError)}` }
+}
+
+function postProbe(
+  url: string,
+  model: string,
+  language: string,
+  apiKey: string | null,
+  signal: AbortSignal
+): Promise<Response> {
   const form = new FormData()
-  form.append('model', config.model)
+  form.append('model', model)
   form.append('response_format', 'json')
-  if (config.language) {
-    form.append('language', config.language)
+  if (language) {
+    form.append('language', language)
   }
   form.append('file', new Blob([silentWav()], { type: 'audio/wav' }), 'test.wav')
+  return fetch(url, {
+    method: 'POST',
+    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+    body: form,
+    signal
+  })
+}
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS)
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-      body: form,
-      signal: controller.signal
-    })
-
-    if (response.ok) {
-      return { ok: true, detail: `Reachable (HTTP ${response.status}).` }
-    }
-    if (response.status === 401 || response.status === 403) {
-      return { ok: false, detail: `Authentication failed (HTTP ${response.status}).` }
-    }
-    // Any other status means the server is up and parsed the request shape.
-    const body = (await response.text().catch(() => '')).slice(0, MAX_ERROR_BODY_CHARS)
-    return {
-      ok: true,
-      detail: `Reachable (HTTP ${response.status})${body ? `: ${body}` : ''}`
-    }
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
-    return { ok: false, detail: `Could not reach endpoint: ${reason}` }
-  } finally {
-    clearTimeout(timeout)
+/**
+ * `fetch` collapses every transport failure into "fetch failed"; the actionable
+ * cause (ECONNREFUSED, certificate error, DNS) lives on `error.cause`. Surface one
+ * level of cause so the settings UI says something a user can act on.
+ */
+function describeFetchError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error)
   }
+  if (error.name === 'AbortError') {
+    return `timed out after ${TEST_TIMEOUT_MS / 1000}s`
+  }
+  const cause = (error as { cause?: unknown }).cause
+  const causeMessage =
+    cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : undefined
+  return causeMessage && causeMessage !== error.message
+    ? `${error.message} (${causeMessage})`
+    : error.message
 }
 
 /** 16-bit PCM WAV of ~0.1s of silence, enough for a server to accept or reject. */

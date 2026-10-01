@@ -36,7 +36,11 @@ export type SpeechApi = {
     apiKey?: string
   }) => Promise<CustomSttEndpointStatus>
   clearCustomEndpoint: () => Promise<CustomSttEndpointStatus>
-  testCustomEndpoint: () => Promise<CustomSttEndpointTestResult>
+  testCustomEndpoint: (probe?: {
+    baseUrl: string
+    model: string
+    language: string
+  }) => Promise<CustomSttEndpointTestResult>
   downloadModel: (modelId: string) => Promise<void>
   cancelDownload: (modelId: string) => Promise<void>
   deleteModel: (modelId: string) => Promise<void>
