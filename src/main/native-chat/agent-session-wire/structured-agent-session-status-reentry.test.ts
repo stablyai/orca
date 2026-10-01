@@ -1,10 +1,12 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentHookServer } from '../../agent-hooks/server'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import {
@@ -34,12 +36,12 @@ async function openJournal(): Promise<AgentSessionJournal> {
       agent: 'codex',
       providerHandle: { kind: 'codex', threadId: 'thread-1' }
     },
-    journalDir: join(root, SESSION)
+    stateDirectory: join(root, SESSION)
   })
   await journal.appendItem(
     { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 1 },
     { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   return journal
 }
@@ -51,7 +53,7 @@ async function createFeed() {
     string,
     {
       journal: AgentSessionJournal
-      params: { location: AgentSessionExecutionLocation; provider: 'codex' }
+      params: { location: AgentSessionExecutionLocation; provider: AgentSessionHandleProvider }
     }
   >([[SESSION, session]])
   const server = new AgentHookServer()

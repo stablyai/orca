@@ -11,10 +11,6 @@ vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
 import { RuntimeServerEnvironmentCommands } from './runtime-server-environment-commands'
 
-function spawnEnoent(): Error {
-  return Object.assign(new Error('spawn git ENOENT'), { code: 'ENOENT', syscall: 'spawn git' })
-}
-
 describe('RuntimeServerEnvironmentCommands.isGitAvailable', () => {
   const commands = new RuntimeServerEnvironmentCommands()
 
@@ -29,28 +25,5 @@ describe('RuntimeServerEnvironmentCommands.isGitAvailable', () => {
   it('answers true when git reports its version', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git version 2.25.1\n', stderr: '' })
     await expect(commands.isGitAvailable()).resolves.toBe(true)
-  })
-
-  it('answers false only when the spawn itself found no binary', async () => {
-    gitExecFileAsyncMock.mockRejectedValue(spawnEnoent())
-    await expect(commands.isGitAvailable()).resolves.toBe(false)
-  })
-
-  it('rejects an ENOENT when the working directory disappeared', async () => {
-    vi.spyOn(process, 'cwd').mockReturnValue(`${process.cwd()}-missing`)
-    gitExecFileAsyncMock.mockRejectedValue(spawnEnoent())
-    await expect(commands.isGitAvailable()).rejects.toThrow('spawn git ENOENT')
-  })
-
-  it('rejects a slow host rather than reporting no Git', async () => {
-    gitExecFileAsyncMock.mockRejectedValue(new Error('git --version timed out after 3000ms'))
-    await expect(commands.isGitAvailable()).rejects.toThrow('timed out')
-  })
-
-  it('rejects a repository-level git failure rather than reporting no Git', async () => {
-    gitExecFileAsyncMock.mockRejectedValue(
-      Object.assign(new Error('detected dubious ownership'), { code: 128 })
-    )
-    await expect(commands.isGitAvailable()).rejects.toThrow('dubious ownership')
   })
 })

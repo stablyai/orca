@@ -3,7 +3,7 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import type { NativeChatMessageSlot } from './native-chat-transcript-slots'
 
 type VirtualizerOptionsCapture = {
   current:
@@ -41,8 +41,9 @@ vi.mock('@tanstack/react-virtual', () => ({
 const { MAX_RETIRED_NATIVE_CHAT_MEASUREMENTS, useNativeChatTranscriptWindow } =
   await import('./use-native-chat-transcript-window')
 
-function slot(id: string): NativeChatTranscriptSlot {
+function slot(id: string): NativeChatMessageSlot {
   return {
+    kind: 'message',
     message: {
       id,
       role: 'assistant',
@@ -58,6 +59,8 @@ function slot(id: string): NativeChatTranscriptSlot {
     folded: false,
     turnFolds: false,
     turnDiff: undefined,
+    subagentRoster: undefined,
+    depth: 0,
     estimatedHeight: 48
   }
 }

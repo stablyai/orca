@@ -8,8 +8,8 @@ import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 /** How a surface is built once the executor has decided which one. Injected because an
- *  orchestration worker's session carries a dispatch hold and a mailbox a plain launch must not
- *  take, while the decision and ordering above it are identical. */
+ *  orchestration worker's session carries a redrive subscription and a mailbox a plain launch
+ *  must not take, while the decision and ordering above it are identical. */
 export type AgentLaunchSurfaceFactory = {
   createStructuredSession(args: {
     worktreeId: string
@@ -64,8 +64,8 @@ export type AgentLaunchSurfaceFactory = {
   deliverTerminalPrompt?(args: { handle: string; prompt: AgentLaunchPrompt }): Promise<boolean>
 }
 
-/** `fence` is carried out of the create because a send must name the lease it was admitted against,
- *  and re-reading it later would read whatever fence the session has by then. */
+/** `fence` is the lease the create was admitted at, carried so the launch prompt's send can fill its
+ *  envelope without re-reading the session; the host does not check a write's fence. */
 export type AgentLaunchStructuredSurface = {
   sessionId: string
   handle: string

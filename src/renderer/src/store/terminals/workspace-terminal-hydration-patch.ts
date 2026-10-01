@@ -174,6 +174,11 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.activeTabIdByWorktree,
       workspaceKeys
     ),
+    pendingDirectSshLayoutEditsByTabId: Object.fromEntries(
+      Object.entries(state.pendingDirectSshLayoutEditsByTabId ?? {}).filter(
+        ([tabId]) => !deletedTargetTabIds.has(tabId)
+      )
+    ),
     tabsByWorktree: replaceHydratedRecordKeys(
       state.tabsByWorktree,
       hydrated.tabsByWorktree,
@@ -193,7 +198,7 @@ export function targetScopedWorkspaceHydrationPatch(
       ),
       ...state.defaultTerminalTabsAppliedByWorktreeId
     },
-    // Why passed through whole: hydration already unioned it with live store state, and the map is
+    // Why passed through whole: hydration already fell back to live store state, and the map is
     // keyed by tab id rather than by workspace key so replaceHydratedRecordKeys has nothing to match.
     closedTerminalTabTombstonesByTabId: hydrated.closedTerminalTabTombstonesByTabId,
     automaticAgentResumeClaimsByTabId: replaceHydratedRecordKeys(

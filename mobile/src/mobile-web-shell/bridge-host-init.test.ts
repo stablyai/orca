@@ -7,10 +7,6 @@ import {
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge/bridge-caps'
 import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
-import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
-import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
-import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
-import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import { routeViewOf } from './page-route-policy'
 
 describe('init and state', () => {
@@ -29,13 +25,6 @@ describe('init and state', () => {
       type: 'init',
       sessionId: 'session-a',
       buildId: 'build-a',
-      // What this shell takes from the page, which is the page's own check before it posts one.
-      accepts: [
-        BRIDGE_ROUTE_PARAM_CLEAR,
-        BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
-        BRIDGE_PAGE_PAINTED,
-        BRIDGE_BACK_CLAIM_NOTIFY
-      ],
       connection: {
         state: 'reconnecting',
         reconnectAttempt: 3,
@@ -265,7 +254,7 @@ describe('init and state', () => {
       route: { pathname: '/h/host-a/session/wt-1' },
       post: () => (view.gone ? Promise.reject(new Error('the view is gone')) : Promise.resolve())
     })
-    // A page that declares nothing is never sent a second `init`, so the tap can only be held.
+    // The second `init` the tap sends is refused with the view, so only the held route is left.
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.publishRoute({
       pathname: '/h/host-a/session/wt-1',
@@ -274,7 +263,7 @@ describe('init and state', () => {
     for (let turn = 0; turn < 4; turn += 1) {
       await Promise.resolve()
     }
-    expect(bridge.posted).toHaveLength(1)
+    expect(bridge.posted).toHaveLength(2)
     // The next document over the same host: a reload, or the view coming back.
     view.gone = false
     bridge.host.receive(clientFrame({ type: 'ready' }))

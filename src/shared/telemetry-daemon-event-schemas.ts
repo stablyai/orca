@@ -201,6 +201,19 @@ export const settingsChangedSchema = z
   })
   .strict()
 
+// Why: profile-state cutover needs fleet-level evidence that authority selection and migration
+// agree with the rollout plan. Keep this enum-only: paths, profile IDs, and serialized state never
+// belong in telemetry.
+export const profileStateAuthoritySelectedSchema = z
+  .object({
+    backend: z.enum(['json', 'sqlite']),
+    classification: z.enum(['neither', 'json-only', 'sqlite-only', 'both']),
+    authority_mode: z.enum(['legacy', 'sqlite-candidate', 'sqlite-established']),
+    runtime: z.enum(['desktop', 'orcad']),
+    migrated: z.boolean()
+  })
+  .strict()
+
 // Managed-hook installer label from `AGENT_HOOK_TARGETS`, distinct from `AGENT_KIND_VALUES`; `claude` (not `claude-code`) is intentional.
 export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>

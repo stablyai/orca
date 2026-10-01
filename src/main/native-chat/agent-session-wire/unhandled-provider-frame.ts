@@ -1,4 +1,4 @@
-import type { AgentJournalStatusItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalPlainStatusItem } from '../../../shared/agent-session-journal-types'
 import {
   boundInlineText,
   boundPayload,
@@ -12,7 +12,7 @@ import {
 } from './provider-frame-disposition'
 
 export type UnhandledProviderFrameJournalItem = {
-  body: AgentJournalStatusItem
+  body: AgentJournalPlainStatusItem
   /** Why the frame surfaced. Error frames are exempt from generic-row caps. */
   classification: 'timeline-substantive' | 'error-surface'
 }

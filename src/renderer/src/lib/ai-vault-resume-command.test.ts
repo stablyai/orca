@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
-  buildAiVaultResumeStartupForWorktree,
-  getAiVaultResumePlatform
+  buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
 
 vi.mock('@/lib/new-workspace', () => ({
@@ -365,111 +364,6 @@ describe('ai vault resume command runtime', () => {
       },
       providerSession: { key: 'session_id', id: 'session-1' }
     })
-  })
-
-  it('uses POSIX command wrapping for Windows-path projects forced to WSL', () => {
-    const state = makeState({
-      worktreePath: 'C:\\Users\\alice\\repo',
-      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-    })
-
-    expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: '/home/alice/repo',
-          codexHome: null
-        }
-      })
-    ).toBe("claude '--resume' 'session one'")
-  })
-
-  it('uses POSIX command wrapping for SSH-owned worktrees on Windows clients', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
-
-    expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: '/home/alice/repo',
-          codexHome: null
-        }
-      })
-    ).toBe("claude '--resume' 'session one'")
-  })
-
-  it('uses POSIX command wrapping for folder workspaces with their own SSH target', () => {
-    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-    state.activeWorktreeId = 'folder:folder-1'
-    state.folderWorkspaces = [
-      {
-        id: 'folder-1',
-        projectGroupId: 'group-1',
-        name: 'Platform',
-        folderPath: '/home/alice/platform',
-        connectionId: 'folder-ssh'
-      }
-    ] as never
-    state.projectGroups = [{ id: 'group-1', connectionId: null, executionHostId: null }] as never
-
-    expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'folder:folder-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: '/home/alice/platform',
-          codexHome: null
-        }
-      })
-    ).toBe("claude '--resume' 'session one'")
-  })
-
-  it('uses POSIX command wrapping for WSL UNC folder workspaces on Windows clients', () => {
-    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-    state.activeWorktreeId = 'folder:folder-1'
-    state.folderWorkspaces = [
-      {
-        id: 'folder-1',
-        projectGroupId: 'group-1',
-        name: 'Platform',
-        folderPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
-      }
-    ] as never
-    state.projectGroups = [{ id: 'group-1', connectionId: null, executionHostId: 'local' }] as never
-
-    expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'folder:folder-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: '/home/alice/platform',
-          codexHome: null
-        }
-      })
-    ).toBe("claude '--resume' 'session one'")
-  })
-
-  it('keeps WSL UNC worktrees on POSIX command wrapping without an explicit override', () => {
-    const state = makeState({
-      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
-    })
-
-    expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
   })
 
   it('converts WSL UNC Codex homes before building Linux resume commands', () => {

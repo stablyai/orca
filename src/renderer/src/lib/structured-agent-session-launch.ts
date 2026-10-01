@@ -27,8 +27,10 @@ import {
 } from '@/lib/structured-agent-session-launch-callers'
 import * as launchDraft from './structured-agent-session-launch-draft'
 import { trackStructuredLaunchFailureToast } from './structured-agent-session-launch-failure-toast'
+import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
 import {
   deleteStructuredLaunchStateIfCurrent,
+  getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchState,
   getStructuredLaunchStateBySessionId,
   markStructuredAgentSessionLaunchCancelled,
@@ -51,7 +53,7 @@ export {
   retireStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab,
   subscribeStructuredAgentLaunchStatus,
-  useStructuredAgentSessionLaunchFailureReason,
+  useStructuredAgentSessionLaunchFailure,
   useStructuredAgentSessionLaunchLifecycle,
   type StructuredAgentLaunchStatus,
   type StructuredAgentSessionLaunchLifecycle
@@ -138,7 +140,13 @@ function trackLaunchSettlement(
         }
         return
       }
-      state.failureReason = error instanceof Error ? error.message : String(error)
+      // The host's message is for its log; the Retry line words the refusal itself.
+      const failure = structuredLaunchFailure(error)
+      if (failure) {
+        state.failure = failure
+      } else {
+        delete state.failure
+      }
       if (error instanceof StructuredAgentSessionCreateRefusalError) {
         settleStructuredLaunchRefusal(state)
       } else if (!state.visibilityUnknown) {
@@ -171,7 +179,7 @@ function restartStructuredLaunchState(state: StructuredLaunchState): void {
     state.intent = retryStructuredAgentSessionLaunchIntent(state.intent)
   }
   resetStructuredLaunchCallers(state)
-  delete state.failureReason
+  delete state.failure
   state.callers.outcome = 'pending'
   // A new create seeds from the settings of now; picks held through the failure still apply.
   state.selection = { ...state.selection, seed: state.intent.seedOptions }
@@ -307,4 +315,15 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
   }
   restartStructuredLaunchState(state)
   return true
+}
+
+/** A message queued on a chat whose start never published relaunches it; the message goes out on
+ *  publish. Shared by the chat's composer and by messages sent from elsewhere. */
+export function relaunchFailedStructuredAgentSessionForMessage(
+  worktreeId: string,
+  sessionId: string
+): void {
+  if (getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId) === 'failed') {
+    retryStructuredAgentSessionLaunch(worktreeId, sessionId)
+  }
 }

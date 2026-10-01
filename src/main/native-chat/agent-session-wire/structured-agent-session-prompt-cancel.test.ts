@@ -1,9 +1,10 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performCancel, type AgentSessionTurnContext } from './structured-agent-session-turns'
@@ -35,7 +36,7 @@ afterEach(async () => {
 
 async function pendingPrompt(): Promise<{ journal: AgentSessionJournal; itemId: string }> {
   root = await mkdtemp(join(tmpdir(), 'orca-prompt-cancel-'))
-  const journal = await journals.open({ identity: IDENTITY, journalDir: root })
+  const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
   const item = await journal.appendItem(
     PROMPT_IDENTITY,
     {
@@ -50,7 +51,7 @@ async function pendingPrompt(): Promise<{ journal: AgentSessionJournal; itemId: 
         resolvedAt: null
       }
     },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   return { journal, itemId: item.itemId }
 }
@@ -117,7 +118,7 @@ describe('performCancel for a pending prompt', () => {
             resolvedAt: null
           }
         },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     })
 

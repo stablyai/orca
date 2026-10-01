@@ -13,18 +13,9 @@
 import type * as FsPromises from 'node:fs/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, resolveGitDirMock, moveWorktreeDirectoryToTrashMock } = vi.hoisted(
-  () => ({
-    gitExecFileAsyncMock: vi.fn(),
-    resolveGitDirMock: vi.fn(),
-    moveWorktreeDirectoryToTrashMock: vi.fn()
-  })
-)
-
-vi.mock('../main/worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrash: vi.fn(async () => true),
-  scheduleWorktreeTrashDeletion: vi.fn()
+const { gitExecFileAsyncMock, resolveGitDirMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  resolveGitDirMock: vi.fn()
 }))
 
 vi.mock('../main/git/runner', () => ({
@@ -170,9 +161,6 @@ beforeEach(() => {
   gitExecFileAsyncMock.mockReset()
   resolveGitDirMock.mockReset()
   resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
-  moveWorktreeDirectoryToTrashMock.mockReset()
-  // Default: the checkout cannot be renamed aside, so removal runs `worktree remove` in place.
-  moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined)
 })
 
 describe('relay/desktop branch-delete refusal parity', () => {

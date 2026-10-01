@@ -105,7 +105,7 @@ export type AgentLaunchOutcome =
       sessionId: string
       handle: string
       /** The host-owned id of the tab that shows this chat: the tab half of the reserved `paneKey`
-       *  when one was sent, else the one the host recorded. Identity, not placement, like the
+       *  when one was sent, else the one the host gave its tab. Identity, not placement, like the
        *  terminal arm's `paneKey`. Absent from hosts that predate it. */
       tabId?: string
     }
@@ -305,7 +305,9 @@ export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
   'startupDraft',
   'startupLaunchConfig',
   'startupEnv',
-  'startupCommandDelivery'
+  'startupCommandDelivery',
+  // The launch carries its own; a create's copy would be a second, possibly contradicting, answer.
+  'launchSource'
 ] as const
 
 /** Strips the reserved agent fields from a create payload. Callers migrating from

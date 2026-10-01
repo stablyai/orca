@@ -136,9 +136,14 @@ function resolveBase(root, requestedBase) {
 }
 
 export function collectAddedLineRanges(root, requestedBase) {
-  const base = resolveBase(root, requestedBase)
-  const mergeBase = runGit(root, ['merge-base', base, 'HEAD']).trim()
-  const comparisonBase = resolvePullRequestDiffBase(root, mergeBase)
+  // On a pull_request checkout HEAD is the merge commit, so its first parent is the base side and
+  // no merge base has to be computed. Resolving it first is what lets CI checkout shallowly: the
+  // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
+  // Off that ref (local runs) the requested base is an arbitrary branch tip, so the merge base is
+  // still what isolates this branch's own lines.
+  const comparisonBase =
+    resolvePullRequestDiffBase(root, null) ??
+    runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
   const changedFiles = splitNullDelimited(
     runGit(root, ['diff', '--name-only', '-z', '--diff-filter=ACMRTUB', comparisonBase, '--'])
   )
@@ -174,7 +179,7 @@ export function collectAddedLineRanges(root, requestedBase) {
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length
     rangesByFile.set(file, [{ start: 1, end: lineCount }])
   }
-  return { base, comparisonBase, rangesByFile }
+  return { comparisonBase, rangesByFile }
 }
 
 function parseOxlintOutput(stdout, label) {
@@ -414,10 +419,12 @@ export function main(
   root = process.cwd(),
   requestedBase = process.argv.slice(2).find((argument) => argument !== '--')
 ) {
-  const { base, comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
+  const { comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
   const files = [...rangesByFile.keys()]
   if (files.length === 0) {
-    console.log(`Changed-code quality gate: no changed JavaScript or TypeScript since ${base}.`)
+    console.log(
+      `Changed-code quality gate: no changed JavaScript or TypeScript since ${comparisonBase.slice(0, 12)}.`
+    )
     return 0
   }
 

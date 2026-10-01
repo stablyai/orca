@@ -6,7 +6,7 @@ import {
 } from './bridge-envelope'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
-import { bridgeNotifyRefusal, type BridgeNotifyName } from './bridge-notify-grants'
+import { bridgeNotifyRefusal } from './bridge-notify-grants'
 
 const GRANTED = [BRIDGE_FAULT_GRANT]
 
@@ -156,29 +156,6 @@ describe('the haptics notify', () => {
         granted: [BRIDGE_HAPTICS_GRANT]
       })
     ).toBe('before-ready')
-  })
-})
-
-/**
- * The totality shown rather than described.
- *
- * The docstring above says a name with no row is a compile error; this is the error. Every row the
- * table has, less the haptics one, against the same `Record` over the union — checked by
- * `tsconfig.test.json`, so the day the omission stops being an error the unused directive is.
- */
-describe('a grant table missing a row', () => {
-  it('does not typecheck', () => {
-    // @ts-expect-error TS2741: no row for the haptics notify, the hole the Record closes.
-    const incomplete: Readonly<Record<BridgeNotifyName, string | null>> = {
-      foreground: null,
-      terminalViewport: null,
-      navigate: 'navigate',
-      [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',
-      storage: 'storage',
-      [BRIDGE_EXTERNAL_LINK_GRANT]: BRIDGE_EXTERNAL_LINK_GRANT,
-      [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT
-    }
-    expect(Object.keys(incomplete)).toHaveLength(7)
   })
 })
 

@@ -42,40 +42,57 @@ describe('terminal close CLI', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
-  it('reports an unverifiable PTY stop as a failing JSON outcome', async () => {
-    process.exitCode = undefined
-    const close = {
-      handle: 'term-remote',
-      tabId: 'tab-1',
-      ptyKilled: false,
-      ptyStopVerdict: 'unverifiable' as const,
-      ptyStopReason: 'its SSH provider is no longer registered'
-    }
-    const call = vi.fn().mockResolvedValue({
-      id: 'req-close',
-      ok: true,
-      result: { close },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await TERMINAL_HANDLERS['terminal close']({
-      flags: new Map([['terminal', close.handle]]),
-      client: { call } as unknown as RuntimeClient,
-      cwd: '/tmp/worktree',
-      json: true
-    })
-
-    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
-      ok: false,
-      error: {
-        code: 'terminal_stop_unverifiable',
-        message: expect.stringContaining('unverifiable'),
-        data: { close }
+  it.each([
+    [
+      'its SSH provider is no longer registered',
+      false,
+      'Closed terminal term-remote. The PTY was not confirmed stopped: its SSH provider is no longer registered.'
+    ],
+    [
+      'Request "pty.shutdown" timed out after 14250ms',
+      true,
+      'Closed terminal term-remote. The PTY was not confirmed stopped: Request "pty.shutdown" timed out after 14250ms. The kill retries when the host reconnects.'
+    ],
+    // An older host never reports a recorded kill, so the same reason promises nothing.
+    [
+      'Request "pty.shutdown" timed out after 14250ms',
+      false,
+      'Closed terminal term-remote. The PTY was not confirmed stopped: Request "pty.shutdown" timed out after 14250ms.'
+    ]
+  ])(
+    'reports an unverifiable stop (%s, kill recorded: %s) as a committed close with exit code 1',
+    async (ptyStopReason, pendingKillRecorded, message) => {
+      process.exitCode = undefined
+      const close = {
+        handle: 'term-remote',
+        tabId: 'tab-1',
+        ptyKilled: false,
+        ptyStopVerdict: 'unverifiable' as const,
+        ptyStopReason,
+        ...(pendingKillRecorded ? { pendingKillRecorded: true as const } : {})
       }
-    })
-    expect(process.exitCode).toBe(1)
-  })
+      const call = vi.fn().mockResolvedValue({
+        id: 'req-close',
+        ok: true,
+        result: { close },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await TERMINAL_HANDLERS['terminal close']({
+        flags: new Map([['terminal', close.handle]]),
+        client: { call } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+
+      expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+        ok: false,
+        error: { code: 'terminal_stop_unverifiable', message, data: { close } }
+      })
+      expect(process.exitCode).toBe(1)
+    }
+  )
 
   it('reports a live PTY stop as a failing human outcome', async () => {
     process.exitCode = undefined

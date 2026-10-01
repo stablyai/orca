@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type {
@@ -8,7 +9,8 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget,
-  type StructuredAgentSessionLifecycleJournal
+  type StructuredAgentSessionLifecycleJournal,
+  type StructuredAgentSessionLinkageJournal
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
@@ -154,6 +156,10 @@ function persistedTarget(
           visit(itemId, 0, body)
         }
       },
+      // This double keeps no producer linkage, so every row reads as the session's own.
+      visitItemsWithLinkage: ((visit) => {
+        persisted.forEach((body, itemId) => visit(itemId, 0, body, {}))
+      }) satisfies StructuredAgentSessionLinkageJournal['visitItemsWithLinkage'],
       itemBody: (itemId: string) => persisted.get(itemId) ?? null,
       epoch: 'test'
     } as unknown as AgentSessionJournal
@@ -201,7 +207,8 @@ describe('claude journal translation — background task rows', () => {
     deferred.bind(target)
     deferred.sink.appendItem(
       { provider: 'orca', clientMessageId: 'blocked-prefill' },
-      { kind: 'message', role: 'system', blocks: [{ type: 'text', text: 'prefill' }] }
+      { kind: 'message', role: 'system', blocks: [{ type: 'text', text: 'prefill' }] },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await appendEntered.promise
     const notification = systemFrame({
@@ -512,7 +519,7 @@ describe('claude journal translation — background task rows', () => {
     const { translator, fallbackRows, taskRowIds, taskRowTexts } = harness()
     playFailedBackgroundCommand(translator)
 
-    // ABLATION: drop `message:system:task_*` from CLAUDE_TYPED_TRANSLATOR_KINDS
+    // ABLATION: drop `message:system:task_*` from TYPED_TRANSLATOR_KINDS
     // and this is `['claude · message:system:task_updated', 'claude ·
     // message:system:task_notification']` — the reported bug exactly.
     expect(fallbackRows()).toEqual([])

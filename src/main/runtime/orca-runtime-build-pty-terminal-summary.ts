@@ -1,7 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithGetPtyRecordForPaneKey } from './orca-runtime-get-pty-record-for-pane-key'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import { runtimeWorktreeIdentityKey, type ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../shared/runtime-types'
 import { getLatestPtyTitle } from './runtime-worktree-status-projection'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -28,6 +28,14 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
     const title = getLatestPtyTitle(pty)
     const pane = parsePaneKey(pty.paneKey ?? '')
     const orphaned = !ptyHoldsRecordedSurface(pty, this.ptySurfaceTopology())
+    // A live process awaiting its pane binding is not evidence of an orphan.
+    if (
+      orphaned &&
+      (this.pendingPtyRegistrationIncarnations.has(pty.ptyId) ||
+        this.terminalMutationLock.hasActiveSpawns(runtimeWorktreeIdentityKey(pty.worktreeId)))
+    ) {
+      throw new Error('terminal_surface_ownership_unavailable')
+    }
     return {
       handle: this.issuePtyHandle(pty),
       ptyId: pty.ptyId,

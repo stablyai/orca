@@ -25,13 +25,6 @@ vi.mock('./status', () => ({
   runWithGitReadCacheInvalidation: <T>(run: () => Promise<T>) => run()
 }))
 
-// Default: the checkout cannot be renamed aside, so removal deletes it in place.
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: vi.fn().mockResolvedValue(undefined),
-  restoreWorktreeDirectoryFromTrash: vi.fn().mockResolvedValue(true),
-  scheduleWorktreeTrashDeletion: vi.fn()
-}))
-
 vi.mock('./worktree', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeModule>()),
   resolveWorktreeAddBaseContext: vi.fn(async () => ({ effectiveBase: 'origin/main' })),

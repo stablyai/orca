@@ -203,7 +203,9 @@ unquoted parameter string on whitespace.
 
 One site still spells `-ExecutionPolicy Bypass` with **no** encoding, the weaker
 signal: `src/main/cli/wsl-cli-scripts.ts` (`-File`, and it is a real script
-file, so the switch is not a no-op there). `src/main/system-fonts.ts` dropped it
+file, so the switch is not a no-op there). Every Orca-managed WSL terminal now
+reaches it by default on each CLI call (`docs/reference/wsl-managed-cli.md`), not
+only after the user registers the WSL CLI. `src/main/system-fonts.ts` dropped it
 for plain `-Command`; `src/shared/secure-path-windows-acl.ts` no longer runs
 PowerShell at all, having moved to `icacls.exe`; and computer use now asks for
 `-ExecutionPolicy RemoteSigned` in
@@ -272,7 +274,7 @@ _shorten the interpreter chain_ rather than to hide a window.
 #18875 is a worked example of that doctrine. The Claude Code lifecycle hook was
 registered as `powershell.exe -NoProfile -EncodedCommand <...>` whose entire
 decoded payload was a `Test-Path` and a call to `~/.orca/agent-hooks/claude-hook.cmd`.
-It now registers the script path itself (`<path> || echo {}`), so `bash ->
+It now registers the bare script path itself, with no shell operators, so `bash ->
 powershell -> cmd -> curl` became `bash -> cmd -> curl` and one
 `powershell.exe -EncodedCommand` per hook event — a first-class Defender alert
 title — leaves the tree. The reporting box fired ~6 900 of them in five days,
@@ -285,24 +287,24 @@ concurrency, invoked as Claude Code invokes it. **No EDR verdict on either tree
 was measured**, so claim the removed `-EncodedCommand` spelling and the shorter
 chain, not a score. `cmd.exe` remains in the tree, spelled by MSYS's own `.cmd`
 spawn rather than by us — the doc's one "unavoidable for `.cmd`/`.bat`" case,
-carrying an absolute path and two literal tokens, with no caret escaping, no
+carrying only an absolute path, with no caret escaping, no
 encoding and no free text. The encoded launcher is still the shape for profile
 paths the shells cannot carry bare (a space, `%`, `^`, `&`, non-ASCII, a UNC
-profile) and for hosts where Git Bash is not resolvable, because PowerShell 5.1
-rejects `||` (measured: parse error, exit 1).
+profile).
 
-That last clause is the standing assumption of this change, and it is worth
-stating plainly because it is **not** measured. `||` parses in Git Bash, cmd.exe
-and pwsh, but not in Windows PowerShell 5.1, so the direct shape is correct for
-any host that is one of the first three. Claude Code itself is a Git Bash host on
-native Windows. What no one here has verified is which host a _compat consumer_
-uses: cursor-agent and Devin import `~/.claude/settings.json` and run `command`
-through their own launcher (the managed `.cmd` carries a `DEVIN_PROJECT_DIR` skip
-for exactly that). If one of them spawns hook strings through Windows PowerShell
-5.1, its imported Claude events become a parse error with empty stdout, which is
-the fail-closed case #14818 exists to prevent. The encoded launcher had no such
-assumption — it was a `powershell.exe` invocation and therefore parsed anywhere.
-Before widening the direct shape to another agent, measure that consumer's host.
+The direct shape first shipped as `<path> || echo {}`, gated on Git Bash being
+resolvable. That gate guessed at a choice Claude Code makes on its own: it runs
+hooks under Windows PowerShell 5.1 when it picks PowerShell, and 5.1 rejects `||`
+(parse error, exit 1), so every hook failed (STA-8913). The registered command is
+now the bare path, which parses in Git Bash, cmd.exe, pwsh and PowerShell 5.1.
+The neutral `{}` for a missing payload lives in the `claude-hook.cmd` entry, which
+hands off to `claude-hook-impl.cmd` in the same `cmd.exe`; a deleted entry is an
+ordinary non-blocking hook error (never exit 2) until the next install rewrites it.
+Compat consumers such as cursor-agent and Devin import `~/.claude/settings.json`
+and run `command` through their own launcher (the payload carries a
+`DEVIN_PROJECT_DIR` skip for that); one that cannot start a `.cmd` at all still
+gets a launch failure. Before widening the direct shape to another agent, measure
+that consumer's host.
 
 ### Computer use: screen capture, synthetic input, runtime-compiled MSIL
 

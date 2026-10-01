@@ -84,6 +84,28 @@ function parse(source, fileName) {
   )
 }
 
+function grantReferences(source, fileName) {
+  const calls = new Set()
+  const imports = new Set()
+  const walk = (node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      calls.add(node.expression.text)
+    }
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      imports.add(node.moduleSpecifier.text)
+    }
+    ts.forEachChild(node, walk)
+  }
+  walk(parse(source, fileName))
+  return { calls, imports }
+}
+
+function referencesReachRow(references, row) {
+  return row.kind === 'call'
+    ? references.calls.has(row.callee)
+    : row.kind === 'import' && references.imports.has(row.specifier)
+}
+
 /**
  * Whether this module reaches the row's seam: calls the function, or imports the substituted module.
  *
@@ -92,44 +114,36 @@ function parse(source, fileName) {
  * can never ask for it, which is the failure a hand-written list already had.
  */
 export function moduleReachesGrantRow(source, fileName, row) {
-  let reached = false
-  const walk = (node) => {
-    if (
-      row.kind === 'call' &&
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === row.callee
-    ) {
-      reached = true
+  return referencesReachRow(grantReferences(source, fileName), row)
+}
+
+// One source version per file, scoped to a census; edits invalidate the parsed references.
+export function createGrantCallSiteReader() {
+  const files = new Map()
+  return (source, fileName, row) => {
+    let held = files.get(fileName)
+    if (held?.source !== source) {
+      held = { source, references: grantReferences(source, fileName) }
+      files.set(fileName, held)
     }
-    if (
-      row.kind === 'import' &&
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text === row.specifier
-    ) {
-      reached = true
-    }
-    ts.forEachChild(node, walk)
+    return referencesReachRow(held.references, row)
   }
-  walk(parse(source, fileName))
-  return reached
 }
 
 /** Every module in the closure that reaches the row, the seam itself never counting as its own use. */
-export function grantCallSites(mobileDir, closure, row) {
+export function grantCallSites(mobileDir, closure, row, readModule = moduleReachesGrantRow) {
   return closure.local.filter((file) => {
     if (!/\.tsx?$/.test(file) || file === row.seam) {
       return false
     }
-    return moduleReachesGrantRow(readFileSync(join(mobileDir, file), 'utf8'), file, row)
+    return readModule(readFileSync(join(mobileDir, file), 'utf8'), file, row)
   })
 }
 
 /** Every grant this closure's own call sites need, in row order. */
-export function grantsNeeded(mobileDir, closure) {
+export function grantsNeeded(mobileDir, closure, readModule) {
   return PAGE_GRANT_CALL_SITES.filter(
-    (row) => grantCallSites(mobileDir, closure, row).length > 0
+    (row) => grantCallSites(mobileDir, closure, row, readModule).length > 0
   ).flatMap((row) => row.grants)
 }
 
@@ -141,11 +155,11 @@ export function grantsNeeded(mobileDir, closure) {
  * grant. A single whole-manifest check would red under every row at once and say only that
  * something was missing.
  */
-export async function grantsMissingForRow(mobileDir, routes, closureOf, row) {
+export async function grantsMissingForRow(mobileDir, routes, closureOf, row, readModule) {
   const missing = []
   for (const route of routes) {
     const closure = await closureOf(route.pathname)
-    if (grantCallSites(mobileDir, closure, row).length === 0) {
+    if (grantCallSites(mobileDir, closure, row, readModule).length === 0) {
       continue
     }
     for (const grant of row.grants) {

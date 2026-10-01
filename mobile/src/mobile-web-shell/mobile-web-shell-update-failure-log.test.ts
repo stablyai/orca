@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
-import { createGenerationStore } from './generation-store'
+import { createGenerationStore, MAX_CACHED_HOSTS } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
 import {
@@ -45,9 +45,16 @@ describe('appendUpdateFailure', () => {
   })
 
   it('holds a ceiling across hosts, evicting the oldest of all', () => {
-    const kept = appendAll(Array.from({ length: 30 }, (_, at) => failure(`host-${at}`, at)))
+    const kept = appendAll(
+      Array.from({ length: MAX_UPDATE_FAILURES + 10 }, (_, at) => failure(`host-${at}`, at))
+    )
     expect(kept).toHaveLength(MAX_UPDATE_FAILURES)
     expect(kept[0]?.at).toBe(10)
+  })
+
+  // Pinned here because deriving it would make the failure log import the store that imports it.
+  it('keeps a full per-host history for every cached host', () => {
+    expect(MAX_UPDATE_FAILURES).toBe(MAX_UPDATE_FAILURES_PER_HOST * MAX_CACHED_HOSTS)
   })
 
   it('drops a build id that is not a digest rather than keep host text', () => {

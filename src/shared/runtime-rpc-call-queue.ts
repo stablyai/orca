@@ -51,6 +51,12 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
   )
 }
 
+// Why its own lane: worktree.rm replies only when Git has deleted the checkout, so its calls would
+// hold the foreground slots listing refreshes need; the background lane's slots belong to status.
+function isLongWaitRuntimeMethod(method: string): boolean {
+  return method === 'worktree.rm'
+}
+
 export class RuntimeRpcCallQueuePool {
   private readonly queues = new Map<string, RuntimeCallQueue>()
   private queuedCallCount = 0
@@ -74,10 +80,12 @@ export class RuntimeRpcCallQueuePool {
     if (signal?.aborted) {
       return Promise.reject(abortSignalReason(signal))
     }
+    // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
+    const queueKey = isLongWaitRuntimeMethod(method) ? `${selector}\u0000long-wait` : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }
-    const existingQueue = this.queues.get(selector)
+    const existingQueue = this.queues.get(queueKey)
     if (existingQueue && this.queuedCount(existingQueue) >= this.maxQueuedPerSelector) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('selector'))
     }
@@ -89,7 +97,7 @@ export class RuntimeRpcCallQueuePool {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('memory'))
     }
 
-    const queue = this.getQueue(selector)
+    const queue = this.getQueue(queueKey)
     return new Promise<T>((resolve, reject) => {
       const call: QueuedRuntimeCall<T> = {
         background: isBackgroundRuntimeMethod(method),
@@ -105,10 +113,10 @@ export class RuntimeRpcCallQueuePool {
       this.queuedCallCount += 1
       this.retainedCallBytes += retainedBytes
       if (signal) {
-        call.onAbort = () => this.cancelQueuedCall(selector, queue, call)
+        call.onAbort = () => this.cancelQueuedCall(queueKey, queue, call)
         signal.addEventListener('abort', call.onAbort, { once: true })
       }
-      this.pump(selector, queue)
+      this.pump(queueKey, queue)
     })
   }
 

@@ -70,6 +70,19 @@ describe('createTerminalTitleTracker command-finished facts', () => {
     ])
   })
 
+  it('reports command starts in byte order with command finishes', () => {
+    const events: string[] = []
+    const tracker = createTerminalTitleTracker({
+      onCommandStarted: () => events.push('started'),
+      onCommandFinished: (exitCode) => events.push(`finished:${exitCode}`)
+    })
+
+    tracker.handleChunk(`${ESC}]133;C${BEL}running${ESC}]133;D;0${BEL}${ESC}]13`)
+    tracker.handleChunk(`3;C${BEL}`)
+
+    expect(events).toEqual(['started', 'finished:0', 'started'])
+  })
+
   it('orders chunk facts titles → command-finished → bell', () => {
     const { events, tracker } = createRecordingTracker()
 

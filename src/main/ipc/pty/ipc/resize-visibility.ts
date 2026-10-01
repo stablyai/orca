@@ -5,8 +5,7 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../../../../shared/pty-renderer-delivery-health'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
-import { setTerminalViewAttributes } from '../../../runtime/terminal-view-attribute-store'
-import { validateTerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import { installTerminalViewAttributesIpc } from './terminal-view-attributes-ipc'
 import {
   recordHiddenRendererPtyDataDrop,
   setRendererPtyDeliveryInterest,
@@ -180,7 +179,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   ipcMain.removeAllListeners('pty:rendererDispatcherReady')
   ipcMain.on('pty:rendererDispatcherReady', (event) => {
     // Why: the reconcile below destructively clears delivery accounting, so a straggler handshake from a dying window must not reset the new window.
-    if (!isMainWindowPtyIpcEvent(event, mainWindow, mainWindow.webContents)) {
+    if (!isMainWindowPtyIpcEvent(event, mainWindow)) {
       return
     }
     // Why: a handshake while the gate is already open means a page load whose lifecycle reset was missed; clear the dead page's stale accounting so it can't permanently gate survivors.
@@ -284,14 +283,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     }
   })
 
-  ipcMain.removeAllListeners('pty:terminalViewAttributes')
-  ipcMain.on('pty:terminalViewAttributes', (_event, args: unknown) => {
-    // Why validate-or-drop: a malformed palette gives a wrong color reply that breaks TUI theme detection worse than the silent-until-first-push default.
-    const attributes = validateTerminalViewAttributes(args)
-    if (attributes) {
-      setTerminalViewAttributes(attributes)
-    }
-  })
+  installTerminalViewAttributesIpc(session)
 
   ipcMain.removeAllListeners('pty:setPtyDeliveryInterest')
   ipcMain.on('pty:setPtyDeliveryInterest', (_event, args: { id: string; interested: boolean }) => {
@@ -321,5 +313,14 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       ?.clearBuffer(args.id)
       .catch(() => {})
     runtime?.clearHeadlessTerminalBuffer(args.id).catch(() => {})
+  })
+
+  ipcMain.removeAllListeners('pty:resetInputModes')
+  ipcMain.on('pty:resetInputModes', (_event, args: { id: string }) => {
+    // Why: an older daemon or relay rejects the request; its model keeps the modes until reattach.
+    tryGetProviderForPty(args.id)
+      ?.resetInputModes(args.id)
+      .catch(() => {})
+    runtime?.resetHeadlessTerminalInputModes(args.id).catch(() => {})
   })
 }

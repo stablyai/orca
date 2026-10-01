@@ -96,6 +96,10 @@ describe('structured worker Orca session id backfill', () => {
       processIncarnation: structuredWorkerProcessIncarnation(SESSION_B),
       ownership: 'owned'
     })
+    // Rows a writer without the column left; a current writer records the incarnation's Orca session id.
+    db.db.exec(
+      'UPDATE dispatch_contexts SET assignee_orca_session_id = NULL, creator_orca_session_id = NULL'
+    )
 
     backfillStructuredWorkerOrcaSessionIds(db.db)
 

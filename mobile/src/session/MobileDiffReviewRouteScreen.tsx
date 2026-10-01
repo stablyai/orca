@@ -5,6 +5,7 @@ import { firstReviewParam, normalizeReviewFilterParam } from './mobile-diff-revi
 import { normalizeReviewAreaParam } from './mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
+import { useHostProtocolGates } from '../components/HostProtocolGate'
 import { useRouteHandoff } from '../navigation/route-handoff'
 
 /**
@@ -51,9 +52,13 @@ export function MobileDiffReviewRouteScreen() {
     )
   }, [hostId, name, router, worktreeId])
 
+  const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
   const controller = useMobileDiffReviewController({
     client,
     connState,
+    hostCapabilities,
+    hostStatusPending: statusPending,
+    hostStatusReadable: statusReadable,
     hostId,
     worktreeId,
     name,

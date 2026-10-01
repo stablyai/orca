@@ -9,6 +9,8 @@ import {
   structuredAgentSessionPayloadFingerprint
 } from '../../../shared/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   StructuredAgentSessionLaunchCancelledError,
   type StructuredAgentLaunchReceipt
@@ -19,6 +21,11 @@ import {
   subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
+import {
+  agentSessionRefusalFailure,
+  agentSessionThrownFailure,
+  type AgentSessionWriteFailure
+} from '../../../shared/agent-session-write-failure'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
@@ -30,7 +37,7 @@ export type StructuredLaunchSelection = {
 
 export type StructuredLaunchOptionOutcome =
   | { kind: 'accepted'; options: Readonly<Record<string, string>> }
-  | { kind: 'refused'; message: string }
+  | { kind: 'refused'; failure: AgentSessionWriteFailure }
   | { kind: 'superseded' }
 
 type OptionReply = (outcome: StructuredLaunchOptionOutcome) => void
@@ -87,7 +94,7 @@ async function setLaunchOption(
     >({ kind: 'local' }, 'agentSession.setOption', {
       envelope: {
         sessionId,
-        clientOperationId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
+        clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid),
         expectedRuntimeFence: fence,
         payloadFingerprint: structuredAgentSessionPayloadFingerprint({
           method: 'agentSession.setOption',
@@ -99,9 +106,15 @@ async function setLaunchOption(
     })
     return result.ok
       ? { kind: 'accepted', options: result.value.options ?? { [key]: value } }
-      : { kind: 'refused', message: result.refusal.message }
+      : { kind: 'refused', failure: agentSessionRefusalFailure(result.refusal) }
   } catch (error) {
-    return { kind: 'refused', message: error instanceof Error ? error.message : String(error) }
+    return {
+      kind: 'refused',
+      failure: agentSessionThrownFailure(
+        error,
+        error instanceof RuntimeRpcCallError ? error.code : undefined
+      )
+    }
   }
 }
 

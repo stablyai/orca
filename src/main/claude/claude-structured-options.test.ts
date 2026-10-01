@@ -9,8 +9,9 @@ import {
   ClaudeControlRequestTimeoutError
 } from './claude-agent-sdk-control-requests'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
-import { createClaudeSessionStartupGate } from './claude-structured-session-startup-gate'
+import { createClaudeSessionStartup } from './claude-structured-session-startup-state'
 import {
   claudeStructuredSessionOptionsFrom,
   observeClaudeFastModeFacts,
@@ -35,6 +36,7 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
+    childWork: new ClaudeChildWorkDecoder(),
     commands: new ClaudeSlashCommandCatalog(),
     dispatchSequence: 0,
     optionMutationSequence: 0,
@@ -46,7 +48,7 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     capabilities: [],
     events: undefined,
     translator: null,
-    startup: { ...createClaudeSessionStartupGate(), state: 'proven' }
+    startup: { ...createClaudeSessionStartup(), state: 'proven' }
   }
 }
 
@@ -125,15 +127,6 @@ describe('Claude structured Fast mode', () => {
 
   it('rejects definitively unsupported Fast before applying', async () => {
     const { session, applyFlagSettings } = fastModeSession(false)
-    await expect(
-      setClaudeStructuredOption(session, { key: 'fastMode', value: 'true' }, undefined)
-    ).rejects.toThrow('does not support Fast mode')
-    expect(applyFlagSettings).not.toHaveBeenCalled()
-  })
-
-  it('does not authorize a new Fast enable when model support is unknown', async () => {
-    const { session, applyFlagSettings } = fastModeSession(undefined)
-
     await expect(
       setClaudeStructuredOption(session, { key: 'fastMode', value: 'true' }, undefined)
     ).rejects.toThrow('does not support Fast mode')

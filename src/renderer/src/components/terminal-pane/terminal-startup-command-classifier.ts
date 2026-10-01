@@ -19,7 +19,7 @@ for (const config of Object.values(TUI_AGENT_CONFIG)) {
   }
 }
 
-export function getTerminalStartupCommandToken(command: string): string {
+function getTerminalStartupCommandToken(command: string): string {
   const scanLimit = Math.min(command.length, TERMINAL_STARTUP_COMMAND_TOKEN_MAX_CHARS)
   let index = 0
 
@@ -48,11 +48,6 @@ export function getTerminalStartupCommandToken(command: string): string {
     index += 1
   }
   return command.slice(tokenStart, index)
-}
-
-export function isCodexTerminalStartupCommand(command: string): boolean {
-  const executable = getTerminalStartupCommandExecutableName(command)
-  return executable === 'codex' || executable.startsWith('codex-')
 }
 
 export function isKnownTuiAgentTerminalStartupCommand(command: string): boolean {

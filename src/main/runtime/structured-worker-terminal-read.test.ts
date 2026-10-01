@@ -75,22 +75,22 @@ describe('reading a structured worker through the terminal-read path', () => {
     hostRef.current = null
   })
 
-  it('serves the journal as terminal lines, with no dispatch and no capability', () => {
+  it('serves the journal as terminal lines, with no dispatch and no capability', async () => {
     // The defect this pins: a peer has no dispatch id and no coordinator standing, so `worker-read`
     // is closed to it, and `terminal read` threw `terminal_handle_stale` for a perfectly live
     // worker. A peer could not see a structured agent's recent output at all.
     const handle = registerWorker()
     installHost({ items: [message('i1', 'first line\nsecond line'), message('i2', 'done')] })
-    const read = readStructuredWorkerTerminal({ handle, db: null })
+    const read = await readStructuredWorkerTerminal({ handle, db: null })
     expect(read?.tail).toEqual(['[assistant] first line', 'second line', '[assistant] done'])
     expect(read?.status).toBe('running')
     expect(read?.truncated).toBe(false)
   })
 
-  it('honours limit, and claims no cursor space it cannot honour', () => {
+  it('honours limit, and claims no cursor space it cannot honour', async () => {
     const handle = registerWorker()
     installHost({ items: [message('i1', 'a'), message('i2', 'b'), message('i3', 'c')] })
-    const read = readStructuredWorkerTerminal({ handle, db: null, limit: 2 })
+    const read = await readStructuredWorkerTerminal({ handle, db: null, limit: 2 })
     expect(read?.tail).toEqual(['[assistant] b', '[assistant] c'])
     // No index is advertised: the next read re-projects a sliding window, so 0/length would name
     // positions that address different lines by then.
@@ -99,7 +99,7 @@ describe('reading a structured worker through the terminal-read path', () => {
     expect(read?.latestCursor).toBeUndefined()
   })
 
-  it('refuses a cursor read rather than silently misdelivering lines', () => {
+  it('refuses a cursor read rather than silently misdelivering lines', async () => {
     // The PTY cursor indexes an append-only completed-line buffer with a monotone count. This
     // window is a bounded tail re-projected every read, so a saved index addresses different lines
     // as the journal grows — and `truncated` could never fire to say so, because it tests
@@ -107,14 +107,10 @@ describe('reading a structured worker through the terminal-read path', () => {
     // duplicated lines with `truncated:false`.
     const handle = registerWorker()
     installHost({ items: [message('i1', 'a')] })
-    const refusal = (() => {
-      try {
-        readStructuredWorkerTerminal({ handle, db: null, cursor: 0 })
-        return ''
-      } catch (error) {
-        return (error as Error).message
-      }
-    })()
+    const refusal = await readStructuredWorkerTerminal({ handle, db: null, cursor: 0 }).then(
+      () => '',
+      (error: unknown) => (error instanceof Error ? error.message : String(error))
+    )
     expect(refusal).toMatch(/not line-addressable/)
     // Tells the caller what DOES work here. Polling a bounded newest-last tail and diffing fails
     // safe — a harmless re-read — where a broken cursor fails unsafe, as a silent hole.
@@ -125,35 +121,35 @@ describe('reading a structured worker through the terminal-read path', () => {
     expect(refusal).not.toContain('worker-read')
   })
 
-  it('reports dropped history as truncated rather than pretending the page is whole', () => {
+  it('reports dropped history as truncated rather than pretending the page is whole', async () => {
     const handle = registerWorker()
     installHost({ items: [message('i1', 'tail only')], hasOlder: true })
-    expect(readStructuredWorkerTerminal({ handle, db: null })?.truncated).toBe(true)
+    expect((await readStructuredWorkerTerminal({ handle, db: null }))?.truncated).toBe(true)
   })
 
-  it('redacts dispatch capability tokens the same way the archive path does', () => {
+  it('redacts dispatch capability tokens the same way the archive path does', async () => {
     const handle = registerWorker()
     const token = `dcap_${'a'.repeat(32)}`
     installHost({ items: [message('i1', `token is ${token} here`)] })
-    const tail = readStructuredWorkerTerminal({ handle, db: null })?.tail.join('\n') ?? ''
+    const tail = (await readStructuredWorkerTerminal({ handle, db: null }))?.tail.join('\n') ?? ''
     expect(tail).not.toContain(token)
     expect(tail).toContain('[dispatch capability redacted]')
   })
 
-  it('refuses when the session is not attached rather than answering an empty tail', () => {
+  it('refuses when the session is not attached rather than answering an empty tail', async () => {
     // An empty tail is the claim "this worker has produced no output", which is a different and
     // false statement — and the one a caller cannot tell apart from a real silence.
     const handle = registerWorker()
     installHost({ items: 'unreadable' })
-    expect(() => readStructuredWorkerTerminal({ handle, db: null })).toThrow(
+    await expect(readStructuredWorkerTerminal({ handle, db: null })).rejects.toThrow(
       'agent_session_ownership_unknown'
     )
   })
 
-  it('reports a session it cannot verify as unknown, never as running', () => {
+  it('reports a session it cannot verify as unknown, never as running', async () => {
     const handle = registerWorker()
     installHost({ items: [message('i1', 'said something')], hasSession: false })
-    expect(readStructuredWorkerTerminal({ handle, db: null })?.status).toBe('unknown')
+    expect((await readStructuredWorkerTerminal({ handle, db: null }))?.status).toBe('unknown')
   })
 
   it('is what `terminal read` answers with, ahead of the PTY lookup', async () => {
@@ -182,15 +178,15 @@ describe('reading a structured worker through the terminal-read path', () => {
     })
   })
 
-  it('leaves every handle that is not a live structured worker to the PTY path', () => {
+  it('leaves every handle that is not a live structured worker to the PTY path', async () => {
     const handle = registerWorker()
     installHost({ items: [message('i1', 'x')] })
-    expect(readStructuredWorkerTerminal({ handle: 'term_abc', db: null })).toBeNull()
+    expect(await readStructuredWorkerTerminal({ handle: 'term_abc', db: null })).toBeNull()
     // A terminal owner an older build recorded loads conflicted: not this runtime's worker.
     installHost({
       items: [message('i1', 'x')],
       lease: { runtimeKind: 'native', claimStatus: 'conflicted' }
     })
-    expect(readStructuredWorkerTerminal({ handle, db: null })).toBeNull()
+    expect(await readStructuredWorkerTerminal({ handle, db: null })).toBeNull()
   })
 })

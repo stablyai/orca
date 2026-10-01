@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * What the remote-workspace export publishes when the renderer omits `session`, against the real
  * `Store`.
@@ -10,7 +11,7 @@
  * Drives the real `Store` rather than a `getWorkspaceSession` fake: the whole defect is which
  * partition the read reaches, and a fake answers whatever the test tells it to.
  */
-import { mkdtempSync, realpathSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -105,12 +106,13 @@ function runtimeAuthoredTab(): TerminalTab {
   }
 }
 
-const stores: InstanceType<typeof Store>[] = []
+const directories: string[] = []
 let hostSnapshot: RemoteWorkspaceSnapshot
 
-afterEach(() => {
-  for (const store of stores.splice(0)) {
-    store.flush()
+afterEach(async () => {
+  await closeTestStores()
+  for (const directory of directories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true })
   }
   vi.restoreAllMocks()
 })
@@ -162,8 +164,8 @@ beforeEach(() => {
  *  local blob still carries the worktree key with an empty list. */
 function createStrandedStore(): InstanceType<typeof Store> {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-ssh-partition-export-')))
-  const store = new Store({ dataFile: join(dir, 'orca-data.json') })
-  stores.push(store)
+  directories.push(dir)
+  const store = createSqliteTestStore(Store, { dataFile: join(dir, 'orca-data.json') })
   store.addRepo(remoteRepo(REPO_ID, '/remote/checkout', TARGET_ID))
   // A second populated SSH partition: the fallback has to reach the publishing target's own
   // partition, not merely "some" partition that happens to hold tabs.

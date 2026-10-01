@@ -12,7 +12,6 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import {
@@ -29,6 +28,12 @@ const STRUCTURED_HANDLE = 'structworker_worker'
 const TERMINAL_HANDLE = 'term_worker'
 
 const structuredPreambles: string[] = []
+// The session host the code under test reads; a structural fake, so no host type is claimed.
+const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
+
+vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: () => hostRef.current
+}))
 
 vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -42,6 +47,7 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
   ...(await importOriginal<Record<string, unknown>>()),
   sendStructuredWorkerPreamble: async (args: { preamble: string }) => {
     structuredPreambles.push(args.preamble)
+    return 'accepted'
   },
   releaseStructuredWorkerSession: () => {},
   discardStructuredWorkerSession: async () => {}
@@ -69,7 +75,7 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
     worktreeId: WORKTREE,
     hostScope: { kind: 'local', hostId: 'local' }
   })
-  setStructuredAgentSessionHost({
+  hostRef.current = {
     hasSession: () => true,
     deps: {
       store: {
@@ -82,10 +88,12 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
             deathEvidence: null,
             runtimeFence: 1
           }
-        })
+        }),
+        // No committed /clear: each session is its own lineage's root.
+        listRecords: () => []
       }
     }
-  } as never)
+  }
   return paneKey
 }
 
@@ -149,7 +157,7 @@ describe('a worker cannot tell which mode it is running in', () => {
 
   afterEach(() => {
     db.close()
-    setStructuredAgentSessionHost(null)
+    hostRef.current = null
     structuredWorkerIdentities.clear()
     vi.restoreAllMocks()
   })
@@ -253,10 +261,14 @@ describe('a worker cannot tell which mode it is running in', () => {
         source: 'terminal'
       })
 
-    expect(read).toThrow(/has no terminal output/)
+    const refusal = await read().then(
+      () => '',
+      (error: unknown) => (error instanceof Error ? error.message : String(error))
+    )
+    expect(refusal).toMatch(/has no terminal output/)
     // The refusal names a source that works instead of naming the worker's kind.
-    expect(read).toThrow(/--source auto or --source transcript/)
-    expect(read).not.toThrow(/structured/i)
+    expect(refusal).toMatch(/--source auto or --source transcript/)
+    expect(refusal).not.toMatch(/structured/i)
   })
 
   it('never claims a structured worker was checked for a human-answerable prompt', async () => {

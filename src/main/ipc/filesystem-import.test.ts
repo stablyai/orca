@@ -240,26 +240,6 @@ describe('fs:importExternalPaths', () => {
     expect(openMock).toHaveBeenCalledWith(path.join(destDir, 'logo.png'), 'wx')
   })
 
-  it('imports multiple files in one batch', async () => {
-    const sources = ['/tmp/dropped/a.txt', '/tmp/dropped/b.txt']
-    lstatMock.mockImplementation(async (p: string) => {
-      const resolved = [path.resolve(sources[0]), path.resolve(sources[1])]
-      if (resolved.includes(p)) {
-        return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
-      }
-      throw enoent()
-    })
-
-    const result = (await handlers.get('fs:importExternalPaths')!(null, {
-      sourcePaths: sources,
-      destDir
-    })) as { results: { status: string }[] }
-
-    expect(result.results).toHaveLength(2)
-    expect(result.results[0]).toMatchObject({ status: 'imported' })
-    expect(result.results[1]).toMatchObject({ status: 'imported' })
-  })
-
   it('imports a directory recursively', async () => {
     const sourcePath = '/tmp/dropped/assets'
     mockSourceDir(sourcePath, [

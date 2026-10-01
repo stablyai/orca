@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   USER_MESSAGE,
   adapterFor,
+  answerWithOpenedTurn,
   fakeCodex,
   identityFor,
   type Route
@@ -19,9 +20,9 @@ describe('Codex structured Fast mode dispatch', () => {
           }
         ],
         nextCursor: null
-      }),
-      'turn/start': () => ({ turn: { id: 'turn-fast' } })
+      })
     })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-fast')
     const adapter = adapterFor(codex)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -43,7 +44,8 @@ describe('Codex structured Fast mode dispatch', () => {
   })
 
   it('uses Standard on the first turn after acquisition with Fast explicitly off', async () => {
-    const codex = fakeCodex({ 'turn/start': () => ({ turn: { id: 'turn-standard' } }) })
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-standard')
     const adapter = adapterFor(codex)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -91,10 +93,8 @@ describe('Codex structured Fast mode dispatch', () => {
         ],
         nextCursor: null
       }))
-      const codex = fakeCodex({
-        'model/list': listModels,
-        'turn/start': () => ({ turn: { id: 'turn-recovered' } })
-      })
+      const codex = fakeCodex({ 'model/list': listModels })
+      codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-recovered')
       const adapter = adapterFor(codex)
       await expect(
         adapter.acquire({

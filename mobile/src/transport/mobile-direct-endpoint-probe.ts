@@ -1,28 +1,9 @@
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
-import type { HostProfile } from './types'
 
-function directEndpointUrls(host: HostProfile): string[] {
-  const endpoints =
-    host.endpoints?.filter(({ kind }) => kind !== 'relay').map(({ url }) => url) ?? []
-  return [...new Set([host.endpoint, ...endpoints])]
-}
-
-export function directPathForEndpoint(
-  host: HostProfile,
-  endpoint: string
-): Exclude<MobileConnectionPath, 'relay'> {
-  const configured = host.endpoints?.find((candidate) => candidate.url === endpoint)
-  if (configured?.kind === 'tailscale') {
-    return 'tailscale'
-  }
-  try {
-    const hostname = new URL(endpoint).hostname
-    if (hostname.endsWith('.ts.net') || /^100\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname)) {
-      return 'tailscale'
-    }
-  } catch {}
-  return 'lan'
+export function directPathForEndpoint(endpoint: string): Exclude<MobileConnectionPath, 'relay'> {
+  return isTailscaleEndpoint(endpoint) ? 'tailscale' : 'lan'
 }
 
 // Why: 'reconnecting' is published on any socket close, so it cannot tell a dead
@@ -98,62 +79,28 @@ function waitForAuthenticatedSession(
 }
 
 export async function openAuthenticatedDirectEndpoint(
-  host: HostProfile,
-  openDirect: (endpoint: string) => RpcClient,
+  openDirect: () => RpcClient,
   timeoutMs: number,
   signal?: AbortSignal
-): Promise<{ client: RpcClient; path: Exclude<MobileConnectionPath, 'relay'> } | null> {
+): Promise<RpcClient | null> {
   if (signal?.aborted) {
     return null
   }
-  const endpoints = directEndpointUrls(host)
-  return await new Promise((resolve) => {
-    const clients = new Set<RpcClient>()
-    let remaining = endpoints.length
-    let settled = false
-    const rejectCandidate = (): void => {
-      remaining--
-      if (!settled && remaining === 0) {
-        settled = true
-        resolve(null)
-      }
-    }
-    for (const endpoint of endpoints) {
-      let client: RpcClient
-      try {
-        client = openDirect(endpoint)
-      } catch {
-        rejectCandidate()
-        continue
-      }
-      clients.add(client)
-      void waitForAuthenticatedSession(client, timeoutMs, signal).then(
-        () => {
-          if (signal?.aborted) {
-            client.close()
-            rejectCandidate()
-            return
-          }
-          if (settled) {
-            client.close()
-            return
-          }
-          settled = true
-          for (const candidate of clients) {
-            if (candidate !== client) {
-              candidate.close()
-            }
-          }
-          resolve({ client, path: directPathForEndpoint(host, endpoint) })
-        },
-        () => {
-          if (settled) {
-            return
-          }
-          client.close()
-          rejectCandidate()
-        }
-      )
-    }
-  })
+  let client: RpcClient
+  try {
+    client = openDirect()
+  } catch {
+    return null
+  }
+  try {
+    await waitForAuthenticatedSession(client, timeoutMs, signal)
+  } catch {
+    client.close()
+    return null
+  }
+  if (signal?.aborted) {
+    client.close()
+    return null
+  }
+  return client
 }

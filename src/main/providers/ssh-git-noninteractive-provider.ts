@@ -27,6 +27,7 @@ export class SshGitNoninteractiveProvider extends SshGitReadProvider {
         args: plan.args,
         cwd,
         stdin: plan.stdinPayload,
+        ...(plan.env ? { env: plan.env } : {}),
         timeoutMs,
         operation
       },

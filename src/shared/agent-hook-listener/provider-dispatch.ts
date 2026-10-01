@@ -1,3 +1,5 @@
+import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
+import { normalizeQoderEvent } from './providers/qoder-events'
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import { readLastCommandCodeUserPromptEntryFromTranscript } from './command-code-transcript'
@@ -23,6 +25,7 @@ import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
 import { normalizeMuseEvent } from './providers/muse-events'
+import { normalizeDshEvent } from './providers/dsh-events'
 import { normalizeZCodeEvent } from './providers/zcode-events'
 
 export type ProviderDispatchResult = {
@@ -51,6 +54,16 @@ export function normalizeProviderEvent(input: {
   let payload: ParsedAgentStatusPayload | null
 
   switch (source) {
+    case 'codebuddy':
+      payload = normalizeCompatibleLifecycleEvent(
+        source,
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload
+      )
+      break
     case 'claude':
       payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
       break
@@ -148,11 +161,17 @@ export function normalizeProviderEvent(input: {
     case 'devin':
       payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayload)
       break
+    case 'qoder':
+      payload = normalizeQoderEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'muse':
       payload = normalizeMuseEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'dsh':
+      payload = normalizeDshEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'zcode':
       payload = normalizeZCodeEvent(state, eventName, promptText, paneKey, hookPayload)

@@ -28,9 +28,10 @@ describe('terminal shutdown process-table batching', () => {
         startedAt: 'Mon Jul 13 12:54:47 2026'
       }
     ]).flat()
+    // Each scan is stamped when it starts, after the walks that produced the snapshots.
     readProcessTable
-      .mockResolvedValueOnce({ rows, capturedAtMs: Date.now() })
-      .mockResolvedValue({ rows: [], capturedAtMs: Date.now() })
+      .mockImplementationOnce(async () => ({ rows, capturedAtMs: Date.now() + 1 }))
+      .mockImplementation(async () => ({ rows: [], capturedAtMs: Date.now() + 1 }))
     const shutdowns = Array.from({ length: 20 }, (_, index) => {
       const rootPid = 100 + index
       const snapshot = collectDescendantRows(rootPid, [

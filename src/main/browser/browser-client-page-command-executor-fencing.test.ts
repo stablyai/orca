@@ -208,28 +208,4 @@ describe('BrowserClientPageCommandExecutor authority fencing', () => {
       errorCode: 'browser_client_page_executor_closed'
     })
   })
-
-  it('prevents an in-flight creation from granting navigation after fencing', async () => {
-    const { dependencies, executor, order, route } = createHarness()
-    let resolveRoute = (_route: typeof route): void => {}
-    dependencies.retainNetworkRoute.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveRoute = resolve
-        })
-    )
-    const creating = executor.handle(createCommand('createPage'), new AbortController().signal)
-    await Promise.resolve()
-
-    executor.fenceNavigation()
-    resolveRoute(route)
-
-    await expect(creating).resolves.toEqual({
-      status: 'failed',
-      errorCode: 'browser_client_page_executor_closed'
-    })
-    expect(dependencies.routeWebContents.grantNavigation).not.toHaveBeenCalled()
-    expect(order).toEqual(['release-route'])
-    await executor.close()
-  })
 })

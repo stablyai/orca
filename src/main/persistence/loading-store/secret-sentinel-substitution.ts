@@ -10,69 +10,92 @@ export type SecretSentinelSubstitution = {
   hashValue: string
 }
 
-/**
- * Replace every secret sentinel in `serialized` in ONE pass, producing the on-disk bytes and the
- * guard hash from the same encoded segments.
- *
- * Why not the obvious `payload.replace(...)` / `hashInput.replace(...)` loop it replaces: each
- * `String.replace` returns a rope that the *next* `replace` has to flatten before it can search, so
- * N sentinels cost 2N-1 flattened copies of the whole multi-MB state, plus one more per side when
- * `hash.update` and the file write finally consume them. Measured on a 4.65 MB store with three
- * sentinels: 7 full-state string allocations, 62 MB of V8 heap, 27 MB of it in large_object_space.
- *
- * Here the state is walked once, each literal run is UTF-8 encoded exactly once, and those same
- * buffers feed both the payload and the hash — 1 full-state string, 1 encode.
- *
- * Byte-for-byte identical output to the loop: both sides read the sentinel in its JSON-escaped
- * form, the replacements are the JSON-escaped `blob`/`hashValue`, and the hash sees the same byte
- * sequence it saw when it was handed one concatenated string.
- */
+type SecretSubstitutionOutput<T extends string | Buffer> = {
+  encode: (value: string) => T
+  concat: (chunks: T[]) => T
+}
+
+const bufferOutput: SecretSubstitutionOutput<Buffer> = {
+  encode: (value) => Buffer.from(value, 'utf8'),
+  concat: (chunks) => Buffer.concat(chunks)
+}
+
+const textOutput: SecretSubstitutionOutput<string> = {
+  encode: (value) => value,
+  concat: (chunks) => chunks.join('')
+}
+
+/** One traversal keeps ciphertext and guard hashes aligned without copying once per secret. */
 export function applySecretSentinelSubstitutions(
   serialized: string,
   substitutions: readonly SecretSentinelSubstitution[],
-  degradedPrefix: string
-): { payload: Buffer; stateHash: string } {
+  degradedPrefix: string,
+  output?: 'buffer'
+): { payload: Buffer; stateHash: string }
+export function applySecretSentinelSubstitutions(
+  serialized: string,
+  substitutions: readonly SecretSentinelSubstitution[],
+  degradedPrefix: string,
+  output: 'text'
+): { payload: string; stateHash: string }
+export function applySecretSentinelSubstitutions(
+  serialized: string,
+  substitutions: readonly SecretSentinelSubstitution[],
+  degradedPrefix: string,
+  output: 'buffer' | 'text' = 'buffer'
+): { payload: Buffer | string; stateHash: string } {
+  return output === 'text'
+    ? substituteSentinels(serialized, substitutions, degradedPrefix, textOutput)
+    : substituteSentinels(serialized, substitutions, degradedPrefix, bufferOutput)
+}
+
+function substituteSentinels<T extends string | Buffer>(
+  serialized: string,
+  substitutions: readonly SecretSentinelSubstitution[],
+  degradedPrefix: string,
+  output: SecretSubstitutionOutput<T>
+): { payload: T; stateHash: string } {
   const hash = createHash('sha1').update(degradedPrefix)
   if (substitutions.length === 0) {
-    const payload = Buffer.from(serialized, 'utf8')
+    const payload = output.encode(serialized)
     return { payload, stateHash: hash.update(payload).digest('hex') }
   }
 
-  const replacementBySentinel = new Map<string, { blob: Buffer; hashValue: Buffer }>()
+  const replacementBySentinel = new Map<string, { blob: T; hashValue: T }>()
   const alternatives: string[] = []
   for (const { sentinel, blob, hashValue } of substitutions) {
-    // Preserved from the loop this replaces: both the search key and the replacements are the
-    // JSON-escaped forms, because that is what `serialized` actually contains.
+    // Match escaped JSON contents, including quotes and backslashes inside a secret.
     const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
     if (replacementBySentinel.has(escapedSentinel)) {
       continue
     }
     alternatives.push(escapeRegex(escapedSentinel))
     replacementBySentinel.set(escapedSentinel, {
-      blob: Buffer.from(JSON.stringify(blob).slice(1, -1), 'utf8'),
-      hashValue: Buffer.from(JSON.stringify(hashValue).slice(1, -1), 'utf8')
+      blob: output.encode(JSON.stringify(blob).slice(1, -1)),
+      hashValue: output.encode(JSON.stringify(hashValue).slice(1, -1))
     })
   }
 
-  // Global, though a sentinel is a UUID minted after the state was assembled and so occurs exactly
-  // once: a single pass that substitutes every occurrence cannot leave one behind on disk.
+  // Substitute every occurrence so a repeated sentinel cannot survive on disk.
   const pattern = new RegExp(alternatives.join('|'), 'g')
-  const chunks: Buffer[] = []
+  const chunks: T[] = []
   let cursor = 0
   let match: RegExpExecArray | null
   while ((match = pattern.exec(serialized)) !== null) {
-    // Non-null: the alternation is built from exactly the map's keys.
-    const replacement = replacementBySentinel.get(match[0])!
-    // A sliced substring, so this does not copy the state; the encode below is its only pass.
-    const literal = Buffer.from(serialized.slice(cursor, match.index), 'utf8')
+    const replacement = replacementBySentinel.get(match[0])
+    if (replacement === undefined) {
+      throw new Error('Secret substitution matched an unregistered sentinel')
+    }
+    // The Buffer output reuses each literal's UTF-8 bytes for both the payload and hash.
+    const literal = output.encode(serialized.slice(cursor, match.index))
     chunks.push(literal, replacement.blob)
     hash.update(literal)
     hash.update(replacement.hashValue)
     cursor = match.index + match[0].length
   }
-  const tail = Buffer.from(serialized.slice(cursor), 'utf8')
+  const tail = output.encode(serialized.slice(cursor))
   chunks.push(tail)
   hash.update(tail)
 
-  return { payload: Buffer.concat(chunks), stateHash: hash.digest('hex') }
+  return { payload: output.concat(chunks), stateHash: hash.digest('hex') }
 }

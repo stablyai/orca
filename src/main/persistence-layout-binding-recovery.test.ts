@@ -1,9 +1,10 @@
+import { closeTestStores, testState, createStore, makeRepo } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { isTerminalLeafId } from '../shared/stable-pane-id'
-import { testState, createStore, makeRepo } from './persistence-test-harness'
+
 import {
   TEST_LEAF_1,
   TEST_LEAF_2,
@@ -59,7 +60,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('drops legacy leaf-keyed records from mixed-version writes before binding preservation', async () => {

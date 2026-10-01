@@ -1,4 +1,8 @@
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { runProcess } from '../../shared/child-process/run-process'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
@@ -21,18 +25,23 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
+import { installOrcadBundle } from './orcad-remote-install'
+import {
+  abandonInstall,
+  finalizeInstall,
+  isRemoteInstallComplete
+} from './ssh-relay-versioned-install'
 import { emptyOrcadActivationRecord, withActivatedVersion } from './orcad-activation-record'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { finalizeInstall } from './ssh-relay-versioned-install'
 import type { SshConnection } from './ssh-connection'
 
 const mockExec = vi.mocked(execCommand)
-const NEW_VERSION = '0.2.0+bb01'
+const NEW_VERSION = '0.2.0+bb0100000000'
 const OLD_VERSION = '0.1.0+aa01'
 
 vi.mock('./ssh-relay-versioned-install', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  readLocalFullVersion: () => '0.2.0+bb01',
+  readLocalFullVersion: () => '0.2.0+bb0100000000',
   isRemoteInstallComplete: vi.fn().mockResolvedValue(false),
   finalizeInstall: vi.fn().mockResolvedValue(undefined),
   abandonInstall: vi.fn().mockResolvedValue(undefined)
@@ -82,6 +91,11 @@ type HostScript = {
   /** Readiness content per version dir, keyed by the version in the path. */
   readiness: Record<string, string>
   log: string[]
+  preflightResult?: string
+  snapshotResult?: string
+  comparisonResult?: string
+  candidateStopResult?: string
+  readinessAtMs?: number
 }
 
 function scriptHost(script: HostScript): void {
@@ -91,8 +105,26 @@ function scriptHost(script: HostScript): void {
       return script.activationRecord
     }
     if (text.includes('.orcad-readiness') && text.startsWith('cat ')) {
+      if (script.readinessAtMs !== undefined && Date.now() < script.readinessAtMs) {
+        return ''
+      }
       const version = Object.keys(script.readiness).find((v) => text.includes(v))
       return version ? script.readiness[version] : ''
+    }
+    if (text.includes('--orcad-profile-state-preflight')) {
+      script.log.push('preflight')
+      return (
+        script.preflightResult ??
+        JSON.stringify({
+          type: 'orca_profile_state_ready',
+          nonce: text.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/)?.[0],
+          runtime: 'bun',
+          runtimeVersion: '1.4.2',
+          sqliteVersion: '3.51.0',
+          artifactVersion: NEW_VERSION,
+          revision: 1
+        })
+      )
     }
     if (text.includes('nohup')) {
       script.log.push(`launch:${text.includes(NEW_VERSION) ? NEW_VERSION : OLD_VERSION}`)
@@ -100,11 +132,15 @@ function scriptHost(script: HostScript): void {
     }
     if (text.includes('kill -TERM')) {
       script.log.push(`stop:${text.includes(NEW_VERSION) ? NEW_VERSION : OLD_VERSION}`)
-      return 'STOPPED'
+      return text.includes(NEW_VERSION) ? (script.candidateStopResult ?? 'STOPPED') : 'STOPPED'
     }
     if (text.includes('tar -C') && text.includes('-cf')) {
       script.log.push('snapshot')
-      return 'CAPTURED'
+      return script.snapshotResult ?? 'CAPTURED'
+    }
+    if (text.includes('verdict=UNCHANGED')) {
+      script.log.push('compare-state')
+      return script.comparisonResult ?? 'UNCHANGED'
     }
     return ''
   })
@@ -132,7 +168,105 @@ const ACTIVE_OLD = JSON.stringify(
   withActivatedVersion(emptyOrcadActivationRecord(), OLD_VERSION, null, new Date(0))
 )
 
+describe('orcad install lock ownership', () => {
+  const remoteDir = `/home/u/.orca-remote/orcad-${NEW_VERSION}`
+  const install = (signal?: AbortSignal) =>
+    installOrcadBundle(
+      { ...options({ signal }), localOrcadDir: '/local/out/orcad' },
+      NEW_VERSION,
+      remoteDir
+    )
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(isRemoteInstallComplete).mockReset().mockResolvedValue(false)
+  })
+
+  it('leaves another install lock alone when the initial probe is complete', async () => {
+    vi.mocked(isRemoteInstallComplete).mockResolvedValueOnce(true)
+    await install()
+    expect(acquireInstallLock).not.toHaveBeenCalled()
+    expect(abandonInstall).not.toHaveBeenCalled()
+    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+  })
+
+  it('releases its lock when another installer completed while acquisition waited', async () => {
+    vi.mocked(isRemoteInstallComplete).mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    await install()
+    expect(acquireInstallLock).toHaveBeenCalledOnce()
+    expect(abandonInstall).toHaveBeenCalledOnce()
+    expect(abandonInstall).toHaveBeenCalledWith(expect.anything(), remoteDir, options().host)
+    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(finalizeInstall).not.toHaveBeenCalled()
+  })
+
+  it('publishes a complete install before releasing its lock once', async () => {
+    await install()
+    expect(uploadRelayDirectory).toHaveBeenCalledOnce()
+    expect(finalizeInstall).toHaveBeenCalledWith(expect.anything(), remoteDir, options().host, {
+      signal: undefined,
+      releaseLock: false
+    })
+    expect(abandonInstall).toHaveBeenCalledOnce()
+    expect(vi.mocked(finalizeInstall).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(abandonInstall).mock.invocationCallOrder[0]
+    )
+  })
+
+  it('releases a failed upload without publishing it or replacing its error', async () => {
+    const error = new Error('upload interrupted')
+    vi.mocked(uploadRelayDirectory).mockRejectedValueOnce(error)
+    await expect(install()).rejects.toBe(error)
+    expect(abandonInstall).toHaveBeenCalledOnce()
+    expect(finalizeInstall).not.toHaveBeenCalled()
+  })
+
+  it('releases its lock without reusing an aborted operation signal', async () => {
+    const controller = new AbortController()
+    const error = new Error('deployment canceled')
+    vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+      controller.abort(error)
+      controller.signal.throwIfAborted()
+    })
+    await expect(install(controller.signal)).rejects.toBe(error)
+    expect(abandonInstall).toHaveBeenCalledOnce()
+    expect(abandonInstall).toHaveBeenCalledWith(expect.anything(), remoteDir, options().host)
+    expect(finalizeInstall).not.toHaveBeenCalled()
+  })
+
+  it('does not release a lock when acquisition failed', async () => {
+    const error = new Error('lock held by another client')
+    vi.mocked(acquireInstallLock).mockRejectedValueOnce(error)
+    await expect(install()).rejects.toBe(error)
+    expect(abandonInstall).not.toHaveBeenCalled()
+    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+  })
+})
+
 describe('deployOrcad', () => {
+  it.each(['', '{"type":"orca_profile_state_ready","revision":0}'])(
+    'leaves the incumbent and shared state alone when preflight returns %j',
+    async (preflightResult) => {
+      const script: HostScript = {
+        activationRecord: ACTIVE_OLD,
+        readiness: { [NEW_VERSION]: readyLine({}) },
+        log: [],
+        preflightResult
+      }
+      scriptHost(script)
+      expect(await deployOrcad(options())).toMatchObject({
+        outcome: 'installed-not-activated',
+        code: 'orcad_candidate_preflight_failed'
+      })
+      expect(script.log).toEqual(['preflight'])
+      expect(
+        vi
+          .mocked(writeRelayFile)
+          .mock.calls.some(([, , path]) => path.includes('orcad-active.json'))
+      ).toBe(false)
+    }
+  )
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -166,6 +300,7 @@ describe('deployOrcad', () => {
       )
       expect(chmod).toBeGreaterThanOrEqual(0)
       expect(mockExec.mock.calls[chmod]?.[1]).toContain(`/ripgrep/${platform}/rg'`)
+      expect(mockExec.mock.calls[chmod]?.[1]).toContain("/bun-runtime'")
       expect(vi.mocked(uploadRelayDirectory).mock.invocationCallOrder[0]).toBeLessThan(
         mockExec.mock.invocationCallOrder[chmod]
       )
@@ -177,13 +312,17 @@ describe('deployOrcad', () => {
 
   it('does not run chmod on a Windows remote', async () => {
     scriptHost({ activationRecord: '', readiness: {}, log: [] })
-    await deployOrcad(
-      options({
+    await installOrcadBundle(
+      {
+        conn: options().conn,
         host: getRemoteHostPlatform('win32-x64'),
-        remoteHome: 'C:/Users/u',
-        census: { liveSessions: 1, startedSinceActivation: 0 }
-      })
+        localOrcadDir: '/local/out/orcad'
+      },
+      NEW_VERSION,
+      `C:/Users/u/.orca-remote/orcad-${NEW_VERSION}`
     )
+    expect(uploadRelayDirectory).toHaveBeenCalledOnce()
+    expect(finalizeInstall).toHaveBeenCalledOnce()
     expect(mockExec.mock.calls.some(([, command]) => String(command).startsWith('chmod '))).toBe(
       false
     )
@@ -198,6 +337,73 @@ describe('deployOrcad', () => {
     })
     await expect(deployOrcad(options())).rejects.toThrow('chmod failed')
     expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+  })
+
+  it.skipIf(process.platform === 'win32').each([undefined, 'linux-x64', 'linux-musl-x64'])(
+    'restores uploaded executable modes with optional browser %s',
+    async (browserTarget) => {
+      const directory = mkdtempSync(join(tmpdir(), 'orcad-install-modes-'))
+      const binaries = ['bun-runtime', 'ripgrep/linux-x64/rg']
+      if (browserTarget) {
+        binaries.push(`agent-browser-${browserTarget}`)
+      }
+      try {
+        for (const filename of binaries) {
+          const path = join(directory, filename)
+          mkdirSync(dirname(path), { recursive: true })
+          writeFileSync(path, 'uploaded executable')
+          chmodSync(path, 0o644)
+        }
+        mockExec.mockImplementation(async (_conn, command) => {
+          const result = await runProcess({ program: '/bin/sh', args: ['-c', command] })
+          if (result.code !== 0) {
+            throw new Error(result.stderr)
+          }
+          return result.stdout
+        })
+        await installOrcadBundle(
+          {
+            conn: options().conn,
+            host: getRemoteHostPlatform('linux-x64'),
+            localOrcadDir: directory
+          },
+          NEW_VERSION,
+          directory
+        )
+        expect(finalizeInstall).toHaveBeenCalledOnce()
+        for (const filename of binaries) {
+          expect(statSync(join(directory, filename)).mode & 0o777).toBe(0o755)
+        }
+      } finally {
+        mockExec.mockReset()
+        rmSync(directory, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('allows startup time after a slow bundled preflight', async () => {
+    let elapsedMs = 0
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => elapsedMs)
+    scriptHost({
+      activationRecord: '',
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      readinessAtMs: 100_000,
+      log: []
+    })
+    try {
+      const result = await deployOrcad(
+        options({
+          readinessTimeoutMs: undefined,
+          sleep: async () => {
+            elapsedMs += 50_000
+          }
+        })
+      )
+      expect(result.outcome).toBe('installed-and-activated')
+      expect(elapsedMs).toBe(100_000)
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('activates a healthy candidate and records the outgoing version as the rollback target', async () => {
@@ -218,7 +424,7 @@ describe('deployOrcad', () => {
     })
   })
 
-  it('snapshots the shared data root before the candidate ever runs', async () => {
+  it('stops the incumbent before snapshotting, so SQLite WAL files are quiescent', async () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
       readiness: { [NEW_VERSION]: readyLine({}) },
@@ -228,6 +434,7 @@ describe('deployOrcad', () => {
     await deployOrcad(options())
     expect(script.log.indexOf('snapshot')).toBeGreaterThan(-1)
     expect(script.log.indexOf('snapshot')).toBeLessThan(script.log.indexOf(`launch:${NEW_VERSION}`))
+    expect(script.log.indexOf(`stop:${OLD_VERSION}`)).toBeLessThan(script.log.indexOf('snapshot'))
   })
 
   it('installs but does not activate when terminals are running', async () => {
@@ -278,16 +485,93 @@ describe('deployOrcad', () => {
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ outcome: 'installed-not-activated' })
     expect(script.log).toEqual([
-      'snapshot',
+      'preflight',
       `stop:${OLD_VERSION}`,
+      'snapshot',
       `launch:${NEW_VERSION}`,
       `stop:${NEW_VERSION}`,
+      'compare-state',
       `launch:${OLD_VERSION}`
     ])
     expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
       `orcad ${OLD_VERSION} was restarted and is serving again`
     )
   })
+
+  it.each(['CHANGED', 'UNKNOWN', ''])(
+    'preserves rejected candidate state when comparison is %s',
+    async (comparisonResult) => {
+      const script: HostScript = {
+        activationRecord: ACTIVE_OLD,
+        readiness: { [NEW_VERSION]: readyLine({ selfTestOk: false }) },
+        log: [],
+        comparisonResult
+      }
+      scriptHost(script)
+
+      const result = await deployOrcad(options())
+
+      expect(result).toMatchObject({ outcome: 'installed-not-activated' })
+      expect(script.log).toEqual([
+        'preflight',
+        `stop:${OLD_VERSION}`,
+        'snapshot',
+        `launch:${NEW_VERSION}`,
+        `stop:${NEW_VERSION}`,
+        'compare-state'
+      ])
+      expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
+        'recovery requires a fresh host terminal census'
+      )
+      expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
+        '/home/u/.orca-remote/orcad-state-snapshots/'
+      )
+      expect(mockExec.mock.calls.some(([, command]) => command.includes('echo RESTORED'))).toBe(
+        false
+      )
+    }
+  )
+
+  it('restarts the incumbent when a quiescent snapshot cannot be captured', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [OLD_VERSION]: readyLine({}) },
+      log: [],
+      snapshotResult: 'tar: write failed'
+    }
+    scriptHost(script)
+
+    await expect(deployOrcad(options())).rejects.toThrow('incumbent was stopped')
+    expect(script.log).toEqual([
+      'preflight',
+      `stop:${OLD_VERSION}`,
+      'snapshot',
+      `launch:${OLD_VERSION}`
+    ])
+  })
+
+  it.each(['NO_PID', 'STILL_RUNNING', 'SIGNAL_FAILED', ''])(
+    'does not inspect or replace state without confirmed candidate exit: %s',
+    async (candidateStopResult) => {
+      const script: HostScript = {
+        activationRecord: ACTIVE_OLD,
+        readiness: { [NEW_VERSION]: readyLine({ selfTestOk: false }) },
+        log: [],
+        candidateStopResult
+      }
+      scriptHost(script)
+
+      await deployOrcad(options())
+
+      expect(script.log).toEqual([
+        'preflight',
+        `stop:${OLD_VERSION}`,
+        'snapshot',
+        `launch:${NEW_VERSION}`,
+        `stop:${NEW_VERSION}`
+      ])
+    }
+  )
 
   it('refuses to activate when a different build answered the port', async () => {
     const script: HostScript = {

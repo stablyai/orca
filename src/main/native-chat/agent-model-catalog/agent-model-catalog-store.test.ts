@@ -153,6 +153,46 @@ describe('agent model catalog store', () => {
     expect(save).toHaveBeenCalledTimes(2)
   })
 
+  it("keeps a live child's default effort through a listing that names none, across a restart", async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
+    const store = new AgentModelCatalogStore()
+    await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+    const efforts = [
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' }
+    ]
+    const listing = (defaultEffort?: string): AgentModelCatalogSuccess => ({
+      models: [
+        {
+          id: 'opus',
+          label: 'Opus',
+          isDefault: true,
+          efforts,
+          ...(defaultEffort ? { defaultEffort } : {})
+        }
+      ],
+      fastModeTierByModel: new Map(),
+      origin: 'live-session'
+    })
+    store.recordSuccess('fp', 'claude', listing('medium'))
+    // A session-less probe never names Claude's default.
+    store.recordSuccess('fp', 'claude', { ...listing(), origin: 'probe' })
+    expect(store.get('fp')!.models[0]!.defaultEffort).toBe('medium')
+    await store.flushPersistence()
+    const restarted = new AgentModelCatalogStore()
+    await restarted.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+    expect(restarted.get('fp')!.models[0]!.defaultEffort).toBe('medium')
+
+    // A newer report replaces it; a model that stops offering it drops it.
+    store.recordSuccess('fp', 'claude', listing('high'))
+    expect(store.get('fp')!.models[0]!.defaultEffort).toBe('high')
+    store.recordSuccess('fp', 'claude', {
+      ...listing(),
+      models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: [efforts[0]!] }]
+    })
+    expect(store.get('fp')!.models[0]).not.toHaveProperty('defaultEffort')
+  })
+
   it('persists successes only and hydrates them across a restart', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
     const store = new AgentModelCatalogStore()

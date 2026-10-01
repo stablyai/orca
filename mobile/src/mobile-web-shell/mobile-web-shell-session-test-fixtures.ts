@@ -41,6 +41,7 @@ export const MANIFEST_WIRE: MobileWebBundleManifestRead = {
   buildId: 'b'.repeat(64),
   minCompatibleRuntimeProtocolVersion: 2,
   runtimeProtocolVersion: 5,
+  pageVersion: 1,
   entrypoint: 'index.html',
   totalBytes: 4096,
   assets: [
@@ -86,6 +87,7 @@ export function manifestFacts(wire: MobileWebBundleManifestRead): MobileWebShell
     schemaVersion: wire.schemaVersion,
     runtimeProtocolVersion: wire.runtimeProtocolVersion,
     minCompatibleRuntimeProtocolVersion: wire.minCompatibleRuntimeProtocolVersion,
+    pageVersion: wire.pageVersion,
     totalBytes: wire.totalBytes,
     totalAssets: wire.assets.length,
     routes: wire.routes,
@@ -103,7 +105,8 @@ export const CACHED: CachedGeneration = {
   compat: {
     schemaVersion: MANIFEST.schemaVersion,
     runtimeProtocolVersion: MANIFEST.runtimeProtocolVersion,
-    minCompatibleRuntimeProtocolVersion: MANIFEST.minCompatibleRuntimeProtocolVersion
+    minCompatibleRuntimeProtocolVersion: MANIFEST.minCompatibleRuntimeProtocolVersion,
+    pageVersion: MANIFEST.pageVersion
   }
 }
 

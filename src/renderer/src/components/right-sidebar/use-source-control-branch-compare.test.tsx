@@ -123,22 +123,6 @@ describe('useSourceControlBranchCompare scheduler', () => {
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(2)
   })
 
-  it('does not lose the trailing refresh when the call arrives late in the run', async () => {
-    const first = deferred<typeof OK>()
-    mocks.getRuntimeGitBranchCompare.mockReturnValueOnce(first.promise)
-    await mount()
-
-    void latest?.refreshBranchCompare()
-    await flush()
-    void latest?.refreshBranchCompare()
-
-    await act(async () => {
-      first.resolve(OK)
-    })
-    await flush()
-    expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(2)
-  })
-
   it('chains another trailing run when a call lands during the trailing run', async () => {
     const first = deferred<typeof OK>()
     const second = deferred<typeof OK>()

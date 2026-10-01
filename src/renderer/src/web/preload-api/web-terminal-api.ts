@@ -17,6 +17,8 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     signal: () => {},
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
     clearBuffer: () => {},
+    // Likewise terminal.resetInputModes.
+    resetInputModes: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
     ackData: () => {},
@@ -84,6 +86,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     onSpawned: () => noopUnsubscribe,
     onSerializeBufferRequest: () => noopUnsubscribe,
     onClearBufferRequest: () => noopUnsubscribe,
+    onResetInputModesRequest: () => noopUnsubscribe,
     sendSerializedBuffer: () => {},
     declarePendingPaneSerializer: () => Promise.resolve(0),
     settlePaneSerializer: () => Promise.resolve(),

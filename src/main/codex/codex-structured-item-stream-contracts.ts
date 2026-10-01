@@ -2,7 +2,7 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session-journa
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { codexJournalItem, CodexThreadItem } from './codex-structured-item-translation'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 export type CodexItemStreamDeps = {
   sink: StructuredAgentSessionEventSink
@@ -13,7 +13,7 @@ export type CodexItemStreamDeps = {
     turnId: string | null,
     item: CodexThreadItem
   ) => AgentJournalItemIdentity
-  linkageFor: CodexRowLinkage
+  attributionFor: CodexRowAttribution
   coalesceMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number

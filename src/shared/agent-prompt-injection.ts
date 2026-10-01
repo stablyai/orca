@@ -131,10 +131,6 @@ export function buildAgentPromptPasteBytes(prompt: string, leadLine?: string): s
   return `${lead}${AGENT_PROMPT_BRACKETED_PASTE_START}${sanitizeAgentPromptText(prompt)}${AGENT_PROMPT_BRACKETED_PASTE_END}`
 }
 
-export function buildAgentPromptSubmitBytes(): string {
-  return AGENT_PROMPT_SUBMIT
-}
-
 export function* iterateAgentPromptPasteChunks(
   prompt: string,
   maxChunkBytes = TERMINAL_INPUT_CHUNK_MAX_BYTES

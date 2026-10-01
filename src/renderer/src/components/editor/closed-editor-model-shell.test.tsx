@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React from 'react'
 import { useStore, type StoreApi } from 'zustand'
-import * as monaco from 'monaco-editor'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'

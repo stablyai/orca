@@ -1,4 +1,5 @@
 name: PR Checks
+run-name: "PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
 
 on:
   pull_request:
@@ -23,25 +24,32 @@ jobs:
   # Per-job outputs also skip git-compat/xterm/packaging/shell when those
   # inputs are unchanged; empty diffs fail closed and run everything.
   code_paths:
-    name: detect code-relevant changes
-    runs-on: ubuntu-latest
+    name: detect changes and check repository guards
+    # Reuse one lightweight checkout for detection and the always-required guards.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
-      native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
+      reused_run_id: ${{ steps.readiness.outputs.run_id }}
+      # A proven success masks required work only; advisory routing still uses the full diff.
+      native_cache_changed: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.native_cache_changed }}
       mobile_dependencies: ${{ steps.filter.outputs.mobile_dependencies }}
-      mobile_web_app: ${{ steps.filter.outputs.mobile_web_app }}
-      static_analysis: ${{ steps.filter.outputs.static_analysis }}
-      typecheck: ${{ steps.filter.outputs.typecheck }}
-      git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
-      codex_index_heal_contract: ${{ steps.filter.outputs.codex_index_heal_contract }}
-      xterm_patch_sync: ${{ steps.filter.outputs.xterm_patch_sync }}
-      shell_contracts: ${{ steps.filter.outputs.shell_contracts }}
-      test: ${{ steps.filter.outputs.test }}
-      orcad_browser: ${{ steps.filter.outputs.orcad_browser }}
-      cross-version-wire: ${{ steps.filter.outputs.cross-version-wire }}
-      managed_hook_node18: ${{ steps.filter.outputs.managed_hook_node18 }}
-      package: ${{ steps.filter.outputs.package }}
-      package_windows: ${{ steps.filter.outputs.package_windows }}
+      mobile_web_app: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.mobile_web_app }}
+      static_analysis: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.static_analysis }}
+      typecheck: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.typecheck }}
+      git_compatibility: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.git_compatibility }}
+      codex_index_heal_contract: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.codex_index_heal_contract }}
+      xterm_patch_sync: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.xterm_patch_sync }}
+      shell_contracts: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.shell_contracts }}
+      test: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.test }}
+      orcad_browser: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.orcad_browser }}
+      cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
+      managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
+      package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
+      package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
       ssh_source_changed: ${{ steps.e2e_filter.outputs.ssh_source_changed }}
@@ -51,23 +59,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Why blob:none: full history is needed for the merge-base diff, but historical
-          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
-          # few this job actually reads on demand.
-          fetch-depth: 0
+          # Why depth 50 and not 0: every diff below resolves to HEAD^1, so only the merge commit
+          # and a little slack are needed. Fetching all 8127 refs' commit graph cost ~20s here and
+          # is charged to the start of all 22 jobs, since they all need this one.
+          # Why blob:none stays: the sparse tree below is ~7 files, so there are no blobs to
+          # materialize and no promisor refetch. Measured 9.5s -> 1.6s against 20.7s today.
+          fetch-depth: 50
           filter: blob:none
+          sparse-checkout: |
+            /config/scripts/git-pull-request-diff-base.mjs
+            /package.json
+            /README.md
+            /docs/readme/
+            /.github/scripts/check-root-directory-entries.mjs
+            /config/scripts/check-readme-local-links.mjs
+            /config/scripts/pr-code-change-scope.mjs
+            /config/scripts/pr-e2e-source-routing.mjs
+            /config/scripts/pr-ready-check-reuse.mjs
+          sparse-checkout-cone-mode: false
           persist-credentials: false
+
+      - name: Reject new root-level files and folders
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          node .github/scripts/check-root-directory-entries.mjs "$DIFF_BASE" HEAD
+
+      # The full Git index retains link targets outside the sparse working tree.
+      - name: Check README local links
+        run: node config/scripts/check-readme-local-links.mjs
+
+      # Readiness changes eligibility for advisory tests, not the already-tested source.
+      - name: Find identical successful required checks
+        id: readiness
+        if: github.event.action == 'ready_for_review'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_CHECK_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: node config/scripts/pr-ready-check-reuse.mjs
 
       - name: Classify changed paths
         id: filter
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          # Why HEAD^1 and not --merge-base: HEAD is the pull request merge commit, so its first
+          # parent is the base side already. Computing a merge base instead would require the
+          # payload base SHA to be in the graph, which is what forced a full-history checkout.
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
           # Why --no-renames: name-only rename detection can report only the destination.
           # A code file moved under docs/ must still expose its code-side deletion.
-          CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR --merge-base "$BASE_SHA" "$HEAD_SHA")"
+          CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR "$DIFF_BASE" HEAD)"
           echo "Changed paths:"
           printf '%s\n' "$CHANGED"
           printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mjs | tee -a "$GITHUB_OUTPUT"
@@ -79,8 +123,8 @@ jobs:
         run: |
           set -euo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
-          HEAD="${{ github.event.pull_request.head.sha }}"
-          CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE")"
+          CHANGED="$(git diff --name-only --diff-filter=AMCR "$DIFF_BASE" HEAD)"
           # Source routes are executable contracts so a test can prove exact
           # authorities, exclusions, and sentinels without evaluating workflow shell.
           TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs)"
@@ -94,7 +138,7 @@ jobs:
           # trigger on IME source rather than on a spec name in some route's list.
           NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
           echo "native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
-          WSL_CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR --merge-base "$BASE" "$HEAD")"
+          WSL_CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR "$DIFF_BASE" HEAD)"
           WSL_SOURCE_CHANGED="$(printf '%s\n' "$WSL_CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --wsl-source)"
           echo "wsl_source_changed=$WSL_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
           echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
@@ -111,37 +155,62 @@ jobs:
     name: static analysis
     needs: [code_paths]
     if: needs.code_paths.outputs.static_analysis == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: measured 128s against 172s on ubuntu-latest, with every compute step faster --
+    # type-aware 24s->15s, anti-slop 28->19s, localization extraction 67->46s, the orcad smoke
+    # 39->14s. Both lint engines ship linux-arm64 and the Bun target follows process.arch, so
+    # the whole toolchain resolves. Free for public repositories, same as the typecheck job.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Why blob:none: full history is needed for the merge-base diff, but historical
-          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
-          # few this job actually reads on demand.
-          fetch-depth: 0
-          filter: blob:none
+          # Why depth 50: the gates below diff against HEAD^1, so no merge base is computed and
+          # the payload base SHA need not be in the graph.
+          # Why no blob:none here, unlike code_paths: this job checks out all 30,226 files, and
+          # the filter then forces a second promisor fetch of nearly every blob. Measured 23s
+          # blobless against ~11s without it.
+          fetch-depth: 50
           persist-credentials: false
 
+      # Why two guarded installs: the mixed root+mobile store entry is 537 MB against
+      # 321 MB for root alone, and restoring it costs 8.6s against 4.6s. Most PRs skip the
+      # mobile install below, so they were paying 216 MB for packages they never link. The
+      # root-only key is also the one the hourly warmer reseeds. Only one of these runs.
       - uses: ./.github/actions/install-node-dependencies
+        if: needs.code_paths.outputs.mobile_dependencies != 'true'
+        with:
+          native-runtime: node
+
+      - uses: ./.github/actions/install-node-dependencies
+        if: needs.code_paths.outputs.mobile_dependencies == 'true'
         with:
           native-runtime: node
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      # Keep each check in its own log while sharing this runner.
       - name: Lint
+        id: root-lint
+        background: true
         run: pnpm exec oxlint --format github
 
       - name: Reject low-evidence patterns
         run: pnpm run audit:anti-slop
 
+      - wait: root-lint
+
       - name: Enforce focused code-quality plugins
+        id: native-code-quality
+        background: true
         run: pnpm run audit:code-quality:native
 
       - name: Enforce type-aware code-quality baseline
         run: pnpm run audit:code-quality:type-aware
+
+      # Mobile installation changes import resolution for the native cycle check.
+      - wait: native-code-quality
 
       # Why here: the changed-code gate lints mobile files too, and its type-aware pass
       # resolves types from mobile/node_modules. Without the install every mobile type
@@ -150,10 +219,14 @@ jobs:
         if: needs.code_paths.outputs.mobile_dependencies == 'true'
 
       - name: Enforce changed-code quality
+        id: changed-code-quality
+        background: true
         run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
 
       - name: Enforce React Doctor on changed lines
         run: pnpm run check:react-doctor:changed -- "${{ github.event.pull_request.base.sha }}"
+
+      - wait: changed-code-quality
 
       - name: Check Zustand selector fan-out budget
         run: pnpm run check:zustand-selector-fanout
@@ -167,9 +240,9 @@ jobs:
       - name: Check VM runtime rollback compatibility
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          if git diff --quiet --merge-base "$BASE_SHA" "$HEAD_SHA" -- \
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          if git diff --quiet "$DIFF_BASE" HEAD -- \
             src/shared/ephemeral-vm-runtime-store.ts \
             src/shared/ephemeral-vm-runtime-feature-store.ts \
             src/shared/ephemeral-vm-runtime-rollback-projection.ts \
@@ -194,11 +267,39 @@ jobs:
       - name: Enforce runtime Electron-import ratchet
         run: pnpm run check:runtime-electron-ratchet
 
+      # Why: extraction writes sorted evidence to an isolated temporary path,
+      # so feature PRs need one normalized AST pass rather than a three-OS matrix.
+      - name: Verify localization extraction
+        id: localization-extraction
+        background: true
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # Detection failures run the full check; renames retain the removed input path.
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
+            scope="$(node config/scripts/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
+            echo "Localization extraction inputs are unchanged."
+          else
+            pnpm run verify:localization-extraction
+          fi
+
       # Why both: the ratchet proves nothing reachable from the runtime imports electron,
       # which is a property of the import graph. This proves the Node artifact it enables
       # actually boots, pairs, creates a worktree and round-trips a real PTY.
       - name: Boot orcad and round-trip a terminal
-        run: pnpm run smoke:orcad-terminal
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: |
+          # Detection failures run the smoke; renames retain the removed input path.
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/orcad-smoke-changes" &&
+            scope="$(node config/scripts/orcad-terminal-smoke-change-scope.mjs "$RUNNER_TEMP/orcad-smoke-changes")" && [ "$scope" = false ]; then
+            echo "Orcad terminal smoke inputs are unchanged."
+          else
+            pnpm run smoke:orcad-terminal
+          fi
 
       - name: Verify the generated RPC params catalog
         run: pnpm run verify:rpc-params-catalog
@@ -209,22 +310,15 @@ jobs:
       - name: Verify skill freshness manifest
         run: pnpm run verify:skill-bundle-manifest
 
-      - name: Verify localization catalog
-        run: pnpm run verify:localization-catalog
-
-      # Why: the renderer ships only the English entries i18next cannot rebuild
-      # from each call site's inline default, so the generated subset has to
-      # track en.json and those defaults.
-      - name: Verify runtime-required localization catalog
-        run: pnpm run verify:localization-runtime-catalog
-
-      # Why: extraction writes sorted evidence to an isolated temporary path,
-      # so feature PRs need one normalized AST pass rather than a three-OS matrix.
-      - name: Verify localization extraction
-        run: pnpm run verify:localization-extraction
+      - name: Verify localization catalogs
+        id: localization-catalogs
+        background: true
+        run: pnpm run verify:localization-catalogs
 
       - name: Verify localization coverage
         run: pnpm run verify:localization-coverage
+
+      - wait: [localization-catalogs, localization-extraction]
 
       # Why: project-owned type declarations must live in .ts so tsc
       # actually checks them. TypeScript's skipLibCheck: true (inherited
@@ -249,37 +343,11 @@ jobs:
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
 
-  root_directory_guard:
-    name: root directory guard
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          # Why blob:none: full history is needed for the merge-base diff, but historical
-          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
-          # few this job actually reads on demand.
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-
-      - name: Reject new root-level files and folders
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
-
-      # Why here: the READMEs embed media owned by docs/site and resources/onboarding,
-      # and the classifier skips static_analysis for docs-only diffs. This job runs
-      # on every PR and needs no install.
-      - name: Check README local links
-        run: node config/scripts/check-readme-local-links.mjs
-
   typecheck:
     needs: [code_paths]
     if: needs.code_paths.outputs.typecheck == 'true'
-    runs-on: ubuntu-latest
+    # Typechecking uses no native runtime, so it can use the free public ARM runner.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -317,39 +385,7 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      # Why: the 2.25.5 lane is a source build of a pinned tarball, so it produced the
-      # same binary on every PR for minutes of runner time. The key carries the version
-      # because that is the only input; the sha256 assertion below still guards the
-      # tarball on the miss path that actually builds. Only this PR's own later pushes
-      # can restore it — GitHub scopes a cache written from a pull_request run to that
-      # ref — so a first push always takes the build path below.
-      - name: Cache baseline Git build
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/orca-git-compat/git-2.25.5
-          key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5
-
-      # Why its own step: this is `make -j$(nproc)` on every core, and the lanes below
-      # spend their wall clock waiting on container starts, not on Git. Sharing a runner
-      # with the build stretched one ~1.5s boundary case past Vitest's 30s timeout, so
-      # the build has to finish before anything timed starts.
-      - name: Build the baseline Git binary
-        run: |
-          archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
-          source="$HOME/.cache/orca-git-compat/git-2.25.5"
-          if [ -x "$source/git" ]; then
-            exit 0
-          fi
-          curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
-          echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
-            | sha256sum --check
-          mkdir -p "$source"
-          tar -xzf "$archive" -C "$source" --strip-components=1
-          make -C "$source" -j"$(nproc)" \
-            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
-          # Why: the linked binaries are what the next run needs; the objects that
-          # produced them are most of the tree and would bloat the cache entry.
-          find "$source" -name '*.o' -delete
+      - uses: ./.github/actions/prepare-git-compatibility
 
       - name: Verify Git binary compatibility matrix
         run: |
@@ -399,9 +435,12 @@ jobs:
     name: Codex index-heal contract
     needs: [code_paths]
     if: needs.code_paths.outputs.codex_index_heal_contract == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
+    runs-on: ubuntu-24.04-arm
     env:
       CODEX_CLI_VERSION: '0.150.1'
+      # Why a second pin: --no-daemon only exists from 0.156, and Orca's codex wrapper relies on it.
+      CODEX_NO_DAEMON_CLI_VERSION: '0.158.0'
 
     steps:
       - name: Checkout
@@ -430,11 +469,42 @@ jobs:
             pnpm exec vitest run --config config/vitest.config.ts \
             src/main/codex/codex-index-heal-binary-contract.test.ts
 
+      - name: Install pinned no-daemon Codex CLI
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/codex-cli-no-daemon" \
+            "@openai/codex@$CODEX_NO_DAEMON_CLI_VERSION"
+
+      - name: Verify Codex --no-daemon contract
+        env:
+          ORCA_CODEX_NO_DAEMON_CONTRACT_REQUIRED: '1'
+          ORCA_CODEX_NO_DAEMON_CONTRACT_VERSION: ${{ env.CODEX_NO_DAEMON_CLI_VERSION }}
+        run: |
+          set -euo pipefail
+          ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
+            pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/pty/codex-no-daemon-binary-contract.test.ts
+
+      # Why the no-daemon install: it is the newest pinned Codex, and its project
+      # lookup decides whether a worktree launch stops at the trust prompt.
+      - name: Verify Codex project-trust contract
+        env:
+          ORCA_CODEX_TRUST_CONTRACT_REQUIRED: '1'
+          ORCA_CODEX_TRUST_CONTRACT_VERSION: ${{ env.CODEX_NO_DAEMON_CLI_VERSION }}
+        run: |
+          set -euo pipefail
+          ORCA_CODEX_TRUST_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
+            pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/agent-trust-presets.test.ts
+
   xterm_patch_sync:
     name: xterm patch sync
     needs: [code_paths]
     if: needs.code_paths.outputs.xterm_patch_sync == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: the patch check rebuilds 4 packages x 2 builds and byte-compares against the
+    # checked-in bundles. Those were generated on Linux x64 and reproduce byte-for-byte on
+    # darwin-arm64, so the output is neither host-arch nor host-OS dependent.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -442,21 +512,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install-node-dependencies
-
-      # Why: the check rebuilds every package in the manifest from a pinned upstream
-      # commit — @xterm/xterm and its three addons, each built twice (once unmodified to
-      # prove the toolchain still reproduces the published bundles, once patched). Caching
-      # the npm metadata and the shallow clone keeps the repeated cost to the builds
-      # themselves; the key is the manifest, so a commit, package or toolchain bump
-      # invalidates it.
-      - name: Restore upstream xterm build inputs
-        uses: actions/cache@v5
+      # The generator uses Node built-ins and installs its own upstream toolchain.
+      - uses: actions/setup-node@v6
         with:
-          path: |
-            ~/.npm
-            ${{ runner.temp }}/xterm-patch-build/upstream/.git
-          key: xterm-upstream-${{ hashFiles('config/patches/xterm-upstream.json') }}
+          node-version-file: package.json
+          package-manager-cache: false
+
+      # Rebuild both pristine and patched bundles; reuse only the pinned toolchain.
+      - uses: ./.github/actions/prepare-xterm-dependencies
 
       - name: Verify xterm patches match the pinned upstream build
         env:
@@ -467,7 +530,8 @@ jobs:
     name: shell contracts
     needs: [code_paths]
     if: needs.code_paths.outputs.shell_contracts == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: fish 4.x is published for noble/arm64 and zsh is in the arm64 archive.
+    runs-on: ubuntu-24.04-arm
     # Why: this job's cost is almost entirely package download, and a stalled mirror has
     # no wall-clock bound of its own. A successful run finishes in ~4.5 minutes, so this
     # is generous; it exists so a wedge fails the job instead of holding the whole run
@@ -479,6 +543,8 @@ jobs:
       # and its fish lane is the only end-to-end guard for #9993, so a skip would
       # report green with nothing exercised. Turns those skips into failures.
       ORCA_REQUIRE_FISH: '1'
+      # Why: the runner image ships pwsh, and the codex wrapper's PowerShell lane must not skip.
+      ORCA_REQUIRE_PWSH: '1'
 
     steps:
       - name: Checkout
@@ -493,6 +559,8 @@ jobs:
       # fish-color-scheme-child-stdin.node-pty.test.ts (#9993) needs it. Noble ships
       # 3.7, so the PPA is what makes that lane real.
       - name: Install zsh and fish
+        id: shells
+        background: true
         run: |
           # Why the update/PPA/fish steps are tolerant: a repo the runner image already
           # ships can lack a Release file for this suite, and a failed add-apt-repository
@@ -541,6 +609,12 @@ jobs:
           # first install command in this step to prove the lane really installs them.
           timeout 300 sudo apt-get install -y zsh fish
 
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - wait: shells
+
       # Separate from the install so the failure names the contract, not an apt error.
       # ORCA_REQUIRE_FISH re-checks this at test time; this step just fails in seconds
       # instead of after a full dependency install.
@@ -556,10 +630,6 @@ jobs:
             exit 1
           fi
 
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: node
-
       - name: Test real shell contracts
         run: |
           pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
@@ -569,6 +639,7 @@ jobs:
             src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             src/main/pty/codex-shell-launch-preflight.test.ts \
+            src/main/pty/codex-shell-no-daemon.test.ts \
             src/main/pty/omp-shell-wrapper-alias-safety.test.ts \
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             src/main/shell-startup-feature-channel.test.ts \
@@ -576,6 +647,7 @@ jobs:
             src/main/zsh-scoped-histfile.live-shell.test.ts \
             src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
+            src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/pty-reply-echo-shapes.node-pty.test.ts \
@@ -588,7 +660,7 @@ jobs:
     name: prepare test native cache node 24
     needs: [code_paths]
     if: needs.code_paths.outputs.native_cache_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -601,15 +673,40 @@ jobs:
           native-runtime: node
           node-version: '24'
 
+  # Why hoisted out of unit-tests.yml: a caller's `needs` gate the whole called workflow, so
+  # while planning lived in there it queued behind static analysis and typecheck and the shards
+  # then queued behind it. Planning needs none of their output, so running it against
+  # code_paths alone overlaps it with the gate. Measured a median 93s off the matrix's start.
+  unit_plan:
+    needs: [code_paths]
+    if: needs.code_paths.outputs.test == 'true'
+    uses: ./.github/workflows/unit-plan.yml
+    with:
+      selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+
   test:
-    needs: [code_paths, test_native_cache]
+    needs: [code_paths, unit_plan, test_native_cache, static_analysis, typecheck]
+    # Honor cancellation while allowing the optional native-cache primer to skip.
     if: >-
-      always() &&
+      !cancelled() &&
       needs.code_paths.outputs.test == 'true' &&
+      needs.unit_plan.result == 'success' &&
+      needs.static_analysis.result == 'success' &&
+      needs.typecheck.result == 'success' &&
       (needs.test_native_cache.result == 'success' || needs.test_native_cache.result == 'skipped')
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
+      runner: ubuntu-24.04-arm
+      shards: ${{ needs.unit_plan.outputs.shards }}
+
+  # Why a sibling and not part of the test workflow: it is advisory, so it must not delay the
+  # gate. Inside unit-tests.yml a caller's `needs: test` waited for it, holding verify ~36s
+  # after the last shard. Deliberately absent from verify's needs for the same reason.
+  unit_selection_evidence:
+    needs: [test]
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
+    uses: ./.github/workflows/unit-selection-evidence.yml
 
   # Why a separate job: the test needs a real Chrome, and the sharded `test` matrix
   # would pay for it on every shard to run one file in whichever shard it landed in.
@@ -673,8 +770,21 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      # The drawer check runs on WebKit as well as Chrome, because the shell's iOS WebView is
+      # WebKit and the Chrome above cannot stand in for it. Downloaded rather than resolved from
+      # the runner: Ubuntu ships no WebKit build to point at.
+      - name: Install WebKit for the drawer check
+        id: webkit
+        background: true
+        run: pnpm exec playwright install --with-deps webkit
+
       # The entry lives in mobile/ so one React resolves; without this every RN import is nothing.
       - uses: ./.github/actions/install-mobile-dependencies
+
+      - name: Prepare mobile route snapshot
+        id: mobile-routes
+        background: true
+        run: node config/scripts/run-mobile-web-app-checks.mjs --prepare-route-snapshot "$RUNNER_TEMP/mobile-routes.json"
 
       # Why the runner's Google Chrome and not a downloaded chromium: same reason as the orcad
       # browser job -- Ubuntu 24.04 only ships an AppArmor userns profile for the Chrome .deb.
@@ -691,14 +801,11 @@ jobs:
           "$chrome" --version
           echo "ORCA_MOBILE_WEB_RENDER_BROWSER=$chrome" >> "$GITHUB_ENV"
 
-      # The drawer check runs on WebKit as well as Chrome, because the shell's iOS WebView is
-      # WebKit and the Chrome above cannot stand in for it. Downloaded rather than resolved from
-      # the runner: Ubuntu ships no WebKit build to point at.
-      - name: Install WebKit for the drawer check
-        run: pnpm exec playwright install --with-deps webkit
-
       - name: Build and verify the app bundle
         run: pnpm run build:mobile-web
+
+      # Browser checks must observe both a finished install and the built bundle.
+      - wait: [webkit, mobile-routes]
 
       # The bundling tests skip themselves where mobile dependencies are absent, which is how they
       # stay green in the sharded `test` job. This is the job that installs them, so here a missing
@@ -709,23 +816,20 @@ jobs:
       # one `pr-code-change-scope.mjs` fires this job on, so naming a test into the family is all
       # it takes to have it run. Quoted because these are vitest filename filters, matched as
       # substrings against the discovered files, and the shell must not touch them.
-      #
-      # Cost: 18 files in 25-30s wall, of which the frame-budget sweep is 2.5s. That sweep encodes
-      # 111 noise JPEGs in Chromium, so it is the one step here whose cost grows with its viewport
-      # set; adding rows to that set is a decision about this job's runtime.
+      # Route censuses share fresh dependency lists for this invocation; scratch builds stay independent.
       - name: Builder, override census and render checks
         env:
           ORCA_MOBILE_WEB_APP_DEPS_REQUIRED: '1'
+          ORCA_MOBILE_WEB_PREPARED_ROUTE_SNAPSHOT: ${{ runner.temp }}/mobile-routes.json
         run: |
-          pnpm exec vitest run --config config/vitest.config.ts \
-            'config/scripts/mobile-web-app-' \
-            'config/scripts/build-mobile-web-app-bundle.test.mjs'
+          node config/scripts/run-mobile-web-app-checks.mjs
 
   cross-version-wire:
     name: cross-version wire compatibility
     needs: [code_paths]
     if: needs.code_paths.outputs.cross-version-wire == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       # Why fetch-depth 0: the harness extracts the newest release tag to skew
@@ -757,12 +861,15 @@ jobs:
           tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
+          tests/e2e/cross-version-wire/agent-session-resume-marker-downgrade.unit.test.ts
+          tests/e2e/cross-version-wire/cross-version-worktree-ps-verdict.unit.test.ts
 
   managed_hook_node18:
     name: managed hooks on Node 18
     needs: [code_paths]
     if: needs.code_paths.outputs.managed_hook_node18 == 'true'
-    runs-on: ubuntu-latest
+    # Why ARM: Node 18 publishes linux-arm64; the per-platform runtime files are read as data.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -785,7 +892,7 @@ jobs:
 
   package:
     name: package
-    needs: [code_paths]
+    needs: [code_paths, static_analysis, typecheck]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
@@ -798,7 +905,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: ~/.cache/electron-builder
           key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
@@ -835,6 +942,24 @@ jobs:
           src/main/browser/browser-route-h3-egress.electron.test.ts
           src/main/browser/browser-route-dns-prefetch.electron.test.ts
 
+      # Restore independent fixtures during builds; keep native lifecycle probes serial.
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        id: shutdown-fixture-cache
+        background: true
+        with:
+          fixture: headless-serve-shutdown
+
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        id: cli-fixture-cache
+        background: true
+        with:
+          fixture: cli-launch-contract
+
+      - name: Install Linux package tooling
+        id: linux-package-tools
+        background: true
+        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+
       - name: Build package inputs
         run: |
           status=0
@@ -853,6 +978,8 @@ jobs:
           exit "$status"
 
       - name: Project web client from renderer build
+        id: web-client
+        background: true
         run: pnpm run build:web-from-renderer
 
       # Why here and not inside "Build package inputs": this job assembles packaging inputs step by
@@ -864,17 +991,16 @@ jobs:
       - name: Build native components
         run: pnpm run build:native
 
-      - name: Install Linux package tooling
-        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+      - wait: [linux-package-tools, web-client]
 
       - name: Package unpacked app
         env:
+          ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
-        # PR artifacts are only inspected locally; gzip avoids release-size xz compression.
-        run: >-
-          pnpm exec electron-builder --config config/electron-builder.config.cjs
-          --linux AppImage deb rpm --x64 --publish never
-          --config.deb.compression=gz --config.rpm.compression=gzip
+        # Prepare once with every hook, then isolate the format-specific mutations.
+        run: |
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --linux dir --x64 --publish never
+          node config/scripts/package-linux-formats.mjs
 
       - name: Verify root-package marker payloads
         run: |
@@ -889,13 +1015,21 @@ jobs:
           [[ "$deb_marker" == deb ]] || { echo "Expected deb marker, got: $deb_marker"; exit 1; }
           [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
 
+      - wait: shutdown-fixture-cache
+
       - name: Verify headless serve signal shutdown
+        env:
+          ORCA_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.shutdown-fixture-cache.outputs.image }}
         run: >-
           node config/scripts/run-headless-serve-shutdown-docker.mjs
           --appimage dist/orca-linux.AppImage --all-entrypoints
 
       # A default container reproduces the hostile AppImage launch environment.
+      - wait: cli-fixture-cache
+
       - name: Verify Linux CLI launch contract
+        env:
+          ORCA_CLI_FIXTURE_CACHE_IMAGE: ${{ steps.cli-fixture-cache.outputs.image }}
         run: node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage
 
       - name: Smoke packaged CLI
@@ -906,7 +1040,7 @@ jobs:
 
   package_windows:
     name: package (windows)
-    needs: [code_paths]
+    needs: [code_paths, static_analysis, typecheck]
     if: needs.code_paths.outputs.package_windows == 'true'
     runs-on: windows-2022
     timeout-minutes: 30
@@ -918,14 +1052,15 @@ jobs:
           persist-credentials: false
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          # Release builds seed this exact path set; PR-local copies cannot serve other PRs.
+          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            electron-builder-windows-
+            electron-builder-win-
 
       # Why persist-native-cache false: this job later rebuilds the same path for
       # Electron. A post-job save would store the Electron ABI under the Node key.
@@ -954,6 +1089,12 @@ jobs:
 
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
+      - name: Test Windows installer process probe
+        # Keep cold CIM startup out of the concurrent Electron/native process workload.
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          config/scripts/nsis-process-check.test.mjs
+
       - name: Test Windows-specific boundaries
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
@@ -983,12 +1124,14 @@ jobs:
           src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts
           src/main/codex/windows-hook-command.test.ts
           src/main/codex/windows-hook-upgrade.test.ts
+          src/main/codex/hook-service-managed-install.test.ts
           src/main/windows/windows-pty-job.win32.test.ts
           src/main/windows/windows-msys-job.win32.test.ts
           src/main/providers/agent-foreground-process-git-bash.win32.test.ts
           src/main/windows/windows-host-job.win32.test.ts
           src/main/windows/windows-process-tree-command-line-patch.test.ts
           src/main/windows/windows-process-table-native-addon.win32.test.ts
+          src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts
           src/main/windows-live-tree-kill.win32.test.ts
           src/main/wsl/wsl-runner.test.ts
           src/main/wsl/wsl-guest-environment.test.ts
@@ -1016,12 +1159,28 @@ jobs:
       - name: Cache Windows CLI launcher
         uses: actions/cache@v5
         with:
-          path: native/windows-cli-launcher/.build
-          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs') }}
+          # Why the cargo directories ride along: a hit on .build skips the build
+          # entirely, but a miss otherwise recompiles the resource crate from a
+          # cold registry.
+          path: |
+            native/windows-cli-launcher/.build
+            native/windows-cli-launcher/target
+            ~/.cargo/registry
+          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs', 'resources/build/icon.ico', 'package.json') }}
+
+      # Why an explicit step rather than trusting the runner image: the packaged
+      # CLI launcher is a native Rust binary, and a host without cargo fails deep
+      # inside electron-builder's native hook instead of here.
+      - name: Ensure the Rust toolchain for the Windows CLI launcher
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            rustup toolchain install stable --profile minimal
+            rustup default stable
+          }
+          cargo --version
 
       - name: Build package inputs
-        env:
-          ORCA_REUSE_WINDOWS_CLI_LAUNCHER: '1'
         run: pnpm run build:release:parallel
 
       - name: Restore compiled Electron native modules
@@ -1088,11 +1247,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
 
   verify:
-    if: always()
+    if: ${{ !cancelled() }}
     needs:
       - code_paths
       - static_analysis
-      - root_directory_guard
       - typecheck
       - git_compatibility
       - codex_index_heal_contract
@@ -1105,7 +1263,9 @@ jobs:
       - managed_hook_node18
       - package
       - package_windows
-    runs-on: ubuntu-latest
+    # Evaluating job results only needs the lightweight container runner.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
 
     steps:
       # Why: e2e is deliberately absent from needs. The suite is currently red on
@@ -1122,7 +1282,6 @@ jobs:
           SHOULD_RUN: ${{ needs.code_paths.outputs.should_run }}
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
           STATIC_ANALYSIS_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis }}
-          ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           TYPECHECK_SHOULD_RUN: ${{ needs.code_paths.outputs.typecheck }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
@@ -1149,9 +1308,6 @@ jobs:
           PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
         run: |
           if [ "$CODE_PATHS" != "success" ]; then
-            exit 1
-          fi
-          if [ "$ROOT_DIRECTORY_GUARD" != "success" ]; then
             exit 1
           fi
           if [ "$SHOULD_RUN" != "true" ]; then

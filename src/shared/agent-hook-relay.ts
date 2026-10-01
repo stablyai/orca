@@ -1,3 +1,4 @@
+import type { AgentProcessPresence } from './agent-process-presence'
 // Why: defines the wire shape carried by the JSON-RPC `agent.hook` notification
 // the relay sends to Orca. Consumed by `src/relay/agent-hook-server.ts` (which
 // produces it after the shared listener parses an HTTP POST) and by
@@ -37,6 +38,8 @@ import type { AgentHookTarget } from './agent-hook-types'
 const AGENT_HOOK_SOURCES = [
   'claude',
   'codex',
+  'qoder',
+  'codebuddy',
   'gemini',
   'antigravity',
   'amp',
@@ -55,7 +58,8 @@ const AGENT_HOOK_SOURCES = [
   'devin',
   'kimi',
   'muse',
-  'zcode'
+  'zcode',
+  'dsh'
 ] as const
 
 export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]
@@ -74,6 +78,7 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
   paneKey: string
+  agentPresence?: AgentProcessPresence
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
   tabId?: string

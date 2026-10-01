@@ -79,7 +79,10 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     // and it cannot derive the hash segment from ORCA_USER_DATA_PATH alone.
     'ORCA_SHELL_READY_ROOT/p',
     'ORCA_CLI_COMMAND/u',
+    // Why /p: the managed CLI launcher lives in the host's userData tree.
+    'ORCA_WSL_CLI_DIR/p',
     'ORCA_CODEX_LAUNCH_PREFLIGHT/p',
+    'ORCA_CODEX_ISOLATE/u',
     'ORCA_PANE_KEY/u',
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',

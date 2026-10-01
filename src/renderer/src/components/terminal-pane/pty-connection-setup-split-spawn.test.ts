@@ -600,7 +600,7 @@ describe('connectPanePty', () => {
       writes.join('').indexOf('NEWER-LIVE-SSH-OUTPUT')
     )
     expect(transport.sendInput).not.toHaveBeenCalledWith('codex resume provider-session\r')
-    expect(transport.sendInput).toHaveBeenCalledWith('AFTER_ADOPTION_REPLAY\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('AFTER_ADOPTION_REPLAY\r', 'query-reply')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, stablePtyId)
   })
 
@@ -642,7 +642,7 @@ describe('connectPanePty', () => {
     setFitOverride('pty-live', 'remote-desktop-fit', 80, 24)
     transport.claimViewport.mockClear()
     ;(onDataHandler as (data: string) => void)('a')
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
     expect(transport.claimViewport).toHaveBeenCalledTimes(1)
     ;(onDataHandler as (data: string) => void)('b')
     // The renderer stays parked until runtime convergence is acknowledged, so a second keystroke can retry a transient failed resize.

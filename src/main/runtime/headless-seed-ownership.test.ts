@@ -184,13 +184,15 @@ it.each([false, true])(
     const started = makeDeferred()
     const release = makeDeferred()
     const original = HeadlessEmulator.prototype.write
-    vi.spyOn(HeadlessEmulator.prototype, 'write').mockImplementationOnce(
-      async function (this: HeadlessEmulator, data, options) {
-        started.resolve()
-        await release.promise
-        return original.call(this, data, options)
-      }
-    )
+    vi.spyOn(HeadlessEmulator.prototype, 'write').mockImplementationOnce(async function (
+      this: HeadlessEmulator,
+      data,
+      options
+    ) {
+      started.resolve()
+      await release.promise
+      return original.call(this, data, options)
+    })
     const read = runtime.providerTail(visibleOnly)
     snapshot.resolve(PROVIDER_SNAPSHOT)
     await started.promise

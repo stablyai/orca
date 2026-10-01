@@ -6,7 +6,8 @@
  * so they are straightforward to test independently.
  */
 import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
-import { spawn } from 'node:child_process'
+import { spawnProcess } from '../shared/child-process/run-process'
+import { abortSignalReason } from '../shared/abort-signal-reason'
 import { open } from 'node:fs/promises'
 import {
   buildRgArgs,
@@ -83,6 +84,7 @@ export type SearchOptions = {
   includePattern?: string
   excludePattern?: string
   maxResults: number
+  signal?: AbortSignal
 }
 
 export type SearchResult = SharedSearchResult
@@ -104,6 +106,10 @@ export function searchWithRg(
   query: string,
   opts: SearchOptions
 ): Promise<SearchResult> {
+  const { signal } = opts
+  if (signal?.aborted) {
+    return Promise.reject(abortSignalReason(signal))
+  }
   return new Promise((resolve, reject) => {
     const rgArgs = buildRgArgs(query, rootPath, opts)
     const acc = createAccumulator()
@@ -127,13 +133,14 @@ export function searchWithRg(
     // Why a second binding: the closures below capture it, and narrowing does not reach them.
     const command: string = resolvedRgCommand
     const env = buildRelayCommandEnv()
-    let child: ReturnType<typeof spawn>
+    let child: ReturnType<typeof spawnProcess>
     try {
-      child = spawn(command, rgArgs, {
+      child = spawnProcess({
+        program: command,
+        args: rgArgs,
         cwd: rootPath,
         env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
+        stdio: ['ignore', 'pipe', 'pipe']
       })
     } catch {
       resolve(finalize(acc))
@@ -147,6 +154,7 @@ export function searchWithRg(
         return false
       }
       resolved = true
+      signal?.removeEventListener('abort', onAbort)
       lines.clear()
       clearTimeout(killTimeout)
       // Why: child.kill() is advisory over SSH; detach listeners if the
@@ -162,6 +170,17 @@ export function searchWithRg(
       return true
     }
 
+    function onAbort(): void {
+      if (signal && settle()) {
+        try {
+          killSpawnedRipgrepProcess(child)
+        } catch {
+          // A refused kill must still release the canceled request.
+        }
+        reject(abortSignalReason(signal))
+      }
+    }
+
     function resolveOnce(): void {
       if (settle()) {
         resolve(finalize(acc))
@@ -172,8 +191,11 @@ export function searchWithRg(
       if (launchFailureCheck) {
         return
       }
-      launchFailureCheck = retryRipgrepOnPathAfterLaunchFailure(command, rootPath, error).then(
-        async (retryOnPath) => {
+      launchFailureCheck = retryRipgrepOnPathAfterLaunchFailure(command, rootPath, error)
+        .then(async (retryOnPath) => {
+          if (resolved) {
+            return
+          }
           if (retryOnPath) {
             // Why: a launch failure produced no output, so rerunning on PATH rg loses nothing.
             if (settle()) {
@@ -184,19 +206,25 @@ export function searchWithRg(
           // Why not resolveOnce() on an unreachable root: an empty result reads as "no matches"
           // and the git/readdir chain never engages, because it only triggers on an unavailable
           // ripgrep. The workspace moving would otherwise look like a successful empty scan.
+          const failure = await classifyRipgrepLaunchFailure(
+            rootPath,
+            [command, pathRipgrepCommand()],
+            env,
+            signal
+          )
           if (settle()) {
             reject(
-              (await classifyRipgrepLaunchFailure(
-                rootPath,
-                [command, pathRipgrepCommand()],
-                env
-              )) === 'cwd-unreachable'
+              failure === 'cwd-unreachable'
                 ? ripgrepMissingCwdError(rootPath)
                 : new RipgrepUnavailableError()
             )
           }
-        }
-      )
+        })
+        .catch((error: unknown) => {
+          if (settle()) {
+            reject(error)
+          }
+        })
     }
 
     function processLine(line: string): void {
@@ -251,6 +279,10 @@ export function searchWithRg(
       killSpawnedRipgrepProcess(child)
       resolveOnce()
     }, SEARCH_TIMEOUT_MS)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
 }
 

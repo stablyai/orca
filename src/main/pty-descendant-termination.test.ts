@@ -453,7 +453,8 @@ describe('terminateDescendantSnapshotAndWait', () => {
       snapshot([row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')]),
       {
         sendSignal,
-        readTable: vi.fn().mockResolvedValue(tableCapture([recycled])),
+        // Reads begin after the walk that produced the snapshot, as every fresh scan does.
+        readTable: vi.fn().mockResolvedValue(tableCapture([recycled], CAPTURED_AT_MS + 1_000)),
         requireIdentityBeforeSignal: true,
         verifyMs: 100
       }

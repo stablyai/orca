@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import { connect, type ConnectOptions } from './rpc-client'
-import { resolvePairingHostIdentity, saveHost } from './host-store'
+import { resolvePairingHostIdentity, savePairedHost } from './host-store'
 import type { HostProfile, PairingOffer } from './types'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 import {
@@ -45,7 +45,7 @@ type Dependencies = {
   connectRelay: typeof connectMobileRelayForPairing
   resolveInviteDirector: typeof resolvePairingInviteThroughDirector
   resolveHostIdentity: typeof resolvePairingHostIdentity
-  saveHost: typeof saveHost
+  savePairedHost: typeof savePairedHost
   saveJournal: typeof saveMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
@@ -60,7 +60,7 @@ const defaultDependencies: Dependencies = {
   connectRelay: connectMobileRelayForPairing,
   resolveInviteDirector: resolvePairingInviteThroughDirector,
   resolveHostIdentity: resolvePairingHostIdentity,
-  saveHost,
+  savePairedHost,
   saveJournal: saveMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
@@ -206,7 +206,7 @@ async function runPairing(
   assertActive(isDisposed)
 
   if (!journal) {
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
     recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
   }
@@ -231,7 +231,7 @@ async function runPairing(
     // Why: this commits a LAN-only host instead of failing, so the refusal code is the only
     // record of why the phone never got a relay endpoint.
     log('info', 'Relay: desktop will not serve relay pairing', provision.error.code)
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
     await dependencies.clearJournal(journal.metadata.journalId)
     recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
@@ -247,7 +247,7 @@ async function runPairing(
   }
   assertActive(isDisposed)
   await dependencies.writeCredentialBundle(promotePairingJournalCredential({ journal, installed }))
-  await dependencies.saveHost(relayHost(journal, endpoints.relay))
+  await dependencies.savePairedHost(relayHost(journal, endpoints.relay))
   await dependencies.clearJournal(journal.metadata.journalId)
   recordWinnerDescriptor(dependencies, hostId, winner.status)
   return { hostId }

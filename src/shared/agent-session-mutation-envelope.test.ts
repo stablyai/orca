@@ -109,16 +109,15 @@ describe('admitAgentSessionMutation', () => {
     expect(admission.decision).toBe('replay')
   })
 
-  it('refuses a stale fence and hands back the current one', () => {
-    const admission = admitAgentSessionMutation({
-      ...base,
-      envelope: envelope({ expectedRuntimeFence: 3 }),
-      ledger: ADMIT('f'.repeat(64))
-    })
-    expect(admission).toMatchObject({
-      decision: 'refused',
-      refusal: { code: 'agent_session_checkpoint_stale', currentFence: 4 }
-    })
+  it('admits a writer whatever fence the client last saw', () => {
+    for (const expectedRuntimeFence of [3, 5, null]) {
+      const admission = admitAgentSessionMutation({
+        ...base,
+        envelope: envelope({ expectedRuntimeFence }),
+        ledger: ADMIT('f'.repeat(64))
+      })
+      expect(admission, String(expectedRuntimeFence)).toMatchObject({ decision: 'admit' })
+    }
   })
 
   it('refuses a writer while the lease is unreconciled', () => {
@@ -164,11 +163,18 @@ describe('admitAgentSessionMutation', () => {
   it('surfaces a ledger refusal verbatim', () => {
     const admission = admitAgentSessionMutation({
       ...base,
-      ledger: { decision: 'refused', code: 'agent_session_operation_expired' }
+      ledger: {
+        decision: 'refused',
+        code: 'agent_session_operation_expired',
+        details: { reason: 'operationExpired' }
+      }
     })
     expect(admission).toMatchObject({
       decision: 'refused',
-      refusal: { code: 'agent_session_operation_expired' }
+      refusal: {
+        code: 'agent_session_operation_expired',
+        details: { reason: 'operationExpired' }
+      }
     })
   })
 })

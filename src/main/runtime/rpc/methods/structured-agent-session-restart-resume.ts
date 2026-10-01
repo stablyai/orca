@@ -64,20 +64,15 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     }
   }),
   defineMethod({
-    // Reattach only, no send. No Orca surface calls it now — the desktop prompt's single action is
-    // resume-and-continue — but it is a PUBLISHED wire method, so dropping it is a wire removal an
-    // older or non-desktop client would meet as an unknown method.
+    // Reattach only, no send. Reattaching is nothing now — an agent starts only for work — so this
+    // answers that nothing was resumed. No Orca surface calls it, but it is a PUBLISHED wire
+    // method, so dropping it is a wire removal an older client would meet as an unknown method.
     name: 'agentSession.restartResume',
     params: RestartResumeParams,
-    handler: async (params, ctx) => {
+    handler: async (_params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
-      const host = requireStructuredHost(ctx)
-      return {
-        results: await host.restartResume.resume(
-          params.sessionIds,
-          structuredCallerFor(ctx).callerKey
-        )
-      }
+      requireStructuredHost(ctx)
+      return { results: [] }
     }
   })
 ]

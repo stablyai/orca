@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ORCA_SESSION_ADDRESS_PREFIX,
   formatOrcaSessionAddress,
   isOrcaSessionId,
   parseOrcaSessionAddress
 } from './orca-session-address'
+import { testOrcaSessionId } from './orca-session-address-test-fixture'
 
-const SESSION_ID = '0b7e4c2a-5f1d-4e8a-9c3b-2d6f8a1e4b70'
+const SESSION_ID = testOrcaSessionId('0b7e4c2a-5f1d-4e8a-9c3b-2d6f8a1e4b70')
 const ADDRESS = `session:${SESSION_ID}`
 
 describe('Orca session address', () => {
   it('addresses an Orca session id as session:<id> and parses the bare id back', () => {
-    expect(ORCA_SESSION_ADDRESS_PREFIX).toBe('session:')
     expect(formatOrcaSessionAddress(SESSION_ID)).toBe(ADDRESS)
     expect(parseOrcaSessionAddress(ADDRESS)).toBe(SESSION_ID)
-    expect(formatOrcaSessionAddress(parseOrcaSessionAddress(ADDRESS) ?? '')).toBe(ADDRESS)
+    const parsed = parseOrcaSessionAddress(ADDRESS)
+    expect(parsed && formatOrcaSessionAddress(parsed)).toBe(ADDRESS)
   })
 
   it('reads only the addressed spelling when parsing an address', () => {

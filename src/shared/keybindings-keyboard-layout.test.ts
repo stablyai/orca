@@ -85,10 +85,18 @@ describe('keybindings', () => {
       shift: false
     }
 
-    expect(keybindingMatchesAction('app.settings', dvorakPhysicalW, 'darwin')).toBe(true)
+    expect(
+      keybindingMatchesAction('app.settings', dvorakPhysicalW, 'darwin', {
+        'app.settings': ['Mod+Comma']
+      })
+    ).toBe(true)
     expect(keybindingMatchesAction('tab.close', dvorakPhysicalW, 'darwin')).toBe(false)
     expect(keybindingMatchesAction('tab.close', dvorakPhysicalComma, 'darwin')).toBe(true)
-    expect(keybindingMatchesAction('app.settings', dvorakPhysicalComma, 'darwin')).toBe(false)
+    expect(
+      keybindingMatchesAction('app.settings', dvorakPhysicalComma, 'darwin', {
+        'app.settings': ['Mod+Comma']
+      })
+    ).toBe(false)
     expect(keybindingFromInput(dvorakPhysicalW, 'darwin')).toEqual({
       ok: true,
       value: 'Mod+Comma'

@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
 /**
  * Drives the real `Store`, because the value of the prune gate is entirely in whether the shipping
  * write paths signal it. A mutation that unwires the call site survives any test that pokes the gate
@@ -43,17 +44,18 @@ beforeEach(() => {
   __resetLocalWorktreeMetadataPruneGateForTests()
 })
 
-afterEach(() => {
+afterEach(async () => {
   // Leaving a debounced save armed would write into a temp dir after the test file finishes.
   for (const store of stores.splice(0)) {
-    store.flush()
+    store.freezeWrites()
   }
+  await closeTestStores()
   vi.restoreAllMocks()
 })
 
 function createStore(): InstanceType<typeof Store> {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-store-prune-gate-')))
-  const store = new Store({ dataFile: join(dir, 'orca-data.json') })
+  const store = createSqliteTestStore(Store, { dataFile: join(dir, 'orca-data.json') })
   stores.push(store)
   return store
 }

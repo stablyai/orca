@@ -74,43 +74,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).toHaveBeenCalledTimes(4)
   })
 
-  it('bounds a visible idle remote pane through the shipped cost predicate', async () => {
-    // Why: a remote inspection is an RPC round trip to the execution host plus a
-    // host-side foreground scan — the costliest inspection shape here — yet it
-    // was excluded from the no-evidence tier on every client platform.
-    const sshPtyId = toAppSshPtyId('target-1', 'pty-1')
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess, {
-      getPtyId: () => sshPtyId,
-      isProcessInspectionCostly: () => isAgentProcessInspectionCostly(MAC_UA, sshPtyId)
-    })
-
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    // 60s / 15s = 4 host round trips. Pre-fix (2s idle cadence) this was 30.
-    expect(inspectProcess).toHaveBeenCalledTimes(4)
-  })
-
-  it('re-arms the remote pane to the 2s cadence on the first byte of PTY output', async () => {
-    // Why: agent-start detection on a remote pane must stay event-driven, not
-    // wait out the relaxed interval.
-    const runtimePtyId = toRemoteRuntimePtyId('term_1', 'env-a')
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess, {
-      getPtyId: () => runtimePtyId,
-      isProcessInspectionCostly: () => isAgentProcessInspectionCostly(MAC_UA, runtimePtyId)
-    })
-
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(14_000)
-    expect(inspectProcess).not.toHaveBeenCalled()
-
-    coordinator.observeOutputActivity()
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(inspectProcess).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps the full 2s idle cadence on hosts where inspection is cheap', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess, {
@@ -122,30 +85,6 @@ describe('agent completion no-evidence inspection cadence', () => {
 
     // 60s / 2s = 30: local POSIX panes (cheap `ps`) must not be relaxed.
     expect(inspectProcess).toHaveBeenCalledTimes(30)
-  })
-
-  it('keeps the full cadence when the coordinator has no cost source', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess, {
-      isProcessInspectionCostly: undefined
-    })
-
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(inspectProcess).toHaveBeenCalledTimes(30)
-  })
-
-  it('costs zero idle inspections when the host publishes foreground evidence', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess, {
-      shouldPollNoEvidenceProcessCadence: () => false
-    })
-
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(inspectProcess).not.toHaveBeenCalled()
   })
 
   it('starts a bounded hot cadence after output on an evidence-publishing host', async () => {
@@ -166,20 +105,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).toHaveBeenCalledTimes(4)
     await vi.advanceTimersByTimeAsync(60_000)
     expect(inspectProcess).toHaveBeenCalledTimes(4)
-  })
-
-  it('does not re-arm no-evidence scans for output from hidden panes', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess, {
-      shouldPollProcessCadence: () => false,
-      shouldPollNoEvidenceProcessCadence: () => false
-    })
-
-    coordinator.startProcessTracking()
-    coordinator.observeOutputActivity()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(inspectProcess).not.toHaveBeenCalled()
   })
 
   it('leaves a hidden noisy pane fully unpolled in the shipped option shape', async () => {

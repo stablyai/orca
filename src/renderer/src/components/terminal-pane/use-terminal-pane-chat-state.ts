@@ -33,6 +33,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     clearCodexRestartNotice,
     consumePendingCodexPaneRestart,
     setTabCanExpandPane,
+    setTabLayout,
     setTabPaneExpanded,
     setTabViewMode,
     suppressPtyExit,
@@ -148,15 +149,35 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
   const applyNativeChatLeafRoute = useCallback(
     (route: NativeChatLeafRoute): void => {
+      const state = useAppStore.getState()
+      const currentMode = selectUnifiedTerminalTabFields(
+        state.unifiedTabsByWorktree,
+        worktreeId,
+        tabId
+      ).isChatViewMode
+      if (!isChatViewMode && currentMode && chatLeafId && route.chatLeafId === null) {
+        // Keep the owner through the batched toggle that turns chat mode on.
+        return
+      }
       if (route.chatLeafId !== chatLeafId) {
         setChatLeafId(route.chatLeafId)
+      }
+      const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      if (existingLayout && existingLayout.chatLeafId !== (route.chatLeafId ?? undefined)) {
+        if (route.chatLeafId) {
+          setTabLayout(tabId, { ...existingLayout, chatLeafId: route.chatLeafId })
+        } else if (existingLayout?.chatLeafId) {
+          const nextLayout = { ...existingLayout }
+          delete nextLayout.chatLeafId
+          setTabLayout(tabId, nextLayout)
+        }
       }
       if (route.exitChat && unifiedTabId) {
         setTabViewMode(unifiedTabId, 'terminal')
       }
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [chatLeafId, setTabViewMode, unifiedTabId]
+    [chatLeafId, isChatViewMode, setTabLayout, setTabViewMode, tabId, unifiedTabId, worktreeId]
   )
   const handleConfirmedAgentExit = useCallback(
     (leafId: string): void => {

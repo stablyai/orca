@@ -35,7 +35,7 @@ const STRIP = '[data-native-chat-background-tasks]'
 const GOAL = '[data-native-chat-thread-goal]'
 // The seam is CSS on DOM adjacency: the strip styles itself when a goal tab follows
 // it, and the goal tab styles itself when the strip precedes it.
-const STRIP_DOCK_RULE = /^group-has-\[\+\[([a-z-]+)\]\]\/tasks:(.+)$/
+const STRIP_DOCK_RULE = /^\[\[data-native-chat-background-tasks\]:has\(\+\[([a-z-]+)\]\)_&\]:(.+)$/
 const GOAL_DOCK_RULE = /^group-\[\[([a-z-]+)\]\+&\]\/goal:(.+)$/
 
 function dockRules(root: Element, rule: RegExp): { attribute: string; utility: string }[] {
@@ -205,5 +205,38 @@ describe('NativeChatStructuredSession task strip above a pending prompt', () => 
     expect(strip.compareDocumentPosition(promptCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
+  })
+})
+
+describe('NativeChatStructuredSession queued messages above the task strip', () => {
+  afterEach(() => {
+    cleanup()
+    localStorage.clear()
+    resetStructuredSessionMocks()
+  })
+
+  it('stacks queued messages above the strip, so running shells and agents sit next to the composer', () => {
+    showStripAndGoal()
+    mocks.queuedCards = [
+      {
+        messageId: 'draft-1',
+        position: 1,
+        text: 'Reply with the word banana.',
+        state: 'waiting',
+        hold: 'turn'
+      }
+    ]
+    render(sessionView())
+
+    const queued = document.querySelector('[data-queued-message-id="draft-1"]')
+    const strip = document.querySelector(STRIP)
+    if (!queued || !strip) {
+      throw new Error('expected both a queued message and the task strip')
+    }
+    expect(queued.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+    // The strip still docks on the goal tab; the queue never sits between them.
+    expect(strip.nextElementSibling).toBe(document.querySelector(GOAL))
   })
 })

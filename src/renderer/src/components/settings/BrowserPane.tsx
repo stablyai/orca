@@ -102,25 +102,18 @@ export function BrowserPane({
 
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
 
-  const showHomePage = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[0]])
-  const showSearchEngine = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[1]])
-  const showDefaultZoom = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[2]])
-  const showLinkRouting = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[3]])
-  const showLinkRoutingModifier = matchesSettingsSearch(searchQuery, [
-    getBrowserPaneSearchEntries()[4]
-  ])
-  const showTerminalLinkActions = matchesSettingsSearch(searchQuery, [
-    getBrowserPaneSearchEntries()[5]
-  ])
-  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[6]])
-  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[7]])
-  const showClientHostedRemote = matchesSettingsSearch(searchQuery, [
-    getBrowserPaneSearchEntries()[8]
-  ])
-  const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [
-    getBrowserPaneSearchEntries()[9]
-  ])
-  const showUserAgent = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[10]])
+  const browserSearchEntries = getBrowserPaneSearchEntries()
+  const showHomePage = matchesSettingsSearch(searchQuery, [browserSearchEntries[0]])
+  const showSearchEngine = matchesSettingsSearch(searchQuery, [browserSearchEntries[1]])
+  const showDefaultZoom = matchesSettingsSearch(searchQuery, [browserSearchEntries[2]])
+  const showLinkRouting = matchesSettingsSearch(searchQuery, [browserSearchEntries[3]])
+  const showLinkRoutingModifier = matchesSettingsSearch(searchQuery, [browserSearchEntries[4]])
+  const showTerminalLinkActions = matchesSettingsSearch(searchQuery, [browserSearchEntries[5]])
+  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [browserSearchEntries[6]])
+  const showCookies = matchesSettingsSearch(searchQuery, [browserSearchEntries[7]])
+  const showClientHostedRemote = matchesSettingsSearch(searchQuery, [browserSearchEntries[8]])
+  const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [browserSearchEntries[9]])
+  const showUserAgent = matchesSettingsSearch(searchQuery, [browserSearchEntries[10]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(

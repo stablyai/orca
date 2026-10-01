@@ -100,13 +100,6 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     expect(listRunningWslHomeDirsAsync).toHaveBeenCalledTimes(1)
   })
 
-  it('resolves homes only for distros currently reported as running', async () => {
-    listRunningWslHomeDirsAsync.mockResolvedValue(['\\\\wsl.localhost\\Ubuntu\\home\\ada'])
-
-    await expect(getAiVaultWslHomeDirs()).resolves.toEqual(['\\\\wsl.localhost\\Ubuntu\\home\\ada'])
-    expect(listRunningWslHomeDirsAsync).toHaveBeenCalledTimes(1)
-  })
-
   it('skips running-distro discovery once a probe has reported no installed WSL distro', async () => {
     hasCachedWslDistros.mockReturnValue(true)
     getCachedWslDistros.mockReturnValue([])

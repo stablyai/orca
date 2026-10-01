@@ -5,7 +5,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRefusal,
@@ -13,6 +14,7 @@ import {
   type StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { withObservedProviderExit } from './structured-agent-session-failure-text'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -20,9 +22,14 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
+// The refusal says what the chat's start failure says; the error text stays in the log.
+const COULD_NOT_RESTART = "Codex couldn't restart. Send your message to try again."
+const PROVIDER_STOPPED =
+  'Codex stopped before it finished starting. Send your message to try again.'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -42,7 +49,7 @@ beforeEach(async () => {
       observedAt: NOW
     }
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     store,
     adapter: {
@@ -53,7 +60,7 @@ beforeEach(async () => {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -66,47 +73,75 @@ afterEach(async () => {
 })
 
 describe('failed create owner verdict', () => {
-  it('answers an exit-proven failure as exited on the first call and its replay, and a new operation starts fresh', async () => {
-    // The cleanup's release proves the whole tree gone: the common failed start.
-    acquire.mockRejectedValueOnce(new Error(EXIT_REASON))
-    const first = hostTestAttachParams(null)
-    const refusal = {
-      code: 'agent_session_operation_invalid',
-      message: EXIT_REASON,
-      ownerVerdict: 'exited'
+  it.each([
+    // The cleanup's release proves the whole tree gone, which says nothing about why it failed.
+    ['a failure the cleanup proved gone', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],
+    // Only an exit the adapter saw says the provider stopped.
+    [
+      'an exit the adapter observed',
+      () => withObservedProviderExit(new Error(EXIT_REASON)),
+      { reason: 'providerStartFailed' },
+      PROVIDER_STOPPED
+    ]
+  ])(
+    'answers %s as exited on the first call and its replay, and a new operation starts fresh',
+    async (_case, failure, situation, message) => {
+      acquire.mockRejectedValueOnce(failure())
+      const first = hostTestAttachParams(null)
+      // The replay names the same details as the first answer: the ledger kept them beside the code,
+      // and the verdict reaches released clients at the top level exactly as before.
+      const refusal = {
+        code: 'agent_session_operation_invalid',
+        details: { ...situation, ownerVerdict: 'exited' },
+        message,
+        ownerVerdict: 'exited'
+      }
+
+      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
+      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
+      expect(acquire).toHaveBeenCalledOnce()
+
+      const retry = hostTestAttachParams(null)
+      expect(retry.envelope.clientOperationId).not.toBe(first.envelope.clientOperationId)
+      await expect(host.attach(CALLER, retry)).resolves.toMatchObject({ ok: true })
+      expect(acquire).toHaveBeenCalledTimes(2)
+      expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     }
+  )
 
-    await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-    await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-    expect(acquire).toHaveBeenCalledOnce()
+  it.each([
+    // A cleanup that saw the root go may have stopped it itself.
+    ['a root exit the cleanup saw', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],
+    [
+      'a root exit the adapter observed',
+      () => withObservedProviderExit(new Error(EXIT_REASON)),
+      { reason: 'providerStartFailed' },
+      PROVIDER_STOPPED
+    ]
+  ])(
+    'answers %s as exited on the first call, in the shape its replay takes',
+    async (_case, cause, situation, message) => {
+      acquire.mockRejectedValueOnce(new AgentSessionAcquisitionRootExitObservedError(cause()))
+      const first = hostTestAttachParams(null)
+      // The replay names the same details as the first answer: the ledger kept them beside the code,
+      // and the verdict reaches released clients at the top level exactly as before.
+      const refusal = {
+        code: 'agent_session_operation_invalid',
+        details: { ...situation, ownerVerdict: 'exited' },
+        message,
+        ownerVerdict: 'exited'
+      }
 
-    const retry = hostTestAttachParams(null)
-    expect(retry.envelope.clientOperationId).not.toBe(first.envelope.clientOperationId)
-    await expect(host.attach(CALLER, retry)).resolves.toMatchObject({ ok: true })
-    expect(acquire).toHaveBeenCalledTimes(2)
-    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
-  })
+      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
+      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
+      expect(acquire).toHaveBeenCalledOnce()
 
-  it('answers a first-hand root exit as exited on the first call, in the shape its replay takes', async () => {
-    acquire.mockRejectedValueOnce(
-      new AgentSessionAcquisitionRootExitObservedError(new Error(EXIT_REASON))
-    )
-    const first = hostTestAttachParams(null)
-    const refusal = {
-      code: 'agent_session_operation_invalid',
-      message: EXIT_REASON,
-      ownerVerdict: 'exited'
+      await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+        ok: true
+      })
+      expect(acquire).toHaveBeenCalledTimes(2)
     }
-
-    await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-    await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-    expect(acquire).toHaveBeenCalledOnce()
-
-    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
-      ok: true
-    })
-    expect(acquire).toHaveBeenCalledTimes(2)
-  })
+  )
 
   it('answers an acquisition refusal with its verdict directly', async () => {
     acquire.mockRejectedValueOnce(new AgentSessionAcquisitionRefusal('not signed in'))
@@ -115,7 +150,8 @@ describe('failed create owner verdict', () => {
       ok: false,
       refusal: {
         code: 'agent_session_operation_invalid',
-        message: 'not signed in',
+        details: { reason: 'providerStartFailed', ownerVerdict: 'exited' },
+        message: PROVIDER_STOPPED,
         ownerVerdict: 'exited'
       }
     })
@@ -132,6 +168,10 @@ describe('failed create owner verdict', () => {
       ok: false,
       refusal: { code: 'agent_session_ownership_unknown', ownerVerdict: 'unverifiable' }
     })
-    expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
+    // Released so the next start can go ahead, but with no death evidence: nothing proved it.
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      deathEvidence: null
+    })
   })
 })

@@ -39,12 +39,28 @@ vi.mock('./opencode-go-usage-source-selection', () => ({
   fetchOpenCodeGoUsage: vi.fn()
 }))
 
+vi.mock('./zcode-usage-fetcher', () => ({
+  fetchZcodeRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
+
 vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
 
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn()
 }))
 
 vi.mock('./grok-auth', () => ({
@@ -132,7 +148,6 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({
         codexHomePath: wslCodexHome,
-        allowPtyFallback: false,
         signal: expect.any(AbortSignal)
       })
     )

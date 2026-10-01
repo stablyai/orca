@@ -60,7 +60,8 @@ const JOURNAL: AgentJournalRenderItem[] = [
   ]),
   row(10, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Done.' }] }),
   user(11, [{ type: 'text', text: 'Thanks' }]),
-  // Journalled after `Thanks` but observed before `Done.`: the transcript orders by observation.
+  // Recovered after a crash: journalled after `Thanks`, but carrying the provider's clock from
+  // before `Done.`. The transcript orders by journal position, never observation.
   { ...user(12, [{ type: 'text', text: 'Observed earlier' }]), observedAt: 1_009.5 }
 ]
 
@@ -68,7 +69,7 @@ const JOURNAL: AgentJournalRenderItem[] = [
 function loadedRailItems(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
   const projected = createNativeChatMessageListProjection()(
     projectStructuredAgentSessionMessages(items, [], submissions)
-  )
+  ).conversation
   const messages = omitNativeChatThreadGoalRows(projectNativeChatTaskListFrames(projected))
   let turn: string | undefined
   const turnKeys = messages.map((message) => {
@@ -80,12 +81,10 @@ function loadedRailItems(items: AgentJournalRenderItem[], submissions: AgentJour
   const slots = buildNativeChatTranscriptSlots({
     messages,
     turnKeys,
-    latestUserIndex: messages.findLastIndex((message) => message.role === 'user'),
-    currentTurnKey: turn,
+    liveTurnKey: turn,
     receipts: new Map<string, NativeChatResolvedPrompt>(),
     turnStatuses: { active: null, completedByTurn: {} },
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
-    showTurnStatus: true,
     expandedTurnKeys: new Set<string>(),
     isWorking: false,
     lifecycleWorking: false
@@ -107,13 +106,13 @@ describe('conversation outline parity with the loaded rail', () => {
       }))
     ).toEqual(loaded.map(({ id, text, hasImages }) => ({ id, text, hasImages })))
     // Anti-vacuous: the folded tool result, the refused send, the harness turn and the empty
-    // prompt were all dropped, and the late-journalled row sits where it was observed.
+    // prompt were all dropped, and the recovered row sits where it was journalled.
     expect(outline.map((entry) => entry.itemId)).toEqual([
       'item-1',
       'item-5',
       'item-9',
-      'item-12',
-      'item-11'
+      'item-11',
+      'item-12'
     ])
   })
 
@@ -123,8 +122,8 @@ describe('conversation outline parity with the loaded rail', () => {
       { itemId: 'item-1', sequence: 1, preview: 'Fix the parser', imageCount: 0 },
       { itemId: 'item-5', sequence: 5, preview: '', imageCount: 1 },
       { itemId: 'item-9', sequence: 9, preview: 'Compare these', imageCount: 2 },
-      { itemId: 'item-12', sequence: 12, preview: 'Observed earlier', imageCount: 0 },
-      { itemId: 'item-11', sequence: 11, preview: 'Thanks', imageCount: 0 }
+      { itemId: 'item-11', sequence: 11, preview: 'Thanks', imageCount: 0 },
+      { itemId: 'item-12', sequence: 12, preview: 'Observed earlier', imageCount: 0 }
     ])
   })
 })

@@ -61,7 +61,7 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     payload: string,
-    options: RuntimeTerminalWriteOptions = {}
+    options: RuntimeTerminalWriteOptions
   ): Promise<void> {
     return this.terminalWriter.writeAction(ptyId, action, payload, options)
   }
@@ -69,7 +69,7 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
   protected writeTerminalInputChunks(
     ptyId: string,
     text: string,
-    options: RuntimeTerminalWriteOptions = {}
+    options: RuntimeTerminalWriteOptions
   ): Promise<void> {
     return this.terminalWriter.writeChunks(ptyId, text, options)
   }

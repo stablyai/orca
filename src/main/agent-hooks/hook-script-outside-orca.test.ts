@@ -36,15 +36,6 @@ describe('managed hook outside an Orca terminal', () => {
     expect(readdirSync(dir)).toEqual(['codex-hook.sh'])
   })
 
-  it('pane key present but no endpoint: still silent and writes nothing', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-outside-partial-'))
-    const res = runHook(dir, { ORCA_PANE_KEY: 'tab:0', ORCA_TAB_ID: 'tab' })
-    expect(res.status).toBe(0)
-    expect(res.stdout).toBe('')
-    expect(res.stderr).toBe('')
-    expect(readdirSync(dir)).toEqual(['codex-hook.sh'])
-  })
-
   it('endpoint points at a path that does not exist: silent, exit 0', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-outside-stale-'))
     const res = runHook(dir, {

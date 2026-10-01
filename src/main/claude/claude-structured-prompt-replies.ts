@@ -1,5 +1,8 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
-import { decodeAgentSessionQuestionAnswers } from '../../shared/agent-session-question-answer'
+import type {
+  AgentSessionPromptResponse,
+  AgentSessionQuestionAnswer
+} from '../../shared/agent-session-question-answer'
 import {
   claudePromptQuestions,
   isClaudePromptRecord,
@@ -20,12 +23,6 @@ export type ClaudeApprovalDecision = (typeof CLAUDE_APPROVAL_DECISIONS)[number]
 
 function isClaudeApprovalDecision(optionId: string): optionId is ClaudeApprovalDecision {
   return CLAUDE_APPROVAL_DECISIONS.some((decision) => decision === optionId)
-}
-
-function questionIdFromAddress(prompt: ClaudePendingPrompt, address: string): string | null {
-  const match = /^q([1-9]\d*)$/.exec(address)
-  const index = match ? Number(match[1]) - 1 : -1
-  return index >= 0 ? (prompt.questionIds[index] ?? null) : null
 }
 
 function questionAnswer(prompt: ClaudePendingPrompt, questionId: string, optionId: string): string {
@@ -111,49 +108,8 @@ function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): Permis
 
 function questionResponse(
   prompt: ClaudePendingPrompt,
-  optionId: string,
-  boundQuestionId?: string
-): PermissionResult | null {
-  const decoded = decodeClaudeQuestionOptionId(optionId)
-  const decodedQuestionId = decoded
-    ? (questionIdFromAddress(prompt, decoded.questionId) ??
-      (prompt.questionIds.includes(decoded.questionId) ? decoded.questionId : null))
-    : null
-  const selectedQuestionId =
-    boundQuestionId ??
-    decodedQuestionId ??
-    (prompt.questionIds.length === 1 ? prompt.questionIds[0] : null)
-  if (!selectedQuestionId || !prompt.questionIds.includes(selectedQuestionId)) {
-    throw new Error(`${optionId} does not name a question on Claude prompt ${prompt.promptKey}`)
-  }
-  const answer = questionAnswer(prompt, selectedQuestionId, optionId)
-  prompt.answers.set(selectedQuestionId, answer)
-  if (prompt.questionIds.some((id) => !prompt.answers.has(id))) {
-    return null
-  }
-  const answers: Record<string, string | readonly string[]> = {}
-  for (const id of prompt.questionIds) {
-    const answer = prompt.answers.get(id)
-    if (answer === undefined) {
-      return null
-    }
-    answers[id] = answer
-  }
-  return {
-    behavior: 'allow',
-    updatedInput: { ...prompt.input, answers },
-    toolUseID: prompt.toolUseId
-  }
-}
-
-function groupedQuestionResponse(
-  prompt: ClaudePendingPrompt,
-  optionId: string
-): PermissionResult | null {
-  const grouped = decodeAgentSessionQuestionAnswers(optionId)
-  if (!grouped) {
-    return null
-  }
+  grouped: readonly AgentSessionQuestionAnswer[]
+): PermissionResult {
   const questions = claudePromptQuestions(prompt.input)
   if (grouped.length !== prompt.questionIds.length) {
     throw new Error(`Grouped answer does not match Claude prompt ${prompt.promptKey}`)
@@ -191,15 +147,20 @@ function groupedQuestionResponse(
   }
 }
 
-export function applyClaudePromptAnswer(
-  found: { prompt: ClaudePendingPrompt; questionId?: string },
-  optionId: string
-): PermissionResult | null {
-  if (found.prompt.kind === 'approval') {
-    return approvalResponse(found.prompt, optionId)
+/** Builds Claude's reply without touching the prompt, so a reply that cannot be built refuses the
+ *  answer before anything is recorded. */
+export function buildClaudePromptReply(
+  prompt: ClaudePendingPrompt,
+  response: AgentSessionPromptResponse
+): PermissionResult {
+  if (prompt.kind === 'approval') {
+    if (response.kind !== 'option') {
+      throw new Error(`Claude prompt ${prompt.promptKey} takes a decision, not answers`)
+    }
+    return approvalResponse(prompt, response.optionId)
   }
-  return (
-    groupedQuestionResponse(found.prompt, optionId) ??
-    questionResponse(found.prompt, optionId, found.questionId)
-  )
+  if (response.kind !== 'answers') {
+    throw new Error(`Claude prompt ${prompt.promptKey} takes answers, not a decision`)
+  }
+  return questionResponse(prompt, response.answers)
 }

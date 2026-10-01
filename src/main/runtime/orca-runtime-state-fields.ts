@@ -82,6 +82,9 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         terminalProvenance: 'current_runtime' | 'restored'
       }) => AgentHookAuthorityAttestation | null
       retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+      checkHookAgentPresence?: (
+        paneKey: string
+      ) => Promise<'live' | 'unverifiable' | 'exited' | null>
       reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: the device registry lives on the RPC server, which is constructed with this runtime;
@@ -96,14 +99,12 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         args: AiVaultPrepareSessionResumeArgs
       ) => Promise<AiVaultPrepareSessionResumeResult>
       prepareCodexStructuredLaunch?: (input: {
-        workspacePath: string
         launchEnv: NodeJS.ProcessEnv
       }) => string | null | Promise<string | null>
       // Why a sibling of prepare: record-less catalog reads must resolve the
       // same launch home with none of launch prep's side effects (no sync, no
       // bridge, no cleared selection).
       resolveCodexStructuredLaunchHome?: (input: {
-        workspacePath: string
         launchEnv: NodeJS.ProcessEnv
       }) => string | null | Promise<string | null>
       buildAgentHookPtyEnv?: () => Record<string, string>
@@ -232,6 +233,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =
       deps?.retireAgentHookCompatibilityAuthority ?? null
+    this.checkHookAgentPresenceFn = deps?.checkHookAgentPresence ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)

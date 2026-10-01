@@ -20,7 +20,7 @@ const REPRESENTATIVE_CWD_LINE_LIMIT = 200
 const REPRESENTATIVE_FILE_LIMIT = 3
 const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
 
-// Both encodings are lossy; retain Claude’s existing cache and verify each Pi transcript.
+// Bucket encodings are lossy; retain Claude’s cache and verify other transcripts individually.
 const PROJECT_DIR_CWD_CACHE_MAX = 2048
 const projectDirCwdCache = new Map<string, string>()
 
@@ -75,7 +75,7 @@ type InScopeDiscoveryArgs = {
 }
 
 /**
- * Fully include the transcripts of cwd-bucket directories (Claude, Pi) whose cwd
+ * Fully include the transcripts of cwd-bucket directories (Claude, Pi, CodeBuddy) whose cwd
  * falls inside the active workspace/project paths.
  *
  * Why: these agents keep one directory per cwd, e.g. `~/.claude/projects/<cwd-encoded>/`.
@@ -108,7 +108,7 @@ export async function discoverInScopeCwdBucketFiles(
       }
       await collectBucketFiles({
         agent: layout.agent,
-        scopePaths: layout.agent === 'pi' ? args.scopePaths : undefined,
+        scopePaths: layout.agent !== 'claude' ? args.scopePaths : undefined,
         projectDir,
         issues: args.issues,
         collected,

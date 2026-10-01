@@ -14,7 +14,12 @@ import {
   sanitizeBranchSlug,
   type BranchNameWorkContext
 } from '../../shared/branch-name-from-work'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
+import {
+  cleanGeneratedCommitMessage,
+  stripPrefilledReasoningPreamble,
+  type CommandTemplateBackslash
+} from '../../shared/commit-message-prompt'
+import { isCustomAgentId } from '../../shared/commit-message-agent-spec'
 import {
   planCommitMessageGeneration,
   type CommitMessagePlan
@@ -56,7 +61,7 @@ async function executeGenerationPlan(input: {
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
 }): Promise<InternalTextGenerationResult> {
-  return input.target.kind === 'remote'
+  const result = await (input.target.kind === 'remote'
     ? runRemoteSourceControlPlan({
         plan: input.plan,
         target: input.target,
@@ -70,7 +75,25 @@ async function executeGenerationPlan(input: {
         emptyResultName: input.emptyResultName,
         operation: input.operation,
         spawnAgent: input.spawnAgent
-      })
+      }))
+  // Why: only a custom command runs a raw model whose chat template can swallow
+  // the opening think tag; a built-in agent's message may just mention the tag.
+  // PR fields are JSON, so they strip only when parsing fails instead.
+  if (
+    !result.success ||
+    !isCustomAgentId(input.params.agentId) ||
+    input.operation === 'pull-request-fields'
+  ) {
+    return result
+  }
+  const answer = stripPrefilledReasoningPreamble(result.rawOutput)
+  if (answer === result.rawOutput) {
+    return result
+  }
+  const rawOutput = cleanGeneratedCommitMessage(answer)
+  return rawOutput
+    ? { ...result, rawOutput }
+    : { success: false, error: `${input.plan.label} returned an empty ${input.emptyResultName}.` }
 }
 
 export async function generateCommitMessage(input: {
@@ -168,7 +191,7 @@ export async function generatePullRequestFields(input: {
   try {
     return {
       success: true,
-      fields: parseGeneratedPullRequestFields(result.rawOutput, context),
+      fields: parsePullRequestFieldsOutput(result.rawOutput, context, params.agentId),
       agentLabel: result.agentLabel,
       branchChangedByPreparation: context.branchChangedByPreparation
     }
@@ -178,6 +201,24 @@ export async function generatePullRequestFields(input: {
       error: 'Generated pull request details could not be parsed.',
       branchChangedByPreparation: context.branchChangedByPreparation
     }
+  }
+}
+
+// Why: a body may quote a lone closing tag inside valid JSON, so reasoning is
+// stripped only when the untouched output does not parse.
+function parsePullRequestFieldsOutput(
+  raw: string,
+  context: PullRequestDraftContext,
+  agentId: GenerateParams['agentId']
+): GeneratedPullRequestFields {
+  try {
+    return parseGeneratedPullRequestFields(raw, context)
+  } catch (error) {
+    const answer = isCustomAgentId(agentId) ? stripPrefilledReasoningPreamble(raw) : raw
+    if (answer === raw) {
+      throw error
+    }
+    return parseGeneratedPullRequestFields(cleanGeneratedCommitMessage(answer), context)
   }
 }
 

@@ -583,13 +583,16 @@ describeEditor(
                 { timeout: 15_000 }
               )
             }
-            // The inserted image painted: `naturalWidth` is 0 for an element the browser refused
-            // or never fetched, which is what a policy that did not admit it would leave.
-            expect(
-              await page.evaluate(
-                () => document.querySelector('#first-surface #editor img')?.naturalWidth ?? 0
+            // Insertion precedes image loading; a refused image must still fail this paint check.
+            await expect
+              .poll(
+                () =>
+                  page.evaluate(
+                    () => document.querySelector('#first-surface #editor img')?.naturalWidth ?? 0
+                  ),
+                { timeout: 15_000 }
               )
-            ).toBeGreaterThan(0)
+              .toBeGreaterThan(0)
             expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
             expect(consoleErrors).toEqual([])
           } finally {

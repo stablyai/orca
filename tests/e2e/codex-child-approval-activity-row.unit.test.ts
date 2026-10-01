@@ -22,7 +22,7 @@ import type { Tab } from '../../src/shared/tab-types'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { createCodexJournalTranslator } from '../../src/main/codex/codex-structured-journal-translation'
 import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/codex-structured-prompt-replies'
-import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
@@ -140,13 +140,14 @@ async function openHost() {
       providerHandle: { kind: 'codex', threadId: CODEX_THREAD }
     },
     now: tick,
-    journalDir: join(root, SESSION)
+    stateDirectory: join(root, SESSION)
   })
   const feed = new StructuredAgentSessionStatusFeed({
-    sessions: new Map([[SESSION, indexedStatusFeedSession({ journal, hasProviderChild: true })]]),
+    sessions: new Map([
+      [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
+    ]),
     getRecord: () => null,
-    now: () => 1,
-    readBackgroundTasks: () => ({ state: 'monitoring', tasks: [] })
+    now: () => 1
   })
   const events: AgentSessionStatusEvent[] = []
   feed.subscribe({ id: 'renderer', emit: (event) => events.push(event) })

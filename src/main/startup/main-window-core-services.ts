@@ -126,8 +126,11 @@ export function attachMainWindowCoreServices(
       isRecoveryReloadInFlight,
       onCodexHomePtySpawned: handleCodexHomePtySpawned,
       onPtyExit: handlePtyExit,
-      onBeforeUpdateQuit: () =>
-        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
+      onBeforeUpdateQuit: async () => {
+        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
+        await store.writeLatestProfileStateJsonCompatibilityExportAsync()
+      },
+      onBeforeUpdateQuitFailure: 'abort',
       updateInstallMode: resolveUpdateInstallMode(state.isServeMode),
       onWorktreeLifecycle: emitPluginWorktreeLifecycle
     }

@@ -122,8 +122,11 @@ export function activateLocalPtySession(args: {
   if (onDataDisposable) {
     disposables.push(onDataDisposable)
   }
+  ptyDisposables.set(id, disposables)
 
+  let exitedBeforeSpawnReply = false
   const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
+    exitedBeforeSpawnReply = true
     // Why: node-pty reports a signalled death as {exitCode: 0, signal: N}; the
     // cause is built here, where the signal and the spawn's trustworthiness
     // are both still in hand.
@@ -151,14 +154,18 @@ export function activateLocalPtySession(args: {
     }
   })
   if (onExitDisposable) {
-    ptyExitDisposables.set(id, onExitDisposable)
+    if (exitedBeforeSpawnReply) {
+      onExitDisposable.dispose()
+    } else {
+      ptyExitDisposables.set(id, onExitDisposable)
+    }
   }
-  ptyDisposables.set(id, disposables)
 
   const startupCommandDeliveredByWrapper =
     spawn.command !== undefined &&
     plan.shellReadyLaunch?.env[POSIX_SHELL_STARTUP_COMMAND_ENV] === spawn.command
   if (
+    !exitedBeforeSpawnReply &&
     spawn.command &&
     !plan.startupCommandDeliveredInShellArgs &&
     !startupCommandDeliveredByWrapper
@@ -191,6 +198,7 @@ export function activateLocalPtySession(args: {
     id,
     incarnationId,
     pid,
+    ...(exitedBeforeSpawnReply ? { exitedBeforeSpawnReply: true } : {}),
     ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
   }
 }

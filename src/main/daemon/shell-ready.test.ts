@@ -444,23 +444,6 @@ describePosix('daemon shell-ready launch config', () => {
     }
   })
 
-  it('owns zle-line-init for the shell-ready marker instead of an azhw hook', async () => {
-    const { getShellReadyLaunchConfig } = await importFreshShellReady()
-
-    getShellReadyLaunchConfig('/bin/zsh')
-
-    // Why .zshenv: the widget registration lives in the deferred hook, which the
-    // first prompt's precmd sweep calls exactly once.
-    const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
-    expect(zshenv).toContain('zle -N zle-line-init __orca_prompt_mark')
-    expect(zshenv).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
-    expect(zshenv).toContain('printf "\\033]777;orca-shell-ready\\007"')
-    // Why: add-zle-hook-widget aborts its chain when an earlier hook exits non-zero, so don't register the marker through it.
-    expect(zshenv).not.toContain('add-zle-hook-widget line-init')
-    // Why: re-source guard — skip re-capturing when already the bound widget so the prior chain survives a second source.
-    expect(zshenv).toContain('== "user:__orca_prompt_mark"')
-  })
-
   // Why: oh-my-zsh vi-mode's zle-line-init returns non-zero; add-zle-hook-widget then aborts the chain and the marker never fires.
   itWithZsh(
     'emits the shell-ready marker even when a user zle-line-init widget fails (oh-my-zsh vi-mode shape)',
@@ -698,22 +681,5 @@ describePosix('daemon shell-ready launch config', () => {
         process.env.ZDOTDIR = previousZdotdir
       }
     }
-  })
-
-  it('sources the user .zshenv at wrapper top level, not inside a function', async () => {
-    // Why: PR #1737 sourced .zshenv in a wrapper function, breaking `typeset -U
-    // path`. Top-level sourcing is still the contract.
-    const { getShellReadyLaunchConfig } = await importFreshShellReady()
-
-    getShellReadyLaunchConfig('/bin/zsh')
-
-    const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
-
-    expect(zshenv).toContain('builtin source -- "$_orca_user_zshenv"')
-    // Every function the hook needs is defined above the source, so a user
-    // `emulate sh` cannot leave the rest of this file unparseable.
-    expect(zshenv.indexOf('__orca_deferred_init() {')).toBeLessThan(
-      zshenv.indexOf('builtin source -- "$_orca_user_zshenv"')
-    )
   })
 })

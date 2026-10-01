@@ -28,7 +28,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     ptyId: string,
     generation: number,
     pastePayload: string,
-    options: RuntimeAgentPromptWriteOptions = {}
+    options: RuntimeAgentPromptWriteOptions
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
@@ -63,7 +63,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
-      if (!this.ptyController?.write(ptyId, initialWrite)) {
+      if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
       // Why: a prompt Orca delivers is not a keystroke, so the renderer path
@@ -114,7 +114,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     if (!submitWithPaste) {
-      if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
+      if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
       // The prompt is submitted by this write, so this is the first moment the

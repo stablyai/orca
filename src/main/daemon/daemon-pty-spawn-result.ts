@@ -289,7 +289,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     const snapshotPrefix = reattachSnapshot.scrollbackAnsi + reattachSnapshot.rehydrateSequences
     const snapshotFrame = reattachSnapshot.snapshotAnsi
     const snapshotPayload = snapshotPrefix + snapshotFrame
-    // Why kitty flags ride beside the payload, not inside it: the snapshot reaches renderer xterms where POST_REPLAY_REATTACH_RESET's kitty reset must win (terminal-query-authority.md §kitty).
+    // Why kitty flags ride beside the payload, not inside it: renderers re-assert them in the replay epilogue, after the payload's screen switches (terminal-query-authority.md §kitty).
     // Why known `0` is no longer dropped: the pane tracker must be able to tell
     // "the app negotiated nothing" from "this reattach proved nothing".
     const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(

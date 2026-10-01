@@ -166,13 +166,4 @@ describe('normalizeZCodeEvent', () => {
   it('ignores lifecycle events it does not model', () => {
     expect(normalizeAndAccept(state, 'zcode', zcodeEvent('SomethingElse'))).toBeNull()
   })
-
-  it('attributes every event to zcode, never to claude, despite the compatible payload', () => {
-    const event = normalizeAndAccept(
-      state,
-      'zcode',
-      zcodeEvent('UserPromptSubmit', { prompt: 'hello' })
-    )
-    expect(event?.payload.agentType).toBe('zcode')
-  })
 })

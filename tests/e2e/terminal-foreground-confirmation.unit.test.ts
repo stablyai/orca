@@ -93,6 +93,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
 
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })

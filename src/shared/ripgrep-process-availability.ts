@@ -1,6 +1,7 @@
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawnProcess, type ChildProcessHandle } from './child-process/run-process'
+import { abortSignalReason, throwIfSignalAborted } from './abort-signal-reason'
 
 const RIPGREP_CWD_CHECK_TIMEOUT_MS = 1000
 const RIPGREP_FAILURE_PROBE_TIMEOUT_MS = 5000
@@ -36,7 +37,7 @@ export function isTransientRipgrepSpawnError(error: unknown): boolean {
 
 function ignoreRipgrepSpawnError(): void {}
 
-export function killSpawnedRipgrepProcess(child: ChildProcess): boolean {
+export function killSpawnedRipgrepProcess(child: ChildProcessHandle): boolean {
   // Why: killing a failed-spawn handle can signal the relay's own process group.
   if (Object.hasOwn(child, 'pid') && child.pid === undefined) {
     return false
@@ -45,7 +46,7 @@ export function killSpawnedRipgrepProcess(child: ChildProcess): boolean {
 }
 
 export function absorbPendingRipgrepSpawnError(
-  child: ChildProcess,
+  child: ChildProcessHandle,
   state: { errorObserved: boolean; unavailableExitObserved: boolean }
 ): void {
   if (
@@ -77,12 +78,19 @@ export async function isRipgrepSpawnCwdUsable(cwd: string): Promise<boolean> {
   }
 }
 
-function probeRipgrepVersion(command: string, env: NodeJS.ProcessEnv): Promise<boolean> {
-  return new Promise((resolve) => {
-    let child: ChildProcess
+function probeRipgrepVersion(
+  command: string,
+  env: NodeJS.ProcessEnv,
+  signal?: AbortSignal
+): Promise<boolean> {
+  if (signal?.aborted) {
+    return Promise.reject(abortSignalReason(signal))
+  }
+  return new Promise((resolve, reject) => {
+    let child: ChildProcessHandle
     try {
       // windowsHide: a probe must never flash a console window on Windows.
-      child = spawn(command, ['--version'], { env, stdio: 'ignore', windowsHide: true })
+      child = spawnProcess({ program: command, args: ['--version'], env, stdio: 'ignore' })
     } catch {
       resolve(false)
       return
@@ -91,26 +99,45 @@ function probeRipgrepVersion(command: string, env: NodeJS.ProcessEnv): Promise<b
     // Why kill on timeout: a `rg --version` that hangs -- a stalled network mount, or antivirus
     // holding a just-installed rg.exe -- would otherwise leave a live process and a ref'd handle
     // behind for the relay's lifetime, once per launch failure.
-    const settle = (available: boolean, kill = false): void => {
+    const settle = (available: boolean, kill = false, error?: Error): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
       child.off('close', onClose)
-      if (kill) {
-        killSpawnedRipgrepProcess(child)
-      }
-      // Why leave one 'error' listener attached: a spawn error can still arrive after this
-      // settles, and an unhandled 'error' on a ChildProcess throws.
+      child.off('error', onError)
+      // A queued spawn error or synchronous kill failure can arrive after cleanup.
       child.once('error', ignoreRipgrepSpawnError)
-      resolve(available)
+      if (kill) {
+        try {
+          killSpawnedRipgrepProcess(child)
+        } catch {
+          // A refused kill must not strand the probe's settlement.
+        }
+      }
+      if (error) {
+        reject(error)
+      } else {
+        resolve(available)
+      }
     }
+    const onAbort = (): void => {
+      if (signal) {
+        settle(false, true, abortSignalReason(signal))
+      }
+    }
+    const onError = (): void => settle(false)
     const onClose = (code: number | null): void => settle(code === 0)
-    child.once('error', () => settle(false))
+    child.once('error', onError)
     child.once('close', onClose)
     const timeout = setTimeout(() => settle(false, true), RIPGREP_FAILURE_PROBE_TIMEOUT_MS)
     timeout.unref?.()
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
 }
 
@@ -129,13 +156,18 @@ function probeRipgrepVersion(command: string, env: NodeJS.ProcessEnv): Promise<b
 export async function classifyRipgrepLaunchFailure(
   cwd: string,
   candidates: readonly (string | null)[],
-  env: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv,
+  signal?: AbortSignal
 ): Promise<'cwd-unreachable' | 'ripgrep-unavailable'> {
-  if (await isRipgrepSpawnCwdUsable(cwd)) {
+  throwIfSignalAborted(signal)
+  const usable = await isRipgrepSpawnCwdUsable(cwd)
+  throwIfSignalAborted(signal)
+  if (usable) {
     return 'ripgrep-unavailable'
   }
   for (const command of new Set(candidates.filter((entry) => entry !== null))) {
-    if (await probeRipgrepVersion(command, env)) {
+    throwIfSignalAborted(signal)
+    if (await probeRipgrepVersion(command, env, signal)) {
       return 'cwd-unreachable'
     }
   }
@@ -179,7 +211,7 @@ export async function classifySynchronousRipgrepSpawnFailure(
 }
 
 export function isRipgrepUnavailableExit(
-  child: ChildProcess,
+  child: ChildProcessHandle,
   code: number | null,
   signal: NodeJS.Signals | null,
   options: { classifyNativeLauncherExit?: boolean } = {}

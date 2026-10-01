@@ -261,8 +261,7 @@ describe('agentSession.create tracing', () => {
         totalDurationMs: 57,
         phases: [
           { phase: 'reconcile_leases', startedAtMs: 0, durationMs: 1 },
-          { phase: 'resolve_recovery', startedAtMs: 1, durationMs: 2 },
-          { phase: 'settlement_retry', startedAtMs: 3, durationMs: 3 },
+          { phase: 'resolve_recovery', startedAtMs: 1, durationMs: 5 },
           { phase: 'probe_owner', startedAtMs: 6, durationMs: 4 },
           { phase: 'reserve_owner', startedAtMs: 10, durationMs: 5 },
           { phase: 'acquire_owner', startedAtMs: 15, durationMs: 6 },

@@ -8,9 +8,6 @@
 /** What a page puts in `client.id`. Fixed, so a resent message fingerprints the same caller. */
 export const BRIDGE_PAGE_CLIENT_ID = 'orca-page-client'
 
-/** `init.accepts` name for a shell that swaps. A page told nothing claims no identity at all. */
-export const BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT = 'page-client-identity'
-
 /** The two fields a page carries an identity in. `mobileClient` is native chat's spelling. */
 const IDENTITY_FIELDS = ['client', 'mobileClient'] as const
 

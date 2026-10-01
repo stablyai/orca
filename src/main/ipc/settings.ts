@@ -12,6 +12,7 @@ import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../share
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
@@ -242,13 +243,7 @@ export function registerSettingsHandlers(
           userInitiated: true,
           shouldHydrateShellPath: app.isPackaged,
           onInstallError: recordManagedHookInstallFailure,
-          shouldContinue: (agent) => {
-            const settings = store.getSettings()
-            return (
-              settings.agentStatusHooksEnabled !== false &&
-              !settings.disabledTuiAgents.includes(agent)
-            )
-          }
+          shouldContinue: (agent) => isAgentStatusHooksEnabledForAgent(store.getSettings(), agent)
         })
       } catch (error) {
         console.warn('[settings] failed to reconcile managed agent hooks:', error)

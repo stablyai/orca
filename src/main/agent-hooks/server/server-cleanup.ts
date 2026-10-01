@@ -1,3 +1,4 @@
+import type { AgentProcessPresence } from '../../../shared/agent-process-presence'
 import {
   admitLegacyAgentStatus,
   deleteLegacyAgentStatus,
@@ -115,6 +116,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
   reconcileEndedProcessForPaneKeys(
     paneKeys: Iterable<string>,
     options?: {
+      endedPresence?: AgentProcessPresence
       /** The pane's PTY outlived its agent (a confirmed shell foreground), so the session can still
        *  be resumed in place — keep the `providerSessionOnly` remnant the paired `agentStatus:drop`
        *  minted for exactly this case. A certified PTY exit passes nothing: there is no pane left to
@@ -129,13 +131,17 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
         continue
       }
-      const retained = options?.preserveResumeIdentity
+      const resumeRow = options?.preserveResumeIdentity
         ? this.toRetainedProviderSessionRow(
             this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
               | EnrichedAgentHookEventPayload
               | undefined
           )
         : null
+      const retained =
+        resumeRow && options?.endedPresence
+          ? { ...resumeRow, agentPresence: options.endedPresence }
+          : resumeRow
       const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined

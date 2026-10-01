@@ -1,4 +1,5 @@
 import { normalizeExternalBrowserUrl } from '../../shared/browser-url'
+import type { UserAgentMetadata } from './browser-tab-identity'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
@@ -60,15 +61,21 @@ export type PendingMainFrameNavigation = {
   supersededUrls: string[]
 }
 
-export type AuthUserAgentOverrideOperation = {
-  sequence: number
+/** An Emulation.setUserAgentOverride payload; an empty userAgent clears the override. */
+export type CdpUserAgentOverride = {
   userAgent: string
+  userAgentMetadata?: UserAgentMetadata
 }
 
-export type AuthUserAgentOverrideState = {
-  confirmed: AuthUserAgentOverrideOperation | null
+export type CdpUserAgentOverrideOperation = {
+  sequence: number
+  override: CdpUserAgentOverride
+}
+
+export type CdpUserAgentOverrideState = {
+  confirmed: CdpUserAgentOverrideOperation | null
   nextSequence: number
-  pending: AuthUserAgentOverrideOperation[]
+  pending: CdpUserAgentOverrideOperation[]
 }
 
 export const SAFE_POPUP_WINDOW_OPTIONS = {

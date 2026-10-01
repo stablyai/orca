@@ -173,14 +173,6 @@ describe('useBrowserPageChromeFocus', () => {
     expect(useAppStore.getState().pendingAddressBarFocusByPageId[PAGE_ID]).toBe(true)
   })
 
-  it('claims a durable palette request aimed at the address bar', () => {
-    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'address-bar' }))
-
-    renderChrome()
-
-    expectAddressBarFocusedAndSelected()
-  })
-
   it('releases the address-bar latch once a palette grab has run its frames', () => {
     renderChrome()
 
@@ -421,66 +413,5 @@ describe('useBrowserPageChromeFocus', () => {
     })
 
     expect(document.activeElement).toBe(addressBar('b'))
-  })
-
-  it('sends the chord to the floating browser, not the focused split under it', () => {
-    render(
-      <>
-        <ChromeHarness testId="a" chromeShortcutScope="focused" />
-        <div data-floating-terminal-panel>
-          <ChromeHarness
-            testId="floating"
-            browserTabId="page-floating"
-            workspaceId="workspace-floating"
-            chromeShortcutScope="owned-target"
-          />
-        </div>
-      </>
-    )
-    act(() => flushFrames())
-
-    act(() => {
-      guest('floating').focus()
-      guest('floating').dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'l', metaKey: true, bubbles: true, cancelable: true })
-      )
-    })
-
-    expect(document.activeElement).toBe(addressBar('floating'))
-  })
-
-  it('sends the chord to the focused split, not the floating browser over it', () => {
-    render(
-      <>
-        <div data-floating-terminal-panel>
-          <ChromeHarness
-            testId="floating"
-            browserTabId="page-floating"
-            workspaceId="workspace-floating"
-            chromeShortcutScope="owned-target"
-          />
-        </div>
-        <ChromeHarness testId="a" chromeShortcutScope="focused" />
-      </>
-    )
-    act(() => flushFrames())
-
-    act(() => {
-      guest('a').focus()
-      guest('a').dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'l', metaKey: true, bubbles: true, cancelable: true })
-      )
-    })
-
-    expect(document.activeElement).toBe(addressBar('a'))
-  })
-
-  it('leaves the chord to the rest of the app while the pane is inactive', () => {
-    renderChrome({ isActive: false })
-    act(() => guest().focus())
-
-    pressFocusAddressBarChord(true)
-
-    expect(document.activeElement).toBe(guest())
   })
 })

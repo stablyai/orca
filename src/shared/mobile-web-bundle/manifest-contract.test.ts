@@ -11,6 +11,7 @@ import {
   MOBILE_WEB_BUNDLE_MAX_ROUTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
   MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
+  MOBILE_WEB_PAGE_VERSION,
   type MobileWebBundleAsset
 } from './manifest-contract'
 
@@ -101,6 +102,24 @@ describe('MobileWebBundleManifestSchema', () => {
     expect(
       MobileWebBundleManifestSchema.safeParse(manifestOf([ENTRY], { schemaVersion: 2 })).success
     ).toBe(false)
+  })
+})
+
+describe('the page version a manifest carries', () => {
+  it('takes a count, which is what a shell floors on', () => {
+    expect(
+      MobileWebBundleManifestSchema.safeParse(manifestOf([ENTRY], { pageVersion: 1 })).success
+    ).toBe(true)
+    for (const bad of [-1, 1.5, '1']) {
+      expect(
+        MobileWebBundleManifestSchema.safeParse(manifestOf([ENTRY], { pageVersion: bad })).success,
+        String(bad)
+      ).toBe(false)
+    }
+  })
+
+  it('is at least 1, so a manifest without one reads as older than every page that has one', () => {
+    expect(MOBILE_WEB_PAGE_VERSION).toBeGreaterThanOrEqual(1)
   })
 })
 

@@ -9,11 +9,14 @@ type WriteSchedulingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
   | 'automationListProjectionCache'
+  | 'dirtyProfileStateDomains'
   | 'firstPendingSaveAt'
   | 'pendingWrite'
+  | 'profileMaintenancePending'
   | 'quitFlushStarted'
   | 'writeGeneration'
   | 'writeTimer'
+  | 'writesFrozen'
 >
 
 const writeSchedulingOperationsContext = Symbol('WriteSchedulingOperations')
@@ -30,36 +33,44 @@ export class WriteSchedulingOperations {
   }
 
   async waitForPendingWrite(): Promise<void> {
-    await Promise.all([
-      this[writeSchedulingOperationsContext].runtime.pendingWrite,
-      this[writeSchedulingOperationsContext].runtime.activeViewPreference.waitForPendingWrite()
-    ])
+    const { runtime } = this[writeSchedulingOperationsContext]
+    await Promise.all([runtime.pendingWrite, runtime.activeViewPreference.waitForPendingWrite()])
   }
 }
 
-export function scheduleSave(owner: WriteSchedulingOperations): void {
-  owner[writeSchedulingOperationsContext].runtime.automationListProjectionCache = null
-  // Why: once the quit flush has snapshotted, a newly debounced write would fire during
-  // teardown with nothing awaiting it, and the process can exit mid-rename. The quit
-  // flush is the last write by construction.
-  if (owner[writeSchedulingOperationsContext].runtime.quitFlushStarted) {
+export function scheduleSave(
+  owner: WriteSchedulingOperations,
+  dirtyDomains?: readonly string[]
+): void {
+  const { runtime, writes } = owner[writeSchedulingOperationsContext]
+  runtime.automationListProjectionCache = null
+  const trackedDomains = runtime.dirtyProfileStateDomains
+  if (dirtyDomains === undefined) {
+    runtime.dirtyProfileStateDomains = null
+  } else if (trackedDomains !== null) {
+    for (const domain of dirtyDomains) {
+      trackedDomains.add(domain)
+    }
+  }
+  // A timer admitted after the final snapshot could outlive the awaited shutdown work.
+  if (runtime.quitFlushStarted || runtime.profileMaintenancePending) {
     return
   }
-  owner[writeSchedulingOperationsContext].runtime.writeGeneration += 1
-  const now = Date.now()
-  owner[writeSchedulingOperationsContext].runtime.firstPendingSaveAt ??= now
-  if (owner[writeSchedulingOperationsContext].runtime.writeTimer) {
-    clearTimeout(owner[writeSchedulingOperationsContext].runtime.writeTimer)
+  runtime.writeGeneration += 1
+  if (runtime.writesFrozen) {
+    return
   }
-  const untilMaxWait = Math.max(
-    0,
-    owner[writeSchedulingOperationsContext].runtime.firstPendingSaveAt + SAVE_MAX_WAIT_MS - now
-  )
+  const now = Date.now()
+  runtime.firstPendingSaveAt ??= now
+  if (runtime.writeTimer) {
+    clearTimeout(runtime.writeTimer)
+  }
+  const untilMaxWait = Math.max(0, runtime.firstPendingSaveAt + SAVE_MAX_WAIT_MS - now)
   const delay = Math.min(SAVE_DEBOUNCE_MS, untilMaxWait)
-  owner[writeSchedulingOperationsContext].runtime.writeTimer = setTimeout(() => {
-    owner[writeSchedulingOperationsContext].runtime.writeTimer = null
-    owner[writeSchedulingOperationsContext].runtime.firstPendingSaveAt = null
-    void enqueueWrite(owner[writeSchedulingOperationsContext].writes)
+  runtime.writeTimer = setTimeout(() => {
+    runtime.writeTimer = null
+    runtime.firstPendingSaveAt = null
+    void enqueueWrite(writes, { skipIfClean: true }).catch(() => {})
   }, delay)
 }
 

@@ -1,10 +1,13 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { AgentSessionRecordStore } from './agent-session-record-store'
-import { agentSessionStorePath } from './agent-session-record-store-file'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import {
+  openTestAgentSessionRecordStore,
+  readPersistedTestAgentSessionStoreText
+} from './agent-session-record-store-test-harness'
 
 const NOW = 1_800_000_000_000
 const MATCHED = { outcome: 'identity-matched', matchedOn: ['spawn-token'] } as const
@@ -63,7 +66,7 @@ async function establishOwner(
 async function liveStore(): Promise<{ directory: string; store: AgentSessionRecordStore }> {
   const directory = await mkdtemp(join(tmpdir(), 'orca-lease-renewal-batch-'))
   directories.push(directory)
-  const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  const store = await openTestAgentSessionRecordStore(directory)
   await establishOwner(store, directory, 'a')
   await establishOwner(store, directory, 'b')
   return { directory, store }
@@ -93,7 +96,7 @@ describe('agent-session lease renewal batch', () => {
       probe: { outcome: 'pid-absent' },
       now: NOW + 5_000
     })
-    const beforeDisk = await readFile(agentSessionStorePath(directory), 'utf-8')
+    const beforeDisk = await readPersistedTestAgentSessionStoreText(directory)
     const beforeFirst = store.getRecord('session-a')
 
     await expect(
@@ -104,8 +107,8 @@ describe('agent-session lease renewal batch', () => {
     ).rejects.toThrow('agent_session_checkpoint_stale')
 
     expect(store.getRecord('session-a')).toEqual(beforeFirst)
-    expect(await readFile(agentSessionStorePath(directory), 'utf-8')).toBe(beforeDisk)
-    const reopened = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    expect(await readPersistedTestAgentSessionStoreText(directory)).toBe(beforeDisk)
+    const reopened = await openTestAgentSessionRecordStore(directory)
     expect(
       reopened
         .listRecords()

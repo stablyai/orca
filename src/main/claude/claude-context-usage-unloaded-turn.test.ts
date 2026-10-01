@@ -14,14 +14,12 @@ import {
   type StructuredAgentSessionState
 } from '../../shared/structured-agent-session-reducer'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  readStructuredAgentSessionOptions,
-  type StructuredAgentSessionMutationContext
-} from '../native-chat/agent-session-wire/structured-agent-session-host-mutations'
+import type { StructuredAgentSessionMutationContext } from '../native-chat/agent-session-wire/structured-agent-session-host-mutations'
+import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import {
   assistantFrame,
   initFrame,
@@ -53,7 +51,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
       providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
     },
     now: () => 9_000,
-    journalDir: join(root, SESSION)
+    stateDirectory: join(root, SESSION)
   })
 }
 
@@ -85,6 +83,11 @@ function readOptions(
   journal: AgentSessionJournal,
   adapter: Partial<StructuredAgentSessionAdapter>
 ) {
+  const running = {
+    journal,
+    child: { fence: 1, generation: 'generation-1' },
+    params: { provider: 'claude' }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the options read touches only these members.
   const context = {
     deps: {
@@ -95,7 +98,8 @@ function readOptions(
       store: { getRecord: () => undefined }
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
-    requireSession: () => ({ journal, fence: 1 })
+    openConversation: async () => running,
+    conversation: async () => running
   } as unknown as StructuredAgentSessionMutationContext
   return readStructuredAgentSessionOptions(context, SESSION)
 }

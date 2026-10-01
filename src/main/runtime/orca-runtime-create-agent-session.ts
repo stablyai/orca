@@ -27,6 +27,7 @@ import {
   deterministicAgentSessionUuid,
   isAgentSessionOperationOutcomeUnknown
 } from './runtime-agent-launch-resolution'
+import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 
 export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
   async createAgentSession(
@@ -169,7 +170,6 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       if (!startup) {
         throw new Error('agent_session_identity_required')
       }
-      await this.markWorkspaceTrustedForAgent(request.agent, workspace.connectionId, workspace.path)
       if (caller.signal?.aborted) {
         throw new Error('client_disconnected')
       }
@@ -201,6 +201,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           launchAgent: request.agent,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           startupCommandDelivery: startup.startupCommandDelivery,
+          // A fresh agent this host built; the request has no surface field, so it counts as `unknown`.
+          telemetry: agentStartedTelemetry(request.agent, undefined),
           cwd: startupCwd,
           presentation: request.presentation ?? 'background',
           tabId: operationTabId,

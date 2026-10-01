@@ -8,8 +8,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentSessionTurnActivity } from '../../shared/agent-session-wire'
 import { selectStructuredAgentTurnActivity } from '../../shared/native-chat-turn-activity'
-import { latestStructuredAgentSessionAssistantMessage } from '../../shared/structured-agent-session-projection'
+import { latestStructuredAgentSessionAssistantMessage } from '../../shared/structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionThinking,
   statusStructuredAgentSessionToolCall
@@ -19,6 +20,7 @@ import type { AgentSessionJournal } from '../native-chat/agent-session-journal/j
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexThreadItem } from './codex-thread-item-identity'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const SESSION = 'session-codex-children'
 const PARENT = 'thread-parent'
@@ -42,7 +44,7 @@ async function openJournal(root: string): Promise<AgentSessionJournal> {
       agent: 'codex',
       providerHandle: { kind: 'codex', threadId: PARENT }
     },
-    journalDir: root,
+    database: openTestJournalHostDatabase(root),
     now: () => 1_000
   })
 }
@@ -51,7 +53,16 @@ async function session() {
   const root = await mkdtemp(join(tmpdir(), 'orca-codex-children-'))
   let journal = await openJournal(root)
   const deferred = createDeferredStructuredAgentSessionEventSink()
-  deferred.bind({ journal, fence: 1, publish: () => {} })
+  const activities: (AgentSessionTurnActivity | null)[] = []
+  deferred.bind({
+    journal,
+    fence: 1,
+    publish: (activity) => {
+      if (activity !== undefined) {
+        activities.push(activity)
+      }
+    }
+  })
   cleanups.push(async () => {
     deferred.close()
     await journal.close()
@@ -79,6 +90,8 @@ async function session() {
   return {
     on,
     item,
+    /** Every live activity the host published to the session's clients. */
+    activities,
     /** The parent's turn is open and has spawned a running child. */
     spawnChild: () => {
       on(PARENT, 'turn/started', { turn: { id: PARENT_TURN } })
@@ -152,15 +165,33 @@ describe("a Codex subagent's rows on the parent's surfaces", () => {
   })
 
   it("does not show the child's compaction as the parent's activity line", async () => {
-    const { spawnChild, item, items } = await session()
+    const { spawnChild, item, items, activities } = await session()
     spawnChild()
-    item(CHILD, 'item/completed', CHILD_TURN, { type: 'contextCompaction', id: 'child-compact' })
+    const compaction: CodexThreadItem = { type: 'contextCompaction', id: 'child-compact' }
+    item(CHILD, 'item/started', CHILD_TURN, compaction)
+    item(CHILD, 'item/completed', CHILD_TURN, compaction)
 
     const rows = await items()
-    expect(selectStructuredAgentTurnActivity(rows, PARENT_TURN)).toBeNull()
+    expect(activities.map((activity) => activity?.text)).not.toContain(
+      'Compacting the conversation'
+    )
+    expect(selectStructuredAgentTurnActivity(rows, PARENT_TURN, activities.at(-1))).toEqual({
+      kind: 'description',
+      text: 'Coordinating with another agent'
+    })
     expect(
       rows.some((row) => row.body.kind === 'status' && row.body.text === 'Context compacted')
     ).toBe(true)
+  })
+
+  it("shows the parent's own compaction as its activity line", async () => {
+    const { spawnChild, item, items, activities } = await session()
+    spawnChild()
+    item(PARENT, 'item/started', PARENT_TURN, { type: 'contextCompaction', id: 'own-compact' })
+
+    expect(
+      selectStructuredAgentTurnActivity(await items(), PARENT_TURN, activities.at(-1))
+    ).toEqual({ kind: 'description', text: 'Compacting the conversation' })
   })
 
   it("quotes the parent's own latest line, and still does after a reopen", async () => {

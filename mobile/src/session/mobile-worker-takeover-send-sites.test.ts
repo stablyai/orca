@@ -13,7 +13,6 @@ import {
   clearMobileNativeChatInput
 } from './mobile-native-chat-send'
 import { sendMobileTerminalQueryReply } from '../terminal/mobile-terminal-query-reply'
-import { createTerminalAndSendPrompt } from './pr-ai-triage-launch'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
 
@@ -110,13 +109,14 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
       onSuccess: vi.fn(),
       refreshCanPaste: vi.fn()
     } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: untyped vi.fn() stubs stand in for callbacks whose returns the send path never reads.
     diff = useMobileDiffReviewSendActions({
       client: client as unknown as RpcClient,
       connState: 'connected',
       worktreeId: 'workspace',
       screenState: { kind: 'loading' },
       setActionError: vi.fn(),
-      setSendSheet: vi.fn(),
+      sheets: { openSheet: vi.fn(), closeSheet: vi.fn(), updateSendSheet: vi.fn() },
       saveCommentsAndReviewState: vi.fn()
     } as never)
     return null
@@ -178,7 +178,6 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
         imagePaths: ['/tmp/picture.png'],
         followedByText: true
       }),
-    'PR triage': () => createTerminalAndSendPrompt(client, 'workspace', 'fix checks'),
     'diff review': () => diff.sendPromptToTerminal(handle, []),
     programmatic: () => client.sendRequest('terminal.send')
   }
@@ -239,23 +238,19 @@ it.each(realSites)('%s reports on its send target once per handle per 30 seconds
   expect(reports()[2][1]).toEqual({ terminal: 'term-2' })
 })
 
-it.each([
-  'query reply',
-  'image heal',
-  'image attachment',
-  'PR triage',
-  'diff review',
-  'programmatic'
-] as const)('%s never reports takeover', async (site) => {
-  const client = clientFixture()
-  const sites = mountSendSites(client)
-  await act(async () => {
-    await sites[site]()
-    await sites[site]()
-  })
-  expect(client.sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(true)
-  expect(client.sendRequest.mock.calls.filter(([method]) => method === REPORT)).toHaveLength(0)
-})
+it.each(['query reply', 'image heal', 'image attachment', 'diff review', 'programmatic'] as const)(
+  '%s never reports takeover',
+  async (site) => {
+    const client = clientFixture()
+    const sites = mountSendSites(client)
+    await act(async () => {
+      await sites[site]()
+      await sites[site]()
+    })
+    expect(client.sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(true)
+    expect(client.sendRequest.mock.calls.filter(([method]) => method === REPORT)).toHaveLength(0)
+  }
+)
 
 it.each(realSites)('%s does not report a rejected send', async (site) => {
   const client = clientFixture()

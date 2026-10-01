@@ -94,10 +94,10 @@ describe('clear pane identity', () => {
         groupId: 'local-group',
         isPinned: true
       })
-      expect(next.groupsByWorktree?.[WT]?.[0]).toMatchObject({
-        activeTabId: 'local-pane'
-      })
-      expect(next.groupsByWorktree?.[WT]?.[0]?.tabOrder[0]).toBe('local-pane')
+      // An omitted groups patch means the snapshot left every group as it was.
+      const nextGroup = (next.groupsByWorktree ?? state.groupsByWorktree)[WT]?.[0]
+      expect(nextGroup).toMatchObject({ activeTabId: 'local-pane' })
+      expect(nextGroup?.tabOrder[0]).toBe('local-pane')
       expect(next.activeTabIdByWorktree?.[WT] ?? state.activeTabIdByWorktree[WT]).toBe('local-pane')
       expect(next.tabsByWorktree?.[WT] ?? []).toEqual([])
       const repeated = applyWebSessionTabsSnapshot({ ...state, ...next }, snapshot, ENV, NOW + 1, {

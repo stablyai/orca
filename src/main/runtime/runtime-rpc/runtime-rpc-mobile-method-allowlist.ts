@@ -218,6 +218,9 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'agentSession.reveal',
   'agentSession.send',
   'agentSession.cancel',
+  'agentSession.queuedMessageSend',
+  'agentSession.queuedMessageDelete',
+  'agentSession.queuedMessagesResume',
   'agentSession.close',
   'agentSession.respondToApproval',
   'agentSession.respondToQuestion',
@@ -230,6 +233,8 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'agentSession.history',
   'agentSession.subscribe',
   'agentSession.unsubscribe',
+  // No-ops on a current host; kept until MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION passes the
+  // mobile builds that still call them.
   'agentSession.hold',
   'agentSession.release',
   'nativeChat.readSession',

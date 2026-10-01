@@ -455,7 +455,8 @@ describe('HeadlessEmulator', () => {
 
     it('tracks long split private mouse mode sequences', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
-      const fillerModes = Array.from({ length: 40 }, (_, i) => String(3000 + i)).join(';')
+      // Within xterm's 32-param cap: modes follow what xterm itself parsed, as every live viewer does.
+      const fillerModes = Array.from({ length: 29 }, (_, i) => String(3000 + i)).join(';')
 
       await emulator.write(`\x1b[?1002;${fillerModes};100`)
       await emulator.write('6h')
@@ -564,6 +565,16 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.modes.sgrMouseMode).toBe(false)
       expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
+      // Replay readers must not guess the encoding of an active tracking mode.
+      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006l')
+    })
+
+    it('states no mouse encoding while nothing tracks the mouse', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b[?1002h\x1b[?1002l')
+
+      expect(emulator.getSnapshot().rehydrateSequences).not.toContain('\x1b[?1006')
     })
 
     it('tracks SGR-pixels mouse reporting as a separate active encoding', async () => {

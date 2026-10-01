@@ -5,6 +5,7 @@ import {
   excerptAgentFailureOutput,
   planCustomCommand,
   STAGED_DIFF_BYTE_BUDGET,
+  stripPrefilledReasoningPreamble,
   tokenizeCustomCommandTemplate,
   truncateDiffForPrompt
 } from './commit-message-prompt'
@@ -133,6 +134,44 @@ describe('cleanGeneratedCommitMessage', () => {
 
   it('returns empty string when input is whitespace', () => {
     expect(cleanGeneratedCommitMessage('   \n\t')).toBe('')
+  })
+
+  it('drops a leading <think> reasoning block and unwraps the answer', () => {
+    expect(
+      cleanGeneratedCommitMessage('<think>\nThe diff fixes a typo.\n</think>\n\nFix typo\n\n- Why')
+    ).toBe('Fix typo\n\n- Why')
+    expect(cleanGeneratedCommitMessage('<think>short</think>\n```\nfeat: add parser\n```')).toBe(
+      'feat: add parser'
+    )
+  })
+
+  it('drops a leading Kimi-VL ◁think▷ reasoning block', () => {
+    expect(cleanGeneratedCommitMessage('◁think▷Typo in README.◁/think▷Fix typo in README')).toBe(
+      'Fix typo in README'
+    )
+  })
+
+  it('keeps think tags that are not a leading reasoning block', () => {
+    const quoted = 'Strip <think>…</think> blocks from generated messages'
+    expect(cleanGeneratedCommitMessage(quoted)).toBe(quoted)
+    expect(cleanGeneratedCommitMessage('fix: handle stray </think> in stream')).toBe(
+      'fix: handle stray </think> in stream'
+    )
+    expect(cleanGeneratedCommitMessage('<think>still reasoning')).toBe('<think>still reasoning')
+  })
+})
+
+describe('stripPrefilledReasoningPreamble', () => {
+  it('drops reasoning that ends in a closing tag whose opening tag was prefilled', () => {
+    expect(
+      stripPrefilledReasoningPreamble("We need the message only.\nLet's final.</think>Fix typo")
+    ).toBe('Fix typo')
+    expect(stripPrefilledReasoningPreamble('Reasoning.◁/think▷\nFix typo')).toBe('Fix typo')
+  })
+
+  it('keeps a closing tag that follows its own opening tag', () => {
+    const quoted = 'Strip <think>…</think> blocks'
+    expect(stripPrefilledReasoningPreamble(quoted)).toBe(quoted)
   })
 })
 

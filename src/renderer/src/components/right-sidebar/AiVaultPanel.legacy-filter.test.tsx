@@ -26,7 +26,7 @@ const updateSettingsOrThrow = vi.fn(async (next: { aiVaultSearch: { enabled: boo
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign((select: (state: typeof mockState) => unknown) => select(mockState), {
-    getState: () => ({ ...mockState, updateSettingsOrThrow })
+    getState: () => ({ ...mockState, updateSettingsOrThrow, markFeatureTipsSeen: vi.fn() })
   })
 }))
 vi.mock('@/store/selectors', () => ({

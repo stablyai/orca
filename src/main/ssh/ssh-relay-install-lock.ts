@@ -1,6 +1,7 @@
 import type { SshConnection } from './ssh-connection'
-import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
+import { execCommand } from './ssh-relay-deploy-helpers'
 import { RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { isRelayGcClaimed, waitForRelayGcClaimRelease } from './ssh-relay-gc-claim'
 import {
   acquireInstallLockParentCommand,
@@ -54,7 +55,10 @@ export async function isRelayInstallLockStale(
     const out = await execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir))
     const ageSec = Number.parseInt(out.trim(), 10)
     return Number.isFinite(ageSec) && ageSec >= 0 && ageSec * 1000 > INSTALL_LOCK_STALE_MS
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     return false
   }
 }
@@ -95,11 +99,20 @@ export async function acquireInstallLock(
           remoteRelayDir,
           host,
           options?.signal
-        ).catch(() => true)
+        ).catch((err) => {
+          if (isUnconfirmedSshCommandTermination(err)) {
+            throw err
+          }
+          return true
+        })
         if (!claimedAfterAcquire && !options?.signal?.aborted) {
           return
         }
-        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
+        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch((err) => {
+          if (isUnconfirmedSshCommandTermination(err)) {
+            throw err
+          }
+        })
         options?.signal?.throwIfAborted()
       }
     } catch (err) {
@@ -119,7 +132,12 @@ export async function acquireInstallLock(
         host,
         tryStealInstallLockCommand(host, lockDir, INSTALL_LOCK_STALE_SECONDS),
         { signal: options?.signal }
-      ).catch(() => 'BUSY')
+      ).catch((err) => {
+        if (isUnconfirmedSshCommandTermination(err)) {
+          throw err
+        }
+        return 'BUSY'
+      })
       options?.signal?.throwIfAborted()
       if (steal.trim().endsWith('OK')) {
         const reason = steal.trim().endsWith('REBOOT_OK') ? 'previous-boot' : 'stale'
@@ -129,11 +147,20 @@ export async function acquireInstallLock(
           remoteRelayDir,
           host,
           options?.signal
-        ).catch(() => true)
+        ).catch((err) => {
+          if (isUnconfirmedSshCommandTermination(err)) {
+            throw err
+          }
+          return true
+        })
         if (!claimedAfterSteal && !options?.signal?.aborted) {
           return
         }
-        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
+        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch((err) => {
+          if (isUnconfirmedSshCommandTermination(err)) {
+            throw err
+          }
+        })
         options?.signal?.throwIfAborted()
       }
     }

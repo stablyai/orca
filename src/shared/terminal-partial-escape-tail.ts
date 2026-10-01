@@ -155,8 +155,8 @@ export function advancePartialEscapeTail(pendingTail: string, chunk: string): st
   // Why the pre-filter: `extractPartialEscapeTail` only leaves `ground` on an ESC byte, so with
   // no pending tail and no ESC in the chunk the answer is always ''. Taking it here skips both
   // the full-chunk concat and the per-code-unit walk on ESC-free output (build logs, `cat`,
-  // piped tool output) — the same gate `TerminalOscCwdTitleScanner.scan` and
-  // `TerminalMouseModeMirror.scan` already apply on the very same ingest path.
+  // piped tool output) — the same gate `TerminalOscCwdTitleScanner.scan` already
+  // applies on the very same ingest path.
   if (pendingTail.length === 0 && !chunk.includes('\x1b')) {
     return ''
   }

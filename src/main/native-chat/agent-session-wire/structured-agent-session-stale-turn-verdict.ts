@@ -1,26 +1,32 @@
 // What the host may durably say about a turn whose provider child is gone.
 //
-// `interrupted` requires the host to have seen the child exit; that receipt is the only end time it
-// is allowed to record. Everything weaker — a pid probe, an identity mismatch, a journal found
-// running on a cold acquire — is `unverifiable` and carries no end at all.
+// `interrupted` requires proof that the child which wrote the turn is gone: death evidence naming
+// that turn's owner by fence — a watched exit, or a local probe that found the recorded pid gone or
+// reused. A release nothing proved — lost contact, an unverifiable identity, a stop that outlived the
+// ladder — carries none, and neither does a later owner's death; the turn is then `unverifiable`
+// with no end at all, until a proof naming its owner is written and revises it.
 
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalTurnLifecycle
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem,
+  type AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
 } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
-import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
+import type {
+  StructuredAgentSessionChildEndCause,
+  StructuredAgentSessionEndedEvent
+} from './structured-agent-session-adapter'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
 
 export type StructuredAgentSessionTurnVerdict =
-  | { state: 'interrupted'; completedAt: number }
+  /** `cancellation` only for a stop the user aimed at this chat: every other cut is news. */
+  | { state: 'interrupted'; completedAt: number; outcome?: 'cancellation' }
   | { state: 'unverifiable' }
 
 export const UNVERIFIABLE_TURN_VERDICT: StructuredAgentSessionTurnVerdict = {
@@ -28,11 +34,70 @@ export const UNVERIFIABLE_TURN_VERDICT: StructuredAgentSessionTurnVerdict = {
 }
 
 export function turnVerdictFromDeathEvidence(
-  evidence: AgentSessionDeathEvidence | null | undefined
+  evidence: AgentSessionDeathEvidence | null | undefined,
+  /** Fence of the owner that wrote the turn. */
+  turnFence: number | undefined
 ): StructuredAgentSessionTurnVerdict {
-  return evidence?.kind === 'exit-observed'
-    ? { state: 'interrupted', completedAt: evidence.observedAt }
-    : UNVERIFIABLE_TURN_VERDICT
+  if (!evidence) {
+    return UNVERIFIABLE_TURN_VERDICT
+  }
+  if (evidence.ownerFence === undefined) {
+    // Evidence an older build wrote names no owner; it keeps the rule that build applied.
+    return evidence.kind === 'exit-observed'
+      ? { state: 'interrupted', completedAt: evidence.observedAt }
+      : UNVERIFIABLE_TURN_VERDICT
+  }
+  if (evidence.ownerFence !== turnFence) {
+    return UNVERIFIABLE_TURN_VERDICT
+  }
+  if (evidence.kind === 'exit-observed') {
+    return { state: 'interrupted', completedAt: evidence.observedAt }
+  }
+  // A probe finds a dead child long after it died; its last renewal bounds the end, so the turn never
+  // counts the time Orca was down. Timeline rows don't: a send can land there after the death.
+  return {
+    state: 'interrupted',
+    completedAt: Math.min(evidence.lastProvenAliveAt ?? evidence.observedAt, evidence.observedAt)
+  }
+}
+
+/**
+ * The one mapping from why a provider child ended to what the turn it cut reads as. Each adapter
+ * settles its own open turn through it on `ended`, and the host's fallback settles through it any
+ * turn no adapter did. Only a stop the user aimed at this chat is their cancellation.
+ */
+export function turnVerdictForChildEnd(
+  cause: StructuredAgentSessionChildEndCause,
+  completedAt: number
+): Extract<StructuredAgentSessionTurnVerdict, { state: 'interrupted' }> {
+  return stopIsTheUsers(cause)
+    ? { state: 'interrupted', completedAt, outcome: 'cancellation' }
+    : { state: 'interrupted', completedAt }
+}
+
+/** Whether the user asked for this end. Only then is a cut turn their cancellation. */
+export function stopIsTheUsers(cause: StructuredAgentSessionChildEndCause): boolean {
+  switch (cause) {
+    case 'user-stop':
+    case 'user-close':
+      return true
+    case 'host-stop':
+    case 'evict':
+    case 'exit':
+    case 'attach-failed':
+      return false
+  }
+}
+
+/** Why the child an `ended` event reports ended: who asked for a close, else an exit it had. A
+ *  requested close with no cause named is the host's own. */
+export function childEndCauseOfEndedEvent(
+  event: { type: 'ended' } & Partial<Pick<StructuredAgentSessionEndedEvent, 'cause' | 'stopCause'>>
+): StructuredAgentSessionChildEndCause {
+  if (event.cause === 'unexpected-exit') {
+    return 'exit'
+  }
+  return event.stopCause ?? 'host-stop'
 }
 
 /** Revises every still-running lifecycle item in place, keeping its identity and start. */
@@ -40,45 +105,50 @@ export function runningTurnLifecycleRevisions(
   items: readonly AgentJournalRenderItem[],
   verdict: StructuredAgentSessionTurnVerdict
 ): JournalLifecycleMutationInput[] {
-  const revisions: JournalLifecycleMutationInput[] = []
-  for (const item of items) {
+  return items.flatMap((item) => {
     const turn = readAgentJournalTurn(item.body)
-    if (turn?.state !== 'running') {
-      continue
-    }
-    const identity = parseAgentJournalItemKey(item.itemId)
-    if (!identity) {
-      continue
-    }
-    revisions.push({
-      kind: 'item',
-      identity,
-      body: agentJournalTurnBody(settledLifecycle(turn, verdict))
-    })
-  }
-  return revisions
+    return turn?.state === 'running' ? turnLifecycleRevision(item, turn, verdict) : []
+  })
 }
 
-function staleSessionLifecycleRevisions(
-  items: readonly AgentJournalRenderItem[]
+/**
+ * A turn an earlier settle could only call `unverifiable`, because the proof had not been written
+ * yet, revised once a proof names the owner that wrote it. Only ever upward, and never from an
+ * older build's proof, which names no owner.
+ */
+export function provenUnverifiableTurnRevisions(
+  items: readonly AgentJournalRenderItem[],
+  evidence: AgentSessionDeathEvidence | null | undefined,
+  journal: Pick<AgentSessionJournal, 'itemFence'>
 ): JournalLifecycleMutationInput[] {
-  const revisions: JournalLifecycleMutationInput[] = []
-  for (const item of items) {
-    const identity = parseAgentJournalItemKey(item.itemId)
-    if (!identity) {
-      continue
-    }
-    const cancelled =
-      (item.body.kind === 'approval' || item.body.kind === 'question') &&
-      item.body.resolution.state === 'pending'
-        ? cancelledJournalPromptBody(item.body)
-        : null
-    if (cancelled) {
-      revisions.push({ kind: 'item', identity, body: cancelled })
-    }
+  const ownerFence = evidence?.ownerFence
+  if (ownerFence === undefined) {
+    return []
   }
-  revisions.push(...runningTurnLifecycleRevisions(items, UNVERIFIABLE_TURN_VERDICT))
-  return revisions
+  return items.flatMap((item) => {
+    const turn = readAgentJournalTurn(item.body)
+    return turn?.state === 'unverifiable' && journal.itemFence(item.itemId) === ownerFence
+      ? turnLifecycleRevision(item, turn, turnVerdictFromDeathEvidence(evidence, ownerFence))
+      : []
+  })
+}
+
+function turnLifecycleRevision(
+  item: AgentJournalRenderItem,
+  turn: AgentJournalTurnLifecycle,
+  verdict: StructuredAgentSessionTurnVerdict
+): JournalLifecycleMutationInput[] {
+  const identity = parseAgentJournalItemKey(item.itemId)
+  return identity
+    ? [
+        {
+          kind: 'item',
+          identity,
+          body: agentJournalTurnBody(settledLifecycle(turn, verdict)),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ]
+    : []
 }
 
 /** The verdict owns the turn's end and nothing else; every other field the row
@@ -94,30 +164,15 @@ function settledLifecycle(
     durationMs: _durationMs,
     ...kept
   } = lifecycle
-  return verdict.state === 'interrupted'
-    ? { ...kept, state: verdict.state, completedAt: verdict.completedAt }
-    : { ...kept, state: verdict.state }
-}
-
-/** A running row found when a NEW child is acquired belongs to a generation whose exit nobody
- *  observed. Must run before that child's buffered events land, or a live turn would be judged. */
-export async function settleStaleSessionStateOnAcquire(input: {
-  journal: AgentSessionJournal
-  sessionId: string
-  fence: number
-  acquisitionGeneration: string | null
-}): Promise<number> {
-  const { journal } = input
-  const revisions = staleSessionLifecycleRevisions(journal.snapshot().items)
-  const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
-  const settlementId = `stale-session:${input.sessionId}:${input.fence}:${generation}`
-  for (const chunk of partitionJournalLifecycleMutations(settlementId, revisions)) {
-    await journal.appendLifecycleBatch({
-      settlementId: chunk.settlementId,
-      fence: input.fence,
-      recovered: true,
-      mutations: chunk.mutations
-    })
+  if (verdict.state !== 'interrupted') {
+    return { ...kept, state: verdict.state }
   }
-  return revisions.length
+  // A renewal can predate the turn, which started with its owner alive; it never ends before that.
+  const began = Math.max(lifecycle.requestedAt ?? 0, lifecycle.startedAt ?? 0)
+  return {
+    ...kept,
+    state: verdict.state,
+    completedAt: Math.max(verdict.completedAt, began),
+    ...(verdict.outcome ? { outcome: verdict.outcome } : {})
+  }
 }

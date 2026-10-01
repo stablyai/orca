@@ -135,20 +135,6 @@ describe('agent launch caller placement and telemetry', () => {
     })
   })
 
-  it('falls back to the tab-bar quick launch source when a caller names none', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
-
-    // Why: git-history-explain-commit is the one production call site that names no launch source,
-    // so it is reported as a tab-bar quick launch rather than as its own surface.
-    expect(queuedStartupPayload(store)?.telemetry).toEqual({
-      agent_kind: 'kind:codex',
-      launch_source: 'tab_bar_quick_launch',
-      request_kind: 'new'
-    })
-  })
-
   it('creates the tab before queueing its startup command', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 

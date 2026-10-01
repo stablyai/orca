@@ -27,7 +27,11 @@ import { getSessionParseCacheEntry } from './session-parse-cache-store'
 import { describeSkippedTranscriptRecords } from './session-transcript-record-budget'
 import { canStopParsingSessions } from './session-scan-cutoff'
 import { discoverInScopeCwdBucketFiles } from './session-scanner-scope-discovery'
-import { CLAUDE_CWD_BUCKET_LAYOUT, PI_CWD_BUCKET_LAYOUT } from './session-cwd-bucket-layouts'
+import {
+  CLAUDE_CWD_BUCKET_LAYOUT,
+  PI_CWD_BUCKET_LAYOUT,
+  CODEBUDDY_CWD_BUCKET_LAYOUT
+} from './session-cwd-bucket-layouts'
 import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
 import { cursorChatMetaRefusals, withCursorChatMetaScan } from './session-scanner-cursor-chat-meta'
 import type {
@@ -166,7 +170,11 @@ function mergeSessions(
 
 // Agents whose on-disk layout names a directory per cwd, so a scope's older
 // sessions can be found without reading every transcript's header.
-const CWD_BUCKET_LAYOUTS = [CLAUDE_CWD_BUCKET_LAYOUT, PI_CWD_BUCKET_LAYOUT]
+const CWD_BUCKET_LAYOUTS = [
+  CLAUDE_CWD_BUCKET_LAYOUT,
+  PI_CWD_BUCKET_LAYOUT,
+  CODEBUDDY_CWD_BUCKET_LAYOUT
+]
 
 async function scanInScopeSessions(args: {
   discoveries: SessionFileDiscovery[]
@@ -240,7 +248,8 @@ async function parseSessionCandidates(args: {
           args.platform,
           args.executionHostId,
           args.parseStats,
-          args.antigravityWorkspaceResolver
+          args.antigravityWorkspaceResolver,
+          args.signal
         )
       )
     )
@@ -268,10 +277,17 @@ async function parseSessionCandidate(
   platform: NodeJS.Platform,
   executionHostId: ExecutionHostId,
   parseStats: SessionParseStats,
-  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
+  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver,
+  signal?: AbortSignal
 ): Promise<SessionParseResult> {
   try {
-    let session = await parseAgentSessionFileCached(candidate, platform, parseStats)
+    let session = await parseAgentSessionFileCached(
+      candidate,
+      platform,
+      parseStats,
+      undefined,
+      signal
+    )
     if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
       session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
     }

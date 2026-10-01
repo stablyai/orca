@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
+import { getPosixCodexShellLaunchPreflight } from '../shared/codex-shell-function'
 import {
   BASH_FEATURE_CHANNEL_BLOCK,
   BASH_PROMPT_COMMAND_COMPOSITION_BLOCK,
@@ -32,10 +33,10 @@ function getRelayZshWrapperSpec(): ZshStartupHookSpec {
     overlayRestoreComment:
       '# Why: remote startup files can re-export user defaults after relay spawn.',
     restores: {
+      managedWslCli: false,
       agentTeamsPath: false,
       remoteCliBinDir: true,
-      codexHome: false,
-      codexLaunchPreflight: false
+      codexHome: false
     }
   }
 }
@@ -73,7 +74,7 @@ fi
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
-${BASH_HISTFILE_RESTORE_BLOCK}
+${getPosixCodexShellLaunchPreflight()}${BASH_HISTFILE_RESTORE_BLOCK}
 # Why: SSH bash sessions need the same command lifecycle markers as local
 # bash so agent rows stop showing "working" when the foreground command exits.
 __orca_initializing_wrapper=1

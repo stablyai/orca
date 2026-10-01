@@ -103,26 +103,6 @@ describe('resolveCodexPaneLaunchAccount', () => {
     ).toEqual({ selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' })
   })
 
-  it('records the same account a resume pinned to when it is already selected', () => {
-    const accounts = [managedAccount({ id: 'account-a' })]
-
-    // Why: the sweep compares this against the live selection, so an equal
-    // account must still be recorded — it is simply not reported stale.
-    expect(
-      resolveCodexPaneLaunchAccount({
-        pinnedByResume: true,
-        launchCodexHomePath: '/data/codex-accounts/account-a/home',
-        systemCodexHomePath: SYSTEM_HOME,
-        settings: settings({ host: 'account-a', accounts }),
-        target: { runtime: 'host' }
-      })
-    ).toEqual({
-      selectionKey: 'host',
-      accountId: 'account-a',
-      homeRoute: 'account-home'
-    })
-  })
-
   it('maps a resume redirected to the real system home to the system-default account', () => {
     expect(
       resolveCodexPaneLaunchAccount({

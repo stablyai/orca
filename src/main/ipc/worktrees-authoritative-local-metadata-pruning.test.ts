@@ -319,7 +319,10 @@ describe('authoritative local worktree metadata pruning integration', () => {
 
       expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
       // Only the detected listing re-derives; its fresh re-scan is what registers the roots.
-      expect(isRegisteredWorktreePath(REPO_PATH)).toBe(channel === 'worktrees:listDetected')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies the local repository rows read by this registry check.
+      expect(isRegisteredWorktreePath(REPO_PATH, store as never)).toBe(
+        channel === 'worktrees:listDetected'
+      )
     }
   )
 
@@ -357,7 +360,8 @@ describe('authoritative local worktree metadata pruning integration', () => {
     await pending
 
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-    expect(isRegisteredWorktreePath(newPath)).toBe(true)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies the local repository rows read by this registry check.
+    expect(isRegisteredWorktreePath(newPath, store as never)).toBe(true)
   })
 
   it.each(['scan generation', 'caller request'] as const)(
@@ -406,7 +410,8 @@ describe('authoritative local worktree metadata pruning integration', () => {
 
       expect(store.pruneSessionlessMissingLocalWorktreeMetadataForRepo).not.toHaveBeenCalled()
       expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-      expect(isRegisteredWorktreePath(REPO_PATH)).toBe(false)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies the local repository rows read by this registry check.
+      expect(isRegisteredWorktreePath(REPO_PATH, store as never)).toBe(false)
       expect(pruneCleanupScanSnapshotsMock).not.toHaveBeenCalled()
       expect(pruneSpaceAnalysisSnapshotsMock).not.toHaveBeenCalled()
     }
@@ -454,7 +459,8 @@ describe('authoritative local worktree metadata pruning integration', () => {
 
     expect(store.pruneSessionlessMissingLocalWorktreeMetadataForRepo).toHaveBeenCalledTimes(1)
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-    expect(isRegisteredWorktreePath(newPath)).toBe(true)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies the local repository rows read by this registry check.
+    expect(isRegisteredWorktreePath(newPath, store as never)).toBe(true)
   })
 
   it('does not capture or prune on an initial WSL scan', async () => {

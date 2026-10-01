@@ -83,7 +83,7 @@ describe('buildDispatchPreamble', () => {
   )
 
   it('renders every injected lifecycle command on one cross-shell-safe line', () => {
-    const result = buildDispatchPreamble(baseParams({ dispatchCapability: 'dcap_secret' }))
+    const result = buildDispatchPreamble(baseParams())
     const commandLines = result
       .split('\n')
       .filter((line) => line.trimStart().startsWith('orca orchestration'))
@@ -182,27 +182,14 @@ describe('buildDispatchPreamble', () => {
     expect(cadence).toContain('immediately before\n  # you send worker_done')
   })
 
-  it('carries the minted Dispatch capability on lifecycle and question commands', () => {
-    const result = buildDispatchPreamble({
-      ...baseParams(),
-      dispatchCapability: 'dcap_test_secret'
-    })
-
-    expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(4)
-    expect(result).not.toContain('"dispatchCapability"')
-  })
-
-  it('renders capability-bound worker_done and heartbeat recipes', () => {
-    const result = buildDispatchPreamble({
-      ...baseParams(),
-      dispatchCapability: 'dcap_test_secret'
-    })
+  it('renders worker_done and heartbeat recipes bound to the exact Dispatch', () => {
+    const result = buildDispatchPreamble(baseParams())
 
     expect(result).toMatch(
-      /orchestration send --from term_worker --dispatch-capability dcap_test_secret --type worker_done .*?--task-id task_abc123 --dispatch-id ctx_def456/u
+      /orchestration send --from term_worker --type worker_done .*?--task-id task_abc123 --dispatch-id ctx_def456/u
     )
     expect(result).toMatch(
-      /orchestration send --from term_worker --dispatch-capability dcap_test_secret --type heartbeat .*?--task-id task_abc123 --dispatch-id ctx_def456/u
+      /orchestration send --from term_worker --type heartbeat .*?--task-id task_abc123 --dispatch-id ctx_def456/u
     )
   })
 
@@ -263,12 +250,6 @@ describe('buildDispatchPreamble', () => {
     for (const fragment of fragments) {
       expect(fragment).not.toMatch(/orca orchestration/)
     }
-  })
-
-  it('uses orca CLI when devMode is false', () => {
-    const result = buildDispatchPreamble(baseParams({ devMode: false }))
-    expect(result).toContain('orca orchestration send')
-    expect(result).toContain('orca orchestration check')
   })
 
   it('uses the exact orca-ide command for packaged WSL workers', () => {

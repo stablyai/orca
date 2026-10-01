@@ -12,6 +12,7 @@ import {
   takeAllPendingBackgroundTerminalWorktreeMounts,
   takePendingBackgroundTerminalWorktreeMount
 } from './terminal/background-terminal-worktree-mount'
+import type { StartupTerminalTabHold } from './terminal/startup-terminal-tab-hold'
 import {
   combineTerminalWorktreeParkIds,
   useManualTerminalWorktreeParking
@@ -68,6 +69,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
+  const startupTerminalTabHoldRef = useRef<StartupTerminalTabHold | null>(null)
   // Why a ref, not state: the cold-activation pass runs during render, where a
   // setState would be a render-phase update; the pass returns the count instead.
   const activationDeferralPlanRevisionRef = useRef(0)
@@ -167,6 +169,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     backgroundMountTabIdsByWorktreeRef,
     activationDeferredMountTabIdsByWorktreeRef,
     lastActivationWorktreeIdRef,
+    startupTerminalTabHoldRef,
     activationDeferralPlanRevisionRef
   }
 }

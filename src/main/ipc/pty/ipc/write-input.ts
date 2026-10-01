@@ -1,4 +1,5 @@
-import type { BrowserWindow, IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron'
+import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
+import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider } from '../../../providers/types'
 import { isPtyWriteUnavailableError } from '../../../providers/pty-write-unavailable-error'
@@ -10,21 +11,24 @@ import { notePtyInput } from '../../../memory/pty-registry'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 
 export function isMainWindowPtyIpcEvent(
   event: IpcMainEvent | IpcMainInvokeEvent,
-  mainWindow: BrowserWindow,
-  mainWebContents: WebContents
+  mainWindow: PtyRendererDelivery | undefined
 ): boolean {
+  const mainWebContents = mainWindow?.webContents
   return (
+    !!mainWindow &&
+    !!mainWebContents &&
     event.sender === mainWebContents &&
     !mainWindow.isDestroyed() &&
     !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
   )
 }
 
-export type PtyWritePayload = { id: string; data: string }
+export type PtyWritePayload = { id: string; data: string; inputKind: TerminalInputKind }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
 /**
@@ -42,23 +46,21 @@ function stampPtyInput(id: string, data: string): void {
 }
 
 export function createPtyWriteInput(deps: {
-  mainWindow: BrowserWindow
+  mainWindow?: PtyRendererDelivery
   runtime?: OrcaRuntimeService
 }): {
   writePtyInput: (args: PtyWritePayload) => boolean | Promise<boolean>
   writePtyInputAccepted: (args: PtyWritePayload) => boolean | Promise<boolean>
   isPtyWritePayload: (value: unknown) => value is PtyWritePayload
   isPtyViewportClaimPayload: (value: unknown) => value is PtyViewportClaimPayload
-  isPtyWriteEventFromMainWindow: (
-    event: IpcMainEvent | IpcMainInvokeEvent,
-    mainWebContents: WebContents
-  ) => boolean
+  isPtyWriteEventFromMainWindow: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean
 } {
   const { mainWindow, runtime } = deps
 
   const reportUnavailablePtyWrite = (id: string, error: unknown): void => {
     if (
       !isPtyWriteUnavailableError(error) ||
+      !mainWindow ||
       mainWindow.isDestroyed() ||
       (typeof mainWindow.webContents.isDestroyed === 'function' &&
         mainWindow.webContents.isDestroyed())
@@ -163,10 +165,14 @@ export function createPtyWriteInput(deps: {
     (value as { cols: number }).cols > 0 &&
     (value as { rows: number }).rows > 0
 
-  const isPtyWriteEventFromMainWindow = (
-    event: IpcMainEvent | IpcMainInvokeEvent,
-    mainWebContents: WebContents
-  ): boolean => isMainWindowPtyIpcEvent(event, mainWindow, mainWebContents)
+  const isPtyWriteEventFromMainWindow = (event: IpcMainEvent | IpcMainInvokeEvent): boolean =>
+    isMainWindowPtyIpcEvent(event, mainWindow)
+
+  const noteRendererPtyInput = (args: PtyWritePayload): void => {
+    lastInputAtByPty.set(args.id, performance.now())
+    interactiveOutputCharsByPty.set(args.id, 0)
+    runtime?.terminalRunFacts?.recordInput(args.id, args.inputKind, args.data)
+  }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
@@ -178,9 +184,7 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
+      noteRendererPtyInput(args)
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
@@ -200,9 +204,7 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
+      noteRendererPtyInput(args)
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false

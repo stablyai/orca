@@ -10,7 +10,7 @@ import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
-} from '@/lib/source-control-launch-agent-selection'
+} from '../../../shared/source-control-launch-agent-selection'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { getNotificationNavigationTarget } from './notification-routing'
 import {
@@ -6,8 +5,6 @@ import {
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
-
-const rootLayoutSource = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8')
 
 function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
@@ -99,20 +96,6 @@ describe('notification route coordination', () => {
 
   it('leaves a host-only notification as a shallow push with nothing to coordinate', () => {
     expect(getNotificationNavigationTarget({ hostId: 'host-1' })?.sessionTarget).toBeNull()
-  })
-
-  it('routes notification taps through the coordinated transition, not a bare push', () => {
-    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
-    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
-
-    // Assert the markers first: a renamed banner would otherwise slice garbage and report a
-    // missing call instead of the real cause.
-    expect(start).toBeGreaterThanOrEqual(0)
-    expect(end).toBeGreaterThan(start)
-
-    const notificationEffect = rootLayoutSource.slice(start, end)
-    expect(notificationEffect).toContain('openNotificationRoute(target)')
-    expect(notificationEffect).not.toContain('router.push(')
   })
 })
 

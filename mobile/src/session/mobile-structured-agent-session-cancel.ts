@@ -75,7 +75,7 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   } else if (result.status === 'refused') {
     onSendError(result.message)
   } else if (result.status === 'failed') {
-    onSendError(result.message === 'Request not sent' ? 'Stop not sent' : result.message)
+    onSendError(result.message)
   }
   return false
 }

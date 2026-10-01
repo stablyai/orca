@@ -1,31 +1,11 @@
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress-intent'
+import { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-query-colors'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { agentKindSchema } from '../../shared/telemetry-events'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
-import {
-  terminalOscColorQueryReply,
-  type TerminalOscColorQueryReplyColors
-} from '../../shared/terminal-osc-color-reply'
 
-function normalizeTerminalColorQueryReplyColors(
-  value: unknown
-): TerminalOscColorQueryReplyColors | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-  const record = value as { foreground?: unknown; background?: unknown }
-  const colors = {
-    ...(typeof record.foreground === 'string' ? { foreground: record.foreground } : {}),
-    ...(typeof record.background === 'string' ? { background: record.background } : {})
-  }
-  if (!terminalOscColorQueryReply(colors, 10) || !terminalOscColorQueryReply(colors, 11)) {
-    return null
-  }
-  return colors
-}
-
-function shouldReplyToStartupTerminalColorQueries(args: {
+function isAgentLaunch(args: {
   launchAgent?: unknown
   telemetry?: { agent_kind?: unknown } | undefined
   command?: string
@@ -53,12 +33,11 @@ export function getStartupTerminalIngressIntent(args: {
   terminalColorQueryReplies?: unknown
   terminalKittyKeyboardProtocol?: boolean
 }) {
-  if (!shouldReplyToStartupTerminalColorQueries(args)) {
-    return undefined
-  }
+  // Why colours for every PTY: an agent typed into a plain shell later queries too, and these
+  // seed an owner that has not been pushed the host's viewer colours yet.
   return parsePtyStartupIngressIntent({
-    colors: normalizeTerminalColorQueryReplyColors(args.terminalColorQueryReplies) ?? {},
-    kittyKeyboardProtocol: args.terminalKittyKeyboardProtocol,
+    colors: normalizeColorQueryReplyColors(args.terminalColorQueryReplies) ?? {},
+    kittyKeyboardProtocol: args.terminalKittyKeyboardProtocol === true && isAgentLaunch(args),
     deadlineMs: 5_000
   })
 }

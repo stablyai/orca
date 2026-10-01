@@ -92,7 +92,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         await timeRendererStartupStep('fetch-settings', () =>
           actions.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
         )
-        // Why: hidden-at-launch PTYs can query OSC 10/11 before any pane mounts; publish view attributes as soon as settings exist so main's silent-until-push responder has data.
+        // Why: hidden-at-launch PTYs can query before any pane mounts; publish view attributes as soon as settings exist so every PTY owner answers from the composed theme.
         publishTerminalViewAttributesAtAppStart(
           useAppStore.getState().settings,
           getSystemPrefersDark()

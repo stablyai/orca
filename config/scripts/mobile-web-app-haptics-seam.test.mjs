@@ -40,6 +40,14 @@ const read = (file) => readFileSync(join(mobileDir, file), 'utf8')
 /** The route module behind each declared page route, shared with the screencast-lane census. */
 const ROUTE_MODULES = PAGE_ROUTE_MODULES
 
+// These cases read the same source tree; keep each route's real closure once.
+const closures = new Map()
+async function closureOf(module) {
+  const built = closures.get(module) ?? mobileWebAppRouteClosure(module)
+  closures.set(module, built)
+  return structuredClone(await built)
+}
+
 const HAPTICS_GRANT = 'haptics'
 
 /** The shell's mapping from a notify kind to one of the app's own functions. */
@@ -222,7 +230,7 @@ describeClosure(
   'every page route closure and the haptics seam',
   () => {
     it.each([...ROUTE_MODULES])('resolves the seam to the web sibling: %s', async (_route, mod) => {
-      const closure = await mobileWebAppRouteClosure(mod)
+      const closure = await closureOf(mod)
       expect(closure.local).toContain(HAPTICS_SEAM)
       expect(closure.local).not.toContain(HAPTICS_NATIVE)
       // The precondition an assertion about a closure needs: the walk read a page, not nothing.
@@ -232,7 +240,7 @@ describeClosure(
     it.each([...ROUTE_MODULES])(
       'imports the seam from at least one module, so the grant is not idle: %s',
       async (_route, mod) => {
-        const closure = await mobileWebAppRouteClosure(mod)
+        const closure = await closureOf(mod)
         expect(hapticsSeamImporters(mobileDir, closure).length).toBeGreaterThan(0)
       }
     )
@@ -252,7 +260,7 @@ describeClosure(
     it('declares haptics on exactly the routes whose closure reaches the seam', async () => {
       const reaching = []
       for (const [route, mod] of ROUTE_MODULES) {
-        const closure = await mobileWebAppRouteClosure(mod)
+        const closure = await closureOf(mod)
         if (hapticsSeamImporters(mobileDir, closure).length > 0) {
           reaching.push(route)
         }
@@ -283,7 +291,7 @@ describeClosure(
      */
     it('adds one module to a page closure, and only the two haptics modules are in it', async () => {
       for (const mod of ROUTE_MODULES.values()) {
-        const closure = await mobileWebAppRouteClosure(mod)
+        const closure = await closureOf(mod)
         expect(closure.local.filter((file) => file.includes('haptics')).sort(), mod).toEqual([
           HAPTICS_KINDS_MODULE,
           HAPTICS_SEAM

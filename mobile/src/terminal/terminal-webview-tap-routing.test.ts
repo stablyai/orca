@@ -148,6 +148,11 @@ describe('terminal WebView tap routing', () => {
   it('focuses native input after reporting a touch tap to a mouse-tracking TUI', async () => {
     const { posted } = boot('interactive prompt', undefined, 'drag')
     await settle()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: '\u001b[?1006l' })
+      })
+    )
 
     fireTouch('touchstart', [{ x: 20, y: tapY }])
     fireTouch('touchend', [])
@@ -157,6 +162,17 @@ describe('terminal WebView tap routing', () => {
         .filter((message) => message.type === 'terminal-input' || message.type === 'terminal-tap')
         .map((message) => message.type)
     ).toEqual(['terminal-input', 'terminal-tap'])
+  })
+
+  it('focuses native input without mouse bytes while the tracking encoding is unproven', async () => {
+    const { posted } = boot('interactive prompt', undefined, 'drag')
+    await settle()
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((message) => message.type === 'terminal-input')).toBeUndefined()
+    expect(posted.filter((message) => message.type === 'terminal-tap')).toHaveLength(1)
   })
 
   it('reports a non-mouse touch tap without terminal mouse bytes', async () => {

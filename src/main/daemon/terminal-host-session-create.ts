@@ -12,7 +12,7 @@ import type { TerminalHostTombstones } from './terminal-host-tombstones'
 import type { TerminalSessionTeardown } from './terminal-session-teardown'
 import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-window'
 import { TerminalAttachCanceledError } from './daemon-errors'
-import { rejectOnAbort } from './terminal-attach-cancellation'
+import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
 
@@ -47,10 +47,11 @@ export async function createOrAttachTerminalSession(
     // reaches this a beat after the attach that retired it, and refusing surfaced the raw
     // SessionNotFoundError to the user. Windows makes it the common case, where the plain-shell
     // sweep holds the claim across an OS identity probe and taskkill (#18046).
-    await Promise.race([
+    await waitForTerminalAttachOperation(
       deps.sessionTeardown.settle(opts.sessionId),
-      rejectOnAbort(opts.cancelSignal, opts.sessionId)
-    ])
+      opts.cancelSignal,
+      opts.sessionId
+    )
     deps.assertCreateAllowed()
     existing = deps.sessions.get(opts.sessionId)
     // Unkillable child, or a fresh teardown claimed it while we waited: still nobody's to recreate.

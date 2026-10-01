@@ -111,7 +111,19 @@ export function setLocalWorkspaceSession(
   if (deferSnapshotFiles) {
     enqueueTerminalScrollbackSnapshotWork(owner, prior, session)
   }
-  scheduleSave(context.scheduling)
+  if (
+    remappedAcknowledgements.changed ||
+    remappedActivityCutoffs.changed ||
+    remappedManualUnread.changed
+  ) {
+    // UI remaps include protected fields, so keep the complete serializer boundary.
+    scheduleSave(context.scheduling)
+  } else {
+    scheduleSave(
+      context.scheduling,
+      remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession']
+    )
+  }
 }
 
 export function enqueueTerminalScrollbackSnapshotWork(

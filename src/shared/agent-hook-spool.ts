@@ -40,16 +40,13 @@ export function buildSpoolHookBody(record: SpoolRecord): Record<string, unknown>
     version: record.version,
     launchToken: record.launchToken,
     hookEventName: record.hookEventName,
+    agentProcess: record.agentProcess,
     payload: record.payload
   }
 }
 
 export function launchTokenHash(token: string | undefined): string | null {
   return token?.trim() ? createHash('sha256').update(token.trim()).digest('hex') : null
-}
-
-export function readSpoolRecords(path: string, now = Date.now()): SpoolRecord[] {
-  return readSpoolFile(path, now).records
 }
 
 /** Records plus the byte offset through the last COMPLETE line. A torn trailing line is

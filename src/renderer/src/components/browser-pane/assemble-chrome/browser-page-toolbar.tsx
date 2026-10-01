@@ -1,6 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserChromeToolbar } from './browser-chrome-toolbar'
@@ -102,9 +103,20 @@ export function BrowserPageToolbar({
   currentBrowserUrl: string
   externalUrl: string | null
 }): React.JSX.Element {
+  const browserTourStep = useAppStore((state) =>
+    state.activeContextualTourId === 'browser' ? state.activeContextualTourStepIndex : null
+  )
+  const pinnedStage =
+    browserTourStep === 0
+      ? ('grab' as const)
+      : browserTourStep === 1
+        ? ('annotate' as const)
+        : undefined
+
   return (
     <BrowserChromeToolbar
       showTourAnchors
+      pinnedStage={pinnedStage}
       controls={{
         canGoBack: canGoBack || Boolean(convertedFrom),
         canGoForward: canGoForward || Boolean(convertedTo),
@@ -161,7 +173,9 @@ export function BrowserPageToolbar({
           onHardReload={() => runReloadTrigger('hard-reload')}
         />
       }
-      importControl={<BrowserImportHintButton profileId={sessionProfileId} />}
+      importControl={(compact) => (
+        <BrowserImportHintButton profileId={sessionProfileId} compact={compact} />
+      )}
       elementTools={{
         activeIntent: grab.state !== 'idle' ? grabIntent : null,
         onStartIntent: startGrabIntent,
@@ -176,13 +190,16 @@ export function BrowserPageToolbar({
         canShowDiscoveryHint: isActive
       }}
       shareControl={
-        shareableArtifactFile ? (
-          <ArtifactPublishButton
-            sourceKey={shareableArtifactFile.filePath}
-            className="h-7 w-7"
-            createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
-          />
-        ) : null
+        shareableArtifactFile
+          ? (control) => {
+              const props = {
+                sourceKey: shareableArtifactFile.filePath,
+                className: 'h-7 w-7',
+                createRequest: () => readBrowserHtmlArtifactRequest(currentBrowserUrl)
+              }
+              return <ArtifactPublishButton {...props} {...control} />
+            }
+          : undefined
       }
       viewSource={{
         onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
@@ -204,7 +221,7 @@ export function BrowserPageToolbar({
         ),
         disabled: !externalUrl
       }}
-      overflowMenu={
+      overflowMenu={(overflow) => (
         <BrowserToolbarMenu
           currentProfileId={sessionProfileId}
           workspaceId={workspaceId}
@@ -212,8 +229,9 @@ export function BrowserPageToolbar({
           viewportPresetId={viewportPresetId}
           onDestroyWebview={() => destroyPersistentWebview(browserPageId)}
           isActive={isActive}
+          overflow={overflow}
         />
-      }
+      )}
     />
   )
 }

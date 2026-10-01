@@ -89,10 +89,12 @@ export function createRuntime(
     connectionId?: string
     isWsl?: boolean
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+    checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
   } = {}
 ): MailboxNotificationHarness {
   const runtime = new OrcaRuntimeService(null, undefined, {
     getAgentStatusSnapshot: options.getAgentStatusSnapshot,
+    checkHookAgentPresence: options.checkHookAgentPresence,
     attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
       paneKey === PANE_KEY || paneKey.startsWith(`${SECOND_TAB_ID}:`)
         ? { paneKey, source: 'current_hook' }

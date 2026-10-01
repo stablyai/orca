@@ -43,8 +43,6 @@ export type BridgeClientNotificationDeps = {
   isClosed: () => boolean
   /** What `init.grants.native` named. A grant the shell did not give is a frame it would refuse. */
   hasGrant: (name: string) => boolean
-  /** What `init.accepts` named. The other half of the same read: a capability rather than a grant. */
-  shellAccepts: (name: string) => boolean
 }
 
 export type BridgeClientNotifications = {
@@ -140,25 +138,12 @@ export function createBridgeClientNotifications(
         error: captureBridgeError(error)
       })
     },
-    // Gated on the shell saying it takes one, not on a grant: `notify` is a closed union, so an
-    // older shell answers an unknown name with an error frame per mount. Answering nothing, because
-    // a page that has painted has nothing else to do about a shell that will not hear it.
+    // Not on a grant: every session takes it, and a page that has painted has nothing else to do.
     notifyPagePainted: () => {
-      if (deps.shellAccepts(BRIDGE_PAGE_PAINTED)) {
-        post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_PAINTED })
-      }
+      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_PAINTED })
     },
-    // Gated the same way, for the same reason, and answering nothing: a shell that will not hear
-    // the claim keeps the key, which is what every shell did before this frame existed.
     notifyBackClaim: (claimed) => {
-      if (deps.shellAccepts(BRIDGE_BACK_CLAIM_NOTIFY)) {
-        post({
-          v: BRIDGE_PROTOCOL_VERSION,
-          type: 'notify',
-          name: BRIDGE_BACK_CLAIM_NOTIFY,
-          claimed
-        })
-      }
+      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed })
     }
   }
 }

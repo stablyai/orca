@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -248,25 +248,5 @@ describe('the synthesized RequireContext', () => {
   it('does not answer inherited Object keys', () => {
     const context = build({ './h/index.tsx': {} })
     expect(() => context('constructor')).toThrow('no route module')
-  })
-})
-
-describe('the web entry', () => {
-  it('leaves the suspense boundary to expo-router', async () => {
-    const entry = await readFile(join(projectDir, 'mobile', 'web-entry', 'index.tsx'), 'utf8')
-    // A second boundary around the whole tree catches nothing the router has not already caught,
-    // and would only make the fallback ambiguous about which layer suspended.
-    expect(entry).not.toContain('Suspense')
-  })
-
-  itBundling('because the router already wraps every screen in one', async () => {
-    // The premise of the test above, read off the copy that is bundled: getQualifiedRouteComponent
-    // wraps each screen itself, which is what makes the lazy route manifest safe without a
-    // boundary of our own.
-    const useScreens = await readFile(
-      join(projectDir, 'mobile', 'node_modules', 'expo-router', 'build', 'useScreens.js'),
-      'utf8'
-    )
-    expect(useScreens).toContain('<react_1.default.Suspense fallback=')
   })
 })

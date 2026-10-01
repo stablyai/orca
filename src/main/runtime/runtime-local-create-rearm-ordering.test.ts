@@ -33,7 +33,10 @@ vi.mock('./runtime-local-worktree-setup', () => ({
   }))
 }))
 
-vi.mock('../ipc/filesystem-auth', () => ({ invalidateAuthorizedRootsCache: vi.fn() }))
+vi.mock('../ipc/filesystem-auth', () => ({
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
+}))
 
 import { OrcaRuntimeService } from './orca-runtime'
 

@@ -96,7 +96,9 @@ export class ClaudeSubagentLinkage implements ClaudeSubagentLinkageSource {
     const excluded = this.deps.ids.isExcluded(parentToolUseId, canonical)
     // An announcement named this spawn call, so the task id behind it is
     // settled — including the case where the two ids are the same string, which
-    // comparing them could not tell from never having been announced.
+    // comparing them could not tell from never having been announced. An earlier
+    // run's announcement counts: a child resumed after a restart keeps that run's
+    // spawn id on its frames, and its rows recall the id that run resolved.
     const announced = this.deps.ids.isAnnounced(parentToolUseId)
     if (
       !settled &&
@@ -132,8 +134,9 @@ export class ClaudeSubagentLinkage implements ClaudeSubagentLinkageSource {
       )
     }
     // Nothing is coming for this id: nested tool traffic, a grandchild inside a
-    // sidechain, or a forwarded spawn call that can wait no longer. The raw
-    // reference is the only handle there will ever be for it.
+    // sidechain, a forwarded spawn call that can wait no longer, or a resumed
+    // child no journaled row ever resolved. The raw reference is the only handle
+    // there will ever be for it.
     return linked(
       parentToolUseId,
       canonical,

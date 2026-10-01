@@ -7,8 +7,13 @@ import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/envir
 import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
-import { resolveClaudeReplayTurn } from './claude-structured-dispatch'
-import { readClaudeFrameString, readClaudeInit } from './claude-structured-init-proof'
+import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
+import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
+import {
+  readClaudeCapabilities,
+  readClaudeFrameString,
+  readClaudeInit
+} from './claude-structured-init-proof'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { CLAUDE_SPAWN_TOKEN_ENV, claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
@@ -30,6 +35,7 @@ import {
   type ClaudeAcquireCallbacks
 } from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { readClaudeTranscriptEntryUuid } from './claude-transcript-entry-uuid'
 import { persistClaudeTurnResumePoint } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
@@ -58,7 +64,9 @@ export async function acquireClaudeSession({
   // A managed-account switch is mid-swap of the pinned credential home; refuse here,
   // before this acquisition cancels the previous attempt and closes the live session.
   if (isClaudeAuthSwitchInProgress()) {
-    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE))
+    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE), {
+      reason: 'accountSwitchInProgress'
+    })
   }
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
@@ -98,6 +106,9 @@ export async function acquireClaudeSession({
         liveSession.reportedOptions.model = init.model
         liveSession.reportedModelMutation = liveSession.optionMutationSequence
       }
+      if (liveSession) {
+        liveSession.capabilities = readClaudeCapabilities(liveSession.capabilities, init.message)
+      }
     }
     observedLeafUuid = readClaudeTranscriptEntryUuid(message) ?? observedLeafUuid
     if (liveSession) {
@@ -107,10 +118,17 @@ export async function acquireClaudeSession({
       if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
         persistClaudeTurnResumePoint(sessionId, liveSession, deps)
       }
+      // The CLI's idle releases its doubted sends; a late echo still accepts one it goes on to run.
+      if (claudeSessionStateEndsTurn(message) && sessions.get(sessionId) === liveSession) {
+        deps.onSessionIdle?.({ sessionId })
+      }
     }
+    // Settled after the turn this echo opens is emitted: a send read as answered before its turn
+    // lands reads as nothing running, and Stop and Working blink off in between.
+    const settlements: (() => void)[] = []
     const turnOrigin = liveSession
       ? resolveClaudeReplayTurn(liveSession, message, (settlement) =>
-          deps.onDispatchSettledLate?.({ sessionId, ...settlement })
+          settlements.push(() => deps.onDispatchSettledLate?.({ sessionId, ...settlement }))
         )
       : null
     const startsTurn = turnOrigin !== null
@@ -128,6 +146,9 @@ export async function acquireClaudeSession({
         ...observedAt
       })
     )
+    for (const settle of settlements) {
+      settle()
+    }
   }
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId,
@@ -178,6 +199,8 @@ export async function acquireClaudeSession({
             initProof.reject(error)
           },
           onExit: (error) => {
+            // The child exited on its own; marked in place, as the fault report may hold this error.
+            withObservedProviderExit(error)
             childEnded ??= error
             initProof.reject(error)
             callbacks.handleExit(sessionId, attempt, error)
@@ -248,30 +271,34 @@ export async function acquireClaudeSession({
         event()
       }
     })
-    session.startup.settled = settleClaudeSessionStartup({
-      session,
-      facts: readClaudeStartupFacts({
-        connection,
-        initProof,
-        sessionId,
-        providerSessionId: launch.providerSessionId,
-        resumesTranscript: launch.resumesTranscript,
-        inputOptions: input.options,
-        requestTimeoutMs: deps.requestTimeoutMs,
-        emit
-      }),
-      isCurrent: () => sessions.get(sessionId) === session,
-      requestTimeoutMs: deps.requestTimeoutMs,
-      fault: (error) => callbacks.handleExit(sessionId, attempt, error),
-      onStarted: (options) =>
-        emit({
-          type: 'started',
+    // Whichever comes first: the start landing or faulting, or the child being ended.
+    session.startup.settled = Promise.race([
+      session.startup.settled,
+      settleClaudeSessionStartup({
+        session,
+        facts: readClaudeStartupFacts({
+          connection,
+          initProof,
           sessionId,
-          fence: input.fence,
-          acquisitionGeneration: session.acquisitionGeneration,
-          ...options
-        })
-    })
+          providerSessionId: launch.providerSessionId,
+          resumesTranscript: launch.resumesTranscript,
+          inputOptions: input.options,
+          requestTimeoutMs: deps.requestTimeoutMs,
+          emit
+        }),
+        isCurrent: () => sessions.get(sessionId) === session,
+        requestTimeoutMs: deps.requestTimeoutMs,
+        fault: (error) => callbacks.handleExit(sessionId, attempt, error),
+        onStarted: (options) =>
+          emit({
+            type: 'started',
+            sessionId,
+            fence: input.fence,
+            acquisitionGeneration: session.acquisitionGeneration,
+            ...options
+          })
+      })
+    ])
     // A child whose exit already reached `handleExit` is not handed over as live: the create
     // fails with the CLI's own diagnostic, as one that died before publish does.
     if (sessions.get(sessionId) !== session) {

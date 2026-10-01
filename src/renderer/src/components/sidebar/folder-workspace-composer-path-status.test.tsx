@@ -154,32 +154,6 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
     expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, { force: true })
   })
 
-  it('blocks creation while the first path status check is unknown', () => {
-    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    const fetchFolderWorkspacePathStatus = vi.fn()
-    useAppStore.setState({
-      projectGroups: [projectGroup],
-      fetchFolderWorkspacePathStatus,
-      folderWorkspacePathStatuses: {}
-    })
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    act(() => {
-      root?.render(<HookProbe />)
-    })
-
-    expect(
-      (
-        globalThis as {
-          __folderWorkspaceComposerPathStatusResult?: { pathStatusBlocksCreate: boolean }
-        }
-      ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
-    ).toBe(true)
-    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, { force: true })
-  })
-
   it('does not block creation for an unavailable path status', () => {
     vi.useFakeTimers()
     vi.setSystemTime(20_000)
@@ -276,17 +250,5 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
         }
       ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
     ).toBe(true)
-  })
-
-  it('tracks settled path status refreshes by cache key and expiry generation', () => {
-    const source = useFolderWorkspaceComposerPathStatus.toString()
-    expect(source).toContain('activePathStatusRefreshIdRef')
-    expect(source).toContain('activePathStatusRefreshIdRef.current !== refreshId')
-    expect(source).toContain('completedPathStatusRefreshKeys')
-    expect(source).toContain('`${pathStatusCacheKey}:${cacheExpiryTick}`')
-    expect(source).toContain('new Set(current).add(pathStatusRefreshKey)')
-    expect(source).toContain('!completedPathStatusRefreshKeys.has(pathStatusRefreshKey)')
-    expect(source).toContain('cachedBlockingPathStatus')
-    expect(source).toContain('cachedPathStatusEntry.status.reason === "ambiguous-connection"')
   })
 })

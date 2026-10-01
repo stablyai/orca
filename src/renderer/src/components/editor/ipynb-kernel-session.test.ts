@@ -55,9 +55,50 @@ beforeEach(() => {
     listener({ openFiles: openFiles.current }, { openFiles: [] })
   }
   openFiles.current = [{ filePath: FILE }]
+  // Cells only reach runCells after the user trusts the notebook.
+  for (const filePath of [
+    FILE,
+    '/repo/nb.ipynb',
+    '/other.ipynb',
+    '/third.ipynb',
+    '/fourth.ipynb'
+  ]) {
+    session.trustNotebook(filePath)
+  }
 })
 
 describe('notebook kernel session', () => {
+  it('runs no interpreter before trust: a pick or restart only records the choice', async () => {
+    const untrusted = '/untrusted/nb.ipynb'
+    const shipped = { path: '/untrusted/.venv/bin/python', name: '.venv' }
+    openFiles.current = [{ filePath: untrusted }]
+    session.selectEnvironment(untrusted, shipped)
+    session.restartKernel(untrusted)
+    await Promise.resolve()
+    expect(notebookApi.startKernel).not.toHaveBeenCalled()
+    expect(notebookApi.listPythonEnvironments).not.toHaveBeenCalled()
+    expect(getSession(untrusted)).toMatchObject({ status: 'off', trusted: false, queue: [] })
+
+    session.trustNotebook(untrusted)
+    await session.runCells(untrusted, [{ key: 'a', code: 'x' }], '/untrusted')
+    expect(notebookApi.startKernel).toHaveBeenCalledWith({
+      filePath: untrusted,
+      python: shipped.path
+    })
+    expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: untrusted, code: 'x' })
+  })
+
+  it('discovers with workspace interpreters once trusted', async () => {
+    openFiles.current = [{ filePath: '/fifth.ipynb' }]
+    session.trustNotebook('/fifth.ipynb')
+    await session.runCells('/fifth.ipynb', [{ key: 'a', code: 'x' }], '/proj')
+    expect(notebookApi.listPythonEnvironments).toHaveBeenCalledWith({
+      filePath: '/fifth.ipynb',
+      rootPath: '/proj',
+      runWorkspaceInterpreters: true
+    })
+  })
+
   it('starts the recommended env, runs queued cells in order, and stops the queue on an error', async () => {
     await session.runCells(
       FILE,

@@ -28,6 +28,7 @@ import {
   type ComposerDropItemResult
 } from '../composer-drop-result'
 import { applyComposerNativeFileDrop } from '../composer-native-file-drop'
+import { useMountedRef } from '../useMountedRef'
 import { useComposerDropListener } from './composer-drop-listener'
 
 // Local drops bypass the runtime importer's skip classification.
@@ -53,6 +54,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
     setAgentPrompt,
     setAttachmentPaths
   } = input
+  const mountedRef = useMountedRef()
 
   const addComposerAttachments = useCallback(
     (paths: string[]): void => {
@@ -214,8 +216,14 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
     async (paths: string[], canApply: () => boolean = () => true): Promise<void> => {
       const results: ComposerDropItemResult[] = []
       for (const filePath of paths) {
+        if (!mountedRef.current) {
+          return
+        }
         try {
           await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+          if (!mountedRef.current) {
+            return
+          }
           const stat = await window.api.fs.stat({ filePath })
           results.push({
             status: 'imported',
@@ -227,7 +235,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         }
       }
 
-      if (!canApply()) {
+      if (!mountedRef.current || !canApply()) {
         return
       }
       const dropResult = collectComposerDropResult(results)
@@ -241,7 +249,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         })
       }
     },
-    [addComposerAttachments, insertComposerFolderPaths]
+    [addComposerAttachments, insertComposerFolderPaths, mountedRef]
   )
 
   const applyNativeDrop = useCallback(

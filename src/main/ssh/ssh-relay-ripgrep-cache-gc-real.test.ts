@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
@@ -110,6 +111,75 @@ describe('ripgrep cache shell transactions', () => {
     await recordRemoteRipgrepReference(conn, host, relay, FIRST)
     await gcRemoteRipgrepCache(conn, host, home)
     expect(readdirSync(cache)).toEqual([FIRST])
+  })
+
+  it('restores an abandoned tombstone that a relay still references', async () => {
+    await recordRemoteRipgrepReference(conn, host, relay, FIRST)
+    await recordRemoteRipgrepReference(conn, host, relay, SECOND)
+    const tombstone = `.rg-gc-${SECOND}.123.${Date.now() - 60 * 60_000}`
+    renameSync(join(cache, SECOND), join(cache, tombstone))
+
+    await gcRemoteRipgrepCache(conn, host, home)
+
+    expect(readdirSync(cache).sort()).toEqual([FIRST, SECOND])
+    expect(existsSync(join(cache, SECOND, 'rg'))).toBe(true)
+  })
+
+  it('preserves a referenced tombstone when the clock moves backward during the reference scan', async () => {
+    await recordRemoteRipgrepReference(conn, host, relay, FIRST)
+    await recordRemoteRipgrepReference(conn, host, relay, SECOND)
+    const now = Date.now()
+    const tombstone = `.rg-gc-${SECOND}.123.${now - 30 * 60_000 - 1}`
+    renameSync(join(cache, SECOND), join(cache, tombstone))
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    let calls = 0
+    execMock.mockImplementation(async (_conn: unknown, command: string) => {
+      if (++calls === 2) {
+        clock.mockReturnValue(now - 60_000)
+      }
+      return runShell(command)
+    })
+    try {
+      await gcRemoteRipgrepCache(conn, host, home)
+      expect(readdirSync(cache).sort()).toEqual([FIRST, SECOND])
+      expect(existsSync(join(cache, SECOND, 'rg'))).toBe(true)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it('lets exactly one of two passes claim the same abandoned tombstone', async () => {
+    await recordRemoteRipgrepReference(conn, host, relay, FIRST)
+    const tombstone = `.rg-gc-${SECOND}.123.${Date.now() - 60 * 60_000}`
+    renameSync(join(cache, SECOND), join(cache, tombstone))
+    let releaseClaim!: () => void
+    const claimHeld = new Promise<void>((resolve) => {
+      releaseClaim = resolve
+    })
+    let heldPassReachedClaim!: () => void
+    const reachedClaim = new Promise<void>((resolve) => {
+      heldPassReachedClaim = resolve
+    })
+    let held = false
+    execMock.mockImplementation(async (_conn: unknown, command: string) => {
+      const script = process.platform === 'win32' ? decodeRemotePowerShellScript(command) : command
+      if (!held && script.includes(tombstone)) {
+        held = true
+        heldPassReachedClaim()
+        await claimHeld
+      }
+      return runShell(command)
+    })
+
+    // The held pass sees SECOND as unreferenced; the other pins it and restores it.
+    const heldPass = gcRemoteRipgrepCache(conn, host, home)
+    await reachedClaim
+    await gcRemoteRipgrepCache(conn, host, home, { pinnedEntry: SECOND })
+    releaseClaim()
+    await heldPass
+
+    expect(readdirSync(cache).sort()).toEqual([FIRST, SECOND])
+    expect(existsSync(join(cache, SECOND, 'rg'))).toBe(true)
   })
 
   it('does not nest a tombstone inside a directory recreated by a concurrent installer', async () => {

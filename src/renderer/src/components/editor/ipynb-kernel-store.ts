@@ -54,11 +54,15 @@ function loadEnvironments(): Record<string, PythonEnvironment> {
     return isRecord(stored)
       ? Object.fromEntries(
           Object.entries(stored).flatMap(([filePath, env]) =>
-            isRecord(env) &&
-            typeof env.path === 'string' &&
-            typeof env.name === 'string' &&
-            typeof env.version === 'string'
-              ? [[filePath, { path: env.path, name: env.name, version: env.version }]]
+            isRecord(env) && typeof env.path === 'string' && typeof env.name === 'string'
+              ? [
+                  [
+                    filePath,
+                    typeof env.version === 'string'
+                      ? { path: env.path, name: env.name, version: env.version }
+                      : { path: env.path, name: env.name }
+                  ]
+                ]
               : []
           )
         )

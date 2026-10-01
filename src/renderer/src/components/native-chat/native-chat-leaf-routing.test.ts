@@ -135,7 +135,7 @@ describe('resolveNativeChatLeafRoute', () => {
     ).toEqual({ chatLeafId: 'agent-leaf', exitChat: false })
   })
 
-  it('moves chat to an eligible active sibling after its leaf closes', () => {
+  it('exits chat when the user closes its pane', () => {
     expect(
       resolveNativeChatLeafRoute({
         isChatViewMode: true,
@@ -144,7 +144,7 @@ describe('resolveNativeChatLeafRoute', () => {
         chatLeafStillMounted: false,
         activeLeafIsEligible: true
       })
-    ).toEqual({ chatLeafId: 'agent-sibling', exitChat: false })
+    ).toEqual({ chatLeafId: null, exitChat: true })
   })
 
   it('does not move chat when its mounted leaf temporarily becomes ineligible', () => {

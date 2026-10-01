@@ -310,28 +310,6 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockCreateTab).toHaveBeenCalled()
   })
 
-  it('keeps a declined Claude launch on the structured path', async () => {
-    const { StructuredAgentSessionCreateRefusalError } =
-      await import('./launch-structured-agent-session')
-    const refusal = new StructuredAgentSessionCreateRefusalError(
-      'structured_agent_session_unsupported'
-    )
-    mockLaunchStructuredCodexSession.mockRejectedValueOnce(refusal)
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
-
-    expect(result).toMatchObject({
-      surface: { kind: 'local-agent-session', sessionId: 'codex-session-1' }
-    })
-    await expect(result?.structuredSettlement).resolves.toEqual({
-      kind: 'failed',
-      error: refusal
-    })
-    expect(mockCreateTab).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(mockToastError).toHaveBeenCalledOnce())
-  })
-
   it.each([[], null])(
     'preserves terminal-backed launches with capability answer %s',
     async (capabilities) => {

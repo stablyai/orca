@@ -25,6 +25,7 @@ const { CodexAppServerUnsupportedError } = await import('./codex-app-server-clie
 const { codexAppServerCapabilityCache } = await import('./codex-app-server-capability-cache')
 const { _internals, grantManagedCodexHookTrust } = await import('./codex-hook-trust-grant')
 const { markCodexProjectTrusted } = await import('../agent-trust-presets')
+const { getLocalCodexTrustConfigFiles } = await import('./codex-home-paths')
 const { setCodexTrustGrantTelemetry } = await import('./codex-trust-grant-telemetry')
 const {
   computeTrustKey,
@@ -133,15 +134,12 @@ function writingSessionRunner(args: {
 }
 
 describe('two Codex pane launches against one config.toml', () => {
-  it('does not let a failing launch roll back a concurrent launch that already succeeded', async () => {
-    // Why warm: on a cold host the shared capability probe incidentally
-    // serializes the two launches. Once the host is known-supported that
-    // dedupe is bypassed and the per-file lane is the only thing left.
+  it("leaves a concurrent grant's records in place when a sibling grant fails", async () => {
+    // Why warm: on a cold host the shared capability probe serializes the two
+    // grants. Once the host is known-supported, their sessions overlap.
     codexAppServerCapabilityCache.rememberSupported('native')
     const tomlPath = join(runtimeHomeDir, 'config.toml')
     const entries = [managedEntry('session_start')]
-    let sessionsInFlight = 0
-    let maxSessionsInFlight = 0
     let call = 0
     let releaseFirst!: () => void
     const firstGate = new Promise<void>((resolve) => {
@@ -149,21 +147,15 @@ describe('two Codex pane launches against one config.toml', () => {
     })
 
     _internals.setGrantSessionRunner(async (request) => {
-      sessionsInFlight += 1
-      maxSessionsInFlight = Math.max(maxSessionsInFlight, sessionsInFlight)
       call += 1
       const isFirst = call === 1
-      try {
-        return await writingSessionRunner({
-          tomlPath,
-          entries,
-          hashPrefix: isFirst ? 'sha256:doomed-' : 'sha256:survivor-',
-          gate: isFirst ? firstGate : undefined,
-          outcome: isFirst ? 'verify-failed' : 'granted'
-        })(request)
-      } finally {
-        sessionsInFlight -= 1
-      }
+      return writingSessionRunner({
+        tomlPath,
+        entries,
+        hashPrefix: isFirst ? 'sha256:doomed-' : 'sha256:survivor-',
+        gate: isFirst ? firstGate : undefined,
+        outcome: isFirst ? 'verify-failed' : 'granted'
+      })(request)
     })
 
     const doomed = grantManagedCodexHookTrust(buildPlan(entries))
@@ -174,15 +166,13 @@ describe('two Codex pane launches against one config.toml', () => {
 
     expect(await doomed).toMatchObject({ lane: 'fallback', reason: 'verify-failed' })
     expect(await survivor).toMatchObject({ lane: 'rpc' })
-    // The doomed run's rollback must not resurrect the pre-grant file over
-    // the entries the survivor legitimately wrote.
+    // Why: a failed grant writes nothing back, so the survivor's records stay.
     const trust = readHookTrustEntries(tomlPath)
     const key = normalizeHookTrustKeyForLookup(computeTrustKey(entries[0]))
     expect(trust.get(key)?.trustedHash).toBe('sha256:survivor-session_start')
-    expect(maxSessionsInFlight).toBe(1)
   })
 
-  it('keeps a concurrent markCodexProjectTrusted write out of a grant rollback window', async () => {
+  it('writes project trust while a grant session is still running, and keeps it', async () => {
     codexAppServerCapabilityCache.rememberSupported('native')
     const tomlPath = join(runtimeHomeDir, 'config.toml')
     const entries = [managedEntry('session_start')]
@@ -204,18 +194,14 @@ describe('two Codex pane launches against one config.toml', () => {
 
     try {
       const grant = grantManagedCodexHookTrust(buildPlan(entries))
-      // Let the grant capture config.toml and start its session.
       await tick()
       await tick()
-      const marked = markCodexProjectTrusted(workspace)
-      await tick()
-      // The lane must hold the preset write back until rollback has run.
-      expect(readFileSync(tomlPath, 'utf-8')).not.toContain('trust_level')
+      // Why: the grant holds no lane across its session, so a launch's write lands at once.
+      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
+      expect(readFileSync(tomlPath, 'utf-8')).toContain('trust_level = "trusted"')
 
       releaseSession()
       expect(await grant).toMatchObject({ lane: 'fallback', reason: 'verify-failed' })
-      await marked
-
       expect(readFileSync(tomlPath, 'utf-8')).toContain('trust_level = "trusted"')
     } finally {
       rmSync(workspace, { recursive: true, force: true })
@@ -397,7 +383,10 @@ describe('reentrancy under concurrency', () => {
       // write nested inside both.
       const outcome = await runExclusivelyForCodexTrustConfig(tomlPath, () =>
         runExclusivelyForCodexTrustConfig(systemToml, async () => {
-          await markCodexProjectTrusted(workspace)
+          await markCodexProjectTrusted(
+            workspace,
+            getLocalCodexTrustConfigFiles(testState.fakeHomeDir)
+          )
           return grantManagedCodexHookTrust(buildPlan(entries))
         })
       )

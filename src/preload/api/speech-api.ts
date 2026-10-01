@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
@@ -9,7 +10,10 @@ import type {
 export type SpeechApi = {
   getCatalog: () => Promise<SpeechModelManifest[]>
   getModelStates: () => Promise<SpeechModelState[]>
-  getOpenAiApiKeyStatus: () => Promise<{ configured: boolean }>
+  getOpenAiApiKeyStatus: () => Promise<{
+    configured: boolean
+    protection: SecretAtRestProtection | null
+  }>
   saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
   clearOpenAiApiKey: () => Promise<{ configured: boolean }>
   downloadModel: (modelId: string) => Promise<void>

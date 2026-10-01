@@ -23,9 +23,15 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
     listOpenCodeSqliteSessionsViaWorker: (
       args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
     ) => v1List.listOpenCodeSqliteSessions(args),
+    listZcodeSqliteSessionsViaWorker: (
+      args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
+    ) => v1List.listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
     parseOpenCodeSqliteSessionViaWorker: (
       args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
     ) => v1Parse.parseOpenCodeSqliteSession(args),
+    parseZcodeSqliteSessionViaWorker: (
+      args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
+    ) => v1Parse.parseOpenCodeSqliteSession({ ...args, agent: 'zcode' }),
     listOpenCode2SqliteSessionsViaWorker: (
       args: Parameters<typeof v2List.listOpenCode2SqliteSessions>[0]
     ) => v2List.listOpenCode2SqliteSessions(args),
@@ -400,7 +406,7 @@ describe('scanAiVaultSessions', () => {
       await writeEveryAgentVault(root)
     await writeMuseScannerFixture(roots.museSessionsDir)
 
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 25 })
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
@@ -428,6 +434,7 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('opencode2')).toBe(
       "cd '/tmp/opencode2' && opencode2 --standalone --session 'opencode2-session'"
     )
+    expect(commandByAgent.get('zcode')).toBe("cd '/tmp/zcode' && zcode --resume 'zcode-session'")
     expect(commandByAgent.get('grok')).toBe("cd '/tmp/grok' && grok --resume 'grok-session'")
     expect(commandByAgent.get('hermes')).toBe(
       "cd '/tmp/hermes' && hermes --resume 'hermes-session'"

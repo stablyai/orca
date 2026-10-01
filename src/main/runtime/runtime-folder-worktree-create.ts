@@ -26,7 +26,6 @@ type RuntimeFolderWorktreeCreateDeps = {
     selector: string,
     options: TerminalCreateOptions
   ) => Promise<RuntimeTerminalCreate>
-  markTrusted: (agent: TuiAgent, path: string) => Promise<void>
   pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
   sendFollowup: (handle: string, followup: WorktreeStartupFollowup) => void
   invalidateResolvedWorktrees: () => void
@@ -131,10 +130,6 @@ export async function createRuntimeFolderWorktree(args: {
   let startupTerminal: CreateWorktreeResult['startupTerminal']
   if (args.startup && deps.ptySpawnAvailable) {
     try {
-      const trustAgent = args.draftPaste?.agent ?? args.createdWithAgent
-      if (trustAgent) {
-        await deps.markTrusted(trustAgent, worktree.path)
-      }
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),

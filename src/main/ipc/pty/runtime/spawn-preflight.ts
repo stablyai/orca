@@ -12,7 +12,6 @@ import {
   resolveCodexHomeAfterManagedAuthReadiness,
   shouldSkipCodexHomeEnvForWindowsShell,
   shouldStripInheritedOrcaCodexHome,
-  isCodexStatusHooksEnabled,
   codexHomePathsEqual
 } from '../host-env/codex-home'
 import { promoteAgentTeamsShimPath } from '../host-env/path'
@@ -137,8 +136,7 @@ export async function prepareRuntimePtySpawn(
         launchAgent: args.launchAgent,
         providerSession: args.resumeProviderSession,
         target: ctx.codexSelectionTarget,
-        launchEnv: args.env,
-        workspacePath: ctx.cwd
+        launchEnv: args.env
       })
   const codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
@@ -188,10 +186,7 @@ export async function prepareRuntimePtySpawn(
     ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
   const selectLaunchCodexHome = async (): Promise<string | null> =>
-    (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
-      workspacePath: ctx.cwd,
-      launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-    })) ?? null
+    (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env)) ?? null
   ctx.selectedCodexHomePath =
     !ctx.preAdoptedStablePane && !args.connectionId
       ? getCompatibleSelectedCodexHomePath(
@@ -219,17 +214,12 @@ export async function prepareRuntimePtySpawn(
       resolveCurrent: async () =>
         getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
-          (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
-            workspacePath: ctx.cwd,
-            launchAgent: 'codex'
-          })) ?? null
+          (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env)) ?? null
         ),
       resolveAfterUnavailable: async (unavailableManagedHomePath) =>
         getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
           (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
-            workspacePath: ctx.cwd,
-            launchAgent: 'codex',
             unavailableManagedHomePath
           })) ?? null
         )
@@ -286,7 +276,6 @@ export async function prepareRuntimePtySpawn(
         wslDistro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
         disabledTuiAgents: ptySettings?.disabledTuiAgents,
-        codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: ctx.deps.runtime?.shouldRelayTerminalBrowserOpens?.(),
         deferGitConfigGuardToDaemon:

@@ -116,7 +116,10 @@ export function scheduleTerminalHistoryPermissionRepair(basePath: string): Promi
     }
     scheduledBasePaths.delete(oldest.value)
   }
-  const { promise, resolve: settle } = Promise.withResolvers<boolean>()
+  let settle!: (repaired: boolean) => void
+  const promise = new Promise<boolean>((resolve) => {
+    settle = resolve
+  })
   const timer = setTimeout(() => {
     repairTerminalHistoryPermissions(key).then(settle, () => settle(false))
   }, REPAIR_START_DELAY_MS)

@@ -17,6 +17,7 @@ import {
   getDaemonEndpointFacts,
   readDaemonPidRecord
 } from '../daemon/daemon-init'
+import type { OrcadProfileStateAuthoritySelection } from './orcad-profile-state-telemetry'
 
 /**
  * How much a green self-test actually proves.
@@ -64,6 +65,8 @@ export type OrcadHealth = {
   arch: string
   pid: number
   terminalDaemon: TerminalDaemonHealth
+  /** The low-cardinality profile-state authority selected during startup, when available. */
+  profileStateAuthority?: OrcadProfileStateAuthoritySelection
 }
 
 /**
@@ -146,7 +149,10 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
   }
 }
 
-export async function collectOrcadHealth(buildVersion: string): Promise<OrcadHealth> {
+export async function collectOrcadHealth(
+  buildVersion: string,
+  profileStateAuthority?: OrcadProfileStateAuthoritySelection
+): Promise<OrcadHealth> {
   return {
     buildHash: computeOrcadBuildHash(),
     buildVersion,
@@ -155,6 +161,7 @@ export async function collectOrcadHealth(buildVersion: string): Promise<OrcadHea
     platform: process.platform,
     arch: process.arch,
     pid: process.pid,
-    terminalDaemon: await collectTerminalDaemonHealth()
+    terminalDaemon: await collectTerminalDaemonHealth(),
+    ...(profileStateAuthority ? { profileStateAuthority } : {})
   }
 }

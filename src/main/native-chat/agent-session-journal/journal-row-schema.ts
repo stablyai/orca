@@ -5,12 +5,14 @@
 // UNREADABLE, not skippable: the caller must degrade to read-only rather than
 // render a partial timeline or compact past a row it cannot interpret.
 
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalDispatchState,
   type AgentJournalItemBody,
   type AgentJournalMessageItem,
   type AgentJournalProducerLinkage,
+  type AgentJournalTurnScope,
   type AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import {
@@ -36,6 +38,10 @@ type JournalRowBase = AgentJournalProducerLinkage & {
   ts: number
   /** Set when crash reconciliation appended the row after the fact. */
   recovered?: true
+  /** Which turn the item this row creates belongs to. Rides the base, and is not a `v` bump,
+   *  for the reason linkage does. Absent on rows from hosts that predate it: the reducer
+   *  derives one for them on read. */
+  turnScope?: AgentJournalTurnScope
 }
 
 /** First row of every epoch: binds the epoch to a provider handle and records why it opened. */
@@ -77,7 +83,20 @@ export type JournalSubmissionRow = JournalRowBase & {
   payloadFingerprint: string
   providerHandle: AgentSessionProviderHandle
   body: AgentJournalMessageItem
+  /** Accepted to be handed over by a later `dispatch{pending}` row; absent on rows whose writer
+   *  dispatched in the same step. Older readers keep the key and ignore it. */
+  handoverRecorded?: true
+  /** The queued draft this submission hands off; absent for a direct send. Older readers keep
+   *  the key and ignore it. */
+  queuedMessageId?: string
+  /** Who asked for this turn: `client` for a person's send over the client send RPC (typed, or
+   *  a queued card they sent now); `host` for Orca's own — orchestration mail, a restart
+   *  continuation, a launch prompt, the queue's automatic drain. Absent on rows from before it
+   *  was recorded. Older readers keep the key and ignore it. */
+  origin?: JournalSubmissionOrigin
 }
+
+export type JournalSubmissionOrigin = 'client' | 'host'
 
 export type JournalDispatchRow = JournalRowBase & {
   kind: 'dispatch'
@@ -86,6 +105,11 @@ export type JournalDispatchRow = JournalRowBase & {
   /** Provider item identity adopted on accept. */
   providerItemId: string | null
   reason: string | null
+  /** On `pending`: the turn the message was handed into, which becomes its row's scope. */
+  turnScope?: AgentJournalTurnScope
+  /** On `rejected`: why, typed. Older readers keep the key and ignore it; a malformed one is
+   *  dropped when read, never the row. */
+  rejection?: AgentSessionFailureFact
 }
 
 /** An item mutation may name its own producer, because one batch can CREATE
@@ -98,6 +122,7 @@ export type JournalLifecycleMutation =
       itemId: string
       revision: number
       body: AgentJournalItemBody
+      turnScope?: AgentJournalTurnScope
     })
   | { kind: 'tombstone'; itemId: string; revision: number }
 
@@ -163,10 +188,12 @@ export function parseJournalRow(line: string): JournalRowParse {
   }
   const upcast = upcastRow(record, version)
   dropUnusableProducerLinkage(upcast)
+  dropUnusableTurnScope(upcast)
   if (upcast.kind === 'lifecycle-batch' && Array.isArray(upcast.mutations)) {
     for (const mutation of upcast.mutations) {
       if (isPlainObject(mutation)) {
         dropUnusableProducerLinkage(mutation)
+        dropUnusableTurnScope(mutation)
       }
     }
   }
@@ -192,6 +219,24 @@ function dropUnusableProducerLinkage(record: Record<string, unknown>): void {
   }
   if (record.attempt !== undefined && !Number.isInteger(record.attempt)) {
     delete record.attempt
+  }
+}
+
+/** A scope this build cannot place, removed like unusable linkage: the row then reads as one
+ *  written before scopes existed, and the reducer derives its scope. */
+function dropUnusableTurnScope(record: Record<string, unknown>): void {
+  const scope = record.turnScope
+  if (
+    scope !== undefined &&
+    !(
+      isPlainObject(scope) &&
+      (scope.kind === 'thread' ||
+        (scope.kind === 'turn' &&
+          typeof scope.turnItemId === 'string' &&
+          scope.turnItemId.length > 0))
+    )
+  ) {
+    delete record.turnScope
   }
 }
 

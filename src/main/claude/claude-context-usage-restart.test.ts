@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { settleStaleSessionStateOnAcquire } from '../native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
+import { settleStaleStructuredAgentSessionState } from '../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { bindClaudeContextUsageCapture } from './claude-context-usage'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
@@ -106,7 +106,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
       providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
     },
     now: () => 9_000,
-    journalDir: join(root, 'orca-session')
+    stateDirectory: join(root, 'orca-session')
   })
 }
 
@@ -212,11 +212,12 @@ describe('context usage across a restart', () => {
     // The child dies with turn-b running; nothing ends it from the provider side.
     crashed.release()
 
-    await settleStaleSessionStateOnAcquire({
+    await settleStaleStructuredAgentSessionState({
       journal,
       sessionId: 'orca-session',
       fence: 2,
-      acquisitionGeneration: 'next'
+      acquisitionGeneration: 'next',
+      deathEvidence: null
     })
     const turns = journal.snapshot().items.map((item) => readAgentJournalTurn(item.body)?.state)
     expect(turns).toContain('unverifiable')
@@ -233,11 +234,12 @@ describe('context usage across a restart', () => {
     // The write is queued while the host settles the turn behind the sink's back.
     live.detach()
     live.translator.handle(assistantFrame('reply-a2', 3_000, 30_000))
-    await settleStaleSessionStateOnAcquire({
+    await settleStaleStructuredAgentSessionState({
       journal,
       sessionId: 'orca-session',
       fence: 1,
-      acquisitionGeneration: 'next'
+      acquisitionGeneration: 'next',
+      deathEvidence: null
     })
     live.reattach()
     await live.settle()

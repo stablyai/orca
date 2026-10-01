@@ -4,7 +4,8 @@ export type PythonEnvironment = {
   path: string
   /** `.venv`, `python3`, … — what the kernel picker shows first. */
   name: string
-  version: string
+  /** Absent for a workspace env listed before trust, which is read from disk rather than run. */
+  version?: string
 }
 
 export type PythonEnvironments = {

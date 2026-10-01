@@ -3,12 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import type { AppState } from '../types'
 import { createUIStore } from './ui-slice-test-harness'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
+  appendStructuredAgentSessionOutboxMessage: vi.fn(),
+  relaunchFailedStructuredAgentSessionForMessage: vi.fn(),
   track: vi.fn(),
   toastMessage: vi.fn(),
   toastSuccess: vi.fn(),
@@ -21,6 +24,15 @@ vi.mock('@/lib/active-agent-note-send', () => ({
     options: { explicitTarget?: boolean } = {}
   ) => (options.explicitTarget ? `selected:${status}` : status),
   sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
+}))
+
+vi.mock('@/components/native-chat/structured-agent-session-outbox-storage', () => ({
+  appendStructuredAgentSessionOutboxMessage: mocks.appendStructuredAgentSessionOutboxMessage
+}))
+
+vi.mock('@/lib/structured-agent-session-launch', () => ({
+  relaunchFailedStructuredAgentSessionForMessage:
+    mocks.relaunchFailedStructuredAgentSessionForMessage
 }))
 
 vi.mock('@/lib/telemetry', () => ({
@@ -43,6 +55,9 @@ afterEach(() => {
 beforeEach(() => {
   mocks.sendNotesToActiveAgentSession.mockReset()
   mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'sent' })
+  mocks.appendStructuredAgentSessionOutboxMessage.mockReset()
+  mocks.appendStructuredAgentSessionOutboxMessage.mockReturnValue({ clientMessageId: 'queued' })
+  mocks.relaunchFailedStructuredAgentSessionForMessage.mockReset()
   mocks.track.mockReset()
   mocks.toastMessage.mockReset()
   mocks.toastSuccess.mockReset()
@@ -72,6 +87,13 @@ function makeTerminalTab(id: string, worktreeId: string): TerminalTab {
     sortOrder: 0,
     createdAt: Date.now()
   }
+}
+
+// Why: send targets list structured chats from the tabs slice, which the UI harness omits.
+function createAgentSendStore(): StoreApi<AppState> {
+  const store = createUIStore()
+  store.setState({ unifiedTabsByWorktree: {} })
+  return store
 }
 
 function deferred<T>() {
@@ -150,7 +172,7 @@ describe('createUISlice agent send target mode', () => {
   }
 
   it('opens target mode with derived eligible and disabled pane keys', () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     seedAgentSendState(store)
 
     store.getState().openAgentSendPopoverTargetMode({
@@ -176,7 +198,7 @@ describe('createUISlice agent send target mode', () => {
   })
 
   it('disables sidebar target rows that need permission', async () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     seedAgentSendState(store)
     const agentStatusByPaneKey = store.getState().agentStatusByPaneKey
     store.setState({
@@ -213,7 +235,7 @@ describe('createUISlice agent send target mode', () => {
   })
 
   it('does not reveal the sidebar when the current workspace has no eligible targets', () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     seedAgentSendState(store)
     store.setState({
       terminalLayoutsByTabId: {
@@ -258,7 +280,7 @@ describe('createUISlice agent send target mode', () => {
   })
 
   it('sends to the live leaf PTY, runs delivery callback, tracks followup, and closes', async () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     const onPromptDelivered = vi.fn()
     seedAgentSendState(store)
     store.getState().openAgentSendPopoverTargetMode({
@@ -288,8 +310,98 @@ describe('createUISlice agent send target mode', () => {
     expect(store.getState().agentSendPopoverTargetMode).toBeNull()
   })
 
+  const chatTabId = 'structured-agent-session-claude_1'
+  const chatPaneKey = structuredAgentSessionPaneKey(chatTabId, 'claude_1')
+
+  function seedChatState(
+    store: StoreApi<AppState>,
+    agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+  ): void {
+    store.setState({
+      agentStatusByPaneKey,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      ptyIdsByTabId: {},
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: chatTabId,
+            entityId: 'claude_1',
+            groupId: 'group-1',
+            worktreeId,
+            contentType: 'agent-session',
+            agentSessionAgent: 'claude',
+            label: 'Claude Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: Date.now()
+          }
+        ]
+      }
+    })
+  }
+
+  it('does not reveal the sidebar for a chat before its first turn, which has no row there', () => {
+    const store = createAgentSendStore()
+    seedChatState(store, {})
+
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().agentSendPopoverTargetMode?.eligiblePaneKeys).toEqual([])
+    expect(store.getState().pendingRevealWorktree).toBeNull()
+  })
+
+  it('sends to a structured chat by its session, not a terminal', async () => {
+    const store = createAgentSendStore()
+    const onPromptDelivered = vi.fn()
+    const now = Date.now()
+    seedChatState(store, {
+      [chatPaneKey]: {
+        state: 'done',
+        prompt: 'previous',
+        updatedAt: now,
+        stateStartedAt: now,
+        agentType: 'claude',
+        paneKey: chatPaneKey,
+        stateHistory: []
+      }
+    })
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send',
+      onPromptDelivered
+    })
+    expect(store.getState().agentSendPopoverTargetMode?.eligiblePaneKeys).toEqual([chatPaneKey])
+
+    await expect(store.getState().sendPromptToSidebarAgentTarget(chatPaneKey)).resolves.toBe(true)
+
+    expect(mocks.appendStructuredAgentSessionOutboxMessage).toHaveBeenCalledWith(
+      'claude_1',
+      'Review this'
+    )
+    expect(mocks.relaunchFailedStructuredAgentSessionForMessage).toHaveBeenCalledWith(
+      worktreeId,
+      'claude_1'
+    )
+    expect(mocks.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
+    expect(onPromptDelivered).toHaveBeenCalledTimes(1)
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Claude')
+  })
+
   it('keeps target mode open and does not run delivery callback when send fails', async () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     const onPromptDelivered = vi.fn()
     seedAgentSendState(store)
     mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'not-ready' })
@@ -318,7 +430,7 @@ describe('createUISlice agent send target mode', () => {
   })
 
   it('sends to a working agent row through the selected-target note helper', async () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     seedAgentSendState(store)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
@@ -343,7 +455,7 @@ describe('createUISlice agent send target mode', () => {
   })
 
   it('acknowledges delivery when the picker closes before the send completes', async () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     const onPromptDelivered = vi.fn()
     const write = deferred<{ status: 'sent' }>()
     seedAgentSendState(store)
@@ -374,7 +486,7 @@ describe('createUISlice agent send target mode', () => {
   })
 
   it('does not let an older send close a reopened popover with the same id', async () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     const onPromptDelivered = vi.fn()
     const write = deferred<{ status: 'sent' }>()
     seedAgentSendState(store)
@@ -417,7 +529,7 @@ describe('createUISlice agent send target mode', () => {
   })
 
   it('does not let an older send failure mutate a reopened popover with the same id', async () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     const onPromptDelivered = vi.fn()
     const write = deferred<{ status: 'not-ready' }>()
     seedAgentSendState(store)
@@ -460,7 +572,7 @@ describe('createUISlice agent send target mode', () => {
   })
 
   it('does not retarget the same popover while a send is in progress', async () => {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     const write = deferred<{ status: 'sent' }>()
     seedAgentSendState(store)
     mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
@@ -515,7 +627,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
   it('dismisses live and retained agent notifications only when the event is unvisited', () => {
     const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
     vi.stubGlobal('window', { api: { notifications: { dismiss } } })
-    const store = createUIStore()
+    const store = createAgentSendStore()
     store.setState({
       tabsByWorktree: {
         'wt-live': [makeTerminalTab(tabId, 'wt-live')]
@@ -567,7 +679,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
   it('falls back to live entry worktree attribution and skips unresolved live entries', () => {
     const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
     vi.stubGlobal('window', { api: { notifications: { dismiss } } })
-    const store = createUIStore()
+    const store = createAgentSendStore()
     const fallbackPaneKey = makePaneKey('tab-fallback', '44444444-4444-4444-8444-444444444444')
     store.setState({
       tabsByWorktree: {},
@@ -598,7 +710,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
   it('dedupes identical live and retained notification ids for the same pane', () => {
     const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
     vi.stubGlobal('window', { api: { notifications: { dismiss } } })
-    const store = createUIStore()
+    const store = createAgentSendStore()
     store.setState({
       tabsByWorktree: {
         'wt-live': [makeTerminalTab(tabId, 'wt-live')]
@@ -637,7 +749,7 @@ describe('openDiffNotesSendMenuForActiveWorktree', () => {
     comments: { sentAt?: number }[],
     activeWorktreeId: string | null = 'wt-1'
   ): { store: StoreApi<AppState>; setRightSidebarTab: ReturnType<typeof vi.fn> } {
-    const store = createUIStore()
+    const store = createAgentSendStore()
     const setRightSidebarTab = vi.fn()
     store.setState({
       activeWorktreeId,

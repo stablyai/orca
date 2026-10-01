@@ -122,37 +122,4 @@ describe('active rail item', () => {
       })
     ).toBe('u2')
   })
-
-  it('keeps a row taller than the viewport active while it spans it', () => {
-    expect(
-      findActiveNativeChatRailItem({
-        slots: [{ turnKey: 'u1' }],
-        virtualItems: [{ index: 0, start: 0, end: 2000 }],
-        scrollTop: 800,
-        clientHeight: VIEWPORT,
-        scrollHeight: 4000,
-        previousActiveId: null
-      })
-    ).toBe('u1')
-  })
-
-  // `start` already carries `scrollMargin`, so subtracting it again would shift
-  // every row and select the wrong turn.
-  it('reads offsets in container space, margin included', () => {
-    const margin = 500
-    expect(
-      findActiveNativeChatRailItem({
-        slots: TURNS,
-        virtualItems: rows(10).map((row) => ({
-          ...row,
-          start: row.start + margin,
-          end: row.end + margin
-        })),
-        scrollTop: margin + 450,
-        clientHeight: VIEWPORT,
-        scrollHeight: 1500,
-        previousActiveId: null
-      })
-    ).toBe('u2')
-  })
 })

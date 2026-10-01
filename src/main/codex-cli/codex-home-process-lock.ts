@@ -17,12 +17,15 @@ export function resolveCodexHomeProcessLockKey(codexHomePath?: string | null): s
 
 export function resolveCodexHomeProcessLockKeyForSpawnEnv(
   env: NodeJS.ProcessEnv | undefined,
-  wslDistro?: string | null
+  wslDistro?: string | null,
+  commandEnv?: Record<string, string>
 ): string {
   if (wslDistro) {
     // buildWslLauncherEnv forwards only explicit values that differ from the
     // host process; all other cases use the distro user's default home.
-    const codexHome = env?.CODEX_HOME !== process.env.CODEX_HOME ? (env?.CODEX_HOME ?? null) : null
+    const codexHome =
+      commandEnv?.CODEX_HOME ??
+      (env?.CODEX_HOME !== process.env.CODEX_HOME ? (env?.CODEX_HOME ?? null) : null)
     // Why: WSL spawns carry a Linux CODEX_HOME; key it through the same UNC
     // normalization the probe's \\wsl$ home path uses so both lanes collide.
     // Without an explicit home the distro default is unknowable from the host;

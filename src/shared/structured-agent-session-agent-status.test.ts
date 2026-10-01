@@ -19,22 +19,23 @@ describe('structuredAgentSessionAgentStatus', () => {
     expect(
       structuredAgentSessionAgentStatus({
         status: 'attention',
-        backgroundTasks: [task({ kind: 'command' })]
+        childWork: [task({ kind: 'command' })]
       })
     ).toEqual({ state: 'blocked', mainAgent: { state: 'blocked' } })
   })
 
   it('keeps an idle main agent working while a subagent runs, and says the main agent itself is done', () => {
-    expect(
-      structuredAgentSessionAgentStatus({ status: 'idle', backgroundTasks: [task()] })
-    ).toEqual({ state: 'working', mainAgent: { state: 'done' } })
+    expect(structuredAgentSessionAgentStatus({ status: 'idle', childWork: [task()] })).toEqual({
+      state: 'working',
+      mainAgent: { state: 'done' }
+    })
   })
 
   it('reads an idle lead with only a backgrounded shell as monitoring', () => {
     expect(
       structuredAgentSessionAgentStatus({
         status: 'idle',
-        backgroundTasks: [task({ kind: 'command', description: 'sleep 180' })]
+        childWork: [task({ kind: 'command', description: 'sleep 180' })]
       })
     ).toEqual({ state: 'working', workingMode: 'monitoring', mainAgent: { state: 'done' } })
   })
@@ -42,7 +43,7 @@ describe('structuredAgentSessionAgentStatus', () => {
   it('keeps an idle main agent working while a subagent failed in place or is out of contact', () => {
     for (const state of ['blocked', 'unverifiable'] as const) {
       expect(
-        structuredAgentSessionAgentStatus({ status: 'idle', backgroundTasks: [task({ state })] })
+        structuredAgentSessionAgentStatus({ status: 'idle', childWork: [task({ state })] })
       ).toEqual({ state: 'working', mainAgent: { state: 'done' } })
     }
   })
@@ -51,7 +52,7 @@ describe('structuredAgentSessionAgentStatus', () => {
     expect(
       structuredAgentSessionAgentStatus({
         status: 'idle',
-        backgroundTasks: [task({ state: 'waiting' })]
+        childWork: [task({ state: 'waiting' })]
       })
     ).toEqual({ state: 'waiting', mainAgent: { state: 'done' } })
   })
@@ -60,7 +61,9 @@ describe('structuredAgentSessionAgentStatus', () => {
   // not claim a running agent that `projectAgentChildWorkLegacySubagents` then refuses to render.
   it('reads a lead whose only live task is a workflow as monitoring, with no children to show', () => {
     const backgroundTasks = [task({ id: 'flow-1', kind: 'workflow' })]
-    expect(structuredAgentSessionAgentStatus({ status: 'idle', backgroundTasks })).toEqual({
+    expect(
+      structuredAgentSessionAgentStatus({ status: 'idle', childWork: backgroundTasks })
+    ).toEqual({
       state: 'working',
       workingMode: 'monitoring',
       mainAgent: { state: 'done' }
@@ -76,10 +79,7 @@ describe('structuredAgentSessionAgentStatus', () => {
     expect(
       structuredAgentSessionAgentStatus({
         status: 'idle',
-        backgroundTasks: [
-          task({ state: 'done' }),
-          task({ id: 'shell', kind: 'command', state: 'idle' })
-        ]
+        childWork: [task({ state: 'done' }), task({ id: 'shell', kind: 'command', state: 'idle' })]
       })
     ).toEqual({ state: 'done', mainAgent: { state: 'done' } })
     expect(structuredAgentSessionAgentStatus({ status: 'idle' })).toEqual({
@@ -98,7 +98,7 @@ describe('structuredAgentSessionAgentStatus', () => {
       structuredAgentSessionAgentStatus({
         status: 'idle',
         turnOutcome: 'cancellation',
-        backgroundTasks: [task({ kind: 'command' })]
+        childWork: [task({ kind: 'command' })]
       })
     ).toEqual({
       state: 'working',

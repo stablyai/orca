@@ -134,6 +134,12 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
 
+  /** A background removal started or ended; every client refetches and reads the `removing` marker. */
+  publishWorktreeRemovalChange(repoId: string): void {
+    this.invalidateResolvedWorktreeCache()
+    this.notifyWorktreesChanged(repoId)
+  }
+
   // Why: structural catalog changes require a fresh Git scan; renderer metadata edits do not.
   notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
     this.invalidateWorktreeScanCacheForRepo(repoId)

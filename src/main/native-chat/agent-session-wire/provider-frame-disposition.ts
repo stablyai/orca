@@ -162,23 +162,39 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
  *
  * Listing a kind before its translator exists deletes the only report of a
  * failure, so nothing may be added here except together with the code that
- * renders it.
+ * renders it, or that reads it for state while another frame carries its
+ * failure (the Codex thread status, whose fault arrives on `error`).
  *
- * A frame of a listed kind that names no task writes nothing. The row it
+ * A Claude frame of a listed kind that names no task writes nothing. The row it
  * replaces named no task either — it printed the opcode and a raw payload —
  * and every frame this protocol sends carries the id its own tracker and
  * roster have always required.
  */
-const CLAUDE_TYPED_TRANSLATOR_KINDS: ReadonlySet<string> = new Set([
-  'message:system:task_started',
-  'message:system:task_updated',
-  'message:system:task_progress',
-  'message:system:task_notification',
-  'message:system:background_tasks_changed'
-] satisfies ClaudeStreamJsonFrameKind[])
+const TYPED_TRANSLATOR_KINDS: ReadonlyMap<string, ReadonlySet<string>> = new Map<
+  keyof ProviderFrameClassificationTable,
+  ReadonlySet<string>
+>([
+  [
+    'claude',
+    new Set([
+      'message:system:task_started',
+      'message:system:task_updated',
+      'message:system:task_progress',
+      'message:system:task_notification',
+      'message:system:background_tasks_changed'
+    ] satisfies ClaudeStreamJsonFrameKind[])
+  ],
+  [
+    'codex',
+    // Every status arm is thread state the translator reads; a fault's sentence arrives on `error`.
+    new Set([
+      'notification:thread/status/changed'
+    ] satisfies `notification:${CodexAppServerNotificationMethod}`[])
+  ]
+])
 
 export function hasTypedProviderFrameTranslator(provider: string, kind: string): boolean {
-  return provider === 'claude' && CLAUDE_TYPED_TRANSLATOR_KINDS.has(kind)
+  return TYPED_TRANSLATOR_KINDS.get(provider)?.has(kind) === true
 }
 
 const ERROR_VARIANT_KEYS = new Set(['type', 'status', 'state', 'subtype', 'outcome'])
@@ -238,10 +254,10 @@ const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = 
   // `restoreThread` replays them straight through `items.handle`, which is where
   // the classification earns its keep.
   //
-  // `collabAgentToolCall` is deliberately NOT suppressed with it. Nothing
-  // guarantees a session reports subagent work as `subAgentActivity` at all; one
-  // that only ever emits the collab tool call gets no roster row, and suppressing
-  // that too would leave its fan-out showing nothing.
+  // `collabAgentToolCall` is deliberately NOT suppressed with it. Codex's default
+  // multi-agent mode reports subagent work ONLY as that call, which renders as its
+  // own tool row and never reaches this catalog; were it ever to, suppressing it
+  // would leave that session's fan-out showing nothing.
   [CODEX_SUBAGENT_ITEM_TYPE]: 'status-chrome',
   // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
   // nothing at all. Every other item type this build does not model carries text

@@ -26,7 +26,11 @@ import {
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
 import { getManagedScript } from './codex-hook-script'
-import { grantManagedCodexHookTrust } from './codex-hook-trust-grant'
+import {
+  grantManagedCodexHookTrust,
+  type CodexManagedTrustGrantPlan
+} from './codex-hook-trust-grant'
+import { removeSelfComputedTrustBeforeGrant } from './codex-managed-trust-grant-plan'
 import { removeStaleRuntimeHookTrustEntries } from './codex-hook-trust-cleanup'
 import {
   promoteCodexRuntimeHookApprovalsToSystem,
@@ -145,14 +149,18 @@ export async function installCodexHooksExclusively(
     // then carry Codex's verbatim hashes into stale cleanup so it cannot
     // delete what Codex just wrote. Mirrored user trust keeps its existing
     // verbatim-carry lane either way.
-    const grant = await grantManagedCodexHookTrust({
+    const grantPlan: CodexManagedTrustGrantPlan = {
       runtimeHomePath,
       tomlPath,
       managedCommand: command,
       managedEntries: managedTrustEntries,
       host: { kind: 'native' },
       telemetryLane: 'managed'
-    })
+    }
+    // Why: the fallback below writes this trust back if the session fails.
+    const grant = await grantManagedCodexHookTrust(grantPlan, () =>
+      removeSelfComputedTrustBeforeGrant(grantPlan)
+    )
     if (grant.lane === 'rpc') {
       recentGrantEntries = grant.entries
       upsertHookTrustEntries(tomlPath, mirroredTrustEntries)

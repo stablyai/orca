@@ -52,14 +52,12 @@ src/main/browser/agent-browser-bridge-state.ts
 src/main/browser/agent-browser-bridge-types.ts
 src/main/browser/browser-route-egress-electron-launch.ts
 src/main/browser/browser-route-persisted-worker-electron-process.ts
-src/main/claude-accounts/keychain.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-posix-supervisor.ts
 src/main/codex/codex-app-server-session.ts
-src/main/codex/codex-state-db-backfill-recovery.ts
 src/main/codex/codex-wsl-hook-install-plan.ts
 src/main/computer/desktop-script-provider-bridge.ts
 src/main/computer/macos-computer-use-permission-status.ts
@@ -115,6 +113,7 @@ src/main/ipc/repos/repo-clone-lifecycle.ts
 src/main/ipc/worktree-apfs-clone.ts
 src/main/ipc/wsl-watcher-process-exit.ts
 src/main/local-builds/local-build-candidate.ts
+src/main/macos-keychain/generic-password.ts
 src/main/macos-system-sleep-assertion.ts
 src/main/macos-tcc-prompt-watch.ts
 src/main/memory/collector.ts
@@ -130,9 +129,7 @@ src/main/providers/process-cwd.ts
 src/main/providers/windows-console-attached-processes.ts
 src/main/pty-descendant-termination.ts
 src/main/pty/posix-pty-foreground-group.ts
-src/main/pty/posix-pty-process-groups.ts
 src/main/pty/windows-environment-path.ts
-src/main/rate-limits/codex-fetcher.ts
 src/main/rate-limits/gemini-cli-oauth-extractor.ts
 src/main/runtime/tls-certificate.ts
 src/main/runtime/windows-default-route-interfaces.ts
@@ -165,7 +162,6 @@ src/relay/ai-vault-service-spawn.ts
 src/relay/external-automations-handler.ts
 src/relay/fs-handler-git-fallback.ts
 src/relay/fs-handler-list-files.ts
-src/relay/fs-handler-utils.ts
 src/relay/fs-list-files-fallback-chain.ts
 src/relay/git-handler.ts
 src/relay/git-stdout-stream.ts
@@ -178,5 +174,4 @@ src/shared/ephemeral-vm-recipe-runner.ts
 src/shared/fish-binary-requirement.ts
 src/shared/process-table-snapshot-reader.ts
 src/shared/pty-slave-line-discipline-echo.ts
-src/shared/ripgrep-process-availability.ts
 src/shared/shell-process-readiness.ts

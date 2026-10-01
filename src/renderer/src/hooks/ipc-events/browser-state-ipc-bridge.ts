@@ -1,5 +1,6 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
 import {
@@ -121,9 +122,18 @@ export function registerBrowserStateIpcBridge(
       const sourceTab = (store.browserTabsByWorktree[sourcePage.worktreeId] ?? []).find(
         (tab) => tab.id === sourcePage.workspaceId
       )
+      const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
+        store,
+        browserPageId,
+        sourcePage.worktreeId
+      )
       store.createBrowserTab(sourcePage.worktreeId, url, {
         title: url,
         activate: activate ?? true,
+        ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
+        ...(sourceUnifiedTab?.executionHostId
+          ? { executionHostId: sourceUnifiedTab.executionHostId }
+          : {}),
         ...(sourceTab
           ? {
               sessionProfileId: sourceTab.sessionProfileId,

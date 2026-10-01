@@ -7,7 +7,7 @@ export const MARKDOWN_DOCUMENT_LISTING_MAX_PATH_BYTES = 64 * 1024
 export const MARKDOWN_DOCUMENT_LISTING_MAX_VISITED_ENTRIES = 100_000
 export const MARKDOWN_DOCUMENT_LISTING_MAX_DEPTH = 256
 export const MARKDOWN_DOCUMENT_LISTING_ERROR_CODE = 'markdown_document_listing_capacity'
-export const MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE =
+const MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE =
   'Workspace is too large for Markdown link completion.'
 
 const MARKDOWN_DOCUMENT_RETAINED_OVERHEAD_BYTES = 256
@@ -34,17 +34,6 @@ export class MarkdownDocumentListingCapacityError extends Error {
     super(MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE)
     this.name = 'MarkdownDocumentListingCapacityError'
   }
-}
-
-export function isMarkdownDocumentListingCapacityError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false
-  }
-  return (
-    ('code' in error &&
-      (error as { code?: unknown }).code === MARKDOWN_DOCUMENT_LISTING_ERROR_CODE) ||
-    error.message.includes(MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE)
-  )
 }
 
 export function createMarkdownDocumentListingBudget(

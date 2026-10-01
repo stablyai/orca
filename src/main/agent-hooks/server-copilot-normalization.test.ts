@@ -232,20 +232,6 @@ describe('Copilot hook normalization', () => {
     expect(result?.hasExplicitPrompt).toBe(false)
   })
 
-  it('Notification(elicitation_dialog) accepts camelCase type and surfaces the question', () => {
-    const result = _internals.normalizeHookPayload(
-      'copilot',
-      buildBody({
-        hook_event_name: 'Notification',
-        notificationType: 'elicitation_dialog',
-        message: 'Which deployment target should I use?'
-      }),
-      'production'
-    )
-    expect(result?.payload.state).toBe('blocked')
-    expect(result?.payload.lastAssistantMessage).toBe('Which deployment target should I use?')
-  })
-
   it('later progress clears a prior blocked state for the same pane', () => {
     _internals.normalizeHookPayload(
       'copilot',

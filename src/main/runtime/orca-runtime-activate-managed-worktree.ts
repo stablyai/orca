@@ -12,9 +12,7 @@ import type {
 } from './runtime-worktree-agent-startup'
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft,
-  markLocalWorktreeTrusted,
-  markRemoteWorktreeTrusted
+  buildWorktreeStartupForDraft
 } from './runtime-worktree-agent-startup'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { Worktree } from '../../shared/worktree/types'
@@ -27,7 +25,8 @@ import type {
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from './runtime-worktree-lineage-recording'
 import {
   pasteWorktreeStartupDraftWhenReady,
-  sendWorktreeStartupFollowupWhenReady
+  sendWorktreeStartupFollowupWhenReady,
+  waitForWorktreeStartupDraft
 } from './runtime-worktree-startup-readiness'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { provisionWorktreeTerminals } from './runtime-worktree-terminal-provisioning'
@@ -117,7 +116,8 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
   protected async buildStartupForDraft(
     repo: Repo,
     draft: string,
-    requestedAgent?: TuiAgent
+    requestedAgent?: TuiAgent,
+    launchSource?: string
   ): Promise<{
     agent: TuiAgent
     startup: WorktreeStartupLaunch
@@ -130,6 +130,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       repo,
       draft,
       ...(requestedAgent ? { requestedAgent } : {}),
+      ...(launchSource ? { launchSource } : {}),
       settings: this.store.getSettings(),
       getLaunchPlatform: () => this.getAgentLaunchPlatformForRepo(repo)
     })
@@ -161,33 +162,6 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     })
   }
 
-  protected async markLocalWorkspaceTrustedForAgent(
-    agent: TuiAgent,
-    workspacePath: string
-  ): Promise<void> {
-    await markLocalWorktreeTrusted(agent, workspacePath)
-  }
-
-  protected async markWorkspaceTrustedForAgent(
-    agent: TuiAgent,
-    connectionId: string | null | undefined,
-    workspacePath: string
-  ): Promise<void> {
-    if (connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(agent, connectionId, workspacePath)
-      return
-    }
-    await this.markLocalWorkspaceTrustedForAgent(agent, workspacePath)
-  }
-
-  protected async markRemoteWorkspaceTrustedForAgent(
-    agent: TuiAgent,
-    connectionId: string,
-    workspacePath: string
-  ): Promise<void> {
-    await markRemoteWorktreeTrusted(agent, connectionId, workspacePath)
-  }
-
   protected recordCreatedWorktreeLineage(
     worktree: Pick<Worktree, 'id' | 'instanceId'>,
     lineageResolution: WorktreeLineageResolution
@@ -201,6 +175,29 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
 
   protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
     pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
+  }
+
+  /** Only for a newly launched worker, before its first dispatch input. */
+  async waitForFreshWorkerComposer(
+    handle: string,
+    agent: TuiAgent,
+    timeoutMs: number
+  ): Promise<void> {
+    const initialPtyId =
+      this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+    const ptyId = await waitForWorktreeStartupDraft(
+      { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => initialPtyId },
+      handle,
+      agent,
+      { timeoutMs, requireComposerMarker: true }
+    )
+    if (!ptyId) {
+      throw new Error('timeout')
+    }
+    this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+    if (!this.ptysById.get(ptyId)?.connected) {
+      throw new Error('terminal_handle_stale')
+    }
   }
 
   protected sendStartupFollowupWhenReady(handle: string, followup: WorktreeStartupFollowup): void {

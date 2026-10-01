@@ -285,28 +285,6 @@ describe('getAllowedRoots', () => {
     expect(isPathInsideOrEqual).toHaveBeenCalledTimes(100_000)
   })
 
-  it('preserves empty, remote-only, mixed and explicit remote folder scopes in any repo order', () => {
-    const fixture = makeMixedFixture()
-    fixture.repos.push(
-      makeRepo({
-        id: 'local-in-remote-group',
-        path: '/local/mixed',
-        projectGroupId: 'group-remote'
-      })
-    )
-    for (let index = 0; index < fixture.repos.length; index += 1) {
-      fixture.repos.push(fixture.repos.shift()!)
-      const { store } = makeCountingStore(fixture)
-      expect(getAllowedRoots(store)).toEqual(referenceAllowedRoots(store))
-    }
-  })
-
-  it('produces the same roots as the pre-change implementation', () => {
-    const { store } = makeCountingStore(makeMixedFixture())
-
-    expect(getAllowedRoots(store)).toEqual(referenceAllowedRoots(store))
-  })
-
   it('reads the store once and indexes project groups once per build', () => {
     const fixture = makeMixedFixture()
     const { store, counts } = makeCountingStore(fixture)

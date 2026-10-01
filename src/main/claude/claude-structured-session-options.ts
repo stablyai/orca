@@ -223,15 +223,37 @@ export function claudeCatalogAdmitsModel(models: readonly ListedModel[], modelId
   )
 }
 
-function wireClaudeModels(models: readonly ListedModel[]): AgentSessionOptionsResult['models'] {
-  return models.map((entry) => ({
+type WireClaudeModel = AgentSessionOptionsResult['models'][number]
+
+function wireClaudeModel(entry: ListedModel): WireClaudeModel {
+  return {
     id: entry.id,
     label: entry.label,
     ...(entry.description ? { description: entry.description } : {}),
     isDefault: entry.isDefault,
     efforts: entry.efforts,
     ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {})
-  }))
+  }
+}
+
+function wireClaudeModels(models: readonly ListedModel[]): WireClaudeModel[] {
+  return models.map(wireClaudeModel)
+}
+
+/** The listing, with what the CLI runs when no effort is sent on each model the child applies —
+ *  a default only a running child knows, and only while this session has no effort pick. */
+function catalogClaudeModels(session: ClaudeSession, discovered: ListedModel[]): WireClaudeModel[] {
+  const applied = session.options.has('effort') ? undefined : session.appliedOptions
+  return discovered.map((listed) => {
+    const model = wireClaudeModel(listed)
+    const effort = applied?.effort
+    const runsApplied =
+      applied?.model !== undefined &&
+      (listed.id === applied.model || listed.resolvedModel === applied.model)
+    return effort && runsApplied && model.efforts.some((choice) => choice.value === effort)
+      ? { ...model, defaultEffort: effort }
+      : model
+  })
 }
 
 /** Write a provider-listed catalog through to the host store. Account-level
@@ -243,7 +265,7 @@ function writeClaudeCatalogThrough(session: ClaudeSession, discovered: ListedMod
   }
   const support = claudeFastModeSupport(discovered, undefined)
   session.catalogAccess.store.recordSuccess(session.catalogAccess.fingerprint, 'claude', {
-    models: wireClaudeModels(discovered),
+    models: catalogClaudeModels(session, discovered),
     ...(support ? { fastModeSupport: support } : {}),
     fastModeTierByModel: new Map(),
     origin: 'live-session'

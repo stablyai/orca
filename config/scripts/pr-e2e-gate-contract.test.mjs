@@ -127,11 +127,10 @@ describe('PR E2E gate contract', () => {
     const successLoop = verifyStep.run.slice(verifyStep.run.indexOf(successMarker))
     expect(successLoop.length).toBeGreaterThan(0)
     expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
-    expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
     for (const job of prWorkflow.jobs.verify.needs) {
       const envVar = job.replaceAll('-', '_').toUpperCase()
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.${job}.result }}`)
-      if (job === 'code_paths' || job === 'root_directory_guard') {
+      if (job === 'code_paths') {
         continue
       }
       expect(successLoop).toContain(`"$${envVar}"`)
@@ -239,7 +238,7 @@ describe('PR E2E gate contract', () => {
   })
 
   it('scopes detection to the PR range so base drift cannot false-trigger', () => {
-    expect(filterStep.run).toContain('--merge-base "$BASE" "$HEAD"')
+    expect(filterStep.run).toMatch(/diff-base\.mjs "\$BASE"[\s\S]*"\$DIFF_BASE" HEAD/)
     expect(filterStep.run).toContain('set -euo pipefail')
   })
 
@@ -445,7 +444,7 @@ describe('PR E2E gate contract', () => {
   })
 
   it('scopes the VM rollback oracle to the PR range and recipe schema authorities', () => {
-    expect(rollbackStep.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
+    expect(rollbackStep.run).toMatch(/diff-base\.mjs "\$BASE_SHA"[\s\S]*"\$DIFF_BASE" HEAD --/)
     expect(rollbackStep.run).toContain('src/shared/ephemeral-vm-recipes.ts')
     expect(rollbackStep.run).toContain('src/shared/orca-yaml-hook-types.ts')
     expect(selectPrE2eSpecs(['src/shared/ephemeral-vm-recipes.ts'])).toEqual([

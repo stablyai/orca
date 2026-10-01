@@ -5,6 +5,12 @@ import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { assertAuthoritativeWorktreeCatalog } from '../../shared/worktree/worktree-catalog-availability'
 import { isJsonRpcMethodNotFoundError } from './ssh-git-relay-errors'
+import {
+  parseLocalBaseBranchFastForwardOutcome,
+  readFastForwardableBehindCount,
+  type LocalBaseBranchFastForwardOutcome,
+  type LocalBaseBranchRefs
+} from '../../shared/worktree/local-base-branch-fast-forward'
 import { SshGitReviewHeadProvider } from './ssh-git-review-head-provider'
 
 const WORKTREE_IS_CLEAN_CAPABILITY = 'git.worktreeIsClean' as const
@@ -134,16 +140,24 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
     )
   }
 
-  async refreshLocalBaseRefForWorktreeCreate(args: {
-    repoPath: string
-    fullRef: string
-    remoteTrackingRef: string
-    ownerWorktreePath?: string
-    checkOnly?: boolean
-  }): Promise<void> {
-    await this.runWithGitReadInvalidation(async () => {
-      await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
-    })
+  /** The relay inspects and moves the branch host-side, one run per branch at a time. */
+  async refreshLocalBaseRefForWorktreeCreate(
+    args: LocalBaseBranchRefs
+  ): Promise<LocalBaseBranchFastForwardOutcome> {
+    return this.runWithGitReadInvalidation(async () =>
+      parseLocalBaseBranchFastForwardOutcome(
+        await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
+      )
+    )
+  }
+
+  /** Commits local is behind when the relay could fast-forward it; read-only. */
+  async getLocalBaseRefFastForwardableBehind(
+    args: LocalBaseBranchRefs
+  ): Promise<number | undefined> {
+    return readFastForwardableBehindCount(
+      await this.mux.request('git.inspectLocalBaseRefForWorktreeCreate', args)
+    )
   }
 
   async renameCurrentBranch(worktreePath: string, newBranch: string): Promise<void> {

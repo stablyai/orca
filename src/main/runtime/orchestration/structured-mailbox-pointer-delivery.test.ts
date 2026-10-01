@@ -4,6 +4,11 @@ import {
   OrchestrationStructuredMailboxPointerDelivery,
   type StructuredMailboxPointerHost
 } from './structured-mailbox-pointer-delivery'
+import type { StructuredPointerOperationRow } from './db/messages/structured-pointer-operation-store'
+import {
+  structuredPointerBatchFingerprint,
+  type StructuredPointerSubmission
+} from './structured-pointer-operation-id'
 import { structuredSessionGateFacts } from './structured-session-pointer-delivery'
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
 
@@ -84,13 +89,15 @@ function harness(options: {
   const mailbox = options.mailbox ?? 'dispatch:d1'
   const dispatchId = options.dispatchId === undefined ? 'd1' : options.dispatchId
   let journal = options.journal
+  // The session's recorded sends, as its journal reports them.
+  let submissions: StructuredPointerSubmission[] = []
   const markAsDelivered = vi.fn()
   const send: StructuredMailboxPointerHost['send'] = vi.fn(async () => ({
     kind: 'sent' as const,
     state: options.dispatchState ?? ('accepted' as const)
   }))
   const sendMock = vi.mocked(send)
-  const stored = new Map<string, unknown>()
+  const stored = new Map<string, StructuredPointerOperationRow>()
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
     hasOutstandingMailboxDelivery: (handle: string) =>
@@ -99,7 +106,7 @@ function harness(options: {
     getUndeliveredUnreadMessages: () => [{ id: 'm1', type: 'status', sequence: 3 }],
     markAsDelivered,
     getStructuredPointerOperation: (key: string) => stored.get(key),
-    putStructuredPointerOperation: (row: { mailbox_handle: string }) =>
+    putStructuredPointerOperation: (row: StructuredPointerOperationRow) =>
       stored.set(row.mailbox_handle, row),
     deleteStructuredPointerOperation: (key: string) => stored.delete(key)
   }
@@ -108,8 +115,10 @@ function harness(options: {
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: (mailboxHandle) =>
       mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
+    getCliCommand: () => 'orca-dev',
     host: {
-      readGateFacts: () => (journal === null ? null : structuredSessionGateFacts(journal)),
+      readGateFacts: async () =>
+        journal === null ? null : { ...structuredSessionGateFacts(journal), submissions },
       currentFence: () => 4,
       send
     }
@@ -121,6 +130,9 @@ function harness(options: {
     stored,
     setJournal: (next: AgentJournalRenderItem[] | null) => {
       journal = next
+    },
+    setSubmissions: (next: StructuredPointerSubmission[]) => {
+      submissions = next
     }
   }
 }
@@ -261,9 +273,10 @@ describe('structured mailbox pointer delivery', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('retries a rejected nudge on the next journal edge', async () => {
+  it('retries a rejected nudge on the next journal edge, under the same id', async () => {
     // A rejection consumes no mail and nothing else redrives this mailbox, so leaving it unparked
-    // stranded the worker until unrelated mail happened to arrive.
+    // stranded the worker until unrelated mail happened to arrive. The retry keeps the id: the host
+    // replays a recorded refusal rather than starting the agent again.
     const { delivery, send, markAsDelivered } = harness({
       journal: idleJournal(),
       dispatchState: 'rejected'
@@ -276,7 +289,141 @@ describe('structured mailbox pointer delivery', () => {
     delivery.onJournalActivity('session-1')
     await flush()
     expect(send).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[1]![0].operationId).toBe(first)
+  })
+
+  it('points again under a new id once a later send ran', async () => {
+    const { delivery, send, setSubmissions } = harness({
+      journal: idleJournal(),
+      dispatchState: 'unknown'
+    })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    const first = send.mock.calls[0]![0].operationId
+    setSubmissions([
+      { clientMessageId: first, dispatchState: 'unknown', submittedAt: Date.now() },
+      { clientMessageId: 'user-turn', dispatchState: 'accepted', submittedAt: Date.now() + 1 }
+    ])
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(2)
     expect(send.mock.calls[1]![0].operationId).not.toBe(first)
+  })
+
+  it('points once more under a new id for a send an earlier process left in doubt', async () => {
+    const { delivery, send, stored, setSubmissions } = harness({
+      journal: idleJournal(),
+      dispatchState: 'unknown'
+    })
+    stored.set('dispatch:d1', {
+      mailbox_handle: 'dispatch:d1',
+      session_id: 'session-1',
+      operation_id: 'earlier-process-op',
+      batch_fingerprint: structuredPointerBatchFingerprint('session-1', ['m1']),
+      minted_at_ms: 0
+    })
+    setSubmissions([
+      { clientMessageId: 'earlier-process-op', dispatchState: 'unknown', submittedAt: Date.now() }
+    ])
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    const reminted = send.mock.calls[0]![0].operationId
+    expect(reminted).not.toBe('earlier-process-op')
+    // Minted by this process, the new id replays from here on.
+    setSubmissions([
+      { clientMessageId: 'earlier-process-op', dispatchState: 'unknown', submittedAt: Date.now() },
+      { clientMessageId: reminted, dispatchState: 'unknown', submittedAt: Date.now() }
+    ])
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send.mock.calls[1]![0].operationId).toBe(reminted)
+  })
+
+  it('keeps replaying its own send across a clock step, and re-mints only for a rewind that ran a turn', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const { delivery, send, setSubmissions } = harness({
+        journal: idleJournal(),
+        dispatchState: 'unknown'
+      })
+      // The wall clock steps back an hour after the lane started: its own row is still its own.
+      vi.setSystemTime(Date.now() - 60 * 60 * 1000)
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      const first = send.mock.calls[0]![0].operationId
+      setSubmissions([
+        { clientMessageId: first, dispatchState: 'unknown', submittedAt: Date.now() }
+      ])
+      delivery.onJournalActivity('session-1')
+      await flush()
+      expect(send.mock.calls[1]![0].operationId).toBe(first)
+      // A rewind dropped that send from the journal, and the person's turn ran after it.
+      setSubmissions([
+        { clientMessageId: 'user-turn', dispatchState: 'accepted', submittedAt: Date.now() + 1 }
+      ])
+      delivery.onJournalActivity('session-1')
+      await flush()
+      expect(send.mock.calls[2]![0].operationId).not.toBe(first)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not read a turn from before a backward clock step as one that ran after its pointer', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const { delivery, send, setSubmissions } = harness({
+        journal: idleJournal(),
+        dispatchState: 'unknown'
+      })
+      const personTurn = {
+        clientMessageId: 'user-turn',
+        dispatchState: 'accepted' as const,
+        submittedAt: Date.now()
+      }
+      setSubmissions([personTurn])
+      vi.setSystemTime(Date.now() - 2 * 60 * 1000)
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      const first = send.mock.calls[0]![0].operationId
+      setSubmissions([
+        personTurn,
+        { clientMessageId: first, dispatchState: 'unknown', submittedAt: Date.now() }
+      ])
+      for (let edge = 0; edge < 3; edge++) {
+        delivery.onJournalActivity('session-1')
+        await flush()
+      }
+      expect(send.mock.calls.map(([input]) => input.operationId)).toEqual([
+        first,
+        first,
+        first,
+        first
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stamps a pointer whose echo arrived after the lane stopped waiting, sending nothing more', async () => {
+    const { delivery, send, markAsDelivered, stored, setSubmissions } = harness({
+      journal: idleJournal(),
+      dispatchState: 'unknown'
+    })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    const first = send.mock.calls[0]![0].operationId
+    setSubmissions([{ clientMessageId: first, dispatchState: 'pending', submittedAt: Date.now() }])
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    setSubmissions([{ clientMessageId: first, dispatchState: 'accepted', submittedAt: Date.now() }])
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(stored.has('dispatch:d1')).toBe(false)
   })
 
   it('reuses one operation id for the same batch and re-mints when it grows', async () => {
@@ -328,8 +475,9 @@ describe('forgetting one settled worker', () => {
           ? { sessionId, dispatchId: mailboxHandle.slice('dispatch:'.length) }
           : null
       },
+      getCliCommand: () => 'orca',
       host: {
-        readGateFacts: () => structuredSessionGateFacts(journal),
+        readGateFacts: async () => ({ ...structuredSessionGateFacts(journal), submissions: [] }),
         currentFence: () => 4,
         send
       }

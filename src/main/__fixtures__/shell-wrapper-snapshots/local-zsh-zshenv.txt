@@ -60,6 +60,13 @@ __orca_deferred_init() {
   else
     precmd_functions=(${precmd_functions:#__orca_deferred_init})
   fi
+  if [ -n "${ORCA_WSL_CLI_DIR:-}" ]; then
+    if [ -x "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" ]; then
+      export PATH="$ORCA_WSL_CLI_DIR${PATH:+:$PATH}"
+    else
+      printf 'Orca CLI unavailable: cannot run %s. Check WSL Windows-drive mount options.\n' "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" >&2
+    fi
+  fi
   if __orca_has_feature overlay; then
     # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
     __orca_restore_agent_teams_path() {
@@ -136,22 +143,33 @@ __orca_deferred_init() {
 
     # Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
     [[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"
-    # Why: a typed alias expands inside the shell, after pane launch prep.
-    # Why unalias inside the substitution: an alias named codex makes command -v
-    # report the alias text, and the subshell leaves the user's own alias intact.
-    # Why || : twice — zsh alone aborts inside the substitution, but every shell's
-    # assignment adopts its exit status, so an absent codex trips set -e in bash too.
-    __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
-    if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" && -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
-      # Why the function reserved word: it suppresses alias expansion of the name,
-      # which otherwise rewrites this header at parse time and aborts the whole file.
-      function codex {
-        "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
-        command codex "$@"
-      }
-    fi
-    unset __orca_codex_binary
   fi
+  # Why: a typed alias expands inside the shell, after pane launch prep.
+  # Why unalias inside the substitution: an alias named codex makes command -v
+  # report the alias text, and the subshell leaves the user's own alias intact.
+  # Why || : twice — zsh alone aborts inside the substitution, but every shell's
+  # assignment adopts its exit status, so an absent codex trips set -e in bash too.
+  __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
+  if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
+    # Why the function reserved word: it suppresses alias expansion of the name,
+    # which otherwise rewrites this header at parse time and aborts the whole file.
+    function codex {
+      # Why local: zsh's warn_create_global warns for each global a function creates.
+      local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}"
+      if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
+        "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+      fi
+      for __orca_codex_arg in "$@"; do
+        case "$__orca_codex_arg" in agents|queue|--no-daemon|--remote|--remote=*) __orca_codex_isolate=0 ;; esac
+      done
+      # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
+      if [[ "$__orca_codex_isolate" != 0 ]]; then
+        case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
+      fi
+      command codex "$@"
+    }
+  fi
+  unset __orca_codex_binary
   if [[ -n "${_orca_histfile:-}" ]]; then
     HISTFILE="$_orca_histfile"
   fi

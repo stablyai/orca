@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
-import { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -208,7 +209,7 @@ describe('a taken session id under a named operation', () => {
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-session-'))
-    store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(directory)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `deps.store` is the only member `agent.launch` reads, and a member it omits throws on call.
     setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
   })

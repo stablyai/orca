@@ -13,6 +13,7 @@ import {
 // Compatibility exports for runtime command modules that historically imported these seams from
 // filesystem-auth. The implementations remain owned by their focused modules.
 export { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+export { invalidateAuthorizedRootsCacheForRepo } from './registered-worktree-roots-scoped-invalidation'
 export { isENOENT } from './filesystem-path-containment'
 
 export const PATH_ACCESS_DENIED_MESSAGE =
@@ -183,7 +184,7 @@ async function isPathAllowedIncludingRegisteredWorktrees(
     return true
   }
 
-  if (isRegisteredWorktreePath(targetPath)) {
+  if (isRegisteredWorktreePath(targetPath, store)) {
     return true
   }
 
@@ -198,7 +199,9 @@ async function isPathAllowedIncludingRegisteredWorktrees(
     return true
   }
 
-  if (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath)) {
+  if (
+    await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath, store)
+  ) {
     return true
   }
 
@@ -206,8 +209,8 @@ async function isPathAllowedIncludingRegisteredWorktrees(
 
   // Why: linked worktrees are already git-trusted; reuse the cached root index so reads don't spawn `git worktree list` each time.
   return (
-    isRegisteredWorktreePath(targetPath) ||
-    (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath))
+    isRegisteredWorktreePath(targetPath, store) ||
+    (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath, store))
   )
 }
 

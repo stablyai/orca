@@ -40,7 +40,7 @@ import { useNotebookKernelState } from './ipynb-kernel-store'
 type KernelState = ReturnType<typeof useNotebookKernelState>
 
 function environmentLabel({ name, version }: PythonEnvironment): string {
-  return `${name} (Python ${version})`
+  return version ? `${name} (Python ${version})` : name
 }
 
 function kernelLabel({ environment, status, setup }: KernelState): string {
@@ -109,21 +109,27 @@ export function IpynbKernelToolbar({
     kernel.status === 'starting' || (kernel.setup !== null && kernel.setup.phase !== 'idle')
   // A PATH interpreter, not the selected one: that may be the very .venv being (re)created.
   const venvBase = environments?.path[0]
+  const untrustedHint = translate(
+    'auto.components.editor.IpynbViewer.trustFirst',
+    'Run a cell to trust this notebook first'
+  )
 
   useEffect(() => {
     if (!pickerOpen) {
       return
     }
     let current = true
-    void window.api.notebook.listPythonEnvironments({ filePath, rootPath }).then((found) => {
-      if (current) {
-        setEnvironments(found)
-      }
-    })
+    void window.api.notebook
+      .listPythonEnvironments({ filePath, rootPath, runWorkspaceInterpreters: kernel.trusted })
+      .then((found) => {
+        if (current) {
+          setEnvironments(found)
+        }
+      })
     return () => {
       current = false
     }
-  }, [filePath, pickerOpen, rootPath])
+  }, [filePath, kernel.trusted, pickerOpen, rootPath])
 
   const choose = (path: string): void => {
     const environment = [...(environments?.workspace ?? []), ...(environments?.path ?? [])].find(
@@ -146,7 +152,9 @@ export function IpynbKernelToolbar({
       ) : null}
       <IpynbToolbarButton
         label={translate('auto.components.editor.IpynbViewer.restart', 'Restart kernel')}
-        disabled={!kernel.environment || settling}
+        // No kernel can start before trust, so a restart there would silently do nothing.
+        disabled={!kernel.environment || !kernel.trusted || settling}
+        disabledReason={kernel.environment && !kernel.trusted ? untrustedHint : undefined}
         onClick={() => restartKernel(filePath)}
       >
         <RotateCcw />
@@ -220,8 +228,9 @@ export function IpynbKernelToolbar({
             <FolderOpen />
             {translate('auto.components.editor.IpynbViewer.browsePython', 'Browse for Python…')}
           </DropdownMenuItem>
+          {/* Why trusted: it reuses an existing .venv, running a Python the repo may have shipped. */}
           <DropdownMenuItem
-            disabled={!venvBase}
+            disabled={!venvBase || !kernel.trusted}
             onSelect={() => {
               if (venvBase) {
                 offerVirtualEnvironment(filePath, venvBase)
@@ -229,10 +238,17 @@ export function IpynbKernelToolbar({
             }}
           >
             <Plus />
-            {translate(
-              'auto.components.editor.IpynbViewer.createVenvItem',
-              'Create virtual environment…'
-            )}
+            <span className="flex min-w-0 flex-col">
+              <span>
+                {translate(
+                  'auto.components.editor.IpynbViewer.createVenvItem',
+                  'Create virtual environment…'
+                )}
+              </span>
+              {venvBase && !kernel.trusted ? (
+                <span className="text-xs text-muted-foreground">{untrustedHint}</span>
+              ) : null}
+            </span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

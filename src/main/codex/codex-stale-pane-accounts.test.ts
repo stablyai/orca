@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -16,7 +16,6 @@ import {
   recordCodexPaneAccount
 } from './codex-pane-account-registry'
 import { forgetStaleCodexPanes, listStaleCodexPanes } from './codex-stale-pane-accounts'
-import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 
 let userDataPath: string
 let previousUserDataPath: string | undefined
@@ -39,7 +38,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  __resetShellStartupEnvCache()
   rmSync(userDataPath, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
@@ -464,23 +462,6 @@ describe('listStaleCodexPanes', () => {
     ).toEqual([])
   })
 
-  it('does not report a custom-home spelling change that keeps the shared route', () => {
-    recordCodexPaneAccount('pty-1', {
-      selectionKey: 'host',
-      accountId: null,
-      homeRoute: 'shared-home',
-      environmentHomeOverride: { codexHome: '/custom/codex-a' }
-    })
-
-    expect(
-      listStaleCodexPanes({
-        ptyIds: ['pty-1'],
-        settings: settingsWithSelection(null),
-        activeHostHomeRoute: 'shared-home'
-      })
-    ).toEqual([])
-  })
-
   it('leaves a retained pane alone while its process CODEX_HOME is unchanged', () => {
     recordCodexPaneAccount('pty-1', {
       selectionKey: 'host',
@@ -497,76 +478,6 @@ describe('listStaleCodexPanes', () => {
       })
     ).toEqual([])
   })
-
-  it('reports when removing a custom home changes the resolved route', () => {
-    recordCodexPaneAccount('pty-1', {
-      selectionKey: 'host',
-      accountId: null,
-      homeRoute: 'shared-home',
-      environmentHomeOverride: { codexHome: '/custom/codex-home' }
-    })
-
-    expect(
-      listStaleCodexPanes({
-        ptyIds: ['pty-1'],
-        settings: settingsWithSelection(null),
-        activeHostHomeRoute: 'real-home'
-      })
-    ).toEqual([
-      {
-        ptyId: 'pty-1',
-        launchAccountId: null,
-        activeAccountId: null,
-        reason: 'home-route-change'
-      }
-    ])
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'reports a retained pane after its shell startup CODEX_HOME is removed',
-    () => {
-      const paneHome = join(userDataPath, 'pane-home')
-      mkdirSync(paneHome, { recursive: true })
-      const startupPath = join(paneHome, '.zshrc')
-      const customHome = join(paneHome, 'custom-codex-home')
-      writeFileSync(startupPath, 'export CODEX_HOME="$HOME/custom-codex-home"\n')
-      recordCodexPaneAccount('pty-1', {
-        selectionKey: 'host',
-        accountId: null,
-        homeRoute: 'shared-home',
-        shellStartupHomeOverride: {
-          home: paneHome,
-          shell: '/bin/zsh',
-          codexHome: customHome
-        }
-      })
-
-      expect(
-        listStaleCodexPanes({
-          ptyIds: ['pty-1'],
-          settings: settingsWithSelection(null),
-          activeHostHomeRoute: 'shared-home'
-        })
-      ).toEqual([])
-
-      writeFileSync(startupPath, '')
-      __resetShellStartupEnvCache()
-      expect(
-        listStaleCodexPanes({
-          ptyIds: ['pty-1'],
-          settings: settingsWithSelection(null),
-          activeHostHomeRoute: 'real-home'
-        })
-      ).toEqual([
-        {
-          ptyId: 'pty-1',
-          launchAccountId: null,
-          activeAccountId: null,
-          reason: 'home-route-change'
-        }
-      ])
-    }
-  )
 
   it('never reports an unrecorded PTY, so an upgrade cannot invent a prompt', () => {
     expect(

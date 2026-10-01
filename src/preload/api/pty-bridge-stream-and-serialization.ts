@@ -120,6 +120,11 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.on('pty:clearBuffer:request', listener)
     return () => ipcRenderer.removeListener('pty:clearBuffer:request', listener)
   },
+  onResetInputModesRequest: (callback: (data: { ptyId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) => callback(data)
+    ipcRenderer.on('pty:resetInputModes:request', listener)
+    return () => ipcRenderer.removeListener('pty:resetInputModes:request', listener)
+  },
   sendSerializedBuffer: (
     requestId: string,
     snapshot: {

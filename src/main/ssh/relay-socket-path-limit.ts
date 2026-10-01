@@ -11,19 +11,13 @@
  */
 import { createHash } from 'node:crypto'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
-
-/**
- * `sizeof(sun_path)` per remote OS, including the terminating NUL: 108 on Linux,
- * 104 on macOS/BSD. Compared against byte length, not character count — a non-ASCII
- * `$HOME` costs more bytes than characters.
- */
-const SUN_PATH_SIZE: Record<'linux' | 'darwin', number> = { linux: 108, darwin: 104 }
+import { unixSocketPathByteLimit } from '../../shared/unix-socket-path-limit'
 
 export function remoteUnixSocketPathByteLimit(host: RemoteHostPlatform): number | null {
   if (isWindowsRemoteHost(host)) {
     return null
   }
-  return SUN_PATH_SIZE[host.os === 'darwin' ? 'darwin' : 'linux'] - 1
+  return unixSocketPathByteLimit(host.os === 'darwin' ? 'darwin' : 'linux')
 }
 
 export function remoteSocketPathFitsLimit(host: RemoteHostPlatform, sockPath: string): boolean {

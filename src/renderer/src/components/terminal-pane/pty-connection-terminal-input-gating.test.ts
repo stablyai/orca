@@ -191,7 +191,7 @@ describe('connectPanePty', () => {
     }
     ;(onDataHandler as (data: string) => void)('a')
 
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   it('uses the current worktree tab for Codex stale fallback without enumerating all worktrees', async () => {
@@ -234,7 +234,7 @@ describe('connectPanePty', () => {
     }
     ;(onDataHandler as (data: string) => void)('a')
 
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   it('blocks stale Codex fallback input from the current worktree tab without enumerating all worktrees', async () => {
@@ -313,7 +313,7 @@ describe('connectPanePty', () => {
     }
     ;(onDataHandler as (data: string) => void)('a')
 
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   it('restores input through the tab fallback when the dismissed pane has no live PTY binding', async () => {
@@ -347,7 +347,7 @@ describe('connectPanePty', () => {
     }
     ;(onDataHandler as (data: string) => void)('a')
 
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   it('keeps a dismissed split pane typing while a sibling still holds the prompt', async () => {
@@ -389,7 +389,7 @@ describe('connectPanePty', () => {
     ;(onDataHandler as (data: string) => void)('a')
 
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('pty-dismissed')
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   it('keeps blocking a pane with its own unanswered notice next to a dismissed sibling', async () => {
@@ -466,7 +466,7 @@ describe('connectPanePty', () => {
     ;(onDataHandler as (data: string) => void)('a')
 
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('pty-plain-shell')
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   it('keeps blocking input on a pane whose restart is requested but not yet run', async () => {
@@ -782,7 +782,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     vi.advanceTimersByTime(500)
 
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
     expect(transport.sendInput).not.toHaveBeenCalled()
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
   })
@@ -843,7 +843,7 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalledWith('\r')
     // The terminator disarmed it, so the next real command reaches the shell.
     sendTerminalInputThroughPane(pane, 'ls\r')
-    expect(transport.sendInput).toHaveBeenCalledWith('ls\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('ls\r', 'query-reply')
     _resetTerminalPaneRecoveryForTests()
   })
 
@@ -867,7 +867,7 @@ describe('connectPanePty', () => {
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 2)
     await flushAsyncTicks()
 
-    expect(transport.sendInput).toHaveBeenCalledWith('x')
+    expect(transport.sendInput).toHaveBeenCalledWith('x', 'query-reply')
     expect(pane.terminal.write).toHaveBeenCalledWith('', expect.any(Function))
     expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
     binding.dispose()
@@ -892,7 +892,7 @@ describe('connectPanePty', () => {
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 2)
     await flushAsyncTicks()
 
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03')
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
     expect(pane.terminal.write).not.toHaveBeenCalledWith('', expect.any(Function))
     binding.dispose()
   })

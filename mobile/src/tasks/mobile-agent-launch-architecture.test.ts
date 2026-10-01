@@ -2,7 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
 import { OrcaRuntimeRpcServer } from '../../../src/main/runtime/runtime-rpc'
 import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import type { AuthenticatedMobileSocket } from '../../../src/main/runtime/rpc/mobile-socket-wiring'
@@ -37,7 +38,7 @@ beforeEach(async () => {
   createStructuredSession.mockReset()
   createStructuredSession.mockResolvedValue({ ok: true, value: { sessionId: 'session-1' } })
   directory = await mkdtemp(join(tmpdir(), 'orca-launch-architecture-'))
-  store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(directory)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads deps.store; session creation is injected above.
   setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
 })
@@ -241,7 +242,7 @@ describe('mobile launch retry authority', () => {
     }
     const first = await dispatcher.dispatch(request)
     expect(first.ok).toBe(true)
-    store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(directory)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launch admission reads only deps.store from the installed host.
     setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
     await expect(
@@ -291,7 +292,7 @@ describe('mobile launch retry authority', () => {
         message: 'Branch "otter" already exists locally.'
       }
     })
-    store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(directory)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launch admission reads only deps.store from the installed host.
     setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
     await expect(dispatcher.dispatch(request)).resolves.toMatchObject({

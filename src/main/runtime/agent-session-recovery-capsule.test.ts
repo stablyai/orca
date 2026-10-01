@@ -342,6 +342,41 @@ describe('durable restart offers', () => {
     expect(JSON.parse(await readFile(filePath, 'utf8')).failed).toEqual([readable])
   })
 
+  it('keeps refusal details beside the code, read back against that code', async () => {
+    const readable = {
+      marker: marker(),
+      failedAt: NOW,
+      outcome: 'refused',
+      reason: 'agent_session_conflict',
+      latestPrompt: '',
+      latestUserItemId: null
+    }
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 2,
+        entries: [],
+        failed: [
+          { ...readable, details: { reason: 'claimConflicted', note: 'dropped' } },
+          // An unreleased build wrote a cause here; it still parses, naming nothing.
+          { ...readable, marker: marker({ sessionId: 'older' }), cause: 'claimConflicted' },
+          // A reason the code does not list is not this code's.
+          {
+            ...readable,
+            marker: marker({ sessionId: 'foreign' }),
+            details: { reason: 'promptGone' }
+          }
+        ]
+      })
+    )
+
+    expect(await capsule.listFailed(NOW)).toEqual([
+      { ...readable, details: { reason: 'claimConflicted' } },
+      { ...readable, marker: marker({ sessionId: 'older' }) },
+      { ...readable, marker: marker({ sessionId: 'foreign' }) }
+    ])
+  })
+
   it('reads a malformed failure list as no failures', async () => {
     await writeFile(
       filePath,

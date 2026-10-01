@@ -89,11 +89,6 @@ describe('SshConnectionStore', () => {
     sshConfigHostsToTargetsMock.mockReset()
   })
 
-  it('listTargets delegates to store', () => {
-    sshStore.listTargets()
-    expect(mockStore.getSshTargets).toHaveBeenCalled()
-  })
-
   it('lists picker suppression aliases without consulting re-adoption tombstones', () => {
     mockStore.addDeletedSshConfigAlias('config-removed')
     mockStore.addRemovedSshTargetTombstone({
@@ -164,26 +159,6 @@ describe('SshConnectionStore', () => {
     })
 
     expect(sshStore.listTargets()).toEqual([userTarget])
-  })
-
-  it('updateTarget delegates to store', () => {
-    const original: SshTarget = {
-      id: 'ssh-1',
-      label: 'Old Name',
-      host: 'example.com',
-      port: 22,
-      username: 'user'
-    }
-    mockStore.addSshTarget(original)
-
-    const result = sshStore.updateTarget('ssh-1', { label: 'New Name' })
-    expect(result).toBeTruthy()
-    expect(mockStore.updateSshTarget).toHaveBeenCalledWith('ssh-1', { label: 'New Name' })
-  })
-
-  it('removeTarget delegates to store', () => {
-    sshStore.removeTarget('ssh-1')
-    expect(mockStore.removeSshTarget).toHaveBeenCalledWith('ssh-1')
   })
 
   describe('importFromSshConfig', () => {

@@ -13,6 +13,7 @@ import {
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
 import { listRuntimeEnvironmentsForAllHostLoad } from '../runtime-catalog-hosts'
+import { reuseEqualRecordMap } from '../slices/repo-identity-reconcile'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
 
 export function createFolderWorkspaceCatalogActions(
@@ -47,11 +48,12 @@ export function createFolderWorkspaceCatalogActions(
             current.folderWorkspaces,
             current.projectGroups
           )
+          if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
+            return current
+          }
           return {
             folderWorkspaces,
-            ...(arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
-              ? {}
-              : { folderWorkspacePathStatuses: {} })
+            folderWorkspacePathStatuses: {}
           }
         })
       } catch (err) {
@@ -85,11 +87,12 @@ export function createFolderWorkspaceCatalogActions(
             current.folderWorkspaces,
             current.projectGroups
           )
+          if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
+            return current
+          }
           return {
             folderWorkspaces,
-            ...(arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
-              ? {}
-              : { folderWorkspacePathStatuses: {} })
+            folderWorkspacePathStatuses: {}
           }
         })
       }
@@ -130,12 +133,22 @@ export function createFolderWorkspaceCatalogActions(
         })
       )
       if (!failed) {
-        set((s) => ({
-          restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
+        set((s) => {
+          // Why reuseEqualRecordMap: the cleanup rebuilds the record every refresh, and
+          // reference-equality readers (live dashboard selector, popout bridge) re-run on a
+          // fresh-but-equal identity, so the equal case must keep the previous one.
+          const restoredRuntimeHostIdByWorkspaceSessionKey = reuseEqualRecordMap(
             s.restoredRuntimeHostIdByWorkspaceSessionKey,
-            s
+            clearRestoredFolderWorkspaceSessionOwners(
+              s.restoredRuntimeHostIdByWorkspaceSessionKey,
+              s
+            )
           )
-        }))
+          return restoredRuntimeHostIdByWorkspaceSessionKey ===
+            s.restoredRuntimeHostIdByWorkspaceSessionKey
+            ? s
+            : { restoredRuntimeHostIdByWorkspaceSessionKey }
+        })
       }
     }
   }

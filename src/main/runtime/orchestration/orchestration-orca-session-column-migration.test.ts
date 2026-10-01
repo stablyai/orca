@@ -11,6 +11,7 @@ import {
 import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
+import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './db/pane-key-match'
 import {
   currentRunCoordinatorOrcaSessionId,
@@ -18,8 +19,8 @@ import {
 } from './db/runs/run-coordinator-orca-session'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 
-const SESSION_ID = '5f0c1d9e-2b7a-4c3e-8f61-0a9d2e7b4c11'
-const CHAT_SESSION_ID = '9a4e7c1b-3d2f-4b6a-8e5c-7f1d0b2a6c93'
+const SESSION_ID = testOrcaSessionId('5f0c1d9e-2b7a-4c3e-8f61-0a9d2e7b4c11')
+const CHAT_SESSION_ID = testOrcaSessionId('9a4e7c1b-3d2f-4b6a-8e5c-7f1d0b2a6c93')
 const CHAT_SESSION_ADDRESS = formatOrcaSessionAddress(CHAT_SESSION_ID)
 const ORCA_SESSION_ID_COLUMNS = [
   'assignee_orca_session_id',
@@ -47,6 +48,25 @@ const HANDLE_ONLY_COORDINATOR_TRIGGERS_SQL = `
   BEGIN
     INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
     VALUES (NEW.id, NEW.coordinator_handle);
+  END;`
+
+// The mail routing trigger as main recreated it on every open at v41 and before: handle-only.
+const HANDLE_ONLY_MAIL_ROUTING_TRIGGER_SQL = `
+  CREATE TRIGGER trg_messages_route_coordinator_mail
+  AFTER INSERT ON messages
+  WHEN NEW.read = 0 AND NEW.delivery_contract = 'current_delivery'
+    AND EXISTS (SELECT 1 FROM runs WHERE runs.id = NEW.run_id AND runs.legacy = 0)
+    AND EXISTS (
+      SELECT 1 FROM run_coordinator_handles
+      WHERE run_id = NEW.run_id AND terminal_handle = NEW.to_handle
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM dispatch_contexts
+      WHERE run_id = NEW.run_id AND assignee_handle = NEW.to_handle
+        AND status IN ('pending', 'dispatched')
+    )
+  BEGIN
+    UPDATE messages SET to_handle = 'run:' || NEW.run_id WHERE sequence = NEW.sequence;
   END;`
 
 const V41_RUN_COLUMNS =
@@ -117,11 +137,13 @@ function stripOrcaSessionSchema(path: string, version: number): void {
     DROP INDEX idx_dispatch_assignee_orca_session_id;
     DROP TRIGGER trg_runs_remember_coordinator_insert;
     DROP TRIGGER trg_runs_remember_coordinator_update;
+    DROP TRIGGER trg_messages_route_coordinator_mail;
     ALTER TABLE runs DROP COLUMN coordinator_orca_session_id;
     ALTER TABLE runs DROP COLUMN coordinator_orca_session_id_generation;
     ALTER TABLE dispatch_contexts DROP COLUMN assignee_orca_session_id;
     ALTER TABLE dispatch_contexts DROP COLUMN creator_orca_session_id;
     ${HANDLE_ONLY_COORDINATOR_TRIGGERS_SQL}
+    ${HANDLE_ONLY_MAIL_ROUTING_TRIGGER_SQL}
   `)
   raw.pragma(`user_version = ${version}`)
   raw.close()
@@ -419,8 +441,11 @@ describe('orchestration Orca session id column migration', () => {
   it('fills structured-worker rows written after the stamp reached v42 on the next open', () => {
     const path = tempDbPath()
     const first = new OrchestrationDb(path)
-    // No writer records an Orca session id yet, which is also the shape a binary rolled back past v42 writes.
     const rows = seedStructuredAndPtyRows(first)
+    // The shape a binary rolled back past v42 writes: its INSERTs name no Orca session id column.
+    first.db.exec(
+      'UPDATE dispatch_contexts SET assignee_orca_session_id = NULL, creator_orca_session_id = NULL; UPDATE runs SET coordinator_orca_session_id = NULL'
+    )
     expect(
       first.getDispatchContextById(rows.structuredDispatchId)?.assignee_orca_session_id
     ).toBeNull()

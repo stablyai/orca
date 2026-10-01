@@ -20,21 +20,34 @@ import {
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from '../ipc/worktree-logic'
-import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
-} from '../local-worktree-filesystem'
+import { cleanupLocalOrphanedWorktreeDirectory } from '../local-orphaned-worktree-cleanup'
 import { recoverLocalWindowsWorktreeRemoval } from '../local-worktree-removal-recovery'
-import {
-  canSafelyRemoveOrphanedWorktreeDirectory,
-  findRegisteredDeletableWorktree
-} from '../worktree-removal-safety'
+import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
+import {
+  removesInBackground,
+  startBackgroundWorktreeRemoval,
+  waitForPendingWorktreeRemoval
+} from '../worktree-background-removal'
+import { runSerializedWorktreeRemovalAcceptance } from '../worktree-removal-acceptance-queue'
 
-export async function removeRuntimeRegisteredLocalWorktree(args: {
+/** Runs after the previous same-repo removal was accepted; see runSerializedWorktreeRemovalAcceptance. */
+export function removeRuntimeRegisteredLocalWorktree(
+  args: Parameters<typeof acceptRuntimeRegisteredLocalWorktreeRemoval>[0]
+): Promise<RemoveWorktreeResult & { warning?: string }> {
+  return runSerializedWorktreeRemovalAcceptance(
+    args.repo.path,
+    async (): Promise<RemoveWorktreeResult & { warning?: string }> =>
+      // Why: another client's removal of this worktree may have been accepted during the wait.
+      waitForPendingWorktreeRemoval(args.target.id)
+        ? { removing: true }
+        : acceptRuntimeRegisteredLocalWorktreeRemoval(args)
+  )
+}
+
+async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   repo: Repo
   target: RuntimeWorktreeRemovalTarget
   registeredWorktree: GitWorktreeInfo
@@ -61,6 +74,9 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
     // Why: re-read after the archive hook, which can move the branch out from under the pre-hook row.
     fallbackHead: string | undefined
   ) => void
+  /** Fired when Git finished, not on acceptance. */
+  onRemoved: () => void
+  publish: () => void
 }): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, registeredWorktree, localOptions } = args
   const canonicalPath = registeredWorktree.path
@@ -128,20 +144,81 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
     }
   }
 
-  let removalResult: RemoveWorktreeResult | undefined
   const gate = await args.acquireWatcherRemoval(canonicalPath)
-  let completed = false
+  let accepted = false
   try {
     await args.stopPtys()
     if (linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
     }
+    accepted = true
+  } finally {
+    if (!accepted) {
+      await gate.finish(false)
+    }
+  }
+  const acceptedFields = {
+    ...(archiveHookOverride ? { archiveHookOverride } : {}),
+    ...(warning ? { warning } : {})
+  }
+  if (!removesInBackground(canonicalPath, localOptions)) {
+    const result = await finishRuntimeLocalWorktreeRemoval(args, refreshed, gate)
+    args.publish()
+    return { ...result, ...acceptedFields }
+  }
+  // Why detached: every refusal above already ran, and Git's 20-35 s delete must finish even when the
+  // request that asked for it times out; other views read the host's `removing` marker meanwhile.
+  void startBackgroundWorktreeRemoval({
+    removal: {
+      worktreeId: args.target.id,
+      repoId: repo.id,
+      repoPath: repo.path,
+      worktree: refreshed,
+      deleteBranch: args.deleteBranch,
+      force: args.force
+    },
+    run: async (stopSignal) => {
+      const result = await finishRuntimeLocalWorktreeRemoval(args, refreshed, gate, stopSignal)
+      args.onRemoved()
+      return result
+    },
+    publish: () => args.publish()
+  })
+  return { removing: true, ...acceptedFields }
+}
+
+export type RuntimeLocalWorktreeRemovalFinishArgs = Pick<
+  Parameters<typeof acceptRuntimeRegisteredLocalWorktreeRemoval>[0],
+  | 'repo'
+  | 'removedPushTarget'
+  | 'store'
+  | 'localOptions'
+  | 'force'
+  | 'deleteBranch'
+  | 'closeWatchers'
+  | 'preserveBranchHead'
+  | 'finishRemoval'
+> & { target: { id: string } }
+
+/** Git's delete and everything after it; the refusals and teardown before it already ran. */
+export async function finishRuntimeLocalWorktreeRemoval(
+  args: RuntimeLocalWorktreeRemovalFinishArgs,
+  refreshed: GitWorktreeInfo,
+  gate: { finish: (removed: boolean) => Promise<void> },
+  checkoutDeleteSignal?: AbortSignal
+): Promise<RemoveWorktreeResult> {
+  const { repo, localOptions } = args
+  const canonicalPath = refreshed.path
+  let removalResult: RemoveWorktreeResult | undefined
+  let completed = false
+  try {
     try {
       removalResult = args.preserveBranchHead(
         await removeWorktree(repo.path, canonicalPath, args.force, {
           ...(!args.deleteBranch ? { deleteBranch: args.deleteBranch } : {}),
           knownRemovedWorktree: refreshed,
-          ...localOptions
+          ...localOptions,
+          ...(checkoutDeleteSignal ? { checkoutDeleteSignal } : {})
         }),
         refreshed.head
       )
@@ -160,17 +237,19 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
         removalResult = recovered
         completed = true
       } else if (isOrphanedWorktreeError(error)) {
-        await cleanupOrphanedDirectory(repo, canonicalPath, localOptions, args.closeWatchers)
+        await cleanupLocalOrphanedWorktreeDirectory(
+          repo.path,
+          canonicalPath,
+          localOptions,
+          args.closeWatchers
+        )
         await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path, ...localOptions }).catch(
           () => {}
         )
-        await cleanupPushTarget(args)
+        await cleanupRemovedWorktreePushTarget(args)
         args.finishRemoval(undefined, false, refreshed.head)
         completed = true
-        return {
-          ...(archiveHookOverride ? { archiveHookOverride } : {}),
-          ...(warning ? { warning } : {})
-        }
+        return {}
       } else {
         throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
       }
@@ -181,40 +260,13 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   } finally {
     await gate.finish(completed)
   }
-  await cleanupPushTarget(args)
+  await cleanupRemovedWorktreePushTarget(args)
   args.finishRemoval(removalResult, true, refreshed.head)
-  return {
-    ...removalResult,
-    ...(archiveHookOverride ? { archiveHookOverride } : {}),
-    ...(warning ? { warning } : {})
-  }
+  return removalResult ?? {}
 }
 
-async function cleanupOrphanedDirectory(
-  repo: Repo,
-  path: string,
-  options: LocalProjectWorktreeGitOptions,
-  closeWatchers: (path: string) => Promise<void>
-): Promise<void> {
-  const access = getLocalWorktreePathAccess(options)
-  if (
-    await canSafelyRemoveOrphanedWorktreeDirectory(
-      toLocalWorktreeRuntimePath(path, options),
-      toLocalWorktreeRuntimePath(repo.path, options),
-      CLIENT_REMOVAL_HOME,
-      access.statPath,
-      access.readPath
-    )
-  ) {
-    await closeWatchers(path)
-    await removeLocalWorktreePath(path, options).catch(() => {})
-  } else {
-    console.warn(`[worktrees] Refusing recursive cleanup for unproven worktree directory: ${path}`)
-  }
-}
-
-async function cleanupPushTarget(
-  args: Parameters<typeof removeRuntimeRegisteredLocalWorktree>[0]
+export async function cleanupRemovedWorktreePushTarget(
+  args: RuntimeLocalWorktreeRemovalFinishArgs
 ): Promise<void> {
   await cleanupUnusedWorktreePushTargetRemote(
     args.repo.path,

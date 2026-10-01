@@ -20,9 +20,16 @@ const prototype = OrcaRuntimeWithAdoptTerminalOrphansFromInventory.prototype
 const getLivePaneKey = prototype.getLiveTerminalPaneKey
 const resolveActiveTerminal = prototype.resolveActiveTerminal
 
-function installRecord(lease: { runtimeKind: string; claimStatus: string } | null): void {
+function installRecord(
+  lease: { runtimeKind: string; claimStatus: string } | null,
+  tabListed = false
+): void {
   hostRef.current = lease
     ? {
+        getPersistedVisibleSessionTabIndex: () => ({
+          present: true,
+          sessionIds: tabListed ? [SESSION_ID] : []
+        }),
         deps: {
           store: {
             getRecord: () => ({
@@ -73,10 +80,19 @@ describe('bare-handle direct mail to a structured session', () => {
     )
   })
 
-  it('withholds the pane key when the session is not proven live', () => {
-    // The PTY branch is connected-gated so mail is never routed to a corpse; so is this one.
+  it('routes to a worker at rest, whose agent the mail starts', () => {
+    // Released by the idle sweep with its chat tab still listed: owned, so mail reaches it.
     const handle = registerWorker()
-    installRecord({ runtimeKind: 'native', claimStatus: 'reserved' })
+    installRecord({ runtimeKind: 'native', claimStatus: 'released' }, true)
+    expect(getLivePaneKey.call(paneKeyStub, handle)).toBe(
+      structuredWorkerIdentities.get(handle)!.paneKey
+    )
+  })
+
+  it('withholds the pane key from a retired worker: released, with its tab gone', () => {
+    // Mail is never routed to a worker this runtime no longer owns.
+    const handle = registerWorker()
+    installRecord({ runtimeKind: 'native', claimStatus: 'released' }, false)
     expect(getLivePaneKey.call(paneKeyStub, handle)).toBeNull()
   })
 

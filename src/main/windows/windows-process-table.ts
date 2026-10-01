@@ -82,6 +82,7 @@ type WindowsProcessTreeModule = {
    * prebuilt `.node` in place.
    */
   supportedProcessDataFlags?: number
+  getProcessCreationTime?: (pid: number) => number | undefined
   getAllProcesses: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags?: number
@@ -112,6 +113,7 @@ let requireNative: NativeRequire = requireFromMain
  * binding straight to the addon drops a duplicate rather than losing a guard.
  */
 type WindowsProcessTreeAddon = {
+  getProcessCreationTime?: (pid: number) => number | undefined
   getProcessList: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags: number
@@ -168,6 +170,13 @@ function stagedRelayAddonIsUnpatched(): boolean {
   }
 }
 
+/**
+ * Once per process, for the main and relay processes whose console is real. The
+ * daemon's stderr is destroyed once it reports ready, so it logs this capability
+ * to daemonLog at startup instead (daemon-entry.ts).
+ */
+let warnedAboutCimFallback = false
+
 let cachedModule: WindowsProcessTreeModule | null | undefined
 let moduleLoader: () => WindowsProcessTreeModule | null = loadWindowsProcessTree
 let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
@@ -177,6 +186,7 @@ function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
   return {
     ProcessDataFlag: PROCESS_DATA_FLAG,
     supportedProcessDataFlags: addon.supportedProcessDataFlags,
+    getProcessCreationTime: addon.getProcessCreationTime,
     getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
   }
 }
@@ -293,6 +303,7 @@ let nativeReadGate: Promise<unknown> = Promise.resolve()
 
 function resetNativeReaderState(): void {
   nativeReaderEpoch += 1
+  warnedAboutCimFallback = false
   unreturnedReads.clear()
   // Chain, never replace. Dropping the old chain lets a waiter still holding it
   // run against a read queued on the new one -- two concurrent calls into one
@@ -367,6 +378,12 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
       // never silently start forking shells at the caller's poll rate. Absence
       // is the one condition that can never resolve itself — see
       // docs/reference/windows-process-enumeration.md.
+      if (!warnedAboutCimFallback) {
+        warnedAboutCimFallback = true
+        console.warn(
+          '[windows-process-table] no native binding; falling back to a powershell.exe CIM scan at each caller poll. See docs/reference/windows-process-enumeration.md.'
+        )
+      }
       return projection.cimFallback()
     }
     // Reject rather than resolve empty: an empty table is a claim that nothing
@@ -526,6 +543,19 @@ export function isWindowsProcessStartTimeAvailable(): boolean {
     native !== null &&
     ((native.supportedProcessDataFlags ?? 0) & PROCESS_DATA_FLAG.CreationTime) !== 0
   )
+}
+
+/** Fresh identity for synchronous profile admission; opens one PID without taking a table snapshot. */
+export function readWindowsProcessCreationTime(pid: number): number | null {
+  if (process.platform !== 'win32' || !Number.isSafeInteger(pid) || pid <= 0 || pid > 0xffffffff) {
+    return null
+  }
+  try {
+    const value = moduleLoader()?.getProcessCreationTime?.(pid)
+    return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null
+  } catch {
+    return null
+  }
 }
 
 function resetSnapshotReaders(): void {

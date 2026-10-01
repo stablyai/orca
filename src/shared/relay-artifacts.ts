@@ -47,11 +47,13 @@ export type RelayArtifact = {
 
 /** The bare Windows process-table addon; see docs/reference/windows-process-enumeration.md. */
 export const RELAY_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
+export const RELAY_OPENCODE_SQLITE_READER_FILENAME = 'opencode-sqlite-reader.cjs'
 
 export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   { filename: 'relay.js' },
   { filename: 'relay-watcher.js', daemonServiceChild: true },
   { filename: 'relay-ai-vault-service.js', daemonServiceChild: true },
+  { filename: RELAY_OPENCODE_SQLITE_READER_FILENAME },
   { filename: 'managed-hook-runtime.js' },
   // Forked by the AI Vault title reader; without it a relay answers every WSL
   // title request with no title and no error.

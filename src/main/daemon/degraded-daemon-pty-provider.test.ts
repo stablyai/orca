@@ -50,6 +50,7 @@ function createProvider(
     getCwd: vi.fn(async () => ''),
     getInitialCwd: vi.fn(async () => ''),
     clearBuffer: vi.fn(async () => {}),
+    resetInputModes: vi.fn(async () => {}),
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),

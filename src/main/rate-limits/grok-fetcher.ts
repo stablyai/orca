@@ -109,12 +109,11 @@ function usageScalars(config: GrokBillingConfig): (GrokMoneyVal | undefined)[] {
   ]
 }
 
-// Why: proto3 JSON drops default zeros, so an omitted percent can mean zero —
-// but only an explicitly-emitted zero proves this encoder keeps them. #15740
-// ships `onDemandUsed: {val: 0}`, so there the omission means "not reported"
-// and must never render as 0%. Non-zero money fields prove nothing either way,
-// so #9214/#9219 accounts that carry only those keep their genuine 0%.
-function emitsExplicitZeroScalar(config: GrokBillingConfig): boolean {
+function omittedPercentIsUnreported(config: GrokBillingConfig): boolean {
+  // A strict zero cap rejects numeric prefixes like "0invalid" accepted by parseMoneyVal.
+  if (parseMoneyVal(config.onDemandCap) === 0 && Number(config.onDemandCap?.val) === 0) {
+    return [config.onDemandUsed, config.used].some((value) => (parseMoneyVal(value) ?? 0) > 0)
+  }
   return usageScalars(config).some((value) => parseMoneyVal(value) === 0)
 }
 
@@ -130,10 +129,8 @@ function resolveWeeklyPercent(config: GrokBillingConfig): number | null {
   if (reported !== undefined) {
     return null
   }
-  // Why: infer the dropped zero only when nothing else in the payload speaks
-  // for consumption — an explicit zero proves the encoder keeps defaults, and a
-  // computable budget pair is a real monthly number this must not shadow.
-  if (emitsExplicitZeroScalar(config) || mapMonthlyUsage(config) !== null) {
+  // A computable monthly budget must not be relabelled as weekly zero usage.
+  if (omittedPercentIsUnreported(config) || mapMonthlyUsage(config) !== null) {
     return null
   }
   return hasConfirmedWeeklyPeriod(config) ? 0 : null

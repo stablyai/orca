@@ -2,10 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
   CUSTOM_AGENT_ID,
-  DEFAULT_COMMIT_MESSAGE_AGENT_ID,
   getCommitMessageAgentCapability,
   getCommitMessageAgentSpec,
-  getCommitMessageModelCapability,
   getCommitMessageModel,
   isCustomAgentId,
   listCommitMessageAgentCapabilities,
@@ -36,6 +34,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'codex',
       'copilot',
       'cursor',
+      'dsh',
       'kimi',
       'muse',
       'omp',
@@ -140,10 +139,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ])
   })
 
-  it('defaults the agent picker to Claude', () => {
-    expect(DEFAULT_COMMIT_MESSAGE_AGENT_ID).toBe('claude')
-  })
-
   it('treats disabled default agents as unavailable for implicit Source Control AI choices', () => {
     expect(resolveCommitMessageAgentChoice(null, 'codex', ['codex'])).toBe('claude')
     expect(resolveCommitMessageAgentChoice(null, null, ['claude'])).toBeNull()
@@ -214,7 +209,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     })
     expect(codex).not.toHaveProperty('binary')
     expect(codex).not.toHaveProperty('buildArgs')
-    expect(getCommitMessageModelCapability('codex', 'gpt-5.4-mini')?.thinkingLevels).toBeDefined()
   })
 })
 

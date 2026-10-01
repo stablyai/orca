@@ -161,6 +161,19 @@ describe('claude structured launch resolution', () => {
     expect(launch.options.sessionId).toBeUndefined()
   })
 
+  it('names the child by the Orca session id, over any id the configured overlay carries', async () => {
+    // The Orca-minted id, never the provider's: the provider id rotates on /clear.
+    const launch = await resolverFor(record(), () => ({
+      ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
+    }))({ identity: IDENTITY })
+
+    expect(launch.env).toMatchObject({
+      ORCA_AGENT_SESSION_ID: SESSION_ID,
+      ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/)
+    })
+    expect(launch.env?.ORCA_AGENT_SESSION_ID).not.toBe(launch.providerSessionId)
+  })
+
   it('forces session-state events on when the inherited overlay disables them', async () => {
     const launch = await resolverFor(record(), () => ({
       [CLAUDE_SESSION_STATE_EVENTS_ENV]: '0'
@@ -492,16 +505,17 @@ describe('claude structured launch resolution', () => {
 
       gate = WSL_ONLY_NORMALIZED
 
-      // Reacquire after the account state changed: refused before anything spawns.
-      await expect(resolve({ identity: identityAt('leaf-current') })).rejects.toBeInstanceOf(
-        AgentSessionPreSpawnError
-      )
+      // Reacquire after the account state changed: refused before anything spawns, naming the
+      // account shape a person can change.
+      const refused = resolve({ identity: identityAt('leaf-current') })
+      await expect(refused).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+      await expect(refused).rejects.toMatchObject({ reason: 'managedAccountUnsupported' })
     })
 
-    it('fails closed when the account state cannot be read', async () => {
-      await expect(
-        resolverWithGate(() => null)({ identity: identityAt('leaf-current') })
-      ).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+    it('fails closed when the account state cannot be read, naming no situation', async () => {
+      const refused = resolverWithGate(() => null)({ identity: identityAt('leaf-current') })
+      await expect(refused).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+      await expect(refused).rejects.toMatchObject({ reason: undefined })
     })
 
     it('keeps resolving when no gate is wired, so other embedders are unaffected', async () => {

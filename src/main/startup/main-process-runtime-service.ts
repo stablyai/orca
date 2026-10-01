@@ -99,7 +99,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // snapshot above then lists them for the CLI and mobile without a second store.
     structuredAgentStatusSink: {
       publish: (summary, subject) => agentHookServer.ingestStructuredStatus(summary, subject),
-      forget: (subject) => agentHookServer.dropStructuredStatus(subject)
+      forget: (subject) => agentHookServer.dropStructuredStatus(subject),
+      publishChildWork: (subject, evidence, provider) =>
+        agentHookServer.ingestStructuredChildWork(subject, evidence, provider),
+      readChildWork: (subject) => agentHookServer.getStructuredChildWorkViews(subject)
     },
     // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
     // read, so a row observed under one process otherwise acquires whatever the pane owns now.
@@ -114,6 +117,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       agentHookServer.attestCompatibilityAuthority(candidate),
     retireAgentHookCompatibilityAuthority: (paneKey) =>
       agentHookServer.retirePaneAuthority(paneKey),
+    checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
@@ -129,11 +133,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         runtimeHome: state.codexRuntimeHome,
         systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings())
       }),
-    prepareCodexStructuredLaunch: ({ workspacePath, launchEnv }) =>
-      prepareCodexRuntimeHomeForLaunch(undefined, launchEnv, {
-        launchAgent: 'codex',
-        workspacePath
-      }),
+    prepareCodexStructuredLaunch: ({ launchEnv }) =>
+      prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),
     // Why throw like prepare does: a null from an uninitialized service would
     // map to the system home and key a catalog read to the wrong account.
     resolveCodexStructuredLaunchHome: ({ launchEnv }) => {

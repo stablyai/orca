@@ -34,6 +34,17 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    // Why the host-connection phase: the route gate waits on it, so a phase change can strand the
+    // SSH-unavailable card without touching a browser file.
+    id: 'browser.local-ssh-workspace-route',
+    specs: ['tests/e2e/local-ssh-browser-routing.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/(?:main\/browser\/local-ssh-browser-(?:route|partitions)\.ts|renderer\/src\/(?:components\/browser-pane\/(?:use-ssh-workspace-browser-route\.ts|assemble-chrome\/ssh-routed-browser-page-gate\.tsx)|lib\/worktree-host-connection-phase\.ts))$/.test(
+        file
+      )
+  },
+  {
     id: 'terminal.windows-wsl-launch-and-paste',
     specs: [
       'tests/e2e/golden-tab-bar-agent-launch.spec.ts',

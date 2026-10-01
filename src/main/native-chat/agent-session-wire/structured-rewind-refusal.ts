@@ -2,23 +2,28 @@ import {
   AGENT_SESSION_REWIND_REASONS,
   type AgentSessionRewindReason
 } from '../../../shared/agent-session-rewind'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import { refuse, type AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 
 export function rewindRefusal(reason: AgentSessionRewindReason): {
   ok: false
   refusal: AgentSessionWireRefusal
 } {
-  const knownReason =
+  const rewindReason =
     AGENT_SESSION_REWIND_REASONS.find((value) => value === reason) ?? 'outcome-unknown'
+  const message = `agent_session_rewind:${rewindReason}`
   return {
     ok: false,
-    refusal: {
-      code:
-        knownReason === 'outcome-unknown'
-          ? 'agent_session_operation_unknown'
-          : 'agent_session_operation_invalid',
-      message: `agent_session_rewind:${knownReason}`,
-      rewindReason: knownReason
-    }
+    refusal:
+      rewindReason === 'outcome-unknown'
+        ? refuse(
+            'agent_session_operation_unknown',
+            { reason: 'rewindUnconfirmed', rewindReason },
+            message
+          )
+        : refuse(
+            'agent_session_operation_invalid',
+            { reason: 'rewindRefused', rewindReason },
+            message
+          )
   }
 }

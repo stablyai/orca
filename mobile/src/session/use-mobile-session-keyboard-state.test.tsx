@@ -73,8 +73,7 @@ function Harness(): null {
     initializedHandlesRef: { current: new Set() },
     showNativeChatRef: { current: false },
     subscribeToTerminal: () => {},
-    terminalFrameHeightRef: { current: 0 },
-    terminalFrameWidth: 0,
+    terminalFrameRef: { current: null },
     terminalRefs: { current: new Map() },
     unsubscribeTerminal: () => {},
     viewportMeasuredRef: { current: false },
@@ -121,10 +120,10 @@ describe('what the session screen hears about the keyboard', () => {
     expect(harness.notifyKeyboardVisibility).toHaveBeenLastCalledWith(false)
   })
 
-  it('holds the refit off on the page, where the keyboard is open and covers nothing', async () => {
-    // Inside the shell the WebView is already shortened, so the seam reports no occlusion: the
-    // dock needs no lift. Refitting on that height change would reflow the desktop PTY on every
-    // keyboard open, which is the reflow the visibility flag exists to defer.
+  it('holds the refit off for a keyboard that is open and covers nothing', async () => {
+    // A floating keyboard reports no occlusion, so the dock needs no lift. Refitting on that height
+    // change would reflow the desktop PTY on every keyboard open, which is the reflow the
+    // visibility flag exists to defer.
     const tree = await mount()
     harness.keyboard = { height: 0, visible: true }
     await rerender(tree)

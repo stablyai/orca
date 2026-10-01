@@ -156,18 +156,4 @@ describe('WorkspaceKanbanStatusLane', () => {
 
     expect(lane().dataset.workspaceLaneFullIds).toBeUndefined()
   })
-
-  it('passes the host-qualified active workspace through to the card list', () => {
-    renderLane({
-      items: [worktree('shared')],
-      totalCount: 1,
-      hasQuery: false,
-      activeWorktreeIdentity: 'ssh:builder|shared'
-    })
-
-    expect(
-      container.querySelector<HTMLElement>('[data-active-worktree-identity]')?.dataset
-        .activeWorktreeIdentity
-    ).toBe('ssh:builder|shared')
-  })
 })

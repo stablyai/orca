@@ -34,6 +34,9 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
     editorDrafts: {},
     setEditorDraft: (fileId, content) =>
       set((s) => {
+        if (s.editorDrafts[fileId] === content) {
+          return s
+        }
         // Why: read-only tabs must never accrue a draft — it seeds dirty/autosave/hot-exit restore that could overwrite an agent transcript.
         const file = s.openFiles.find((f) => f.id === fileId)
         if (file?.readOnly === true) {

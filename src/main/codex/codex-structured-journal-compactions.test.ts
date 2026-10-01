@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
@@ -82,7 +83,7 @@ describe('compaction provider generation compatibility', () => {
       if (stage === 'append' && reject) {
         return { accepted: false, reason: 'backpressure' }
       }
-      sink.appendItem(identity, body)
+      sink.appendItem(identity, body, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
       return { accepted: true }
     }
     sink.tryPublish = () => {

@@ -7,6 +7,7 @@ import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
+import { fetchZcodeRateLimits } from './zcode-usage-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { fetchOpenCodeGoUsage } from './opencode-go-usage-source-selection'
 import {
@@ -40,12 +41,28 @@ vi.mock('./opencode-go-usage-source-selection', () => ({
   fetchOpenCodeGoUsage: vi.fn()
 }))
 
+vi.mock('./zcode-usage-fetcher', () => ({
+  fetchZcodeRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
+
 vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
 
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn()
 }))
 
 vi.mock('./grok-auth', () => ({
@@ -63,6 +80,57 @@ function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<
 describe('RateLimitService', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
+  })
+
+  it('publishes a ZCode quota snapshot alongside the other providers', async () => {
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 8))
+    vi.mocked(fetchZcodeRateLimits).mockResolvedValue(okProvider('zcode', 42))
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    expect(fetchZcodeRateLimits).toHaveBeenCalledTimes(1)
+    expect(service.getState().zcode?.session?.usedPercent).toBe(42)
+    expect(service.getState().codex?.session?.usedPercent).toBe(8)
+  })
+
+  it('does not keep a previous ZCode account quota after a failed account switch', async () => {
+    vi.mocked(fetchZcodeRateLimits)
+      .mockResolvedValueOnce({
+        ...okProvider('zcode', 42),
+        usageMetadata: { source: 'web', authProvenance: 'account-a' }
+      })
+      .mockResolvedValueOnce({
+        ...errorProvider('zcode', 'request failed'),
+        usageMetadata: { source: 'web', authProvenance: 'account-b', failureKind: 'network' }
+      })
+    const service = new RateLimitService()
+
+    await service.refresh()
+    await service.refresh()
+
+    expect(service.getState().zcode?.status).toBe('error')
+    expect(service.getState().zcode?.session).toBeNull()
+  })
+
+  it('keeps a recent ZCode quota after a failed retry for the same account', async () => {
+    vi.mocked(fetchZcodeRateLimits)
+      .mockResolvedValueOnce({
+        ...okProvider('zcode', 42),
+        usageMetadata: { source: 'web', authProvenance: 'account-a' }
+      })
+      .mockResolvedValueOnce({
+        ...errorProvider('zcode', 'request failed'),
+        usageMetadata: { source: 'web', authProvenance: 'account-a', failureKind: 'network' }
+      })
+    const service = new RateLimitService()
+
+    await service.refresh()
+    await service.refresh()
+
+    expect(service.getState().zcode?.status).toBe('error')
+    expect(service.getState().zcode?.session?.usedPercent).toBe(42)
   })
 
   it('does not reread Grok auth when callers read state snapshots', () => {

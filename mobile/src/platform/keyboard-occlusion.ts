@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Keyboard, Platform } from 'react-native'
+import { Keyboard } from 'react-native'
+import { hostOs } from './host-os'
 
 /** How much of the bottom of the layout viewport it covers, and whether it is open at all. */
 export type SoftKeyboardState = { readonly height: number; readonly visible: boolean }
@@ -44,8 +45,8 @@ export function subscribeSoftKeyboard(
   onShow: (height: number, duration: number) => void,
   onHide: (duration: number) => void
 ): () => void {
-  const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-  const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+  const showEvent = hostOs() === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+  const hideEvent = hostOs() === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
   const show = Keyboard.addListener(showEvent, (event) =>
     onShow(event.endCoordinates.height, event.duration)
   )
@@ -67,18 +68,4 @@ export function currentSoftKeyboardHeight(): number {
 /** The occluded strip alone, for the callers that lift by it and never ask whether it is open. */
 export function useKeyboardOcclusion(): number {
   return useSoftKeyboard().height
-}
-
-/**
- * The bottom padding a composer needs to clear the keyboard, which natively is none.
- *
- * `KeyboardAvoidingView` already moves the composer on a phone, so adding padding there would move
- * it twice. It is inert on the web for the same reason the `Keyboard` stub is — it is driven by
- * those events — so there the padding is the whole of the avoidance.
- *
- * A second name rather than a `Platform.OS` branch at the call site: this one subscribes to nothing
- * on a phone, so a composer that asks for it renders exactly as many times as it does today.
- */
-export function useKeyboardAvoidingPadding(): number {
-  return 0
 }

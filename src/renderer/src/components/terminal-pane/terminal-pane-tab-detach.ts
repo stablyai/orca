@@ -140,6 +140,7 @@ export function detachTerminalPaneToTab(args: {
   )?.shellOverride
   const tab = latestStore.createTab(args.worktreeId, args.targetGroupId, sourceShellOverride, {
     activate: true,
+    ...(detachedLayout.chatLeafId ? { viewMode: 'chat' as const } : {}),
     initialPtyId: ptyId ?? undefined,
     ...(!ptyId
       ? {

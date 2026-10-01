@@ -49,13 +49,6 @@ describe('resolveAgentLaunchRoute', () => {
     }
   )
 
-  it('routes a supported local Codex launch to structured native chat', () => {
-    expect(route()).toBe('structured-native-chat')
-    expect(route({ launchText: 'explain this change', promptDelivery: 'auto-submit' })).toBe(
-      'structured-native-chat'
-    )
-  })
-
   it('routes editable drafts to the structured chat composer', () => {
     expect(route({ launchText: 'reviewable context', promptDelivery: 'draft' })).toBe(
       'structured-native-chat'

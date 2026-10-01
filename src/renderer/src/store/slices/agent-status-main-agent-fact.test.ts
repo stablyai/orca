@@ -51,14 +51,12 @@ describe('the main agent fact on a renderer status entry', () => {
     })
     expect(store.getState().agentStatusByPaneKey[PANE].mainAgent).toEqual(mainAgent)
 
-    store
-      .getState()
-      .setAgentStatus(PANE, {
-        state: 'done',
-        prompt: 'go',
-        agentType: 'claude',
-        observation: osc(2)
-      })
+    store.getState().setAgentStatus(PANE, {
+      state: 'done',
+      prompt: 'go',
+      agentType: 'claude',
+      observation: osc(2)
+    })
     expect(store.getState().agentStatusByPaneKey[PANE].mainAgent).toBeUndefined()
   })
 

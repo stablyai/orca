@@ -1,19 +1,26 @@
 const MAX_WSL_HOME_CACHE_ENTRIES = 64
 const wslHomeCache = new Map<string, string>()
 
+// Why: WSL distro names are case-insensitive, and paths and callers spell them differently.
+function cacheKey(distro: string): string {
+  return distro.toLowerCase()
+}
+
 export function getCachedWslHome(distro: string): string | undefined {
-  const home = wslHomeCache.get(distro)
+  const key = cacheKey(distro)
+  const home = wslHomeCache.get(key)
   if (home === undefined) {
     return undefined
   }
-  wslHomeCache.delete(distro)
-  wslHomeCache.set(distro, home)
+  wslHomeCache.delete(key)
+  wslHomeCache.set(key, home)
   return home
 }
 
 export function rememberWslHome(distro: string, home: string): string {
-  wslHomeCache.delete(distro)
-  wslHomeCache.set(distro, home)
+  const key = cacheKey(distro)
+  wslHomeCache.delete(key)
+  wslHomeCache.set(key, home)
   while (wslHomeCache.size > MAX_WSL_HOME_CACHE_ENTRIES) {
     const oldest = wslHomeCache.keys().next().value
     if (oldest === undefined) {
@@ -25,7 +32,7 @@ export function rememberWslHome(distro: string, home: string): string {
 }
 
 export function hasCachedWslHome(distro: string): boolean {
-  return wslHomeCache.has(distro)
+  return wslHomeCache.has(cacheKey(distro))
 }
 
 export function clearWslHomeCache(): void {

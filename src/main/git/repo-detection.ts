@@ -78,14 +78,19 @@ export function getGitRepoRoot(path: string): string {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return path
     }
-    const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
-      cwd: path
-    }).trim()
-    if (insideWorkTree === 'true') {
-      const root = gitExecFileSync(['rev-parse', '--show-toplevel'], {
-        cwd: path
-      }).trim()
-      return normalizeGitRepoRootForInputPath(path, root)
+    // One spawn, not two: each sync git call blocks main for up to its whole 15s
+    // timeout, so the spawn count is the cost. Safe to combine only here — a bare
+    // repo makes the combined form exit non-zero, and both that throw and the
+    // plain `false` land on the same marker-scan fallback below. `probeGitRepo`
+    // must NOT combine: it has to read `false` cleanly to go on and detect bare.
+    const [insideWorkTree, toplevel] = gitExecFileSync(
+      ['rev-parse', '--is-inside-work-tree', '--show-toplevel'],
+      { cwd: path }
+    )
+      .split('\n')
+      .map((line) => line.trim())
+    if (insideWorkTree === 'true' && toplevel) {
+      return normalizeGitRepoRootForInputPath(path, toplevel)
     }
   } catch {
     // Fall through to preserving the original path.
