@@ -61,7 +61,16 @@ export function useCustomSttEndpoint({
   const [discovering, setDiscovering] = useState(false)
   const [modelSuggestions, setModelSuggestions] = useState<string[]>([])
   const [reachability, setReachability] = useState<CustomSttEndpointReachability>('unknown')
-  const [testResult, setTestResult] = useState<CustomSttEndpointTestState | null>(null)
+  // Why: a Test result is only meaningful for the exact values it ran against. Store
+  // the signature so editing any field (or typing a new key) hides the stale verdict
+  // instead of leaving a rejection that blocks Save, or a success for an untested URL.
+  const [tested, setTested] = useState<{
+    signature: string
+    result: CustomSttEndpointTestState
+  } | null>(null)
+
+  const runSignature = `${baseUrlDraft.trim()}\u0000${modelDraft.trim()}\u0000${languageDraft.trim()}\u0000${apiKeyDraft.trim()}`
+  const testResult = tested && tested.signature === runSignature ? tested.result : null
 
   // Why: once a base URL is typed, ask the endpoint what it supports so the Model
   // field can suggest real names AND show whether the URL actually answers. A miss
@@ -111,7 +120,7 @@ export function useCustomSttEndpoint({
     setModelDraft('')
     setLanguageDraft('')
     setApiKeyDraft('')
-    setTestResult(null)
+    setTested(null)
     setReachability('unknown')
     setModelSuggestions([])
   }, [])
@@ -129,7 +138,7 @@ export function useCustomSttEndpoint({
       })
       .catch(() => {})
     setApiKeyDraft('')
-    setTestResult(null)
+    setTested(null)
     setDialogOpen(true)
   }, [])
 
@@ -232,23 +241,28 @@ export function useCustomSttEndpoint({
   ])
 
   const test = useCallback(async (): Promise<void> => {
+    const signature = runSignature
     setTesting(true)
-    setTestResult(null)
+    setTested(null)
     try {
       const result = await window.api.speech.testCustomEndpoint({
         baseUrl: baseUrlDraft,
         model: modelDraft,
-        language: languageDraft
+        language: languageDraft,
+        apiKey: apiKeyDraft
       })
       if (isMounted()) {
-        setTestResult(result)
+        setTested({ signature, result })
       }
     } catch (err) {
       if (isMounted()) {
-        setTestResult({
-          ok: false,
-          outcome: 'transport',
-          detail: err instanceof Error ? err.message : String(err)
+        setTested({
+          signature,
+          result: {
+            ok: false,
+            outcome: 'transport',
+            detail: err instanceof Error ? err.message : String(err)
+          }
         })
       }
     } finally {
@@ -256,7 +270,7 @@ export function useCustomSttEndpoint({
         setTesting(false)
       }
     }
-  }, [baseUrlDraft, modelDraft, languageDraft, isMounted])
+  }, [runSignature, baseUrlDraft, modelDraft, languageDraft, apiKeyDraft, isMounted])
 
   return {
     dialogOpen,

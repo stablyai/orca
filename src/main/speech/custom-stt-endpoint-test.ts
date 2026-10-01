@@ -1,6 +1,6 @@
 import {
-  readCustomSttEndpointApiKey,
   readCustomSttEndpointConfig,
+  resolveCustomSttApiKeyFor,
   resolveCustomSttTranscriptionUrl
 } from './custom-stt-endpoint-store'
 
@@ -21,6 +21,8 @@ export type CustomSttEndpointProbe = {
   baseUrl: string
   model: string
   language: string
+  /** A just-typed token; when present it is used instead of the saved one. */
+  apiKey?: string
 }
 
 /**
@@ -63,7 +65,9 @@ export async function testCustomSttEndpoint(
   }
 
   const url = resolveCustomSttTranscriptionUrl(baseUrl)
-  const apiKey = readCustomSttEndpointApiKey()
+  // Why: Test must exercise the token the dialog would save. The draft key wins;
+  // the saved token is used only if it was saved for this base URL.
+  const apiKey = resolveCustomSttApiKeyFor(baseUrl, probe?.apiKey)
 
   // Why: undici reuses keep-alive connections, and servers like uvicorn close idle
   // ones — a reused dead socket fails the POST with a bare "fetch failed". GET

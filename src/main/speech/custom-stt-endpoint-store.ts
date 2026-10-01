@@ -51,7 +51,17 @@ function getEndpointTokenPath(): string {
 }
 
 export function normalizeCustomSttBaseUrl(value: string): string {
-  return value.trim().replace(/\/+$/, '')
+  const trimmed = value.trim().replace(/\/+$/, '')
+  // Why: strip a query/fragment defensively for values read back from disk; new
+  // saves reject them outright. Without this, appending the path produces a bad URL.
+  try {
+    const parsed = new URL(trimmed)
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString().replace(/\/+$/, '')
+  } catch {
+    return trimmed
+  }
 }
 
 export function readCustomSttEndpointConfig(): CustomSttEndpointConfig | null {
@@ -101,6 +111,12 @@ export function saveCustomSttEndpointConfig(
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('Endpoint base URL must use http or https')
   }
+  // Why: a query or fragment would be swallowed when the transcription path is
+  // appended (`http://h/v1?x=1` + `/audio/transcriptions` is malformed), so reject
+  // them rather than silently POSTing to the wrong place.
+  if (parsed.search || parsed.hash) {
+    throw new Error('Endpoint base URL must not include a query string or fragment')
+  }
   if (!model) {
     throw new Error('Endpoint model is required')
   }
@@ -117,45 +133,100 @@ export function clearCustomSttEndpointConfig(): void {
   clearCustomSttEndpointApiKey()
 }
 
-export function hasCustomSttEndpointApiKey(): boolean {
-  return existsSync(getEndpointTokenPath())
+/**
+ * A bearer token is bound to the base URL it was saved for. Why: without a binding,
+ * editing the base URL and leaving the key field blank would reuse the old token and
+ * send it to the new host — a credential meant for one server leaking to another.
+ */
+type StoredToken = {
+  baseUrl: string
+  sealed: string
 }
 
-export function saveCustomSttEndpointApiKey(apiKey: string): void {
-  const trimmed = apiKey.trim()
-  if (!trimmed) {
-    throw new Error('API key is required')
-  }
-  ensureOrcaDir()
-  if (getSecretStore().isEncryptionAvailable()) {
-    writeFileSync(getEndpointTokenPath(), getSecretStore().encryptString(trimmed), { mode: 0o600 })
-    cachedApiKey = trimmed
-    return
-  }
-
-  console.warn('[speech] secret encryption unavailable — storing custom STT token in plaintext')
-  writeFileSync(getEndpointTokenPath(), trimmed, { encoding: 'utf8', mode: 0o600 })
-  cachedApiKey = trimmed
-}
-
-/** Returns the configured bearer token, or null when the endpoint is unauthenticated. */
-export function readCustomSttEndpointApiKey(): string | null {
-  if (cachedApiKey !== null) {
-    return cachedApiKey
-  }
+function readStoredToken(): StoredToken | null {
   const path = getEndpointTokenPath()
   if (!existsSync(path)) {
     return null
   }
   try {
-    const raw = readFileSync(path)
-    cachedApiKey = getSecretStore().isEncryptionAvailable()
-      ? getSecretStore().decryptString(raw)
-      : raw.toString('utf8')
-    return cachedApiKey
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<StoredToken>
+    if (typeof parsed.baseUrl !== 'string' || typeof parsed.sealed !== 'string') {
+      return null
+    }
+    return { baseUrl: normalizeCustomSttBaseUrl(parsed.baseUrl), sealed: parsed.sealed }
+  } catch {
+    return null
+  }
+}
+
+function decryptSealedToken(sealed: string): string {
+  if (!getSecretStore().isEncryptionAvailable()) {
+    return sealed
+  }
+  try {
+    return getSecretStore().decryptString(Buffer.from(sealed, 'base64'))
   } catch {
     throw new Error('Custom STT endpoint API key could not be decrypted')
   }
+}
+
+export function hasCustomSttEndpointApiKey(): boolean {
+  return readStoredToken() !== null
+}
+
+export function saveCustomSttEndpointApiKey(apiKey: string, baseUrl?: string): void {
+  const trimmed = apiKey.trim()
+  if (!trimmed) {
+    throw new Error('API key is required')
+  }
+  const boundUrl = normalizeCustomSttBaseUrl(
+    baseUrl ?? readCustomSttEndpointConfig()?.baseUrl ?? ''
+  )
+  if (!boundUrl) {
+    throw new Error('Endpoint base URL is required before saving an API key')
+  }
+  ensureOrcaDir()
+  const encrypted = getSecretStore().isEncryptionAvailable()
+  if (!encrypted) {
+    console.warn('[speech] secret encryption unavailable — storing custom STT token in plaintext')
+  }
+  const sealed = encrypted ? getSecretStore().encryptString(trimmed).toString('base64') : trimmed
+  writeFileSync(
+    getEndpointTokenPath(),
+    JSON.stringify({ baseUrl: boundUrl, sealed } satisfies StoredToken, null, 2),
+    { mode: 0o600 }
+  )
+  cachedApiKey = trimmed
+}
+
+/**
+ * Resolve the bearer token for a request to `baseUrl`, honouring an explicit draft.
+ * The draft wins; otherwise the saved token is used only when it was saved for this
+ * exact base URL. A token stored for a different host is never sent.
+ */
+export function resolveCustomSttApiKeyFor(
+  baseUrl: string,
+  draftKey?: string | null
+): string | null {
+  const trimmedDraft = draftKey?.trim()
+  if (trimmedDraft) {
+    return trimmedDraft
+  }
+  const stored = readStoredToken()
+  if (!stored) {
+    return null
+  }
+  return normalizeCustomSttBaseUrl(baseUrl) === stored.baseUrl
+    ? decryptSealedToken(stored.sealed)
+    : null
+}
+
+/** Returns the token for the currently configured endpoint, or null. */
+export function readCustomSttEndpointApiKey(): string | null {
+  if (cachedApiKey !== null) {
+    return cachedApiKey
+  }
+  return resolveCustomSttApiKeyFor(readCustomSttEndpointConfig()?.baseUrl ?? '')
 }
 
 export function clearCustomSttEndpointApiKey(): void {

@@ -1,7 +1,7 @@
 import { CUSTOM_STT_MODEL_ID } from './model-catalog'
 import {
-  readCustomSttEndpointApiKey,
   readCustomSttEndpointConfig,
+  resolveCustomSttApiKeyFor,
   resolveCustomSttTranscriptionUrl
 } from './custom-stt-endpoint-store'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
@@ -21,10 +21,12 @@ export function resolveTranscriptionTarget(modelId: string): OpenAiTranscription
     if (!config) {
       throw new Error('Custom speech endpoint is not configured')
     }
+    const { baseUrl } = config
     return {
-      url: resolveCustomSttTranscriptionUrl(config.baseUrl),
-      apiKey: readCustomSttEndpointApiKey(),
+      url: resolveCustomSttTranscriptionUrl(baseUrl),
       apiModel: config.model,
+      // Read lazily; only a token saved for this exact base URL is used.
+      readApiKey: () => resolveCustomSttApiKeyFor(baseUrl),
       ...(config.language ? { language: config.language } : {})
     }
   }
@@ -33,5 +35,9 @@ export function resolveTranscriptionTarget(modelId: string): OpenAiTranscription
   if (!apiModel) {
     throw new Error(`Unknown OpenAI transcription model: ${modelId}`)
   }
-  return { url: OPENAI_TRANSCRIPTION_URL, apiKey: readOpenAiSpeechApiKey(), apiModel }
+  return {
+    url: OPENAI_TRANSCRIPTION_URL,
+    apiModel,
+    readApiKey: () => readOpenAiSpeechApiKey()
+  }
 }

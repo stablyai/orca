@@ -13,10 +13,11 @@ import {
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
 import {
+  clearCustomSttEndpointApiKey,
   clearCustomSttEndpointConfig,
   hasCustomSttEndpointApiKey,
-  readCustomSttEndpointApiKey,
   readCustomSttEndpointConfig,
+  resolveCustomSttApiKeyFor,
   saveCustomSttEndpointApiKey,
   saveCustomSttEndpointConfig
 } from '../speech/custom-stt-endpoint-store'
@@ -75,8 +76,15 @@ export function registerSpeechHandlers(store: Store): void {
         model: input.model,
         language: input.language
       })
-      if (typeof input.apiKey === 'string' && input.apiKey.trim()) {
-        saveCustomSttEndpointApiKey(input.apiKey)
+      // Why: an empty key field must mean "no token" — otherwise the previous token
+      // would silently be reused and sent to the new base URL. Save binds a new
+      // token to the base URL it was entered for.
+      if (typeof input.apiKey === 'string') {
+        if (input.apiKey.trim()) {
+          saveCustomSttEndpointApiKey(input.apiKey, input.baseUrl)
+        } else {
+          clearCustomSttEndpointApiKey()
+        }
       }
       return readCustomEndpointStatus()
     }
@@ -89,7 +97,10 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle(
     'speech:testCustomEndpoint',
-    async (_event, probe?: { baseUrl: string; model: string; language: string }) => {
+    async (
+      _event,
+      probe?: { baseUrl: string; model: string; language: string; apiKey?: string }
+    ) => {
       return testCustomSttEndpoint(probe)
     }
   )
@@ -99,7 +110,8 @@ export function registerSpeechHandlers(store: Store): void {
     async (_event, input: { baseUrl: string; apiKey?: string }) => {
       return discoverCustomSttModels({
         baseUrl: input.baseUrl,
-        apiKey: input.apiKey?.trim() ? input.apiKey.trim() : readCustomSttEndpointApiKey()
+        // Only the draft token, or a saved token bound to this exact base URL.
+        apiKey: resolveCustomSttApiKeyFor(input.baseUrl, input.apiKey)
       })
     }
   )

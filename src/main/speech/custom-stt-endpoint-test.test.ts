@@ -1,12 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { storeState } = vi.hoisted(() => ({
-  storeState: { config: null as { baseUrl: string; model: string; language: string } | null }
+  storeState: {
+    config: null as { baseUrl: string; model: string; language: string } | null,
+    savedToken: null as string | null
+  }
 }))
 
 vi.mock('./custom-stt-endpoint-store', () => ({
   readCustomSttEndpointConfig: () => storeState.config,
-  readCustomSttEndpointApiKey: () => null,
+  // Mirrors the real resolver: a draft key wins, else the saved token.
+  resolveCustomSttApiKeyFor: (_baseUrl: string, draftKey?: string | null) =>
+    draftKey?.trim() ? draftKey.trim() : storeState.savedToken,
   resolveCustomSttTranscriptionUrl: (baseUrl: string) =>
     `${baseUrl.replace(/\/+$/, '')}/audio/transcriptions`
 }))
@@ -18,6 +23,7 @@ describe('testCustomSttEndpoint', () => {
 
   beforeEach(() => {
     storeState.config = null
+    storeState.savedToken = null
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
   })
@@ -58,6 +64,22 @@ describe('testCustomSttEndpoint', () => {
     expect(result.ok).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0]?.[0]).toBe('http://draft:2/v1/audio/transcriptions')
+  })
+
+  it('uses a just-typed API key instead of the saved one', async () => {
+    storeState.config = { baseUrl: 'http://h:1/v1', model: 'large-v3', language: '' }
+    storeState.savedToken = 'old-saved-token'
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }))
+
+    await testCustomSttEndpoint({
+      baseUrl: 'http://h:1/v1',
+      model: 'large-v3',
+      language: '',
+      apiKey: 'fresh-draft-key'
+    })
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer fresh-draft-key')
   })
 
   it('falls back to the saved config when no draft is given', async () => {

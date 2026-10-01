@@ -28,6 +28,7 @@ import {
   hasCustomSttEndpoint,
   readCustomSttEndpointApiKey,
   readCustomSttEndpointConfig,
+  resolveCustomSttApiKeyFor,
   resolveCustomSttTranscriptionUrl,
   saveCustomSttEndpointApiKey,
   saveCustomSttEndpointConfig
@@ -93,7 +94,18 @@ describe('custom stt endpoint store', () => {
   })
 
   it('persists and reads an optional bearer token', () => {
-    saveCustomSttEndpointApiKey('token-123')
+    saveCustomSttEndpointConfig({ baseUrl: 'http://h:8090/v1', model: 'large-v3' })
+    saveCustomSttEndpointApiKey('token-123', 'http://h:8090/v1')
     expect(readCustomSttEndpointApiKey()).toBe('token-123')
+  })
+
+  it('does not send a token saved for a different base URL', () => {
+    saveCustomSttEndpointConfig({ baseUrl: 'http://a:8090/v1', model: 'large-v3' })
+    saveCustomSttEndpointApiKey('token-for-a', 'http://a:8090/v1')
+
+    // A token bound to host A must never be offered to host B.
+    expect(resolveCustomSttApiKeyFor('http://b:9999/v1')).toBeNull()
+    // …and a draft key always wins for whatever host it is typed against.
+    expect(resolveCustomSttApiKeyFor('http://b:9999/v1', 'draft-key')).toBe('draft-key')
   })
 })

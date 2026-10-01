@@ -10,7 +10,7 @@ const { customEndpointState, openAiKeyState } = vi.hoisted(() => ({
 
 vi.mock('./custom-stt-endpoint-store', () => ({
   readCustomSttEndpointConfig: () => customEndpointState.config,
-  readCustomSttEndpointApiKey: () => customEndpointState.apiKey,
+  resolveCustomSttApiKeyFor: () => customEndpointState.apiKey,
   resolveCustomSttTranscriptionUrl: (baseUrl: string) => `${baseUrl}/audio/transcriptions`
 }))
 
@@ -28,22 +28,20 @@ describe('resolveTranscriptionTarget', () => {
   })
 
   it('resolves the built-in OpenAI cloud target', () => {
-    expect(resolveTranscriptionTarget('openai-gpt-4o-transcribe')).toEqual({
-      url: 'https://api.openai.com/v1/audio/transcriptions',
-      apiKey: 'sk-test',
-      apiModel: 'gpt-4o-transcribe'
-    })
+    const target = resolveTranscriptionTarget('openai-gpt-4o-transcribe')
+    expect(target.url).toBe('https://api.openai.com/v1/audio/transcriptions')
+    expect(target.apiModel).toBe('gpt-4o-transcribe')
+    expect(target.readApiKey()).toBe('sk-test')
   })
 
   it('resolves the custom endpoint with an optional token', () => {
     customEndpointState.config = { baseUrl: 'http://127.0.0.1:8090/v1', model: 'large-v3' }
     customEndpointState.apiKey = null
 
-    expect(resolveTranscriptionTarget('custom-openai-compatible')).toEqual({
-      url: 'http://127.0.0.1:8090/v1/audio/transcriptions',
-      apiKey: null,
-      apiModel: 'large-v3'
-    })
+    const target = resolveTranscriptionTarget('custom-openai-compatible')
+    expect(target.url).toBe('http://127.0.0.1:8090/v1/audio/transcriptions')
+    expect(target.apiModel).toBe('large-v3')
+    expect(target.readApiKey()).toBeNull()
   })
 
   it('throws when the custom endpoint is selected but unconfigured', () => {
