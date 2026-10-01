@@ -9,6 +9,7 @@ import { Buffer } from 'node:buffer'
  */
 export function createOutputSink(maxBytes: number): {
   write: (chunk: Buffer | string) => void
+  buffer: () => Buffer
   text: () => string
   truncated: () => boolean
 } {
@@ -25,6 +26,7 @@ export function createOutputSink(maxBytes: number): {
       chunks.push(chunk.length > remaining ? chunk.subarray(0, remaining) : chunk)
       bytes += chunk.length
     },
+    buffer: () => (chunks.length === 0 ? Buffer.alloc(0) : Buffer.concat(chunks)),
     text: () =>
       chunks.length === 0
         ? ''

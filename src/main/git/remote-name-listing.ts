@@ -8,6 +8,7 @@ import { gitExecFileAsync } from './runner'
 export type RemoteNameListingGitOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  signal?: AbortSignal
 }
 
 const SIGNED_REMOTE_NAME_LISTING_TTL_MS = 5 * 60_000
@@ -102,32 +103,38 @@ export async function listCachedRemoteNames(
     }
   }
 
-  return runCoalescedProbe(remoteNameListingInFlight, cacheKey, async (ownsKey) => {
-    const configContext = listingGitConfigContext(repoPath, connectionId, localGitOptions)
-    const configSignatureBefore = await readLocalGitConfigSignature(configContext)
-    const remotes = await listUncachedRemoteNames(repoPath, connectionId, localGitOptions)
-    if (remotes === null) {
-      return null
-    }
-    if (ownsKey()) {
-      const configSignatureAfter = await readLocalGitConfigSignature(configContext)
-      const configSignature =
-        configSignatureBefore !== undefined && configSignatureBefore === configSignatureAfter
-          ? configSignatureAfter
-          : undefined
-      remoteNameListingCache.set(cacheKey, {
-        remotes,
-        expiresAt:
-          Date.now() +
-          (configSignature
-            ? SIGNED_REMOTE_NAME_LISTING_TTL_MS
-            : UNSIGNED_REMOTE_NAME_LISTING_TTL_MS),
-        ...(configSignature ? { configSignature } : {})
-      })
-      pruneRemoteNameListingCache(Date.now())
-    }
-    return remotes
-  })
+  return runCoalescedProbe(
+    remoteNameListingInFlight,
+    cacheKey,
+    async (ownsKey) => {
+      const configContext = listingGitConfigContext(repoPath, connectionId, localGitOptions)
+      const configSignatureBefore = await readLocalGitConfigSignature(configContext)
+      const remotes = await listUncachedRemoteNames(repoPath, connectionId, localGitOptions)
+      if (remotes === null) {
+        return null
+      }
+      if (ownsKey()) {
+        const configSignatureAfter = await readLocalGitConfigSignature(configContext)
+        const configSignature =
+          configSignatureBefore !== undefined && configSignatureBefore === configSignatureAfter
+            ? configSignatureAfter
+            : undefined
+        remoteNameListingCache.set(cacheKey, {
+          remotes,
+          expiresAt:
+            Date.now() +
+            (configSignature
+              ? SIGNED_REMOTE_NAME_LISTING_TTL_MS
+              : UNSIGNED_REMOTE_NAME_LISTING_TTL_MS),
+          ...(configSignature ? { configSignature } : {})
+        })
+        pruneRemoteNameListingCache(Date.now())
+      }
+      return remotes
+    },
+    undefined,
+    localGitOptions.signal
+  )
 }
 
 async function listUncachedRemoteNames(
@@ -135,6 +142,7 @@ async function listUncachedRemoteNames(
   connectionId?: string | null,
   localGitOptions: RemoteNameListingGitOptions = {}
 ): Promise<string[] | null> {
+  localGitOptions.signal?.throwIfAborted()
   if (connectionId) {
     const provider = getSshGitProvider(connectionId)
     if (!provider) {
@@ -142,22 +150,30 @@ async function listUncachedRemoteNames(
     }
     try {
       const { stdout } = await provider.exec(['remote'], repoPath, {
-        signal: AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
+        signal: localGitOptions.signal
+          ? AbortSignal.any([
+              localGitOptions.signal,
+              AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
+            ])
+          : AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
       })
       return parseRemoteNames(stdout)
     } catch {
+      localGitOptions.signal?.throwIfAborted()
       return null
     }
   }
   try {
     const { stdout } = await gitExecFileAsync(['remote'], {
       cwd: repoPath,
+      ...(localGitOptions.signal ? { signal: localGitOptions.signal } : {}),
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
       ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
       ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
     })
     return parseRemoteNames(stdout)
   } catch {
+    localGitOptions.signal?.throwIfAborted()
     return null
   }
 }

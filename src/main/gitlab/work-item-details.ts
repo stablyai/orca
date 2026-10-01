@@ -8,6 +8,7 @@ import type {
   GitLabWorkItemDetails
 } from '../../shared/gitlab-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
+import { loadGitLabImages } from './attachment-images'
 import { mapIssueToWorkItem, mapMRToWorkItem } from './mappers'
 import { mapGitLabUser, type GitLabRawUser } from './gitlab-assignable-user-mapping'
 import { encodedProject } from './project-path-encoding'
@@ -26,6 +27,12 @@ import {
   type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
+
+export type GitLabDetailPreviewOptions = {
+  includeImages?: boolean
+  maxReplyBytes?: number
+  signal?: AbortSignal
+}
 
 // ── Top-level aggregator ───────────────────────────────────────────
 
@@ -57,31 +64,60 @@ export async function getWorkItemDetails(
   preference?: IssueSourcePreference,
   connectionId?: string | null,
   projectRefOverride?: ProjectRef | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  previewOptions: GitLabDetailPreviewOptions = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Why: detail fetches must use the same project source as the list row
   // that opened them, otherwise forked repos can show a row from one remote
   // and a detail sheet from another.
+  previewOptions.signal?.throwIfAborted()
+  const executionOptions = previewOptions.signal
+    ? { ...localGitOptions, signal: previewOptions.signal }
+    : localGitOptions
   const projectRef =
     projectRefOverride ??
     (
       await resolveIssueSource(
         repoPath,
         preference,
-        await getGlabKnownHosts(connectionId, localGitOptions),
+        await getGlabKnownHosts(connectionId, executionOptions),
         connectionId,
-        localGitOptions
+        executionOptions
       )
     ).source
   if (!projectRef) {
     return null
   }
-  await acquire()
+  previewOptions.signal?.throwIfAborted()
+  await acquire(undefined, previewOptions.signal)
   try {
-    if (type === 'issue') {
-      return await fetchIssueDetails(repoPath, projectRef, iid, connectionId, localGitOptions)
+    const details =
+      type === 'issue'
+        ? await fetchIssueDetails(repoPath, projectRef, iid, connectionId, executionOptions)
+        : await fetchMRDetails(repoPath, projectRef, iid, connectionId, executionOptions)
+    if (!details || !previewOptions.includeImages) {
+      return details
     }
-    return await fetchMRDetails(repoPath, projectRef, iid, connectionId, localGitOptions)
+    const imageBudget =
+      previewOptions.maxReplyBytes === undefined
+        ? undefined
+        : Math.max(
+            0,
+            previewOptions.maxReplyBytes -
+              Buffer.byteLength(JSON.stringify({ ...details, imageSources: {} }))
+          )
+    const imageSources = await loadGitLabImages(
+      [details.body, ...details.comments.map((comment) => comment.body)],
+      repoPath,
+      projectRef,
+      connectionId,
+      executionOptions,
+      imageBudget
+    ).catch((error) => {
+      console.warn('[gitlab] Attachment previews unavailable:', error)
+      return {}
+    })
+    return { ...details, imageSources }
   } catch {
     return null
   } finally {

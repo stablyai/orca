@@ -25,6 +25,7 @@ export type RemoteUrlProbeContext = {
   connectionId?: string | null
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  signal?: AbortSignal
 }
 
 /** Reads a remote URL, or null when the repo's SSH runtime is not connected. */
@@ -32,18 +33,22 @@ export async function readRemoteUrl(
   context: RemoteUrlProbeContext,
   remoteName: string
 ): Promise<string | null> {
+  context.signal?.throwIfAborted()
   if (context.connectionId) {
     const provider = getSshGitProvider(context.connectionId)
     if (!provider) {
       return null
     }
     const { stdout } = await provider.exec(['remote', 'get-url', remoteName], context.repoPath, {
-      signal: AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
+      signal: context.signal
+        ? AbortSignal.any([context.signal, AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)])
+        : AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
     })
     return stdout
   }
   const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
     cwd: context.repoPath,
+    ...(context.signal ? { signal: context.signal } : {}),
     timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
     ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
     ...(context.admissionTier ? { admissionTier: context.admissionTier } : {})

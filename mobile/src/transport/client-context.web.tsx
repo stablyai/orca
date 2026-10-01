@@ -6,6 +6,7 @@ import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-clie
 import { BRIDGE_PAGE_CLIENT_ID } from '../mobile-web-shell/bridge/bridge-page-client-identity'
 import type { ConnectionState, HostProfile } from './types'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
+import { RpcClientContext as Ctx } from './rpc-client-react-context'
 
 export {
   useDisconnectHostClient,
@@ -16,7 +17,7 @@ export {
   useRefreshHostClient
 } from './host-client-hooks'
 
-const Ctx = createContext<RpcClientContextValue | null>(null)
+export { useRpcClientContext } from './rpc-client-react-context'
 /** The page's own client, which is more than an `RpcClient`: the route seam reads the session off
  *  it to decide which screens are this document's. Separate from `Ctx` so the shared contract above
  *  stays the one every screen sees, page or native. */
@@ -106,12 +107,4 @@ export function usePageBridgeClient(): BridgeRpcClient {
     throw new Error('usePageBridgeClient must be used within RpcClientProvider')
   }
   return client
-}
-
-export function useRpcClientContext(): RpcClientContextValue {
-  const value = useContext(Ctx)
-  if (!value) {
-    throw new Error('useRpcClientContext must be used within RpcClientProvider')
-  }
-  return value
 }

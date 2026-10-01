@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExpandableMarkdownImage } from './MarkdownImageLightbox'
+import CommentMarkdown from './CommentMarkdown'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 
 afterEach(() => {
@@ -66,3 +67,23 @@ describe('ExpandableMarkdownImage', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 })
+
+it.each([undefined, () => {}])(
+  'scales percentage height after loading in either document image renderer',
+  (onLinkClick) => {
+    const src = '/uploads/0123456789abcdef0123456789abcdef/screen.png'
+    render(
+      <CommentMarkdown
+        variant="document"
+        content={`![percent](${src}){height=50%}`}
+        gitlabImageSources={{ [src]: 'data:image/png;base64,abc' }}
+        onLinkClick={onLinkClick}
+      />
+    )
+    const image = screen.getByAltText('percent')
+    Object.defineProperty(image, 'naturalHeight', { configurable: true, value: 400 })
+    fireEvent.load(image)
+    expect(image.style.height).toBe('200px')
+    expect(image.getAttribute('height')).toBeNull()
+  }
+)

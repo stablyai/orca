@@ -44,10 +44,17 @@ type QueueEntry = {
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
   cancelled: boolean
+  onAbort: () => void
 }
 const queue: QueueEntry[] = []
 
-export function acquire(timeoutMs = GITLAB_ADMISSION_TIMEOUT_MS): Promise<void> {
+export function acquire(
+  timeoutMs = GITLAB_ADMISSION_TIMEOUT_MS,
+  signal?: AbortSignal
+): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason)
+  }
   if (running < MAX_CONCURRENT) {
     running += 1
     return Promise.resolve()
@@ -56,11 +63,13 @@ export function acquire(timeoutMs = GITLAB_ADMISSION_TIMEOUT_MS): Promise<void> 
     const entry: QueueEntry = {
       grant: () => {
         clearTimeout(entry.timer)
+        signal?.removeEventListener('abort', entry.onAbort)
         running += 1
         resolve()
       },
       reject: (error) => {
         clearTimeout(entry.timer)
+        signal?.removeEventListener('abort', entry.onAbort)
         reject(error)
       },
       timer: setTimeout(() => {
@@ -71,9 +80,18 @@ export function acquire(timeoutMs = GITLAB_ADMISSION_TIMEOUT_MS): Promise<void> 
         }
         entry.reject(new Error('Timed out waiting for a GitLab operation slot.'))
       }, timeoutMs),
-      cancelled: false
+      cancelled: false,
+      onAbort: () => {
+        entry.cancelled = true
+        const index = queue.indexOf(entry)
+        if (index !== -1) {
+          queue.splice(index, 1)
+        }
+        entry.reject(signal?.reason ?? new Error('GitLab operation cancelled.'))
+      }
     }
     queue.push(entry)
+    signal?.addEventListener('abort', entry.onAbort, { once: true })
   })
 }
 

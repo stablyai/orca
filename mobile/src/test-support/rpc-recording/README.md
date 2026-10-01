@@ -159,11 +159,11 @@ mutant planted on the recording path would be recorded and replayed alike, so ev
 compare clean while certifying the mutated code.
 
 A module-private product export an adapter drives is exposed by its own module — see
-`settingsMountExposures` — not by a shared table. One exposure is shared instead: five domains
-mount a screen that reads the client off the context `client-context.tsx` keeps module-private, and
-`hostClientContextExposure` is the one copy of that string. A rename of the local is invisible to
+`settingsMountExposures` — not by a shared table. One exposure is shared instead: six domains
+mount a screen that reads the client off the context `rpc-client-react-context.ts` exports, and
+`hostClientContextExposure` is the one copy of that string. A rename of the exported binding is invisible to
 `tsc`, so `adapter-seam.test.ts` asserts the declaration it names exists exactly once, and refuses a
-sixth inline copy. The same test requires every file under `adapters/` to be registered in
+separate inline copy. The same test requires every file under `adapters/` to be registered in
 `adapters/mounted-operation-modules.ts`.
 
 Checkpoints contain ordered sender calls and serialized physical application payloads, action and

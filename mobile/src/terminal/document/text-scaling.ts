@@ -1,10 +1,10 @@
+import { getCellHeight, getCellWidth } from './viewport-metrics'
 import { elementInRoot } from './document-host-seams'
 import { TERMINAL_TEXT_SCALES } from '../terminal-text-scales'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
-import { applyFitScale, getCellHeight } from './fit-scale'
+import { applyFitScale } from './fit-scale'
 import { fitDimensionsFromCell } from '../terminal-grid-fit'
-import { getCellWidth } from './viewport-transform'
 
 // Why: init() flips ready false on every re-init (live width reflow included)
 // while the old surface stays visible; a document-scoped latch drives the

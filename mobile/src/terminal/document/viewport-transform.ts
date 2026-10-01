@@ -1,3 +1,4 @@
+import { getCellWidth, getTotalScale } from './viewport-metrics'
 import { repositionOverlay } from './selection-overlay'
 import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import type { TerminalDocumentScope } from './document-scope'
@@ -17,26 +18,6 @@ export function flog(scope: TerminalDocumentScope, tag: string, payload: Record<
       payload: payload
     })
   } catch {}
-}
-
-/** 0 until the renderer has measured a cell. */
-export function getMeasuredCellHeight(scope: TerminalDocumentScope) {
-  const core = scope.term?._core
-  if (core && core._renderService && core._renderService.dimensions) {
-    return core._renderService.dimensions.css.cell.height || 0
-  }
-  return 0
-}
-
-export function getCellWidth(scope: TerminalDocumentScope) {
-  if (!scope.term || !scope.term._core) {
-    return 0
-  }
-  const core = scope.term._core
-  if (core._renderService && core._renderService.dimensions) {
-    return core._renderService.dimensions.css.cell.width || 0
-  }
-  return 0
 }
 
 // Why: width measurement strategy.
@@ -65,10 +46,6 @@ export function computeFitScale(scope: TerminalDocumentScope) {
     return 1
   }
   return Math.min(1, vpWidth / termWidth)
-}
-
-export function getTotalScale(scope: TerminalDocumentScope) {
-  return scope.currentScale * scope.userScale
 }
 
 export function updateTransform(scope: TerminalDocumentScope) {

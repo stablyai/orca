@@ -1,5 +1,5 @@
-import { getCellHeight } from './fit-scale'
-import { getCellWidth, getTotalScale } from './viewport-transform'
+import { getCellHeight, getCellWidth, getTotalScale } from './viewport-metrics'
+
 import type { TerminalDocumentScope } from './document-scope'
 
 export function cellToViewportPx(scope: TerminalDocumentScope, col: number, absRow: number) {

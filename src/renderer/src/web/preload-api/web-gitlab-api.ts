@@ -13,6 +13,7 @@ export type WebGitLabApi = NonNullable<PreloadApi['gl']>
 export type WebGitLabResult<K extends keyof WebGitLabApi> = Awaited<ReturnType<WebGitLabApi[K]>>
 
 export function createGitLabApi(): WebGitLabApi {
+  const detailControllers = new Map<string, AbortController>()
   const route = <Result>(method: WebGitLabRuntimeMethod, args?: unknown): Promise<Result> =>
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
 
@@ -40,8 +41,32 @@ export function createGitLabApi(): WebGitLabApi {
       route<WebGitLabResult<'listLabels'>>(GITLAB_WEB_RPC_METHODS.listLabels, args),
     listAssignableUsers: () => Promise.resolve([]),
     todos: (args) => route<WebGitLabResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
-    workItemDetails: ({ repoOwnerExecutionHostId: _owner, ...args }) =>
-      route<WebGitLabResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),
+    workItemDetails: async ({ repoOwnerExecutionHostId: _owner, requestToken, ...args }) => {
+      if (!requestToken) {
+        return route<WebGitLabResult<'workItemDetails'>>(
+          GITLAB_WEB_RPC_METHODS.workItemDetails,
+          args
+        )
+      }
+      detailControllers.get(requestToken)?.abort()
+      const controller = new AbortController()
+      detailControllers.set(requestToken, controller)
+      try {
+        return await callRuntimeResult<WebGitLabResult<'workItemDetails'>>(
+          GITLAB_WEB_RPC_METHODS.workItemDetails,
+          mapRepoPathArg(args),
+          undefined,
+          controller.signal
+        )
+      } finally {
+        if (detailControllers.get(requestToken) === controller) {
+          detailControllers.delete(requestToken)
+        }
+      }
+    },
+    cancelWorkItemDetails: async ({ requestToken }) => {
+      detailControllers.get(requestToken)?.abort()
+    },
     closeMR: (args) =>
       route<WebGitLabResult<'closeMR'>>(GITLAB_WEB_RPC_METHODS.closeMR, {
         ...args,

@@ -1,5 +1,6 @@
-import { getCellHeight } from './fit-scale'
-import { getTotalScale, updateScrollIndicator } from './viewport-transform'
+import { getCellHeight, getTotalScale } from './viewport-metrics'
+
+import { updateScrollIndicator } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
 

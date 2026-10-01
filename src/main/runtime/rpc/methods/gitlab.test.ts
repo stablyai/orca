@@ -271,7 +271,8 @@ describe('gitlab RPC methods', () => {
       'id:repo-1',
       8,
       'mr',
-      projectRef
+      projectRef,
+      { includeImages: undefined, maxReplyBytes: undefined }
     )
     expect(runtime.getGitLabRepoWorkItemByPath).toHaveBeenCalledWith(
       'id:repo-1',
@@ -374,4 +375,31 @@ describe('gitlab RPC methods', () => {
     expect(bounded).not.toContain('section_start')
     expect(bounded).not.toContain('line 0\n')
   })
+})
+
+it('forwards runtime request cancellation to GitLab details and previews', async () => {
+  const getGitLabRepoWorkItemDetails = vi.fn().mockResolvedValue(null)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This dispatcher test only invokes the GitLab detail query and runtime identity.
+  const runtime = {
+    getRuntimeId: () => 'test-runtime',
+    getGitLabRepoWorkItemDetails
+  } as unknown as OrcaRuntimeService
+  const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+  const controller = new AbortController()
+  await dispatcher.dispatch(
+    makeRequest('gitlab.workItemDetails', {
+      repo: 'id:repo-1',
+      iid: 8,
+      type: 'issue',
+      includeImages: true
+    }),
+    { signal: controller.signal }
+  )
+  expect(getGitLabRepoWorkItemDetails).toHaveBeenCalledWith(
+    'id:repo-1',
+    8,
+    'issue',
+    undefined,
+    expect.objectContaining({ includeImages: true, signal: controller.signal })
+  )
 })

@@ -75,7 +75,16 @@ export function spawnProcess(spec: ProcessSpec): ChildProcessWithoutNullStreams 
 export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
   if (spec.signal?.aborted) {
     spec.onChildTerminated?.()
-    return Promise.resolve({ code: null, signal: null, stdout: '', stderr: '', timedOut: false })
+    return Promise.resolve({
+      code: null,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      timedOut: false,
+      ...(spec.captureRawOutput
+        ? { stdoutBytes: Buffer.alloc(0), stderrBytes: Buffer.alloc(0) }
+        : {})
+    })
   }
   const maxOutputBytes = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
 
@@ -152,6 +161,9 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
           signal,
           stdout: stdout.text(),
           stderr: stderr.text(),
+          ...(spec.captureRawOutput
+            ? { stdoutBytes: stdout.buffer(), stderrBytes: stderr.buffer() }
+            : {}),
           timedOut,
           outputTruncated: stdout.truncated() || stderr.truncated()
         })
@@ -349,6 +361,12 @@ export function runProcessSync(spec: ProcessSpec): ProcessResult {
     signal: result.signal,
     stdout: result.stdout?.toString('utf8') ?? '',
     stderr: result.stderr?.toString('utf8') ?? '',
+    ...(spec.captureRawOutput
+      ? {
+          stdoutBytes: result.stdout ?? Buffer.alloc(0),
+          stderrBytes: result.stderr ?? Buffer.alloc(0)
+        }
+      : {}),
     // Why always false: spawnSync reports an overrun as an ENOBUFS error, and
     // the guard above rethrows it, so no truncated result reaches this point.
     outputTruncated: false,

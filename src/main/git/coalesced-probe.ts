@@ -23,8 +23,14 @@ export async function runCoalescedProbe<T>(
   probes: CoalescedProbes<T>,
   key: string,
   createProbe: (ownsKey: () => boolean) => Promise<T>,
-  staleAfterMs: number = PROBE_COALESCE_STALE_MS
+  staleAfterMs: number = PROBE_COALESCE_STALE_MS,
+  signal?: AbortSignal
 ): Promise<T> {
+  signal?.throwIfAborted()
+  // Cancellable readers own their probes and cannot abort another reader's work.
+  if (signal) {
+    return createProbe(() => !signal.aborted)
+  }
   const now = Date.now()
   const existing = probes.get(key)
   if (existing && now - existing.startedAt < staleAfterMs) {

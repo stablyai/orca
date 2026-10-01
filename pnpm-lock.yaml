@@ -109,7 +109,6 @@ overrides:
   monaco-editor>dompurify: 3.4.15
 
 patchedDependencies:
-  i18next-cli@1.74.2: 7955b89d3aa229f477408608d331f78c85148a85a85913729f89fac65ad8b207
   '@vscode/windows-process-tree@0.8.0': b4be93859cefb159949d9cf05f97fa91a221dff0f793a6f03d02d78ae5b32035
   '@xterm/addon-image@0.10.0-beta.300': e5254a46d6f57bef4a8a19683bfa685afa0ca0127545aea53b54a48104ca3562
   '@xterm/addon-ligatures@0.11.0-beta.300': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
@@ -117,6 +116,7 @@ patchedDependencies:
   '@xterm/addon-serialize@0.15.0-beta.300': b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f
   '@xterm/addon-webgl@0.20.0-beta.299': 94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e
   '@xterm/xterm@6.1.0-beta.303': dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393
+  i18next-cli@1.74.2: 7955b89d3aa229f477408608d331f78c85148a85a85913729f89fac65ad8b207
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
   node-pty@1.1.0: 92c95cffab383d86b3b13a460c75a08074468ebf1f3911db8e874e083201f192
 
@@ -383,6 +383,9 @@ importers:
       emojibase-data:
         specifier: 17.0.0
         version: 17.0.0(emojibase@17.0.0)
+      entities:
+        specifier: 7.0.1
+        version: 7.0.1
       esbuild:
         specifier: ^0.25.12
         version: 0.25.12
@@ -9911,6 +9914,7 @@ snapshots:
       '@swc/core-win32-arm64-msvc': 1.15.46
       '@swc/core-win32-ia32-msvc': 1.15.46
       '@swc/core-win32-x64-msvc': 1.15.46
+    optional: true
 
   '@swc/core@1.16.2':
     dependencies:
@@ -9935,6 +9939,7 @@ snapshots:
   '@swc/types@0.1.27':
     dependencies:
       '@swc/counter': 0.1.3
+    optional: true
 
   '@swc/types@0.1.28':
     dependencies:

@@ -54,7 +54,15 @@ vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof osModule>()
   return {
     ...actual,
-    homedir: homedirMock.mockImplementation(actual.homedir)
+    homedir: homedirMock
+  }
+})
+
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof osModule>()
+  return {
+    ...actual,
+    homedir: homedirMock
   }
 })
 
@@ -64,6 +72,7 @@ import {
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS
 } from './managed-agent-hook-registry'
 import { ClaudeHookService } from '../claude/hook-service'
+import { runExclusivelyForCodexTrustConfig } from '../codex/codex-trust-config-mutation-queue'
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -145,6 +154,8 @@ describe('managed hook script refresh', () => {
   it('covers every shared launcher script with a refresher', async () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-coverage-'))
     homedirMock.mockReturnValue(home)
+    const previousXdgHome = process.env.XDG_CONFIG_HOME
+    process.env.XDG_CONFIG_HOME = join(home, '.config')
     const previousGrokHome = process.env.GROK_HOME
     const previousKimiHome = process.env.KIMI_CODE_HOME
     delete process.env.GROK_HOME
@@ -155,6 +166,7 @@ describe('managed hook script refresh', () => {
           install()
         }
       })
+      await runExclusivelyForCodexTrustConfig(join(home, '.codex', 'config.toml'), async () => {})
       const hooksDir = join(home, '.orca', 'agent-hooks')
       const files = readdirSync(hooksDir)
       expect(files.length).toBeGreaterThan(0)
@@ -177,6 +189,11 @@ describe('managed hook script refresh', () => {
       }
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+      if (previousXdgHome === undefined) {
+        delete process.env.XDG_CONFIG_HOME
+      } else {
+        process.env.XDG_CONFIG_HOME = previousXdgHome
+      }
       if (previousGrokHome === undefined) {
         delete process.env.GROK_HOME
       } else {

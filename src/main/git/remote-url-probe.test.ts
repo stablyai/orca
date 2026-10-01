@@ -113,3 +113,33 @@ describe('remote URL probe', () => {
     ).rejects.toThrow('SSH Git provider unavailable')
   })
 })
+
+it.each([undefined, 'ssh-1'])(
+  'forwards caller cancellation to a remote URL read (%s)',
+  async (connectionId) => {
+    gitExecFileAsyncMock.mockReset()
+    getSshGitProviderMock.mockReset()
+    let executionSignal: AbortSignal | undefined
+    const exec = vi.fn((_args, _cwdOrOptions, options?: { signal?: AbortSignal }) => {
+      executionSignal = options?.signal ?? _cwdOrOptions.signal
+      const signal = executionSignal
+      if (!signal) {
+        throw new Error('Missing cancellation')
+      }
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    })
+    gitExecFileAsyncMock.mockImplementation(exec)
+    getSshGitProviderMock.mockReturnValue({ exec })
+    const controller = new AbortController()
+    const read = readRemoteUrl(
+      { repoPath: '/repo', connectionId, signal: controller.signal },
+      'origin'
+    )
+    const rejected = expect(read).rejects.toMatchObject({ name: 'AbortError' })
+    controller.abort()
+    await rejected
+    expect(executionSignal?.aborted).toBe(true)
+  }
+)

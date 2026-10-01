@@ -698,3 +698,117 @@ describe('parseGlabPaginationHeader', () => {
     expect(parseGlabPaginationHeader('-3', 0)).toBeUndefined()
   })
 })
+
+it('removes a cancelled GitLab waiter without consuming a slot', async () => {
+  await Promise.all([acquire(), acquire(), acquire(), acquire()])
+  const controller = new AbortController()
+  const cancelled = acquire(undefined, controller.signal)
+  const rejection = expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await rejection
+  const next = acquire()
+  release()
+  await next
+  for (let index = 0; index < 4; index++) {
+    release()
+  }
+  await acquire()
+  release()
+})
+
+it('refuses an already-aborted GitLab operation before admission', async () => {
+  await expect(acquire(undefined, AbortSignal.abort())).rejects.toMatchObject({
+    name: 'AbortError'
+  })
+})
+
+it('cancels a cold project lookup without poisoning the project cache or a shared reader', async () => {
+  _resetProjectRefCache()
+  gitExecFileAsyncMock.mockReset()
+  let completeShared: (value: { stdout: string }) => void = () => {}
+  gitExecFileAsyncMock.mockImplementation((_args, options: { signal?: AbortSignal }) => {
+    const signal = options.signal
+    if (!signal) {
+      return new Promise((resolve) => {
+        completeShared = resolve
+      })
+    }
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+    })
+  })
+  const shared = getProjectRefForRemote('/cancel-project', 'origin')
+  const controller = new AbortController()
+  const abandoned = getProjectRefForRemote('/cancel-project', 'origin', ['gitlab.com'], null, {
+    signal: controller.signal
+  })
+  const rejected = expect(abandoned).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await rejected
+  expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  completeShared({ stdout: 'git@gitlab.com:group/project.git' })
+  expect(await shared).toEqual({ host: 'gitlab.com', path: 'group/project' })
+  expect(await getProjectRefForRemote('/cancel-project', 'origin')).toEqual({
+    host: 'gitlab.com',
+    path: 'group/project'
+  })
+  expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+})
+
+it('observes both rejected probes when cancelling origin and upstream discovery', async () => {
+  _resetProjectRefCache()
+  _resetRemoteNameListingCache()
+  gitExecFileAsyncMock.mockReset()
+  gitExecFileAsyncMock.mockImplementation((_args, options: { signal?: AbortSignal }) => {
+    const signal = options.signal
+    if (!signal) {
+      throw new Error('Missing discovery cancellation')
+    }
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+    })
+  })
+  const controller = new AbortController()
+  const discovery = getIssueProjectRef('/cancel-origin-and-upstream', ['gitlab.com'], null, {
+    signal: controller.signal
+  })
+  const rejected = expect(discovery).rejects.toMatchObject({ name: 'AbortError' })
+  await vi.waitFor(() => expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2))
+  controller.abort()
+  await rejected
+})
+
+it('returns a ready upstream project without waiting for a stalled origin', async () => {
+  _resetProjectRefCache()
+  _resetRemoteNameListingCache()
+  gitExecFileAsyncMock.mockReset()
+  gitExecFileAsyncMock.mockImplementation((args: string[], options: { signal?: AbortSignal }) => {
+    if (args[1] !== 'get-url') {
+      return Promise.resolve({ stdout: 'origin\nupstream\n' })
+    }
+    if (args[2] === 'upstream') {
+      return Promise.resolve({ stdout: 'git@gitlab.com:group/upstream.git' })
+    }
+    const signal = options.signal
+    if (!signal) {
+      throw new Error('Missing origin cancellation')
+    }
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+    })
+  })
+  const controller = new AbortController()
+  let settled = false
+  const discovery = getIssueProjectRef('/ready-upstream', ['gitlab.com'], null, {
+    signal: controller.signal
+  }).then((project) => {
+    settled = true
+    return project
+  })
+  try {
+    await vi.waitFor(() => expect(settled).toBe(true))
+    expect(await discovery).toEqual({ host: 'gitlab.com', path: 'group/upstream' })
+  } finally {
+    controller.abort()
+  }
+})

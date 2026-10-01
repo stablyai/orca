@@ -2,6 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter, MountContext } from '../recording-scenario'
+import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
+import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
 
 const HOST_ID = 'host-1'
 const WORKTREE_ID = 'worktree-1'
@@ -20,12 +22,13 @@ const UNLOADED_WORKTREES: typeof WORKTREES = []
  * run against the scripted client; reimplementing `useHostClient` would put acquisition and
  * connection-state policy in the adapter, which is exactly what these recordings exist to observe.
  */
-export const agentHistoryMountExposures: readonly OperationExposure[] = [
-  ['transport/client-context.tsx', '\nexports.RecordingHostClientContext = Ctx;']
-]
+export const agentHistoryMountExposures: readonly OperationExposure[] = [hostClientContextExposure]
 
 /** A connected single-host context: one client, one state, no acquisition or reconnect behaviour. */
-function hostClientContext(client: MountContext['client'], effect: MountContext['effect']) {
+function hostClientContext(
+  client: MountContext['client'],
+  effect: MountContext['effect']
+): RpcClientContextValue {
   return {
     acquire: () => client,
     release: () => {},
@@ -62,9 +65,7 @@ export function agentHistoryMountAdapters(
       const useHistory = modules.load<
         typeof import('../../../agent-history/use-mobile-agent-history-state')
       >('mobile/src/agent-history/use-mobile-agent-history-state.ts').useMobileAgentHistoryState
-      const { RecordingHostClientContext } = modules.load<{
-        RecordingHostClientContext: React.Context<unknown>
-      }>('mobile/src/transport/client-context.tsx')
+      const RecordingHostClientContext = loadHostClientContext(modules)
       const context = hostClientContext(client, effect)
       // A holder rather than a bare binding: the harness is a component, and a component may not
       // assign a variable declared outside it.

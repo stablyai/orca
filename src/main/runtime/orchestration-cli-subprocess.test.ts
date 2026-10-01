@@ -71,6 +71,18 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+    const paneKey = 'tab_keepalive:44444444-4444-4444-8444-444444444444'
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_nobody' ? paneKey : null
+    )
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+      runtime.getTerminalPaneKey(handle)
+    )
+    db.createRun({
+      objective: 'CLI keepalive fixture',
+      coordinatorHandle: 'term_nobody',
+      coordinatorPaneKey: paneKey
+    })
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
     await server.start()
 
@@ -120,7 +132,11 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
         child.once('error', rejectExit)
       })
 
-      expect(exitCode).toBe(0)
+      expect(
+        exitCode,
+        stderrChunks.map((chunk) => chunk.data).join('') +
+          stdoutChunks.map((chunk) => chunk.data).join('')
+      ).toBe(0)
 
       const stderr = stderrChunks.map((c) => c.data).join('')
       const stdout = stdoutChunks.map((c) => c.data).join('')

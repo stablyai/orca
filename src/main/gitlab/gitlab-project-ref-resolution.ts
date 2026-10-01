@@ -90,16 +90,19 @@ export async function getProjectRefForRemote(
     projectRefCache.delete(cacheKey)
   }
 
-  return runProjectRefProbeOnce(cacheKey, (ownsKey) =>
-    resolveProjectRefForRemote(
-      repoPath,
-      remoteName,
-      knownHosts,
-      connectionId,
-      cacheKey,
-      ownsKey,
-      localGitOptions
-    )
+  return runProjectRefProbeOnce(
+    cacheKey,
+    (ownsKey) =>
+      resolveProjectRefForRemote(
+        repoPath,
+        remoteName,
+        knownHosts,
+        connectionId,
+        cacheKey,
+        ownsKey,
+        localGitOptions
+      ),
+    localGitOptions.signal
   )
 }
 
@@ -125,6 +128,7 @@ async function resolveProjectRefForRemote(
       {
         repoPath,
         connectionId,
+        ...(localGitOptions.signal ? { signal: localGitOptions.signal } : {}),
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
       },
@@ -153,6 +157,7 @@ async function resolveProjectRefForRemote(
       return remoteCandidate
     }
   } catch (error) {
+    localGitOptions.signal?.throwIfAborted()
     // Why: a wedged or killed probe is not evidence the remote is not GitLab —
     // caching it would misdetect the forge until the negative expires (P1-D).
     // SSH failures stay uncached outright rather than adopting the generic
@@ -188,6 +193,8 @@ export async function getIssueProjectRef(
     connectionId,
     localGitOptions
   )
+  // Observe cancellation even when upstream wins and origin is never awaited.
+  void originPromise.catch(() => {})
   if (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions)) {
     const upstream = await getProjectRefForRemote(
       repoPath,
@@ -258,10 +265,12 @@ export function glabRepoExecOptions(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): { cwd?: string; wslDistro?: string; admissionTier?: GitAdmissionTier } {
+): { cwd?: string; wslDistro?: string; admissionTier?: GitAdmissionTier; signal?: AbortSignal } {
+  const cancellation = localGitOptions.signal ? { signal: localGitOptions.signal } : {}
   return connectionId
-    ? {}
+    ? cancellation
     : {
+        ...cancellation,
         cwd: repoPath,
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
@@ -298,6 +307,7 @@ async function isGlabConfiguredForRemoteHost(
     }
     return true
   } catch (error) {
+    localGitOptions.signal?.throwIfAborted()
     const execLike = error as { stdout?: unknown; stderr?: unknown; message?: unknown }
     const output =
       [execLike.stdout, execLike.stderr, execLike.message]
