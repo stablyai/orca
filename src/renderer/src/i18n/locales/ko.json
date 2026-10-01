@@ -17567,7 +17567,7 @@
       },
       "status": {
         "responding": "Agent이 응답 중입니다.",
-        "working": "일하고 있는…",
+        "working": "작업 중…",
         "thinking": "생각",
         "workingFor": "{{value0}} 작업 중",
         "workedFor": "{{value0}} 작업 완료",
@@ -17685,9 +17685,9 @@
         "detailsUnavailable": "이 세션에서는 작업 세부정보를 사용할 수 없습니다.",
         "countAgentsOne": "에이전트 1명",
         "countAgentsMany": "{{value0}} 에이전트",
-        "countShellOne": "껍질 1개",
-        "countShellMany": "{{value0}} 껍질",
-        "countShellCommandOne": "1개의 쉘 명령",
+        "countShellOne": "셸 1개",
+        "countShellMany": "셸 {{value0}}개",
+        "countShellCommandOne": "셸 명령 1개",
         "countMonitorsOne": "모니터 1개",
         "countMonitorsMany": "{{value0}} 모니터",
         "countWorkflowsOne": "워크플로우 1개",
@@ -17695,7 +17695,7 @@
         "countTasksOne": "작업 1개",
         "countTasksMany": "{{value0}} 작업",
         "headerTotal": "{{value0}} 백그라운드 작업",
-        "stateWorking": "일하고 있는",
+        "stateWorking": "작업 중",
         "stateMonitoring": "모니터링",
         "stateWaiting": "대기 중",
         "stateBlocked": "막힌",
@@ -17706,7 +17706,7 @@
         "reasonUnverifiable": "연락 없음",
         "reasonBlocked": "실패한",
         "groupAgents": "에이전트",
-        "groupShell": "껍데기",
+        "groupShell": "셸",
         "groupMonitors": "모니터",
         "groupWorkflows": "워크플로",
         "groupTasks": "작업"
@@ -17725,7 +17725,7 @@
       "subagents": {
         "state": {
           "completed": "완전한",
-          "working": "일하고 있는",
+          "working": "작업 중",
           "idle": "idle",
           "failed": "실패한",
           "stopped": "중지됨",
@@ -17979,7 +17979,7 @@
             "unknown": "체크하지 않음"
           },
           "agent": {
-            "working": "일하고 있는",
+            "working": "작업 중",
             "permission": "당신을 기다리고 있습니다",
             "idle": "게으른"
           },
