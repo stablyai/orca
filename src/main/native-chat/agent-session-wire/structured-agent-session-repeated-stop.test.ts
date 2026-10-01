@@ -22,6 +22,7 @@ import {
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
 import { startAgent } from './structured-agent-session-restart-interruption-test-harness'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const REQUESTED = 'Cancellation requested.'
 
@@ -101,6 +102,7 @@ describe('a Stop pressed again', () => {
     await store.renewLeases([])
     const relaunchedStore = await openTestAgentSessionRecordStore(root)
     const relaunched = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store: relaunchedStore,
       adapter: adapter(),
       journalDatabase: openTestJournalHostDatabase(root),
