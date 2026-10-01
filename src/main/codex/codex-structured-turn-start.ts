@@ -122,6 +122,19 @@ export async function startCodexTurn(
   return { turnId: readCodexTurnId(answer) }
 }
 
+/** A user message outside any submission, steered into the thread's open turn; no echo is armed
+ *  because no journal send waits on it. */
+export async function steerCodexTurn(
+  connection: Pick<CodexAppServerConnection, 'request'>,
+  input: { threadId: string; text: string; timeoutMs?: number }
+): Promise<void> {
+  await connection.request(
+    'turn/start',
+    { threadId: input.threadId, input: [{ type: 'text', text: input.text }] },
+    { timeoutMs: input.timeoutMs }
+  )
+}
+
 /**
  * One submission's outcome as the wire must read it: admitted means Codex owns
  * the message and its identity settles on the echo, rejected is Codex answering

@@ -1,5 +1,6 @@
 import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
+import { codexAsyncAnswerText } from './codex-async-user-input'
 import { CODEX_PROMPT_MAX_ANSWER_BYTES } from './codex-prompt-registry-bounds'
 import {
   CODEX_USER_INPUT_METHOD,
@@ -123,6 +124,26 @@ export function applyCodexPromptAnswer(
     answers[id] = { answers: [answer] }
   }
   return { answers }
+}
+
+/** Records one answer to an async ask and returns the user message to steer once every question
+ *  has one; null while questions remain. Throws for an ask no longer open. */
+export function answerCodexAsyncQuestion(
+  registry: CodexPromptRegistry,
+  claim: CodexPromptClaim,
+  prepared: CodexPreparedAnswer
+): { threadId: string; text: string } | null {
+  if (!registry.ownsClaim(claim)) {
+    throw new Error(`codex app-server is no longer waiting on ${claim.itemId}`)
+  }
+  const prompt = claim.prompt
+  if (applyCodexPromptAnswer(prompt, prepared) === null) {
+    registry.releaseClaim(claim)
+    return null
+  }
+  // Forget first, as for a blocking reply: a second answer must not steer twice.
+  registry.forget(prompt)
+  return { threadId: prompt.threadId, text: codexAsyncAnswerText(prompt) }
 }
 
 /** Throws for a prompt Codex is no longer waiting on, which the wire reports as

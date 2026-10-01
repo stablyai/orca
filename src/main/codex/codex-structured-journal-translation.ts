@@ -3,6 +3,7 @@ import {
   turnVerdictForChildEnd
 } from '../native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
 import { createCodexProviderActivityReader } from '../native-chat/agent-session-wire/provider-frame-activity'
+import { readCodexUserMessageReply } from './codex-async-user-input'
 import { CODEX_TOKEN_USAGE_METHOD } from './codex-subagent-activity'
 import {
   CODEX_JOURNAL_ADMITTED,
@@ -249,6 +250,11 @@ export function createCodexJournalTranslator(
         }
       }
       if (event.method === 'item/started' || event.method === 'item/completed') {
+        const reply = readCodexUserMessageReply(event.method, event.params)
+        const answered = reply ? prompts.answerAsync(event.threadId, reply.text) : null
+        if (answered && !answered.accepted) {
+          return answered
+        }
         const routed = routeThreadItem(event)
         // Not a bare return: a claimed item must not skip the turn-tail arm,
         // which is the only publisher of its activity copy.

@@ -1,5 +1,8 @@
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import {
+  boundJournalPromptBody,
+  cancelledJournalPromptBody
+} from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import {
   codexApprovalItem,
   codexPromptIdentity,
@@ -22,14 +25,59 @@ import type { CodexPendingJournalPrompt } from './codex-structured-journal-settl
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
+import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import {
+  agentSessionPromptQuestions,
+  legacyAgentSessionSelectedOptionId,
+  type AgentSessionQuestionAnswer
+} from '../../shared/agent-session-question-answer'
+import {
+  boundInlineText,
+  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+} from '../native-chat/agent-session-journal/journal-payload-bounds'
 
-type CodexGroupedPendingJournalPrompt = CodexPendingJournalPrompt & { promptKey: string }
+/** Resolved with the typed reply as the free-text answer; a reply without text records none. */
+function answeredAsyncQuestionBody(
+  body: AgentJournalItemBody,
+  text: string | null,
+  resolvedAt: number
+): AgentJournalItemBody | null {
+  if (body.kind !== 'question') {
+    return null
+  }
+  const bounded = boundJournalPromptBody(body)
+  const other = text?.trim()
+    ? boundInlineText(text.trim(), DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+    : null
+  const answers: AgentSessionQuestionAnswer[] = other
+    ? agentSessionPromptQuestions(bounded).map((question) => ({
+        questionId: question.id,
+        optionIds: [],
+        other
+      }))
+    : []
+  return {
+    ...bounded,
+    resolution: {
+      state: 'resolved',
+      selectedOptionId: legacyAgentSessionSelectedOptionId(bounded, answers),
+      ...(answers.length > 0 ? { answers } : {}),
+      resolvedBy: null,
+      resolvedAt
+    }
+  }
+}
+
+type CodexGroupedPendingJournalPrompt = CodexPendingJournalPrompt & {
+  promptKey: string
+  delivery?: 'async'
+}
 
 export class CodexJournalPrompts {
   readonly pending = new Map<string, CodexGroupedPendingJournalPrompt>()
 
   constructor(
-    private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'bindPromptItemId'> & {
+    private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'bindPromptItemId' | 'now'> & {
       attributionFor: CodexRowAttribution
     },
     private readonly detailFor: (threadId: string, itemId: string) => string | null,
@@ -42,6 +90,7 @@ export class CodexJournalPrompts {
     params: unknown
     codexItemId: string
     promptKey: string
+    delivery?: 'async'
   }): CodexJournalTranslationAdmission {
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
     if (event.method === CODEX_USER_INPUT_METHOD) {
@@ -62,7 +111,8 @@ export class CodexJournalPrompts {
           turnId,
           promptKey: event.promptKey,
           identity: question.identity,
-          body: question.body
+          body: question.body,
+          ...(event.delivery ? { delivery: event.delivery } : {})
         })
         const trimAdmission = this.trim()
         if (!trimAdmission.accepted) {
@@ -99,6 +149,33 @@ export class CodexJournalPrompts {
     }
     this.deps.bindPromptItemId?.(itemId, event.threadId, event.promptKey, turnId)
     return CODEX_JOURNAL_ADMITTED
+  }
+
+  /** A user message on the thread answers every async ask still open there, in its own words. */
+  answerAsync(threadId: string, text: string | null): CodexJournalTranslationAdmission {
+    const answered = [...this.pending].filter(
+      ([, prompt]) => prompt.delivery === 'async' && prompt.threadId === threadId
+    )
+    if (answered.length === 0) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    const resolvedAt = this.deps.now?.() ?? Date.now()
+    const mutations = answered.flatMap(([, prompt]) => {
+      const body = answeredAsyncQuestionBody(prompt.body, text, resolvedAt)
+      const producer = this.deps.attributionFor(prompt.threadId, prompt.turnId)
+      return body ? [journalLifecycleItemMutation(producer, prompt.identity, body)] : []
+    })
+    const admission = appendCodexLifecycleMutations(
+      this.deps.sink,
+      `prompt-answered:${encodeURIComponent(threadId)}:${encodeURIComponent(answered[0]![0])}`,
+      mutations
+    )
+    if (admission.accepted) {
+      for (const [itemId] of answered) {
+        this.pending.delete(itemId)
+      }
+    }
+    return admission
   }
 
   resolve(journalItemId: string): void {

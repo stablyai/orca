@@ -70,7 +70,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
           params,
           observedAt,
           dispatchSequenceAtReceipt,
-          emit: (current, event) => this.emit(current, event)
+          emit: (current, event) => this.emit(current, event),
+          requestTimeoutMs: deps.requestTimeoutMs
         })
     })
     this.teardown = new CodexStructuredSessionTeardown({
@@ -266,7 +267,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   supportsThreadGoal = (): boolean => true
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
-    answerCodexStructuredPrompt({ request, sessions: this.sessions })
+    answerCodexStructuredPrompt({
+      request,
+      sessions: this.sessions,
+      requestTimeoutMs: this.deps.requestTimeoutMs
+    })
 
   async setOption(
     input: StructuredAgentSessionSetOptionInput

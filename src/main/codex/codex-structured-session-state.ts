@@ -68,6 +68,8 @@ export type CodexStructuredSessionEvent =
       params: unknown
       codexItemId: string
       promptKey: string
+      /** An async ask (Codex 0.158+): no server request waits on it, a user message answers it. */
+      delivery?: 'async'
     }
   | StructuredAgentSessionEndedEvent
   /** Translator-only compatibility for callers that do not participate in host recovery. */

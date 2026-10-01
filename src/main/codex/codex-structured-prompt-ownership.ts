@@ -5,6 +5,7 @@ import {
   type StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
+  answerCodexAsyncQuestion,
   answerCodexPrompt,
   prepareCodexPromptAnswer,
   type CodexPendingPrompt,
@@ -12,6 +13,7 @@ import {
 } from './codex-structured-prompt-replies'
 import { requireLiveCodexSession, type CodexSession } from './codex-structured-session-state'
 import { interruptCodexTurn } from './codex-structured-turn-cancellation'
+import { steerCodexTurn } from './codex-structured-turn-start'
 
 type CancelInput = Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]
 type AnswerInput = Parameters<StructuredAgentSessionAdapter['answerPrompt']>[0]
@@ -137,8 +139,9 @@ function prepareCodexAnswer(
 export async function answerCodexStructuredPrompt(input: {
   request: AnswerInput
   sessions: Map<string, CodexSession>
+  requestTimeoutMs?: number
 }): Promise<void> {
-  const { request, sessions } = input
+  const { request, sessions, requestTimeoutMs } = input
   const session = sessions.get(request.sessionId)
   if (!session || session.ended || session.fence !== request.fence) {
     throw new AgentSessionPromptUnavailableError(request.itemId)
@@ -161,7 +164,14 @@ export async function answerCodexStructuredPrompt(input: {
       throw new AgentSessionPromptUnavailableError(request.itemId)
     }
     session.translator?.resolvePrompt(request.itemId)
-    answerCodexPrompt(session.prompts, session.connection, claim, prepared)
+    if (claim.prompt.delivery !== 'async') {
+      answerCodexPrompt(session.prompts, session.connection, claim, prepared)
+      return
+    }
+    const steer = answerCodexAsyncQuestion(session.prompts, claim, prepared)
+    if (steer) {
+      await steerCodexTurn(session.connection, { ...steer, timeoutMs: requestTimeoutMs })
+    }
   } catch (error) {
     session.prompts.releaseClaim(claim)
     throw error
