@@ -43,6 +43,12 @@ export type SpeechApi = {
     model: string
     language: string
   }) => Promise<CustomSttEndpointTestResult>
+  discoverCustomEndpointModels: (input: { baseUrl: string; apiKey?: string }) => Promise<{
+    ok: boolean
+    models: string[]
+    source?: 'openai-models' | 'health' | 'models'
+    detail?: string
+  }>
   downloadModel: (modelId: string) => Promise<void>
   cancelDownload: (modelId: string) => Promise<void>
   deleteModel: (modelId: string) => Promise<void>

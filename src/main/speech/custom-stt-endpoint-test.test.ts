@@ -70,6 +70,21 @@ describe('testCustomSttEndpoint', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe('http://saved:1/v1/audio/transcriptions')
   })
 
+  it('probes with just a base URL (no model field) to verify reachability', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }))
+
+    const result = await testCustomSttEndpoint({
+      baseUrl: 'http://h:1/v1',
+      model: '',
+      language: ''
+    })
+
+    expect(result.ok).toBe(true)
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    const form = init?.body as FormData
+    expect(form.get('model')).toBeNull()
+  })
+
   it('retries once after a transport failure and reports the cause', async () => {
     storeState.config = { baseUrl: 'http://h:1/v1', model: 'large-v3', language: '' }
     const refused = Object.assign(new TypeError('fetch failed'), {

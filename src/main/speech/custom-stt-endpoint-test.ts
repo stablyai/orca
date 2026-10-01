@@ -36,15 +36,16 @@ export async function testCustomSttEndpoint(
 ): Promise<CustomSttEndpointTestResult> {
   const saved = readCustomSttEndpointConfig()
   const baseUrl = probe?.baseUrl?.trim() || saved?.baseUrl
-  const model = probe?.model?.trim() || saved?.model
+  const model = probe?.model?.trim() || saved?.model || ''
   const language = (probe?.language ?? saved?.language ?? '').trim()
 
   if (!baseUrl) {
     return { ok: false, outcome: 'invalid', detail: 'Enter a base URL first.' }
   }
-  if (!model) {
-    return { ok: false, outcome: 'invalid', detail: 'Enter a model first.' }
-  }
+  // Why: a model is not required to prove reachability — the user can Test right
+  // after pasting a URL, then pick a model from the discovered list. Send no
+  // `model` field at all in that case (most servers fall back to a default),
+  // rather than a placeholder name a strict server would reject.
 
   // Why: a bad base URL is the most common mistake; reject it here rather than
   // sending the user through a generic transport failure.
@@ -119,7 +120,9 @@ function postProbe(
   signal: AbortSignal
 ): Promise<Response> {
   const form = new FormData()
-  form.append('model', model)
+  if (model) {
+    form.append('model', model)
+  }
   form.append('response_format', 'json')
   if (language) {
     form.append('language', language)

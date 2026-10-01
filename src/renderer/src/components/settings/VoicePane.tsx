@@ -9,7 +9,8 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
-import { CustomSttEndpointDialog, type CustomSttEndpointTestState } from './CustomSttEndpointDialog'
+import { CustomSttEndpointDialog } from './CustomSttEndpointDialog'
+import { useCustomSttEndpoint } from './use-custom-stt-endpoint'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
@@ -41,14 +42,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     null
   )
   const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
-  const [customDialogOpen, setCustomDialogOpen] = useState(false)
-  const [customBaseUrlDraft, setCustomBaseUrlDraft] = useState('')
-  const [customModelDraft, setCustomModelDraft] = useState('')
-  const [customLanguageDraft, setCustomLanguageDraft] = useState('')
-  const [customApiKeyDraft, setCustomApiKeyDraft] = useState('')
-  const [customPending, setCustomPending] = useState(false)
-  const [customTesting, setCustomTesting] = useState(false)
-  const [customTestResult, setCustomTestResult] = useState<CustomSttEndpointTestState | null>(null)
   const mountedRef = useRef(true)
   // Merge async whole-object writes into committed current settings; render snapshots could undo toggles changed during IPC and disable the microphone picker.
   const voiceSettingsRef = useRef(voiceSettings)
@@ -59,6 +52,8 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const handlePaneRef = useCallback((node: HTMLDivElement | null): void => {
     mountedRef.current = node !== null
   }, [])
+
+  const isMounted = useCallback((): boolean => mountedRef.current, [])
 
   const updateVoiceSettings = useCallback(
     (updates: Partial<VoiceSettings>): void => {
@@ -71,6 +66,14 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     },
     [updateSettings]
   )
+
+  const customEndpoint = useCustomSttEndpoint({
+    voiceSettings,
+    selectedModel: catalog.find((m) => m.id === voiceSettings.sttModel),
+    updateVoiceSettings,
+    refreshModelStates,
+    isMounted
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -155,134 +158,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     (settingsSearchQuery.trim() !== '' &&
       matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
 
-  const openCustomEndpointDialog = (modelId: string | null = null): void => {
-    void window.api.speech
-      .getCustomEndpointStatus()
-      .then((status) => {
-        updateVoiceSettings({
-          customSttBaseUrl: status.baseUrl,
-          customSttModel: status.model,
-          customSttLanguage: status.language,
-          customSttApiKeyConfigured: status.apiKeyConfigured,
-          ...(modelId ? { sttModel: modelId } : {})
-        })
-        setCustomBaseUrlDraft(status.baseUrl)
-        setCustomModelDraft(status.model)
-        setCustomLanguageDraft(status.language)
-      })
-      .catch(() => {})
-    setCustomApiKeyDraft('')
-    setCustomTestResult(null)
-    setCustomDialogOpen(true)
-  }
-
-  const saveCustomEndpoint = async (_options?: { allowInvalid?: boolean }): Promise<void> => {
-    setCustomPending(true)
-    try {
-      const status = await window.api.speech.saveCustomEndpoint({
-        baseUrl: customBaseUrlDraft,
-        model: customModelDraft,
-        language: customLanguageDraft,
-        apiKey: customApiKeyDraft
-      })
-      updateVoiceSettings({
-        customSttBaseUrl: status.baseUrl,
-        customSttModel: status.model,
-        customSttLanguage: status.language,
-        customSttApiKeyConfigured: status.apiKeyConfigured,
-        sttModel: 'custom-openai-compatible'
-      })
-      await refreshModelStates()
-      setCustomDialogOpen(false)
-      setCustomApiKeyDraft('')
-      toast.success(
-        translate(
-          'auto.components.settings.VoicePane.customEndpointSaved',
-          'Custom transcription endpoint saved'
-        )
-      )
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.customEndpointSaveFailed',
-              'Failed to save custom endpoint'
-            )
-      )
-    } finally {
-      if (mountedRef.current) {
-        setCustomPending(false)
-      }
-    }
-  }
-
-  const clearCustomEndpoint = async (): Promise<void> => {
-    setCustomPending(true)
-    try {
-      await window.api.speech.clearCustomEndpoint()
-      updateVoiceSettings({
-        customSttBaseUrl: '',
-        customSttModel: '',
-        customSttLanguage: '',
-        customSttApiKeyConfigured: false,
-        sttModel: selectedModel?.provider === 'custom' ? '' : voiceSettings.sttModel
-      })
-      await refreshModelStates()
-      setCustomDialogOpen(false)
-      setCustomBaseUrlDraft('')
-      setCustomModelDraft('')
-      setCustomLanguageDraft('')
-      setCustomApiKeyDraft('')
-      toast.success(
-        translate(
-          'auto.components.settings.VoicePane.customEndpointCleared',
-          'Custom transcription endpoint cleared'
-        )
-      )
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.customEndpointClearFailed',
-              'Failed to clear custom endpoint'
-            )
-      )
-    } finally {
-      if (mountedRef.current) {
-        setCustomPending(false)
-      }
-    }
-  }
-
-  const testCustomEndpoint = async (): Promise<void> => {
-    setCustomTesting(true)
-    setCustomTestResult(null)
-    try {
-      const result = await window.api.speech.testCustomEndpoint({
-        baseUrl: customBaseUrlDraft,
-        model: customModelDraft,
-        language: customLanguageDraft
-      })
-      if (mountedRef.current) {
-        setCustomTestResult(result)
-      }
-    } catch (err) {
-      if (mountedRef.current) {
-        setCustomTestResult({
-          ok: false,
-          outcome: 'transport',
-          detail: err instanceof Error ? err.message : String(err)
-        })
-      }
-    } finally {
-      if (mountedRef.current) {
-        setCustomTesting(false)
-      }
-    }
-  }
-
   const openOpenAiDialog = (modelId: string | null = null): void => {
     setPendingCloudModelId(modelId)
     setOpenAiApiKeyDraft('')
@@ -366,7 +241,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         modelStates={modelStates}
         onUpdateVoiceSettings={updateVoiceSettings}
         onOpenOpenAiDialog={openOpenAiDialog}
-        onOpenCustomEndpointDialog={openCustomEndpointDialog}
+        onOpenCustomEndpointDialog={customEndpoint.openDialog}
         onRefreshModelStates={refreshModelStates}
       />
 
@@ -401,24 +276,26 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       />
 
       <CustomSttEndpointDialog
-        open={customDialogOpen}
+        open={customEndpoint.dialogOpen}
         configured={voiceSettings.customSttBaseUrl !== ''}
-        baseUrlDraft={customBaseUrlDraft}
-        modelDraft={customModelDraft}
-        languageDraft={customLanguageDraft}
-        apiKeyDraft={customApiKeyDraft}
+        baseUrlDraft={customEndpoint.baseUrlDraft}
+        modelDraft={customEndpoint.modelDraft}
+        modelSuggestions={customEndpoint.modelSuggestions}
+        discovering={customEndpoint.discovering}
+        languageDraft={customEndpoint.languageDraft}
+        apiKeyDraft={customEndpoint.apiKeyDraft}
         apiKeyConfigured={voiceSettings.customSttApiKeyConfigured}
-        pending={customPending}
-        testing={customTesting}
-        testResult={customTestResult}
-        onOpenChange={setCustomDialogOpen}
-        onBaseUrlDraftChange={setCustomBaseUrlDraft}
-        onModelDraftChange={setCustomModelDraft}
-        onLanguageDraftChange={setCustomLanguageDraft}
-        onApiKeyDraftChange={setCustomApiKeyDraft}
-        onSave={(options) => void saveCustomEndpoint(options)}
-        onClear={() => void clearCustomEndpoint()}
-        onTest={() => void testCustomEndpoint()}
+        pending={customEndpoint.pending}
+        testing={customEndpoint.testing}
+        testResult={customEndpoint.testResult}
+        onOpenChange={customEndpoint.setDialogOpen}
+        onBaseUrlDraftChange={customEndpoint.setBaseUrlDraft}
+        onModelDraftChange={customEndpoint.setModelDraft}
+        onLanguageDraftChange={customEndpoint.setLanguageDraft}
+        onApiKeyDraftChange={customEndpoint.setApiKeyDraft}
+        onSave={() => void customEndpoint.save()}
+        onClear={() => void customEndpoint.clear()}
+        onTest={() => void customEndpoint.test()}
       />
     </div>
   )

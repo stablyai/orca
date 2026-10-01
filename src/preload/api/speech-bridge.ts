@@ -24,6 +24,8 @@ export const speechApi = {
   saveCustomEndpoint: (input) => ipcRenderer.invoke('speech:saveCustomEndpoint', input),
   clearCustomEndpoint: () => ipcRenderer.invoke('speech:clearCustomEndpoint'),
   testCustomEndpoint: (probe) => ipcRenderer.invoke('speech:testCustomEndpoint', probe),
+  discoverCustomEndpointModels: (input) =>
+    ipcRenderer.invoke('speech:discoverCustomEndpointModels', input),
   downloadModel: (modelId: string): Promise<void> =>
     ipcRenderer.invoke('speech:downloadModel', modelId),
   cancelDownload: (modelId: string): Promise<void> =>
