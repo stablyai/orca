@@ -26,6 +26,14 @@ import { ExternalLink, Loader2, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
+function isIssueStatus(value: string): value is NonNullable<SentryIssueUpdate['status']> {
+  return value === 'resolved' || value === 'unresolved' || value === 'ignored'
+}
+
+function isIssuePriority(value: string): value is SentryIssuePriority {
+  return value === 'low' || value === 'medium' || value === 'high'
+}
+
 function EventDetails({ event }: { event: SentryEvent }): React.JSX.Element {
   return (
     <div className="space-y-4 rounded-md border border-border/60 bg-muted/20 p-3 text-xs">
@@ -265,9 +273,7 @@ export function SentryIssueDialog({
                     ? issue.status
                     : 'unresolved'
                 }
-                onValueChange={(status) =>
-                  void mutate({ status: status as 'resolved' | 'unresolved' | 'ignored' })
-                }
+                onValueChange={(status) => isIssueStatus(status) && void mutate({ status })}
               >
                 <SelectTrigger className="h-8 w-36">
                   <SelectValue />
@@ -282,7 +288,7 @@ export function SentryIssueDialog({
                 disabled={mutating}
                 value={issue.priority ?? 'medium'}
                 onValueChange={(priority) =>
-                  void mutate({ priority: priority as SentryIssuePriority })
+                  isIssuePriority(priority) && void mutate({ priority })
                 }
               >
                 <SelectTrigger className="h-8 w-32">
@@ -324,8 +330,8 @@ export function SentryIssueDialog({
                 <Loader2 className="size-4 animate-spin self-center text-muted-foreground" />
               ) : null}
             </div>
-            <ScrollArea className="min-h-0 flex-1 pr-4">
-              <div className="space-y-5 py-4">
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-5 py-4 pr-4">
                 <section className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
                   <Stat label={translate("auto.components.task.page.sentry.IssueDialog.1e0a3492cb", "Events")} value={issue.count.toLocaleString()} />
                   <Stat label={translate("auto.components.task.page.sentry.IssueDialog.8a51dbfd31", "Users")} value={issue.userCount.toLocaleString()} />

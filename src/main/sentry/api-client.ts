@@ -1,5 +1,6 @@
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 import { getMainHttpClient } from '../network/http-client'
+import { sentryRecord } from './sentry-value-guards'
 
 const REQUEST_TIMEOUT_MS = 30_000
 
@@ -26,7 +27,7 @@ export function normalizeSentryBaseUrl(value: string): string {
 
 async function readError(response: Response): Promise<string> {
   try {
-    const data = (await response.json()) as { detail?: unknown; error?: unknown }
+    const data = sentryRecord(await response.json())
     const message = typeof data.detail === 'string' ? data.detail : data.error
     if (typeof message === 'string' && message.trim()) {
       return message
@@ -37,13 +38,13 @@ async function readError(response: Response): Promise<string> {
   return response.statusText || `Sentry request failed (${response.status})`
 }
 
-export async function sentryRequest<T>(args: {
+export async function sentryRequest(args: {
   baseUrl: string
   token: string
   path: string
   search?: URLSearchParams
   init?: RequestInit
-}): Promise<{ value: T; headers: Headers }> {
+}): Promise<{ value: unknown; headers: Headers }> {
   const base = `${args.baseUrl.replace(/\/+$/, '')}/`
   const url = new URL(args.path.replace(/^\/+/, ''), base)
   if (url.origin !== new URL(base).origin) {
@@ -75,7 +76,7 @@ export async function sentryRequest<T>(args: {
     )
   }
   const value = response.status === 204 ? null : await response.json()
-  return { value: value as T, headers: response.headers }
+  return { value, headers: response.headers }
 }
 
 export function parseSentryPagination(headers: Headers): {

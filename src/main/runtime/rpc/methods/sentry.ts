@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import { OptionalFiniteNumber, OptionalPlainString, requiredString } from '../schemas'
 
 const Connect = z.object({
@@ -29,7 +29,7 @@ const Update = IssueId.extend({
   })
 })
 
-export const SENTRY_METHODS: RpcAnyMethod[] = [
+export const SENTRY_METHODS = [
   defineMethod({
     name: 'sentry.connect',
     params: Connect,

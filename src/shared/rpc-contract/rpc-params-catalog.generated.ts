@@ -1076,6 +1076,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
   'runtime.clientEvents.subscribe': null,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
+  'sentry.disconnect': null,
+  'sentry.listAssignees': null,
+  'sentry.listEnvironments': null,
+  'sentry.listProjects': null,
+  'sentry.status': null,
+  'sentry.testConnection': null,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,
   'session.tabs.closeLifecycle': CloseLifecycleTab,
@@ -1196,7 +1202,13 @@ export const RPC_PARAMS_BY_METHOD = {
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
   'emulator.install',
   'orchestration.send',
-  'orchestration.taskUpdate'
+  'orchestration.taskUpdate',
+  'sentry.connect',
+  'sentry.getIssue',
+  'sentry.listEvents',
+  'sentry.listIssues',
+  'sentry.selectOrganization',
+  'sentry.updateIssue'
 ]
 
 export type RpcMethodName = keyof typeof RPC_PARAMS_BY_METHOD

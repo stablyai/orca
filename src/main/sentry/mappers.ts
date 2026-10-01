@@ -8,11 +8,8 @@ import type {
   SentryProject,
   SentryStackFrame
 } from '../../shared/sentry-types'
+import { sentryArray as array, sentryRecord as record } from './sentry-value-guards'
 
-const record = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {}
 const string = (value: unknown, fallback = ''): string =>
   typeof value === 'string' ? value : fallback
 const nullableString = (value: unknown): string | null => (typeof value === 'string' ? value : null)
@@ -20,8 +17,6 @@ const number = (value: unknown): number => {
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(parsed) ? parsed : 0
 }
-const array = (value: unknown): unknown[] => (Array.isArray(value) ? value : [])
-
 export function mapOrganization(value: unknown): SentryOrganization {
   const data = record(value)
   return {

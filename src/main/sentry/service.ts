@@ -19,6 +19,7 @@ import {
   saveSentryCredential
 } from './credential-store'
 import { mapEvent, mapIssue, mapOrganization, mapProject } from './mappers'
+import { sentryArray, sentryRecord } from './sentry-value-guards'
 
 type ConnectResult = { ok: true; status: SentryConnectionStatus } | { ok: false; error: string }
 
@@ -71,12 +72,14 @@ export async function connectSentry(args: {
     if (!token) {
       return { ok: false, error: 'Auth token is required.' }
     }
-    const response = await sentryRequest<unknown[]>({
+    const response = await sentryRequest({
       baseUrl,
       token,
       path: '/api/0/organizations/'
     })
-    const organizations = response.value.map(mapOrganization).filter((org) => org.id && org.slug)
+    const organizations = sentryArray(response.value)
+      .map(mapOrganization)
+      .filter((org) => org.id && org.slug)
     if (!organizations.length) {
       return { ok: false, error: 'This token cannot access a Sentry organization.' }
     }
@@ -120,12 +123,12 @@ export async function testSentryConnection(): Promise<ConnectResult> {
   }
 }
 
-async function currentRequest<T>(
+async function currentRequest(
   path: string,
   options: { search?: URLSearchParams; init?: RequestInit } = {}
-): Promise<{ value: T; headers: Headers }> {
+): Promise<{ value: unknown; headers: Headers }> {
   const client = currentClient()
-  return sentryRequest<T>({
+  return sentryRequest({
     baseUrl: client.baseUrl,
     token: client.token,
     path: `/api/0/organizations/${encodeURIComponent(client.organization.slug)}${path}`,
@@ -133,12 +136,12 @@ async function currentRequest<T>(
   })
 }
 
-async function currentIssueRequest<T>(
+async function currentIssueRequest(
   path: string,
   options: { search?: URLSearchParams; init?: RequestInit } = {}
-): Promise<{ value: T; headers: Headers }> {
+): Promise<{ value: unknown; headers: Headers }> {
   const client = currentClient()
-  return sentryRequest<T>({
+  return sentryRequest({
     baseUrl: client.baseUrl,
     token: client.token,
     path: `/api/0/issues/${path}`,
@@ -147,15 +150,17 @@ async function currentIssueRequest<T>(
 }
 
 export async function listSentryProjects(): Promise<SentryProject[]> {
-  const { value } = await currentRequest<unknown[]>('/projects/')
-  return value.map(mapProject).filter((project) => project.id && project.slug)
+  const { value } = await currentRequest('/projects/')
+  return sentryArray(value)
+    .map(mapProject)
+    .filter((project) => project.id && project.slug)
 }
 
 export async function listSentryEnvironments(): Promise<SentryEnvironment[]> {
-  const { value } = await currentRequest<unknown[]>('/environments/')
-  return value
+  const { value } = await currentRequest('/environments/')
+  return sentryArray(value)
     .map((entry) => {
-      const data = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {}
+      const data = sentryRecord(entry)
       const name = typeof data.name === 'string' ? data.name : ''
       return { id: typeof data.id === 'string' ? data.id : name, name }
     })
@@ -163,13 +168,12 @@ export async function listSentryEnvironments(): Promise<SentryEnvironment[]> {
 }
 
 function mapAssignable(value: unknown, type: 'user' | 'team'): SentryAssignee | null {
-  const data = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const data = sentryRecord(value)
   const id = typeof data.id === 'string' ? data.id : ''
   if (!id) {
     return null
   }
-  const profile =
-    data.user && typeof data.user === 'object' ? (data.user as Record<string, unknown>) : data
+  const profile = data.user ? sentryRecord(data.user) : data
   const assigneeId =
     type === 'user' && typeof profile.id === 'string' ? profile.id : id
   const name =
@@ -184,12 +188,12 @@ function mapAssignable(value: unknown, type: 'user' | 'team'): SentryAssignee | 
 
 export async function listSentryAssignees(): Promise<SentryAssignee[]> {
   const [members, teams] = await Promise.all([
-    currentRequest<unknown[]>('/members/'),
-    currentRequest<unknown[]>('/teams/')
+    currentRequest('/members/'),
+    currentRequest('/teams/')
   ])
   return [
-    ...members.value.map((value) => mapAssignable(value, 'user')),
-    ...teams.value.map((value) => mapAssignable(value, 'team'))
+    ...sentryArray(members.value).map((value) => mapAssignable(value, 'user')),
+    ...sentryArray(teams.value).map((value) => mapAssignable(value, 'team'))
   ].filter((value): value is SentryAssignee => value !== null)
 }
 
@@ -211,16 +215,16 @@ export async function listSentryIssues(
   if (query.cursor) {
     search.set('cursor', query.cursor)
   }
-  const { value, headers } = await currentRequest<unknown[]>('/issues/', {
+  const { value, headers } = await currentRequest('/issues/', {
     search,
     init: { signal }
   })
-  return { items: value.map(mapIssue), ...parseSentryPagination(headers) }
+  return { items: sentryArray(value).map(mapIssue), ...parseSentryPagination(headers) }
 }
 
 export async function getSentryIssue(issueId: string): Promise<SentryIssue | null> {
   try {
-    const { value } = await currentIssueRequest<unknown>(`${encodeURIComponent(issueId)}/`)
+    const { value } = await currentIssueRequest(`${encodeURIComponent(issueId)}/`)
     return mapIssue(value)
   } catch (error) {
     if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
@@ -239,11 +243,11 @@ export async function listSentryEvents(
   if (cursor) {
     search.set('cursor', cursor)
   }
-  const { value, headers } = await currentIssueRequest<unknown[]>(
+  const { value, headers } = await currentIssueRequest(
     `${encodeURIComponent(issueId)}/events/`,
     { search, init: { signal } }
   )
-  return { items: value.map(mapEvent), ...parseSentryPagination(headers) }
+  return { items: sentryArray(value).map(mapEvent), ...parseSentryPagination(headers) }
 }
 
 export async function updateSentryIssue(
@@ -255,7 +259,7 @@ export async function updateSentryIssue(
     if (updates.assignedTo === null) {
       body.assignedTo = ''
     }
-    const { value } = await currentIssueRequest<unknown>(`${encodeURIComponent(issueId)}/`, {
+    const { value } = await currentIssueRequest(`${encodeURIComponent(issueId)}/`, {
       init: { method: 'PUT', body: JSON.stringify(body) }
     })
     return { ok: true, issue: mapIssue(value) }

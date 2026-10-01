@@ -49,6 +49,10 @@ type SentryIssueListOverrides = {
   sort?: 'date' | 'new' | 'freq' | 'user'
 }
 
+function isIssueSort(value: string): value is NonNullable<SentryIssueListOverrides['sort']> {
+  return value === 'date' || value === 'new' || value === 'freq' || value === 'user'
+}
+
 function relativeTime(value: string): string {
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp)) {
@@ -397,9 +401,10 @@ export function TaskPageSentryContent({
         <Select
           value={sort}
           onValueChange={(value) => {
-            const next = value as typeof sort
-            setSort(next)
-            void loadIssues(undefined, { sort: next })
+            if (isIssueSort(value)) {
+              setSort(value)
+              void loadIssues(undefined, { sort: value })
+            }
           }}
         >
           <SelectTrigger className="h-8 w-32">
@@ -585,24 +590,26 @@ function FilterMenu({
           <ChevronDown className="size-3" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="scrollbar-sleek max-h-72 overflow-auto">
-        {items.map((item) => (
-          <DropdownMenuCheckboxItem
-            key={item.id}
-            checked={selected.has(item.id)}
-            onCheckedChange={(checked) => {
-              const next = new Set(selected)
-              if (checked) {
-                next.add(item.id)
-              } else {
-                next.delete(item.id)
-              }
-              onChange(next)
-            }}
-          >
-            {item.label}
-          </DropdownMenuCheckboxItem>
-        ))}
+      <DropdownMenuContent>
+        <div className="scrollbar-sleek max-h-72 overflow-auto">
+          {items.map((item) => (
+            <DropdownMenuCheckboxItem
+              key={item.id}
+              checked={selected.has(item.id)}
+              onCheckedChange={(checked) => {
+                const next = new Set(selected)
+                if (checked) {
+                  next.add(item.id)
+                } else {
+                  next.delete(item.id)
+                }
+                onChange(next)
+              }}
+            >
+              {item.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   )

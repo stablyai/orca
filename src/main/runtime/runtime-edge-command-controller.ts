@@ -114,6 +114,10 @@ const BROWSER_COMMAND_NAMES = [
   'browserTabClose'
 ] as const satisfies readonly (keyof RuntimeBrowserCommands)[]
 
+function bindPrefixedMethods<T extends object, Prefix extends string>(
+  instance: T,
+  prefix: Prefix
+): Pick<PublicMethods<T>, Extract<keyof T, `${Prefix}${string}`>>
 function bindPrefixedMethods<T extends object>(
   instance: T,
   prefix: string
@@ -127,6 +131,10 @@ function bindPrefixedMethods<T extends object>(
   return bound as Partial<PublicMethods<T>>
 }
 
+function bindNamedMethods<T extends object, Names extends readonly (keyof T)[]>(
+  instance: T,
+  names: Names
+): Pick<PublicMethods<T>, Names[number]>
 function bindNamedMethods<T extends object>(
   instance: T,
   names: readonly (keyof T)[]
@@ -162,7 +170,7 @@ export class RuntimeEdgeCommandController {
       ...bindNamedMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindPrefixedMethods(this.emulator, 'emulator'),
       browserScreencast: (params, options) => this.screencasts.start(params, options)
-    } as RuntimeEdgeCommandSurface
+    } satisfies RuntimeEdgeCommandSurface
   }
 
   cancelScreencast(browserPageId: string): void {

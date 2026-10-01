@@ -7,6 +7,7 @@ import {
   readStoredCredentialToken,
   writeEncryptedCredential
 } from '../integration-credential-file'
+import { isSentryRecord } from './sentry-value-guards'
 
 type SentryConnectionFile = {
   version: 1
@@ -46,40 +47,59 @@ export function saveSentryCredential(
 
 function parseCredentialRecord(value: string): SentryCredentialRecord | null {
   try {
-    const record = JSON.parse(value) as SentryCredentialRecord
-    if (
-      record.version !== 1 ||
-      typeof record.token !== 'string' ||
-      !record.token ||
-      typeof record.baseUrl !== 'string' ||
-      !record.organization ||
-      !Array.isArray(record.organizations)
-    ) {
+    const parsed: unknown = JSON.parse(value)
+    if (!isSentryRecord(parsed) || typeof parsed.token !== 'string' || !parsed.token) {
       return null
     }
-    return record
+    const connection = parseConnectionValue(parsed)
+    return connection ? { ...connection, token: parsed.token } : null
   } catch {
     return null
   }
 }
 
+function parseOrganization(value: unknown): SentryOrganization | null {
+  if (
+    !isSentryRecord(value) ||
+    typeof value.id !== 'string' ||
+    typeof value.slug !== 'string' ||
+    typeof value.name !== 'string'
+  ) {
+    return null
+  }
+  return { id: value.id, slug: value.slug, name: value.name }
+}
+
+function parseConnectionValue(value: unknown): SentryConnectionFile | null {
+  if (!isSentryRecord(value) || value.version !== 1 || typeof value.baseUrl !== 'string') {
+    return null
+  }
+  const organization = parseOrganization(value.organization)
+  const organizations = Array.isArray(value.organizations)
+    ? value.organizations.map(parseOrganization)
+    : []
+  if (!organization || organizations.some((entry) => entry === null)) {
+    return null
+  }
+  return {
+    version: 1,
+    baseUrl: value.baseUrl,
+    organization,
+    organizations: organizations.filter((entry): entry is SentryOrganization => entry !== null)
+  }
+}
+
 function readLegacyCredential(): SentryCredentialRecord | null {
-  let value: SentryConnectionFile
+  let value: SentryConnectionFile | null
   try {
-    value = JSON.parse(readFileSync(connectionPath(), 'utf8')) as SentryConnectionFile
+    value = parseConnectionValue(JSON.parse(readFileSync(connectionPath(), 'utf8')))
   } catch {
     return null
   }
   const token = credentialFileHasContent(tokenPath())
     ? readStoredCredentialToken('Sentry', readFileSync(tokenPath()))
     : null
-  if (
-    value.version !== 1 ||
-    !token ||
-    typeof value.baseUrl !== 'string' ||
-    !value.organization ||
-    !Array.isArray(value.organizations)
-  ) {
+  if (!value || !token) {
     return null
   }
   return { ...value, token }
