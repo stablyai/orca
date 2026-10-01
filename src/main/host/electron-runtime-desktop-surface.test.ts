@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getNotificationEventHandler,
   notificationOnMock,
+  notificationRemoveListenerMock,
   resetNotificationDispatchMocks
 } from '../ipc/notifications-test-harness'
 
@@ -32,6 +33,17 @@ describe('electronRuntimeDesktopSurface.showNotification', () => {
     expect(createNotificationRevealHandler).toHaveBeenCalledWith(target)
     getNotificationEventHandler('click')()
     expect(reveal).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases the click action when the notification fails to display', () => {
+    electronRuntimeDesktopSurface.showNotification({
+      title: 't',
+      body: 'b',
+      target: { worktreeId: 'repo::wt1' }
+    })
+
+    getNotificationEventHandler('failed')()
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('click', expect.any(Function))
   })
 
   it('binds no click action without a target', () => {

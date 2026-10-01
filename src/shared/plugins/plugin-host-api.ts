@@ -57,8 +57,11 @@ const notificationsShowParams = z.object({
   // Why: lets a click (desktop) or tap (paired phone) open the worktree/pane the notification is about.
   target: z
     .object({
-      worktreeId: z.string().min(1).max(4096),
-      paneKey: z.string().min(1).max(512).optional()
+      // Why: the push gateway rejects a whole notification whose worktreeId exceeds 2048 chars.
+      worktreeId: z.string().min(1).max(2048),
+      paneKey: z.string().min(1).max(512).optional(),
+      // Why: a structured chat's pane key looks like a terminal's, so the plugin says which to reveal.
+      surface: z.enum(['terminal', 'agent-session']).optional()
     })
     .strict()
     .optional()

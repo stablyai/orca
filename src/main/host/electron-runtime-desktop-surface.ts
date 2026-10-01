@@ -14,15 +14,18 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     const notification = new Notification({ title, body })
     const reveal = target ? createNotificationRevealHandler(target) : null
     if (reveal) {
-      // Why: keep the notification and its click handler alive until it is clicked or dismissed.
+      // Why: keep the notification and its click handler alive until it is clicked, dismissed, or fails.
       const onClick = (): void => {
         release()
         reveal()
       }
-      const release = retainNotificationUntilRelease(notification, () =>
+      const onFailed = (): void => release()
+      const release = retainNotificationUntilRelease(notification, () => {
         notification.removeListener('click', onClick)
-      )
+        notification.removeListener('failed', onFailed)
+      })
       notification.on('click', onClick)
+      notification.on('failed', onFailed)
     }
     notification.show()
     return true
