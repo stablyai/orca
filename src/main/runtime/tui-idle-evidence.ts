@@ -16,6 +16,7 @@ import {
   isKnownReadyPromptBody,
   isQuietReadyScreenBody
 } from './terminal-wait-detection'
+import { getScreenReadyRule, readScreenRuledVerdict } from './screen-ruled-agent-readiness'
 
 /**
  * Ranking the evidence that a `tui-idle` wait may settle on.
@@ -29,8 +30,9 @@ import {
  *   0. BLOCKED — the tail shows a prompt waiting on the user.
  *   1. STRONG READY — the agent states it is ready: an explicit idle marker in its own
  *      title, or a known ready-prompt body.
- *   1b. QUIET READY SCREEN — Muse and an idle Codex title no rest signal, so their
- *      ready-screen body stands in for the strong evidence, believed only once quiet.
+ *   1b. QUIET READY SCREEN — Muse and an idle Codex title no rest signal, and the screen-ruled
+ *      agents (Antigravity, Cline, Prime Agent) can paint their idle composer mid-turn, so their
+ *      ready-screen body is believed only once quiet.
  *   2. WORKING — a fresh first-party agent status (OSC 9999) saying working/blocked/
  *      waiting, or a working title. The agent's own account of itself outranks anything
  *      inferred.
@@ -196,8 +198,10 @@ export type TuiIdleEvaluationInput = {
    *  (~11us and a multi-KB string on a full tail); the title check below usually answers
    *  first, and then none of that has to happen at all. */
   readPositiveBodyEvidence: () => boolean
-  /** Tier 1b body evidence: a Muse or Codex ready screen. Thunk for the same reason as above. */
+  /** Tier 1b body evidence: a Muse, Codex or screen-ruled ready screen. Thunk, as above. */
   readQuietReadyBodyEvidence: () => boolean
+  /** Whether the agent's live screen already ruled on readiness, which shuts the weak lanes. */
+  readScreenDecidesReadiness: () => boolean
   agent: TuiAgent | null | undefined
   firstPartyStatus: FirstPartyAgentStatus
   quiescenceMs: number
@@ -225,8 +229,9 @@ const QUIET_READY_SCREEN_AGENTS: ReadonlySet<TuiAgent> = new Set(['muse', 'codex
  * the cwd (plus a thread name) and no agent name, so neither the explicit-idle nor the
  * sustained-title lane can fire. The ready screen proves the TUI is up; the quiescence
  * demand keeps a mid-turn streaming pane from satisfying, mirroring the tier-3 lane's
- * positive-evidence-plus-quiet shape. Scoped to those agents and agent-unknown panes (which
- * read only Muse's screen): another agent's scrollback quoting them must not settle its wait.
+ * positive-evidence-plus-quiet shape. Scoped to those agents, the screen-ruled ones, and
+ * agent-unknown panes (which read only Muse's screen): another agent's scrollback quoting them
+ * must not settle its wait.
  */
 export function hasQuietReadyScreen(
   record: TuiIdleEvidenceRecord,
@@ -234,7 +239,7 @@ export function hasQuietReadyScreen(
   readBodyEvidence: () => boolean,
   quiescenceMs: number
 ): boolean {
-  if (agent && !QUIET_READY_SCREEN_AGENTS.has(agent)) {
+  if (agent && !QUIET_READY_SCREEN_AGENTS.has(agent) && !getScreenReadyRule(agent)) {
     return false
   }
   // Why: same rule as the tier-3 lane — without an output clock there is no
@@ -297,6 +302,10 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   if (input.record.lastAgentStatus === 'working') {
     return WORKING
   }
+  // Why: a name-only title and a quiet process cannot see the picker or prompt the screen refused.
+  if (input.readScreenDecidesReadiness()) {
+    return { kind: 'pending', quietForeground: 'closed' }
+  }
   if (hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs)) {
     return READY_WEAK
   }
@@ -319,6 +328,20 @@ export type TuiIdleEvidenceSource = {
   getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
   getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
   readScreenLines(ptyId: string | null | undefined): readonly string[] | null
+  /** The painted rows on the PTY's own grid, which only screen-ruled agents read. Absent, they
+   *  have no trustworthy screen. */
+  readScreenRuledLines?(ptyId: string | null | undefined): readonly string[] | null
+}
+
+// Why per agent table: every other agent keeps the screen it read before screen rules existed.
+function screenReader(
+  source: TuiIdleEvidenceSource,
+  agent: TuiAgent | null,
+  ptyId: string | null | undefined
+): () => readonly string[] | null {
+  return getScreenReadyRule(agent)
+    ? () => source.readScreenRuledLines?.(ptyId) ?? null
+    : () => source.readScreenLines(ptyId)
 }
 
 function lazyWaitText(readWaitText: () => string): () => string {
@@ -333,19 +356,15 @@ export function leafTuiIdleEvidence(
 ): TuiIdleEvaluationInput {
   const waitText = lazyWaitText(readWaitText)
   const agent = source.getPaneAgent(leaf.ptyId)
+  const readScreen = screenReader(source, agent, leaf.ptyId)
   return {
     record: leaf,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
     rendererTitle: leaf.paneTitle ?? source.getTabTitle(leaf.tabId),
     readPositiveBodyEvidence: () =>
-      isKnownReadyPromptBody(
-        waitText(),
-        agent,
-        () => source.readScreenLines(leaf.ptyId),
-        leaf.lastOutputAt !== null
-      ),
-    readQuietReadyBodyEvidence: () =>
-      isQuietReadyScreenBody(waitText(), agent, () => source.readScreenLines(leaf.ptyId)),
+      isKnownReadyPromptBody(waitText(), agent, readScreen, leaf.lastOutputAt !== null),
+    readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText(), agent, readScreen),
+    readScreenDecidesReadiness: () => readScreenRuledVerdict(agent, readScreen) !== null,
     agent,
     firstPartyStatus: source.getFirstPartyAgentStatus(leaf.ptyId),
     quiescenceMs: source.quiescenceMs
@@ -359,19 +378,15 @@ export function ptyTuiIdleEvidence(
 ): TuiIdleEvaluationInput {
   const waitText = lazyWaitText(readWaitText)
   const agent = source.getPaneAgent(pty.ptyId)
+  const readScreen = screenReader(source, agent, pty.ptyId)
   return {
     record: pty,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
     readPositiveBodyEvidence: () =>
       (agent !== 'qoder' && source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
-      isKnownReadyPromptBody(
-        waitText(),
-        agent,
-        () => source.readScreenLines(pty.ptyId),
-        pty.lastOutputAt !== null
-      ),
-    readQuietReadyBodyEvidence: () =>
-      isQuietReadyScreenBody(waitText(), agent, () => source.readScreenLines(pty.ptyId)),
+      isKnownReadyPromptBody(waitText(), agent, readScreen, pty.lastOutputAt !== null),
+    readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText(), agent, readScreen),
+    readScreenDecidesReadiness: () => readScreenRuledVerdict(agent, readScreen) !== null,
     agent,
     firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
     quiescenceMs: source.quiescenceMs

@@ -8,6 +8,7 @@ import {
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { findAntigravityReadyPromptIndex } from './antigravity-terminal-readiness'
+import { readScreenRuledVerdict } from './screen-ruled-agent-readiness'
 import {
   findCodexHeaderIndex,
   findCodexScreenReadyPromptIndex,
@@ -15,7 +16,8 @@ import {
   isCodexProvisionalStartupText
 } from './codex-terminal-readiness'
 import { findStartupDialogBlockedSignals } from './startup-dialog-blocked-signals'
-import { startOfLastLines, startOfLastNonBlankLines } from './terminal-wait-tail-window'
+import { startOfLastNonBlankLines } from './terminal-wait-tail-window'
+import { findCursorApprovalPromptIndex } from './cursor-approval-prompt-detection'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
@@ -75,8 +77,8 @@ function isReadyPromptSettled(normalized: string, readyIndex: number | null): bo
  * Tier 1 body evidence for every tui-idle site. `readScreenLines` yields the live emulator's
  * visible grid, or null when the runtime has no trustworthy one.
  *
- * Why not for a clocked Codex pane: its header stays up through every turn, so it proves only
- * that Codex started; isQuietReadyScreenBody holds it to quiescence instead.
+ * Why not for a clocked Codex or screen-ruled pane: its header or composer is also painted
+ * mid-turn, so isQuietReadyScreenBody holds it to quiescence instead.
  * Why a clockless pane keeps it: quiescence needs an output clock, which a restored pane lacks.
  */
 export function isKnownReadyPromptBody(
@@ -87,6 +89,10 @@ export function isKnownReadyPromptBody(
 ): boolean {
   if (agent === 'qoder') {
     return isQoderComposerReady(readScreenLines())
+  }
+  const screenVerdict = readScreenRuledVerdict(agent, readScreenLines)
+  if (screenVerdict !== null) {
+    return screenVerdict && !hasOutputClock
   }
   if (agent === 'codex' && hasOutputClock) {
     return false
@@ -105,7 +111,7 @@ export function isKnownReadyPromptBody(
 /**
  * Tier 1b body evidence: a ready screen from an agent with no title rest signal. Unlike tier 1
  * it only proves the TUI is up, so the ranking holds it to quiescence.
- * Why codex panes only: a `cat`ed transcript or pager in an unknown pane can show the composer.
+ * Why identified panes only: a `cat`ed transcript or pager in an unknown pane can show the composer.
  */
 export function isQuietReadyScreenBody(
   waitText: string,
@@ -123,6 +129,9 @@ export function isQuietReadyScreenBody(
     // Why the provisional veto here too: a daemon start can stay quiet past the quiescence window.
     const normalized = waitText.toLowerCase()
     return isReadyPromptSettled(normalized, findCodexReadyPromptIndex(normalized))
+  }
+  if (readScreenRuledVerdict(agent, readScreenLines) === true) {
+    return true
   }
   return (agent === null || agent === 'muse') && isMuseReadyPromptPreview(waitText)
 }
@@ -241,51 +250,6 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
 
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
   /update available|choose working directory to|codex just got an upgrade|available\s*·|esc\s*skip|enter\s*confirm\s*·|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
-
-// Why text at all: cursor-agent has no approval hook, so the key-bound menu is the only authority.
-const CURSOR_APPROVAL_CHOICE_MARKERS = [
-  'run (once)',
-  'to allowlist?',
-  'run everything',
-  'skip & tell the agent'
-]
-// Why bounded: an answered menu remains in scrollback; only a dialog owning the screen bottom is live.
-const CURSOR_APPROVAL_TAIL_LINES = 8
-
-function findCursorApprovalPromptIndex(normalized: string): number | null {
-  const windowStart = startOfLastLines(normalized, CURSOR_APPROVAL_TAIL_LINES)
-  const tail = normalized.slice(windowStart)
-  if (!tail.includes('run this command?')) {
-    return null
-  }
-  const lines = tail.split('\n')
-  while (lines.length > 0 && lines.at(-1)?.trim() === '') {
-    lines.pop()
-  }
-  let matchedLines = 0
-  let lastChoiceLine = -1
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!isCursorApprovalChoiceLine(lines[index])) {
-      continue
-    }
-    matchedLines += 1
-    lastChoiceLine = index
-  }
-  return matchedLines >= 2 && lastChoiceLine === lines.length - 1
-    ? windowStart + tail.lastIndexOf('run this command?')
-    : null
-}
-
-// Why the trailing key: narration can repeat the menu wording, but it does not end in a selectable key.
-const CURSOR_APPROVAL_CHOICE_KEY_RE =
-  /\((?:shift\+tab|ctrl\+[a-z]|esc(?: or [a-z])*|tab|enter|return|space|[a-z]|[\u21b5\u21e7\u21b9\u238b\u23ce]{1,3})\)\s*$/
-
-function isCursorApprovalChoiceLine(line: string): boolean {
-  return (
-    CURSOR_APPROVAL_CHOICE_KEY_RE.test(line) &&
-    CURSOR_APPROVAL_CHOICE_MARKERS.some((marker) => line.includes(marker))
-  )
-}
 
 // Why bounded: answered dialogs and quoted prompt wording (agents grep this file and its specs) stay in the
 // retained tail; only a dialog owning the screen bottom is live. Real Codex dialogs (trust, hooks review,

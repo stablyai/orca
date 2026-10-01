@@ -11,8 +11,11 @@ import {
 import { withTimeout } from './runtime-async-boundaries'
 import {
   detectTerminalWaitBlockedReason,
+  isKnownReadyPromptBody,
   isKnownReadyPromptSettled
 } from './terminal-wait-detection'
+import { getScreenReadyRule } from './screen-ruled-agent-readiness'
+import { restoreProjectedComposerDraft } from './orca-runtime-terminal-projection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -24,7 +27,6 @@ import {
   buildTerminalWaitResult
 } from './terminal-wait-results'
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
-import { isAntigravityReadyPromptSnapshot } from './antigravity-terminal-readiness'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
@@ -53,8 +55,9 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     if (providerTimeoutMs < 1) {
       return
     }
+    const screenRule = getScreenReadyRule(agent)
     void withTimeout(
-      this.readTerminal(waiter.handle, agent === 'antigravity' ? { screen: true } : {}, {
+      this.readTerminal(waiter.handle, screenRule ? { screen: true } : {}, {
         timeoutMs: providerTimeoutMs,
         retireOnTimeout: true,
         // Why: the ready banner stays in scrollback for the whole session, so
@@ -72,15 +75,21 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         ) {
           return
         }
-        const snapshotText =
-          agent === 'antigravity'
-            ? [...projection.tail, projection.draft ?? ''].join('\n')
-            : projection.tail.join('\n')
+        const snapshotText = projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        const ready =
-          agent === 'antigravity'
-            ? isAntigravityReadyPromptSnapshot(snapshotText)
-            : isKnownReadyPromptSettled(snapshotText)
+        // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse.
+        const ready = screenRule
+          ? isKnownReadyPromptBody(
+              snapshotText,
+              agent,
+              () => restoreProjectedComposerDraft(projection.tail, projection.draft),
+              // Why read now: output since the probe started makes the pane clocked.
+              (
+                this.getLivePtyForHandle(waiter.handle)?.pty ??
+                this.getLiveLeafForHandle(waiter.handle).leaf
+              ).lastOutputAt !== null
+            )
+          : isKnownReadyPromptSettled(snapshotText)
         if (!blockedReason && !ready) {
           return
         }

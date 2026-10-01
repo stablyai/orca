@@ -5,12 +5,29 @@ import { isTerminalWaitWhitespace } from './terminal-wait-tail-window'
  * line anchors. The idle composer is the only captured marker that survives every ready screen.
  */
 export function findAntigravityReadyPromptIndex(normalized: string): number | null {
-  return findAntigravityComposerIndex(normalized, true)
+  return findAntigravityComposerIndex(normalized)
 }
 
-/** Visible-screen snapshots may omit the banner after a dialog closes. */
-export function isAntigravityReadyPromptSnapshot(text: string): boolean {
-  return findAntigravityComposerIndex(text.toLowerCase(), false) !== null
+const SCREEN_RULE_RE = /^─{8,}$/
+
+/**
+ * The live screen's bottom four rows at an idle composer: rule, caret, rule, `? for shortcuts`.
+ * Why the hint row decides: the caret stays painted through a turn and behind the `/model`
+ * picker, but the hint reads `esc to cancel` mid-turn and in the palette, and the picker covers it.
+ */
+export function isAntigravityComposerReadyScreen(screenLines: readonly string[]): boolean {
+  if (screenLines.length < 4) {
+    return false
+  }
+  const [top = '', composer = '', bottom = '', hint = ''] = screenLines
+    .slice(-4)
+    .map((line) => line.trim())
+  return (
+    SCREEN_RULE_RE.test(top) &&
+    isComposerLine(composer) &&
+    SCREEN_RULE_RE.test(bottom) &&
+    hint.toLowerCase().startsWith('? for shortcuts')
+  )
 }
 
 /**
@@ -50,10 +67,9 @@ function isModelRow(line: string): boolean {
   return true
 }
 
-function findAntigravityComposerIndex(normalized: string, requireHeader: boolean): number | null {
-  const headerIndex = normalized.lastIndexOf('antigravity cli')
-  const contentStart = headerIndex === -1 ? 0 : headerIndex
-  if (requireHeader && headerIndex === -1) {
+function findAntigravityComposerIndex(normalized: string): number | null {
+  const contentStart = normalized.lastIndexOf('antigravity cli')
+  if (contentStart === -1) {
     return null
   }
 
