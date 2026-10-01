@@ -1,6 +1,12 @@
 import { openExternalLink } from '../platform/external-link'
 import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
-import { MobileSelectableText } from './MobileSelectableText'
+import { MobileSelectableParagraph, MobileSelectableText } from './MobileSelectableText'
+import {
+  MergedProse,
+  listMarker,
+  mapMarkdownBlocks,
+  type ProseBlockGroup
+} from './mobile-markdown-merged-prose'
 import {
   Fragment,
   createElement,
@@ -232,10 +238,25 @@ function MobileMarkdownContent({
   }
   const mermaidSourceOccurrences = new Map<string, number>()
   // Native-chat range selection is set on each block; nested inline spans inherit it.
+  // On iOS each run of prose blocks becomes one native text instead of one per block.
+  const Paragraph = rangeSelectable ? MobileSelectableParagraph : null
+  const renderProse = Paragraph
+    ? (group: ProseBlockGroup) => (
+        <MergedProse
+          key={`prose:${group.start}`}
+          blocks={group.blocks}
+          Text={MarkdownText}
+          Paragraph={Paragraph}
+          renderInline={(line) => renderInline(line, onOpenFile)}
+          proseStyle={[styles.paragraph, proseScale]}
+          listStyle={[styles.listText, listScale]}
+        />
+      )
+    : null
 
   return (
     <View style={styles.root}>
-      {blocks.map((block, index) => {
+      {mapMarkdownBlocks(blocks, renderProse, (block, index) => {
         if (block.type === 'heading') {
           return (
             <MarkdownText
@@ -340,15 +361,7 @@ function MobileMarkdownContent({
             <View key={index} style={styles.list}>
               {block.items.map((item, itemIndex) => (
                 <View key={itemIndex} style={styles.listItem}>
-                  <NativeText style={styles.listMarker}>
-                    {item.checked == null
-                      ? block.ordered
-                        ? `${itemIndex + 1}.`
-                        : '-'
-                      : item.checked
-                        ? '[x]'
-                        : '[ ]'}
-                  </NativeText>
+                  <NativeText style={styles.listMarker}>{listMarker(block, itemIndex)}</NativeText>
                   <MarkdownText selectable style={[styles.listText, listScale]}>
                     {renderInline(item.text, onOpenFile)}
                   </MarkdownText>

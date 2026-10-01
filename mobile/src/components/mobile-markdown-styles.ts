@@ -1,9 +1,16 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
+const LIST_MARKER_WIDTH = 22
+
+// Merged selectable prose reproduces these View gaps as paragraph spacing.
+export const markdownBlockGap = spacing.sm
+export const markdownListItemGap = spacing.xs
+export const markdownListIndent = LIST_MARKER_WIDTH + spacing.sm
+
 export const styles = StyleSheet.create({
   root: {
-    gap: spacing.sm
+    gap: markdownBlockGap
   },
   paragraph: {
     fontSize: 13,
@@ -122,7 +129,7 @@ export const styles = StyleSheet.create({
     color: colors.textMuted
   },
   list: {
-    gap: spacing.xs
+    gap: markdownListItemGap
   },
   listItem: {
     flexDirection: 'row',
@@ -130,7 +137,7 @@ export const styles = StyleSheet.create({
     gap: spacing.sm
   },
   listMarker: {
-    width: 22,
+    width: LIST_MARKER_WIDTH,
     fontSize: 13,
     lineHeight: 19,
     color: colors.textSecondary,
@@ -142,6 +149,11 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: colors.textPrimary
+  },
+  listMarkerRun: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontFamily: typography.monoFamily
   },
   rule: {
     height: StyleSheet.hairlineWidth,

@@ -1,0 +1,29 @@
+{
+  "name": "@orca/selectable-text",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Selectable UITextView text with paragraph layout. Derived from react-native-uitextview 2.2.0 (bluesky-social, MIT); owned by Orca.",
+  "homepage": "https://github.com/stablyai/orca/tree/main/mobile/packages/selectable-text",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  },
+  "codegenConfig": {
+    "name": "OrcaSelectableTextSpec",
+    "type": "components",
+    "jsSrcsDir": "src",
+    "ios": {
+      "componentProvider": {
+        "OrcaSelectableText": "OrcaSelectableText",
+        "OrcaSelectableTextRun": "OrcaSelectableText"
+      }
+    },
+    "outputDir": {
+      "ios": "ios/generated"
+    }
+  }
+}

@@ -1,21 +1,19 @@
-import { Children, Fragment, isValidElement, type ReactNode } from 'react'
-import { StyleSheet, Text, UIManager, type TextProps } from 'react-native'
-import { UITextView } from 'react-native-uitextview'
+import { Text, UIManager } from 'react-native'
+import {
+  SelectableText,
+  SelectableTextParagraph,
+  type SelectableTextProps
+} from '@orca/selectable-text'
+import type { MobileSelectableParagraphComponent } from './mobile-selectable-paragraph'
 
-// Older development clients can load this bundle before rebuilding their native views.
-const hasRangeSelection = UIManager.hasViewManagerConfig('RNUITextView')
+// Development clients built before the module fall back to plain Text.
+const hasRangeSelection = UIManager.hasViewManagerConfig('OrcaSelectableText')
 
-function flattenFragments(children: ReactNode): ReactNode[] {
-  return (
-    Children.map(children, (child) =>
-      isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment
-        ? flattenFragments(child.props.children)
-        : child
-    ) ?? []
-  )
-}
-
-export function MobileSelectableText({ children, style, ...props }: TextProps): React.JSX.Element {
+export function MobileSelectableText({
+  children,
+  style,
+  ...props
+}: SelectableTextProps): React.JSX.Element {
   if (!hasRangeSelection) {
     return (
       <Text {...props} style={style}>
@@ -23,16 +21,12 @@ export function MobileSelectableText({ children, style, ...props }: TextProps): 
       </Text>
     )
   }
-
-  // The native span adapter otherwise maps numeric bold to semibold.
-  const textStyle = StyleSheet.flatten(style)
-  const nativeStyle =
-    textStyle?.fontWeight === '700' || textStyle?.fontWeight === 700
-      ? { ...textStyle, fontWeight: 'bold' as const }
-      : style
   return (
-    <UITextView {...props} uiTextView style={nativeStyle}>
-      {flattenFragments(children)}
-    </UITextView>
+    <SelectableText {...props} style={style}>
+      {children}
+    </SelectableText>
   )
 }
+
+export const MobileSelectableParagraph: MobileSelectableParagraphComponent | null =
+  hasRangeSelection ? SelectableTextParagraph : null

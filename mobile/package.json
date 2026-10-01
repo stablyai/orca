@@ -24,6 +24,7 @@
   "dependencies": {
     "@noble/hashes": "1.8.0",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
+    "@orca/selectable-text": "file:./packages/selectable-text",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@xterm/addon-unicode11": "0.10.0-beta.300",
     "@xterm/addon-webgl": "0.20.0-beta.299",
@@ -63,7 +64,6 @@
     "react-native-safe-area-context": "^5.7.0",
     "react-native-screens": "^4.24.0",
     "react-native-svg": "^15.15.5",
-    "react-native-uitextview": "2.2.0",
     "react-native-web": "^0.21.2",
     "react-native-webview": "13.16.2",
     "react-native-worklets": "^0.8.3",
