@@ -11,7 +11,6 @@ vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
 import { addWorktree } from './worktree-add'
 import { listWorktreesSharedStrict } from './worktree-scan-cache'
-import { finalizePreparedWorktree } from './worktree-create-preparation'
 
 const HEAD = 'a'.repeat(40)
 
@@ -47,18 +46,6 @@ describe('worktree create admission tier', () => {
     expect(listOptions.length).toBeGreaterThan(0)
     for (const options of listOptions) {
       expect(options).toMatchObject({ admissionTier: 'interactive' })
-    }
-  })
-
-  it('runs the prepared-checkout finalize at the tier the caller asked for', async () => {
-    await finalizePreparedWorktree('/repo', '/prepared', '/repo-wt', 'feature', 'main', false, {
-      admissionTier: 'interactive'
-    })
-
-    for (const match of ['worktree move', 'checkout --no-track', 'worktree unlock']) {
-      const options = optionsForCommand(match)
-      expect(options, match).toHaveLength(1)
-      expect(options[0], match).toMatchObject({ admissionTier: 'interactive' })
     }
   })
 

@@ -9,6 +9,8 @@ import {
   clearGitCapabilityStateForTests,
   withLocalGitCapabilityCacheForExecution
 } from '../git/git-capability-state'
+import { resolveGitAdmissionTier } from '../git/command-runner/git-operation-executor'
+import { isBackgroundWorkHeldForLocalCreates } from '../git/local-worktree-create-activity'
 import {
   __resetPRConflictSummaryDerivationCachesForTests,
   buildConflictSummaryCacheKey,
@@ -17,6 +19,7 @@ import {
   getConflictSummaryGitRuntimeKey,
   readCachedSummary,
   readFreshBaseTipResolution,
+  readLastKnownBaseTipOid,
   rememberUnresolvedBaseTip,
   storeResolvedBaseTip,
   storeCachedSummary
@@ -36,6 +39,21 @@ export async function getPRConflictSummary(
   headRefOid: string,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRConflictSummary | undefined> {
+  if (
+    isBackgroundWorkHeldForLocalCreates() &&
+    resolveGitAdmissionTier(localGitOptions.admissionTier) !== 'interactive'
+  ) {
+    // Why: a local create is checking out on the same disk. Background lookups (card polls, the
+    // refresh queue) answer from what is already known instead of fetching and merging now, and
+    // never wait: they may be serving a request a client is awaiting.
+    return readCachedPRConflictSummary(
+      repoPath,
+      baseRefName,
+      baseRefOid,
+      headRefOid,
+      localGitOptions
+    )
+  }
   // Why: the renderer only needs a read-only merge-conflict snapshot. We
   // derive it from local git state so the PR card can show GitHub-style
   // detail without spending additional gh API calls on every refresh. We use
@@ -78,6 +96,22 @@ export async function getPRConflictSummary(
       localGitOptions
     )
   )
+}
+
+function readCachedPRConflictSummary(
+  repoPath: string,
+  baseRefName: string,
+  baseRefOid: string,
+  headRefOid: string,
+  localGitOptions: LocalGitExecOptions
+): PRConflictSummary | undefined {
+  const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
+  const baseTip =
+    readLastKnownBaseTipOid(buildConflictSummaryCacheKey(runtimeKey, repoPath, baseRefName)) ??
+    baseRefOid
+  return readCachedSummary(
+    buildConflictSummaryCacheKey(runtimeKey, repoPath, baseRefName, headRefOid, baseTip)
+  )?.value
 }
 
 async function derivePRConflictSummary(

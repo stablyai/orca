@@ -27,6 +27,8 @@ const REMOTE_FETCH_CACHE_MAX = 512
 
 export class RuntimeRemoteFetchController {
   private readonly fetchInflight = new Map<string, Promise<RemoteFetchResult>>()
+  // Base fetches past the refresh chain (a create's, or a refresh whose chain turn came); creates join these.
+  private readonly baseFetchesRunning = new Map<string, Promise<RemoteFetchResult>>()
   private readonly remoteFetchQueueTail = new Map<string, Promise<RemoteFetchResult>>()
   private readonly fetchLastCompletedAt = new Map<string, number>()
   private readonly canonicalFetchKeyCache = new Map<string, string>()
@@ -83,7 +85,7 @@ export class RuntimeRemoteFetchController {
 
   private hasInflightFetchForRepo(repoKey: string): boolean {
     const prefix = `${repoKey}::`
-    for (const key of this.fetchInflight.keys()) {
+    for (const key of [...this.fetchInflight.keys(), ...this.baseFetchesRunning.keys()]) {
       if (key.startsWith(prefix)) {
         return true
       }
@@ -172,46 +174,97 @@ export class RuntimeRemoteFetchController {
     if (this.getFreshFetchCompletedAt(key) !== null) {
       return { ok: true }
     }
-    const existing = this.fetchInflight.get(key)
+    const existing = this.fetchInflight.get(key) ?? this.baseFetchesRunning.get(key)
     if (existing) {
       return existing
     }
-    const promise = this.enqueueRemoteFetch(remoteKey, async () => {
-      if (this.getFreshFetchCompletedAt(key) !== null) {
-        return { ok: true }
-      }
-      return gitExecFileAsync(
-        [
-          ...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS,
-          'fetch',
-          '--no-tags',
-          base.remote,
-          `+refs/heads/${base.branch}:${base.ref}`
-        ],
-        {
-          cwd: repoPath,
-          ...gitOptions,
-          useConfiguredSshCommandForNetwork: true,
-          timeout: REMOTE_FETCH_TIMEOUT_MS
-        }
-      )
-        .then((): RemoteFetchResult => {
-          this.rememberFreshFetchCompletedAt(key)
-          return { ok: true }
-        })
-        .catch((err): RemoteFetchResult => {
-          console.warn(
-            `[refreshRemoteTrackingBase] ${base.base} refresh failed for ${repoPath}:`,
-            err
-          )
-          return { ok: false, errorKind: 'git_error' }
-        })
-    }).finally(() => {
+    const promise = this.enqueueRemoteFetch(remoteKey, () =>
+      this.runBaseFetch(key, repoPath, base, gitOptions)
+    ).finally(() => {
       this.fetchInflight.delete(key)
       this.armRefMaintenance(repoPath, gitOptions)
     })
     this.fetchInflight.set(key, promise)
     return promise
+  }
+
+  /**
+   * The create's own base fetch. It never queues behind the shared refresh chain, where a queued
+   * background fetch could hold it, and joins a fetch of the same base only once that fetch has
+   * left the chain. A fetch that recently completed still counts, and any fetch already running in
+   * the repo still finishes first.
+   */
+  async refreshRemoteTrackingBaseForCreate(
+    repoPath: string,
+    base: RemoteTrackingBase,
+    gitOptions: GitOptions = {}
+  ): Promise<RemoteFetchResult> {
+    const key = await this.getCanonicalFetchKey(
+      repoPath,
+      `base:${base.remote}:${base.branch}`,
+      gitOptions
+    )
+    try {
+      return await this.runBaseFetch(key, repoPath, base, gitOptions)
+    } finally {
+      this.armRefMaintenance(repoPath, gitOptions)
+    }
+  }
+
+  private runBaseFetch(
+    key: string,
+    repoPath: string,
+    base: RemoteTrackingBase,
+    gitOptions: GitOptions
+  ): Promise<RemoteFetchResult> {
+    if (this.getFreshFetchCompletedAt(key) !== null) {
+      return Promise.resolve({ ok: true })
+    }
+    const running = this.baseFetchesRunning.get(key)
+    if (running) {
+      return running
+    }
+    const promise = this.fetchRemoteTrackingBase(key, repoPath, base, gitOptions).finally(() =>
+      this.baseFetchesRunning.delete(key)
+    )
+    this.baseFetchesRunning.set(key, promise)
+    return promise
+  }
+
+  private fetchRemoteTrackingBase(
+    key: string,
+    repoPath: string,
+    base: RemoteTrackingBase,
+    gitOptions: GitOptions
+  ): Promise<RemoteFetchResult> {
+    return gitExecFileAsync(
+      [
+        ...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS,
+        'fetch',
+        '--no-tags',
+        base.remote,
+        `+refs/heads/${base.branch}:${base.ref}`
+      ],
+      {
+        cwd: repoPath,
+        ...gitOptions,
+        // Every base fetch is a create's, or the composer's early start of one that a create joins.
+        admissionTier: 'interactive',
+        useConfiguredSshCommandForNetwork: true,
+        timeout: REMOTE_FETCH_TIMEOUT_MS
+      }
+    )
+      .then((): RemoteFetchResult => {
+        this.rememberFreshFetchCompletedAt(key)
+        return { ok: true }
+      })
+      .catch((err): RemoteFetchResult => {
+        console.warn(
+          `[refreshRemoteTrackingBase] ${base.base} refresh failed for ${repoPath}:`,
+          err
+        )
+        return { ok: false, errorKind: 'git_error' }
+      })
   }
 
   async fetchRemoteWithCache(

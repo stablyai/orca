@@ -12,7 +12,6 @@ import {
 import { resolveGitAdmissionTier } from '../git/command-runner/git-operation-executor'
 
 const mocks = vi.hoisted(() => ({
-  rearm: vi.fn(),
   routing: vi.fn<() => { wslDistro?: string }>(),
   defaultBase: vi.fn(),
   hasBase: vi.fn(),
@@ -20,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   canCheckout: vi.fn(),
   branchConflict: vi.fn(),
   githubPr: vi.fn(),
-  consume: vi.fn(),
   add: vi.fn(),
   addSparse: vi.fn(),
   pushTarget: vi.fn(),
@@ -60,7 +58,6 @@ vi.mock('./runtime-worktree-create-git', () => ({
   getSelectedHostedReviewForBranch: vi.fn()
 }))
 vi.mock('./runtime-worktree-filesystem', () => ({ runtimePathExists: async () => false }))
-vi.mock('../worktree-create-preparation', () => ({ consumePreparedWorktreeCreate: mocks.consume }))
 vi.mock('../git/worktree', () => ({ addWorktree: mocks.add, addSparseWorktree: mocks.addSparse }))
 vi.mock('../ipc/worktree-remote', () => ({ configureCreatedWorktreePushTarget: mocks.pushTarget }))
 vi.mock('../ipc/created-worktree-reconciliation', () => ({ resolveCreatedWorktree: mocks.listing }))
@@ -81,14 +78,12 @@ vi.mock('../ipc/worktree-symlinks', () => ({
 }))
 
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
-import type { PreparationRearmHolder } from '../worktree-create-preparation'
+import { isBackgroundWorkHeldForLocalCreates } from '../git/local-worktree-create-activity'
+import { setActiveSink } from '../observability/tracer'
 
 const worktreePath = resolve('/worktrees', 'app')
 
-function createWorktree(
-  request: Partial<RuntimeManagedWorktreeCreateArgs> = {},
-  rearm: PreparationRearmHolder = { fire: () => {} }
-) {
+function createWorktree(request: Partial<RuntimeManagedWorktreeCreateArgs> = {}) {
   const store = {
     getSettings: () => ({
       workspaceDir: '/worktrees',
@@ -108,8 +103,7 @@ function createWorktree(
     hasRemoteTrackingRef: mocks.hasRemoteRef,
     refreshRemoteTrackingBase: mocks.refresh,
     fetchRemote: mocks.fetch,
-    onWorktreeMetadataPersisted: () => undefined,
-    rearm
+    onWorktreeMetadataPersisted: () => undefined
   })
 }
 
@@ -126,7 +120,6 @@ beforeEach(() => {
   mocks.canCheckout.mockResolvedValue(false)
   mocks.branchConflict.mockResolvedValue(null)
   mocks.githubPr.mockResolvedValue(null)
-  mocks.consume.mockResolvedValue({ status: 'hit', result: {}, rearm: mocks.rearm })
   mocks.add.mockResolvedValue({})
   mocks.addSparse.mockResolvedValue({})
   mocks.listing.mockImplementation(async () => {
@@ -145,74 +138,28 @@ beforeEach(() => {
   mocks.copyPaths.mockResolvedValue([])
 })
 
-describe('runtime prepared-worktree replenishment', () => {
-  it('keeps a failed claim reserved through the normal-add fallback', async () => {
-    mocks.consume.mockResolvedValue({
-      status: 'miss',
-      reason: 'finalize_failed',
-      rearm: mocks.rearm
-    })
-    const rearm: PreparationRearmHolder = { fire: () => {} }
-    await createWorktree({}, rearm)
-
-    expect(mocks.add).toHaveBeenCalledOnce()
-    expect(mocks.rearm).not.toHaveBeenCalled()
-    rearm.fire()
-    expect(mocks.rearm).toHaveBeenCalledOnce()
-  })
-
-  it('keeps the failed claim release available when the fallback also fails', async () => {
-    mocks.consume.mockResolvedValue({
-      status: 'miss',
-      reason: 'prepare_failed',
-      rearm: mocks.rearm
-    })
-    mocks.add.mockRejectedValue(new Error('normal add failed'))
-    const rearm: PreparationRearmHolder = { fire: () => {} }
-    await expect(createWorktree({}, rearm)).rejects.toThrow('normal add failed')
-
-    expect(mocks.rearm).not.toHaveBeenCalled()
-    rearm.fire()
-    expect(mocks.rearm).toHaveBeenCalledOnce()
-  })
-
-  it('leaves the re-arm holder armed but unfired once probes and include copies finish', async () => {
-    const rearm: PreparationRearmHolder = { fire: () => {} }
-    let finishProbe!: (paths: string[]) => void
-    mocks.resolveShared.mockImplementation(
+describe('runtime create holds background work off', () => {
+  it('is in flight from the start of the create until it settles', async () => {
+    let finishAdd!: () => void
+    mocks.add.mockImplementation(
       () =>
-        new Promise<string[]>((resolve) => {
-          finishProbe = resolve
+        new Promise((resolve) => {
+          finishAdd = () => resolve({})
         })
     )
-    let finishCopy!: (paths: string[]) => void
-    mocks.copyPaths.mockImplementation(
-      () =>
-        new Promise<string[]>((resolve) => {
-          finishCopy = resolve
-        })
-    )
-    const creation = createWorktree({}, rearm)
-    await vi.waitFor(() => expect(mocks.resolveShared).toHaveBeenCalledOnce())
-    expect(mocks.rearm).not.toHaveBeenCalled()
-    finishProbe([])
-    await vi.waitFor(() => expect(mocks.copyPaths).toHaveBeenCalledOnce())
-    expect(mocks.rearm).not.toHaveBeenCalled()
-    finishCopy([])
+    expect(isBackgroundWorkHeldForLocalCreates()).toBe(false)
+    const creation = createWorktree()
+    await vi.waitFor(() => expect(mocks.add).toHaveBeenCalledOnce())
+    expect(isBackgroundWorkHeldForLocalCreates()).toBe(true)
+    finishAdd()
     await creation
-    // The caller launches terminals before arming, so create must not fire it itself.
-    expect(mocks.rearm).not.toHaveBeenCalled()
-    rearm.fire()
-    expect(mocks.rearm).toHaveBeenCalledOnce()
+    expect(isBackgroundWorkHeldForLocalCreates()).toBe(false)
   })
 
-  it('arms the holder even when materialization fails', async () => {
-    mocks.copyPaths.mockRejectedValue(new Error('copy failed'))
-    const rearm: PreparationRearmHolder = { fire: () => {} }
-    await expect(createWorktree({}, rearm)).rejects.toThrow('copy failed')
-    // The slot was consumed before the failure, so the caller's `finally` must find a real thunk.
-    rearm.fire()
-    expect(mocks.rearm).toHaveBeenCalledOnce()
+  it('releases the hold when the create fails', async () => {
+    mocks.add.mockRejectedValue(new Error('add failed'))
+    await expect(createWorktree()).rejects.toThrow('add failed')
+    expect(isBackgroundWorkHeldForLocalCreates()).toBe(false)
   })
 })
 
@@ -240,7 +187,15 @@ describe('runtime create Git priority', () => {
       expect(mocks.githubPr).toHaveBeenCalledWith('/repo', 'app', routing)
       expect(mocks.remoteBase).toHaveBeenCalledWith('/repo', 'main', options)
       expect(mocks.hasBase).toHaveBeenCalledWith('/repo', 'main', options)
-      expect(mocks.consume).toHaveBeenCalledWith(expect.objectContaining({ options }))
+      expect(mocks.add).toHaveBeenCalledWith(
+        '/repo',
+        worktreePath,
+        'app',
+        'main',
+        false,
+        false,
+        expect.objectContaining(options)
+      )
       expect(mocks.pushTarget).toHaveBeenCalledWith(worktreePath, 'app', target, options)
       expect(mocks.listing).toHaveBeenCalledWith('/repo', worktreePath, 'app', options)
       expect(mocks.resolveShared).toHaveBeenCalledWith('/repo', options)
@@ -249,7 +204,6 @@ describe('runtime create Git priority', () => {
   )
 
   it('creates through interactive headroom when regular Git capacity is occupied', async () => {
-    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'none_armed' })
     const scheduler = new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 1 })
     _resetGitAdmissionForTests(scheduler)
     const blocker = await acquireGitAdmission({ args: ['status'], cwd: '/repo' })
@@ -303,6 +257,46 @@ describe('runtime create Git priority', () => {
       false,
       expect.objectContaining(options)
     )
-    expect(mocks.consume).not.toHaveBeenCalled()
+  })
+})
+
+describe('runtime create span', () => {
+  function captureSpans(): unknown[] {
+    const records: unknown[] = []
+    setActiveSink({ push: (record) => records.push(record), flush: () => {}, close: () => {} })
+    return records
+  }
+
+  it('records whether the create used a spare, as the IPC create does', async () => {
+    const records = captureSpans()
+    mocks.add.mockResolvedValue({ preparedCheckout: { status: 'miss', reason: 'not_ready' } })
+    try {
+      await createWorktree()
+    } finally {
+      setActiveSink(null)
+    }
+
+    expect(records).toMatchObject([
+      {
+        name: 'worktree.create',
+        attributes: {
+          'worktree.create.prepared_checkout': 'miss',
+          'worktree.create.prepared_checkout_miss': 'not_ready'
+        }
+      }
+    ])
+  })
+
+  it('records a sparse create as a sparse_checkout miss', async () => {
+    const records = captureSpans()
+    try {
+      await createWorktree({ sparseCheckout: { directories: ['src'] } })
+    } finally {
+      setActiveSink(null)
+    }
+
+    expect(records).toMatchObject([
+      { attributes: { 'worktree.create.prepared_checkout_miss': 'sparse_checkout' } }
+    ])
   })
 })

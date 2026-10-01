@@ -14,6 +14,7 @@ import type { SearchFileResult, SearchOptions, SearchResult } from './code-searc
 import { pushSearchMatch } from './text-search-match-accumulator'
 import { splitSearchGlobPatterns, toGitGlobPathspecs } from './text-search-glob-patterns'
 import { joinSearchRoot, normalizeRelativePath, relativeToSearchRoot } from './text-search-paths'
+import { WORKTREE_CREATE_PREPARATION_DIRECTORY } from './worktree/create-preparation'
 
 export type SearchAccumulator = {
   fileMap: Map<string, SearchFileResult>
@@ -60,6 +61,9 @@ export function buildRgArgs(query: string, target: string, opts: SearchOptionsLi
     '--hidden',
     '--glob',
     '!.git',
+    // Orca's spare checkouts are a second copy of the repo, never search results.
+    '--glob',
+    `!**/${WORKTREE_CREATE_PREPARATION_DIRECTORY}`,
     '--max-count',
     String(MAX_MATCHES_PER_FILE),
     '--max-filesize',
@@ -217,6 +221,8 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
   } else if (!hasPathspecs) {
     gitArgs.push('.')
   }
+  // `--untracked` would otherwise search Orca's spare checkouts, a second copy of the repo.
+  gitArgs.push(`:(exclude,glob)**/${WORKTREE_CREATE_PREPARATION_DIRECTORY}/**`)
   return gitArgs
 }
 

@@ -2,13 +2,18 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/repo-types'
 import {
   collectWorktreeTrashSweepRoots,
   sweepStaleWorktreeTrash,
   WORKTREE_TRASH_DIR_NAME
 } from './worktree-trash'
+import {
+  _resetLocalWorktreeCreateActivityForTests,
+  holdLocalWorktreeCreate,
+  LOCAL_WORKTREE_CREATE_IDLE_DEADLINE_MS
+} from './git/local-worktree-create-activity'
 
 let scratchDir = ''
 
@@ -126,5 +131,40 @@ describe('collectWorktreeTrashSweepRoots', () => {
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
+  })
+})
+
+describe('sweepStaleWorktreeTrash during a local create', () => {
+  afterEach(() => {
+    _resetLocalWorktreeCreateActivityForTests()
+    vi.useRealTimers()
+  })
+
+  it('waits for the create to settle before deleting, so it never competes with the checkout', async () => {
+    const trashPath = join(scratchDir, WORKTREE_TRASH_DIR_NAME, 'wt-1-abcdef01')
+    await createWorktreeDirectory(trashPath)
+    const release = holdLocalWorktreeCreate()
+
+    const sweep = sweepStaleWorktreeTrash([scratchDir])
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(existsSync(trashPath)).toBe(true)
+
+    release()
+    await expect(sweep).resolves.toEqual({ removed: 1 })
+    expect(existsSync(trashPath)).toBe(false)
+  })
+
+  it('sweeps every leftover entry after one deadline behind a stuck create', async () => {
+    const trashRoot = join(scratchDir, WORKTREE_TRASH_DIR_NAME)
+    const trashPaths = [join(trashRoot, 'wt-1-abcdef01'), join(trashRoot, 'wt-2-abcdef02')]
+    for (const trashPath of trashPaths) {
+      await createWorktreeDirectory(trashPath)
+    }
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    holdLocalWorktreeCreate()
+
+    const sweep = sweepStaleWorktreeTrash([scratchDir])
+    await vi.advanceTimersByTimeAsync(LOCAL_WORKTREE_CREATE_IDLE_DEADLINE_MS)
+    await expect(sweep).resolves.toEqual({ removed: 2 })
   })
 })

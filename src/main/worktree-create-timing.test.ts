@@ -19,4 +19,11 @@ describe('createWorktreeCreateTimingRecorder', () => {
       ]
     })
   })
+
+  it('reports whether the create used a spare checkout', () => {
+    const recorder = createWorktreeCreateTimingRecorder(() => 0)
+    recorder.recordPreparedCheckout({ status: 'miss', reason: 'not_ready' })
+
+    expect(recorder.finish().preparedCheckout).toEqual({ status: 'miss', reason: 'not_ready' })
+  })
 })

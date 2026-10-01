@@ -37,13 +37,14 @@ export function createdWorktreeNotFoundError(worktreePath: string, branchName: s
 }
 
 /**
- * Find the row for a worktree `git worktree add` just created, preferring the repo listing and
- * falling back to asking Git about the worktree itself.
+ * Find the row for a worktree `git worktree add` just created: first by asking Git about the new
+ * worktree itself, then, only if that cannot confirm it, from the repo's full listing.
  *
- * Why the fallback: the listing was the only witness the old code had, so any Git-level listing
- * failure failed a create whose worktree and branch were already on disk, orphaning both (#16520).
+ * Why direct first: the listing walks every registered worktree, so on a repo with hundreds of
+ * them it put a disk-bound scan (up to ~57 s under load) on every create's critical path. The
+ * listing stays as the fallback because a direct read can fail where Git still lists the row (#16520).
  */
-/** A listing that burned the whole budget still leaves the direct read a chance to answer. */
+/** A direct read that burned the whole budget still leaves the listing a chance to answer. */
 const MIN_CREATED_WORKTREE_RECOVERY_MS = 5_000
 
 export async function resolveCreatedWorktree(
@@ -53,11 +54,31 @@ export async function resolveCreatedWorktree(
   options?: GitWorktreeExecOptions
 ): Promise<CreatedWorktreeResolution> {
   const startedAt = Date.now()
+  let directError: unknown
+  try {
+    const described = await describeCreatedWorktree(repoPath, worktreePath, branchName, {
+      ...options,
+      timeout: options?.timeout ?? WORKTREE_LIST_TIMEOUT_MS
+    })
+    if (described) {
+      return { created: described, worktrees: [], listingComplete: false }
+    }
+  } catch (err) {
+    directError = err
+  }
+
   let listingError: Error | undefined
   try {
-    const worktrees = options
-      ? await listWorktreesSharedStrict(repoPath, options)
-      : await listWorktreesSharedStrict(repoPath)
+    // One budget for verifying the create, not one per attempt: a hung Git already spent the
+    // direct read's deadline, and charging the listing a fresh one doubles the wait before the error.
+    const remainingMs = Math.max(
+      WORKTREE_LIST_TIMEOUT_MS - (Date.now() - startedAt),
+      MIN_CREATED_WORKTREE_RECOVERY_MS
+    )
+    const worktrees = await listWorktreesSharedStrict(repoPath, {
+      ...options,
+      timeout: options?.timeout ?? remainingMs
+    })
     const created = findCreatedWorktree(worktrees, worktreePath, branchName)
     if (created) {
       return { created, worktrees, listingComplete: true }
@@ -66,38 +87,24 @@ export async function resolveCreatedWorktree(
     listingError = err instanceof Error ? err : new Error(String(err))
   }
 
-  try {
-    // One budget for verifying the create, not one per attempt: a hung Git already spent the
-    // listing's deadline, and charging the recovery a fresh one doubles the wait before the error.
-    const remainingMs = Math.max(
-      WORKTREE_LIST_TIMEOUT_MS - (Date.now() - startedAt),
-      MIN_CREATED_WORKTREE_RECOVERY_MS
-    )
-    const described = await describeCreatedWorktree(repoPath, worktreePath, branchName, {
-      ...options,
-      timeout: options?.timeout ?? remainingMs
-    })
-    if (described) {
-      return { created: described, worktrees: [], listingComplete: false }
-    }
-  } catch (err) {
-    if (listingError) {
-      // The listing's failure stays the thrown one, but the recovery's reason -- often
+  if (listingError) {
+    if (directError !== undefined) {
+      // The listing's failure stays the thrown one, but the direct read's reason -- often
       // `repo common dir unverifiable: ...` -- would otherwise vanish from the record entirely.
-      console.warn('[worktrees:create] created-worktree recovery also failed', {
-        err,
+      console.warn('[worktrees:create] created-worktree direct read also failed', {
+        err: directError,
         worktreePath
       })
-      throw listingError
     }
-    // The listing simply omitted the row, so the direct read holds the only actionable failure.
-    const notFound = createdWorktreeNotFoundError(worktreePath, branchName)
-    throw new Error(`${notFound.message}: ${err instanceof Error ? err.message : String(err)}`, {
-      cause: err
-    })
-  }
-  if (listingError) {
     throw listingError
   }
-  throw createdWorktreeNotFoundError(worktreePath, branchName)
+  const notFound = createdWorktreeNotFoundError(worktreePath, branchName)
+  if (directError !== undefined) {
+    // The listing simply omitted the row, so the direct read holds the only actionable failure.
+    throw new Error(
+      `${notFound.message}: ${directError instanceof Error ? directError.message : String(directError)}`,
+      { cause: directError }
+    )
+  }
+  throw notFound
 }

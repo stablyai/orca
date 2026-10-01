@@ -12,6 +12,7 @@ import {
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import { annotateWslHostFailure } from './wsl-host-failure'
 import type { GitAdmissionTier, GitExecOptions } from './git-exec-options'
+import { resolveGitAdmissionTier } from './git-operation-executor'
 import { execFileCapture, execFileCaptureToTermination } from './exec-file-capture'
 import {
   pendingWslDirectGitReadEnvironment,
@@ -174,7 +175,9 @@ export function gitExecFileAsync(
         command.cwd,
         options.signal,
         () => gitExecFileAsyncUnlocked(args, options),
-        command.gitDir
+        command.gitDir,
+        // Why: a fetch the user is waiting on (a create's base) must not queue behind background ones.
+        { priority: resolveGitAdmissionTier(options.admissionTier) === 'interactive' }
       )
     : gitExecFileAsyncUnlocked(args, options)
 }

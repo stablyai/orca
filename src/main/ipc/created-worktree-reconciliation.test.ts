@@ -103,31 +103,30 @@ describe('resolveCreatedWorktree', () => {
     vi.mocked(describeCreatedWorktree).mockReset().mockResolvedValue(undefined)
   })
 
-  it('reports the whole listing when it contains the created row', async () => {
-    vi.mocked(listWorktreesSharedStrict).mockResolvedValue([MAIN, CREATED])
-
-    await expect(
-      resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')
-    ).resolves.toEqual({ created: CREATED, worktrees: [MAIN, CREATED], listingComplete: true })
-    expect(describeCreatedWorktree).not.toHaveBeenCalled()
-  })
-
-  it('completes the create from the direct read when the listing fails', async () => {
-    vi.mocked(listWorktreesSharedStrict).mockRejectedValue(new Error('git timed out.'))
+  it('confirms the create from the direct read without listing every worktree', async () => {
     vi.mocked(describeCreatedWorktree).mockResolvedValue(CREATED)
 
     await expect(
       resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')
     ).resolves.toEqual({ created: CREATED, worktrees: [], listingComplete: false })
+    expect(listWorktreesSharedStrict).not.toHaveBeenCalled()
   })
 
-  it('completes the create from the direct read when the listing omits the row', async () => {
-    vi.mocked(listWorktreesSharedStrict).mockResolvedValue([MAIN])
-    vi.mocked(describeCreatedWorktree).mockResolvedValue(CREATED)
+  it('falls back to the whole listing when the direct read cannot confirm the row', async () => {
+    vi.mocked(listWorktreesSharedStrict).mockResolvedValue([MAIN, CREATED])
 
     await expect(
       resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')
-    ).resolves.toMatchObject({ created: CREATED, listingComplete: false })
+    ).resolves.toEqual({ created: CREATED, worktrees: [MAIN, CREATED], listingComplete: true })
+  })
+
+  it('falls back to the whole listing when the direct read throws', async () => {
+    vi.mocked(describeCreatedWorktree).mockRejectedValue(new Error('rev-parse exploded'))
+    vi.mocked(listWorktreesSharedStrict).mockResolvedValue([MAIN, CREATED])
+
+    await expect(
+      resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')
+    ).resolves.toMatchObject({ created: CREATED, listingComplete: true })
   })
 
   it("surfaces the listing's own failure rather than an opaque message", async () => {
@@ -147,24 +146,27 @@ describe('resolveCreatedWorktree', () => {
     )
   })
 
-  it('keeps the listing failure when the direct read itself throws', async () => {
+  it('keeps the listing failure when the direct read also threw', async () => {
     const failure = new Error('fatal: not a git repository')
-    const recoveryFailure = new Error('repo common dir unverifiable: deadline exceeded')
+    const directFailure = new Error('repo common dir unverifiable: deadline exceeded')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.mocked(describeCreatedWorktree).mockRejectedValue(directFailure)
     vi.mocked(listWorktreesSharedStrict).mockRejectedValue(failure)
-    vi.mocked(describeCreatedWorktree).mockRejectedValue(recoveryFailure)
 
     await expect(resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')).rejects.toBe(
       failure
     )
-    expect(warn).toHaveBeenCalledWith('[worktrees:create] created-worktree recovery also failed', {
-      err: recoveryFailure,
-      worktreePath: '/workspaces/feature'
-    })
+    expect(warn).toHaveBeenCalledWith(
+      '[worktrees:create] created-worktree direct read also failed',
+      {
+        err: directFailure,
+        worktreePath: '/workspaces/feature'
+      }
+    )
     warn.mockRestore()
   })
 
-  it('names the path and branch when the listing succeeded without the row', async () => {
+  it('names the path and branch when neither read found the row', async () => {
     vi.mocked(listWorktreesSharedStrict).mockResolvedValue([MAIN])
 
     await expect(resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')).rejects.toThrow(
@@ -174,47 +176,47 @@ describe('resolveCreatedWorktree', () => {
 
   it("adds the direct read's failure when the listing merely omitted the row", async () => {
     vi.mocked(listWorktreesSharedStrict).mockResolvedValue([MAIN])
-    const recoveryFailure = new Error('rev-parse exploded')
-    vi.mocked(describeCreatedWorktree).mockRejectedValue(recoveryFailure)
+    const directFailure = new Error('rev-parse exploded')
+    vi.mocked(describeCreatedWorktree).mockRejectedValue(directFailure)
 
     await expect(
       resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')
     ).rejects.toMatchObject({
       message:
         'Worktree created but not found in listing: /workspaces/feature (branch feature): rev-parse exploded',
-      cause: recoveryFailure
+      cause: directFailure
     })
   })
 
-  it('charges the recovery what the listing left of the budget, not a fresh one', async () => {
-    vi.mocked(listWorktreesSharedStrict).mockImplementation(async () => {
+  it('charges the listing what the direct read left of the budget, not a fresh one', async () => {
+    vi.mocked(describeCreatedWorktree).mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 60))
-      throw new Error('git worktree list timed out.')
+      throw new Error('rev-parse timed out.')
     })
-    vi.mocked(describeCreatedWorktree).mockResolvedValue(CREATED)
+    vi.mocked(listWorktreesSharedStrict).mockResolvedValue([CREATED])
 
     await resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')
 
-    const options = vi.mocked(describeCreatedWorktree).mock.lastCall?.[3]
+    const options = vi.mocked(listWorktreesSharedStrict).mock.lastCall?.[1]
     expect(options?.timeout).toBeGreaterThanOrEqual(5_000)
     expect(options?.timeout).toBeLessThan(30_000)
   })
 
-  it("keeps the caller's own deadline instead of the shared budget", async () => {
-    vi.mocked(listWorktreesSharedStrict).mockRejectedValue(new Error('git worktree list failed.'))
-    vi.mocked(describeCreatedWorktree).mockResolvedValue(CREATED)
-
-    await resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature', { timeout: 1_234 })
-
-    expect(vi.mocked(describeCreatedWorktree).mock.lastCall?.[3]).toMatchObject({ timeout: 1_234 })
-  })
-
-  it('forwards exec options only when the caller supplied them', async () => {
+  it("keeps the caller's own deadline and exec options for both reads", async () => {
     vi.mocked(listWorktreesSharedStrict).mockResolvedValue([CREATED])
-    await resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature')
-    expect(listWorktreesSharedStrict).toHaveBeenLastCalledWith('/repo')
 
-    await resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature', { wslDistro: 'Ubuntu' })
-    expect(listWorktreesSharedStrict).toHaveBeenLastCalledWith('/repo', { wslDistro: 'Ubuntu' })
+    await resolveCreatedWorktree('/repo', '/workspaces/feature', 'feature', {
+      timeout: 1_234,
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(vi.mocked(describeCreatedWorktree).mock.lastCall?.[3]).toMatchObject({
+      timeout: 1_234,
+      wslDistro: 'Ubuntu'
+    })
+    expect(vi.mocked(listWorktreesSharedStrict).mock.lastCall?.[1]).toMatchObject({
+      timeout: 1_234,
+      wslDistro: 'Ubuntu'
+    })
   })
 })

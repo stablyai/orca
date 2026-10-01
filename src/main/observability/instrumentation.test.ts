@@ -219,34 +219,32 @@ describe('addWorktreeCreatePhaseAttributes', () => {
     expect(attributes['worktree.create.unattributed_ms']).toBe(200)
   })
 
-  it('records a prepared-checkout hit and whether it had to be retargeted', () => {
+  it('records a spare checkout hit', () => {
     const { attributes, span } = capture()
     addWorktreeCreatePhaseAttributes(span, {
       totalDurationMs: 900,
       phases: [{ phase: 'git_worktree_add', startedAtMs: 0, durationMs: 400 }],
-      preparedCheckout: { status: 'hit', retargeted: true }
+      preparedCheckout: { status: 'hit' }
     })
 
     expect(attributes['worktree.create.prepared_checkout']).toBe('hit')
-    expect(attributes['worktree.create.prepared_checkout_retargeted']).toBe(true)
     expect(attributes['worktree.create.prepared_checkout_miss']).toBeUndefined()
     expect(attributes['worktree.create.unattributed_ms']).toBe(500)
   })
 
-  it('records why a create missed the prepared checkout', () => {
+  it('records why a create missed the spare checkout', () => {
     const { attributes, span } = capture()
     addWorktreeCreatePhaseAttributes(span, {
       totalDurationMs: 8_000,
       phases: [],
-      preparedCheckout: { status: 'miss', reason: 'base_mismatch' }
+      preparedCheckout: { status: 'miss', reason: 'base_moved' }
     })
 
     expect(attributes['worktree.create.prepared_checkout']).toBe('miss')
-    expect(attributes['worktree.create.prepared_checkout_miss']).toBe('base_mismatch')
-    expect(attributes['worktree.create.prepared_checkout_retargeted']).toBeUndefined()
+    expect(attributes['worktree.create.prepared_checkout_miss']).toBe('base_moved')
   })
 
-  it('stays silent on paths that never consult the prepared checkout', () => {
+  it('stays silent on paths that never consult a spare checkout', () => {
     const { attributes, span } = capture()
     addWorktreeCreatePhaseAttributes(span, { totalDurationMs: 10, phases: [] })
 

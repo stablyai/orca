@@ -4,14 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { gitExecFileAsync } from './runner'
 import { addWorktree, listWorktrees } from './worktree'
-import { finalizePreparedWorktree } from './worktree-create-preparation'
 import { worktreeCreateGit } from './worktree-create-git-executor'
-import {
-  _resetPreparationPoolForTests,
-  listPreparations,
-  startPreparation,
-  takePreparation
-} from '../worktree-create-preparation-pool'
 import {
   acquireGitAdmission,
   GitAdmissionScheduler,
@@ -22,11 +15,10 @@ import {
 const roots: string[] = []
 afterEach(async () => {
   _resetGitAdmissionForTests()
-  await _resetPreparationPoolForTests()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-it('creates cold and prepared worktrees with real Git while status capacity is occupied', async () => {
+it('creates a worktree with real Git while status capacity is occupied', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-create-policy-'))
   roots.push(root)
   const repo = join(root, 'repo')
@@ -51,20 +43,6 @@ it('creates cold and prepared worktrees with real Git while status capacity is o
       }
     })
   )
-  await worktreeCreateGit.run(() =>
-    startPreparation({
-      repoPath: repo,
-      workspaceRoot: root,
-      baseBranch: 'main',
-      canonicalBase: 'refs/heads/main',
-      options: {}
-    })
-  )
-  expect(events.length).toBeGreaterThan(0)
-  expect(events.every((event) => event.tier === 'status')).toBe(true)
-  const [prepared] = listPreparations()
-  expect(prepared).toBeDefined()
-  takePreparation(prepared)
 
   const blocker = await acquireGitAdmission({ args: ['status'], cwd: repo })
   events.length = 0
@@ -76,14 +54,7 @@ it('creates cold and prepared worktrees with real Git while status capacity is o
         env: { ...process.env, GIT_SSH_COMMAND: '' }
       })
       await addWorktree(repo, join(root, 'cold'), 'cold', 'main')
-      await finalizePreparedWorktree(
-        repo,
-        prepared.preparedPath,
-        join(root, 'warm'),
-        'warm',
-        'main'
-      )
-      expect(await listWorktrees(repo)).toHaveLength(3)
+      expect(await listWorktrees(repo)).toHaveLength(2)
     })
     expect(events.some((event) => event.args.includes('core.sshCommand'))).toBe(true)
     expect(events.some((event) => event.args.includes('fetch'))).toBe(true)
@@ -93,9 +64,7 @@ it('creates cold and prepared worktrees with real Git while status capacity is o
         .filter((event) => event.admissionClass === 'general')
         .every((event) => event.slotKind === 'headroom')
     ).toBe(true)
-    for (const name of ['cold', 'warm']) {
-      expect(await readFile(join(root, name, 'file.txt'), 'utf8')).toBe('workspace content\n')
-    }
+    expect(await readFile(join(root, 'cold', 'file.txt'), 'utf8')).toBe('workspace content\n')
   } finally {
     blocker.release()
   }

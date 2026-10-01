@@ -71,6 +71,14 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
     return await this.remoteFetches.getOrStartRemoteTrackingBaseRefresh(repoPath, base, gitOptions)
   }
 
+  async refreshRemoteTrackingBaseForCreate(
+    repoPath: string,
+    base: RemoteTrackingBase,
+    gitOptions: LocalGitExecOptions = {}
+  ): Promise<RemoteFetchResult> {
+    return await this.remoteFetches.refreshRemoteTrackingBaseForCreate(repoPath, base, gitOptions)
+  }
+
   async fetchRemoteWithCache(
     repoPath: string,
     remote: string,

@@ -11,6 +11,7 @@ import {
 import { isBranchCheckedOutInWorktreeError } from './git-branch-delete-refusal'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
 import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
+import { isHookRunUnsupportedError } from './git-hook-run-capability'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedWorktreeListZError
@@ -194,7 +195,8 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
-  it('removes locked prepared worktrees without a separate unlock', async () => {
+  // Why pin this: the startup sweep reclaims retired locked spare checkouts with one doubled --force.
+  it('removes a locked worktree without a separate unlock', async () => {
     await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-discard', 'HEAD'])
     await runGit(['-C', 'compat-discard', 'reset', '--hard', 'HEAD'])
     await runGit(['worktree', 'lock', '--reason', 'owned preparation', 'compat-discard'])
@@ -204,70 +206,57 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     )
   })
 
-  it('supports prepared worktree creation and finalization', async () => {
+  // Why pin this: a spare is registered, locked, then checked out; a create hands it over with a
+  // locked move, a branch, a symbolic-ref and an unlock, never a second checkout.
+  it('builds and hands over a spare checkout in the order a create uses', async () => {
     const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-prepared', 'HEAD'])
-    await runGit(['-C', 'compat-prepared', 'reset', '--hard', 'HEAD'])
+    await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-spare', head])
     await runGit([
       'worktree',
       'lock',
       '--reason',
-      'orca-create-preparation:v1:compat',
-      'compat-prepared'
+      'orca-create-preparation:v1:1:compat',
+      'compat-spare'
     ])
-    // Why: `-f -f` moves a locked preparation while preserving its lock reason (Git >=2.25).
-    await runGit(['worktree', 'move', '-f', '-f', 'compat-prepared', 'compat-final'])
+    await runGit(['-C', 'compat-spare', 'reset', '--hard', head])
+    await runGit(['worktree', 'move', '-f', '-f', 'compat-spare', 'compat-final'])
+    await runGit(['branch', '--no-track', 'compat-spare-final', head])
     await runGit([
       '-C',
       'compat-final',
-      'checkout',
-      '--no-track',
-      '-b',
-      'compat-prepared-final',
-      head
+      'symbolic-ref',
+      '-m',
+      `checkout: moving from ${head} to compat-spare-final`,
+      'HEAD',
+      'refs/heads/compat-spare-final'
     ])
-
-    await expect(runGit(['-C', 'compat-final', 'branch', '--show-current'])).resolves.toMatchObject(
-      { stdout: 'compat-prepared-final\n' }
-    )
-    await expect(runGit(['-C', 'compat-final', 'rev-parse', 'HEAD'])).resolves.toMatchObject({
-      stdout: `${head}\n`
-    })
     await runGit(['worktree', 'unlock', 'compat-final'])
+    expect((await runGit(['-C', 'compat-final', 'status', '--porcelain'])).stdout).toBe('')
+    expect((await runGit(['-C', 'compat-final', 'symbolic-ref', 'HEAD'])).stdout.trim()).toBe(
+      'refs/heads/compat-spare-final'
+    )
     await runGit(['worktree', 'remove', '--force', 'compat-final'])
-    await runGit(['branch', '-D', 'compat-prepared-final'])
   })
 
-  // Why pin this: the prepared-checkout retarget bound reads these as data, and it fails closed,
-  // so a version that printed a different shape would silently stop every retarget rather than
-  // error. Built with `commit-tree` so the check leaves no ref, branch, or worktree behind.
-  it('measures retarget drift identically on every supported Git', async () => {
-    const tree = (await runGit(['rev-parse', 'HEAD^{tree}'])).stdout.trim()
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    const ahead1 = (await runGit(['commit-tree', tree, '-p', head, '-m', 'drift 1'])).stdout.trim()
-    const ahead2 = (
-      await runGit(['commit-tree', tree, '-p', ahead1, '-m', 'drift 2'])
-    ).stdout.trim()
+  // Why pin this: on Git without `hook run`, a spare is built only where no post-checkout hook
+  // would run, and Orca finds that hook through this path.
+  it('resolves the post-checkout hook path through core.hooksPath', async () => {
+    await runGit(['config', 'core.hooksPath', 'compat-hooks'])
+    try {
+      expect((await runGit(['rev-parse', '--git-path', 'hooks/post-checkout'])).stdout.trim()).toBe(
+        'compat-hooks/post-checkout'
+      )
+    } finally {
+      await runGit(['config', '--unset', 'core.hooksPath'])
+    }
+  })
 
-    await expect(
-      runGit(['rev-list', '--count', '--max-count=101', '--end-of-options', `${head}..${ahead2}`])
-    ).resolves.toMatchObject({ stdout: '2\n' })
-    // `--max-count` must report the capped number, not the full one: the bound reads it as a
-    // ceiling, so a Git that returned the true count would reject every retarget instead.
-    await expect(
-      runGit(['rev-list', '--count', '--max-count=1', '--end-of-options', `${head}..${ahead2}`])
-    ).resolves.toMatchObject({ stdout: '1\n' })
-    await expect(
-      runGit(['rev-list', '--count', '--max-count=101', '--end-of-options', `${ahead2}..${head}`])
-    ).resolves.toMatchObject({ stdout: '0\n' })
-
-    await expect(runGit(['merge-base', '--end-of-options', head, ahead2])).resolves.toMatchObject({
-      stdout: `${head}\n`
-    })
-    // A parentless commit shares no history, which is the case the bound must reject however few
-    // commits each side carries.
-    const unrelated = (await runGit(['commit-tree', tree, '-m', 'unrelated root'])).stdout.trim()
-    await expect(runGit(['merge-base', '--end-of-options', head, unrelated])).rejects.toBeDefined()
+  it('runs a hook through `git hook run` from Git 2.36 and is recognized as missing before', async () => {
+    await expectPreferredOrRecognizedFallback(
+      ['hook', 'run', '--ignore-missing', 'orca-capability-probe'],
+      supports(2, 36),
+      isHookRunUnsupportedError
+    )
   })
 
   // Why pin this: Orca answers "which remote has this URL" from one `git remote -v`

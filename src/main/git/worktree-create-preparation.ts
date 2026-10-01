@@ -1,111 +1,113 @@
+import { stat } from 'node:fs/promises'
+import { posix, win32 } from 'node:path'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { isHookRunUnsupportedError } from '../../shared/git-hook-run-capability'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
-import type { AddWorktreeOptions, AddWorktreeResult, GitWorktreeExecOptions } from './worktree'
-import { gitExecOptions, type GitExecOptionsForWorktree } from './worktree-operation-options'
-import {
-  configurePushAutoSetupRemote,
-  notifyPreparedWorktreeMutation,
-  persistWorktreeCreationBase,
-  resolveWorktreeAddBaseContext,
-  resolveWorktreeAddTimeoutMs,
-  WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
-} from './worktree'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { toHostFilesystemPath } from '../host-tree-removal'
+import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
+import {
+  gitExecOptions,
+  resolveWorktreeAddTimeoutMs,
+  WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
+  type GitExecOptionsForWorktree,
+  type GitWorktreeExecOptions
+} from './worktree-operation-options'
+import { translateWorktreePath } from './worktree-path-comparison'
+import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
 
-function gitCleanupOptions(
+/** Never stopped by a signal: a killed metadata command could strand a half-written registration. */
+function gitMetadataOptions(
   cwd: string,
-  options: GitWorktreeExecOptions
+  options: GitWorktreeExecOptions,
+  timeout = WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
 ): GitExecOptionsForWorktree {
-  // Why: cancellation must not strand a partially moved worktree; cleanup is bounded separately.
-  return gitExecOptions(cwd, { ...options, signal: undefined })
+  return { ...gitExecOptions(cwd, { ...options, signal: undefined }), timeout }
 }
 
-async function performDiscardPreparedWorktree(
-  repoPath: string,
-  worktreePath: string,
-  options: GitWorktreeExecOptions
-): Promise<void> {
-  const cleanupGitOptions = {
-    ...gitCleanupOptions(repoPath, options),
-    timeout: options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
-  }
-  try {
-    // Preserve the ownership lock if removal cannot start; Git 2.25 supports locked removal.
-    await gitExecFileAsync(
-      [
-        ...windowsLongPathGitArgs(repoPath),
-        'worktree',
-        'remove',
-        '--force',
-        '--force',
-        worktreePath
-      ],
-      cleanupGitOptions
-    )
-  } finally {
-    invalidateWslLinkedWorktreeGitRouting(worktreePath)
-  }
-}
-
+/**
+ * Builds a spare at `oid`: register without files, lock with Orca's reason, then check out. Locking
+ * first means a checkout killed at any point leaves a spare only Orca's lock claims. Only the
+ * checkout takes `signal`; resolves true only when it finished and the spare was not aborted.
+ */
 export async function prepareWorktreeCreateCheckout(
   repoPath: string,
   worktreePath: string,
-  baseBranch: string,
+  oid: string,
   lockReason: string,
-  options: GitWorktreeExecOptions = {}
-): Promise<void> {
+  options: GitWorktreeExecOptions & {
+    signal: AbortSignal
+    /** Stops before the checkout without killing anything. */
+    isCancelled?: () => boolean
+    onRegistered?: () => void
+  }
+): Promise<boolean> {
+  const { signal, isCancelled, onRegistered } = options
+  // Checked before every step: a spare stopped at any point starts nothing more.
+  const stopped = (): boolean => signal.aborted || Boolean(isCancelled?.())
+  const metadata = gitMetadataOptions(repoPath, options, resolveWorktreeAddTimeoutMs())
   try {
-    await withRepoRefMaintenancePaused('worktree-prepare', () =>
+    return await withRepoRefMaintenancePaused('worktree-prepare', () =>
       runWithGitReadCacheInvalidation(async () => {
-        const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
-          hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
-        )
-        try {
-          await gitExecFileAsync(
-            [
-              ...windowsLongPathGitArgs(repoPath),
-              'worktree',
-              'add',
-              '--detach',
-              '--no-checkout',
-              worktreePath,
-              effectiveBase
-            ],
-            { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
-          )
-          // The add just wrote the marker; drop any pre-create route before the reset routes Git.
-          invalidateWslLinkedWorktreeGitRouting(worktreePath)
-          // Why: reset materializes files without running user post-checkout hooks before submit.
-          await gitExecFileAsync(
-            [...windowsLongPathGitArgs(worktreePath), 'reset', '--hard', effectiveBase],
-            { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
-          )
-          await gitExecFileAsync(
-            [
-              ...windowsLongPathGitArgs(repoPath),
-              'worktree',
-              'lock',
-              '--reason',
-              lockReason,
-              worktreePath
-            ],
-            { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
-          )
-        } catch (error) {
-          await performDiscardPreparedWorktree(repoPath, worktreePath, options).catch(() => {})
-          throw error
+        if (stopped()) {
+          return false
         }
+        await gitExecFileAsync(
+          [
+            ...windowsLongPathGitArgs(repoPath),
+            'worktree',
+            'add',
+            '--detach',
+            '--no-checkout',
+            worktreePath,
+            oid
+          ],
+          metadata
+        )
+        onRegistered?.()
+        // The add just wrote the marker; drop any pre-create route before later commands route.
+        invalidateWslLinkedWorktreeGitRouting(worktreePath)
+        if (stopped()) {
+          return false
+        }
+        await gitExecFileAsync(
+          [
+            ...windowsLongPathGitArgs(repoPath),
+            'worktree',
+            'lock',
+            '--reason',
+            lockReason,
+            worktreePath
+          ],
+          metadata
+        )
+        if (stopped()) {
+          return false
+        }
+        // Why reset: it materializes files without running the user's post-checkout hook early.
+        // `--no-recurse-submodules`, as `worktree add` checks out: submodule.recurse must not apply.
+        await gitExecFileAsync(
+          [
+            ...windowsLongPathGitArgs(worktreePath),
+            'reset',
+            '--hard',
+            '--no-recurse-submodules',
+            oid
+          ],
+          { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
+        )
+        return !signal.aborted
       })
     )
   } finally {
-    notifyPreparedWorktreeMutation(repoPath)
+    bumpWorktreeScanGeneration(repoPath)
   }
 }
 
+/** Removes a spare, locked or not (Git 2.25 removes a locked worktree with the doubled --force). */
 export async function discardPreparedWorktree(
   repoPath: string,
   worktreePath: string,
@@ -113,10 +115,21 @@ export async function discardPreparedWorktree(
 ): Promise<void> {
   try {
     await runWithGitReadCacheInvalidation(() =>
-      performDiscardPreparedWorktree(repoPath, worktreePath, options)
+      gitExecFileAsync(
+        [
+          ...windowsLongPathGitArgs(repoPath),
+          'worktree',
+          'remove',
+          '--force',
+          '--force',
+          worktreePath
+        ],
+        gitMetadataOptions(repoPath, options, options.timeout)
+      )
     )
   } finally {
-    notifyPreparedWorktreeMutation(repoPath)
+    invalidateWslLinkedWorktreeGitRouting(worktreePath)
+    bumpWorktreeScanGeneration(repoPath)
   }
 }
 
@@ -125,171 +138,78 @@ export async function unlockPreparedWorktree(
   worktreePath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<void> {
-  const cleanupGitOptions = {
-    ...gitCleanupOptions(repoPath, options),
-    timeout: options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
-  }
   try {
     await runWithGitReadCacheInvalidation(() =>
       gitExecFileAsync(
         [...windowsLongPathGitArgs(repoPath), 'worktree', 'unlock', worktreePath],
-        cleanupGitOptions
+        gitMetadataOptions(repoPath, options)
       )
     )
   } finally {
-    notifyPreparedWorktreeMutation(repoPath)
+    bumpWorktreeScanGeneration(repoPath)
   }
 }
 
-async function removeFailedFinalization(
+/** `git hook run` (Git 2.36+) runs a hook with the exact arguments a plain create passes. */
+export function supportsHookRun(
   repoPath: string,
-  cleanupPath: string,
-  branch: string,
-  moved: boolean,
   options: GitWorktreeExecOptions
-): Promise<void> {
-  let branchAttached = false
-  if (moved) {
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['symbolic-ref', '--short', 'HEAD'],
-        gitCleanupOptions(cleanupPath, options)
+): Promise<boolean> {
+  return withLocalGitCapabilityCacheForExecution(
+    { cwd: repoPath, wslDistro: options.wslDistro },
+    (capabilities) =>
+      capabilities.runWithFallback(
+        'hook-run',
+        async () => {
+          // A hook name Git never defines, so the probe runs nothing.
+          await gitExecFileAsync(
+            ['hook', 'run', '--ignore-missing', 'orca-capability-probe'],
+            gitExecOptions(repoPath, options)
+          )
+          return true
+        },
+        async () => false,
+        isHookRunUnsupportedError
       )
-      branchAttached = stdout.trim() === branch
-    } catch {
-      // Detached or no longer readable.
-    }
-  }
-  await performDiscardPreparedWorktree(repoPath, cleanupPath, options).catch(() => {})
-  if (branchAttached) {
-    await gitExecFileAsync(
-      ['branch', '-D', '--', branch],
-      gitCleanupOptions(repoPath, options)
-    ).catch(() => {})
+  )
+}
+
+async function isRunnableHookFile(path: string): Promise<boolean> {
+  try {
+    const hook = await stat(toHostFilesystemPath(path))
+    // Windows has no executable bit; Git for Windows runs any regular file there.
+    return hook.isFile() && (process.platform === 'win32' || (hook.mode & 0o111) !== 0)
+  } catch {
+    return false
   }
 }
 
-export async function finalizePreparedWorktree(
+/**
+ * Whether a spare's handover can give `post-checkout` the arguments a plain create gives it: always
+ * with `git hook run`, and on older Git only when no hook would run. `--git-path` honors
+ * `core.hooksPath` (checked on Git 2.25.5 and 2.50.1); a relative one resolves against the repo.
+ */
+export async function checkSparePostCheckoutHook(
   repoPath: string,
-  preparedPath: string,
-  worktreePath: string,
-  branch: string,
-  baseBranch: string,
-  refreshLocalBaseRef = false,
-  options: AddWorktreeOptions = {}
-): Promise<AddWorktreeResult> {
-  const finalizeGitOptions: AddWorktreeOptions = {
-    ...options,
-    timeout: options.timeout ?? resolveWorktreeAddTimeoutMs()
+  options: GitWorktreeExecOptions
+): Promise<{ honorable: boolean; hookRun: boolean; hooksPath?: string }> {
+  if (await supportsHookRun(repoPath, options)) {
+    // Resolved in the repo, as a plain add resolves it: a relative core.hooksPath (husky's
+    // gitignored `.husky/_`) names a directory only the main checkout has. `--path-format` is 2.31+.
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', '--path-format=absolute', '--git-path', 'hooks'],
+      gitExecOptions(repoPath, options)
+    )
+    return { honorable: true, hookRun: true, hooksPath: stdout.trim() }
   }
-  try {
-    return await runWithGitReadCacheInvalidation(async () => {
-      const [targetResult, preparedResult] = await Promise.allSettled([
-        (async () => {
-          const baseContext = await resolveWorktreeAddBaseContext(
-            repoPath,
-            baseBranch,
-            refreshLocalBaseRef,
-            finalizeGitOptions,
-            branch
-          )
-          const targetHead =
-            baseContext.effectiveBaseOid ??
-            (
-              await gitExecFileAsync(
-                ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
-                gitExecOptions(repoPath, finalizeGitOptions)
-              )
-            ).stdout.trim()
-          return { baseContext, targetHead }
-        })(),
-        gitExecFileAsync(
-          ['rev-parse', '--verify', 'HEAD'],
-          gitExecOptions(preparedPath, finalizeGitOptions)
-        )
-      ])
-      // Settle both reads before failure cleanup can remove the prepared checkout.
-      if (targetResult.status === 'rejected') {
-        throw targetResult.reason
-      }
-      const { baseContext, targetHead } = targetResult.value
-      if (preparedResult.status === 'rejected') {
-        await baseContext.pendingLocalBaseRefRefresh
-        throw preparedResult.reason
-      }
-      const preparedHeadOutput = preparedResult.value.stdout
-      if (preparedHeadOutput.trim() !== targetHead) {
-        await gitExecFileAsync(
-          [...windowsLongPathGitArgs(preparedPath), 'reset', '--hard', targetHead],
-          gitExecOptions(preparedPath, finalizeGitOptions)
-        )
-      }
-
-      let moved = false
-      try {
-        try {
-          // Why: `-f -f` moves the locked preparation while preserving its lock reason (Git >=2.25).
-          await gitExecFileAsync(
-            [
-              ...windowsLongPathGitArgs(repoPath),
-              'worktree',
-              'move',
-              '-f',
-              '-f',
-              preparedPath,
-              worktreePath
-            ],
-            gitExecOptions(repoPath, finalizeGitOptions)
-          )
-          moved = true
-        } finally {
-          // The move rewrites both `.git` markers, and a failure can have rewritten one.
-          invalidateWslLinkedWorktreeGitRouting(preparedPath)
-          invalidateWslLinkedWorktreeGitRouting(worktreePath)
-        }
-        await gitExecFileAsync(
-          [
-            ...windowsLongPathGitArgs(worktreePath),
-            'checkout',
-            '--no-track',
-            '-b',
-            branch,
-            targetHead
-          ],
-          gitExecOptions(worktreePath, finalizeGitOptions)
-        )
-        await persistWorktreeCreationBase(
-          worktreePath,
-          branch,
-          baseContext.effectiveBase,
-          finalizeGitOptions
-        )
-        await configurePushAutoSetupRemote(worktreePath, finalizeGitOptions)
-        await gitExecFileAsync(
-          [...windowsLongPathGitArgs(repoPath), 'worktree', 'unlock', worktreePath],
-          gitExecOptions(repoPath, finalizeGitOptions)
-        )
-      } catch (error) {
-        await removeFailedFinalization(
-          repoPath,
-          moved ? worktreePath : preparedPath,
-          branch,
-          moved,
-          finalizeGitOptions
-        )
-        await baseContext.pendingLocalBaseRefRefresh
-        throw error
-      }
-      // Why: the refresh overlapped the finalize above; it has no bearing on the checkout's content.
-      const localBaseRefRefresh = await baseContext.pendingLocalBaseRefRefresh
-      return {
-        ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
-        ...(baseContext.localBaseRefUpdateSuggestion
-          ? { localBaseRefUpdateSuggestion: baseContext.localBaseRefUpdateSuggestion }
-          : {})
-      }
-    })
-  } finally {
-    notifyPreparedWorktreeMutation(repoPath)
-  }
+  const { stdout } = await gitExecFileAsync(
+    ['rev-parse', '--git-path', 'hooks/post-checkout'],
+    gitExecOptions(repoPath, options)
+  )
+  const hookPath = stdout.trim()
+  const pathOps = isWindowsAbsolutePathLike(repoPath) ? win32 : posix
+  const resolved = posix.isAbsolute(hookPath)
+    ? translateWorktreePath(hookPath, repoPath, options)
+    : pathOps.resolve(repoPath, hookPath)
+  return { honorable: !(await isRunnableHookFile(resolved)), hookRun: false }
 }

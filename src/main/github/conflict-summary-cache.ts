@@ -56,10 +56,14 @@ export function readFreshBaseTipResolution(baseKey: string): FreshBaseTipResolut
     return null
   }
   if (Date.now() - entry.resolvedAt >= CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS) {
-    baseOidCache.delete(baseKey)
     return null
   }
   return entry.oid ? { kind: 'resolved', oid: entry.oid } : { kind: 'fallback-unresolved' }
+}
+
+/** The last base tip resolved for `baseKey`, however old; for answers that must not run git. */
+export function readLastKnownBaseTipOid(baseKey: string): string | null {
+  return baseOidCache.get(baseKey)?.oid ?? null
 }
 
 export function storeResolvedBaseTip(baseKey: string, oid: string): void {

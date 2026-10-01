@@ -7,6 +7,7 @@
  * timeouts, and buffering. See docs/design/share-quick-open-file-listing.md.
  */
 import { relativePathInsideRoot } from './cross-platform-path'
+import { WORKTREE_CREATE_PREPARATION_DIRECTORY } from './worktree/create-preparation'
 
 // ─── Hidden-dir blocklist ────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ export const HIDDEN_DIR_BLOCKLIST: ReadonlySet<string> = new Set([
   '.terraform',
   '.docker',
   '.husky',
+  // Orca's own spare checkouts: a full second copy of the repo while the create composer is open.
+  WORKTREE_CREATE_PREPARATION_DIRECTORY,
   // Home-dir cache/install/runtime state; caused the original $HOME-root 10s-timeout bug.
   '.npm',
   '.npm-global',

@@ -10,6 +10,7 @@ import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-lo
 import type { GlobalSettings } from '../shared/global-settings-types'
 import type { Repo } from '../shared/repo-types'
 import { parseWslPath } from './wsl'
+import { whenLocalWorktreeCreatesSettle } from './git/local-worktree-create-activity'
 
 export const WORKTREE_TRASH_DIR_NAME = '.orca-worktree-trash'
 
@@ -40,6 +41,7 @@ export async function sweepStaleWorktreeTrash(
         continue
       }
       try {
+        await whenLocalWorktreeCreatesSettle()
         await removeHostTree(join(trashRoot, entry))
         removed += 1
       } catch (error) {

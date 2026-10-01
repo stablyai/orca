@@ -34,6 +34,7 @@ describe('buildRgArgs', () => {
     expect(args).toContain('--fixed-strings')
     expect(args.indexOf('!.git')).toBeGreaterThan(args.indexOf('--glob'))
     expect(args.slice(-3)).toEqual(['--', 'needle', '/root'])
+    expect(args).toContain('!**/.orca-preparing')
   })
 
   it('honors caseSensitive, wholeWord, useRegex', () => {
@@ -224,7 +225,8 @@ describe('buildGitGrepArgs', () => {
     expect(args).toContain('-i')
     expect(args).toContain('--fixed-strings')
     expect(args).toContain('--no-recurse-submodules')
-    expect(args.at(-1)).toBe('.')
+    expect(args.at(-2)).toBe('.')
+    expect(args.at(-1)).toBe(':(exclude,glob)**/.orca-preparing/**')
   })
 
   it('uses --extended-regexp when useRegex is true', () => {

@@ -5,8 +5,9 @@ import {
   setRepoMaintenanceActivityProbe
 } from './git/local-repo-ref-maintenance'
 import { hasWorktreeRemovalsInFlight } from './ipc/worktrees/worktree-ipc-context'
-import { hasPendingWorktreeCreatePreparations } from './worktree-create-preparation'
+import { isBackgroundWorkHeldForLocalCreates } from './git/local-worktree-create-activity'
 import { hasPendingWorktreeRemovals } from './worktree-background-removal'
+import { hasSpareWork } from './worktree-create-preparation-pool'
 
 /**
  * The app-wide "not now" answer for idle repo maintenance.
@@ -15,9 +16,9 @@ import { hasPendingWorktreeRemovals } from './worktree-background-removal'
  * large backlog is minutes, and takes the `packed-refs` lock while it writes.
  * Any ref deletion needs that same lock and gives up after
  * `core.packedRefsTimeout` (1s), so worktree removal in particular has to veto
- * this -- as does a create in flight, an agent mid-run, and shutdown. Battery is
- * a veto too: this is work the user did not ask for, and a plugged-in quiet
- * window always comes along later.
+ * this -- as does a create in flight, a spare checkout's build or discard, an
+ * agent mid-run, and shutdown. Battery is a veto too: this is work the user did
+ * not ask for, and a plugged-in quiet window always comes along later.
  */
 export type RepoMaintenanceIdleInputs = {
   isQuitting: () => boolean
@@ -31,7 +32,8 @@ export function installRepoMaintenanceIdleGate(
     () =>
       inputs.isQuitting() ||
       inputs.getWorkingAgentCount() > 0 ||
-      hasPendingWorktreeCreatePreparations() ||
+      isBackgroundWorkHeldForLocalCreates() ||
+      hasSpareWork() ||
       hasWorktreeRemovalsInFlight() ||
       hasPendingWorktreeRemovals() ||
       isOnBatteryPower()

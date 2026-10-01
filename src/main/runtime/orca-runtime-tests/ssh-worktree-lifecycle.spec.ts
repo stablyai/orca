@@ -339,7 +339,7 @@ describe('OrcaRuntimeService', () => {
       'origin/main',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/tmp/workspaces' } }
     )
     expect(result.lineage).toBeNull()
     expect(result.workspaceLineage).toMatchObject({

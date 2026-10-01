@@ -1,314 +1,202 @@
-import { worktreePreparationGit } from './git/worktree-create-git-executor'
-import { mkdir } from 'node:fs/promises'
-import { posix, win32 } from 'node:path'
+// Starts a spare checkout when the create composer has refreshed its base on an idle machine. The
+// only caller is the composer prefetch (IPC `worktrees:prefetchCreateBase`, RPC
+// `worktree.prefetchCreateBase`); nothing re-arms one after a create (rule 3).
 import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
 import { isFolderRepo } from '../shared/repo-kind'
-import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
-import type { PreparedCheckoutMissReason } from '../shared/worktree/create-types'
-import type { AddWorktreeOptions, AddWorktreeResult } from './git/worktree'
-import { measureRetargetDivergence } from './git/worktree-base-divergence'
-import { resolveLocalWorktreeBaseRef } from './git/worktree-base-ref-probe'
-import { preparationPathKey, selectPreparationForCreate } from './worktree-create-preparation-claim'
-import {
-  _resetPreparationPoolForTests,
-  hasPendingPreparations,
-  listPreparations,
-  releasePreparationClaim,
-  startPreparation,
-  takePreparation,
-  type DeferredPreparation,
-  type PreparationClaim,
-  type PreparationEntry
-} from './worktree-create-preparation-pool'
-import {
-  discardPreparedWorktree,
-  finalizePreparedWorktree
-} from './git/worktree-create-preparation'
+import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
+import { checkSparePostCheckoutHook } from './git/worktree-create-preparation'
+import { resolveWorktreeBaseCommitOid } from './git/worktree-base-ref-probe'
+import type { GitWorktreeExecOptions } from './git/worktree-operation-options'
+import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktree-logic'
 import {
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
 } from './project-runtime-git-options'
-import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktree-logic'
 import {
-  recordPreparationConsume,
-  resetPreparationConsumeHistoryForTests
-} from './worktree-create-preparation-burst'
-import { toHostFilesystemPath } from './host-tree-removal'
-import type { WorktreeCreateTimingRecorder } from './worktree-create-timing'
-
-export {
-  WORKTREE_CREATE_PREPARATION_LIMIT,
-  WORKTREE_CREATE_PREPARATION_TTL_MS
+  abandonRepoSpare,
+  findSpare,
+  isSpareQuitting,
+  noteSpareHookUnsupported,
+  preparationPathKey,
+  spareRepoKey,
+  startSpare,
+  worktreePreparationGit
 } from './worktree-create-preparation-pool'
+import {
+  localCreatesStarted,
+  mayAbandonSpareForBaseChange,
+  recordSpareAbandonedForBaseChange,
+  spareStartRefusal,
+  type SpareStartRefusal
+} from './worktree-create-spare-gate'
 
-/** A prepared checkout is a create that is either in flight or imminent. */
-export function hasPendingWorktreeCreatePreparations(): boolean {
-  return hasPendingPreparations()
+/** Only the last base picked in a quiet stretch builds, so flipping through bases costs nothing. */
+export const SPARE_REQUEST_DEBOUNCE_MS = 2_000
+
+/** Taken when the composer's prefetch arrives, before its fetch, so later picks win. */
+export type SpareRequestTicket = {
+  repoKey: string
+  seq: number
+  createsStarted: number
+  options: GitWorktreeExecOptions
 }
 
-/** Carries the consumed slot's pending re-arm to the create's outermost `finally`, which fires it
- *  once — after startup on success, and on any failure that follows the consume. */
-export type PreparationRearmHolder = { fire: () => void }
+type SpareSkipReason =
+  | 'quitting'
+  | 'superseded'
+  | 'create_started'
+  | 'abandon_window'
+  | SpareStartRefusal
+  | 'hook_unsupported'
 
-export type PreparedWorktreeCreateAttempt =
-  | {
-      status: 'hit'
-      retargeted: boolean
-      result: AddWorktreeResult
-      /** Run after materialization/startup completes, before returning the create result. */
-      rearm: () => void
-    }
-  | { status: 'miss'; reason: PreparedCheckoutMissReason; rearm?: () => void }
+const pendingRequests = new Map<string, ReturnType<typeof setTimeout>>()
+const runningRequests = new Set<Promise<void>>()
+const latestSeqByRepo = new Map<string, number>()
 
-type ConsumePreparedWorktreeArgs = {
-  repoPath: string
-  workspaceRoot: string
-  worktreePath: string
-  branch: string
-  baseBranch: string
-  refreshLocalBaseRef?: boolean
-  options?: AddWorktreeOptions
-  timing?: Pick<WorktreeCreateTimingRecorder, 'time'>
+function skip(repoPath: string, reason: SpareSkipReason): void {
+  console.info(`[worktree-create] no spare checkout for ${repoPath}: ${reason}`)
 }
 
-function canonicalBaseRef(
-  repoPath: string,
+/** Null for a repo that never gets a spare (SSH, folder, a runtime awaiting repair, quitting). */
+export function beginWorktreeCreateSpareRequest(
+  store: Store,
+  repo: Repo
+): SpareRequestTicket | null {
+  if (repo.connectionId || isFolderRepo(repo) || isSpareQuitting()) {
+    return null
+  }
+  let options: GitWorktreeExecOptions
+  try {
+    options = getLocalProjectWorktreeGitOptions(store, repo)
+  } catch {
+    return null
+  }
+  const repoKey = spareRepoKey(repo.path, options.wslDistro)
+  const seq = (latestSeqByRepo.get(repoKey) ?? 0) + 1
+  latestSeqByRepo.set(repoKey, seq)
+  return { repoKey, seq, createsStarted: localCreatesStarted(), options }
+}
+
+/** Why this request may no longer build: a later pick, a create since it arrived, or quit. */
+function staleReason(ticket: SpareRequestTicket): SpareSkipReason | null {
+  if (isSpareQuitting()) {
+    return 'quitting'
+  }
+  if (latestSeqByRepo.get(ticket.repoKey) !== ticket.seq) {
+    return 'superseded'
+  }
+  // A create since the request arrived ends it: building after that create would be a re-arm.
+  return localCreatesStarted() === ticket.createsStarted ? null : 'create_started'
+}
+
+/** Synchronous and fire-and-forget: the composer never waits on a spare. */
+export function requestWorktreeCreateSpare(
+  store: Store,
+  repo: Repo,
   baseBranch: string,
-  options: AddWorktreeOptions
-): Promise<string> {
-  return resolveLocalWorktreeBaseRef(repoPath, baseBranch, {
-    ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
-  })
-}
-
-export function prepareWorktreeCreateForRepo(
-  store: Store,
-  repo: Repo,
-  baseBranch: string
-): Promise<void> {
-  return worktreePreparationGit.run(() =>
-    prepareWorktreeCreateInBackground(store, repo, baseBranch)
-  )
-}
-
-async function prepareWorktreeCreateInBackground(
-  store: Store,
-  repo: Repo,
-  baseBranch: string
-): Promise<void> {
-  if (repo.connectionId || isFolderRepo(repo)) {
+  ticket: SpareRequestTicket
+): void {
+  const stale = staleReason(ticket)
+  if (stale) {
+    skip(repo.path, stale)
     return
   }
-  const options = getLocalProjectWorktreeGitOptions(store, repo)
-  // Resolving a WSL repo's root spawns `wsl.exe`, and this runs while the create composer is open,
-  // so it must not block the main thread. Key lookup and insert stay in one sync run after the await.
-  // The mirror distro must be threaded exactly as createLocalWorktree threads it, or the two sides
-  // key on different roots and every prepared checkout is discarded.
+  clearTimeout(pendingRequests.get(ticket.repoKey))
+  const timer = setTimeout(() => {
+    pendingRequests.delete(ticket.repoKey)
+    const running = worktreePreparationGit
+      .run(() => startRequestedSpare(store, repo, baseBranch, ticket))
+      .catch((error: unknown) => {
+        console.warn(`[worktree-create] could not start a spare checkout for ${repo.path}`, error)
+      })
+      .finally(() => runningRequests.delete(running))
+    runningRequests.add(running)
+  }, SPARE_REQUEST_DEBOUNCE_MS)
+  timer.unref?.()
+  pendingRequests.set(ticket.repoKey, timer)
+}
+
+async function resolveSpareCommit(
+  repoPath: string,
+  baseBranch: string,
+  options: GitWorktreeExecOptions
+): Promise<string | null> {
+  // The create's own resolvers, so the spare lands on exactly the commit a plain add would use.
+  let oid: string | null = null
+  const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, async (qualifiedRef) => {
+    oid = await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)
+    return oid !== null
+  })
+  // A fully qualified ref or a commit id is passed through unprobed.
+  return oid ?? (await resolveWorktreeBaseCommitOid(repoPath, effectiveBase, options))
+}
+
+async function startRequestedSpare(
+  store: Store,
+  repo: Repo,
+  baseBranch: string,
+  ticket: SpareRequestTicket
+): Promise<void> {
+  const { repoKey, options } = ticket
+  // The gate comes before anything is abandoned: a refused request keeps the existing spare.
+  const refused = staleReason(ticket) ?? spareStartRefusal()
+  if (refused) {
+    skip(repo.path, refused)
+    return
+  }
   const workspaceRoot = await computeWorkspaceRootAsync(
     repo.path,
     getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
   )
-  const canonicalBase = await canonicalBaseRef(repo.path, baseBranch, options)
-  return startPreparation({
+  const oid = await resolveSpareCommit(repo.path, baseBranch, options)
+  if (!oid) {
+    return
+  }
+  const existing = findSpare(repoKey)
+  const sameSpare =
+    existing?.oid === oid && existing.workspaceRootKey === preparationPathKey(workspaceRoot)
+  if (sameSpare) {
+    return
+  }
+  if (existing && !mayAbandonSpareForBaseChange(repoKey)) {
+    skip(repo.path, 'abandon_window')
+    return
+  }
+  const hook = await checkSparePostCheckoutHook(repo.path, options)
+  if (!hook.honorable) {
+    noteSpareHookUnsupported(repoKey)
+    skip(repo.path, 'hook_unsupported')
+    return
+  }
+  // Re-checked after the awaits: a create may have started, or another request replaced the spare.
+  const late = staleReason(ticket) ?? spareStartRefusal()
+  if (late || findSpare(repoKey) !== existing) {
+    skip(repo.path, late ?? 'superseded')
+    return
+  }
+  if (existing) {
+    recordSpareAbandonedForBaseChange(repoKey)
+    abandonRepoSpare(repoKey)
+  }
+  startSpare({
     repoPath: repo.path,
     workspaceRoot,
-    baseBranch,
-    canonicalBase,
+    oid,
+    hookRun: hook.hookRun,
+    ...(hook.hooksPath ? { hooksPath: hook.hooksPath } : {}),
     options
   })
 }
 
-type ClaimedPreparation =
-  | {
-      status: 'claimed'
-      entry: PreparationEntry
-      reservation: PreparationClaim
-      retargeted: boolean
-      canonicalBase: string
-    }
-  | { status: 'miss'; reason: PreparedCheckoutMissReason; rearm?: () => void }
-
-async function claimPreparedWorktree(
-  args: ConsumePreparedWorktreeArgs,
-  options: AddWorktreeOptions
-): Promise<ClaimedPreparation> {
-  const request = {
-    repoPathKey: preparationPathKey(args.repoPath),
-    workspaceRootKey: preparationPathKey(args.workspaceRoot),
-    wslDistro: options.wslDistro ?? '',
-    baseBranch: args.baseBranch
-  }
-  let selection = selectPreparationForCreate(listPreparations(), {
-    ...request,
-    canonicalBase: null
-  })
-  if (selection.kind === 'needs-canonical-base') {
-    // The probe is the only await here, and the pool is re-read after it, so the select-and-take
-    // below stays one synchronous run and no other create can hold the same entry.
-    const canonicalBase = await canonicalBaseRef(args.repoPath, args.baseBranch, options)
-    selection = selectPreparationForCreate(listPreparations(), { ...request, canonicalBase })
-  }
-  if (selection.kind !== 'exact' && selection.kind !== 'retarget') {
-    return {
-      status: 'miss',
-      reason: selection.kind === 'miss' ? selection.reason : 'base_mismatch'
-    }
-  }
-  if (selection.kind === 'retarget') {
-    const candidate = selection.candidate
-    const { canonicalBase } = selection
-    const divergence = await measureRetargetDivergence(
-      args.repoPath,
-      candidate.canonicalBase,
-      canonicalBase,
-      {
-        ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-        ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
-        // Why forward it: a cancelled create must stop these probes now, not at the deadline.
-        ...(options.signal ? { signal: options.signal } : {})
-      }
-    )
-    if (divergence !== 'within') {
-      return {
-        status: 'miss',
-        reason: divergence === 'exceeded' ? 'retarget_too_divergent' : 'retarget_unverifiable'
-      }
-    }
-    // Re-select after the walk: the pool may have gained an exact match or lost this entry. A
-    // different retarget candidate is left for the next create rather than claimed unverified.
-    selection = selectPreparationForCreate(listPreparations(), { ...request, canonicalBase })
-    if (selection.kind === 'miss' || selection.kind === 'needs-canonical-base') {
-      return { status: 'miss', reason: 'base_mismatch' }
-    }
-    if (selection.kind === 'retarget' && selection.candidate !== candidate) {
-      return { status: 'miss', reason: 'base_mismatch' }
-    }
-  }
-  const entry = selection.candidate
-  const reservation = takePreparation(entry, selection.canonicalBase)
-  try {
-    await (args.timing
-      ? args.timing.time('prepared_checkout_wait', () => entry.ready)
-      : entry.ready)
-    return {
-      status: 'claimed',
-      entry,
-      reservation,
-      retargeted: selection.kind === 'retarget',
-      canonicalBase: selection.canonicalBase
-    }
-  } catch {
-    return { status: 'miss', reason: 'prepare_failed', rearm: releaseClaimAfterCreate(reservation) }
-  }
+export async function _whenSpareRequestsSettledForTests(): Promise<void> {
+  await Promise.all(runningRequests)
 }
 
-function startDeferredPreparation(preparation: DeferredPreparation): void {
-  void startPreparation(preparation.args, preparation.kind).catch(() => {
-    // A later create still has the normal add path if speculative preparation fails.
-  })
-}
-
-function releaseClaimAfterCreate(reservation: PreparationClaim): () => void {
-  return () => {
-    for (const preparation of releasePreparationClaim(reservation).pendingPreparations) {
-      startDeferredPreparation(preparation)
-    }
+export function _resetSpareRequestsForTests(): void {
+  for (const timer of pendingRequests.values()) {
+    clearTimeout(timer)
   }
-}
-
-/** Replaces a just-consumed preparation, re-armed on the base the create actually used so the
- *  next one hits exactly — but only once the user has shown they are creating in a burst. A
- *  replacement costs a full checkout and ~5 minutes of disk until its TTL, so arming one after an
- *  isolated create spends that on nobody.
- *
- *  Returns a thunk rather than launching: the replacement is a full `reset --hard`, which on a
- *  large repo holds a general admission slot for tens of seconds. Started mid-create it competes
- *  with the create's own git, so the caller runs it after materialization/startup completes. The burst
- *  bookkeeping still happens here so a later create is recognized as part of a burst. An explicit
- *  prefetch during this create takes precedence over the burst replacement at release. */
-function deferRearmPreparation(
-  entry: PreparationEntry,
-  reservation: PreparationClaim,
-  baseBranch: string,
-  canonicalBase: string
-): () => void {
-  const continuesBurst = recordPreparationConsume(entry.key)
-  return () => {
-    const { released, pendingPreparations } = releasePreparationClaim(reservation)
-    if (!released) {
-      return
-    }
-    const requestedBaseArmed = pendingPreparations.some(
-      (preparation) => preparation.args.canonicalBase === canonicalBase
-    )
-    for (const preparation of pendingPreparations) {
-      startDeferredPreparation(preparation)
-    }
-    if (continuesBurst && !requestedBaseArmed) {
-      startDeferredPreparation({
-        args: {
-          repoPath: entry.repoPath,
-          workspaceRoot: entry.workspaceRoot,
-          baseBranch,
-          canonicalBase,
-          options: entry.options
-        },
-        kind: 'automatic'
-      })
-    }
-  }
-}
-
-export async function consumePreparedWorktreeCreate(
-  args: ConsumePreparedWorktreeArgs
-): Promise<PreparedWorktreeCreateAttempt> {
-  const options = args.options ?? {}
-  const claim = await claimPreparedWorktree(args, options)
-  if (claim.status === 'miss') {
-    return { status: 'miss', reason: claim.reason, ...(claim.rearm ? { rearm: claim.rearm } : {}) }
-  }
-  const { entry, reservation } = claim
-  try {
-    const parentDir = isWindowsAbsolutePathLike(args.worktreePath)
-      ? win32.dirname(args.worktreePath)
-      : posix.dirname(args.worktreePath)
-    await mkdir(toHostFilesystemPath(parentDir), { recursive: true })
-    // Finalize resolves the requested base itself and resets the prepared checkout onto that
-    // commit, so a retargeted claim is handed over at the requested commit or not at all.
-    const finalize = (): Promise<AddWorktreeResult> =>
-      finalizePreparedWorktree(
-        args.repoPath,
-        entry.preparedPath,
-        args.worktreePath,
-        args.branch,
-        args.baseBranch,
-        args.refreshLocalBaseRef,
-        options
-      )
-    const result = args.timing
-      ? await args.timing.time('prepared_checkout_finalize', finalize)
-      : await finalize()
-    // Consuming the only prepared checkout leaves the next create cold. Re-arm for a user who is
-    // creating in a burst; the TTL and the preparation limit still bound an unused replacement.
-    const rearm = deferRearmPreparation(entry, reservation, args.baseBranch, claim.canonicalBase)
-    return { status: 'hit', retargeted: claim.retargeted, result, rearm }
-  } catch (error) {
-    await discardPreparedWorktree(args.repoPath, entry.preparedPath, options).catch(() => {})
-    console.warn(
-      '[worktree-create] prepared checkout could not be finalized; using normal add',
-      error
-    )
-    return {
-      status: 'miss',
-      reason: 'finalize_failed',
-      rearm: releaseClaimAfterCreate(reservation)
-    }
-  }
-}
-
-export async function _resetWorktreeCreatePreparationsForTests(): Promise<void> {
-  resetPreparationConsumeHistoryForTests()
-  await _resetPreparationPoolForTests()
+  pendingRequests.clear()
+  latestSeqByRepo.clear()
 }

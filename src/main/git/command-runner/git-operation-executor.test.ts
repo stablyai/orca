@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { resolveGitAdmissionTier } from './git-operation-executor'
+import { createGitOperationExecutor, resolveGitAdmissionTier } from './git-operation-executor'
 import {
   acquireGitAdmission,
   GitAdmissionScheduler,
   _resetGitAdmissionForTests,
   _gitAdmissionSnapshotForTests
 } from './git-subprocess-admission'
-import { worktreeCreateGit, worktreePreparationGit } from '../worktree-create-git-executor'
+import { worktreeCreateGit } from '../worktree-create-git-executor'
+
+const statusGit = createGitOperationExecutor('status')
 
 afterEach(() => _resetGitAdmissionForTests())
 
@@ -16,7 +18,7 @@ describe('Git operation execution policy', () => {
     const finish = Promise.withResolvers<void>()
     const create = worktreeCreateGit.run(async () => {
       expect(resolveGitAdmissionTier()).toBe('interactive')
-      await worktreePreparationGit.run(async () => {
+      await statusGit.run(async () => {
         await Promise.resolve()
         expect(resolveGitAdmissionTier()).toBe('status')
       })
@@ -49,12 +51,10 @@ describe('Git operation execution policy', () => {
     }
   )
 
-  it('admits nested commands without priority options while preparation work stays queued', async () => {
+  it('admits nested commands without priority options while status-tier work stays queued', async () => {
     _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 1 }))
     const blocker = await acquireGitAdmission({ args: ['status'], cwd: '/repo' })
-    const preparation = worktreePreparationGit.run(() =>
-      acquireGitAdmission({ args: ['status'], cwd: '/repo' })
-    )
+    const statusWork = statusGit.run(() => acquireGitAdmission({ args: ['status'], cwd: '/repo' }))
     try {
       await worktreeCreateGit.run(async () => {
         const grant = await acquireGitAdmission({ args: ['rev-parse', 'HEAD'], cwd: '/repo' })
@@ -66,7 +66,7 @@ describe('Git operation execution policy', () => {
       })
     } finally {
       blocker.release()
-      const grant = await preparation
+      const grant = await statusWork
       grant.release()
     }
     expect(_gitAdmissionSnapshotForTests().queued).toBe(0)

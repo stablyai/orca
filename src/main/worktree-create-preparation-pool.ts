@@ -1,321 +1,310 @@
-import { worktreePreparationGit } from './git/worktree-create-git-executor'
+// The spare checkouts this process holds: at most one per repo per Git host, built while the create
+// composer is open on an idle machine. A create claims one only when it is completely ready for the
+// create's base commit; it never waits on one (rule 1) and never builds another (rule 3).
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
+import type { PreparedCheckoutMissReason } from '../shared/worktree/create-types'
 import {
   WORKTREE_CREATE_PREPARATION_DIRECTORY,
   createWorktreePreparationLockReason
 } from '../shared/worktree/create-preparation'
-import type { AddWorktreeOptions } from './git/worktree'
+import { createGitOperationExecutor } from './git/command-runner/git-operation-executor'
 import { prepareWorktreeCreateCheckout } from './git/worktree-create-preparation'
+import { addOwnedSpareId, releaseOwnedSpareId } from './git/worktree-create-spare-ids'
+import type { GitWorktreeExecOptions } from './git/worktree-operation-options'
 import { toHostFilesystemPath } from './host-tree-removal'
-import { preparationEntryKey, preparationPathKey } from './worktree-create-preparation-claim'
-import {
-  startStalePreparationCleanup,
-  hasPendingStalePreparationCleanup,
-  resetStalePreparationCleanupForTests
-} from './worktree-create-preparation-stale-cleanup'
-import {
-  discardPreparationWithRetry,
-  resetPendingPreparationDiscardsForTests,
-  trackPreparationDiscard
-} from './worktree-preparation-discard-retry'
+import { parseWslPath } from './wsl'
+import { recordSpareBuildDuration } from './worktree-create-spare-gate'
+import { hasPendingSpareDiscards, scheduleSpareDiscard } from './worktree-create-spare-discard'
 
 export const WORKTREE_CREATE_PREPARATION_TTL_MS = 5 * 60_000
+/** A disk bound: each spare is a full checkout, so at most this many repos keep one at a time. */
 export const WORKTREE_CREATE_PREPARATION_LIMIT = 3
 
-export type PreparationEntry = {
+/** A spare's own git runs at status priority, below anything a user is waiting on. */
+export const worktreePreparationGit = createGitOperationExecutor('status')
+
+export type SpareState = 'building' | 'ready' | 'abandoned'
+
+export type SpareEntry = {
+  id: string
   key: string
   repoPath: string
-  repoPathKey: string
-  workspaceRoot: string
   workspaceRootKey: string
-  wslDistro: string
-  baseBranch: string
-  canonicalBase: string
+  oid: string
   preparedPath: string
-  options: AddWorktreeOptions
-  createdAt: number
-  ready: Promise<void>
-  expiration: NodeJS.Timeout
+  options: GitWorktreeExecOptions
+  /** Whether the handover runs `post-checkout` through `git hook run`. */
+  hookRun: boolean
+  /** The repo's hooks directory, absolute in Git's own path space, for that `git hook run`. */
+  hooksPath?: string
+  /** Set once the spare's `worktree add` ran; before that there is nothing to remove. */
+  registered: boolean
+  state: SpareState
   controller: AbortController
-  checkoutStarted: boolean
+  expiration: ReturnType<typeof setTimeout>
 }
 
-export type StartPreparationArgs = {
+export type StartSpareArgs = {
   repoPath: string
   workspaceRoot: string
-  baseBranch: string
-  canonicalBase: string
-  options: AddWorktreeOptions
+  oid: string
+  hookRun: boolean
+  hooksPath?: string
+  options: GitWorktreeExecOptions
 }
 
-export type DeferredPreparation = {
-  args: StartPreparationArgs
-  kind: 'explicit' | 'automatic'
+const spares = new Map<string, SpareEntry>()
+// Repos whose last request built nothing because the handover could not honor `post-checkout`.
+const hookUnsupportedRepos = new Set<string>()
+// Repos whose spare was still building when the latest create started, for its miss reason. Reset
+// at every create start, so a spare stopped for one create never labels a later create elsewhere.
+// Overlapping creates can lose a label, never misattribute one.
+const stoppedForCreate = new Set<string>()
+// Builds whose git may still be running, abandoned WSL ones included.
+let buildsRunning = 0
+let quitting = false
+
+/** Case-folded on Windows, so the building and claiming sides key on the same path. */
+export function preparationPathKey(path: string): string {
+  return isWindowsAbsolutePathLike(path)
+    ? win32.normalize(path).toLowerCase()
+    : posix.normalize(path)
 }
 
-const preparations = new Map<string, PreparationEntry>()
-export type PreparationClaim = {
-  entry: PreparationEntry
-  requestedKey: string
-  pendingPreparations: Map<string, DeferredPreparation>
-}
-const claims = new Set<PreparationClaim>()
-
-/** One repo on one Git host: the scope a stranded discard is retried under. */
-function preparationHostKey(repoPathKey: string, wslDistro: string): string {
-  return `${repoPathKey}\0${wslDistro}`
+/** One spare per repo per Git host. */
+export function spareRepoKey(repoPath: string, wslDistro?: string): string {
+  return `${preparationPathKey(repoPath)}\0${wslDistro ?? ''}`
 }
 
-/** A prepared checkout is a create that is either in flight or imminent. */
-export function hasPendingPreparations(): boolean {
-  return preparations.size > 0 || claims.size > 0 || hasPendingStalePreparationCleanup()
+/** On WSL the checkout runs behind `wsl.exe`; killing that is not proven to stop the Linux git. */
+function stopsByKilling(entry: SpareEntry): boolean {
+  return !entry.options.wslDistro && !parseWslPath(entry.repoPath)
 }
 
-function pathOps(path: string): Pick<typeof posix, 'dirname' | 'join'> {
+function pathOps(path: string): Pick<typeof posix, 'join'> {
   return isWindowsAbsolutePathLike(path) ? win32 : posix
 }
 
-async function discardEntry(entry: PreparationEntry): Promise<void> {
-  // A failed checkout self-discards, but that self-discard is best-effort too, so it can strand the
-  // registration for the same reason the discard here can. Enrol either way.
-  await entry.ready.catch(() => {})
-  if (!entry.checkoutStarted) {
+function discard(entry: SpareEntry): void {
+  if (!entry.registered) {
+    releaseOwnedSpareId(entry.id)
     return
   }
-  await discardPreparationWithRetry({
-    hostKey: preparationHostKey(entry.repoPathKey, entry.wslDistro),
+  scheduleSpareDiscard({
+    id: entry.id,
     repoPath: entry.repoPath,
-    preparedPath: entry.preparedPath,
+    path: entry.preparedPath,
     options: entry.options
   })
 }
 
-function discardEntryInBackground(entry: PreparationEntry): void {
-  // Tracked, not bare `void`: the test reset must be able to settle it before dropping the registry.
-  trackPreparationDiscard(worktreePreparationGit.run(() => discardEntry(entry)))
-}
-
-function expireEntry(entry: PreparationEntry): void {
-  if (preparations.get(entry.key) !== entry) {
-    return
-  }
-  preparations.delete(entry.key)
-  entry.controller.abort()
-  discardEntryInBackground(entry)
-}
-
 /**
- * Frees a slot for an incoming preparation, preferring one the same workspace already owns.
- *
- * The cap is a disk bound — a prepared checkout is a full tree, ~200 MB of tracked content in the
- * repo this was measured against — so it stays small. But flipping through the composer's base
- * picker arms several preparations for one repo, and a plain oldest-first eviction let that churn
- * throw away another project's warm checkout, which is a structural miss for anyone working across
- * several repos. Evict the incoming workspace's own oldest entry first; only reach across
- * workspaces when this one holds none.
+ * Takes the spare out of service at once. A ready spare is discarded now; a building one is stopped
+ * (native: its recorded git child is killed; WSL: left to finish) and discarded when its build ends.
  */
-function enforcePreparationLimit(
-  repoPathKey: string,
-  workspaceRootKey: string,
-  wslDistro: string
-): void {
-  while (preparations.size >= WORKTREE_CREATE_PREPARATION_LIMIT) {
-    const byAge = [...preparations.values()].sort((left, right) => left.createdAt - right.createdAt)
-    const victim =
-      byAge.find(
-        (entry) =>
-          entry.repoPathKey === repoPathKey &&
-          entry.workspaceRootKey === workspaceRootKey &&
-          entry.wslDistro === wslDistro
-      ) ?? byAge[0]
-    if (!victim) {
-      return
-    }
-    preparations.delete(victim.key)
-    clearTimeout(victim.expiration)
-    victim.controller.abort()
-    discardEntryInBackground(victim)
+function abandonSpare(entry: SpareEntry): void {
+  if (spares.get(entry.key) === entry) {
+    spares.delete(entry.key)
   }
-}
-
-export function listPreparations(): PreparationEntry[] {
-  return [...preparations.values()]
-}
-
-export function findPreparation(
-  repoPathKey: string,
-  workspaceRootKey: string,
-  canonicalBase: string,
-  wslDistro: string
-): PreparationEntry | undefined {
-  return preparations.get(
-    preparationEntryKey(repoPathKey, workspaceRootKey, canonicalBase, wslDistro)
-  )
-}
-
-/** Removes an entry from the pool so no other create can claim it. Callers must run this in the
- *  same synchronous turn as the selection that produced `entry`. */
-export function takePreparation(
-  entry: PreparationEntry,
-  requestedCanonicalBase = entry.canonicalBase
-): PreparationClaim {
-  preparations.delete(entry.key)
   clearTimeout(entry.expiration)
-  const requestedKey = preparationEntryKey(
-    entry.repoPathKey,
-    entry.workspaceRootKey,
-    requestedCanonicalBase,
-    entry.wslDistro
-  )
-  const claim = { entry, requestedKey, pendingPreparations: new Map<string, DeferredPreparation>() }
-  claims.add(claim)
-  return claim
+  const wasReady = entry.state === 'ready'
+  entry.state = 'abandoned'
+  if (wasReady) {
+    discard(entry)
+  } else if (stopsByKilling(entry)) {
+    entry.controller.abort()
+  }
 }
 
-function matchingClaim(args: StartPreparationArgs): PreparationClaim | undefined {
-  const key = preparationEntryKey(
-    preparationPathKey(args.repoPath),
-    preparationPathKey(args.workspaceRoot),
-    args.canonicalBase,
-    args.options.wslDistro ?? ''
-  )
-  return [...claims]
-    .toReversed()
-    .find((claim) => claim.entry.key === key || claim.requestedKey === key)
+export function findSpare(repoKey: string): SpareEntry | undefined {
+  return spares.get(repoKey)
 }
 
-/** Preserve one request per canonical key, with explicit prefetch taking precedence. */
-function deferPreparationForClaim(
-  args: StartPreparationArgs,
-  kind: DeferredPreparation['kind']
-): boolean {
-  const matching = matchingClaim(args)
-  if (!matching) {
-    return false
-  }
-  const key = preparationEntryKey(
-    preparationPathKey(args.repoPath),
-    preparationPathKey(args.workspaceRoot),
-    args.canonicalBase,
-    args.options.wslDistro ?? ''
-  )
-  if (kind === 'explicit' || !matching.pendingPreparations.has(key)) {
-    matching.pendingPreparations.set(key, { args, kind })
-  }
-  return true
+export function noteSpareHookUnsupported(repoKey: string): void {
+  hookUnsupportedRepos.add(repoKey)
 }
 
-/** A second release is inert, including after a test reset. */
-export function releasePreparationClaim(claim: PreparationClaim): {
-  released: boolean
-  pendingPreparations: DeferredPreparation[]
-} {
-  if (!claims.delete(claim)) {
-    return { released: false, pendingPreparations: [] }
-  }
-  return { released: true, pendingPreparations: [...claim.pendingPreparations.values()] }
+export function isSpareHookUnsupported(repoKey: string): boolean {
+  return hookUnsupportedRepos.has(repoKey)
 }
 
-export function startPreparation(
-  args: StartPreparationArgs,
-  kind: DeferredPreparation['kind'] = 'explicit'
-): Promise<void> {
-  const existing = findPreparation(
-    preparationPathKey(args.repoPath),
-    preparationPathKey(args.workspaceRoot),
-    args.canonicalBase,
-    args.options.wslDistro ?? ''
-  )
-  if (existing) {
-    return existing.ready
-  }
-  if (deferPreparationForClaim(args, kind)) {
-    return Promise.resolve()
-  }
-  return worktreePreparationGit.run(() => startBackgroundPreparation(args))
+/** Building spares or discards still running; repo maintenance must not start meanwhile. */
+export function hasSpareWork(): boolean {
+  return hasPendingSpareDiscards() || buildsRunning > 0
 }
 
-function startBackgroundPreparation({
-  repoPath,
-  workspaceRoot,
-  baseBranch,
-  canonicalBase,
-  options
-}: StartPreparationArgs): Promise<void> {
-  const repoPathKey = preparationPathKey(repoPath)
-  const workspaceRootKey = preparationPathKey(workspaceRoot)
-  const wslDistro = options.wslDistro ?? ''
-  const key = preparationEntryKey(repoPathKey, workspaceRootKey, canonicalBase, wslDistro)
-  enforcePreparationLimit(repoPathKey, workspaceRootKey, wslDistro)
-  const preparationId = `${process.pid}-${randomUUID()}`
-  const lockReason = createWorktreePreparationLockReason(preparationId)
+/** Every create start, machine-wide: an unfinished spare is a second checkout on the same disk. */
+export function abandonUnfinishedSpares(): void {
+  stoppedForCreate.clear()
+  // Deleting the current entry while iterating a Map is safe.
+  for (const entry of spares.values()) {
+    if (entry.state === 'building') {
+      stoppedForCreate.add(entry.key)
+      abandonSpare(entry)
+    }
+  }
+}
+
+/** Whether a create start stopped this repo's unfinished spare; reported once. */
+export function takeSpareStoppedForCreate(repoKey: string): boolean {
+  return stoppedForCreate.delete(repoKey)
+}
+
+export function abandonRepoSpare(repoKey: string): void {
+  const entry = spares.get(repoKey)
+  if (entry) {
+    abandonSpare(entry)
+  }
+}
+
+export type SpareTake =
+  | { status: 'taken'; entry: SpareEntry }
+  | { status: 'miss'; reason: PreparedCheckoutMissReason }
+
+/** Synchronous, so no other create can take the same spare. */
+export function takeReadySpare(
+  entry: SpareEntry,
+  targetHead: string,
+  workspaceRootKey: string
+): SpareTake {
+  if (spares.get(entry.key) !== entry) {
+    return { status: 'miss', reason: 'none' }
+  }
+  if (entry.state !== 'ready') {
+    return { status: 'miss', reason: 'not_ready' }
+  }
+  if (entry.workspaceRootKey !== workspaceRootKey) {
+    return { status: 'miss', reason: 'workspace_root_mismatch' }
+  }
+  if (entry.oid !== targetHead) {
+    // Why not move it: a reset to another commit costs as much as the diff, which nothing bounds.
+    abandonSpare(entry)
+    return { status: 'miss', reason: 'base_moved' }
+  }
+  spares.delete(entry.key)
+  clearTimeout(entry.expiration)
+  return { status: 'taken', entry }
+}
+
+export function isSpareQuitting(): boolean {
+  return quitting
+}
+
+/** Committed quit: stop every spare build and refuse new ones; the next sweep reclaims leftovers. */
+export function abortSparesForQuit(): void {
+  quitting = true
+  for (const entry of spares.values()) {
+    if (entry.state === 'building' && stopsByKilling(entry)) {
+      entry.controller.abort()
+    }
+  }
+}
+
+async function buildSpare(entry: SpareEntry, workspaceRoot: string): Promise<boolean> {
   const preparationRoot = pathOps(workspaceRoot).join(
     workspaceRoot,
     WORKTREE_CREATE_PREPARATION_DIRECTORY
   )
-  const preparedPath = pathOps(workspaceRoot).join(preparationRoot, preparationId)
-  const controller = new AbortController()
-  const signal = options.signal
-    ? AbortSignal.any([options.signal, controller.signal])
-    : controller.signal
-  const entry = {} as PreparationEntry
-  const expiration = setTimeout(() => expireEntry(entry), WORKTREE_CREATE_PREPARATION_TTL_MS)
-  expiration.unref()
-  Object.assign(entry, {
-    key,
-    repoPath,
-    repoPathKey,
-    workspaceRoot,
-    workspaceRootKey,
-    wslDistro,
-    baseBranch,
-    canonicalBase,
-    preparedPath,
-    options,
-    createdAt: Date.now(),
-    expiration,
-    controller,
-    checkoutStarted: false,
-    ready: (async () => {
-      await startStalePreparationCleanup(
-        preparationHostKey(repoPathKey, wslDistro),
-        repoPath,
-        options
-      )
-      signal.throwIfAborted()
-      await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
-      signal.throwIfAborted()
-      // Already canonical, so the add re-resolves nothing.
-      entry.checkoutStarted = true
-      await prepareWorktreeCreateCheckout(repoPath, preparedPath, canonicalBase, lockReason, {
-        ...options,
-        signal
-      })
-    })()
-  } satisfies PreparationEntry)
-  preparations.set(key, entry)
-  void entry.ready.catch(() => {
-    if (preparations.get(key) === entry) {
-      preparations.delete(key)
-      clearTimeout(entry.expiration)
+  await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
+  const startedAt = Date.now()
+  const ready = await prepareWorktreeCreateCheckout(
+    entry.repoPath,
+    entry.preparedPath,
+    entry.oid,
+    createWorktreePreparationLockReason(entry.id),
+    {
+      ...entry.options,
+      signal: entry.controller.signal,
+      // A WSL spare is never killed, but one abandoned before its checkout must not start it.
+      isCancelled: () => entry.state === 'abandoned',
+      onRegistered: () => {
+        entry.registered = true
+      }
     }
-  })
-  return entry.ready
+  )
+  if (ready) {
+    recordSpareBuildDuration(entry.key, Date.now() - startedAt)
+  }
+  return ready
 }
 
-export async function _resetPreparationPoolForTests(): Promise<void> {
-  const entries = [...preparations.values()]
-  preparations.clear()
-  claims.clear()
-  await resetStalePreparationCleanupForTests()
-  await Promise.all(
-    entries.map(async (entry) => {
-      clearTimeout(entry.expiration)
-      await discardEntry(entry)
-    })
+/** Starts building; nothing awaits the build. The caller has already checked the start gate. */
+export function startSpare(args: StartSpareArgs): void {
+  if (quitting) {
+    return
+  }
+  const key = spareRepoKey(args.repoPath, args.options.wslDistro)
+  const existing = spares.get(key)
+  if (existing) {
+    abandonSpare(existing)
+  }
+  // Map order is insertion order, so the first entry is the oldest spare.
+  for (const oldest of spares.values()) {
+    if (spares.size < WORKTREE_CREATE_PREPARATION_LIMIT) {
+      break
+    }
+    abandonSpare(oldest)
+  }
+  hookUnsupportedRepos.delete(key)
+  stoppedForCreate.delete(key)
+  const id = `${process.pid}-${randomUUID()}`
+  const root = pathOps(args.workspaceRoot).join(
+    args.workspaceRoot,
+    WORKTREE_CREATE_PREPARATION_DIRECTORY
   )
-  await resetPendingPreparationDiscardsForTests()
+  const entry: SpareEntry = {
+    id,
+    key,
+    repoPath: args.repoPath,
+    workspaceRootKey: preparationPathKey(args.workspaceRoot),
+    oid: args.oid,
+    preparedPath: pathOps(root).join(root, id),
+    options: args.options,
+    hookRun: args.hookRun,
+    ...(args.hooksPath ? { hooksPath: args.hooksPath } : {}),
+    registered: false,
+    state: 'building',
+    controller: new AbortController(),
+    expiration: setTimeout(() => abandonSpare(entry), WORKTREE_CREATE_PREPARATION_TTL_MS)
+  }
+  entry.expiration.unref?.()
+  addOwnedSpareId(id)
+  spares.set(key, entry)
+  buildsRunning += 1
+  void worktreePreparationGit
+    .run(() => buildSpare(entry, args.workspaceRoot))
+    .catch((error: unknown) => {
+      if (!entry.controller.signal.aborted) {
+        console.warn(`[worktree-create] spare checkout failed for ${args.repoPath}`, error)
+      }
+      return false
+    })
+    .then((ready) => {
+      buildsRunning -= 1
+      if (ready && entry.state === 'building') {
+        entry.state = 'ready'
+        return
+      }
+      if (spares.get(key) === entry) {
+        spares.delete(key)
+        clearTimeout(entry.expiration)
+      }
+      entry.state = 'abandoned'
+      discard(entry)
+    })
+}
+
+export function _resetSparePoolForTests(): void {
+  for (const entry of spares.values()) {
+    clearTimeout(entry.expiration)
+    entry.controller.abort()
+  }
+  spares.clear()
+  hookUnsupportedRepos.clear()
+  stoppedForCreate.clear()
+  buildsRunning = 0
+  quitting = false
 }

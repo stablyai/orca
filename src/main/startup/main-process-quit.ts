@@ -18,6 +18,7 @@ import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-back
 import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'
 import { awaitPackedRefsLockRelease } from '../git/local-repo-ref-maintenance'
 import { stopBackgroundWorktreeRemovals } from '../worktree-background-removal'
+import { abortSparesForQuit } from '../worktree-create-preparation-pool'
 import { settleTeardownWithinDeadline, settleWithinMs } from '../quit-teardown-deadline'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
@@ -155,6 +156,8 @@ function installWillQuitHandler(): void {
     state.uninstallRepoMaintenanceIdleGate = null
     // Why stop, not wait: a delete can run for minutes, and its record makes the next start finish it.
     stopBackgroundWorktreeRemovals()
+    // The next launch's sweep reclaims a stopped spare: it is locked with this process's pid.
+    abortSparesForQuit()
     agentHookServer.stop()
     // Why Windows only: POSIX hooks short-circuit on ORCA_PANE_KEY, while Windows must register a
     // bare script path that cannot express the guard and would otherwise keep spawning after quit.

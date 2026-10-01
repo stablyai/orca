@@ -1,11 +1,13 @@
 // Real-binary coverage for the create-verification fallback (#16520): the mocked-runner suite cannot
 // prove that the row rebuilt from `rev-parse`/`symbolic-ref` is the row `git worktree list` reports.
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'
 import { clearGitCapabilityStateForTests, getLocalGitCapabilityCache } from './git-capability-state'
 import { describeCreatedWorktree, listWorktreesStrict } from './worktree'
 
@@ -54,6 +56,57 @@ describe('describeCreatedWorktree against the real Git binary', () => {
     await expect(describeCreatedWorktree(repoPath, worktreePath, 'feature')).resolves.toEqual(
       listed
     )
+  })
+
+  it('spells a worktree created through a case-mismatched path the way the listing does', async (context) => {
+    if (!existsSync(join(scratchDir, 'WORKSPACES'))) {
+      context.skip('case-sensitive filesystem: a case-mismatched path names a different directory')
+    }
+    // On disk the directory is `workspaces`; Git records, and lists, the spelling it was given.
+    const requestedPath = join(scratchDir, 'Workspaces', 'case-feature')
+    await git(['worktree', 'add', '-q', requestedPath, '-b', 'case-feature'], repoPath)
+    const listed = (await listWorktreesStrict(repoPath)).find(
+      (worktree) => worktree.branch === 'refs/heads/case-feature'
+    )
+    expect(listed?.path).toContain('Workspaces')
+
+    await expect(describeCreatedWorktree(repoPath, requestedPath, 'case-feature')).resolves.toEqual(
+      listed
+    )
+  })
+
+  it('leaves a relative gitdir record to the listing, which keeps the spelling Git was given', async (context) => {
+    const [major = 0, minor = 0] =
+      (await git(['--version'], repoPath))
+        .match(/(\d+)\.(\d+)/)
+        ?.slice(1)
+        .map(Number) ?? []
+    if (major < 2 || (major === 2 && minor < 48)) {
+      context.skip('worktree.useRelativePaths needs Git 2.48+')
+    }
+    // Case-mismatched on a case-insensitive disk, where `--show-toplevel` would answer `workspaces`.
+    const requestedPath = join(scratchDir, 'Workspaces', 'relative-feature')
+    await git(
+      [
+        '-c',
+        'worktree.useRelativePaths=true',
+        'worktree',
+        'add',
+        '-q',
+        requestedPath,
+        '-b',
+        'relative-feature'
+      ],
+      repoPath
+    )
+    const listed = (await listWorktreesStrict(repoPath)).find(
+      (worktree) => worktree.branch === 'refs/heads/relative-feature'
+    )
+    expect(listed?.path).toContain('Workspaces')
+
+    await expect(
+      resolveCreatedWorktree(repoPath, requestedPath, 'relative-feature')
+    ).resolves.toMatchObject({ created: listed, listingComplete: true })
   })
 
   it('accepts a fully qualified branch ref', async () => {

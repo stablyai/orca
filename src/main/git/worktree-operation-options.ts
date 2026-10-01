@@ -3,13 +3,18 @@ import type {
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
 import { readGitCommandFailureText } from '../../shared/git-command-failure-text'
-import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type {
+  PreparedCheckoutOutcome,
+  RemoveWorktreeResult
+} from '../../shared/worktree/create-types'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 
 export type AddWorktreeResult = {
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
+  /** Set when the caller opted in to a spare checkout. */
+  preparedCheckout?: PreparedCheckoutOutcome
 }
 
 export type SparseWorktreeCreateError = Error & {
@@ -36,6 +41,8 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
     branch: string
     ref: string
   }
+  /** A local create may use a ready spare built under this workspace root (never sparse or no-checkout). */
+  preparedCheckout?: { workspaceRoot: string }
 }
 
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {

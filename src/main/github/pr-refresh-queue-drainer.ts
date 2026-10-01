@@ -18,10 +18,12 @@ import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
+import { createLocalWorktreeCreateDeferral } from '../git/local-worktree-create-activity'
 
 export class PRRefreshQueueDrainer {
   private draining = false
   private timer: ReturnType<typeof setTimeout> | null = null
+  private readonly createDeferral = createLocalWorktreeCreateDeferral(() => this.schedule(0))
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -95,10 +97,13 @@ export class PRRefreshQueueDrainer {
     return this.queue.ordered((a, b) => this.pacing.activeOrder(a, b))
   }
 
-  private nextQueuedWakeDelay(excludedKey: string): number | null {
+  private nextQueuedWakeDelay(
+    entries: readonly PRRefreshQueueEntry[],
+    excludedKey: string
+  ): number | null {
     const now = Date.now()
     let nextDelay = Number.POSITIVE_INFINITY
-    for (const entry of this.queue.values()) {
+    for (const entry of entries) {
       if (entry.key === excludedKey) {
         continue
       }
@@ -115,7 +120,14 @@ export class PRRefreshQueueDrainer {
     this.draining = true
     try {
       while (this.queue.size > 0) {
-        let next = this.ordered()[0]
+        // Local background refreshes run git (base fetch, merge-tree) on the disk a create is
+        // checking out on; manual and SSH refreshes are not held. Held entries are left out of
+        // every pick and wake below, and the deferral wakes the drain for them.
+        const eligible = this.ordered().filter((entry) => !this.isHeldForLocalCreate(entry))
+        if (eligible.length === 0) {
+          return
+        }
+        let next = eligible[0]
         const waitMs = next.dueAt - Date.now()
         if (waitMs > 0) {
           this.schedule(waitMs)
@@ -124,7 +136,7 @@ export class PRRefreshQueueDrainer {
 
         let delay = this.pacing.entryDelay(next)
         if (delay > 0) {
-          const runnable = this.ordered().find(
+          const runnable = eligible.find(
             (entry) => entry.dueAt <= Date.now() && this.pacing.entryDelay(entry) === 0
           )
           if (runnable && runnable.key !== next.key) {
@@ -132,7 +144,7 @@ export class PRRefreshQueueDrainer {
             delay = 0
           } else {
             this.notePacingDelay(next)
-            this.schedule(Math.min(delay, this.nextQueuedWakeDelay(next.key) ?? delay))
+            this.schedule(Math.min(delay, this.nextQueuedWakeDelay(eligible, next.key) ?? delay))
             return
           }
         }
@@ -220,6 +232,14 @@ export class PRRefreshQueueDrainer {
     } finally {
       this.draining = false
     }
+  }
+
+  private isHeldForLocalCreate(entry: PRRefreshQueueEntry): boolean {
+    return (
+      isBackground(entry.reason) &&
+      !entry.candidate.connectionId &&
+      this.createDeferral.shouldDefer()
+    )
   }
 
   private notePacingDelay(entry: PRRefreshQueueEntry): void {

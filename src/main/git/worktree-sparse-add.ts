@@ -1,6 +1,7 @@
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 import { gitExecFileAsync } from './runner'
-import { addWorktree, unsetWorktreeCreationBase } from './worktree-add'
+import { addWorktree } from './worktree-add'
+import { unsetWorktreeCreationBase } from './worktree-add-creation-config'
 import type {
   AddWorktreeOptions,
   AddWorktreeResult,

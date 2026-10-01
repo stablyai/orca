@@ -36,31 +36,23 @@ export type WorktreeCreateTimingPhase = {
 /** Closed vocabulary: these values reach span attributes, so none of them may ever
  *  be derived from a branch name, a ref, or a path. */
 export type PreparedCheckoutMissReason =
-  | 'none_armed'
-  /** Preparations exist, but none for this repo — it was never warmed, or the pool's size cap
-   *  evicted it for another repo. Distinguished from `none_armed` because it is the signal that
-   *  the cap is thrashing for a multi-project user. */
-  | 'repo_mismatch'
-  | 'base_mismatch'
-  | 'retarget_too_divergent'
-  /** The drift check returned no answer. Distinct from `retarget_too_divergent` because that one
-   *  is the bound working as intended, while this one means a possibly cheap retarget was skipped
-   *  anyway. Deliberately a mixed bucket — a blown deadline, a cancelled create, and an ordinary
-   *  Git failure such as a missing ref all land here — so treat a rise as "look at why", not as a
-   *  direct readout of the budget being too small. */
-  | 'retarget_unverifiable'
+  | 'none'
+  /** A spare existed but was still being built; the create never waits on one. */
+  | 'not_ready'
+  /** The spare's commit is not the create's base commit after the create's own fetch. */
+  | 'base_moved'
   | 'workspace_root_mismatch'
-  | 'wsl_distro_mismatch'
-  | 'prepare_failed'
+  /** Something already exists at the create's path, so the spare is not moved there. */
+  | 'target_exists'
+  /** No spare was built: Git before 2.36 cannot give `post-checkout` a plain create's arguments. */
+  | 'hook_unsupported'
   | 'finalize_failed'
-  | 'checkout_existing_branch'
   | 'sparse_checkout'
+  | 'checkout_existing_branch'
 
-/** Whether a create reused a prewarmed checkout, and when it did not, which part of
- *  the claim key disagreed. `retargeted` marks a hit that had to reset the prepared
- *  checkout onto a different ref in the same base family. */
+/** Whether a create used a spare checkout, and when it did not, why. */
 export type PreparedCheckoutOutcome =
-  | { status: 'hit'; retargeted: boolean }
+  | { status: 'hit' }
   | { status: 'miss'; reason: PreparedCheckoutMissReason }
 
 export type WorktreeCreateTiming = {

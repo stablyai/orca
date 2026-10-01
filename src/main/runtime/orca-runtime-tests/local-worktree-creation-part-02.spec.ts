@@ -66,7 +66,7 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        {}
+        { preparedCheckout: { workspaceRoot: '/tmp/workspaces' } }
       )
       expect(gitSpy).toHaveBeenCalledWith(
         ['branch', '--set-upstream-to', 'origin/feature/fix', 'feature/fix'],
@@ -124,7 +124,7 @@ describe('OrcaRuntimeService', () => {
         sha,
         false,
         false,
-        {}
+        { preparedCheckout: { workspaceRoot: '/tmp/workspaces' } }
       )
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
@@ -195,7 +195,7 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        {}
+        { preparedCheckout: { workspaceRoot: '/tmp/workspaces' } }
       )
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
@@ -258,7 +258,7 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        {}
+        { preparedCheckout: { workspaceRoot: '/tmp/workspaces' } }
       )
     } finally {
       gitSpy.mockRestore()
@@ -307,7 +307,7 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        {}
+        { preparedCheckout: { workspaceRoot: '/tmp/workspaces' } }
       )
     } finally {
       gitSpy.mockRestore()
@@ -366,7 +366,7 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        {}
+        { preparedCheckout: { workspaceRoot: '/tmp/workspaces' } }
       )
     } finally {
       gitSpy.mockRestore()
@@ -417,7 +417,7 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        {}
+        { preparedCheckout: { workspaceRoot: '/tmp/workspaces' } }
       )
     } finally {
       gitSpy.mockRestore()

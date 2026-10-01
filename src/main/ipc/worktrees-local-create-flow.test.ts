@@ -106,6 +106,13 @@ vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+const { requestWorktreeCreateSpareMock } = vi.hoisted(() => ({
+  requestWorktreeCreateSpareMock: vi.fn()
+}))
+vi.mock('../worktree-create-preparation', () => ({
+  beginWorktreeCreateSpareRequest: () => ({ seq: 1 }),
+  requestWorktreeCreateSpare: requestWorktreeCreateSpareMock
+}))
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -201,6 +208,21 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
+  it('requests a spare at the prefetched base once its refresh settles', async () => {
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
+    requestWorktreeCreateSpareMock.mockClear()
+
+    await handlers['worktrees:prefetchCreateBase'](null, { repoId: 'repo-1', baseBranch: 'main' })
+
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalled()
+    expect(requestWorktreeCreateSpareMock).toHaveBeenCalledWith(
+      store,
+      expect.objectContaining({ id: 'repo-1' }),
+      'main',
+      { seq: 1 }
+    )
+  })
+
   it('uses the runtime remote fetch cache when prefetching a local branch base', async () => {
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
 
@@ -276,7 +298,7 @@ describe('registerWorktreeHandlers', () => {
       sha,
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
   })
 
@@ -360,7 +382,7 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
@@ -393,7 +415,7 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/rocket',
@@ -445,7 +467,7 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace/worktrees' } }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::../worktrees/feature',
@@ -563,7 +585,7 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
     expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(result).toMatchObject({
@@ -659,7 +681,6 @@ describe('registerWorktreeHandlers', () => {
       startupTerminal?: { spawned: boolean; surface?: string }
       timing?: {
         phases: { phase: string }[]
-        preparedCheckout?: { status: string; reason?: string }
       }
     }
     expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
@@ -730,8 +751,6 @@ describe('registerWorktreeHandlers', () => {
         'spawn_startup_terminal'
       ])
     )
-    // Nothing warmed this repo, so the create must report the cold path rather than stay silent.
-    expect(result.timing?.preparedCheckout).toEqual({ status: 'miss', reason: 'none_armed' })
   })
 
   it('returns the wrapped setup command when startup spawned but setup creation failed', async () => {

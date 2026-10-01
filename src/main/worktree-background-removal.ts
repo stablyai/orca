@@ -130,6 +130,13 @@ export function hasPendingWorktreeRemovals(): boolean {
   return pendingByWorktreeId.size > 0
 }
 
+/** Whether an accepted or interrupted local removal still owns this path, in any repo. */
+export function isWorktreeRemovalPendingAt(worktreePath: string): boolean {
+  return [...pendingByWorktreeId.values()].some((removal) =>
+    areWorktreePathsEqual(removal.worktreePath, worktreePath)
+  )
+}
+
 export function findPendingWorktreeRemovalConflict(
   repoPath: string,
   target: { worktreePath?: string; branch?: string }

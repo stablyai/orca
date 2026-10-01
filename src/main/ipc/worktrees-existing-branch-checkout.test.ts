@@ -297,7 +297,7 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
   })
 
@@ -342,7 +342,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '--set-upstream-to', 'origin/feature/fix', 'feature/fix'],
@@ -437,7 +437,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/bitbucket-title',
@@ -493,7 +493,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/bitbucket-title-2',
@@ -530,7 +530,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
   })
 
@@ -564,7 +564,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
   })
 
@@ -608,7 +608,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
   })
 
@@ -644,7 +644,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
   })
 
@@ -739,7 +739,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
   })
 
@@ -783,7 +783,7 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/workspace' } }
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({

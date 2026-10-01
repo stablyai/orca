@@ -79,7 +79,7 @@ describe('OrcaRuntimeService', () => {
       'origin/main',
       false,
       false,
-      {}
+      { preparedCheckout: { workspaceRoot: '/tmp/workspaces' } }
     )
     expect(result).toEqual({
       worktree: expect.objectContaining({

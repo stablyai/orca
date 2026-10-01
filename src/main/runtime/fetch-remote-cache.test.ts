@@ -42,9 +42,15 @@ function fetchCallCount(): number {
 function exactBaseRefreshOptions(cwd: string): {
   cwd: string
   timeout: number
+  admissionTier: 'interactive'
   useConfiguredSshCommandForNetwork: boolean
 } {
-  return { cwd, timeout: 60_000, useConfiguredSshCommandForNetwork: true }
+  return {
+    cwd,
+    timeout: 60_000,
+    admissionTier: 'interactive',
+    useConfiguredSshCommandForNetwork: true
+  }
 }
 
 function exactBaseRefreshArgs(branch = 'main'): string[] {

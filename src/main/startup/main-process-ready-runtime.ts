@@ -32,6 +32,8 @@ import {
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
+import { sweepRetiredWorktreeCreatePreparations } from '../retired-worktree-create-preparation-sweep'
+import { collectRetiredPreparationSweepTargets } from '../retired-worktree-create-preparation-sweep-targets'
 import { loadWorktreeRemovalRecords } from '../worktree-background-removal'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
@@ -91,6 +93,11 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     ).catch((error) => {
       console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
     })
+    void sweepRetiredWorktreeCreatePreparations(collectRetiredPreparationSweepTargets(store)).catch(
+      (error) => {
+        console.warn('[worktrees] Failed to reclaim retired spare checkouts:', error)
+      }
+    )
     runtime.finishInterruptedWorktreeRemovals()
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   // Why deferred: nothing on the startup path needs it, and it only rewrites plugin files that changed.

@@ -254,6 +254,17 @@ function measuredWallClockMs(phases: readonly WorktreePhaseInterval[]): number {
   return openedAt === null ? 0 : covered + (closesAt - openedAt)
 }
 
+/** Whether a create used a spare checkout, and why not; a closed vocabulary. */
+export function addPreparedCheckoutAttributes(
+  span: ActiveSpan,
+  outcome: PreparedCheckoutOutcome
+): void {
+  span.setAttribute('worktree.create.prepared_checkout', outcome.status)
+  if (outcome.status === 'miss') {
+    span.setAttribute('worktree.create.prepared_checkout_miss', outcome.reason)
+  }
+}
+
 type WorktreePhaseInterval = Pick<WorktreeCreatePhaseTiming, 'startedAtMs' | 'durationMs'>
 
 /** Records a create's phase breakdown on its span. Phase names are already a closed vocabulary in
@@ -268,16 +279,7 @@ export function addWorktreeCreatePhaseAttributes(
 ): void {
   span.setAttribute('worktree.create.total_ms', Math.round(timing.totalDurationMs))
   if (timing.preparedCheckout) {
-    span.setAttribute('worktree.create.prepared_checkout', timing.preparedCheckout.status)
-    if (timing.preparedCheckout.status === 'hit') {
-      // A retargeted hit still pays a reset, so it must not be read as a free hit.
-      span.setAttribute(
-        'worktree.create.prepared_checkout_retargeted',
-        timing.preparedCheckout.retargeted
-      )
-    } else {
-      span.setAttribute('worktree.create.prepared_checkout_miss', timing.preparedCheckout.reason)
-    }
+    addPreparedCheckoutAttributes(span, timing.preparedCheckout)
   }
   for (const phase of timing.phases) {
     span.setAttribute(`worktree.create.phase.${phase.phase}_ms`, Math.round(phase.durationMs))

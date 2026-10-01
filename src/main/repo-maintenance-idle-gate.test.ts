@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const isOnBatteryPowerMock = vi.hoisted(() => vi.fn(() => false))
-const hasPendingPreparationsMock = vi.hoisted(() => vi.fn(() => false))
 const hasRemovalsInFlightMock = vi.hoisted(() => vi.fn(() => false))
+const hasSpareWorkMock = vi.hoisted(() => vi.fn(() => false))
 const setProbeMock = vi.hoisted(() => vi.fn())
 const disposeMock = vi.hoisted(() => vi.fn(async () => {}))
 const postponeMock = vi.hoisted(() => vi.fn())
@@ -21,8 +21,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./worktree-create-preparation', () => ({
-  hasPendingWorktreeCreatePreparations: hasPendingPreparationsMock
+vi.mock('./worktree-create-preparation-pool', () => ({
+  hasSpareWork: hasSpareWorkMock
 }))
 
 vi.mock('./ipc/worktrees/worktree-ipc-context', () => ({
@@ -36,6 +36,11 @@ vi.mock('./git/local-repo-ref-maintenance', () => ({
 }))
 
 import { installRepoMaintenanceIdleGate } from './repo-maintenance-idle-gate'
+import {
+  _resetLocalWorktreeCreateActivityForTests,
+  holdLocalWorktreeCreate,
+  LOCAL_WORKTREE_CREATE_IDLE_DEADLINE_MS
+} from './git/local-worktree-create-activity'
 
 function installProbe(
   overrides: Partial<{ isQuitting: () => boolean; getWorkingAgentCount: () => number }> = {}
@@ -50,8 +55,8 @@ function installProbe(
 
 beforeEach(() => {
   isOnBatteryPowerMock.mockReturnValue(false)
-  hasPendingPreparationsMock.mockReturnValue(false)
   hasRemovalsInFlightMock.mockReturnValue(false)
+  hasSpareWorkMock.mockReturnValue(false)
   postponeMock.mockClear()
   powerListeners.clear()
   appListeners.clear()
@@ -60,6 +65,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  _resetLocalWorktreeCreateActivityForTests()
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -72,10 +79,25 @@ describe('repo maintenance idle gate', () => {
     expect(installProbe({ getWorkingAgentCount: () => 1 }).probe()).toBe(true)
   })
 
-  it('vetoes while a worktree create is prepared or in flight', () => {
-    hasPendingPreparationsMock.mockReturnValue(true)
+  it('vetoes while a worktree create is in flight', () => {
+    holdLocalWorktreeCreate()
 
     expect(installProbe().probe()).toBe(true)
+  })
+
+  it('vetoes while a spare checkout is building or being discarded', () => {
+    hasSpareWorkMock.mockReturnValue(true)
+
+    expect(installProbe().probe()).toBe(true)
+  })
+
+  it('stops vetoing once a stuck create outlasts the deadline', async () => {
+    vi.useFakeTimers()
+    holdLocalWorktreeCreate()
+    const { probe } = installProbe()
+
+    await vi.advanceTimersByTimeAsync(LOCAL_WORKTREE_CREATE_IDLE_DEADLINE_MS)
+    expect(probe()).toBe(false)
   })
 
   it('vetoes while a worktree removal is deleting refs', () => {

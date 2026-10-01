@@ -1,9 +1,8 @@
 import { readFile, realpath, stat } from 'node:fs/promises'
-import { join, posix } from 'node:path'
+import { join, posix, win32 } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../shared/gitdir-marker-payload'
-import { isWorktreeCreatePreparation } from '../../shared/worktree/create-preparation'
 import { toWslExecutionSpace } from '../../shared/wsl-paths'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import {
@@ -23,6 +22,8 @@ import {
 } from './worktree-operation-options'
 import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
 import { detectSparseCheckoutCached } from './worktree-sparse-checkout-cache'
+import { isHiddenCreatePreparation } from './worktree-create-spare-ids'
+import { resolveGitDir } from './source-control/resolve-git-dir'
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
@@ -34,7 +35,7 @@ export async function listWorktreeGraph(
     const worktrees = await readTranslatedWorktreeGraph(repoPath, options)
     return options.includeCreatePreparations
       ? worktrees
-      : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
+      : worktrees.filter((worktree) => !isHiddenCreatePreparation(worktree))
   } catch (err) {
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
@@ -52,7 +53,7 @@ export async function listWorktreesUnshared(
     const worktrees = await readTranslatedWorktreeGraph(repoPath, options)
     const visibleWorktrees = options.includeCreatePreparations
       ? worktrees
-      : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
+      : worktrees.filter((worktree) => !isHiddenCreatePreparation(worktree))
     return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
   } catch (err) {
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
@@ -92,7 +93,7 @@ export async function listWorktreesStrict(
   })
   const visibleWorktrees = options.includeCreatePreparations
     ? worktrees
-    : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
+    : worktrees.filter((worktree) => !isHiddenCreatePreparation(worktree))
   return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
 }
 
@@ -289,10 +290,39 @@ function isPosixAbsolutePath(pathValue: string): boolean {
 }
 
 /**
+ * The worktree's path as `git worktree list` prints it: what Git recorded at `worktree add`, which
+ * keeps the caller's letter case where `--show-toplevel` reports the on-disk case. On a
+ * case-insensitive disk only this spelling keys the worktree the way every later scan will.
+ * Relative when `worktree.useRelativePaths` (Git 2.48+) wrote it; undefined when unreadable.
+ */
+async function readRecordedWorktreePath(
+  worktreePath: string,
+  options: GitWorktreeExecOptions,
+  timeoutMs: number
+): Promise<string | undefined> {
+  try {
+    const record = await withDeadline(
+      resolveGitDir(worktreePath, options).then((gitDir) =>
+        readFile(join(gitDir, 'gitdir'), 'utf8')
+      ),
+      timeoutMs
+    )
+    // Git's listing right-trims the record and drops this suffix the same way.
+    const recorded = record.trimEnd()
+    if (!recorded.endsWith('/.git')) {
+      return undefined
+    }
+    return recorded.slice(0, -'/.git'.length)
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Reconstruct the listing row for a worktree `git worktree add` just created, by asking Git about
- * the worktree itself. Used when the listing fails or omits it, so a create does not abandon a
- * worktree Git already wrote to disk (#16520). Returns undefined unless Git resolves the path into
- * this repo's object store with the expected branch checked out.
+ * the worktree itself instead of listing every worktree. Returns undefined, leaving the caller to
+ * the listing, unless Git resolves the path into this repo's object store with the expected branch
+ * checked out, or when Git recorded the path relative.
  */
 export async function describeCreatedWorktree(
   repoPath: string,
@@ -301,24 +331,30 @@ export async function describeCreatedWorktree(
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo | undefined> {
   const expectedRef = `refs/heads/${normalizeLocalBranchRef(branch)}`
-  // Bound Git recovery after the bounded listing failed; filesystem canonicalization stays best effort.
+  // Bound the Git reads; filesystem canonicalization stays best effort.
   const deadlined: GitWorktreeExecOptions = {
     ...options,
     timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   }
-  const [created, repoGitCommonDir, checkedOutRef, head] = await Promise.all([
+  const [created, repoGitCommonDir, checkedOutRef, head, recordedPath] = await Promise.all([
     readRepoLocation(worktreePath, toWslExecutionSpace(worktreePath), deadlined),
     readRepoCommonDirFromGit(repoPath, deadlined),
     readCheckedOutBranchRef(worktreePath, deadlined),
-    readWorktreeHeadOid(worktreePath, deadlined)
+    readWorktreeHeadOid(worktreePath, deadlined),
+    readRecordedWorktreePath(worktreePath, options, deadlined.timeout ?? WORKTREE_LIST_TIMEOUT_MS)
   ])
   // An unreadable HEAD means Git could not confirm the worktree, so report nothing rather than a blank OID.
   if (!created || checkedOutRef !== expectedRef || !head) {
     return undefined
   }
+  // Only the listing resolves a relative record (`--show-toplevel` gives the on-disk case); win32
+  // also counts POSIX-rooted paths absolute.
+  if (recordedPath !== undefined && !win32.isAbsolute(recordedPath)) {
+    return undefined
+  }
   if (!(await isSameRepoCommonDir(created.commonDir, [repoGitCommonDir]))) {
-    // Only now read the second opinion from disk: a `.git` on a hung mount pins a threadpool thread
-    // that no deadline can reclaim, so never pay that on the path where Git already agreed.
+    // Only now read the repo's `.git` from disk: on a hung mount it pins a threadpool thread no
+    // deadline reclaims. The record read above is safe: `worktree add` just wrote it.
     const repoDiskCommonDir = await readRepoCommonDirFromDisk(
       repoPath,
       deadlined.timeout ?? WORKTREE_LIST_TIMEOUT_MS
@@ -331,7 +367,7 @@ export async function describeCreatedWorktree(
     repoPath,
     [
       {
-        path: translateWorktreePath(created.topLevel, repoPath, options),
+        path: translateWorktreePath(recordedPath ?? created.topLevel, repoPath, options),
         head,
         branch: expectedRef,
         isBare: false,

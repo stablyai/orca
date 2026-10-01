@@ -1,4 +1,4 @@
-import { worktreeCreateGit } from '../git/worktree-create-git-executor'
+import { runLocalWorktreeCreate } from '../git/worktree-create-git-executor'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
@@ -19,7 +19,8 @@ import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
 import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
 import { createRuntimeLocalGitWorktree } from './runtime-local-git-worktree-create'
 import { materializeRuntimeLocalWorktree } from './runtime-local-worktree-materialization'
-import type { PreparationRearmHolder } from '../worktree-create-preparation'
+import { addPreparedCheckoutAttributes, withWorktreeSpan } from '../observability/instrumentation'
+import type { ActiveSpan } from '../observability/tracer'
 
 type RuntimeLocalWorktreeCreateArgs<T> = {
   request: RuntimeManagedWorktreeCreateArgs
@@ -44,14 +45,19 @@ type RuntimeLocalWorktreeCreateArgs<T> = {
   ) => Promise<RemoteFetchResult>
   fetchRemote: (path: string, remote: string, options?: LocalGitExecOptions) => Promise<void>
   onWorktreeMetadataPersisted: (worktree: Worktree) => T
-  rearm: PreparationRearmHolder
 }
 
 export function createRuntimeLocalManagedWorktree<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {
-  return worktreeCreateGit.run(() => performRuntimeLocalWorktreeCreate(args))
+  // The same `worktree.create` span the IPC create records, so RPC and CLI creates report spares too.
+  return runLocalWorktreeCreate(() =>
+    withWorktreeSpan({ stage: 'create' }, (span) => performRuntimeLocalWorktreeCreate(args, span))
+  )
 }
 
-async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {
+async function performRuntimeLocalWorktreeCreate<T>(
+  args: RuntimeLocalWorktreeCreateArgs<T>,
+  span: ActiveSpan
+) {
   const { request, repo, store } = args
   const settings = store.getSettings()
   const pathSettings = getWorktreePathSettings(repo, settings, getWorktreeMirrorDistro(store, repo))
@@ -115,9 +121,11 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
     resolveRemoteTrackingBase: args.resolveRemoteTrackingBase,
     hasRemoteTrackingRef: args.hasRemoteTrackingRef,
     refreshRemoteTrackingBase: args.refreshRemoteTrackingBase,
-    fetchRemote: args.fetchRemote,
-    rearm: args.rearm
+    fetchRemote: args.fetchRemote
   })
+  if (git.preparedCheckout) {
+    addPreparedCheckoutAttributes(span, git.preparedCheckout)
+  }
   const materialized = await materializeRuntimeLocalWorktree({
     request,
     repo,

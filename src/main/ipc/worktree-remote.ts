@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 // Why: worktree create helpers (local + remote) split out of worktrees.ts; the cohesive create flow runs this file just over the per-file line limit.
 
-import { worktreeCreateGit } from '../git/worktree-create-git-executor'
+import { runLocalWorktreeCreate } from '../git/worktree-create-git-executor'
 import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
 import type { BrowserWindow } from 'electron'
 import { posix, win32 } from 'node:path'
@@ -32,10 +32,6 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import {
-  consumePreparedWorktreeCreate,
-  type PreparationRearmHolder
-} from '../worktree-create-preparation'
 import {
   getBranchConflictKind,
   resolveDefaultBaseRefViaExec,
@@ -2180,15 +2176,9 @@ export function createLocalWorktree(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
-  // Why a holder fired in `finally`: consuming a prepared checkout leaves the pool one short, so a
-  // create that fails after that point — include copy, push target, terminal startup — must still
-  // arm the replacement. Fires exactly once, after startup on the success path.
-  const rearm: PreparationRearmHolder = { fire: () => {} }
-  return worktreeCreateGit
-    .run(() => performLocalWorktreeCreate(args, repo, store, mainWindow, rearm, runtime))
-    .finally(() => {
-      rearm.fire()
-    })
+  return runLocalWorktreeCreate(() =>
+    performLocalWorktreeCreate(args, repo, store, mainWindow, runtime)
+  )
 }
 
 async function performLocalWorktreeCreate(
@@ -2196,7 +2186,6 @@ async function performLocalWorktreeCreate(
   repo: Repo,
   store: Store,
   mainWindow: BrowserWindow,
-  rearm: PreparationRearmHolder,
   runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
@@ -2310,7 +2299,7 @@ async function performLocalWorktreeCreate(
         remoteTrackingRefresh = {
           base: remoteTrackingBase,
           hadLocalBaseRef: hasRemoteTrackingBaseRef,
-          promise: runtime.getOrStartRemoteTrackingBaseRefresh(
+          promise: runtime.refreshRemoteTrackingBaseForCreate(
             repo.path,
             remoteTrackingBase,
             ...localWorktreeGitOptionArgs
@@ -2596,46 +2585,19 @@ async function performLocalWorktreeCreate(
     ...remoteTrackingBaseOption,
     ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
   }
-  const preparedWorktreeOptions = addProjectGitOptions(
-    suggestLocalBaseRefUpdate
-      ? { ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate }
-      : remoteTrackingBaseOption
-  )
+  // A spare is a detached full checkout, so only a plain new-branch add can use one.
+  const addSpareOptions = (options?: AddWorktreeOptions): AddWorktreeOptions =>
+    addProjectGitOptions({ ...options, preparedCheckout: { workspaceRoot } })
+  if (sparseDirectories.length > 0 || checkoutExistingBranch) {
+    timing.recordPreparedCheckout({
+      status: 'miss',
+      reason: sparseDirectories.length > 0 ? 'sparse_checkout' : 'checkout_existing_branch'
+    })
+  }
   let addResult: AddWorktreeResult
   try {
     addResult =
       (await timing.time('git_worktree_add', async () => {
-        if (sparseDirectories.length === 0 && !checkoutExistingBranch) {
-          const prepared = await consumePreparedWorktreeCreate({
-            repoPath: repo.path,
-            workspaceRoot,
-            worktreePath,
-            branch: branchName,
-            baseBranch,
-            refreshLocalBaseRef: settings.refreshLocalBaseRefOnWorktreeCreate,
-            options: preparedWorktreeOptions,
-            timing
-          })
-          timing.recordPreparedCheckout(
-            prepared.status === 'hit'
-              ? { status: 'hit', retargeted: prepared.retargeted }
-              : { status: 'miss', reason: prepared.reason }
-          )
-          if (prepared.status === 'hit') {
-            // Why deferred: re-arming is a full `reset --hard`; started here it would hold a
-            // general admission slot for the rest of this create's own git.
-            rearm.fire = prepared.rearm
-            return prepared.result
-          }
-          if (prepared.rearm) {
-            rearm.fire = prepared.rearm
-          }
-        } else {
-          timing.recordPreparedCheckout({
-            status: 'miss',
-            reason: sparseDirectories.length > 0 ? 'sparse_checkout' : 'checkout_existing_branch'
-          })
-        }
         if (sparseDirectories.length > 0) {
           if (checkoutExistingBranch) {
             return addSparseWorktree(
@@ -2689,7 +2651,7 @@ async function performLocalWorktreeCreate(
             baseBranch,
             settings.refreshLocalBaseRefOnWorktreeCreate,
             false,
-            addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
+            addSpareOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
           )
         }
         return addWorktree(
@@ -2699,7 +2661,7 @@ async function performLocalWorktreeCreate(
           baseBranch,
           settings.refreshLocalBaseRefOnWorktreeCreate,
           false,
-          addProjectGitOptions(remoteTrackingBaseOption)
+          addSpareOptions(remoteTrackingBaseOption)
         )
       })) ?? {}
   } catch (error) {
@@ -2708,9 +2670,11 @@ async function performLocalWorktreeCreate(
     }
     throw error
   }
-  // Why: the worktree is listable from here on. Every scan that started earlier -- including a
-  // prepared checkout's, which listings hide while it is still locked -- now describes a catalog
-  // without it, and must not be served or cached as the current one.
+  if (addResult.preparedCheckout) {
+    timing.recordPreparedCheckout(addResult.preparedCheckout)
+  }
+  // Why: the worktree is listable from here on. Every scan that started earlier now describes a
+  // catalog without it, and must not be served or cached as the current one.
   runWorktreeChangeInvalidators(repo.id)
 
   // Why: fallible metadata work after creation must not leave a real workspace name reusable.

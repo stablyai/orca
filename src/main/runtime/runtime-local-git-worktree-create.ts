@@ -2,6 +2,7 @@ import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
+import type { PreparedCheckoutOutcome } from '../../shared/worktree/create-types'
 import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import { configureCreatedWorktreePushTarget } from '../ipc/worktree-remote'
@@ -16,10 +17,6 @@ import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktre
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
 import { isGeneratedWorktreeCreateName } from '../worktree-create-candidates'
-import {
-  consumePreparedWorktreeCreate,
-  type PreparationRearmHolder
-} from '../worktree-create-preparation'
 import {
   failedWorktreeCreationNeedsRetirement,
   retireGeneratedWorktreeName
@@ -58,13 +55,13 @@ export async function createRuntimeLocalGitWorktree(args: {
     options?: LocalGitExecOptions
   ) => Promise<RemoteFetchResult>
   fetchRemote: (repoPath: string, remote: string, options?: LocalGitExecOptions) => Promise<void>
-  rearm: PreparationRearmHolder
 }): Promise<{
   remoteTrackingBase: RemoteTrackingBase | null
   sparseDirectories: string[]
   configuredPushTarget?: GitPushTarget
   created: GitWorktreeInfo
   addResult: AddWorktreeResult
+  preparedCheckout?: PreparedCheckoutOutcome
 }> {
   let remoteTrackingBase = await args.resolveRemoteTrackingBase(
     args.repo.path,
@@ -124,14 +121,15 @@ export async function createRuntimeLocalGitWorktree(args: {
     !args.settings.localBaseRefSuggestionDismissed &&
     Boolean(remoteTrackingBase)
   const remoteOption = remoteTrackingBase ? { remoteTrackingBase } : undefined
-  const preparedWorktreeOptions: AddWorktreeOptions = {
+  const addOptions: AddWorktreeOptions = {
     ...remoteOption,
     ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {}),
-    ...args.localWorktreeGitOptions
-  }
-  const addOptions: AddWorktreeOptions = {
-    ...preparedWorktreeOptions,
-    ...(args.checkoutExistingBranch ? { checkoutExistingBranch: true } : {})
+    ...args.localWorktreeGitOptions,
+    ...(args.checkoutExistingBranch ? { checkoutExistingBranch: true } : {}),
+    // A spare is a full detached checkout, so only a plain new-branch add can use one.
+    ...(sparseDirectories.length === 0 && !args.checkoutExistingBranch
+      ? { preparedCheckout: { workspaceRoot: args.workspaceRoot } }
+      : {})
   }
   const shouldRetireGeneratedName =
     args.request.nameWasGenerated === true &&
@@ -139,50 +137,26 @@ export async function createRuntimeLocalGitWorktree(args: {
     isGeneratedWorktreeCreateName(args.effectiveSanitizedName!)
   let addResult: AddWorktreeResult
   try {
-    const preparedAttempt =
-      sparseDirectories.length === 0 && !args.checkoutExistingBranch
-        ? await consumePreparedWorktreeCreate({
-            repoPath: args.repo.path,
-            workspaceRoot: args.workspaceRoot,
-            worktreePath: args.worktreePath,
-            branch: args.branchName,
-            baseBranch: args.baseBranch,
-            refreshLocalBaseRef: args.settings.refreshLocalBaseRefOnWorktreeCreate,
-            options: preparedWorktreeOptions
-          })
-        : null
-    // This path has no create-span recorder, so the miss reason is only observable on the IPC path.
-    if (preparedAttempt?.status === 'miss' && preparedAttempt.rearm) {
-      args.rearm.fire = preparedAttempt.rearm
-    }
-    if (preparedAttempt?.status === 'hit') {
-      addResult = preparedAttempt.result
-      // Deferred, not fired: re-arming is a full `reset --hard`, and the caller still has
-      // materialization probes and terminals ahead of it.
-      args.rearm.fire = preparedAttempt.rearm
-    } else if (sparseDirectories.length > 0) {
-      addResult =
-        (await addSparseWorktree(
-          args.repo.path,
-          args.worktreePath,
-          args.branchName,
-          sparseDirectories,
-          args.baseBranch,
-          args.settings.refreshLocalBaseRefOnWorktreeCreate,
-          addOptions
-        )) ?? {}
-    } else {
-      addResult =
-        (await addWorktree(
-          args.repo.path,
-          args.worktreePath,
-          args.branchName,
-          args.baseBranch,
-          args.settings.refreshLocalBaseRefOnWorktreeCreate,
-          false,
-          addOptions
-        )) ?? {}
-    }
+    addResult =
+      (sparseDirectories.length > 0
+        ? await addSparseWorktree(
+            args.repo.path,
+            args.worktreePath,
+            args.branchName,
+            sparseDirectories,
+            args.baseBranch,
+            args.settings.refreshLocalBaseRefOnWorktreeCreate,
+            addOptions
+          )
+        : await addWorktree(
+            args.repo.path,
+            args.worktreePath,
+            args.branchName,
+            args.baseBranch,
+            args.settings.refreshLocalBaseRefOnWorktreeCreate,
+            false,
+            addOptions
+          )) ?? {}
   } catch (error) {
     if (shouldRetireGeneratedName && failedWorktreeCreationNeedsRetirement(error)) {
       await retireGeneratedWorktreeName(
@@ -222,11 +196,20 @@ export async function createRuntimeLocalGitWorktree(args: {
     args.branchName,
     args.localWorktreeGitOptions
   )
+  // As the IPC create reports it: a sparse or existing-branch create never consults a spare.
+  const preparedCheckout: PreparedCheckoutOutcome | undefined =
+    addResult.preparedCheckout ??
+    (sparseDirectories.length > 0
+      ? { status: 'miss', reason: 'sparse_checkout' }
+      : args.checkoutExistingBranch
+        ? { status: 'miss', reason: 'checkout_existing_branch' }
+        : undefined)
   return {
     remoteTrackingBase,
     sparseDirectories,
     ...(configuredPushTarget ? { configuredPushTarget } : {}),
     created,
-    addResult
+    addResult,
+    ...(preparedCheckout ? { preparedCheckout } : {})
   }
 }
