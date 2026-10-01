@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Navigator } from 'expo-router'
 import { colors } from '../theme/mobile-theme'
@@ -32,45 +32,35 @@ type NavigatorContext = ReturnType<typeof Navigator.useContext>
 type Descriptors = NavigatorContext['descriptors']
 type Routes = NavigatorContext['state']['routes']
 
-type Transition = Readonly<{
-  kind: 'push' | 'pop'
-  /** The entering screen on push, the leaving one on pop. */
-  movingKey: string
-  /** The screen that stays visible beneath the moving one. */
-  underKey: string
-}>
+/** A pop needs no under key: the screen beneath it is always the new top. */
+type Transition =
+  | Readonly<{ kind: 'push'; enteringKey: string; underKey: string }>
+  | Readonly<{ kind: 'pop'; leaving: Routes[number]; descriptors: Descriptors }>
 
 type Shown = Readonly<{
   /** The navigator's own routes array, whose identity changes exactly when the state does. */
   routes: Routes
   descriptors: Descriptors
   transition: Transition | null
-  /** On pop, the route that left the state and stays mounted until its slide ends. */
-  leaving: Readonly<{ route: Routes[number]; descriptors: Descriptors }> | null
 }>
 
-/** No Web Animations (an old WebView) or reduced motion settles at once rather than throwing. */
-function slidesAllowed(): boolean {
-  return (
-    'animate' in Element.prototype &&
-    !('matchMedia' in window && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  )
+function prefersReducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 /** Push = the old top is still in the stack below the new one; pop = the old top left it. */
-function transitionBetween(previous: Routes, next: Routes): Transition | null {
-  const previousTop = previous.at(-1)
+function transitionBetween(previous: Shown, next: Routes): Transition | null {
+  const previousTop = previous.routes.at(-1)
   const nextTop = next.at(-1)
   if (!previousTop || !nextTop || previousTop.key === nextTop.key) {
     return null
   }
   const nextKeys = next.map((route) => route.key)
   if (nextKeys.at(-2) === previousTop.key) {
-    return { kind: 'push', movingKey: nextTop.key, underKey: previousTop.key }
+    return { kind: 'push', enteringKey: nextTop.key, underKey: previousTop.key }
   }
-  const previousKeys = previous.map((route) => route.key)
-  if (!nextKeys.includes(previousTop.key) && previousKeys.includes(nextTop.key)) {
-    return { kind: 'pop', movingKey: previousTop.key, underKey: nextTop.key }
+  if (!nextKeys.includes(previousTop.key) && previous.routes.some((r) => r.key === nextTop.key)) {
+    return { kind: 'pop', leaving: previousTop, descriptors: previous.descriptors }
   }
   // A replace or a reset has no direction to slide in.
   return null
@@ -79,60 +69,46 @@ function transitionBetween(previous: Routes, next: Routes): Transition | null {
 function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const { state, descriptors } = Navigator.useContext()
   const { routes } = state
-  const [shown, setShown] = useState<Shown>({
-    routes,
-    descriptors,
-    transition: null,
-    leaving: null
-  })
+  const [shown, setShown] = useState<Shown>({ routes, descriptors, transition: null })
 
   // Derived during render, so the first painted frame of a pop still holds the leaving screen.
   if (shown.routes !== routes) {
-    const animates = animation !== 'none' && slidesAllowed()
     const moved = shown.routes.at(-1)?.key !== routes.at(-1)?.key
-    const transition = !moved
-      ? shown.transition
-      : animates
-        ? transitionBetween(shown.routes, routes)
-        : null
-    const leavingRoute = moved && transition?.kind === 'pop' ? shown.routes.at(-1) : undefined
+    const slides = moved && animation !== 'none' && !prefersReducedMotion()
     setShown({
       routes,
       descriptors,
-      transition,
-      leaving: leavingRoute
-        ? { route: leavingRoute, descriptors: shown.descriptors }
-        : moved
-          ? null
-          : shown.leaving
+      transition: !moved ? shown.transition : slides ? transitionBetween(shown, routes) : null
     })
   }
 
-  const { transition, leaving } = shown
-  const topKey = routes[state.index]?.key
-  const settle = () => setShown((current) => ({ ...current, transition: null, leaving: null }))
+  const settle = useCallback(() => setShown((current) => ({ ...current, transition: null })), [])
+  const { transition } = shown
+  const topKey = routes.at(-1)?.key
+  // One flat keyed list, so the leaving screen keeps its mount when it moves to the last slot.
+  const slots = transition?.kind === 'pop' ? [...routes, transition.leaving] : routes
 
   return (
     // No NavigationContent: it must render in the navigator's own pass, and a settle re-renders
     // only this view. expo-router's NavigatorSlot renders descriptors bare for the same reason.
-    <View style={styles.stack}>
-      {state.routes.map((route) => (
-        <StackScreen
-          key={route.key}
-          visible={route.key === topKey || route.key === transition?.underKey}
-          motion={
-            transition?.kind === 'push' && transition.movingKey === route.key ? 'enter' : null
-          }
-          onSettled={settle}
-        >
-          {descriptors[route.key]?.render()}
-        </StackScreen>
-      ))}
-      {leaving ? (
-        <StackScreen key={leaving.route.key} visible motion="exit" onSettled={settle}>
-          {leaving.descriptors[leaving.route.key]?.render()}
-        </StackScreen>
-      ) : null}
+    // Untappable mid-slide, as natively: a second tap on the list would push a second screen.
+    <View style={styles.stack} pointerEvents={transition ? 'none' : 'auto'}>
+      {slots.map((route) => {
+        const leaving = transition?.kind === 'pop' && route.key === transition.leaving.key
+        const entering = transition?.kind === 'push' && route.key === transition.enteringKey
+        const under = transition?.kind === 'push' && route.key === transition.underKey
+        const descriptor = leaving ? transition.descriptors[route.key] : descriptors[route.key]
+        return (
+          <StackScreen
+            key={route.key}
+            visible={route.key === topKey || leaving || under}
+            motion={leaving ? 'exit' : entering ? 'enter' : null}
+            onSettled={settle}
+          >
+            {descriptor?.render()}
+          </StackScreen>
+        )
+      })}
     </View>
   )
 }
@@ -149,8 +125,8 @@ function StackScreen({
   children: ReactNode
 }) {
   const ref = useRef<View>(null)
-  const onSettledRef = useRef(onSettled)
-  onSettledRef.current = onSettled
+  // Where an interrupted slide stopped, so a pop during a push leaves from there and not from 0.
+  const stoppedAt = useRef<string | null>(null)
 
   // Before paint, so neither screen is ever painted at rest before its slide starts.
   useLayoutEffect(() => {
@@ -158,15 +134,21 @@ function StackScreen({
     if (motion === null || !(node instanceof HTMLElement)) {
       return
     }
+    const from = stoppedAt.current
+    stoppedAt.current = null
     const frames =
       motion === 'enter'
         ? [{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }]
-        : [{ transform: 'translateX(0)' }, { transform: 'translateX(100%)' }]
+        : [{ transform: from ?? 'translateX(0)' }, { transform: 'translateX(100%)' }]
     // Web Animations run on the compositor, so a heavy screen mounting does not stall the slide.
     const slide = node.animate(frames, { duration: SLIDE_MS, easing: SLIDE_EASING, fill: 'both' })
-    slide.onfinish = () => onSettledRef.current()
+    slide.onfinish = onSettled
+    const stop = () => {
+      stoppedAt.current = getComputedStyle(node).transform
+      slide.cancel()
+    }
     if (motion === 'exit' || node.childElementCount > 0) {
-      return () => slide.cancel()
+      return stop
     }
     // A route whose chunk is still loading suspends to an empty screen: hold it off-screen until
     // its content commits, so the slide carries the screen and not a blank panel.
@@ -182,16 +164,12 @@ function StackScreen({
     return () => {
       observer.disconnect()
       clearTimeout(cap)
-      slide.cancel()
+      stop()
     }
-  }, [motion])
+  }, [motion, onSettled])
 
   return (
-    <View
-      ref={ref}
-      pointerEvents={motion === 'exit' ? 'none' : 'auto'}
-      style={[styles.screen, visible ? null : styles.hidden]}
-    >
+    <View ref={ref} style={[styles.screen, visible ? null : styles.hidden]}>
       {children}
     </View>
   )

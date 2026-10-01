@@ -67,10 +67,15 @@ export default function ProbeList() {
 }
 `
 
-const sessionSource = (handoffModule) => `import { View } from 'react-native'
+// Counts mounts, so a screen remounted for its exit slide reads as a second one.
+const sessionSource = (handoffModule) => `import { useEffect } from 'react'
+import { View } from 'react-native'
 import { useRouteHandoff } from ${JSON.stringify(handoffModule)}
 export default function ProbeSession() {
   useRouteHandoff()
+  useEffect(() => {
+    globalThis.__orcaSessionMounts = (globalThis.__orcaSessionMounts ?? 0) + 1
+  }, [])
   return <View testID="stack-probe-session" style={{ flex: 1, backgroundColor: '#602040' }} />
 }
 `
@@ -118,21 +123,11 @@ afterAll(async () => {
   }
 })
 
-async function openList({
-  animation = 'default',
-  reducedMotion = 'no-preference',
-  webAnimations = true
-} = {}) {
+async function openList({ animation = 'default', reducedMotion = 'no-preference' } = {}) {
   const page = await browser.newPage({ viewport: VIEWPORT, reducedMotion })
-  await page.addInitScript(
-    ([value, keepAnimate]) => {
-      globalThis.__orcaStackProbeAnimation = value
-      if (!keepAnimate) {
-        delete Element.prototype.animate
-      }
-    },
-    [animation, webAnimations]
-  )
+  await page.addInitScript((value) => {
+    globalThis.__orcaStackProbeAnimation = value
+  }, animation)
   await page.addInitScript(installShellDouble, {
     version: bridgeVersion,
     sessionId: 'stack-transition-session',
@@ -159,8 +154,8 @@ async function openList({
 }
 
 /**
- * Runs `action` on the probe, then reads both screens' left edge once per animation frame.
- * A hidden screen (display: none, or unmounted) reads as null.
+ * Runs `action` on the probe, then reads both screens' left edge once per animation frame, and
+ * which screen a tap at the centre would land on. A hidden screen, or no screen hit, reads as null.
  */
 function sampleFrames(page, action, { followUp = null, afterFrames = 0 } = {}) {
   return page.evaluate(
@@ -171,6 +166,12 @@ function sampleFrames(page, action, { followUp = null, afterFrames = 0 } = {}) {
           const rect = node?.getBoundingClientRect()
           return rect && rect.width > 0 ? Math.round(rect.left) : null
         }
+        const hitAt = () =>
+          document
+            .elementFromPoint(innerWidth / 2, innerHeight / 2)
+            ?.closest('[data-testid^="stack-probe-"]')
+            ?.getAttribute('data-testid')
+            ?.replace('stack-probe-', '') ?? null
         const frames = []
         const start = performance.now()
         globalThis.__orcaStackProbe[name]()
@@ -178,7 +179,13 @@ function sampleFrames(page, action, { followUp = null, afterFrames = 0 } = {}) {
           if (nextAction !== null && frames.length === followAt) {
             globalThis.__orcaStackProbe[nextAction]()
           }
-          frames.push({ list: leftOf('stack-probe-list'), session: leftOf('stack-probe-session') })
+          frames.push({
+            list: leftOf('stack-probe-list'),
+            session: leftOf('stack-probe-session'),
+            hit: hitAt(),
+            // Where the running slide starts, which is how a slide that restarts from 0 shows.
+            from: document.getAnimations()[0]?.effect?.getKeyframes()[0]?.transform ?? null
+          })
           if (performance.now() - start < sampleMs) {
             requestAnimationFrame(tick)
           } else {
@@ -206,6 +213,10 @@ async function waitForBackClaim(page) {
 }
 
 const between = (left) => left !== null && left > 0 && left < VIEWPORT.width
+const sliding = (frames) => frames.filter((frame) => between(frame.session))
+const SESSION_SETTLED = { list: null, session: 0, hit: 'session', from: null }
+const LIST_SETTLED = { list: 0, session: null, hit: 'list', from: null }
+const sessionMounts = (page) => page.evaluate(() => globalThis.__orcaSessionMounts ?? 0)
 
 describeRender('the host stack transition on the page', () => {
   it('slides the session in from the right on push, over the list', async () => {
@@ -215,7 +226,9 @@ describeRender('the host stack transition on the page', () => {
     // Red on native-stack's web view: the session's first visible frame is already at x = 0.
     expect(firstShown?.session).toBeGreaterThan(0)
     expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
-    expect(frames.at(-1)).toEqual({ list: null, session: 0 })
+    // The list stays painted under the slide but takes no tap, so a double tap cannot push twice.
+    expect(sliding(frames).map((frame) => frame.hit)).toEqual(sliding(frames).map(() => null))
+    expect(frames.at(-1)).toEqual(SESSION_SETTLED)
     expect(errors).toEqual([])
     await page.close()
   }, 120_000)
@@ -223,10 +236,13 @@ describeRender('the host stack transition on the page', () => {
   it('slides the session out to the right on Back, revealing the list', async () => {
     const { errors, page } = await openList()
     await sampleFrames(page, 'push')
+    expect(await sessionMounts(page)).toBe(1)
     const frames = await sampleFrames(page, 'back')
     // Red on native-stack's web view: the popped screen is gone on the first frame after Back.
     expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
-    expect(frames.at(-1)).toEqual({ list: 0, session: null })
+    // The screen sliding out is the one that was on screen, not a fresh mount of it.
+    expect(await sessionMounts(page)).toBe(1)
+    expect(frames.at(-1)).toEqual(LIST_SETTLED)
     expect(errors).toEqual([])
     await page.close()
   }, 120_000)
@@ -238,7 +254,7 @@ describeRender('the host stack transition on the page', () => {
     await waitForBackClaim(page)
     const frames = await sampleFrames(page, 'hardwareBack')
     expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
-    expect(frames.at(-1)).toEqual({ list: 0, session: null })
+    expect(frames.at(-1)).toEqual(LIST_SETTLED)
     expect(await nodeCount(page)).toBe(baseline)
     expect(errors).toEqual([])
     await page.close()
@@ -250,7 +266,7 @@ describeRender('the host stack transition on the page', () => {
     const pushed = await nodeCount(page)
     const frames = await sampleFrames(page, 'back', { followUp: 'push', afterFrames: 3 })
     expect(frames.slice(0, 3).some((frame) => between(frame.session))).toBe(true)
-    expect(frames.at(-1)).toEqual({ list: null, session: 0 })
+    expect(frames.at(-1)).toEqual(SESSION_SETTLED)
     expect(await nodeCount(page)).toBe(pushed)
     expect(
       await page.evaluate(
@@ -261,19 +277,40 @@ describeRender('the host stack transition on the page', () => {
     await page.close()
   }, 120_000)
 
-  it('swaps instantly in the tablet split view, under reduced motion and without animate()', async () => {
-    for (const options of [
-      { animation: 'none' },
-      { reducedMotion: 'reduce' },
-      { webAnimations: false }
-    ]) {
+  it('settles on the list when Back interrupts an unfinished push', async () => {
+    const { errors, page } = await openList()
+    // Warm the session chunk, so the interrupted push is mid-slide rather than waiting for content.
+    await sampleFrames(page, 'push')
+    await sampleFrames(page, 'back')
+    const baseline = await nodeCount(page)
+    const mounts = await sessionMounts(page)
+    const frames = await sampleFrames(page, 'push', { followUp: 'back', afterFrames: 6 })
+    expect(between(frames[5].session)).toBe(true)
+    // Leaves from where the push stopped, not from 0: the exit's first keyframe is mid-screen.
+    const exitFrom = frames.slice(6).find((frame) => frame.from?.startsWith('matrix'))?.from
+    const startX = Number(exitFrom?.match(/matrix\(1, 0, 0, 1, ([\d.]+), 0\)/)?.[1])
+    expect(between(startX)).toBe(true)
+    const leaving = frames
+      .slice(6)
+      .map((frame) => frame.session)
+      .filter((left) => left !== null)
+    expect(leaving).toEqual(leaving.toSorted((a, b) => a - b))
+    expect(frames.at(-1)).toEqual(LIST_SETTLED)
+    expect(await nodeCount(page)).toBe(baseline)
+    expect(await sessionMounts(page)).toBe(mounts + 1)
+    expect(errors).toEqual([])
+    await page.close()
+  }, 120_000)
+
+  it('swaps instantly in the tablet split view and under reduced motion', async () => {
+    for (const options of [{ animation: 'none' }, { reducedMotion: 'reduce' }]) {
       const { errors, page } = await openList(options)
       const pushed = await sampleFrames(page, 'push')
       expect(pushed.filter((frame) => between(frame.session))).toEqual([])
-      expect(pushed.at(-1)).toEqual({ list: null, session: 0 })
+      expect(pushed.at(-1)).toEqual(SESSION_SETTLED)
       const popped = await sampleFrames(page, 'back')
       expect(popped.filter((frame) => between(frame.session))).toEqual([])
-      expect(popped.at(-1)).toEqual({ list: 0, session: null })
+      expect(popped.at(-1)).toEqual(LIST_SETTLED)
       expect(errors).toEqual([])
       await page.close()
     }
