@@ -126,14 +126,18 @@ function classifyLoaderMessage(message: string): NodePtyProbeFailure {
 
 /** Dlopen before the wrapper can hide loader failures as module misses; print caught causes
  * as stdout verdicts, while uncatchable loader aborts remain child signals. */
-export function buildNodePtyLoadProbeScript(nodePtyDir: string): string {
+export function buildNodePtyLoadProbeScript(
+  nodePtyDir: string,
+  options: { useConptyDll?: boolean } = {}
+): string {
   const entry = JSON.stringify(join(nodePtyDir, 'lib', 'index.js'))
   const utils = JSON.stringify(join(nodePtyDir, 'lib', 'utils.js'))
   const root = JSON.stringify(nodePtyDir)
   // Follow node-pty’s search order and platform module name; Windows defers conpty until spawn.
+  const conptyBuild = options.useConptyDll ? 17763 : 18309
   return [
     `const fs=require('fs'),p=require('path');`,
-    `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=18309?'conpty':'pty';`,
+    `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=${conptyBuild}?'conpty':'pty';`,
     `let f=null;`,
     `for(const d of ['build/orca-napi-'+process.platform+'-'+process.arch,'build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
     `for(const r of [${root},p.join(${root},'lib')]){`,
@@ -210,7 +214,9 @@ export function checkNodePtyPrecondition(
   try {
     result = runProcessSync({
       program: process.execPath,
-      args: ['-e', buildNodePtyLoadProbeScript(nodePtyDir)],
+      // Why the DLL floor: orcad spawns with useConptyDll, so the binding to prove
+      // loadable is the one the patched agent selects from build 17763.
+      args: ['-e', buildNodePtyLoadProbeScript(nodePtyDir, { useConptyDll: true })],
       timeoutMs: PROBE_TIMEOUT_MS
     })
   } catch (error) {
