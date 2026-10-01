@@ -3,9 +3,7 @@ import { ArrowDown, CornerLeftUp } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 
-/** The list's one floating control. Reading history, it returns to the latest
- *  message; at the bottom of a reply taller than the screen, it goes up to the
- *  prompt. The two never show together, so they share a slot. */
+/** Prompt and latest-message navigation share one floating slot. */
 export function MobileNativeChatJumpControl({
   showJumpToTail,
   showPromptJump,

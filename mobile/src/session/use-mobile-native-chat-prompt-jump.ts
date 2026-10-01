@@ -64,9 +64,7 @@ export function useMobileNativeChatPromptJump({
   const onViewableItemsChanged = useRef((info: { viewableItems: ViewToken[] }) => {
     setViewable({
       scopeKey: latestRef.current.scopeKey,
-      keys: new Set(
-        info.viewableItems.filter((token) => token.isViewable).map((token) => token.key)
-      )
+      keys: new Set(info.viewableItems.filter((item) => item.isViewable).map((item) => item.key))
     })
   }).current
 
