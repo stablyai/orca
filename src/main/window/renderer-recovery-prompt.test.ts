@@ -100,6 +100,24 @@ describe('presentRendererRecoveryPrompt', () => {
     expect(shown[0].detail).not.toContain('times in a row')
   })
 
+  // The blank window is the one failure with nothing on screen to read: no crash dialog, no error
+  // page. Calling it a crash loop would also print "recover 0 times", since a document nobody
+  // reloaded carries no recovery count.
+  it('names the blank window instead of a crash loop or a stalled reload', async () => {
+    const { run, shown, reload } = harness({
+      failure: 'bootstrap-absent',
+      recentRecoveryCount: 0,
+      responses: [0]
+    })
+    await run()
+    expect(shown[0].message).toContain('opened but stayed blank')
+    expect(shown[0].detail).toContain('Orca never started inside it')
+    expect(shown[0].detail).not.toContain('times in a row')
+    expect(shown[0].detail).not.toContain('never finished loading')
+    expect(shown[0].detail).toContain('graphics-driver or installation problem')
+    expect(reload).toHaveBeenCalledOnce()
+  })
+
   it('quits on the last button', async () => {
     const { run, reload, quit } = harness({ responses: [1] })
     await run()

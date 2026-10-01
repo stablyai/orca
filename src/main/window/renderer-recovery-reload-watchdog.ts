@@ -1,6 +1,7 @@
 import { is } from '@electron-toolkit/utils'
 import type { BrowserWindow } from 'electron'
 import { isSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
+import { createRendererBootstrapLivenessGate } from './renderer-bootstrap-liveness'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
 import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 
@@ -24,7 +25,10 @@ const MILESTONE_RANK: Record<RecoveryReloadMilestone, number> = {
   'dom-ready': 2
 }
 
-export type RecoveryExhaustionCause = 'crash-loop' | 'reload-stalled'
+export type RecoveryExhaustionCause = 'crash-loop' | 'reload-stalled' | 'bootstrap-absent'
+// One automatic reload per blank document, then the user decides: a build whose entry chunk is
+// permanently broken would otherwise reload forever, and every reload costs the session again.
+const RENDERER_BOOTSTRAP_RELOAD_ATTEMPTS = 1
 
 export type RendererRecoveryReloadWatchdog = {
   /** Issues a recovery reload and arms the stall watchdog. */
@@ -47,7 +51,8 @@ export type RendererRecoveryReloadWatchdog = {
 
 type RecoveryReload = {
   attempt: number
-  details: Electron.RenderProcessGoneDetails
+  /** Absent when nothing died: a document that loaded but never ran its JavaScript. */
+  details?: Electron.RenderProcessGoneDetails
   recentRecoveryCount: number
   /** Never rewritten: the elapsedMs a crash bundle reads has to stay time-since-issue. */
   issuedAt: number
@@ -250,6 +255,48 @@ export function createRendererRecoveryReloadWatchdog(args: {
     escalate(reload, 'reload-stalled')
   }
 
+  // A landed document that never ran its JavaScript is the blank-window field failure: nothing died,
+  // no load failed, and did-finish-load already reported success. Route it into the same
+  // reload-then-prompt machinery a stalled reload uses.
+  const onBootstrapAbsent = (info: {
+    consecutiveUnconfirmed: number
+    waitedMs: number
+  }): boolean => {
+    // A live attempt, a queued crash recovery or an open prompt already owns the next load.
+    if (
+      prompt ||
+      inFlight ||
+      isRecoveryPending() ||
+      isWindowClosing() ||
+      opts?.getIsQuitting?.() ||
+      mainWindow.isDestroyed() ||
+      isSystemSessionEnding()
+    ) {
+      return false
+    }
+    const subject: RecoveryPromptSubject = latest ?? { recentRecoveryCount: 0 }
+    opts?.onRecoveryReloadOutcome?.({
+      status: 'blank',
+      attempt: info.consecutiveUnconfirmed,
+      elapsedMs: info.waitedMs
+    })
+    if (info.consecutiveUnconfirmed <= RENDERER_BOOTSTRAP_RELOAD_ATTEMPTS) {
+      // Named, not spread: `latest` carries its own `attempt`, and inheriting it would spend this
+      // reload's one retry and misreport the attempt in the crumb.
+      start(
+        { attempt: 1, details: subject.details, recentRecoveryCount: subject.recentRecoveryCount },
+        'automatic'
+      )
+      return true
+    }
+    escalate(subject, 'bootstrap-absent')
+    return true
+  }
+  const bootstrapGate = createRendererBootstrapLivenessGate({
+    onBootstrapAbsent,
+    rendererWebContentsId
+  })
+
   // Commit and DOM-ready distinguish a blank load from a document still loading.
   const observeMilestone = (milestone: RecoveryReloadMilestone) => (): void => {
     if (!inFlight || MILESTONE_RANK[milestone] <= MILESTONE_RANK[inFlight.milestone]) {
@@ -258,7 +305,12 @@ export function createRendererRecoveryReloadWatchdog(args: {
     inFlight.milestone = milestone
     inFlight.progressedSinceArm = true
   }
-  const onDidNavigate = observeMilestone('committed')
+  const observeCommitted = observeMilestone('committed')
+  const onDidNavigate = (): void => {
+    // A replacement document owes its own bootstrap proof; its predecessor's does not carry over.
+    bootstrapGate.notifyDocumentNavigated()
+    observeCommitted()
+  }
   const onDomReady = observeMilestone('dom-ready')
   const onDidFailLoad = (
     _event: Electron.Event,
@@ -284,6 +336,8 @@ export function createRendererRecoveryReloadWatchdog(args: {
       start({ attempt: 1, details, recentRecoveryCount }, trigger),
     escalate,
     notifyDocumentLoaded: () => {
+      // did-finish-load is not proof the app booted, so start the clock on that proof.
+      bootstrapGate.notifyDocumentLoaded()
       // Timed-out replacements can still recover beneath the prompt.
       if (latest?.superseded) {
         settleLoaded(latest)
@@ -291,6 +345,8 @@ export function createRendererRecoveryReloadWatchdog(args: {
     },
     // Restore the budget after sleep without rewriting the diagnostic issue time.
     notifySystemResume: () => {
+      // The same suspend froze the bootstrap deadline, which is armed with no reload in flight.
+      bootstrapGate.notifySystemResume()
       if (!inFlight) {
         return
       }
@@ -298,6 +354,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
       armTimer(inFlight)
     },
     clear: () => {
+      bootstrapGate.clear()
       inFlight = null
       latest = null
       prompt = null

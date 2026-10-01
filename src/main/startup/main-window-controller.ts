@@ -115,14 +115,16 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         expectedTeardown: getExpectedTeardownScope(webContentsId, false)
       }),
     onRendererRecoveryExhausted: ({ details, recentRecoveryCount, cause, retry }) => {
-      // Why two names: a stalled reload never opened the breaker, and a bundle that says it did misreads the failure.
+      // Why distinct names: a stalled reload never opened the breaker, and a document that loaded
+      // but never booted is neither — a bundle that conflates them misreads the failure.
       recordDurableCrashBreadcrumb(
         cause === 'reload-stalled'
           ? 'renderer_recovery_reload_exhausted'
-          : 'renderer_recovery_circuit_breaker_open',
+          : cause === 'bootstrap-absent'
+            ? 'renderer_bootstrap_absent'
+            : 'renderer_recovery_circuit_breaker_open',
         {
-          reason: details.reason,
-          exitCode: details.exitCode ?? null,
+          ...(details ? { reason: details.reason, exitCode: details.exitCode ?? null } : {}),
           recentRecoveryCount
         }
       )
@@ -145,9 +147,15 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         recordDurableCrashBreadcrumb('renderer_recovery_reload')
       }
     },
-    // Pair the intent breadcrumb with its path-free outcome.
+    // Pair the intent breadcrumb with its path-free outcome. A blank document is the exception:
+    // the renderer reloaded itself, so there is no renderer_recovery_reload intent to pair with.
     onRecoveryReloadOutcome: ({ status, ...outcome }) => {
-      recordDurableCrashBreadcrumb(`renderer_recovery_reload_${status}`, outcome)
+      recordDurableCrashBreadcrumb(
+        status === 'blank'
+          ? 'renderer_bootstrap_unconfirmed'
+          : `renderer_recovery_reload_${status}`,
+        outcome
+      )
     }
   })
   recordCrashBreadcrumb('main_window_created')

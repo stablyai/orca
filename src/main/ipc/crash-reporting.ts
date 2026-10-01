@@ -17,6 +17,10 @@ import {
 } from './crash-reporting-renderer-error-report'
 import { recordRendererBreadcrumbFromRenderer } from './crash-reporting-renderer-breadcrumbs'
 import {
+  notifyRendererBootstrapped,
+  RENDERER_BOOTSTRAP_BREADCRUMB
+} from '../window/renderer-bootstrap-signal'
+import {
   getLatestPendingReport,
   getLatestSendableReport,
   getRequestedCrashReport,
@@ -67,6 +71,11 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
     'crashReports:recordBreadcrumb',
     (event, args?: { name?: unknown; data?: unknown }) => {
       const senderId = event?.sender?.id
+      // Why here: this is the only message a renderer sends before anything else runs, so it is
+      // the app-JS-is-alive proof the blank-window gate waits on. See renderer-bootstrap-liveness.
+      if (args?.name === RENDERER_BOOTSTRAP_BREADCRUMB && typeof senderId === 'number') {
+        notifyRendererBootstrapped(senderId)
+      }
       recordRendererBreadcrumbFromRenderer(
         args,
         typeof senderId === 'number' ? rendererCrashBreadcrumbOrigin(senderId) : undefined
