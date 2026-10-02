@@ -23,6 +23,23 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
   },
   {
+    name: 'bridge',
+    keys: [
+      'bridge list',
+      'bridge id',
+      'bridge resolve',
+      'bridge read',
+      'bridge type',
+      'bridge send',
+      'bridge message',
+      'bridge msg',
+      'bridge keys',
+      'bridge name',
+      'bridge doctor'
+    ],
+    load: async () => (await import('./handlers/terminal-bridge.js')).BRIDGE_HANDLERS
+  },
+  {
     name: 'artifacts',
     keys: [
       'artifacts list',
