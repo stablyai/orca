@@ -170,6 +170,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
           cause,
           reason: ('reason' in ending ? ending.reason : undefined) ?? null,
           duringStartup: stopping.phase === 'starting',
+          observedAt: context.now(),
           // A later retry that proves the exit still ends the child at the Stop it finishes.
           ...(owed ? { endedAt: owed.requestedAt } : {}),
           ...verdict

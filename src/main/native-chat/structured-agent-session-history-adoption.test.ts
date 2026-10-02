@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from './agent-session-wire/structured-agent-session-lease-state-test-support'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -165,9 +166,17 @@ describe('findCommittedStructuredAgentSessionAdoptionReplay', () => {
   })
 })
 
+/** The holder's lease as a host running every live owner derives it. */
+function stateOf(holder: StructuredAgentSessionAdoptionOwnership) {
+  const record = agentSessionRecordFixture(holder.lease)
+  return testHostLeaseState(() => record)(record.sessionId)
+}
+
 describe('structuredAdoptionConflictError', () => {
   it('calls a conversation with an admitted writer a conflict', () => {
-    expect(structuredAdoptionConflictError(ownership()).message).toBe('agent_session_conflict')
+    expect(structuredAdoptionConflictError(stateOf(ownership())).message).toBe(
+      'agent_session_conflict'
+    )
   })
 
   it.each([
@@ -178,7 +187,7 @@ describe('structuredAdoptionConflictError', () => {
     // Neither verdict admits a second writer; they differ only in what the user is told.
     expect(
       structuredAdoptionConflictError(
-        ownership({ lease: agentSessionLeaseFixture(leaseOverrides) })
+        stateOf(ownership({ lease: agentSessionLeaseFixture(leaseOverrides) }))
       ).message
     ).toBe('agent_session_ownership_unknown')
   })

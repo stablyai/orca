@@ -79,7 +79,8 @@ async function seedPendingRewind(phase: 'prepared' | 'provider-succeeded') {
     callerKey: caller.callerKey,
     envelope: request.envelope,
     hostFingerprint: request.envelope.payloadFingerprint,
-    now: HOST_TEST_NOW
+    now: HOST_TEST_NOW,
+    ownerProof: host.collaboratorsForTests().runtimeState.ownerProof(HOST_TEST_SESSION)
   })
   await store.recordOperationOutcome({
     callerKey: caller.callerKey,

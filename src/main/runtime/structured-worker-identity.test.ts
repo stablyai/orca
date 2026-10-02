@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest'
+import { testHostLeaseState } from '../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import { isTerminalLeafId, parsePaneKey } from '../../shared/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
@@ -176,8 +177,8 @@ describe('structured worker identity', () => {
   it('keeps a recovered session current across a fence bump', () => {
     // The host bumps the fence on its own transparent crash recovery; fencing identity on it
     // would wedge the SAME worker as identity_unproven forever.
-    expect(structuredWorkerRecordIsCurrent(record({ runtimeFence: 1 }), false)).toBe(true)
-    expect(structuredWorkerRecordIsCurrent(record({ runtimeFence: 9 }), false)).toBe(true)
+    expect(isCurrent(record({ runtimeFence: 1 }), false)).toBe(true)
+    expect(isCurrent(record({ runtimeFence: 9 }), false)).toBe(true)
     expect(structuredWorkerProcessIncarnation(SESSION_ID)).toBe(
       structuredWorkerProcessIncarnation(SESSION_ID)
     )
@@ -185,17 +186,23 @@ describe('structured worker identity', () => {
 
   it('refuses a conflicted session, and a released one whose chat tab is gone', () => {
     // A terminal owner an older build recorded loads conflicted; it is not this worker.
-    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'conflicted' }), true)).toBe(false)
-    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'released' }), false)).toBe(false)
-    expect(structuredWorkerRecordIsCurrent(null, true)).toBe(false)
+    expect(isCurrent(record({ claimStatus: 'conflicted' }), true)).toBe(false)
+    expect(isCurrent(record({ claimStatus: 'released' }), false)).toBe(false)
+    expect(isCurrent(null, true)).toBe(false)
   })
 
   it('keeps a released session with a listed tab: that worker is at rest, not gone', () => {
-    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'released' }), true)).toBe(true)
+    expect(isCurrent(record({ claimStatus: 'released' }), true)).toBe(true)
     // A live lease is owned whether or not a tab shows it.
-    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'live' }), false)).toBe(true)
+    expect(isCurrent(record({ claimStatus: 'live' }), false)).toBe(true)
   })
 })
+
+/** Current as a host running every live owner derives the lease. */
+function isCurrent(stored: AgentSessionRecord | null, tabListed: boolean): boolean {
+  const state = stored ? testHostLeaseState(() => stored)(stored.sessionId) : null
+  return structuredWorkerRecordIsCurrent(stored, state, tabListed)
+}
 
 describe('structured worker identity registry', () => {
   let registry: StructuredWorkerIdentityRegistry

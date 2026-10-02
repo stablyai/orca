@@ -16,7 +16,10 @@ import type {
   StructuredAgentSessionProviderChildIdentity
 } from './structured-agent-session-host-types'
 
-type ChildBearer = Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedChild'> & {
+type ChildBearer = Pick<
+  StructuredAgentSessionHostSession,
+  'child' | 'lastEndedChild' | 'owesProviderChildWindDown'
+> & {
   journal: Pick<AgentSessionJournal, 'cursor'>
 }
 
@@ -35,6 +38,14 @@ export function indexProviderChild(
   child: StructuredAgentSessionProviderChild
 ): void {
   session.child = child
+  // A start goes ahead past an owed stop only once that stop proved its root gone; the new
+  // acquisition moved the lease, so what that stop still owed is superseded.
+  if (
+    session.owesProviderChildWindDown &&
+    !sameProviderChild(session.owesProviderChildWindDown, child)
+  ) {
+    session.owesProviderChildWindDown = undefined
+  }
 }
 
 export function markProviderChildStarted(

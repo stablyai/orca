@@ -1,5 +1,6 @@
 /**
- * Single-writer lease adjudication.
+ * Single-writer lease adjudication: the owner-probe vocabulary and restart reconciliation. What a
+ * lease is now, and whether an acquisition wins it, derive from these in `agent-session-lease-state`.
  *
  * Every decision here fails closed: expiry alone never grants a second owner, and an
  * unverifiable process counts as possibly alive until recovery resolution concludes about it. A
@@ -15,10 +16,6 @@ import type {
   AgentSessionHandoffStage,
   AgentSessionLease
 } from './agent-session-record'
-import type {
-  AgentSessionOwnerVerdict,
-  AgentSessionRefusalDetailsByCode
-} from './agent-session-wire-refusals'
 
 export type AgentSessionIdentityMatchField = 'process-start-time' | 'spawn-token'
 
@@ -35,25 +32,6 @@ export type AgentSessionOwnerProbe =
   | { outcome: 'reservation-unused' }
   /** The host could not answer — restricted container, no start time, no token echo. */
   | { outcome: 'indeterminate'; reason: string }
-
-export type AgentSessionLeaseRefusalCode =
-  | 'agent_session_checkpoint_stale'
-  | 'agent_session_conflict'
-  | 'agent_session_ownership_unknown'
-  | 'agent_session_operation_conflict'
-  | 'execution_owner_reconciling'
-
-export type AgentSessionAcquisitionDecision =
-  | { decision: 'granted'; nextFence: number }
-  /** The same acquisition operation re-entering its own reservation; no new fence, no new spawn. */
-  | { decision: 'retry-reservation'; fence: number }
-  | {
-      [C in AgentSessionLeaseRefusalCode]: {
-        decision: 'refused'
-        code: C
-        details: AgentSessionRefusalDetailsByCode[C]
-      }
-    }[AgentSessionLeaseRefusalCode]
 
 export type AgentSessionRestartAdjudication =
   /** Nothing is outstanding — no owner, no reservation. Clear any latched stage; the fence stays. */
@@ -78,7 +56,7 @@ export function isProvenAliveProbe(probe: AgentSessionOwnerProbe): boolean {
   return probe.outcome === 'identity-matched' && probe.matchedOn.length > 0
 }
 
-function deathEvidenceFor(
+export function deathEvidenceFor(
   probe: AgentSessionOwnerProbe,
   observedAt: number,
   lease: AgentSessionLease
@@ -101,123 +79,8 @@ function deathEvidenceFor(
   return null
 }
 
-/** `exited` only for a lease released on death evidence; one recovery released without proof, like
- *  anything held or mid-handoff, may still be running. */
-export function agentSessionLeaseOwnerVerdict(lease: AgentSessionLease): AgentSessionOwnerVerdict {
-  if (agentSessionLeaseAdmitsWriter(lease)) {
-    return 'live'
-  }
-  return lease.claimStatus === 'released' &&
-    lease.handoffStage === null &&
-    lease.ownerProcess === null &&
-    lease.reservedSpawnToken === null &&
-    lease.deathEvidence !== null
-    ? 'exited'
-    : 'unverifiable'
-}
-
-/** Nothing holds this lease: released, no handoff in flight, and reconciled since the last restart. */
-export function agentSessionLeaseIsReleased(lease: AgentSessionLease): boolean {
-  return !lease.unreconciled && lease.claimStatus === 'released' && lease.handoffStage === null
-}
-
-/** True when the recorded owner may write right now. Used by every mutating path in later parts. */
-export function agentSessionLeaseAdmitsWriter(lease: AgentSessionLease): boolean {
-  return (
-    !lease.unreconciled &&
-    lease.handoffStage === null &&
-    lease.claimStatus === 'live' &&
-    lease.ownerProcess !== null
-  )
-}
-
 export function isAgentSessionFenceCurrent(lease: AgentSessionLease, fence: number): boolean {
   return Number.isSafeInteger(fence) && fence === lease.runtimeFence
-}
-
-/**
- * Compare-and-swap acquisition. `probe` describes what the host could prove about the recorded
- * owner; it is only consulted when a recorded owner or an unused reservation stands in the way.
- */
-export function evaluateAgentSessionAcquisition(args: {
-  lease: AgentSessionLease
-  expectedFence: number
-  handoffOperationId: string | null
-  probe: AgentSessionOwnerProbe
-}): AgentSessionAcquisitionDecision {
-  const { lease, expectedFence, handoffOperationId, probe } = args
-  if (lease.unreconciled) {
-    return {
-      decision: 'refused',
-      code: 'execution_owner_reconciling',
-      details: { reason: 'hostReconciling' }
-    }
-  }
-  if (!isAgentSessionFenceCurrent(lease, expectedFence)) {
-    return {
-      decision: 'refused',
-      code: 'agent_session_checkpoint_stale',
-      details: { reason: 'fenceStale' }
-    }
-  }
-  if (lease.claimStatus === 'conflicted') {
-    // Why: the user's own terminal agent; restart adjudication and recovery retire it once gone.
-    return {
-      decision: 'refused',
-      code: 'agent_session_conflict',
-      details: { reason: 'claimConflicted' }
-    }
-  }
-  if (lease.handoffStage === 'recovering') {
-    // Why: no stage expires into an owner; recovery resolution concludes about it first.
-    return {
-      decision: 'refused',
-      code: 'agent_session_ownership_unknown',
-      details: { reason: 'ownerUnproven' }
-    }
-  }
-  if (lease.handoffStage !== null && lease.handoffOperationId !== null) {
-    if (handoffOperationId !== lease.handoffOperationId) {
-      // Why: the retry key is operation id + fence + stage; a different id is a different intent.
-      return {
-        decision: 'refused',
-        code: 'agent_session_operation_conflict',
-        details: { reason: 'handoffInFlight' }
-      }
-    }
-    if (
-      lease.ownerProcess === null &&
-      lease.claimStatus === 'reserved' &&
-      lease.reservedSpawnToken !== null
-    ) {
-      // Why: an idempotent re-run of a reservation that already exists at this fence.
-      return { decision: 'retry-reservation', fence: lease.runtimeFence }
-    }
-  }
-  if (lease.ownerProcess !== null) {
-    if (!isProvenDeadProbe(probe)) {
-      // Why: a lapsed deadline means Orca stopped hearing from the owner, not that the child
-      // stopped editing files and spending tokens.
-      return isProvenAliveProbe(probe)
-        ? { decision: 'refused', code: 'agent_session_conflict', details: { reason: 'ownerAlive' } }
-        : {
-            decision: 'refused',
-            code: 'agent_session_ownership_unknown',
-            details: { reason: 'ownerUnproven' }
-          }
-    }
-    return { decision: 'granted', nextFence: nextAgentSessionFence(lease) }
-  }
-  if (lease.claimStatus === 'reserved' && probe.outcome !== 'reservation-unused') {
-    // Why: a reservation with no proven process is not a free lease — the crash may have lost
-    // the race with the spawn rather than beaten it.
-    return {
-      decision: 'refused',
-      code: 'agent_session_ownership_unknown',
-      details: { reason: 'ownerUnproven' }
-    }
-  }
-  return { decision: 'granted', nextFence: nextAgentSessionFence(lease) }
 }
 
 /**

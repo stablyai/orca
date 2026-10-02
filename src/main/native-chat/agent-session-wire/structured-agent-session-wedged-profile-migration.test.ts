@@ -15,10 +15,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import {
-  evaluateAgentSessionAcquisition,
-  type AgentSessionOwnerProbe
-} from '../../../shared/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import { evaluateAgentSessionAcquisition } from '../../../shared/agent-session-lease-acquisition'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'

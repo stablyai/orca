@@ -9,6 +9,7 @@
  * never reads it — an agent at rest still receives mail, which starts it.
  */
 
+import { agentSessionLeaseOwnerVerdict } from '../../shared/agent-session-lease-state'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { OrcaSessionId } from '../../shared/orca-session-address'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
@@ -135,7 +136,7 @@ export function structuredSessionCloseSettled(sessionId: string): boolean {
   return (
     status === 'exited' ||
     (status === 'unverifiable' &&
-      readStructuredAgentSessionRecord(sessionId)?.lease.claimStatus === 'released')
+      getStructuredAgentSessionHost()?.leaseState(sessionId)?.state === 'free')
   )
 }
 
@@ -170,17 +171,20 @@ export function observeStructuredWorker(
     }
   }
   const record = host.deps.store.getRecord(identity.sessionId)
-  if (!record) {
-    return { status: 'unverifiable', reason: 'No durable record backs this structured session.' }
+  const state = host.leaseState(identity.sessionId)
+  if (!record || !state) {
+    // A create this host is acquiring has no record yet.
+    return state?.state === 'acquiring'
+      ? { status: 'live' }
+      : { status: 'unverifiable', reason: 'No durable record backs this structured session.' }
   }
-  if (record.lease.claimStatus === 'released' && record.lease.deathEvidence) {
-    return { status: 'exited' }
-  }
-  if (host.hasSession(identity.sessionId) && record.lease.claimStatus === 'live') {
-    return { status: 'live' }
-  }
-  return {
-    status: 'unverifiable',
-    reason: 'The session has no attached provider child in this runtime generation.'
-  }
+  // Derived from what this host proves, never the stored claim: a release whose write failed
+  // leaves `live` stored behind a child the host watched exit.
+  const status = agentSessionLeaseOwnerVerdict(record.lease, state)
+  return status === 'unverifiable'
+    ? {
+        status,
+        reason: 'The session has no attached provider child in this runtime generation.'
+      }
+    : { status }
 }

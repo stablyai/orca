@@ -28,6 +28,9 @@ import type { StructuredAgentSessionAttachContext } from './structured-agent-ses
 import { attachStructuredAgentSessionUnderSerialize } from './structured-agent-session-attach-orchestration'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { sameProviderChild } from './structured-agent-session-provider-child'
+import { deriveAgentSessionLeaseState } from '../../../shared/agent-session-lease-state'
+import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
   finishOwedStructuredAgentSessionWindDownUnderSerialize,
   type StructuredAgentSessionLifetimeContext
@@ -55,13 +58,18 @@ const AGENT_START_CALLER_KEY = 'trusted-local:agent-start'
 /**
  * Every operation that reaches the provider finishes a stop an earlier attempt left owed first: the
  * child that stop could not prove gone takes no input, and none may start beside it. Still
- * unproven, the operation is refused with the exit `unverifiable`, never assumed `exited`.
+ * unproven, the operation is refused with the exit `unverifiable`, never assumed `exited`. A child
+ * the stop DID prove gone owes only bookkeeping, which gates nothing: its retry was reported, and
+ * the next acquisition's compare-and-swap moves the lease past it.
  */
 export async function finishOwedStructuredAgentSessionStop(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string
 ): Promise<StructuredAgentSessionResumeOutcome> {
-  if (await finishOwedStructuredAgentSessionWindDownUnderSerialize(context, sessionId)) {
+  if (
+    (await finishOwedStructuredAgentSessionWindDownUnderSerialize(context, sessionId)) ||
+    owedProviderChildRootGone(context.sessions.get(sessionId))
+  ) {
     return { ok: true }
   }
   return {
@@ -158,6 +166,7 @@ async function startStructuredAgentSessionAgent(
     return { ok: false, refusal: unreconciled }
   }
   await context.runtimeState.resolveRecovery(sessionId)
+  const proof = await context.runtimeState.proveOwner(sessionId)
   const record = context.deps.store.getRecord(sessionId)
   if (!record) {
     return refuseResume(
@@ -175,16 +184,18 @@ async function startStructuredAgentSessionAgent(
   }
   const params = structuredAgentSessionResumeParams(
     record,
+    proof,
     structuredAgentSessionResumeOperationId(context.now())
   )
   if (!params) {
-    return record.lease.unreconciled
+    const { state } = deriveAgentSessionLeaseState(record.lease, proof)
+    return state === 'reconciling'
       ? refuseResume(
           'execution_owner_reconciling',
           { reason: 'hostReconciling' },
           'This host has not yet adjudicated the session lease.'
         )
-      : record.lease.claimStatus === 'conflicted'
+      : state === 'conflicted'
         ? refuseResume(
             'agent_session_conflict',
             { reason: 'claimConflicted' },
@@ -201,6 +212,8 @@ async function startStructuredAgentSessionAgent(
   try {
     attached = await attachStructuredAgentSessionUnderSerialize(context, callerKey, params, {
       ...(startedFor === undefined ? {} : { startedFor }),
+      // The acquisition decides on the proof this start was admitted on, not a second probe.
+      provenOwner: { lease: record.lease, proof },
       onAcquisitionFailed: (error) => {
         acquisitionError = error
       }
@@ -233,7 +246,7 @@ function withDiagnostic(
 }
 
 function settledResumeRefusal(
-  context: Pick<StructuredAgentSessionAttachContext, 'deps'>,
+  context: Pick<StructuredAgentSessionAttachContext, 'deps' | 'runtimeState'>,
   callerKey: string,
   operationId: string,
   sessionId: string,
@@ -253,7 +266,8 @@ function settledResumeRefusal(
       outcome.message ?? (error instanceof Error ? error.message : String(error))
     ),
     outcome.status,
-    context.deps.store.getRecord(sessionId)
+    context.deps.store.getRecord(sessionId),
+    (record) => context.runtimeState.ownerProofFor(record)
   )
 }
 
@@ -263,4 +277,13 @@ function refuseResume<C extends AgentSessionWireRefusalCode>(
   message: string
 ): StructuredAgentSessionResumeOutcome {
   return { ok: false, refusal: refuse(code, details, message) }
+}
+
+/** The owed stop already ended its child and proved the root gone: only its bookkeeping is left. */
+function owedProviderChildRootGone(
+  session: StructuredAgentSessionHostSession | undefined
+): boolean {
+  const owed = session?.owesProviderChildWindDown
+  const ended = session?.lastEndedChild
+  return Boolean(owed && ended?.rootGone && !session?.child && sameProviderChild(ended, owed))
 }

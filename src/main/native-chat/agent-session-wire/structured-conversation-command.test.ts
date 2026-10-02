@@ -674,7 +674,8 @@ describe('what an older build left', () => {
         callerKey: caller.callerKey,
         envelope: params.envelope,
         hostFingerprint: params.envelope.payloadFingerprint,
-        now: clock
+        now: clock,
+        ownerProof: host.collaboratorsForTests().runtimeState.ownerProof(HOST_TEST_SESSION)
       })
     ).toMatchObject({ admission: { decision: 'admit' } })
     expect(await host.attach(caller, orphanStart)).toMatchObject({ ok: true })

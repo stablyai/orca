@@ -1,5 +1,6 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
+import { NO_HOST_MEMORY } from './structured-agent-session-lease-state-test-support'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
@@ -210,10 +211,8 @@ describe('deferred structured agent-session event sink', () => {
 
   it('replaces a failed cached sink before recovery drain', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the cached-sink path reads only the logger, on the failed drain.
-    const runtime = new StructuredAgentSessionHostRuntimeState({
-      store: {},
-      logger: createStructuredAgentSessionLogger()
-    } as never)
+    const deps = { store: {}, logger: createStructuredAgentSessionLogger() } as never
+    const runtime = new StructuredAgentSessionHostRuntimeState(deps, NO_HOST_MEMORY)
     const failed = runtime.eventSinkFor('session-1')
     failed.bind(target(1, [], 0))
     failed.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })

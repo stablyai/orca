@@ -11,6 +11,7 @@
  * coordinator's decision (`reclaimable`) owes no work, so it may rest.
  */
 
+import type { AgentSessionLeaseState } from '../../shared/agent-session-lease-state'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { OrchestrationDb } from './orchestration/db'
 import type { WorkerDispatchState } from './orchestration/types'
@@ -36,14 +37,18 @@ export function structuredWorkerOwned(sessionId: string): boolean | null {
     return null
   }
   let record: AgentSessionRecord | null
+  let state: AgentSessionLeaseState | null
   try {
     record = host.deps.store.getRecord(sessionId)
+    state = host.leaseState(sessionId)
   } catch {
     record = null
+    state = null
   }
   return structuredWorkerRecordIsCurrent(
     record,
-    record?.lease.claimStatus === 'released' && structuredWorkerTabListed(host, sessionId)
+    state,
+    state?.state === 'free' && structuredWorkerTabListed(host, sessionId)
   )
 }
 

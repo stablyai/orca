@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { testHostLeaseState } from '../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -93,6 +94,7 @@ function installOwnership(overrides: Partial<StructuredProviderSessionOwnership>
     ...overrides
   }
   const record = agentSessionRecordFixture(ownership.lease)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host double; the code under test reads only the members defined here.
   setStructuredAgentSessionHost({
     deps: {
       store: {
@@ -112,7 +114,8 @@ function installOwnership(overrides: Partial<StructuredProviderSessionOwnership>
           }
         ]
       }
-    }
+    },
+    leaseState: testHostLeaseState(() => ({ lease: ownership.lease }))
   } as never)
 }
 

@@ -77,7 +77,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
       })
     : null
   if (conflict) {
-    throw structuredAdoptionConflictError(conflict)
+    throw structuredAdoptionConflictError(input.host?.leaseState(conflict.sessionId) ?? null)
   }
   return resolveStructuredAgentSessionAdoption({
     agent: input.agent,

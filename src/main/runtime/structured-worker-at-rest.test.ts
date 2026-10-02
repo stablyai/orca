@@ -3,6 +3,7 @@
 // its process runs is a separate answer, and a close counts a released lease as done.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { OrchestrationDb } from './orchestration/db'
 
@@ -51,6 +52,10 @@ function installHost(current: AgentSessionRecord | null, tabs: string[]) {
   const host = {
     deps: { store: { getRecord: () => current } },
     hasSession: () => false,
+    leaseState: testHostLeaseState(
+      () => current,
+      () => false
+    ),
     getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: tabs }),
     setSessionTabVisibility: vi.fn(async (_id: string, visible: boolean) => {
       tabs.splice(0, tabs.length, ...(visible ? [SESSION] : []))

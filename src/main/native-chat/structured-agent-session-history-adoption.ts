@@ -9,7 +9,10 @@ import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusa
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import type { AgentSessionProviderHandle } from '../../shared/agent-session-journal-types'
 import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
+import {
+  agentSessionLeaseAdmitsWriter,
+  type AgentSessionLeaseState
+} from '../../shared/agent-session-lease-state'
 
 export type StructuredAgentSessionAdoptionOwnership = {
   sessionId: string
@@ -105,10 +108,11 @@ export function findConflictingStructuredAdoption(input: {
 /** Mirrors the legacy PTY resume's refusal vocabulary: a conversation with an admitted writer is a
  *  conflict, one without is an unknown owner. Neither ever admits a second writer. */
 export function structuredAdoptionConflictError(
-  ownership: StructuredAgentSessionAdoptionOwnership
+  /** The holding session's lease as its host derives it. */
+  state: AgentSessionLeaseState | null
 ): Error {
   return agentSessionRefusalError(
-    agentSessionLeaseAdmitsWriter(ownership.lease)
+    state && agentSessionLeaseAdmitsWriter(state)
       ? 'agent_session_conflict'
       : 'agent_session_ownership_unknown',
     { reason: 'conversationHeldElsewhere' }

@@ -284,7 +284,7 @@ export class AgentSessionRecordStore {
     this.transact((draft) => admitAgentSessionMutationOperation(draft, args))
 
   /** The ledger's answer alone, placing nothing; `admitMutationOperation` is the transaction. */
-  evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
+  evaluateMutationOperation = (args: Omit<AgentSessionMutationOperationAdmission, 'ownerProof'>) =>
     evaluateAgentSessionMutationOperation(this.state, args)
 
   /** Durable compare-and-swap for the right to run an admitted operation's effect: two replays both

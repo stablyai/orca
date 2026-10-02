@@ -18,12 +18,13 @@ import {
   type AgentSessionOperationDecision,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
+import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
+import { evaluateAgentSessionAcquisition } from '../../shared/agent-session-lease-acquisition'
 import {
-  agentSessionLeaseIsReleased,
+  agentSessionLeaseIsFree,
   agentSessionLeaseOwnerVerdict,
-  evaluateAgentSessionAcquisition,
-  type AgentSessionOwnerProbe
-} from '../../shared/agent-session-lease-adjudication'
+  deriveAgentSessionLeaseState
+} from '../../shared/agent-session-lease-state'
 import {
   agentSessionExecutionLocationsEqual,
   isAgentSessionLaunchEnv,
@@ -118,6 +119,15 @@ export function requireAgentSessionRecordForReplay(
   return record
 }
 
+/** The lease as the reservation's probe proves it; this runs inside the attach's own attempt. */
+function probedLeaseState(record: AgentSessionRecord, probe: AgentSessionOwnerProbe) {
+  return deriveAgentSessionLeaseState(record.lease, {
+    fence: record.lease.runtimeFence,
+    attemptInFlight: false,
+    owner: { kind: 'probed', probe }
+  })
+}
+
 export function admitPendingAgentSessionReservationReplay(
   record: AgentSessionRecord,
   request: AgentSessionReserveRequest
@@ -195,7 +205,8 @@ export function applyAgentSessionReservation(
   const recreatable =
     existing.providerHandleChain.length === 0 &&
     !request.adoptedHandleLink &&
-    agentSessionLeaseOwnerVerdict(existing.lease) === 'exited'
+    agentSessionLeaseOwnerVerdict(existing.lease, probedLeaseState(existing, request.probe)) ===
+      'exited'
   if (request.expectedFence === null && !recreatable) {
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
@@ -314,10 +325,17 @@ export function commitAgentSessionReservation(
 ): AgentSessionReserveResult {
   const decision = evaluateAgentSessionReserveOperation(state, request)
   const existing = state.records.get(request.sessionId)
-  // An unfinished operation whose reservation recovery released continues under its own id at the
-  // next fence, as a resume does under a new id; the fence move stops the old spawn committing.
+  // An unfinished operation whose reservation is free — released, or proven abandoned — continues
+  // under its own id at the next fence, as a resume does under a new id; the fence move stops the
+  // old spawn committing. Its own reservation still standing is retried, never superseded.
+  const ownReservation =
+    existing !== undefined &&
+    existing.lease.handoffOperationId !== null &&
+    existing.lease.handoffOperationId === request.handoffOperationId
   const continued =
-    existing && agentSessionLeaseIsReleased(existing.lease)
+    existing &&
+    !ownReservation &&
+    agentSessionLeaseIsFree(probedLeaseState(existing, request.probe))
       ? { ...request, expectedFence: existing.lease.runtimeFence }
       : null
   if (decision.decision === 'refused') {

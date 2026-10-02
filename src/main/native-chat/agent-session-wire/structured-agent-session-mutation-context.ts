@@ -6,6 +6,7 @@ import type {
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentSessionHostProof } from '../../../shared/agent-session-lease-state'
 import {
   admitAndRunAgentSessionMutation,
   type AgentSessionMutationRequest,
@@ -28,6 +29,8 @@ export type StructuredAgentSessionMutationContext = {
   conversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession>
   /** The session's child records, as the strip reads them; what command admission decides on. */
   readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined
+  /** What the host's memory proves about the session's owner, read inside its serialize. */
+  ownerProof: (sessionId: string) => AgentSessionHostProof | null
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   /** The session's conversation, opened when closed; inside the caller's serialize. */
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
@@ -67,6 +70,7 @@ export function mutateStructuredAgentSession<TValue>(
       journal: () => context.sessions.get(envelope.sessionId)?.journal,
       prepareSession,
       publish: (journal) => context.publish(envelope.sessionId, journal),
+      ownerProof: () => context.ownerProof(envelope.sessionId),
       flushStreamedEvents: context.flushStreamedEvents,
       providerChildPhase: () => context.sessions.get(envelope.sessionId)?.child?.phase,
       now: () => context.now()

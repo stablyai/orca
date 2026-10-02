@@ -7,22 +7,32 @@
 // it answers "may this be resumed", not "should it be" — so it lives here now and the caller that
 // knows a surface is asking is the only one that acts on it.
 
-import { agentSessionLeaseIsReleased } from '../../../shared/agent-session-lease-adjudication'
+import {
+  agentSessionLeaseIsFree,
+  deriveAgentSessionLeaseState,
+  type AgentSessionHostProof
+} from '../../../shared/agent-session-lease-state'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { attachParamsForRecord } from './structured-agent-session-conversation-open'
 
-export function isResumableStructuredAgentSessionRecord(record: AgentSessionRecord): boolean {
-  return agentSessionLeaseIsReleased(record.lease)
+/** Free as the host proves it: stored released, or an owner it watched exit or probed dead. A
+ *  stored claim alone is never the answer — a release whose write failed would strand the chat. */
+export function isResumableStructuredAgentSessionRecord(
+  record: AgentSessionRecord,
+  ownerProof: AgentSessionHostProof | null
+): boolean {
+  return agentSessionLeaseIsFree(deriveAgentSessionLeaseState(record.lease, ownerProof))
 }
 
 /** Attach params for a resume, or null when this record's lease is somebody else's problem. */
 export function structuredAgentSessionResumeParams(
   record: AgentSessionRecord,
+  ownerProof: AgentSessionHostProof | null,
   clientOperationId: string
 ): AgentSessionAttachParams | null {
-  if (!isResumableStructuredAgentSessionRecord(record)) {
+  if (!isResumableStructuredAgentSessionRecord(record, ownerProof)) {
     return null
   }
   return attachParamsForRecord(record, {

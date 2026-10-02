@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import type { PtyProcessInfo } from '../providers/pty-process-info'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -96,8 +97,13 @@ describe('structured worker incarnation liveness', () => {
   const LOCAL_SCOPE = JSON.stringify({ kind: 'local', hostId: 'local' })
 
   function installHost(lease: Record<string, unknown>): void {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host double; the code under test reads only the members defined here.
     setStructuredAgentSessionHost({
       hasSession: () => false,
+      leaseState: testHostLeaseState(
+        () => ({ lease }),
+        () => false
+      ),
       deps: {
         store: {
           getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null }, lease })

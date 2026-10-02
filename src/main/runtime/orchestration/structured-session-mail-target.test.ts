@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import {
   getAppEnvironment,
   hasAppEnvironment,
@@ -72,7 +73,8 @@ function installStore(record: AgentSessionRecord | null, visible = true): Store 
         listRecords: () => [...store.records.values()],
         getVisibleSessionTabIndex: () => store.visible
       }
-    }
+    },
+    leaseState: testHostLeaseState((sessionId) => store.records.get(sessionId))
   }
   return store
 }

@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { testOwnerAdmitted } from './structured-agent-session-lease-state-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
@@ -84,6 +85,7 @@ describe('processless structured session reservation', () => {
     await expect(
       performAttach({
         logger: createStructuredAgentSessionLogger(),
+        ownerAdmitted: testOwnerAdmitted,
         store,
         adapter,
         openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -129,6 +131,7 @@ describe('processless structured session reservation', () => {
     } as unknown as StructuredAgentSessionAdapter
     const input = {
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store,
       adapter,
       journalDatabase: openTestJournalHostDatabase(root),
@@ -167,6 +170,7 @@ describe('processless structured session reservation', () => {
     const adapter = { supportsCreate, acquire } as unknown as StructuredAgentSessionAdapter
     const input = {
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store,
       adapter,
       journalDatabase: openTestJournalHostDatabase(root),
@@ -220,6 +224,7 @@ describe('processless structured session reservation', () => {
     await expect(
       performAttach({
         logger: createStructuredAgentSessionLogger(),
+        ownerAdmitted: testOwnerAdmitted,
         store,
         adapter,
         openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -286,6 +291,7 @@ describe('processless structured session reservation', () => {
     } as unknown as StructuredAgentSessionAdapter
     const input = {
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store,
       adapter,
       journalDatabase: openTestJournalHostDatabase(root),

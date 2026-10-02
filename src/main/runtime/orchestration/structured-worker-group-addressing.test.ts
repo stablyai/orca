@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 
@@ -68,6 +69,11 @@ function installHost(options: {
       }
     },
     hasSession: () => options.hasSession ?? true,
+    leaseState: (sessionId: string) =>
+      testHostLeaseState(
+        () => ({ sessionId, lease }),
+        () => options.hasSession ?? true
+      )(sessionId),
     getPersistedVisibleSessionTabIndex: () => ({
       present: true,
       sessionIds: options.tabListed ? [SESSION_ID] : []

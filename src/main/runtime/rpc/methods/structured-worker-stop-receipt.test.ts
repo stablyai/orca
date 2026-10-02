@@ -7,6 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../../../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -93,10 +94,15 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
   it('keeps a restarted worker unsettled when close finds no attached session', async () => {
     const dispatchId = startStructuredWorker()
     const close = vi.fn(async () => {})
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host double; the code under test reads only the members defined here.
     setStructuredAgentSessionHost({
       close,
       setSessionTabVisibility: async () => {},
       hasSession: () => false,
+      leaseState: testHostLeaseState(
+        () => ({ lease: { claimStatus: 'live' } }),
+        () => false
+      ),
       deps: {
         store: {
           getRecord: () => ({

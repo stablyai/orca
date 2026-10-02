@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 
@@ -46,6 +47,10 @@ function installHost(options: {
       }
     },
     hasSession: () => options.hasSession ?? true,
+    leaseState: testHostLeaseState(
+      () => ({ lease }),
+      () => options.hasSession ?? true
+    ),
     history: () => {
       if (options.items === 'unreadable') {
         throw new Error('agent_session_ownership_unknown')

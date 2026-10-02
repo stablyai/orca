@@ -12,9 +12,13 @@ import type {
   AgentSessionOperationOutcome,
   AgentSessionOperationRow
 } from '../../../shared/agent-session-operation-ledger'
-import { agentSessionLeaseOwnerVerdict } from '../../../shared/agent-session-lease-adjudication'
+import {
+  agentSessionLeaseOwnerVerdict,
+  deriveAgentSessionLeaseState,
+  type AgentSessionHostProof
+} from '../../../shared/agent-session-lease-state'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionAcquisitionExitProof } from '../../runtime/agent-session-acquisition-failure-settlement'
+import type { AgentSessionAcquisitionExitProof } from '../../../shared/agent-session-failed-acquisition'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
@@ -148,13 +152,17 @@ export function preSpawnFailureInWords(error: unknown, wording: FailedAcquisitio
 export function failedCreateRefusal(
   refusal: AgentSessionWireRefusal,
   status: AgentSessionOperationOutcome['status'],
-  record: AgentSessionRecord | null
+  record: AgentSessionRecord | null,
+  ownerProof: (record: AgentSessionRecord) => AgentSessionHostProof
 ): { ok: false; refusal: AgentSessionWireRefusal } {
   return status === 'failed' && record
     ? {
         ok: false,
         refusal: withAgentSessionRefusalFacts(refusal, {
-          ownerVerdict: agentSessionLeaseOwnerVerdict(record.lease)
+          ownerVerdict: agentSessionLeaseOwnerVerdict(
+            record.lease,
+            deriveAgentSessionLeaseState(record.lease, ownerProof(record))
+          )
         })
       }
     : { ok: false, refusal }
@@ -169,7 +177,8 @@ export function stampFailedCreateOwnerVerdict(
   },
   callerKey: string,
   envelope: { sessionId: string; clientOperationId: string },
-  result: AgentSessionMutationResult<AgentSessionAttachResult>
+  result: AgentSessionMutationResult<AgentSessionAttachResult>,
+  ownerProof: (record: AgentSessionRecord) => AgentSessionHostProof
 ): AgentSessionMutationResult<AgentSessionAttachResult> {
   if (result.ok) {
     return result
@@ -178,6 +187,7 @@ export function stampFailedCreateOwnerVerdict(
   return failedCreateRefusal(
     result.refusal,
     row?.outcome.status ?? 'pending',
-    store.getRecord(envelope.sessionId)
+    store.getRecord(envelope.sessionId),
+    ownerProof
   )
 }

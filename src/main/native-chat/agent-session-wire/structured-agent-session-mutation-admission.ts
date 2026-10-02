@@ -13,6 +13,7 @@ import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
 } from '../../../shared/agent-session-mutation-envelope'
+import type { AgentSessionHostProof } from '../../../shared/agent-session-lease-state'
 import type { AgentSessionOperationDecision } from '../../../shared/agent-session-operation-ledger'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -75,6 +76,8 @@ export type AgentSessionMutationRequest<TValue> = {
     record: AgentSessionRecord
   ) => Promise<AgentSessionMutationSessionPreparation>
   publish: (journal: AgentSessionJournal) => void
+  /** What the host proves about the session's owner; read after `prepareSession`. */
+  ownerProof: () => AgentSessionHostProof | null
   flushStreamedEvents: (sessionId: string) => Promise<void>
   providerChildPhase?: AgentSessionTurnContext['providerChildPhase']
   now: () => number
@@ -121,7 +124,8 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     hostFingerprint,
     now: request.now(),
     ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {}),
-    ...(plan.conversationWrite ? { conversationWrite: true } : {})
+    ...(plan.conversationWrite ? { conversationWrite: true } : {}),
+    ownerProof: request.ownerProof()
   }
   let admitted: AgentSessionMutationOperationDecision
   let ledgerRowWritten = true
@@ -174,6 +178,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       hostFingerprint,
       ledger: { decision: 'admit', row: admission.row },
       lease: record.lease,
+      ownerProof: operation.ownerProof,
       ...(plan.conversationWrite ? { conversationWrite: true } : {})
     })
     if (rerun.decision === 'refused') {
@@ -218,6 +223,7 @@ function admitWithoutLedgerRow(
     hostFingerprint: operation.hostFingerprint,
     ledger: evaluated.decision,
     lease: evaluated.record.lease,
+    ownerProof: operation.ownerProof,
     ...(operation.conversationWrite ? { conversationWrite: true } : {})
   })
   return { admission, record: evaluated.record }

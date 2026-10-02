@@ -99,9 +99,15 @@ export function structuredAgentSessionResumableSet(
     if (!record || !input.supportsRecord(record)) {
       continue
     }
-    // The lease must be free and adjudicated. A contested or still-reconciling record is somebody
-    // else's to resolve, and resuming into it is how a session gets two writers.
-    if (input.leaseState !== 'may-be-held' && !isResumableStructuredAgentSessionRecord(record)) {
+    // The lease must be free. A contested or still-reconciling record is somebody else's to
+    // resolve, and resuming into it is how a session gets two writers; a clean release is free
+    // either way, and its attach still reconciles before it reserves.
+    // Read after restart reconciliation: nothing in this runtime's memory speaks for the owner a
+    // previous one recorded, so the reconciled record decides.
+    if (
+      input.leaseState !== 'may-be-held' &&
+      !isResumableStructuredAgentSessionRecord(record, null)
+    ) {
       continue
     }
     // A conversation that FORKED since teardown is not the one we marked, and can never be again:

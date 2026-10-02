@@ -8,6 +8,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
@@ -101,6 +102,10 @@ function installHost(options: HostOptions = {}) {
       }
     },
     hasSession: (sessionId: string) => held.has(sessionId),
+    leaseState: testHostLeaseState(
+      (id) => (id === SESSION ? entry : null),
+      (id) => held.has(id)
+    ),
     setSessionTabVisibility,
     close
   }

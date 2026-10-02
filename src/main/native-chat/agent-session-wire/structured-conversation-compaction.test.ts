@@ -689,7 +689,8 @@ it("ignores an older build's unconfirmed compaction record, and answers its oper
     callerKey: CALLER.callerKey,
     envelope: older.envelope,
     hostFingerprint: older.envelope.payloadFingerprint,
-    now: HOST_TEST_NOW
+    now: HOST_TEST_NOW,
+    ownerProof: state.host.collaboratorsForTests().runtimeState.ownerProof(SESSION)
   })
   await state.store.setConversationCommand(
     SESSION,

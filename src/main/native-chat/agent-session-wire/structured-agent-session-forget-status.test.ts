@@ -187,7 +187,10 @@ function attachContext(
       currentEventSink: () => eventSink,
       mintEventSink: () => eventSink,
       adoptEventSink: () => undefined,
-      probeOwner: async () => ({ outcome: 'pid-absent' }),
+      proveOwner: async () => null,
+      beginAcquisition: () => () => undefined,
+      ownerProofFor: () => null,
+      ownerProofForAttempt: () => null,
       discardEventSink: () => undefined
     },
     sessions,

@@ -15,7 +15,8 @@
  * - A request with no session id that declares an `orca_session_id:` caller gets the party it names: a
  *   worker's handle, or a refusal for a chat, whose address alone identifies nobody.
  */
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
+import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-state'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../../shared/agent-session-caller-env'
 import {
@@ -193,15 +194,16 @@ function assertSessionCanAct(sessionId: string, record: AgentSessionRecord): voi
       `Agent session ${sessionId} runs on another host, and an Orca session ID identifies a caller only on the host that runs that session.`
     )
   }
-  if (agentSessionLeaseAdmitsWriter(record.lease)) {
+  // Derived, not stored: a release whose write failed must not let a dead worker act.
+  const state = getStructuredAgentSessionHost()?.leaseState(record.sessionId) ?? null
+  if (state && agentSessionLeaseAdmitsWriter(state)) {
     return
   }
-  const { lease } = record
   const reason =
-    lease.claimStatus === 'released'
+    state?.state === 'free'
       ? // Why not "ended": a released lease is evicted and wakeable; only a running process may act.
         'is not running right now. A new message or user turn revives it; retry then.'
-      : lease.handoffStage !== null
+      : state?.state === 'acquiring' || record.lease.handoffStage !== null
         ? 'is changing owners on this host. Retry when that finishes.'
         : 'has no live owner on this host right now. Retry once it is running.'
   throw new OrchestrationError(

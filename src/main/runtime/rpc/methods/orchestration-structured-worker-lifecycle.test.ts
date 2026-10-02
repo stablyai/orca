@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../../../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 
@@ -69,6 +70,10 @@ function installHost(options: {
       sessionIds: options.tabListed ? [IDENTITY.sessionId] : []
     }),
     hasSession: () => (closed ? false : (options.hasSession ?? true)),
+    leaseState: testHostLeaseState(
+      () => record,
+      () => (closed ? false : (options.hasSession ?? true))
+    ),
     setSessionTabVisibility: options.setSessionTabVisibility ?? (async () => {}),
     close:
       options.close ??

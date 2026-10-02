@@ -12,6 +12,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../../../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import {
@@ -76,20 +77,17 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
     worktreeId: WORKTREE,
     hostScope: { kind: 'local', hostId: 'local' }
   })
+  const record = {
+    provider: 'claude',
+    location: { executionHostId: 'local', wslDistro: null },
+    lease: { runtimeKind: 'native', claimStatus: 'live', deathEvidence: null, runtimeFence: 1 }
+  }
   hostRef.current = {
     hasSession: () => true,
+    leaseState: testHostLeaseState(() => record),
     deps: {
       store: {
-        getRecord: () => ({
-          provider: 'claude',
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: {
-            runtimeKind: 'native',
-            claimStatus: 'live',
-            deathEvidence: null,
-            runtimeFence: 1
-          }
-        }),
+        getRecord: () => record,
         // No committed /clear: each session is its own lineage's root.
         listRecords: () => []
       }

@@ -8,6 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../../../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
@@ -43,10 +44,23 @@ function installHost(options: { closeThrows?: boolean; lease?: Record<string, un
     }
     attached = false
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host double; the code under test reads only the members defined here.
   setStructuredAgentSessionHost({
     setSessionTabVisibility,
     close,
     hasSession: () => attached,
+    leaseState: testHostLeaseState(
+      () => ({
+        lease: options.lease ?? {
+          claimStatus: attached ? 'live' : 'released',
+          deathEvidence: attached
+            ? null
+            : { kind: 'exit-observed', detail: 'closed', observedAt: 1 },
+          runtimeFence: 2
+        }
+      }),
+      () => attached
+    ),
     hold: async () => {},
     release: () => {},
     subscribe: () => () => {},

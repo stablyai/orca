@@ -8,6 +8,7 @@
  */
 
 import { terminalOwnerRefusalMessage } from '../../../shared/agent-session-legacy-handoff-lease'
+import { deriveAgentSessionLeaseState } from '../../../shared/agent-session-lease-state'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionAnyRefusalReason,
@@ -19,8 +20,13 @@ function ownerDescription(record: AgentSessionRecord): string {
   return owner ? `process ${owner.pid} on ${owner.hostId}` : 'a process it never got to record'
 }
 
+/** A conflicted claim answers the same whatever the host proves; no proof can retire it here. */
+function conflicted(record: AgentSessionRecord): boolean {
+  return deriveAgentSessionLeaseState(record.lease, null).state === 'conflicted'
+}
+
 function latchedMessage(record: AgentSessionRecord): string {
-  if (record.lease.claimStatus === 'conflicted') {
+  if (conflicted(record)) {
     return terminalOwnerRefusalMessage(record.lease)
   }
   return record.lease.ownerProcess
@@ -68,7 +74,7 @@ export function structuredAgentSessionRefusalMessage(
   const { code } = emitted
   if (code === 'agent_session_ownership_unknown' || code === 'agent_session_conflict') {
     const message = latchedMessage(record)
-    if (record.lease.claimStatus === 'conflicted') {
+    if (conflicted(record)) {
       return { message, reference: { code, details: { reason: 'claimConflicted' } } }
     }
     return {

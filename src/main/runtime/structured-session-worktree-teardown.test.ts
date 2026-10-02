@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { IPtyProvider } from '../providers/types'
 
@@ -97,6 +98,10 @@ function installHost(options: {
       }
     },
     hasSession: (sessionId: string) => held.has(sessionId),
+    leaseState: testHostLeaseState(
+      (sessionId) => options.records.find((entry) => entry.sessionId === sessionId),
+      (sessionId) => held.has(sessionId)
+    ),
     getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...visible] }),
     setSessionTabVisibility: async (sessionId: string, isVisible: boolean) => {
       if (!isVisible) {
@@ -195,6 +200,33 @@ describe('worktree teardown and structured agent sessions', () => {
       members: [{ sessionId: 's1', agent: 'claude' }],
       live: []
     })
+  })
+
+  it.each([
+    ['recovery has not proven gone', { handoffStage: 'recovering' }],
+    ['a failed startup reconciliation left unadjudicated', { unreconciled: true }]
+  ] as const)(
+    'closes an open chat whose previous agent %s, and refuses until it settles',
+    async (_label, lease) => {
+      const unproven = record('s1', WORKTREE)
+      Object.assign(unproven.lease, lease)
+      const host = installHost({ records: [unproven], unverifiable: new Set(['s1']) })
+      expect(listStructuredSessionsForWorktree(WORKTREE, {}).live).toEqual([
+        { sessionId: 's1', agent: 'claude' }
+      ])
+
+      await expect(killAllProcessesForWorktree(WORKTREE, destructiveDeps())).rejects.toThrow(
+        /1 agent session \(claude\)/
+      )
+      expect(host.closed).toEqual(['s1'])
+    }
+  )
+
+  it('never counts an open chat released before the restart as live while it is unreconciled', () => {
+    const released = record('s1', WORKTREE)
+    Object.assign(released.lease, { claimStatus: 'released', unreconciled: true })
+    installHost({ records: [released] })
+    expect(listStructuredSessionsForWorktree(WORKTREE, {}).live).toEqual([])
   })
 
   it('closes a live session on an ordinary removal instead of refusing it', async () => {

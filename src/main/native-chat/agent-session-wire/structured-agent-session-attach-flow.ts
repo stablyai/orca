@@ -15,7 +15,6 @@ import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -29,6 +28,7 @@ import {
   type AttachedJournal
 } from './structured-agent-session-attach'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionFailedAcquisitionSettlement } from '../../runtime/agent-session-acquisition-failure-settlement'
 import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
@@ -64,6 +64,8 @@ export type AttachFlowInput = {
     acquiredOwner: boolean,
     providerChildPhase: StructuredAgentSessionProviderChildPhase
   ) => Promise<void> | void
+  /** Whether this host already runs the record's admitted writer: a re-attach, not an acquire. */
+  ownerAdmitted: (record: AgentSessionRecord) => boolean
   /** Host-owned provider sink, bound to the journal inside `onAttached`. */
   eventSink?: StructuredAgentSessionEventSink
   /** Stops acquisition-window events targeting the superseded journal. */
@@ -78,6 +80,9 @@ export type AttachFlowInput = {
   /** The error an acquisition failed with, for a host-side reader of the provider's words; the
    *  refusal never carries them. */
   onAcquisitionFailed?: (error: unknown) => void
+  /** The settlement of a failed acquisition did not land; the host keeps it as proof of how its
+   *  own attempt ended. */
+  onAcquisitionUnsettled?: (settlement: AgentSessionFailedAcquisitionSettlement) => void
 }
 
 export async function performAttach(
@@ -167,9 +172,9 @@ export async function performAttach(
       adapter: input.adapter,
       identity: journalIdentityFor(record, params),
       accountHome: record.accountHome,
-      ownerAlreadyAdmitted: agentSessionLeaseAdmitsWriter(record.lease)
+      ownerAlreadyAdmitted: input.ownerAdmitted(record)
     })
-    if (!agentSessionLeaseAdmitsWriter(record.lease)) {
+    if (!input.ownerAdmitted(record)) {
       const acquired = await withAgentSessionCreatePhase('acquire_owner', input.recordPhase, () =>
         acquireOwner(input, record)
       )
@@ -187,7 +192,7 @@ export async function performAttach(
     if (reservedRecord && spawnToken && !unsupportedReservationSettlementAttempted) {
       // Settle processless proof and failed operation atomically.
       try {
-        await store.settleFailedAcquisition({
+        await settleFailedAcquisition(input, {
           sessionId,
           fence: reservedRecord.lease.runtimeFence,
           spawnToken,
@@ -294,7 +299,7 @@ async function settleUnsupportedReservation(
     return
   }
   try {
-    await input.store.settleFailedAcquisition({
+    await settleFailedAcquisition(input, {
       sessionId: record.sessionId,
       fence: record.lease.runtimeFence,
       spawnToken,
@@ -311,5 +316,17 @@ async function settleUnsupportedReservation(
     })
   } catch (error) {
     throw new AggregateError([error], 'agent session unsupported reservation settlement failed')
+  }
+}
+
+async function settleFailedAcquisition(
+  input: AttachFlowInput,
+  settlement: AgentSessionFailedAcquisitionSettlement
+): Promise<void> {
+  try {
+    await input.store.settleFailedAcquisition(settlement)
+  } catch (error) {
+    input.onAcquisitionUnsettled?.(settlement)
+    throw error
   }
 }

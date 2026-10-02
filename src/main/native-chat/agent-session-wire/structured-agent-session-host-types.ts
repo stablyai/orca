@@ -76,6 +76,8 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** What the chat records about this end; absent reads as a provider exit with no detail. */
     failure?: SubmissionRejectionFact
     duringStartup: boolean
+    /** When the host saw the child end: an exit's receipt, or a stop's proof. */
+    observedAt: number
     startedFor?: string
     /** Where the conversation's journal stood when the child ended, to order the end against a
      *  message's acceptance. A stop's end stands where it was asked for: a message accepted while

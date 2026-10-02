@@ -3,30 +3,16 @@ import {
   settleAgentSessionOperation,
   type AgentSessionOperationOutcome
 } from '../../shared/agent-session-operation-ledger'
+import {
+  failedAcquisitionDeathEvidence,
+  failedAcquisitionReleasesReservation,
+  isFailedAcquisitionReservation,
+  type AgentSessionAcquisitionExitProof
+} from '../../shared/agent-session-failed-acquisition'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
-import type {
-  AgentSessionDeathEvidence,
-  AgentSessionRecord
-} from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { assertFence, withLease } from './agent-session-lease-transitions'
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
-
-/**
- * How the failed attempt's provider process was accounted for.
- * - `exit-proven`: cleanup observed the whole tree gone.
- * - `root-exit-observed`: the owner root's exit was observed first-hand, so the
- *   identity this lease is keyed on is dead, but its descendants were not proven
- *   gone. Releases the lease and says exactly that, claiming nothing more.
- * - `processless`: the attempt failed before a process existed.
- * - `unproven`: nothing about the process was observed. A recorded owner goes to recovery, which
- *   concludes about it; a reservation that recorded none is released, since the adapter already
- *   closed the stdio of anything it spawned.
- */
-export type AgentSessionAcquisitionExitProof =
-  | 'exit-proven'
-  | 'root-exit-observed'
-  | 'processless'
-  | 'unproven'
 
 export type AgentSessionFailedAcquisitionSettlement = {
   sessionId: string
@@ -123,15 +109,10 @@ function settleFailedLease(
   args: AgentSessionFailedAcquisitionSettlement
 ): AgentSessionRecord {
   assertFence(record.lease, args.fence)
-  if (
-    record.lease.claimStatus !== 'reserved' ||
-    record.lease.handoffStage !== 'new-owner-proving' ||
-    record.lease.reservedSpawnToken !== args.spawnToken ||
-    record.lease.handoffOperationId !== args.operationId
-  ) {
+  if (!isFailedAcquisitionReservation(record.lease, args)) {
     throw new Error('agent_session_ownership_unknown')
   }
-  if (args.exitProof === 'unproven' && record.lease.ownerProcess) {
+  if (!failedAcquisitionReleasesReservation(record.lease, args.exitProof)) {
     // Parking in recovery proves nothing alive, so `lastRenewedAt` keeps the spawn's proof.
     return {
       ...withLease(record, {
@@ -153,35 +134,10 @@ function settleFailedLease(
     claimStatus: 'released',
     lastRenewedAt: args.now,
     handoffOperationId: null,
-    deathEvidence: acquisitionDeathEvidence(args.exitProof, args.now, record.lease.runtimeFence)
+    deathEvidence: failedAcquisitionDeathEvidence(
+      args.exitProof,
+      args.now,
+      record.lease.runtimeFence
+    )
   })
-}
-
-/** Records only what was observed: never a tree claim the cleanup did not make, and nothing at all
- *  when nothing was. */
-function acquisitionDeathEvidence(
-  exitProof: AgentSessionAcquisitionExitProof,
-  observedAt: number,
-  ownerFence: number
-): AgentSessionDeathEvidence | null {
-  if (exitProof === 'unproven') {
-    return null
-  }
-  const proof = { observedAt, ownerFence }
-  if (exitProof === 'processless') {
-    return { kind: 'pid-absent', detail: 'reservation failed before spawn', ...proof }
-  }
-  if (exitProof === 'root-exit-observed') {
-    return {
-      kind: 'exit-observed',
-      detail: 'the provider process exited; its descendants were not proven gone',
-      ...proof
-    }
-  }
-  // Cleanup proved no child of this attempt remains; it may never have spawned.
-  return {
-    kind: 'exit-observed',
-    detail: 'acquisition cleanup proved no provider child remains',
-    ...proof
-  }
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -36,7 +37,8 @@ function registerStructuredWorker(): string {
           lease: { runtimeKind: 'native', claimStatus: 'live', runtimeFence: 1 }
         })
       }
-    }
+    },
+    leaseState: testHostLeaseState(() => ({ lease: { claimStatus: 'live', runtimeFence: 1 } }))
   }
   const handle = mintStructuredWorkerHandle()
   structuredWorkerIdentities.register({

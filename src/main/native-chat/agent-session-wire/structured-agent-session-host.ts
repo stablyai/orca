@@ -85,9 +85,7 @@ export class StructuredAgentSessionHost {
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
-  private readonly reconcileLeases: (
-    sessionId: string
-  ) => Promise<SessionWire.AgentSessionWireRefusal | null>
+  private readonly reconcileLeases: ReturnType<typeof createRestartReconciler>
   private readonly restore: ReturnType<typeof createStructuredAgentSessionHostRestore>
   private readonly lifetime: StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: ReturnType<
@@ -109,8 +107,9 @@ export class StructuredAgentSessionHost {
       (sessionId) => this.lifetime.conversation(sessionId),
       this.clientDelivery.readChildWork
     )
-    this.runtimeState = new StructuredAgentSessionHostRuntimeState(deps, (sessionId, error) =>
-      this.eventRecovery.recoverAfterSinkFailure(sessionId, error)
+    const memory = { session: (id: string) => this.sessions.get(id), serialize: this.serialize }
+    this.runtimeState = new StructuredAgentSessionHostRuntimeState(deps, memory, (id, error) =>
+      this.eventRecovery.recoverAfterSinkFailure(id, error)
     )
     this.reconcileLeases = createRestartReconciler({
       store: deps.store,
@@ -180,6 +179,8 @@ export class StructuredAgentSessionHost {
   private now = (): number => this.deps.now?.() ?? Date.now()
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
+  /** The session's lease as this host proves it now from memory; null without a record. */
+  leaseState = (sessionId: string) => this.runtimeState.leaseState(sessionId)
   sessionAgent = (sessionId: string) => this.deps.store.getRecord(sessionId)?.provider ?? null
 
   handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
@@ -275,6 +276,7 @@ export class StructuredAgentSessionHost {
       flushStreamedEvents: this.flushStreamedEvents,
       conversation: this.lifetime.conversation,
       readChildWork: this.clientDelivery.readChildWork,
+      ownerProof: (sessionId) => this.runtimeState.ownerProof(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       openConversation: this.conversationDelivery.open,
       ensureAgent: (sessionId) =>

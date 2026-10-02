@@ -76,6 +76,7 @@ export async function settleUnexpectedStructuredAgentSessionExit<
         reason: unexpectedEvent.reason,
         ...(unexpectedEvent.failure ? { failure: unexpectedEvent.failure } : {}),
         duringStartup: exitedDuringStartup,
+        observedAt,
         // The adapter publishes an exit only once it saw the root go, first-hand or proven.
         rootGone: true
       })

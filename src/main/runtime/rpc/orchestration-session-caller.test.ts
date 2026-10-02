@@ -273,7 +273,13 @@ describe('orchestration session callers at the dispatch entry', () => {
     })
 
     it('a released lease', async () => {
-      h.records.set(SESSION_X, sessionRecord(SESSION_X, { lease: { claimStatus: 'released' } }))
+      // Every release writer clears the owner and the token; a release still naming one is unproven.
+      h.records.set(
+        SESSION_X,
+        sessionRecord(SESSION_X, {
+          lease: { claimStatus: 'released', ownerProcess: null, reservedSpawnToken: null }
+        })
+      )
       await expectRefusedWithNoEffects(SESSION_X, CODES.notLive, /is not running right now/)
     })
 

@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
+import { NO_HOST_MEMORY } from './structured-agent-session-lease-state-test-support'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
@@ -73,7 +74,7 @@ function runtimeState(
     probeOwner,
     logger: createStructuredAgentSessionLogger()
   } as StructuredAgentSessionHostDeps
-  return new StructuredAgentSessionHostRuntimeState(deps)
+  return new StructuredAgentSessionHostRuntimeState(deps, NO_HOST_MEMORY)
 }
 
 function liveRecord(): AgentSessionRecord {
@@ -149,7 +150,11 @@ describe('host runtime-state owner probe', () => {
       probeOwner,
       logger: log.logger
     } as unknown as StructuredAgentSessionHostDeps
-    const state = new StructuredAgentSessionHostRuntimeState(deps, onEventSinkFailure)
+    const state = new StructuredAgentSessionHostRuntimeState(
+      deps,
+      NO_HOST_MEMORY,
+      onEventSinkFailure
+    )
 
     await (
       state as unknown as { leaseRenewer: { renewNow: () => Promise<void> } }

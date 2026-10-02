@@ -43,6 +43,7 @@ export async function rewindStructuredAgentSession(
       prepareSession: openWithAgent(context, params.envelope),
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
+      ownerProof: () => context.ownerProof(sessionId),
       flushStreamedEvents: context.flushStreamedEvents,
       now: context.now,
       plan: {

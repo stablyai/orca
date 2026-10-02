@@ -9,7 +9,10 @@
 // This runs under the session's own serialized step, which its close and sends wait on, so it
 // asks the provider nothing: the event carries what the child proved.
 
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
+import {
+  agentSessionLeaseAdmitsWriter,
+  deriveAgentSessionLeaseState
+} from '../../../shared/agent-session-lease-state'
 import type { StructuredAgentSessionStartedEvent } from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionHostDeps,
@@ -17,6 +20,7 @@ import type {
 } from './structured-agent-session-host-types'
 import { nativeSessionOptionsFromReport } from './structured-agent-session-option-restoration'
 import { markProviderChildStarted } from './structured-agent-session-provider-child'
+import { structuredAgentSessionOwnerProof } from './structured-agent-session-owner-proof'
 
 export type StructuredAgentSessionProviderStartedContext = {
   deps: StructuredAgentSessionHostDeps
@@ -65,7 +69,17 @@ async function persistStartedOptions(
   if (
     !record ||
     record.lease.runtimeFence !== event.fence ||
-    !agentSessionLeaseAdmitsWriter(record.lease)
+    !agentSessionLeaseAdmitsWriter(
+      deriveAgentSessionLeaseState(
+        record.lease,
+        structuredAgentSessionOwnerProof({
+          lease: record.lease,
+          hostId: store.hostId,
+          session: context.sessions.get(event.sessionId),
+          attemptInFlight: false
+        })
+      )
+    )
   ) {
     return
   }

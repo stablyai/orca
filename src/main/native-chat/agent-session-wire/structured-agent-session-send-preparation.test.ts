@@ -283,7 +283,8 @@ describe('a send with no live owner', () => {
       envelope: params.envelope,
       hostFingerprint: params.envelope.payloadFingerprint,
       now: NOW,
-      operationIdScope: 'global'
+      operationIdScope: 'global',
+      ownerProof: host.collaboratorsForTests().runtimeState.ownerProof(SESSION)
     })
     await store.recordOperationOutcome({
       callerKey: CALLER.callerKey,

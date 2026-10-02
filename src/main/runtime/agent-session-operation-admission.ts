@@ -17,6 +17,7 @@ import {
   admitAgentSessionMutation,
   type AgentSessionMutationAdmission
 } from '../../shared/agent-session-mutation-envelope'
+import type { AgentSessionHostProof } from '../../shared/agent-session-lease-state'
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
@@ -37,6 +38,8 @@ export type AgentSessionMutationOperationAdmission = {
   now: number
   operationIdScope?: 'global'
   conversationWrite?: true
+  /** What the host proves about the owner, taken once the call made the session ready. */
+  ownerProof: AgentSessionHostProof | null
 }
 
 export type AgentSessionMutationOperationDecision = {
@@ -109,7 +112,7 @@ export function admitAgentSessionGlobalOperationRow(
  *  know before it decides whether to give the session an owner. Null when no record exists. */
 export function evaluateAgentSessionMutationOperation(
   state: Pick<AgentSessionStoreState, 'records' | 'operations'>,
-  args: AgentSessionMutationOperationAdmission
+  args: Omit<AgentSessionMutationOperationAdmission, 'ownerProof'>
 ): { decision: AgentSessionOperationDecision; record: AgentSessionRecord } | null {
   const record = state.records.get(args.envelope.sessionId)
   if (!record) {
@@ -123,7 +126,7 @@ export function evaluateAgentSessionMutationOperation(
 }
 
 function mutationOperation(
-  args: AgentSessionMutationOperationAdmission
+  args: Omit<AgentSessionMutationOperationAdmission, 'ownerProof'>
 ): AgentSessionOperationAdmission {
   return {
     callerKey: args.callerKey,
@@ -151,6 +154,7 @@ export function admitAgentSessionMutationOperation(
     hostFingerprint: args.hostFingerprint,
     ledger: ledger.decision,
     lease: record.lease,
+    ownerProof: args.ownerProof,
     ...(args.conversationWrite ? { conversationWrite: true } : {})
   })
   if (ledger.decision.decision === 'admit' && admission.decision === 'refused') {

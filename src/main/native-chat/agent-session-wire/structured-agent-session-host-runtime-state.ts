@@ -1,21 +1,45 @@
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import {
+  deriveAgentSessionLeaseState,
+  type AgentSessionHostProof,
+  type AgentSessionLeaseState
+} from '../../../shared/agent-session-lease-state'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionFailedAcquisitionSettlement } from '../../runtime/agent-session-acquisition-failure-settlement'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type DeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionSinkBarrier
 } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
+import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
+import { structuredAgentSessionOwnerProof } from './structured-agent-session-owner-proof'
 import { resolveStructuredSessionRecovery } from './structured-agent-session-recovery-resolution'
+
+/** The host's own memory of its sessions, which owner proof is read from. */
+export type StructuredAgentSessionHostMemory = {
+  session: (sessionId: string) => StructuredAgentSessionHostSession | undefined
+  serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
+}
 
 export class StructuredAgentSessionHostRuntimeState {
   private readonly eventSinks = new Map<string, DeferredStructuredAgentSessionEventSink>()
+  /** Sessions an attach of this host's is acquiring. In memory only: a restart reconciles every
+   *  lease anyway, and an attempt that ends takes its entry with it. */
+  private readonly acquisitions = new Set<string>()
+  /** Each session's last failed attempt whose settlement write did not land: the proof that frees
+   *  its reservation, and the write the renewer replays. Dead once the lease moves past its fence. */
+  private readonly unsettledAcquisitions = new Map<
+    string,
+    AgentSessionFailedAcquisitionSettlement
+  >()
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
   private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void
 
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
+    private readonly memory: StructuredAgentSessionHostMemory,
     onEventSinkFailure?: (sessionId: string, error: unknown) => void
   ) {
     this.onEventSinkFailure = onEventSinkFailure
@@ -23,6 +47,9 @@ export class StructuredAgentSessionHostRuntimeState {
       store: deps.store,
       probe: (record) => this.probeRecord(record),
       ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
+      ownerProof: (record) => this.ownerProofFor(record),
+      landUnsettledAcquisition: (sessionId) => this.landUnsettledAcquisition(sessionId),
+      serialize: memory.serialize,
       now: () => deps.now?.() ?? Date.now(),
       // Lease/ownership failures are transient and stay on the visible lease-error path.
       // Only deferred sink I/O failures are terminal and may force-close a provider.
@@ -117,8 +144,19 @@ export class StructuredAgentSessionHostRuntimeState {
     }
   }
 
-  /** Exit from a latched recovery stage when present-time evidence permits one. */
-  resolveRecovery(sessionId: string): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
+  /** Exit from a latched recovery stage when present-time evidence permits one. A failed attempt's
+   *  unwritten settlement that would have parked its owner there lands first, so recovery concludes
+   *  about it as if it had been written. */
+  async resolveRecovery(sessionId: string): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
+    if (this.leaseState(sessionId)?.state === 'recovering') {
+      await this.landUnsettledAcquisition(sessionId).catch((error: unknown) => {
+        this.deps.logger.warn("writing a failed start's settlement failed", {
+          scope: 'lease-convergence',
+          sessionId,
+          error
+        })
+      })
+    }
     return resolveStructuredSessionRecovery(
       {
         store: this.deps.store,
@@ -128,6 +166,89 @@ export class StructuredAgentSessionHostRuntimeState {
       },
       sessionId
     )
+  }
+
+  /** Brackets one acquisition. Until it ends, readers outside the session's serialize derive the
+   *  lease as `acquiring`; an attach runs under serialize, so there is at most one per session. */
+  beginAcquisition(sessionId: string): () => void {
+    this.acquisitions.add(sessionId)
+    return () => this.acquisitions.delete(sessionId)
+  }
+
+  rememberUnsettledAcquisition(settlement: AgentSessionFailedAcquisitionSettlement): void {
+    this.unsettledAcquisitions.set(settlement.sessionId, settlement)
+  }
+
+  /** Writes the settlement this host's failed attempt could not, while it still speaks for the
+   *  lease. An aged-out ledger row already answers its replay as expired, so it is left alone. */
+  async landUnsettledAcquisition(sessionId: string): Promise<void> {
+    const settlement = this.unsettledAcquisitions.get(sessionId)
+    const record = this.deps.store.getRecord(sessionId)
+    if (!settlement || !record) {
+      return
+    }
+    const proof = this.ownerProofFor(record)
+    const operation = this.deps.store.getOperationRow(settlement.callerKey, settlement.operationId)
+    if (
+      !proof.attemptInFlight &&
+      proof.owner.kind === 'failed-acquisition' &&
+      operation?.outcome.status === 'pending'
+    ) {
+      await this.deps.store.settleFailedAcquisition(settlement)
+    }
+  }
+
+  /** What memory proves about the session's owner; null when the session has no record. */
+  ownerProof(sessionId: string): AgentSessionHostProof | null {
+    const record = this.deps.store.getRecord(sessionId)
+    return record ? this.ownerProofFor(record) : null
+  }
+
+  ownerProofFor(record: AgentSessionRecord): AgentSessionHostProof {
+    return {
+      ...this.ownerProofForAttempt(record),
+      attemptInFlight: this.acquisitions.has(record.sessionId)
+    }
+  }
+
+  /** The proof as the acquiring attempt itself reads it: its own attempt is not one beside it. */
+  ownerProofForAttempt(record: AgentSessionRecord): AgentSessionHostProof {
+    const unsettled = this.unsettledAcquisitions.get(record.sessionId)
+    // Fences only grow, so an attempt behind the lease can never speak for it again.
+    if (unsettled && unsettled.fence < record.lease.runtimeFence) {
+      this.unsettledAcquisitions.delete(record.sessionId)
+    }
+    return structuredAgentSessionOwnerProof({
+      lease: record.lease,
+      hostId: this.deps.store.hostId,
+      session: this.memory.session(record.sessionId),
+      attemptInFlight: false,
+      ...(unsettled ? { unsettledAcquisition: unsettled } : {})
+    })
+  }
+
+  /** The lease as memory proves it, for a reader that cannot wait on a probe. A create in flight
+   *  has no record yet and is `acquiring` all the same; null when there is neither. */
+  leaseState(sessionId: string): AgentSessionLeaseState | null {
+    const record = this.deps.store.getRecord(sessionId)
+    if (!record) {
+      return this.acquisitions.has(sessionId) ? { state: 'acquiring' } : null
+    }
+    return deriveAgentSessionLeaseState(record.lease, this.ownerProofFor(record))
+  }
+
+  /** Memory's proof, or a probe where memory has none: what a start and an acquisition decide on. */
+  async proveOwner(sessionId: string): Promise<AgentSessionHostProof | null> {
+    const known = this.ownerProof(sessionId)
+    if (
+      !known ||
+      known.attemptInFlight ||
+      known.owner.kind === 'watched-exit' ||
+      known.owner.kind === 'failed-acquisition'
+    ) {
+      return known
+    }
+    return { ...known, owner: { kind: 'probed', probe: await this.probeOwner(sessionId) } }
   }
 
   probeOwner(sessionId: string): Promise<AgentSessionOwnerProbe> {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import type { OrchestrationDb } from '../orchestration/db'
 import { migrateV43 } from '../orchestration/db/schema/migrate-v43'
 import {
@@ -82,7 +83,8 @@ describe('a database an earlier build wrote session:<id> addresses into', () => 
           listRecords: () => [...h.records.values()],
           getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [SESSION_X, SESSION_Y] })
         }
-      }
+      },
+      leaseState: testHostLeaseState((sessionId) => h.records.get(sessionId))
     }
     seeded = seedEarlierBuildRows(h.db)
     h.db.migrate()

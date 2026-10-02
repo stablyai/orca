@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { testOwnerAdmitted } from './structured-agent-session-lease-state-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -153,6 +154,7 @@ describe('structured session acquisition options', () => {
     let firstJournal: AgentSessionJournal | undefined
     const first = await performAttach({
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store: initialStore,
       adapter: withHistory('created'),
       openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -191,6 +193,7 @@ describe('structured session acquisition options', () => {
 
     const second = await performAttach({
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store,
       adapter: withHistory('resumed'),
       openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -223,6 +226,7 @@ describe('structured session acquisition options', () => {
 
     const created = await performAttach({
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store,
       adapter: sessionAdapter,
       openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -253,6 +257,7 @@ describe('structured session acquisition options', () => {
     const attempt = async (options: Readonly<Record<string, string>>, spawnToken: string) =>
       performAttach({
         logger: createStructuredAgentSessionLogger(),
+        ownerAdmitted: testOwnerAdmitted,
         store,
         adapter: sessionAdapter,
         openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -284,6 +289,7 @@ describe('structured session acquisition options', () => {
 
     const created = await performAttach({
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store,
       adapter: adapter({ origin: 'created' }),
       openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -315,6 +321,7 @@ describe('structured session acquisition options', () => {
     const releasedFence = resumedStore.getRecord(SESSION)?.lease.runtimeFence ?? 0
     const resumed = await performAttach({
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store: resumedStore,
       adapter: adapter({
         origin: 'resumed',
@@ -358,6 +365,7 @@ describe('structured session acquisition options', () => {
 
     const created = await performAttach({
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store,
       adapter: sessionAdapter,
       openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -395,6 +403,7 @@ describe('structured session acquisition options', () => {
     await expect(
       performAttach({
         logger: createStructuredAgentSessionLogger(),
+        ownerAdmitted: testOwnerAdmitted,
         store,
         adapter: failingAdapter,
         openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -489,6 +498,7 @@ describe('structured session acquisition options', () => {
       ) =>
         performAttach({
           logger: createStructuredAgentSessionLogger(),
+          ownerAdmitted: testOwnerAdmitted,
           store: target,
           adapter: failingAdapter,
           openConversation: openTestAttachConversation(
@@ -591,6 +601,7 @@ describe('the tab a create reserves', () => {
   function attachWith(store: AgentSessionRecordStore, surfaceTabId?: string) {
     return performAttach({
       logger: createStructuredAgentSessionLogger(),
+      ownerAdmitted: testOwnerAdmitted,
       store,
       adapter: adapter({ origin: 'created' }),
       openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),

@@ -5,6 +5,7 @@ import { mkdtemp, rm, writeFile, truncate } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { testOwnerAdmitted } from './structured-agent-session-lease-state-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -124,6 +125,7 @@ async function attach(
   store ??= await openTestAgentSessionRecordStore(root!)
   return performAttach({
     logger: createStructuredAgentSessionLogger(),
+    ownerAdmitted: testOwnerAdmitted,
     store,
     adapter: sessionAdapter,
     openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),

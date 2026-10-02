@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { NO_HOST_MEMORY } from './structured-agent-session-lease-state-test-support'
 import {
   evictStructuredAgentSession,
   StructuredAgentSessionEvictionError,
@@ -48,11 +49,12 @@ function context(): StructuredAgentSessionEvictionContext & { order: string[] } 
 
 function runtimeState(): StructuredAgentSessionHostRuntimeState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: eviction against the sink cache reads only the sinks and the logger; store and adapter are never reached.
-  return new StructuredAgentSessionHostRuntimeState({
+  const deps = {
     store: {},
     adapter: {},
     logger: recordingStructuredAgentSessionLogger().logger
-  } as never)
+  } as never
+  return new StructuredAgentSessionHostRuntimeState(deps, NO_HOST_MEMORY)
 }
 
 describe('structured agent session eviction', () => {

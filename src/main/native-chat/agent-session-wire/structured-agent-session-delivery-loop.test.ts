@@ -22,6 +22,7 @@ function ended(
     reason: null,
     failure: EXIT_FAILURE,
     duringStartup,
+    observedAt: 1,
     endedAt: { epoch: 'epoch-1', sequence: 3 }
   }
 }

@@ -11,6 +11,7 @@
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
+import { SURFACE_RELEASE_EXIT_DETAIL } from '../../shared/agent-session-lease-state'
 import { assertFence, withLease } from './agent-session-lease-transitions'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 
@@ -50,7 +51,7 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
     lastRenewedAt: args.now,
     deathEvidence: {
       kind: 'exit-observed',
-      detail: args.exitReason ?? 'the last surface holding this session released it',
+      detail: args.exitReason ?? SURFACE_RELEASE_EXIT_DETAIL,
       observedAt: args.exitObservedAt ?? args.now,
       ownerFence: record.lease.runtimeFence
     }

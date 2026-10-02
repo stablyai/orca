@@ -15,6 +15,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import type { AgentSessionLeaseState } from '../../shared/agent-session-lease-state'
 import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
@@ -144,18 +145,21 @@ export function structuredWorkerHostScope(
 
 /**
  * Whether the durable record still describes THIS worker under this host — ownership, not whether
- * its process runs. A released lease is a worker at rest while its chat tab is listed; released
- * with the tab gone is retired. `tabListed` is the persisted tab index's answer.
+ * its process runs. A free lease is a worker at rest while its chat tab is listed; free with the
+ * tab gone is retired. `state` is the lease as the host derives it; `tabListed` is the persisted
+ * tab index's answer.
  */
 export function structuredWorkerRecordIsCurrent(
   record: AgentSessionRecord | null | undefined,
+  state: AgentSessionLeaseState | null,
   tabListed: boolean
 ): boolean {
   return Boolean(
     record &&
+    state &&
     // Why: a conflicted claim may name a terminal an older build recorded as owner, not this worker.
-    record.lease.claimStatus !== 'conflicted' &&
-    (record.lease.claimStatus !== 'released' || tabListed) &&
+    state.state !== 'conflicted' &&
+    (state.state !== 'free' || tabListed) &&
     structuredWorkerHostScope(record.location)
   )
 }

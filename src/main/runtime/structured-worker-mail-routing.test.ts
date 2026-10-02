@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { testHostLeaseState } from '../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -38,7 +39,8 @@ function installRecord(
             })
           }
         },
-        hasSession: () => lease.claimStatus === 'live'
+        hasSession: () => lease.claimStatus === 'live',
+        leaseState: testHostLeaseState(() => ({ lease }))
       }
     : null
 }

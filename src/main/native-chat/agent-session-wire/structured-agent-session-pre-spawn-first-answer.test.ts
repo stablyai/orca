@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { testOwnerAdmitted } from './structured-agent-session-lease-state-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
@@ -84,6 +85,7 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
     store,
     adapter,
     logger: createStructuredAgentSessionLogger(),
+    ownerAdmitted: testOwnerAdmitted,
     journalDatabase: openTestJournalHostDatabase(root),
     openConversation: openTestAttachConversation(openTestJournalHostDatabase(root)),
     authority: {

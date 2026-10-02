@@ -1,6 +1,6 @@
 // Admission for one mutating `agentSession.*` call.
 //
-// The rules themselves live in the durable ledger and the lease adjudicator;
+// The rules themselves live in the durable ledger and the lease derivation;
 // this is only the fixed order they are applied in, plus the payload
 // fingerprint both peers derive from the same request fields. Nothing here
 // re-derives who may write — that answer comes from
@@ -11,7 +11,11 @@ import type {
   AgentSessionOperationDecision,
   AgentSessionOperationRow
 } from './agent-session-operation-ledger'
-import { agentSessionLeaseAdmitsWriter } from './agent-session-lease-adjudication'
+import {
+  agentSessionLeaseAdmitsWriter,
+  deriveAgentSessionLeaseState,
+  type AgentSessionHostProof
+} from './agent-session-lease-state'
 import type { AgentSessionLease } from './agent-session-record'
 import { terminalOwnerRefusalMessage } from './agent-session-legacy-handoff-lease'
 import type { AgentSessionMutationEnvelope, AgentSessionWireRefusal } from './agent-session-wire'
@@ -93,6 +97,8 @@ export function admitAgentSessionMutation(input: {
   /** Decision from the durable ledger, evaluated under `hostFingerprint`. */
   ledger: AgentSessionOperationDecision
   lease: AgentSessionLease
+  /** What the host proves about the lease's owner; null proves nothing, so admits no writer. */
+  ownerProof: AgentSessionHostProof | null
   /** A write to the conversation, not to the provider child: a send is accepted and a Stop
    *  withdraws queued messages whoever owns the child, so the lease does not admit them. */
   conversationWrite?: true
@@ -118,7 +124,7 @@ export function admitAgentSessionMutation(input: {
   if (input.conversationWrite) {
     return { decision: 'admit', row: ledger.row }
   }
-  const leaseRefusal = refuseUnlessWriterAdmitted(lease)
+  const leaseRefusal = refuseUnlessWriterAdmitted(lease, input.ownerProof)
   if (leaseRefusal) {
     return { decision: 'refused', refusal: leaseRefusal }
   }
@@ -127,10 +133,15 @@ export function admitAgentSessionMutation(input: {
 
 /** Why the single admission oracle said no, mapped to what the client can do
  *  about it. The predicate itself is never re-implemented here. */
-function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireRefusal | null {
-  if (agentSessionLeaseAdmitsWriter(lease)) {
+function refuseUnlessWriterAdmitted(
+  lease: AgentSessionLease,
+  ownerProof: AgentSessionHostProof | null
+): AgentSessionWireRefusal | null {
+  const state = deriveAgentSessionLeaseState(lease, ownerProof)
+  if (agentSessionLeaseAdmitsWriter(state)) {
     return null
   }
+  // Why: a clean release derives free while unreconciled; the refusal still names the adjudication.
   if (lease.unreconciled) {
     return refuse(
       'execution_owner_reconciling',
@@ -138,21 +149,26 @@ function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireR
       'This host has not yet adjudicated the session lease.'
     )
   }
-  if (lease.handoffStage !== null) {
-    if (lease.claimStatus === 'conflicted') {
-      return refuse(
-        'agent_session_conflict',
-        { reason: 'claimConflicted' },
-        terminalOwnerRefusalMessage(lease)
-      )
-    }
-    return lease.handoffStage === 'new-owner-proving'
-      ? refuse('agent_session_conflict', { reason: 'chatStarting' }, 'The chat is still starting.')
-      : refuse(
-          'agent_session_conflict',
-          { reason: 'ownerUnproven' },
-          "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
-        )
+  if (state.state === 'conflicted') {
+    return refuse(
+      'agent_session_conflict',
+      { reason: 'claimConflicted' },
+      terminalOwnerRefusalMessage(lease)
+    )
+  }
+  if (state.state === 'acquiring' || lease.handoffStage === 'new-owner-proving') {
+    return refuse(
+      'agent_session_conflict',
+      { reason: 'chatStarting' },
+      'The chat is still starting.'
+    )
+  }
+  if (state.state === 'recovering') {
+    return refuse(
+      'agent_session_conflict',
+      { reason: 'ownerUnproven' },
+      "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
+    )
   }
   return refuse(
     'agent_session_ownership_unknown',

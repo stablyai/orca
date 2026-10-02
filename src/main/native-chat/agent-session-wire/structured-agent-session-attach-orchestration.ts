@@ -17,6 +17,16 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
 import { stampFailedCreateOwnerVerdict } from './structured-agent-session-failed-create-refusal'
 import {
+  agentSessionLeaseAdmitsWriter,
+  deriveAgentSessionLeaseState,
+  type AgentSessionHostProof
+} from '../../../shared/agent-session-lease-state'
+import type { AgentSessionLease } from '../../../shared/agent-session-record'
+import {
+  structuredAgentSessionAcquisitionProbe,
+  structuredAgentSessionPriorDeathEvidence
+} from './structured-agent-session-owner-proof'
+import {
   pinnedAgentSessionLaunchArgs,
   pinnedAgentSessionLaunchEnv
 } from './structured-agent-session-launch-env'
@@ -47,6 +57,8 @@ export type StructuredAgentSessionAttachOptions = {
   onAcquisitionFailed?: AttachFlowInput['onAcquisitionFailed']
   /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
   startedFor?: string
+  /** The proof a caller in the same serialize already gathered, and the lease it was gathered for. */
+  provenOwner?: { lease: AgentSessionLease; proof: AgentSessionHostProof | null }
 }
 
 /**
@@ -116,9 +128,14 @@ async function runAttach(
   await withAgentSessionCreatePhase('resolve_recovery', recordPhase, () =>
     context.runtimeState.resolveRecovery(sessionId)
   )
-  const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
-    context.runtimeState.probeOwner(sessionId)
-  )
+  const proven = options.provenOwner
+  // Reused only while the lease is the very one it was gathered for; anything else probes again.
+  const proof =
+    proven && context.deps.store.getRecord(sessionId)?.lease === proven.lease
+      ? proven.proof
+      : await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
+          context.runtimeState.proveOwner(sessionId)
+        )
   // A child this attach spawns writes through a sink this attempt owns. Only a successful
   // attach makes the child and its sink the session's; any other exit closes the sink with
   // whatever the child queued, and leaves the conversation's child as it was.
@@ -126,17 +143,30 @@ async function runAttach(
   // Read before the reserve clears it: how the previous generation ended decides how whatever it
   // left running is settled.
   const priorRecord = context.deps.store.getRecord(sessionId)
-  const priorDeathEvidence = priorRecord?.lease.deathEvidence ?? null
+  const priorDeathEvidence = structuredAgentSessionPriorDeathEvidence(
+    priorRecord,
+    proof,
+    context.now()
+  )
   const attempt: { candidate: AttachCandidate | null; committed: boolean } = {
     candidate: null,
     committed: false
   }
+  // From here to the stamp, readers outside this serialize see the lease as `acquiring`.
+  const endAcquisition = context.runtimeState.beginAcquisition(sessionId)
   try {
     const attached = await performAttach({
       store: context.deps.store,
       adapter: context.deps.adapter,
       logger: context.deps.logger,
       eventSink: attemptSink.sink,
+      ownerAdmitted: (record) =>
+        agentSessionLeaseAdmitsWriter(
+          deriveAgentSessionLeaseState(
+            record.lease,
+            context.runtimeState.ownerProofForAttempt(record)
+          )
+        ),
       // The superseded child's writes settle into its own journal before a new child starts.
       onAcquiring: async () => {
         const barrier = await context.runtimeState.currentEventSink(sessionId)?.drained()
@@ -148,7 +178,7 @@ async function runAttach(
         spawnToken: () => context.deps.mintSpawnToken?.() ?? randomUUID(),
         claimKeyId: context.deps.claimKeyId,
         handoffOperationId: params.envelope.clientOperationId,
-        probe,
+        probe: structuredAgentSessionAcquisitionProbe(priorRecord?.lease ?? null, proof),
         ...(await pinnedAgentSessionLaunchArgs(context.deps.resolveLaunchArgs, params)),
         ...(await pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params))
       },
@@ -157,6 +187,8 @@ async function runAttach(
       now: () => context.now(),
       recordPhase,
       ...(options.onAcquisitionFailed ? { onAcquisitionFailed: options.onAcquisitionFailed } : {}),
+      onAcquisitionUnsettled: (settlement) =>
+        context.runtimeState.rememberUnsettledAcquisition(settlement),
       openConversation: async (record) => {
         const conversation = await context.openConversation(record.sessionId, {
           acquisition: true
@@ -224,8 +256,16 @@ async function runAttach(
       indexProviderChild(conversation, candidate.child)
       context.publishStatus?.(sessionId)
     }
-    return stampFailedCreateOwnerVerdict(context.deps.store, callerKey, params.envelope, attached)
+    endAcquisition()
+    return stampFailedCreateOwnerVerdict(
+      context.deps.store,
+      callerKey,
+      params.envelope,
+      attached,
+      (record) => context.runtimeState.ownerProofFor(record)
+    )
   } finally {
+    endAcquisition()
     if (!attempt.committed) {
       attemptSink.close()
     }
@@ -256,6 +296,7 @@ function endReleasedChild(
       // Orca failed to attach; the provider said nothing.
       failure: agentSessionFailureFact('hostFault'),
       duringStartup: child.phase === 'starting',
+      observedAt: context.now(),
       ...verdict
     })
   ) {

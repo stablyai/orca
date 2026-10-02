@@ -1,4 +1,4 @@
-import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
+import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-state'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -181,8 +181,14 @@ function parseResumeInvocation(command: string): ResumeInvocation | null {
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {
   throw new Error(
-    agentSessionLeaseAdmitsWriter(ownership.lease)
+    structuredSessionWriterAdmitted(ownership.sessionId)
       ? 'agent_session_conflict'
       : 'agent_session_ownership_unknown'
   )
+}
+
+/** Whether this host runs the session's admitted writer, as it derives the lease now. */
+function structuredSessionWriterAdmitted(sessionId: string): boolean {
+  const state = getStructuredAgentSessionHost()?.leaseState(sessionId) ?? null
+  return state !== null && agentSessionLeaseAdmitsWriter(state)
 }

@@ -9,9 +9,9 @@
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
   adjudicateAgentSessionRestart,
-  evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
 } from '../../shared/agent-session-lease-adjudication'
+import { evaluateAgentSessionAcquisition } from '../../shared/agent-session-lease-acquisition'
 import {
   appendAgentSessionProviderHandleLink,
   type AgentSessionProviderHandleLink

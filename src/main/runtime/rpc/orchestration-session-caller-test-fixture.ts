@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { testHostLeaseState } from '../../native-chat/agent-session-wire/structured-agent-session-lease-state-test-support'
 import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
@@ -85,7 +86,8 @@ export function createSessionCallerHarness(hostRef: SessionHostRef): SessionCall
         getRecord: (sessionId: string) => records.get(sessionId) ?? null,
         listRecords: () => [...records.values()]
       }
-    }
+    },
+    leaseState: testHostLeaseState((sessionId) => records.get(sessionId))
   }
   structuredWorkerIdentities.clear()
   const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })

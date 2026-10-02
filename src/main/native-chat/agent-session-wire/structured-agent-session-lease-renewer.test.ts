@@ -6,12 +6,26 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import type { AgentSessionOwnerEvidence } from '../../../shared/agent-session-lease-state'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const NOW = 1_800_000_000_000
+
+/** A host whose memory proves nothing about any owner: every answer comes from the probe. */
+const NO_MEMORY = {
+  ownerProof: (record: AgentSessionRecord) => ({
+    fence: record.lease.runtimeFence,
+    attemptInFlight: false,
+    owner: { kind: 'none' as const }
+  }),
+  landUnsettledAcquisition: async () => {},
+  serialize: (_sessionId: string, task: () => Promise<void>) => task()
+}
 const roots: string[] = []
 
 async function liveStore(): Promise<AgentSessionRecordStore> {
@@ -104,6 +118,7 @@ describe('structured agent-session lease renewal', () => {
         )
     )
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      ...NO_MEMORY,
       logger: recordingStructuredAgentSessionLogger().logger,
       store: { listRecords: () => records, renewLeases } as unknown as AgentSessionRecordStore,
       probe: vi.fn(),
@@ -148,6 +163,7 @@ describe('structured agent-session lease renewal', () => {
     })
     const log = recordingStructuredAgentSessionLogger()
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      ...NO_MEMORY,
       store: {
         listRecords: () => records,
         renewLeases,
@@ -177,6 +193,7 @@ describe('structured agent-session lease renewal', () => {
     const store = await liveStore()
     let now = NOW
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      ...NO_MEMORY,
       logger: recordingStructuredAgentSessionLogger().logger,
       store,
       probe: async () => ({
@@ -207,6 +224,7 @@ describe('structured agent-session lease renewal', () => {
       releaseProbe = resolve
     })
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      ...NO_MEMORY,
       logger: recordingStructuredAgentSessionLogger().logger,
       store,
       probe: async () => {
@@ -233,6 +251,7 @@ describe('structured agent-session lease renewal', () => {
       matchedOn: ['process-start-time' as const]
     }))
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      ...NO_MEMORY,
       logger: recordingStructuredAgentSessionLogger().logger,
       store,
       probe,
@@ -249,6 +268,7 @@ describe('structured agent-session lease renewal', () => {
     const store = await liveStore()
     const log = recordingStructuredAgentSessionLogger()
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      ...NO_MEMORY,
       store,
       probe: async () => ({ outcome: 'indeterminate', reason: 'probe unavailable' }),
       now: () => NOW + 10_000,
@@ -278,6 +298,7 @@ describe('structured agent-session lease renewal', () => {
       matchedOn: ['process-start-time' as const]
     }))
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      ...NO_MEMORY,
       logger: recordingStructuredAgentSessionLogger().logger,
       store,
       probe,
@@ -288,5 +309,159 @@ describe('structured agent-session lease renewal', () => {
 
     expect(probe).not.toHaveBeenCalled()
     expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(NOW)
+  })
+
+  describe('a lease the host can prove free', () => {
+    function renewerWith(
+      store: AgentSessionRecordStore,
+      probe: AgentSessionOwnerProbe,
+      owner: AgentSessionOwnerEvidence = { kind: 'none' },
+      attemptInFlight = false
+    ) {
+      const log = recordingStructuredAgentSessionLogger()
+      const renewer = new StructuredAgentSessionLeaseRenewer({
+        ...NO_MEMORY,
+        ownerProof: (record) => ({ fence: record.lease.runtimeFence, attemptInFlight, owner }),
+        store,
+        probe: async () => probe,
+        now: () => NOW + 10_000,
+        logger: log.logger
+      })
+      return { renewer, log }
+    }
+
+    it('converges a live lease whose owner the probe found dead, in one write', async () => {
+      const store = await liveStore()
+      const evict = vi.spyOn(store, 'evictProvenDeadOwner')
+      const { renewer } = renewerWith(store, { outcome: 'pid-absent' })
+
+      await renewer.renewNow()
+      await renewer.renewNow()
+
+      expect(evict).toHaveBeenCalledOnce()
+      expect(store.getRecord('session-renewal')?.lease).toMatchObject({
+        claimStatus: 'released',
+        ownerProcess: null,
+        runtimeFence: 2,
+        deathEvidence: { kind: 'pid-absent', ownerFence: 1, lastProvenAliveAt: NOW }
+      })
+    })
+
+    it('replays the release an exit this host watched never landed, without probing', async () => {
+      const store = await liveStore()
+      const probe = vi.fn()
+      const renewer = new StructuredAgentSessionLeaseRenewer({
+        ...NO_MEMORY,
+        ownerProof: (record) => ({
+          fence: record.lease.runtimeFence,
+          attemptInFlight: false,
+          owner: { kind: 'watched-exit', observedAt: NOW + 5, reason: 'crashed' }
+        }),
+        store,
+        probe,
+        now: () => NOW + 10_000,
+        logger: recordingStructuredAgentSessionLogger().logger
+      })
+
+      await renewer.renewNow()
+
+      expect(probe).not.toHaveBeenCalled()
+      expect(store.getRecord('session-renewal')?.lease).toMatchObject({
+        claimStatus: 'released',
+        deathEvidence: { kind: 'exit-observed', detail: 'crashed', observedAt: NOW + 5 }
+      })
+    })
+
+    it('reports a convergence that fails and lands it on a later tick', async () => {
+      const store = await liveStore()
+      vi.spyOn(store, 'evictProvenDeadOwner').mockRejectedValueOnce(new Error('disk unavailable'))
+      const { renewer, log } = renewerWith(store, { outcome: 'pid-absent' })
+
+      await renewer.renewNow()
+      expect(store.getRecord('session-renewal')?.lease.claimStatus).toBe('live')
+      expect(log.entries.map((entry) => entry.fields)).toContainEqual({
+        scope: 'lease-convergence',
+        sessionId: 'session-renewal',
+        error: expect.objectContaining({ message: 'disk unavailable' })
+      })
+
+      await renewer.renewNow()
+      expect(store.getRecord('session-renewal')?.lease.claimStatus).toBe('released')
+    })
+
+    it.each([
+      ['the child this host runs, whose exit event is still on its way', { kind: 'runs' }, false],
+      ['a lease an acquisition of this host is taking', { kind: 'none' }, true]
+    ] as const)('leaves %s to its own owner', async (_label, owner, attemptInFlight) => {
+      const store = await liveStore()
+      const { renewer } = renewerWith(store, { outcome: 'pid-absent' }, owner, attemptInFlight)
+
+      await renewer.renewNow()
+
+      expect(store.getRecord('session-renewal')?.lease).toMatchObject({
+        claimStatus: 'live',
+        lastRenewedAt: NOW
+      })
+    })
+
+    it('reports a child memory says runs once the probe proves it dead, and renews nothing', async () => {
+      const store = await liveStore()
+      const renew = vi.spyOn(store, 'renewLeases')
+      const { renewer, log } = renewerWith(store, { outcome: 'pid-absent' }, { kind: 'runs' })
+
+      await renewer.renewNow()
+
+      expect(renew).not.toHaveBeenCalled()
+      expect(log.entries.map((entry) => entry.fields)).toContainEqual({
+        scope: 'lease-renewal',
+        sessionId: 'session-renewal',
+        probe: { outcome: 'pid-absent' }
+      })
+    })
+
+    it('never queues behind an acquisition that began after the tick proved the lease free', async () => {
+      const store = await liveStore()
+      let attemptInFlight = false
+      const serialize = vi.fn(() => new Promise<void>(() => {}))
+      const renewer = new StructuredAgentSessionLeaseRenewer({
+        ...NO_MEMORY,
+        ownerProof: (record) => ({
+          fence: record.lease.runtimeFence,
+          attemptInFlight,
+          owner: { kind: 'none' }
+        }),
+        serialize,
+        store,
+        probe: async () => {
+          // A send's attach takes the session while the tick is probing.
+          attemptInFlight = true
+          return { outcome: 'pid-absent' }
+        },
+        now: () => NOW + 10_000,
+        logger: recordingStructuredAgentSessionLogger().logger
+      })
+
+      await renewer.renewNow()
+
+      expect(serialize).not.toHaveBeenCalled()
+      expect(store.getRecord('session-renewal')?.lease.claimStatus).toBe('live')
+    })
+
+    it('never converges an owner proven alive or a conflicted claim', async () => {
+      const store = await liveStore()
+      const alive = renewerWith(store, {
+        outcome: 'identity-matched',
+        matchedOn: ['process-start-time']
+      })
+      await alive.renewer.renewNow()
+      expect(store.getRecord('session-renewal')?.lease.claimStatus).toBe('live')
+
+      await store.transitionHandoff('session-renewal', (record) => ({
+        ...record,
+        lease: { ...record.lease, claimStatus: 'conflicted' }
+      }))
+      await renewerWith(store, { outcome: 'pid-absent' }).renewer.renewNow()
+      expect(store.getRecord('session-renewal')?.lease.claimStatus).toBe('conflicted')
+    })
   })
 })
