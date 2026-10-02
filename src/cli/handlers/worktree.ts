@@ -256,6 +256,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
     assertParentWorktreeFlagsCompatible(flags)
+    const manualOrder = getOptionalNumberFlag(flags, 'manual-order')
+    if (flags.has('manual-order') && manualOrder === undefined) {
+      throw new RuntimeClientError('invalid_argument', 'Invalid numeric value for --manual-order')
+    }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
@@ -266,6 +270,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
+      ...(manualOrder !== undefined ? { manualOrder } : {}),
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true
     })

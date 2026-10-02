@@ -5,6 +5,8 @@ import { SERVE_COMMAND_SPECS } from './serve'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
 
+const WORKTREE_SET_METADATA_FLAGS = ['worktree', 'display-name', 'issue', 'linear-issue', 'comment']
+
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['open'],
@@ -144,25 +146,24 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--manual-order <number>] [--parent-worktree <selector>|--no-parent] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
-      'worktree',
-      'display-name',
-      'issue',
-      'linear-issue',
-      'comment',
+      ...WORKTREE_SET_METADATA_FLAGS,
       'workspace-status',
+      'manual-order',
       'parent-worktree',
       'no-parent'
     ],
     notes: [
       'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
-      'Pass --linear-issue null to clear the Linear issue link.'
+      'Pass --linear-issue null to clear the Linear issue link.',
+      '--manual-order accepts a finite rank, including negative, zero, and fractional values. Larger ranks sort earlier in existing Manual mode within pin, status, and project groups; this does not change the sort mode. Omission preserves the current rank. Git worktrees and registered folder-repo records are supported; standalone folder workspaces use the separate folderWorkspace.update RPC.'
     ],
     examples: [
       'orca worktree set --worktree active --linear-issue STA-335 --json',
-      'orca worktree set --worktree active --linear-issue null --json'
+      'orca worktree set --worktree active --linear-issue null --json',
+      'orca worktree set --worktree active --manual-order 2.5 --json'
     ]
   },
   {

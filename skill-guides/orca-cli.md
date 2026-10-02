@@ -87,8 +87,13 @@ ORCA worktree create --name independent-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
+ORCA worktree set --worktree active --manual-order 2.5 --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
+
+`worktree set --manual-order <number>` saves a finite rank, including negative, zero, and fractional values. Larger ranks sort earlier in existing Manual mode within pin, status, and project groups. The flag does not change the selected sort mode or other modes' ordering. Omission preserves the saved rank; `null` reset and top/bottom placement are not supported.
+
+This works for Git worktrees and registered non-Git folder-repo records returned by `worktree list`. Standalone `folder:<id>` workspaces use the separate `folderWorkspace.update` RPC and remain unsupported by `worktree set`. Verify rank readback with `worktree show --json`; runtimes predating the existing `manualOrder` field may ignore it.
 
 Selectors:
 
