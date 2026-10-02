@@ -270,13 +270,17 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   if (blockedReason) {
     return { kind: 'blocked', reason: blockedReason }
   }
-  // Qoder publishes "Ready" before its trust dialog is dismissed; only its composer proves input is live.
-  if (input.agent === 'qoder') {
+  // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
+  if (input.agent === 'qoder' || input.agent === 'hermes') {
     if (
       hasFreshWorkingFirstPartyStatus(input.firstPartyStatus) ||
       input.record.lastAgentStatus === 'working'
     ) {
-      return WORKING
+      return input.agent === 'hermes' &&
+        input.firstPartyStatus?.state !== 'working' &&
+        input.record.lastAgentStatus !== 'working'
+        ? { kind: 'pending', quietForeground: 'closed' }
+        : WORKING
     }
     return input.readPositiveBodyEvidence()
       ? READY_STRONG
@@ -442,7 +446,7 @@ export function ptyTuiIdleEvidence(
     record: pty,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
     readPositiveBodyEvidence: () =>
-      (agent !== 'qoder' && source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
+      (agent !== 'qoder' && agent !== 'hermes' && source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
       isKnownReadyPromptBody(waitText(), agent, readScreen, pty.lastOutputAt !== null),
     readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText(), agent, readScreen),
     readAgentRuleVerdict: () => readAgentRuleVerdict(agent, pty, readScreen, waitText),

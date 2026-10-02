@@ -23,17 +23,20 @@ const status = (eventName: string, payload: Record<string, unknown> = {}): strin
   return `\x1b]9999;${JSON.stringify(parsed)}\x07`
 }
 
-const readyPane = async () =>
-  createTranscriptPane({
+const readyPane = async () => {
+  const pane = await createTranscriptPane({
     paneTitle: 'Hermes Agent',
     foregroundProcess: 'hermes',
     launchAgent: 'hermes',
     size: { cols: 120, rows: 31 },
     data: captured
   })
+  await pane.runtime.readTerminal(pane.handle, { screen: true })
+  return pane
+}
 
 describe('Hermes TUI readiness from a captured PTY', () => {
-  it('settles tui-idle on the session-boundary row a freshly launched Hermes emits', async () => {
+  it('settles tui-idle on a ready composer after the session-boundary hook', async () => {
     const { runtime, handle } = await readyPane()
     // What Orca's own managed plugin sends for `on_session_start`.
     runtime.onPtyData(
@@ -46,7 +49,7 @@ describe('Hermes TUI readiness from a captured PTY', () => {
     await expect(
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_000 })
     ).resolves.toMatchObject({ satisfied: true })
-    // The boundary row is tier-1 evidence, so no pane's screen is serialized to settle it.
+    // The retained screen decides without a provider screen round trip.
     expect(read.mock.calls.filter(([, options]) => options?.screen === true)).toEqual([])
   }, 5_000)
 
@@ -93,8 +96,13 @@ describe('Hermes TUI readiness from a captured PTY', () => {
     ).rejects.toThrow('timeout')
   }, 3_000)
 
-  it('does not settle on a turn-end done row, only on a session boundary', async () => {
-    const { runtime, handle } = await readyPane()
+  it('does not settle on a turn-end done row without a ready screen', async () => {
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'Hermes Agent',
+      foregroundProcess: 'hermes',
+      launchAgent: 'hermes',
+      data: ''
+    })
     // `post_llm_call` lands `done` without the boundary flag; the #6011 rule still applies.
     runtime.onPtyData(
       TRANSCRIPT_PANE_PTY_ID,

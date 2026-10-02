@@ -5,6 +5,7 @@ import cline from './cline.json'
 import codex from './codex.json'
 import cursor from './cursor.json'
 import gemini from './gemini.json'
+import hermes from './hermes.json'
 import omp from './omp.json'
 import opencode from './opencode.json'
 import opencode2 from './opencode2.json'
@@ -41,6 +42,7 @@ export const BUNDLED_AGENT_STATE_RULE_FILES: readonly AgentStateRulesFile[] =
     codex,
     cursor,
     gemini,
+    hermes,
     omp,
     opencode,
     opencode2,

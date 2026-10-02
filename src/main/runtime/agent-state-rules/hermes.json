@@ -1,0 +1,28 @@
+{
+  "id": "hermes",
+  "engineVersion": 1,
+  "profile": { "screenSource": "trusted" },
+  "anchors": [],
+  "rules": [
+    {
+      "id": "composer_ready",
+      "why": "Hermes 0.21.x paints a ready status row above the input composer after startup, session slash acknowledgements and completed turns. The elapsed-time row keeps repainting at rest, so quiet is not required. Startup and running turns replace ready; unsubmitted slash commands occupy the composer.",
+      "priority": 500,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "regex": "^─ ready [│|]", "ignoreCase": true },
+          { "regex": "^❯(?: Try \"[^\"]+\"(?: for commands)?)?$" }
+        ]
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": false }
+    },
+    {
+      "id": "composer_not_ready",
+      "why": "A readable screen without the ready footer and available composer is still starting, handling input, running a turn or showing a picker; a quiet process cannot prove otherwise.",
+      "priority": 100,
+      "when": { "region": "screen" },
+      "answer": { "state": "hold" }
+    }
+  ]
+}
