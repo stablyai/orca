@@ -6310,6 +6310,13 @@
           "copied": "命令已复制",
           "retry": "立即重试",
           "restored": "Git 已恢复正常。工作树已刷新。"
+        },
+        "markDone": {
+          "movedOne": "已将 {{name}} 移至 {{status}}",
+          "movedMany": "已将 {{count}} 个工作区移至 {{status}}",
+          "undo": "撤消",
+          "failedOne": "无法将 {{name}} 移至 {{status}}",
+          "failedMany": "无法将 {{count}} 个工作区移至 {{status}}"
         }
       },
       "shared": {

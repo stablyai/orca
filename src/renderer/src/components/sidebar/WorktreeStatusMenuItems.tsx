@@ -1,6 +1,7 @@
 import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
@@ -9,15 +10,20 @@ import { Kanban } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { DONE_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-statuses'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 
 export function WorktreeStatusMenuItems(props: {
   contextWorkspaceStatus: string
   deletingContext: boolean
   isMultiContext: boolean
+  markDoneShortcutApplies: boolean
   onAssignWorkspaceStatus: (status: string) => void
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }) {
+  const markDoneShortcut = useOptionalShortcutLabel('workspace.markDone')
+  const showMarkDoneShortcut = props.markDoneShortcutApplies && markDoneShortcut !== null
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={props.deletingContext}>
@@ -38,6 +44,9 @@ export function WorktreeStatusMenuItems(props: {
               >
                 <meta.icon className={cn('size-3.5', meta.tone)} />
                 {status.label}
+                {showMarkDoneShortcut && status.id === DONE_WORKSPACE_STATUS_ID ? (
+                  <DropdownMenuShortcut>{markDoneShortcut}</DropdownMenuShortcut>
+                ) : null}
               </DropdownMenuRadioItem>
             )
           })}

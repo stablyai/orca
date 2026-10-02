@@ -6489,6 +6489,13 @@
           "copied": "Command copied",
           "retry": "Retry now",
           "restored": "Git is working again. Worktrees refreshed."
+        },
+        "markDone": {
+          "movedOne": "Moved {{name}} to {{status}}",
+          "movedMany": "Moved {{count}} workspaces to {{status}}",
+          "undo": "Undo",
+          "failedOne": "Could not move {{name}} to {{status}}",
+          "failedMany": "Could not move {{count}} workspaces to {{status}}"
         }
       },
       "shared": {

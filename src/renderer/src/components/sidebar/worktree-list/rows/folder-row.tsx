@@ -42,6 +42,7 @@ export type FolderWorkspaceRowContext = {
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
+  onContextMenuClose: (worktree: Worktree) => void
   onImmediateActivate: (worktreeId: string, rowKey: string | undefined) => void
   onRowClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onRowPointerDown: (
@@ -121,6 +122,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
           activationRowKey={folderWorktree.id}
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}
+          onContextMenuClose={ctx.onContextMenuClose}
           statusPrDisplay={folderPrDisplay}
         />
         <div className="pointer-events-auto absolute right-3 top-1.5">

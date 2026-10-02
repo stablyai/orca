@@ -6310,6 +6310,13 @@
           "copied": "명령이 복사됨",
           "retry": "지금 다시 시도",
           "restored": "Git이 다시 작동합니다. 워크트리를 새로고침했습니다."
+        },
+        "markDone": {
+          "movedOne": "{{name}}을(를) {{status}}(으)로 이동했습니다",
+          "movedMany": "워크스페이스 {{count}}개를 {{status}}(으)로 이동했습니다",
+          "undo": "실행 취소",
+          "failedOne": "{{name}}을(를) {{status}}(으)로 이동할 수 없습니다",
+          "failedMany": "워크스페이스 {{count}}개를 {{status}}(으)로 이동할 수 없습니다"
         }
       },
       "shared": {

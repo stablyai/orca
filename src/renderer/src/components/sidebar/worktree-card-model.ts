@@ -43,6 +43,7 @@ export type WorktreeCardProps = {
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
+  onContextMenuClose?: (worktree: Worktree) => void
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onCardDragStart?: (
     event: React.DragEvent<HTMLDivElement>,

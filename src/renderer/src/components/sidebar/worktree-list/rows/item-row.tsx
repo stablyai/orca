@@ -48,6 +48,7 @@ export type WorktreeItemRowContext = {
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
+  onContextMenuClose: (worktree: Worktree) => void
   onImmediateActivate: (worktreeId: string, rowKey: string | undefined) => void
   onRowClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onRowPointerDown: (
@@ -210,6 +211,7 @@ export function renderWorktreeItemRow(
         onSelectionGesture={ctx.onSelectionGesture}
         onWorktreeCardClick={ctx.onWorktreeCardClick}
         onContextMenuSelect={ctx.onContextMenuSelect}
+        onContextMenuClose={ctx.onContextMenuClose}
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}
         hideRepoBadge={ctx.groupBy === 'repo'}

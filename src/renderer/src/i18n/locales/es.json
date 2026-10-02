@@ -5402,6 +5402,13 @@
           "copied": "Comando copiado",
           "retry": "Reintentar ahora",
           "restored": "Git funciona de nuevo. Worktrees actualizados."
+        },
+        "markDone": {
+          "movedOne": "{{name}} movido a {{status}}",
+          "movedMany": "{{count}} espacios de trabajo movidos a {{status}}",
+          "undo": "Deshacer",
+          "failedOne": "No se pudo mover {{name}} a {{status}}",
+          "failedMany": "No se pudieron mover {{count}} espacios de trabajo a {{status}}"
         }
       },
       "shared": {

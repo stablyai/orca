@@ -6310,6 +6310,13 @@
           "copied": "コマンドをコピーしました",
           "retry": "今すぐ再試行",
           "restored": "Git が再び動作しています。ワークツリーを更新しました。"
+        },
+        "markDone": {
+          "movedOne": "{{name}} を {{status}} に移動しました",
+          "movedMany": "{{count}} 件のワークスペースを {{status}} に移動しました",
+          "undo": "元に戻す",
+          "failedOne": "{{name}} を {{status}} に移動できませんでした",
+          "failedMany": "{{count}} 件のワークスペースを {{status}} に移動できませんでした"
         }
       },
       "shared": {

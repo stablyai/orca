@@ -74,7 +74,9 @@ function renderProbe(activeWorktreeId: string, activeHostId: 'local' | null): vo
       virtualizer: { scrollToIndex: () => {} } as never,
       scrollRef: { current: null },
       activeModal: 'none',
-      markDirectScrollInput: () => {}
+      markDirectScrollInput: () => {},
+      selectedWorktrees: [],
+      onNavigate: () => {}
     })
     return null
   }

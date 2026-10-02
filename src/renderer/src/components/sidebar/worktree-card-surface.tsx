@@ -37,6 +37,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     handleDragStart,
     handleDragEnd,
     handleContextMenuSelect,
+    handleContextMenuOpenChange,
     showRenameErrorDialog,
     setShowRenameErrorDialog
   } = card
@@ -130,6 +131,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
           worktree={worktree}
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
+          onOpenChange={handleContextMenuOpenChange}
           onAssignWorkspaceStatus={onAssignWorkspaceStatus}
         >
           {cardBody}
