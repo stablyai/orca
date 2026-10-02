@@ -95,7 +95,9 @@ export function WorktreeCardParentContent({
         workspaceTitle={hoverWorkspaceTitle}
         workspaceTitleRenameDisabled={isDeleting || affiliateListMode}
         detailsAfter={
-          workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
+          workspacePorts.length > 0 || card.worktree.workspaceUrl ? (
+            <WorktreeCardPortsDetails ports={workspacePorts} worktree={card.worktree} />
+          ) : null
         }
         openDelay={100}
         hoverControl={detailsHoverControl}

@@ -150,6 +150,7 @@ export const WORKTREE_METHODS = [
     permission: 'workspace',
     params: WorktreeSet,
     handler: async (params, { runtime }) => ({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: diffComments/mobileDiffReview are z.unknown() on the wire; the store owns their shape.
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
         ...(params.displayName !== undefined
@@ -188,6 +189,7 @@ export const WORKTREE_METHODS = [
         sparsePresetId: params.sparsePresetId,
         baseRef: params.baseRef,
         workspaceStatus: params.workspaceStatus,
+        workspaceUrl: params.workspaceUrl,
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
         mobileDiffReview: params.mobileDiffReview,

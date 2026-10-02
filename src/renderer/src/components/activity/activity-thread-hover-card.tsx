@@ -404,8 +404,8 @@ function ActivityThreadHoverCardContent({
         )}
 
         {/* Ports */}
-        {foundation.workspacePorts.length > 0 && (
-          <WorktreeCardPortsDetails ports={foundation.workspacePorts} />
+        {(foundation.workspacePorts.length > 0 || worktree.workspaceUrl) && (
+          <WorktreeCardPortsDetails ports={foundation.workspacePorts} worktree={worktree} />
         )}
       </SelectedTextCopyMenu>
     </HoverCardContent>
