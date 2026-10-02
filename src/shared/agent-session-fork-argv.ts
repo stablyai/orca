@@ -29,6 +29,8 @@ export function getAgentForkArgv(
       // Why: the fork runs in the child worktree, so skip Codex's session-vs-current cwd prompt.
       return ['codex', 'fork', '-c', 'tui.resume_cwd=current', id]
     // Why: exhaustive (no default) so a new ResumableTuiAgent forces an explicit fork decision.
+    case 'codebuddy':
+    case 'qoder':
     case 'gemini':
     case 'antigravity':
     case 'opencode':
@@ -44,6 +46,7 @@ export function getAgentForkArgv(
     case 'kimi':
     case 'muse':
     case 'zcode':
+    case 'dsh':
       return null
   }
 }
