@@ -3207,3 +3207,39 @@ html.native-shell .app-layout {
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
+
+/* Why: the format-on-save switch needs a command before it can be turned on;
+   nudging the command field points at what to fill in instead of leaving the
+   user with a switch that springs back. */
+@keyframes format-on-save-command-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20% {
+    transform: translateX(-4px);
+  }
+
+  40% {
+    transform: translateX(4px);
+  }
+
+  60% {
+    transform: translateX(-3px);
+  }
+
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+.animate-format-on-save-command-nudge {
+  animation: format-on-save-command-nudge 0.36s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-format-on-save-command-nudge {
+    animation: none;
+  }
+}

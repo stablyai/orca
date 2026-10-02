@@ -12,6 +12,7 @@ function createHarness(
   applyEdits: ReturnType<typeof vi.fn>
   pushEditOperations: ReturnType<typeof vi.fn>
   pushUndoStop: ReturnType<typeof vi.fn>
+  setSelections: ReturnType<typeof vi.fn>
 } {
   const getValue = vi.fn(() => initialContent)
   const getFullModelRange = vi.fn(() => ({
@@ -27,12 +28,16 @@ function createHarness(
     getEOL: () => eol,
     getFullModelRange,
     pushEditOperations,
-    applyEdits
+    applyEdits,
+    validatePosition: vi.fn((position: { lineNumber: number; column: number }) => position)
   } as unknown as editor.ITextModel
   const pushUndoStop = vi.fn()
+  const setSelections = vi.fn()
   const editorInstance = {
     getModel: () => model,
-    pushUndoStop
+    pushUndoStop,
+    getSelections: vi.fn(() => []),
+    setSelections
   } as unknown as editor.IStandaloneCodeEditor
   return {
     editorInstance,
@@ -40,7 +45,8 @@ function createHarness(
     getFullModelRange,
     applyEdits,
     pushEditOperations,
-    pushUndoStop
+    pushUndoStop,
+    setSelections
   }
 }
 

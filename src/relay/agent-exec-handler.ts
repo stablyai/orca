@@ -55,11 +55,30 @@ function resolveWindowsCommand(binary: string, env: NodeJS.ProcessEnv): string {
   return binary
 }
 
+function isCmdShellInvocation(binary: string, args: string[]): boolean {
+  return (
+    process.platform === 'win32' &&
+    /(?:^|[\\/])cmd(?:\.exe)?$/i.test(binary) &&
+    args.length === 4 &&
+    args[0].toLowerCase() === '/d' &&
+    args[1].toLowerCase() === '/s' &&
+    args[2].toLowerCase() === '/c'
+  )
+}
+
 function getWindowsSafeSpawn(
   binary: string,
   args: string[],
   env: NodeJS.ProcessEnv
-): { spawnCmd: string; spawnArgs: string[] } {
+): { spawnCmd: string; spawnArgs: string[]; windowsVerbatimArguments?: boolean } {
+  // Why: Node's argv quoting escapes inner quotes as `\"`, which cmd.exe misreads; `/s` strips one outer pair.
+  if (isCmdShellInvocation(binary, args)) {
+    return {
+      spawnCmd: binary,
+      spawnArgs: [args[0], args[1], args[2], `"${args[3]}"`],
+      windowsVerbatimArguments: true
+    }
+  }
   const resolvedBinary = resolveWindowsCommand(binary, env)
   if (!isWindowsBatchScript(resolvedBinary)) {
     return { spawnCmd: resolvedBinary, spawnArgs: args }
@@ -170,12 +189,17 @@ export class AgentExecHandler {
     return new Promise<ExecResult>((resolve) => {
       let child
       try {
-        const { spawnCmd, spawnArgs } = getWindowsSafeSpawn(binary, args, spawnEnv)
+        const { spawnCmd, spawnArgs, windowsVerbatimArguments } = getWindowsSafeSpawn(
+          binary,
+          args,
+          spawnEnv
+        )
         child = spawn(spawnCmd, spawnArgs, {
           cwd,
           env: spawnEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
-          windowsHide: true
+          windowsHide: true,
+          ...(windowsVerbatimArguments ? { windowsVerbatimArguments } : {})
         })
       } catch (error) {
         resolve({

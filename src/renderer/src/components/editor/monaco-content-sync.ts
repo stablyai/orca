@@ -1,4 +1,4 @@
-import type { editor } from 'monaco-editor'
+import type { editor, ISelection } from 'monaco-editor'
 
 export type MonacoContentSyncMode = 'undoable' | 'read-only-live-tail'
 
@@ -46,7 +46,35 @@ function replaceModelContent(
     return
   }
   const fullRange = model.getFullModelRange()
+  // Why: a full-range replace collapses the cursor to the end of the edit. Format
+  // on save routes through here on every save, so without this the caret jumps to
+  // the bottom of the file mid-edit.
+  const selections = mode === 'undoable' ? editorInstance.getSelections() : null
   applyModelEdit(editorInstance, model, { range: fullRange, text: content }, mode, withUndoStops)
+  if (selections && selections.length > 0) {
+    editorInstance.setSelections(
+      selections.map((selection) => clampSelectionToModel(model, selection))
+    )
+  }
+}
+
+function clampSelectionToModel(model: editor.ITextModel, selection: ISelection): ISelection {
+  // Why: the replacement text can be shorter than what the selection pointed at,
+  // and Monaco throws on out-of-range positions.
+  const anchor = model.validatePosition({
+    lineNumber: selection.selectionStartLineNumber,
+    column: selection.selectionStartColumn
+  })
+  const active = model.validatePosition({
+    lineNumber: selection.positionLineNumber,
+    column: selection.positionColumn
+  })
+  return {
+    selectionStartLineNumber: anchor.lineNumber,
+    selectionStartColumn: anchor.column,
+    positionLineNumber: active.lineNumber,
+    positionColumn: active.column
+  }
 }
 
 /**

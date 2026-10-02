@@ -53,6 +53,7 @@ export type RepositoryApi = {
         | 'repoIcon'
         | 'upstream'
         | 'hookSettings'
+        | 'formatOnSave'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'

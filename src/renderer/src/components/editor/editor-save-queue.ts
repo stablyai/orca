@@ -11,9 +11,11 @@ import {
   ORCA_EDITOR_FILE_SAVED_EVENT,
   type EditorFileSavedDetail
 } from './editor-autosave'
+import { maybeFormatSavedFile, willFormatSavedFile } from './editor-format-on-save'
 import { flushPendingEditorChange } from './editor-pending-flush'
 import {
   clearSelfWrite,
+  recordFormatterPendingSelfWrite,
   recordSelfWrite,
   SELF_WRITE_REMOTE_TTL_MS
 } from './editor-self-write-registry'
@@ -101,13 +103,15 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         const fileContext = getEditorFileOperationContext(state, liveFile, worktree?.path ?? null)
         const connectionId = fileContext.connectionId
         // Why: stamp before writing so useEditorExternalWatch ignores our own fs:changed echo (editor-self-write-registry).
+        const selfWriteTtl =
+          connectionId || liveFile.runtimeEnvironmentId?.trim()
+            ? SELF_WRITE_REMOTE_TTL_MS
+            : undefined
         recordSelfWrite(
           liveFile.filePath,
           contentToSave,
           liveFile.runtimeEnvironmentId,
-          connectionId || liveFile.runtimeEnvironmentId?.trim()
-            ? SELF_WRITE_REMOTE_TTL_MS
-            : undefined
+          selfWriteTtl
         )
         try {
           await writeRuntimeFile(fileContext, liveFile.filePath, contentToSave)
@@ -117,6 +121,35 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           throw error
         }
 
+        const repo = worktree
+          ? state.repos.find((candidate) => candidate.id === worktree.repoId)
+          : undefined
+        const mayFormat = willFormatSavedFile(liveFile, worktree, repo)
+        if (mayFormat) {
+          // Why: the formatter rewrites the file before this await returns, so its echo must
+          // already be recognised as ours — the formatted bytes are only known afterwards.
+          recordFormatterPendingSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
+        }
+        let formattedContent: string | null = null
+        try {
+          formattedContent = await maybeFormatSavedFile({
+            file: liveFile,
+            worktree,
+            fileContext,
+            savedContent: contentToSave
+          })
+        } finally {
+          // Why: a stale renderer copy of the repo config can still have formatted; the rewrite needs its stamp either way.
+          if (mayFormat || formattedContent !== null) {
+            recordSelfWrite(
+              liveFile.filePath,
+              formattedContent ?? contentToSave,
+              liveFile.runtimeEnvironmentId,
+              selfWriteTtl
+            )
+          }
+        }
+
         if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
           return
         }
@@ -124,12 +157,13 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         const nextState = store.getState()
         const currentDraft = nextState.editorDrafts[file.id]
         const stillDirty = currentDraft !== undefined && currentDraft !== contentToSave
+        const diskContent = formattedContent ?? contentToSave
         nextState.markFileDirty(file.id, stillDirty)
         if (!stillDirty) {
           nextState.clearEditorDraft(file.id)
         }
-        // Why: disk now holds contentToSave — rebaseline so our own save isn't flagged external; drop pending verification.
-        nextState.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(contentToSave))
+        // Why: disk now holds diskContent — rebaseline so our own save isn't flagged external; drop pending verification.
+        nextState.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(diskContent))
         nextState.clearPendingDiskBaselineVerification(file.id)
         // Why: the write made disk match the buffer, so clear any now-stale changed-on-disk conflict.
         const savedFile = nextState.openFiles.find((openFile) => openFile.id === file.id)
@@ -140,7 +174,11 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
         window.dispatchEvent(
           new CustomEvent<EditorFileSavedDetail>(ORCA_EDITOR_FILE_SAVED_EVENT, {
-            detail: { fileId: file.id, content: contentToSave }
+            // Why: this event states what is on disk, so it carries the
+            // formatted bytes even when the user has typed since the save. It
+            // updates the disk-side content only — the unsaved draft is kept by
+            // markFileDirty/clearEditorDraft above and still wins in the editor.
+            detail: { fileId: file.id, content: diskContent }
           })
         )
       })

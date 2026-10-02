@@ -33,6 +33,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'repoIcon'
             | 'upstream'
             | 'hookSettings'
+            | 'formatOnSave'
             | 'worktreeBaseRef'
             | 'worktreeBasePath'
             | 'kind'

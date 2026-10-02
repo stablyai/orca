@@ -12,6 +12,7 @@ import { Trash2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
+import { RepositoryFormatOnSaveSection } from './RepositoryFormatOnSaveSection'
 import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
@@ -392,6 +393,12 @@ export function RepositoryPane({
       </section>
     ) : null,
     hooksSection,
+    <RepositoryFormatOnSaveSection
+      key="format-on-save"
+      repo={repo}
+      searchQuery={searchQuery}
+      onUpdateFormatOnSave={(formatOnSave) => updateSelectedRepo(repo.id, { formatOnSave })}
+    />,
     !isFolder &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
       <RepositorySourceControlAiSection

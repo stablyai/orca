@@ -31,6 +31,7 @@ import {
 } from '@/components/editor/editor-autosave'
 import {
   __clearSelfWriteRegistryForTests,
+  recordFormatterPendingSelfWrite,
   recordSelfWrite
 } from '@/components/editor/editor-self-write-registry'
 import { __clearEditorPathMovesForTests } from '@/components/editor/editor-path-move-inflight'
@@ -621,6 +622,130 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
+    dispose()
+  })
+
+  describe('while a formatter is still running', () => {
+    function arrange(options: { dirty: boolean; diskAfterSettle: string }) {
+      const file = { ...fileNotes, isDirty: options.dirty }
+      vi.mocked(useAppStore.getState).mockReturnValue({
+        openFiles: [file],
+        setExternalMutation
+      } as never)
+      vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file] as never)
+      const readFile = vi
+        .fn()
+        .mockResolvedValue({ content: options.diskAfterSettle, isBinary: false })
+      vi.stubGlobal('window', { api: { fs: { readFile } } })
+      return { readFile, ...createExternalWatchEventHandler(findTarget) }
+    }
+
+    it('holds the event without reading or flagging anything until the formatter exits', async () => {
+      const { readFile, handleFsChanged, dispose } = arrange({
+        dirty: true,
+        diskAfterSettle: 'formatted'
+      })
+
+      recordFormatterPendingSelfWrite('/repo/notes.md')
+      handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(readFile).not.toHaveBeenCalled()
+      expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'changed')
+      dispose()
+    })
+
+    it('accepts the formatter’s own write once its bytes are known', async () => {
+      const { handleFsChanged, dispose } = arrange({ dirty: true, diskAfterSettle: 'formatted' })
+
+      recordFormatterPendingSelfWrite('/repo/notes.md')
+      handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+      recordSelfWrite('/repo/notes.md', 'formatted')
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'changed')
+      dispose()
+    })
+
+    it('flags a different write that landed inside the window', async () => {
+      const { handleFsChanged, dispose } = arrange({ dirty: true, diskAfterSettle: 'agent edit' })
+
+      recordFormatterPendingSelfWrite('/repo/notes.md')
+      handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+      recordSelfWrite('/repo/notes.md', 'orca save')
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
+      dispose()
+    })
+
+    it('reloads a clean tab after the window when the disk differs from the formatted bytes', async () => {
+      const { handleFsChanged, dispose } = arrange({ dirty: false, diskAfterSettle: 'agent edit' })
+
+      recordFormatterPendingSelfWrite('/repo/notes.md')
+      handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+      await vi.advanceTimersByTimeAsync(100)
+      expect(notifyEditorExternalFileChange).not.toHaveBeenCalled()
+
+      recordSelfWrite('/repo/notes.md', 'formatted')
+      await vi.advanceTimersByTimeAsync(200)
+
+      expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        relativePath: 'notes.md',
+        runtimeEnvironmentId: null
+      })
+      dispose()
+    })
+
+    it('does not reload a clean tab for the formatter’s own output', async () => {
+      const { handleFsChanged, dispose } = arrange({ dirty: false, diskAfterSettle: 'formatted' })
+
+      recordFormatterPendingSelfWrite('/repo/notes.md')
+      handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+      recordSelfWrite('/repo/notes.md', 'formatted')
+      await vi.advanceTimersByTimeAsync(200)
+
+      expect(notifyEditorExternalFileChange).not.toHaveBeenCalled()
+      dispose()
+    })
+
+    it('replays a held event when the pending stamp expires without a settle', async () => {
+      const { handleFsChanged, dispose } = arrange({ dirty: true, diskAfterSettle: 'agent edit' })
+
+      recordFormatterPendingSelfWrite('/repo/notes.md')
+      handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+      await vi.advanceTimersByTimeAsync(31_000)
+      // Why: expiry is lazy, so the next stamp write prunes it and releases the held work; with no stamp left the change is external.
+      recordSelfWrite('/repo/other.md', 'unrelated')
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
+      dispose()
+    })
+  })
+
+  it('accepts a verification read that straddles the formatter rewrite', async () => {
+    const dirtyFile = { ...fileNotes, isDirty: true }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [dirtyFile],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyFile] as never)
+    // Why: the read starts against the pre-format stamp but the queue re-stamps the formatted bytes before it lands.
+    const readFile = vi.fn().mockImplementation(async () => {
+      recordSelfWrite('/repo/notes.md', 'formatted')
+      return { content: 'formatted', isBinary: false }
+    })
+    vi.stubGlobal('window', { api: { fs: { readFile } } })
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    recordSelfWrite('/repo/notes.md', 'orca save')
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'changed')
     dispose()
   })
 

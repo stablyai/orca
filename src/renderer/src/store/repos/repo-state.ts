@@ -37,6 +37,7 @@ export type RepoUpdate = Partial<
     | 'repoIcon'
     | 'upstream'
     | 'hookSettings'
+    | 'formatOnSave'
     | 'worktreeBaseRef'
     | 'worktreeBasePath'
     | 'kind'

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { posix, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import type {
   CreateHostedReviewArgs,
   CreateStackedHostedReviewArgs,
@@ -15,12 +15,11 @@ import {
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
-import { listRepoWorktreeGraph } from '../repo-worktrees'
 import {
-  getLocalProjectGhExecOptions,
-  getLocalProjectWorktreeGitOptions
-} from '../project-runtime-git-options'
+  normalizeRemoteWorktreePath,
+  resolveRepoOwnedWorktreePath
+} from './repo-owned-worktree-path'
+import { getLocalProjectGhExecOptions } from '../project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
 import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
@@ -49,8 +48,7 @@ function assertRegisteredRepoForBranch(args: HostedReviewForBranchArgs, store: S
     // Which host holds the files, not which this client may dial: a remote path is POSIX and
     // `resolve()` would rewrite it, and a row can name its SSH owner in either spelling.
     const samePath = getRepoSshConnectionId(candidate)
-      ? normalizeRemoteHostedReviewPath(candidate.path) ===
-        normalizeRemoteHostedReviewPath(args.repoPath)
+      ? normalizeRemoteWorktreePath(candidate.path) === normalizeRemoteWorktreePath(args.repoPath)
       : resolve(candidate.path) === resolve(args.repoPath)
     return (
       candidate.id === args.repoId &&
@@ -62,48 +60,6 @@ function assertRegisteredRepoForBranch(args: HostedReviewForBranchArgs, store: S
     throw new Error('Access denied: unknown or ambiguous repository owner')
   }
   return matches[0]
-}
-
-async function resolveHostedReviewWorktreePath(
-  repo: Repo,
-  store: Store,
-  worktreePath?: string
-): Promise<string> {
-  if (!worktreePath) {
-    return repo.path
-  }
-  if (getRepoSshConnectionId(repo)) {
-    const remoteWorktreePath = normalizeRemoteHostedReviewPath(worktreePath)
-    const repoWorktrees = await listRepoWorktreeGraph(repo)
-    if (
-      !repoWorktrees.some(
-        (worktree) => normalizeRemoteHostedReviewPath(worktree.path) === remoteWorktreePath
-      )
-    ) {
-      throw new Error('Access denied: worktree does not belong to repository')
-    }
-    return remoteWorktreePath
-  }
-  const resolvedWorktreePath = await resolveRegisteredWorktreePath(worktreePath, store)
-  const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
-  const repoWorktrees =
-    Object.keys(localGitOptions).length > 0
-      ? await listRepoWorktreeGraph(repo, localGitOptions)
-      : await listRepoWorktreeGraph(repo)
-  if (!repoWorktrees.some((worktree) => resolve(worktree.path) === resolvedWorktreePath)) {
-    throw new Error('Access denied: worktree does not belong to repository')
-  }
-  return resolvedWorktreePath
-}
-
-function normalizeRemoteHostedReviewPath(remotePath: string): string {
-  if (!remotePath || remotePath.includes('\0')) {
-    throw new Error('Access denied: invalid worktree path')
-  }
-  // Why: SSH worktree paths belong to the remote POSIX host. Local path.resolve
-  // rewrites them on Windows and cannot authorize remote-only paths.
-  const normalized = posix.normalize(remotePath)
-  return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized
 }
 
 export function registerHostedReviewHandlers(store: Store, stats: StatsCollector): void {
@@ -142,7 +98,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
       const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
-      const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+      const worktreePath = await resolveRepoOwnedWorktreePath(repo, store, args.worktreePath)
       const localGitOptions = getLocalProjectGhExecOptions(store, repo)
       return getHostedReviewCreationEligibility({
         ...args,
@@ -155,7 +111,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
 
   ipcMain.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
     const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
-    const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+    const worktreePath = await resolveRepoOwnedWorktreePath(repo, store, args.worktreePath)
     const localGitOptions = {
       ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: 'interactive' as const
@@ -202,7 +158,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     'hostedReview:createStacked',
     async (_event, args: CreateStackedHostedReviewArgs) => {
       const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
-      const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+      const worktreePath = await resolveRepoOwnedWorktreePath(repo, store, args.worktreePath)
       const localGitOptions = {
         ...getLocalProjectGhExecOptions(store, repo),
         admissionTier: 'interactive' as const

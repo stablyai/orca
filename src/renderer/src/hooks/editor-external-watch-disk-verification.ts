@@ -9,7 +9,9 @@ import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-dis
 import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
 import {
   clearSelfWrite,
+  deferUntilFormatterSettles,
   getRecentSelfWrite,
+  isDiskContentExpectedBySelfWrite,
   type RecentSelfWrite
 } from '@/components/editor/editor-self-write-registry'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
@@ -106,6 +108,17 @@ export function scheduleEditorChangedOnDiskMark(
   }
   const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
   const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
+  const deferMark = (): boolean =>
+    deferUntilFormatterSettles(
+      absolutePath,
+      target.runtimeEnvironmentId,
+      `mark:${fileIds.join(',')}`,
+      () => scheduleEditorChangedOnDiskMark(target, notification, fileIds)
+    )
+  // Why: the formatter's bytes are unknown until it exits; hold the event and verify it against the real stamp then.
+  if (recentSelfWrite?.formatterPending && deferMark()) {
+    return
+  }
   // Why: the fs event may be the echo of Orca's own save — verify disk really differs from our last write before showing a "changed on disk" banner.
   if (!recentSelfWrite || recentSelfWrite.content === null) {
     markTabsChangedOnDisk(fileIds, target.connectionId)
@@ -119,8 +132,18 @@ export function scheduleEditorChangedOnDiskMark(
     connectionId: target.connectionId
   })
     .then((result) => {
-      if (result.isBinary || result.content !== recentSelfWrite.content) {
-        markTabsChangedOnDisk(fileIds, target.connectionId)
+      if (
+        result.isBinary ||
+        (result.content !== recentSelfWrite.content &&
+          !isDiskContentExpectedBySelfWrite(
+            absolutePath,
+            target.runtimeEnvironmentId,
+            result.content
+          ))
+      ) {
+        if (!deferMark()) {
+          markTabsChangedOnDisk(fileIds, target.connectionId)
+        }
       }
     })
     .catch(() => {
@@ -249,11 +272,23 @@ export function scheduleSelfWriteAwareEditorExternalReload(
   file: OpenFile,
   recentSelfWrite: RecentSelfWrite
 ): void {
+  const runtimeEnvironmentId = file.runtimeEnvironmentId ?? target.runtimeEnvironmentId
+  const deferReload = (): boolean =>
+    deferUntilFormatterSettles(file.filePath, runtimeEnvironmentId, `reload:${file.id}`, () => {
+      const settled = getRecentSelfWrite(file.filePath, runtimeEnvironmentId)
+      if (settled) {
+        scheduleSelfWriteAwareEditorExternalReload(target, notification, file, settled)
+      } else {
+        scheduleDebouncedEditorExternalReload(notification)
+      }
+    })
+  if (recentSelfWrite.formatterPending && deferReload()) {
+    return
+  }
   if (recentSelfWrite.content === null) {
     scheduleDebouncedEditorExternalReload(notification)
     return
   }
-  const runtimeEnvironmentId = file.runtimeEnvironmentId ?? target.runtimeEnvironmentId
   // Why: a self-write stamp only proves recent change; compare disk content so it suppresses only Orca's echo, not a newer agent write in the same TTL.
   void readFileForEchoVerification({
     runtimeEnvironmentId,
@@ -264,10 +299,11 @@ export function scheduleSelfWriteAwareEditorExternalReload(
     expectedExternalSshTargetId: file.externalSshTargetId
   })
     .then((result) => {
-      if (
-        (result.isBinary || result.content !== recentSelfWrite.content) &&
-        hasCleanExternalReloadTarget(notification)
-      ) {
+      const matchesSelfWrite =
+        !result.isBinary &&
+        (result.content === recentSelfWrite.content ||
+          isDiskContentExpectedBySelfWrite(file.filePath, runtimeEnvironmentId, result.content))
+      if (!matchesSelfWrite && hasCleanExternalReloadTarget(notification) && !deferReload()) {
         clearSelfWrite(file.filePath, runtimeEnvironmentId)
         scheduleDebouncedEditorExternalReload(notification)
       }

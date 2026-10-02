@@ -34,6 +34,7 @@ import { starNagApi } from './api/star-nag-bridge'
 import { diagnosticsApi } from './api/diagnostics-bridge'
 import { settingsApi } from './api/settings-bridge'
 import { agentAwakeApi } from './api/agent-awake-bridge'
+import { editorApi } from './api/editor-bridge'
 import { localhostWorktreeLabelsApi } from './api/localhost-worktree-labels-bridge'
 import { keybindingsApi } from './api/keybindings-bridge'
 import { codexAccountsApi } from './api/codex-accounts-bridge'
@@ -153,6 +154,7 @@ const api = {
   browser: browserApi,
   emulator: emulatorApi,
   hooks: hooksApi,
+  editor: editorApi,
   ephemeralVm: ephemeralVmApi,
   cache: cacheApi,
   session: sessionApi,

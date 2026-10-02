@@ -10481,6 +10481,12 @@
             "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
             "projectRuntime": "Project Runtime",
             "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+            "formatOnSave": "Format on Save",
+            "formatOnSaveDescription": "Run this project's formatter after Orca saves a file.",
+            "formatterCommand": "Formatter Command",
+            "formatterCommandDescription": "Shell command run in the worktree root after each save.",
+            "formatIncludedFiles": "Included Files",
+            "formatIncludedFilesDescription": "Globs limiting which saved files run the formatter.",
             "githubAccount": "GitHub Account",
             "githubAccountDescription": "Bind a keyring gh login for this project’s GitHub API calls.",
             "githubAccountKeyword": "github account",
@@ -11945,6 +11951,18 @@
           "setupRecipe": "Set up an environment recipe for your cloud provider.",
           "createWorkspace": "Create a workspace and select that recipe under Run on.",
           "openSetup": "Set up environment recipes"
+        },
+        "RepositoryFormatOnSaveSection": {
+          "enableTitle": "Format on Save",
+          "enableDescription": "Run this project's formatter after Orca saves a file in this repository.",
+          "sectionDescription": "Orca runs the command in the worktree root after each save, so the project’s own formatter config and version apply.",
+          "needsCommand": "Set a formatter command below to turn this on.",
+          "commandTitle": "Formatter Command",
+          "commandDescription": "Shell command run in the worktree root. ${file} and ${relativeFile} expand to the saved file.",
+          "commandHint": "A non-zero exit leaves the saved file untouched and shows the formatter’s error.",
+          "includeTitle": "Included Files",
+          "includeDescription": "Comma-separated globs limiting which saved files run the command. Leave empty to format every saved file.",
+          "runtimeHostNotice": "This project runs on a runtime host, which has no channel for running the command. Saves there are written unformatted; local, WSL, and SSH worktrees are formatted."
         },
         "ReleaseChannelSection": {
           "switchFailed": "Could not switch to that build.",
@@ -15617,6 +15635,13 @@
               "notice": {
                 "8c59ce5075": "Failed to save the file. Please try again."
               }
+            }
+          }
+        },
+        "formatOnSave": {
+          "failure": {
+            "notice": {
+              "4f2b1c9a7d": "Formatter failed"
             }
           }
         },

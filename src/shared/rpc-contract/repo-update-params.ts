@@ -52,6 +52,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         .optional(),
       upstream: RepoUpstream,
       hookSettings: z.unknown().optional(),
+      formatOnSave: z.unknown().optional(),
       worktreeBaseRef: OptionalString,
       worktreeBasePath: OptionalString,
       kind: z.enum(['git', 'folder']).optional(),
