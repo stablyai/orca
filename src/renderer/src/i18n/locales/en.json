@@ -18366,7 +18366,8 @@
       "disabledReason": {
         "bare": "Bare repositories have no working tree to fork.",
         "archived": "Unarchive this workspace to fork it.",
-        "detached": "Check out a branch first; this workspace is on a detached commit."
+        "detached": "Check out a branch first; this workspace is on a detached commit.",
+        "repoMissing": "This workspace's project is not available."
       }
     }
   },

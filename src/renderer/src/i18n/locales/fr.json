@@ -18304,7 +18304,8 @@
       "disabledReason": {
         "bare": "Les dépôts bare n'ont pas d'arbre de travail à forker.",
         "archived": "Désarchivez cet espace de travail pour le forker.",
-        "detached": "Passez d'abord sur une branche ; cet espace de travail est sur un commit détaché."
+        "detached": "Passez d'abord sur une branche ; cet espace de travail est sur un commit détaché.",
+        "repoMissing": "Le projet de cet espace de travail n'est pas disponible."
       }
     }
   },

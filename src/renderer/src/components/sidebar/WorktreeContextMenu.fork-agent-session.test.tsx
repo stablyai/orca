@@ -14,6 +14,7 @@ const state = {
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),
   workspaceStatuses: [],
+  repos: [{ id: 'repo', kind: 'git' }] as { id: string; kind: string }[],
   openModal: vi.fn(),
   projectGroups: [],
   createProjectGroup: vi.fn(),
@@ -57,6 +58,7 @@ const writeClipboardText = vi.fn()
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 beforeEach(() => {
+  state.repos = [{ id: 'repo', kind: 'git' }]
   state.openModal.mockReset()
   writeClipboardText.mockReset()
   Object.defineProperty(window, 'api', {
@@ -124,6 +126,19 @@ function clickMenuItem(label: string): void {
   })
 }
 
+async function hoverTooltipText(item: HTMLElement | undefined): Promise<string | null> {
+  const trigger = item?.closest<HTMLElement>('[data-slot="tooltip-trigger"]')
+  if (!trigger) {
+    return null
+  }
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+  })
+  const content = document.querySelector('[data-slot="tooltip-content"]')
+  // Why: Radix repeats the text in a visually hidden role="tooltip" node; read the visible copy.
+  return content?.firstChild?.textContent ?? null
+}
+
 describe('WorktreeContextMenu Fork Agent Session', () => {
   it('opens the fork dialog for a git worktree', () => {
     openMenu(worktreeFixture({ branch: 'refs/heads/feedback' }))
@@ -150,16 +165,29 @@ describe('WorktreeContextMenu Fork Agent Session', () => {
     [{ branch: '' }, 'Check out a branch first; this workspace is on a detached commit.'],
     [{ isArchived: true }, 'Unarchive this workspace to fork it.'],
     [{ isBare: true }, 'Bare repositories have no working tree to fork.']
-  ])('explains why it is disabled for %o', (overrides, reason) => {
+  ])('explains why it is disabled for %o in a tooltip', async (overrides, reason) => {
     openMenu(worktreeFixture(overrides))
 
-    expect(findMenuItem('Fork Agent Session...')?.getAttribute('title')).toBe(reason)
+    const item = findMenuItem('Fork Agent Session...')
+    expect(item?.hasAttribute('title')).toBe(false)
+    expect(await hoverTooltipText(item)).toBe(reason)
   })
 
-  it('gives no disabled reason when the worktree can be forked', () => {
+  it('is disabled with a reason when the project record is missing', async () => {
+    state.repos = []
     openMenu(worktreeFixture())
 
-    expect(findMenuItem('Fork Agent Session...')?.hasAttribute('title')).toBe(false)
+    const item = findMenuItem('Fork Agent Session...')
+    expect(item?.getAttribute('aria-disabled')).toBe('true')
+    expect(await hoverTooltipText(item)).toBe("This workspace's project is not available.")
+  })
+
+  it('gives no disabled reason when the worktree can be forked', async () => {
+    openMenu(worktreeFixture())
+
+    const item = findMenuItem('Fork Agent Session...')
+    expect(item?.getAttribute('aria-disabled')).toBeNull()
+    expect(await hoverTooltipText(item)).toBeNull()
   })
 
   it('is hidden for folder workspaces', () => {

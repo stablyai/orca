@@ -15325,7 +15325,8 @@
       "disabledReason": {
         "bare": "Los repositorios bare no tienen un árbol de trabajo para hacer un fork.",
         "archived": "Desarchiva este espacio de trabajo para hacer un fork.",
-        "detached": "Primero cambia a una rama; este espacio de trabajo está en un commit separado."
+        "detached": "Primero cambia a una rama; este espacio de trabajo está en un commit separado.",
+        "repoMissing": "El proyecto de este espacio de trabajo no está disponible."
       }
     }
   },
