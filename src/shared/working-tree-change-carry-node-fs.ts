@@ -2,6 +2,7 @@ import { constants as fsConstants } from 'node:fs'
 import { chmod, copyFile, lstat, mkdir, readlink, rm, symlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isDefinitiveAbsence } from './definitive-filesystem-absence'
+import { CARRY_SYMLINKED_ANCESTOR_CODE } from './working-tree-change-carry'
 
 // Why: git reports paths with '/', so split before joining with the host separator.
 function resolveEntryPath(root: string, relativePath: string): string {
@@ -9,7 +10,10 @@ function resolveEntryPath(root: string, relativePath: string): string {
 }
 
 // Why: a symlinked parent directory would route a carried write or rollback delete outside the root.
-async function findSymlinkedAncestor(root: string, relativePath: string): Promise<string | null> {
+export async function findNodeSymlinkedAncestor(
+  root: string,
+  relativePath: string
+): Promise<string | null> {
   let current = root
   for (const segment of relativePath.split('/').slice(0, -1)) {
     current = join(current, segment)
@@ -28,9 +32,12 @@ async function findSymlinkedAncestor(root: string, relativePath: string): Promis
 }
 
 async function assertNoSymlinkedAncestor(root: string, relativePath: string): Promise<void> {
-  const ancestor = await findSymlinkedAncestor(root, relativePath)
+  const ancestor = await findNodeSymlinkedAncestor(root, relativePath)
   if (ancestor !== null) {
-    throw new Error(`Refusing to follow symlinked directory ${ancestor} for ${relativePath}`)
+    throw Object.assign(
+      new Error(`Refusing to follow symlinked directory ${ancestor} for ${relativePath}`),
+      { code: CARRY_SYMLINKED_ANCESTOR_CODE }
+    )
   }
 }
 
@@ -76,10 +83,6 @@ export async function nodeWorkingTreeEntryExists(
   root: string,
   relativePath: string
 ): Promise<boolean> {
-  // Why: a path behind a symlinked target directory is blocked, so the carry refuses before writing.
-  if ((await findSymlinkedAncestor(root, relativePath)) !== null) {
-    return true
-  }
   try {
     await lstat(resolveEntryPath(root, relativePath))
     return true

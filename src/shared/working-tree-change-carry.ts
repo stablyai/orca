@@ -1,6 +1,9 @@
 export const CARRY_MAX_UNTRACKED_FILES = 2000
 export const CARRY_MAX_UNTRACKED_BYTES = 200 * 1024 * 1024
 
+// Why: the io refuses to follow a symlinked parent folder; tagged so the carry knows nothing was written.
+export const CARRY_SYMLINKED_ANCESTOR_CODE = 'CARRY_SYMLINKED_ANCESTOR'
+
 export type WorkingTreeCarryGit = (args: string[], cwd: string) => Promise<string>
 
 export type WorkingTreeCarryIo = {
@@ -9,6 +12,7 @@ export type WorkingTreeCarryIo = {
   copyEntry: (fromRoot: string, toRoot: string, relativePath: string) => Promise<void>
   removeEntry: (root: string, relativePath: string) => Promise<void>
   entryExists: (root: string, relativePath: string) => Promise<boolean>
+  findSymlinkedAncestor: (root: string, relativePath: string) => Promise<string | null>
 }
 
 export type WorkingTreeCarryFailureReason =
@@ -35,8 +39,14 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function isAlreadyExistsError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST'
+// Why: EEXIST means someone else's file is there; a symlinked-parent refusal wrote nothing.
+function isCopyFailureWithoutWrite(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'EEXIST' || error.code === CARRY_SYMLINKED_ANCESTOR_CODE)
+  )
 }
 
 // Why: reset --hard restores tracked state but leaves stash-added/copied paths untracked, so remove them explicitly.
@@ -131,6 +141,17 @@ export async function carryWorkingTreeChanges(
     : []
   // Why: a pre-existing (often ignored) target file at any path we're about to write would be silently clobbered.
   const candidatePaths = [...stashAddedPaths, ...untracked]
+  const symlinkedAncestors = await Promise.all(
+    candidatePaths.map((relativePath) => io.findSymlinkedAncestor(targetPath, relativePath))
+  )
+  const behindSymlinkIndex = symlinkedAncestors.findIndex((ancestor) => ancestor !== null)
+  if (behindSymlinkIndex !== -1) {
+    return {
+      ok: false,
+      reason: 'target_dirty',
+      detail: `A carried path is behind a symlinked folder: ${candidatePaths[behindSymlinkIndex]}`
+    }
+  }
   const collisions = await Promise.all(
     candidatePaths.map((relativePath) => io.entryExists(targetPath, relativePath))
   )
@@ -149,8 +170,8 @@ export async function carryWorkingTreeChanges(
       try {
         await io.copyEntry(sourcePath, targetPath, relativePath)
       } catch (error) {
-        // Why: EEXIST means someone else's file is there; any other failure may leave our partial copy.
-        if (!isAlreadyExistsError(error)) {
+        // Why: any other failure may leave our partial copy behind.
+        if (!isCopyFailureWithoutWrite(error)) {
           writtenPaths.push(relativePath)
         }
         throw error

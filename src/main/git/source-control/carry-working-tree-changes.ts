@@ -4,6 +4,7 @@ import {
 } from '../../../shared/working-tree-change-carry'
 import {
   copyNodeWorkingTreeEntry,
+  findNodeSymlinkedAncestor,
   nodeWorkingTreeEntryExists,
   removeNodeWorkingTreeEntry,
   sumNodeEntrySizes
@@ -27,7 +28,8 @@ export async function carryLocalWorkingTreeChanges(
         sumEntrySizes: sumNodeEntrySizes,
         copyEntry: copyNodeWorkingTreeEntry,
         removeEntry: removeNodeWorkingTreeEntry,
-        entryExists: nodeWorkingTreeEntryExists
+        entryExists: nodeWorkingTreeEntryExists,
+        findSymlinkedAncestor: findNodeSymlinkedAncestor
       },
       sourcePath,
       targetPath

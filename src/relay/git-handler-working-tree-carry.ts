@@ -4,6 +4,7 @@ import {
 } from '../shared/working-tree-change-carry'
 import {
   copyNodeWorkingTreeEntry,
+  findNodeSymlinkedAncestor,
   nodeWorkingTreeEntryExists,
   removeNodeWorkingTreeEntry,
   sumNodeEntrySizes
@@ -30,7 +31,8 @@ export class GitHandlerWorkingTreeCarryOperations extends GitHandlerOperationCon
           sumEntrySizes: sumNodeEntrySizes,
           copyEntry: copyNodeWorkingTreeEntry,
           removeEntry: removeNodeWorkingTreeEntry,
-          entryExists: nodeWorkingTreeEntryExists
+          entryExists: nodeWorkingTreeEntryExists,
+          findSymlinkedAncestor: findNodeSymlinkedAncestor
         },
         // Why: this.git expands '~' for its cwd, but the fs io reads these roots directly.
         expandTilde(sourceWorktreePath),

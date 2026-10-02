@@ -16,12 +16,14 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   CARRY_MAX_UNTRACKED_FILES,
+  CARRY_SYMLINKED_ANCESTOR_CODE,
   carryWorkingTreeChanges,
   normalizeWorkingTreeCarryResult,
   type WorkingTreeCarryIo
 } from './working-tree-change-carry'
 import {
   copyNodeWorkingTreeEntry,
+  findNodeSymlinkedAncestor,
   nodeWorkingTreeEntryExists,
   removeNodeWorkingTreeEntry,
   sumNodeEntrySizes
@@ -43,7 +45,8 @@ const io: WorkingTreeCarryIo = {
   sumEntrySizes: sumNodeEntrySizes,
   copyEntry: copyNodeWorkingTreeEntry,
   removeEntry: removeNodeWorkingTreeEntry,
-  entryExists: nodeWorkingTreeEntryExists
+  entryExists: nodeWorkingTreeEntryExists,
+  findSymlinkedAncestor: findNodeSymlinkedAncestor
 }
 
 function createRepoWithChild(extraFiles: Record<string, string> = {}): {
@@ -385,9 +388,38 @@ describe('carryWorkingTreeChanges', () => {
 
       const result = await carryWorkingTreeChanges(io, source, target)
 
-      expect(result).toEqual({ ok: false, reason: 'target_dirty' })
+      expect(result).toEqual({
+        ok: false,
+        reason: 'target_dirty',
+        detail: 'A carried path is behind a symlinked folder: link/foo'
+      })
       expect(existsSync(join(outside, 'foo'))).toBe(false)
       expect(lstatSync(join(target, 'link')).isSymbolicLink()).toBe(true)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'finishes rolling back when the applied stash turns a carried path into a symlinked folder',
+    async () => {
+      const { source, target } = createRepoWithChild({ d: 'file\n' })
+      const outside = join(source, '..', 'outside')
+      mkdirSync(outside)
+      writeFileSync(join(outside, 'foo'), 'precious\n')
+      // Why: the index type-changes `d` to a symlink, while the worktree holds a real `d/foo`.
+      rmSync(join(source, 'd'))
+      symlinkSync('../outside', join(source, 'd'))
+      git(source, 'add', 'd')
+      rmSync(join(source, 'd'))
+      mkdirSync(join(source, 'd'))
+      writeFileSync(join(source, 'd', 'foo'), 'new\n')
+
+      const result = await carryWorkingTreeChanges(io, source, target)
+
+      expect(result).toMatchObject({ ok: false, reason: 'apply_failed' })
+      expect(readFileSync(join(outside, 'foo'), 'utf8')).toBe('precious\n')
+      expect(lstatSync(join(target, 'd')).isFile()).toBe(true)
+      expect(readFileSync(join(target, 'd'), 'utf8')).toBe('file\n')
+      expect(git(target, 'status', '--porcelain', '--untracked-files=all')).toBe('')
     }
   )
 
@@ -404,7 +436,9 @@ describe('carryWorkingTreeChanges', () => {
       mkdirSync(join(source, 'link'))
       writeFileSync(join(source, 'link', 'bar'), 'carried\n')
 
-      await expect(copyNodeWorkingTreeEntry(source, target, 'link/bar')).rejects.toThrow(/symlink/)
+      await expect(copyNodeWorkingTreeEntry(source, target, 'link/bar')).rejects.toMatchObject({
+        code: CARRY_SYMLINKED_ANCESTOR_CODE
+      })
       await expect(removeNodeWorkingTreeEntry(target, 'link/foo')).rejects.toThrow(/symlink/)
       expect(await nodeWorkingTreeEntryExists(target, 'link/foo')).toBe(true)
       expect(existsSync(join(outside, 'bar'))).toBe(false)
