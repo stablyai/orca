@@ -1,7 +1,10 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
 import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
-import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
+import {
+  sshPtyOwnerLeaseSecretSlot,
+  sshTargetHttpProxySecretSlot
+} from '../../protected-secret-persistence'
 import { MAX_CLAUDE_LIVE_PTY_SESSION_IDS } from '../restoring-sessions/pane-alias-normalization'
 import {
   MAX_REMOVED_SSH_TARGET_TOMBSTONES,
@@ -47,6 +50,13 @@ export function updateSshTarget(
     return null
   }
   const normalized = normalizeSshTarget({ ...target, ...updates })
+  // Why mirrors settings.httpProxyUrl: only an update that explicitly carries an empty
+  // proxy is a user clear, so release the retained ciphertext here. An unrelated edit
+  // omits the key and must keep a keychain-sealed proxy recoverable; without this, a
+  // sealed slot would re-emit its ciphertext and resurrect the cleared proxy.
+  if ('httpProxyUrl' in updates && !updates.httpProxyUrl) {
+    operations.protectedSecrets.removeRetainedBlob(sshTargetHttpProxySecretSlot(id))
+  }
   const previousHostIdentity = sshHostIdentity(target)
   // Why: Object.assign only adds keys, so anything normalization stripped (retired sync fields, implicit defaults) must be deleted off the live target.
   const mutableTarget = target as Record<string, unknown>
@@ -89,6 +99,7 @@ export function removeSshTarget(operations: SshTargetStateOperations, id: string
   operations.state.sshTargets = nextTargets
   operations.state.sshPtyConsumerRecoveries = nextRecoveries
   operations.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(id))
+  operations.protectedSecrets.removeRetainedBlob(sshTargetHttpProxySecretSlot(id))
   operations.scheduleSave()
 }
 
