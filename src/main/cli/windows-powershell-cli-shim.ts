@@ -247,9 +247,12 @@ async function copyFileSettings(fromPath: string, toPath: string): Promise<void>
   if (!result.timedOut && result.code === 0) {
     return
   }
-  console.warn(
-    '[cli] kept the PowerShell profile text but could not copy its file settings:',
-    result.stderr.trim() || result.stdout.trim()
+  // Why throw: the temporary file has inherited ACLs. Renaming it over the
+  // profile would replace the user's access controls (#24428).
+  throw new Error(
+    result.stderr.trim() ||
+      result.stdout.trim() ||
+      'Failed to copy the PowerShell profile file settings'
   )
 }
 
