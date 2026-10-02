@@ -225,6 +225,16 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       requestedLaunch,
       remote.state === 'ready'
     )
+    // Why: an omitted --agent is resolved on the worker host, so only its receipt names the agent.
+    if (remote.launch) {
+      const hostAgent = remote.launch.effective?.agent
+      db.recordWorkerStartLaunch({
+        dispatchId: started.dispatch.id,
+        // Why only a known id: the host's receipt crosses the federation boundary unvalidated.
+        agent: isTuiAgent(hostAgent) ? hostAgent : null,
+        launch: remote.launch
+      })
+    }
     if (isReadyRemoteFederatedWorkerStartReceipt(remote)) {
       recordReadyFederatedDispatch(db, started.dispatch.id, remote)
       const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
