@@ -83,6 +83,13 @@ export type SshTarget = {
   /** Port forwards to auto-restore on connect/reconnect. Persisted so
    *  forwards survive app restarts. */
   portForwards?: SavedPortForward[]
+  /** HTTP proxy for processes spawned on this host's terminals (e.g. a proxy
+   *  reachable FROM the remote host). Injected as HTTP_PROXY/HTTPS_PROXY/ALL_PROXY
+   *  into the remote PTY env; distinct from the client-side Advanced network proxy,
+   *  which never crosses the SSH boundary. */
+  httpProxyUrl?: string
+  /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
+  httpProxyBypassRules?: string
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean

@@ -6,6 +6,8 @@ import { PTY_STARTUP_INGRESS_VERSION } from '../../shared/pty-startup-ingress'
 export function buildSshPtySpawnRequest(args: {
   options: PtySpawnOptions
   remoteCliBridgeEnv?: RemoteCliBridgeEnv
+  /** Per-host HTTP proxy env from the target's own settings; see buildSshPtySpawnEnv. */
+  targetProxyEnv?: Record<string, string>
   supportsCreateOperation: boolean
 }): Record<string, unknown> {
   const { options } = args
@@ -16,7 +18,8 @@ export function buildSshPtySpawnRequest(args: {
     env: buildSshPtySpawnEnv({
       env: options.env,
       envToDelete: options.envToDelete,
-      remoteCliBridgeEnv: args.remoteCliBridgeEnv
+      remoteCliBridgeEnv: args.remoteCliBridgeEnv,
+      targetProxyEnv: args.targetProxyEnv
     }),
     ...(options.envToDelete?.length ? { envToDelete: options.envToDelete } : {}),
     // Why: the relay needs launch identity for plugin env overlays and provider-side delivery.
