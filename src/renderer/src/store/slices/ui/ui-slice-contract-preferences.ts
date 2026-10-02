@@ -13,6 +13,7 @@ import type {
   VisibleWorkspaceHostIds
 } from '../../../../../shared/ui-chrome-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { ClaudeCompactMetric } from '../../../../../shared/claude-compact-metric'
 import type { AutomationHostFilter } from '../../../../../shared/automation-host-filter'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
@@ -108,6 +109,8 @@ export type UISlicePreferences = {
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   statusBarUsageMode: StatusBarUsageMode
   setStatusBarUsageMode: (mode: StatusBarUsageMode) => void
+  claudeCompactMetric: ClaudeCompactMetric
+  setClaudeCompactMetric: (metric: ClaudeCompactMetric) => void
 }
 
 export type UISliceSurfaces = {

@@ -3909,7 +3909,8 @@
             "compact": "精简",
             "footerDetailAria": "使用情况页脚详情",
             "detailedTooltip": "完整使用情况，包含条形图、标签和百分比",
-            "compactTooltip": "精简使用情况：仅显示最吃紧的窗口"
+            "compactTooltip": "精简用量：每个提供商显示一个指标",
+            "compactMetricUnavailable": "{{metric}}不可用"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -3994,6 +3995,10 @@
             "resumingAriaOne": "正在恢复 1 个聊天。点击查看详情。",
             "resumingAria": "正在恢复 {{value0}} 个聊天。点击查看详情。",
             "resumingTooltip": "正在恢复中断的聊天并请它们继续…"
+          },
+          "ClaudeSwitcherMenu": {
+            "compactMetric": "紧凑显示指标",
+            "compactMetricAuto": "自动"
           }
         }
       },

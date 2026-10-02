@@ -4,72 +4,31 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
-import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type { ClaudeCompactMetric } from '../../../../shared/claude-compact-metric'
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import {
   clampUsedPercent,
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
-import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
+import { barColor, formatResetCountdown, ProviderIcon } from './tooltip'
+import {
+  getAvailableUsageSections,
+  getUsageSectionShortLabel,
+  selectCompactUsage,
+  type UsageSection
+} from './compact-usage-selection'
 import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 
 type ProviderId = ProviderRateLimits['provider']
-export type UsageSection = { label: string; window: RateLimitWindow }
-
-// Windows/buckets that actually carry data — absent limits arrive as null, but a
-// partial/rehydrated provider can also carry an undefined window; both must be
-// dropped so downstream consumers never dereference `window.usedPercent`.
-function usedSections(p: ProviderRateLimits): UsageSection[] {
-  return getWindowSections(p).filter(
-    (s): s is UsageSection => s.window !== null && s.window !== undefined
-  )
-}
 
 function providerMaxUsed(sections: UsageSection[]): number {
   return sections.length > 0
     ? Math.max(...sections.map((s) => clampUsedPercent(s.window.usedPercent)))
     : 0
-}
-
-// Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
-function shortLabel(
-  p: ProviderRateLimits,
-  section: UsageSection,
-  useRemainingDuration = false
-): string {
-  if (p.buckets?.some((b) => b.name === section.label)) {
-    return section.label
-  }
-  // fableWeekly shares the 7d window with weekly; label it distinctly so the two
-  // don't both render as "wk".
-  if (section.window === p.fableWeekly) {
-    return 'Fable'
-  }
-  if (p.provider === 'zcode' && section.window === p.monthly) {
-    return section.label
-  }
-  return useRemainingDuration
-    ? formatRateLimitWindowChipLabel(section.window)
-    : formatWindowLabel(section.window.windowMinutes)
-}
-
-export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
-  const sections = usedSections(p)
-  if (sections.length === 0) {
-    return null
-  }
-  // Why: the footer promises one quiet summary per provider; choose urgency by
-  // consumption even when the user displays the complementary “% left” value.
-  const tightest = sections.reduce((current, candidate) =>
-    clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
-      ? candidate
-      : current
-  )
-  return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
 // The soonest-resetting window summarizes the agent's next reset in one line.
@@ -81,6 +40,26 @@ function soonestResetLabel(sections: UsageSection[], now: number): string | null
     return null
   }
   return formatResetCountdown(Math.min(...resets) - now)
+}
+
+export function CompactMetricUnavailable({
+  label,
+  showLabel = true
+}: {
+  label: string
+  showLabel?: boolean
+}): React.JSX.Element {
+  const description = translate(
+    'auto.components.status.bar.UsageRosterPanel.compactMetricUnavailable',
+    '{{metric}} is unavailable',
+    { metric: label }
+  )
+  return (
+    <span title={description} className="tabular-nums text-muted-foreground">
+      <span aria-hidden>{showLabel ? `${label} --` : '--'}</span>
+      <span className="sr-only">{description}</span>
+    </span>
+  )
 }
 
 function UsageMetric({
@@ -119,7 +98,8 @@ export function UsageRow({
   state,
   showSignInAction,
   now,
-  mode = 'verbose'
+  mode = 'verbose',
+  claudeCompactMetric = 'auto'
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
@@ -127,13 +107,14 @@ export function UsageRow({
   showSignInAction: boolean
   now: number
   mode?: StatusBarUsageMode
+  claudeCompactMetric?: ClaudeCompactMetric
 }): React.JSX.Element {
-  const sections = usedSections(p)
+  const sections = getAvailableUsageSections(p)
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
-  const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
+  const compactSelection = mode === 'compact' ? selectCompactUsage(p, claudeCompactMetric) : null
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -156,17 +137,22 @@ export function UsageRow({
               </span>
             ) : null}
           </>
-        ) : tightest ? (
+        ) : compactSelection?.kind === 'selected' ? (
           <span className="ml-auto">
             <UsageMetric
-              section={tightest}
-              label={tightest.label}
+              section={compactSelection.section}
+              label={compactSelection.section.label}
               display={display}
               showBar={false}
             />
           </span>
-        ) : reset ? (
+        ) : reset && compactSelection?.kind !== 'unavailable' ? (
           <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
+        ) : null}
+        {compactSelection?.kind === 'unavailable' ? (
+          <span className="ml-auto">
+            <CompactMetricUnavailable label={compactSelection.label} />
+          </span>
         ) : null}
       </div>
       {hasUsage && mode === 'verbose' ? (
@@ -175,7 +161,7 @@ export function UsageRow({
             <UsageMetric
               key={section.label}
               section={section}
-              label={shortLabel(p, section)}
+              label={getUsageSectionShortLabel(p, section)}
               display={display}
             />
           ))}
@@ -202,7 +188,8 @@ export function UsageRosterPanel({
   canSignIn,
   onManageAccounts,
   onUsageDetails,
-  renderRow
+  renderRow,
+  claudeCompactMetric = 'auto'
 }: {
   providers: ProviderRateLimits[]
   display: UsagePercentageDisplay
@@ -219,16 +206,18 @@ export function UsageRosterPanel({
   // Claude/Codex account-switch drill-in submenu); return null to use the
   // default clickable row.
   renderRow?: (p: ProviderRateLimits, row: React.ReactNode) => React.ReactNode
+  claudeCompactMetric?: ClaudeCompactMetric
 }): React.JSX.Element {
   // Why: one boundary-scheduled clock keeps every open row current without per-provider timers.
   const now = useResetCountdownClock(
     providers.flatMap((provider) =>
-      usedSections(provider).map((section) => section.window.resetsAt)
+      getAvailableUsageSections(provider).map((section) => section.window.resetsAt)
     )
   )
   // Worst-first so the agent nearest a limit sits on top.
   const sorted = [...providers].sort(
-    (a, b) => providerMaxUsed(usedSections(b)) - providerMaxUsed(usedSections(a))
+    (a, b) =>
+      providerMaxUsed(getAvailableUsageSections(b)) - providerMaxUsed(getAvailableUsageSections(a))
   )
 
   return (
@@ -282,7 +271,7 @@ export function UsageRosterPanel({
               label: translate('auto.components.status.bar.UsageRosterPanel.compact', 'Compact'),
               tooltip: translate(
                 'auto.components.status.bar.UsageRosterPanel.compactTooltip',
-                'Condensed usage: only the tightest window'
+                'Condensed usage: one metric per provider'
               )
             }
           ]}
@@ -290,7 +279,7 @@ export function UsageRosterPanel({
       </div>
       <div className="border-t border-border/70" />
       {sorted.map((p) => {
-        const state = getUsageRosterRowState(p, usedSections(p).length > 0)
+        const state = getUsageRosterRowState(p, getAvailableUsageSections(p).length > 0)
         const showSignInAction = state.kind === 'sign-in' && canSignIn(p.provider)
         const rowNode = (
           <UsageRow
@@ -300,6 +289,7 @@ export function UsageRosterPanel({
             showSignInAction={showSignInAction}
             now={now}
             mode={statusBarUsageMode}
+            claudeCompactMetric={claudeCompactMetric}
           />
         )
         if (showSignInAction) {

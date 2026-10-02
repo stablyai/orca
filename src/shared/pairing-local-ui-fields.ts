@@ -1,10 +1,5 @@
 import type { PersistedUIState } from './persisted-ui-state-types'
 
-// UI state each side of a pairing owns for itself. These fields describe a client's own view —
-// which workspaces it hides, what order it puts repos and host sections in — and are keyed to hosts
-// only that side knows about, so a value copied across the boundary in either direction overwrites
-// the receiver's answer with one computed for somebody else. They must be stripped on the way to a
-// host (ui.set) and pinned to the local value on the way back (ui.get).
 export const PAIRING_LOCAL_UI_FIELDS = [
   // Its hostKey names authorities only the writing client can resolve — a paired
   // client's `desktop` is a different machine — and old hosts reject the unknown key.
@@ -12,6 +7,8 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'hideWorkspacesFromOtherDevices',
   'manualRepoOrder',
   'workspaceHostOrder',
+  // Paired clients may choose to watch different Claude quotas.
+  'claudeCompactMetric',
   // Agent View filters and presentation belong to each client's host catalog and viewport.
   'agentsVisibleHostIds',
   'agentsFilterRepoIds',

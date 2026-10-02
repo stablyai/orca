@@ -12,6 +12,7 @@ import {
 } from '../../../shared/workspace-statuses'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
+import { normalizeClaudeCompactMetric } from '../../../shared/claude-compact-metric'
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
@@ -58,6 +59,7 @@ export function getPersistedUI(
     syncTaskStatusFromWorkspaceBoard: state.ui?.syncTaskStatusFromWorkspaceBoard === true,
     usagePercentageDisplay: normalizeUsagePercentageDisplay(state.ui?.usagePercentageDisplay),
     statusBarUsageMode: normalizeStatusBarUsageMode(state.ui?.statusBarUsageMode),
+    claudeCompactMetric: normalizeClaudeCompactMetric(state.ui?.claudeCompactMetric),
     // Why: strict boolean coercion so a missing/legacy value reads as false (first-run notice still fires).
     trayMinimizeNoticeShown: state.ui?.trayMinimizeNoticeShown === true,
     osc52ClipboardDefaultOnNoticePending: state.ui?.osc52ClipboardDefaultOnNoticePending === true,

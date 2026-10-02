@@ -6,6 +6,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import type { ClaudeCompactMetric } from '../../../../shared/claude-compact-metric'
 import {
   ProviderIcon,
   USAGE_URGENT_PERCENT,
@@ -14,7 +15,8 @@ import {
   getProviderDisplayName,
   getProviderUsageStatusLabel
 } from './tooltip'
-import { getTightestUsageSection } from './UsageRosterPanel'
+import { CompactMetricUnavailable } from './UsageRosterPanel'
+import { selectCompactUsage } from './compact-usage-selection'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
@@ -78,8 +80,9 @@ export type UsageTone = 'urgent' | 'warning' | 'normal'
 
 /** Urgency by consumption, matching the usage bar colors, whatever % display the user chose. */
 export function getUsageTone(p: ProviderRateLimits): UsageTone {
-  const tightest = getTightestUsageSection(p)
-  const used = tightest ? clampUsedPercent(tightest.window.usedPercent) : 0
+  const selection = selectCompactUsage(p, 'auto')
+  const used =
+    selection.kind === 'selected' ? clampUsedPercent(selection.section.window.usedPercent) : 0
   return used >= USAGE_URGENT_PERCENT
     ? 'urgent'
     : used >= USAGE_WARNING_PERCENT
@@ -93,10 +96,12 @@ export function getUsageTone(p: ProviderRateLimits): UsageTone {
  */
 export function UsageOverflowChip({
   hidden,
-  display
+  display,
+  claudeCompactMetric = 'auto'
 }: {
   hidden: readonly ProviderRateLimits[]
   display: UsagePercentageDisplay
+  claudeCompactMetric?: ClaudeCompactMetric
 }): React.JSX.Element {
   const tones = hidden.map(getUsageTone)
   const tone = tones.includes('urgent')
@@ -106,11 +111,15 @@ export function UsageOverflowChip({
       : 'normal'
   const names = hidden
     .map((p) => {
-      const tightest = getTightestUsageSection(p)
+      const selection = selectCompactUsage(p, claudeCompactMetric)
       const name = getProviderDisplayName(p.provider)
-      return tightest
-        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display)}`
-        : name
+      if (selection.kind === 'selected') {
+        return `${name} ${formatUsagePercentageLabel(selection.section.window.usedPercent, display)}`
+      }
+      if (selection.kind === 'unavailable') {
+        return `${name} ${selection.label} --`
+      }
+      return name
     })
     .join(', ')
   return (
@@ -266,12 +275,14 @@ export function ProviderSegment({
   p,
   compact,
   display,
-  mode = 'verbose'
+  mode = 'verbose',
+  claudeCompactMetric = 'auto'
 }: {
   p: ProviderRateLimits | null
   compact: boolean
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
+  claudeCompactMetric?: ClaudeCompactMetric
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
@@ -286,10 +297,10 @@ export function ProviderSegment({
     )
   }
 
-  const tightest = getTightestUsageSection(p)
+  const selection = selectCompactUsage(p, mode === 'compact' ? claudeCompactMetric : 'auto')
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !tightest) {
+  if (p.status === 'fetching' && selection.kind === 'empty') {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -308,7 +319,7 @@ export function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !tightest) {
+  if (p.status === 'error' && selection.kind === 'empty') {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -326,18 +337,23 @@ export function ProviderSegment({
       <ProviderIcon provider={provider} />
       {mode === 'verbose' ? (
         <>
-          {tightest && !compact ? (
-            <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
+          {selection.kind === 'selected' && !compact ? (
+            <MiniBar
+              usedPct={clampUsedPercent(selection.section.window.usedPercent)}
+              display={display}
+            />
           ) : null}
           <VerboseProviderUsage p={p} display={display} />
         </>
-      ) : tightest ? (
+      ) : selection.kind === 'selected' ? (
         <WindowLabel
-          w={tightest.window}
-          label={tightest.label}
+          w={selection.section.window}
+          label={selection.section.label}
           display={display}
           showLabel={!compact}
         />
+      ) : selection.kind === 'unavailable' ? (
+        <CompactMetricUnavailable label={selection.label} showLabel={!compact} />
       ) : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>

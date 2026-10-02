@@ -5,6 +5,7 @@ import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { normalizeClaudeCompactMetric } from '../../../../shared/claude-compact-metric'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
@@ -22,6 +23,9 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     useAppStore((s) => s.usagePercentageDisplay)
   )
   const statusBarUsageMode = normalizeStatusBarUsageMode(useAppStore((s) => s.statusBarUsageMode))
+  const claudeCompactMetric = normalizeClaudeCompactMetric(
+    useAppStore((s) => s.claudeCompactMetric)
+  )
   const setStatusBarUsageMode = useAppStore((s) => s.setStatusBarUsageMode)
   const [usageMenuOpen, setUsageMenuOpen] = useState(false)
   const usageMenuFocusHandoff = useStatusBarMenuFocusHandoff()
@@ -242,6 +246,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     anyFetching,
     anyVisible,
     barRef,
+    claudeCompactMetric,
     collapseUsage,
     collapsedUsageProviders,
     compact,

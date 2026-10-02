@@ -12,14 +12,10 @@ import {
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties
 } from '../../../../../shared/constants'
-import {
-  DEFAULT_USAGE_PERCENTAGE_DISPLAY,
-  normalizeUsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
-import {
-  DEFAULT_STATUS_BAR_USAGE_MODE,
-  normalizeStatusBarUsageMode
-} from '../../../../../shared/status-bar-usage-mode'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import { normalizeClaudeCompactMetric } from '../../../../../shared/claude-compact-metric'
+import { DEFAULT_STATUS_BAR_UI_STATE } from '../../../../../shared/status-bar-ui-defaults'
 import type { WorkspaceHostScope } from '../../../../../shared/ui-chrome-types'
 import {
   normalizeExecutionHostOrder,
@@ -294,7 +290,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       window.api.ui.set({ statusBarVisible: v }).catch(console.error)
       set({ statusBarVisible: v })
     },
-    usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+    ...DEFAULT_STATUS_BAR_UI_STATE,
     setUsagePercentageDisplay: (display) => {
       const normalized = normalizeUsagePercentageDisplay(display)
       // Why: changing the control is the discovery path, so permanently dismiss the one-time change notice.
@@ -309,11 +305,15 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         usagePercentageDisplayChangeNoticeDismissed: true
       })
     },
-    statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {
       const normalized = normalizeStatusBarUsageMode(mode)
       window.api.ui.set({ statusBarUsageMode: normalized }).catch(console.error)
       set({ statusBarUsageMode: normalized })
+    },
+    setClaudeCompactMetric: (metric) => {
+      const normalized = normalizeClaudeCompactMetric(metric)
+      window.api.ui.set({ claudeCompactMetric: normalized }).catch(console.error)
+      set({ claudeCompactMetric: normalized })
     }
   }
 }

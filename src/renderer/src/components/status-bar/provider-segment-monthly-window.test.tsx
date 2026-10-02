@@ -174,7 +174,13 @@ describe('ProviderSegment monthly window', () => {
     }
 
     const markup = renderToStaticMarkup(
-      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
+      <ProviderSegment
+        p={limits}
+        compact={false}
+        display="used"
+        mode="verbose"
+        claudeCompactMetric="weekly"
+      />
     )
 
     expect(markup).toContain('10% used 5h')
@@ -182,14 +188,125 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).toContain('30% used Fable')
     expect(markup).not.toContain('40% used')
   })
+
+  it.each([
+    ['auto', '0% left', 'Fable'],
+    ['session', '97% left', '5h'],
+    ['weekly', '3% left', 'wk'],
+    ['fableWeekly', '0% left', 'Fable']
+  ] as const)(
+    'shows the selected Claude %s value left',
+    async (claudeCompactMetric, value, label) => {
+      const { ProviderSegment } = await import('./StatusBar')
+      const limits: ProviderRateLimits = {
+        provider: 'claude',
+        session: windowOf(3, 300),
+        weekly: windowOf(97, 10_080),
+        fableWeekly: windowOf(100, 10_080),
+        updatedAt: Date.now(),
+        error: null,
+        status: 'ok'
+      }
+
+      const markup = renderToStaticMarkup(
+        <ProviderSegment
+          p={limits}
+          compact={false}
+          display="remaining"
+          mode="compact"
+          claudeCompactMetric={claudeCompactMetric}
+        />
+      )
+
+      expect(markup).toContain(value)
+      expect(markup).toContain(label)
+    }
+  )
+
+  it.each([
+    ['ok', false],
+    ['fetching', false],
+    ['error', false],
+    ['ok', true],
+    ['fetching', true],
+    ['error', true]
+  ] as const)(
+    'shows an unavailable metric in %s state when all windows absent is %s',
+    async (status, allAbsent) => {
+      const { ProviderSegment } = await import('./StatusBar')
+      const limits: ProviderRateLimits = {
+        provider: 'claude',
+        session: allAbsent ? null : windowOf(3, 300),
+        weekly: null,
+        updatedAt: Date.now(),
+        error: status === 'error' ? 'refresh failed' : null,
+        status
+      }
+
+      const markup = renderToStaticMarkup(
+        <ProviderSegment
+          p={limits}
+          compact={false}
+          display="remaining"
+          mode="compact"
+          claudeCompactMetric="weekly"
+        />
+      )
+
+      expect(markup).toContain('Weekly --')
+      expect(markup).toContain('<span aria-hidden="true">Weekly --</span>')
+      expect(markup).toContain('<span class="sr-only">Weekly is unavailable</span>')
+      expect(markup).not.toContain('···')
+      if (status === 'error') {
+        expect(markup).toContain('lucide-triangle-alert')
+      }
+    }
+  )
+})
+
+describe('collapsed usage summary', () => {
+  function claudeLimits(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
+    return {
+      provider: 'claude',
+      session: windowOf(3, 300),
+      weekly: windowOf(97, 10_080),
+      fableWeekly: windowOf(100, 10_080),
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok',
+      ...overrides
+    }
+  }
+
+  it('uses the chosen Claude metric while preserving Automatic urgency', async () => {
+    const { UsageOverflowChip } = await import('./StatusBarProviderSegment')
+    const markup = renderToStaticMarkup(
+      <UsageOverflowChip
+        hidden={[claudeLimits()]}
+        display="remaining"
+        claudeCompactMetric="session"
+      />
+    )
+
+    expect(markup).toContain('title="Also: Claude 97% left"')
+    expect(markup).toContain('data-tone="urgent"')
+  })
+
+  it('keeps a missing chosen quota visible as unavailable', async () => {
+    const { UsageOverflowChip } = await import('./StatusBarProviderSegment')
+    const markup = renderToStaticMarkup(
+      <UsageOverflowChip
+        hidden={[claudeLimits({ session: null, weekly: null, fableWeekly: null })]}
+        display="remaining"
+        claudeCompactMetric="weekly"
+      />
+    )
+
+    expect(markup).toContain('title="Also: Claude Weekly --"')
+  })
 })
 
 describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
-  // A partial/rehydrated provider can carry an undefined (not null) window even
-  // though the type declares `session`/`weekly` as `RateLimitWindow | null`. The
-  // old `s.window !== null` filter let the undefined-window section through, so
-  // getTightestUsageSection's reduce read `.usedPercent` of undefined and crashed
-  // the status-bar overlay (TypeError in ProviderSegment).
   const partialProvider = {
     provider: 'codex',
     weekly: windowOf(42, 10080),
@@ -198,10 +315,13 @@ describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
     status: 'ok'
   } as unknown as ProviderRateLimits // `session` omitted -> undefined at runtime
 
-  it('getTightestUsageSection ignores an undefined window instead of crashing', async () => {
-    const { getTightestUsageSection } = await import('./UsageRosterPanel')
-    expect(() => getTightestUsageSection(partialProvider)).not.toThrow()
-    expect(getTightestUsageSection(partialProvider)?.window.usedPercent).toBe(42)
+  it('selectCompactUsage ignores an undefined window instead of crashing', async () => {
+    const { selectCompactUsage } = await import('./compact-usage-selection')
+    expect(() => selectCompactUsage(partialProvider, 'auto')).not.toThrow()
+    expect(selectCompactUsage(partialProvider, 'auto')).toMatchObject({
+      kind: 'selected',
+      section: { window: { usedPercent: 42 } }
+    })
   })
 
   it('ProviderSegment renders without crashing when a provider window is undefined', async () => {

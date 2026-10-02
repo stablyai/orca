@@ -92,6 +92,15 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
+  it('round-trips the Claude compact metric preference', async () => {
+    const store = await createStore()
+    store.updateUI({ claudeCompactMetric: 'weekly' })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().claudeCompactMetric).toBe('weekly')
+  })
+
   it('round-trips and normalizes the host-qualified manual repo order', async () => {
     const store = await createStore()
     store.updateUI({

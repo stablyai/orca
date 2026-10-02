@@ -3909,7 +3909,8 @@
             "compact": "コンパクト",
             "footerDetailAria": "使用量フッターの詳細",
             "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
-            "compactTooltip": "凝縮された使用状況: 最も狭いウィンドウのみ"
+            "compactTooltip": "要約表示: プロバイダーごとに1つの指標",
+            "compactMetricUnavailable": "{{metric}}は利用できません"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}}を更新中",
@@ -3994,6 +3995,10 @@
             "resumingAriaOne": "1 件のチャットを再開中。詳細はクリックしてください。",
             "resumingAria": "{{value0}} 件のチャットを再開中。詳細はクリックしてください。",
             "resumingTooltip": "中断されたチャットを復元し、続行を依頼しています…"
+          },
+          "ClaudeSwitcherMenu": {
+            "compactMetric": "コンパクト表示の指標",
+            "compactMetricAuto": "自動"
           }
         }
       },

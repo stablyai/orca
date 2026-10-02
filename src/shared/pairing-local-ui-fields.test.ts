@@ -10,6 +10,7 @@ describe('pairing-local UI fields', () => {
       'hideWorkspacesFromOtherDevices',
       'manualRepoOrder',
       'workspaceHostOrder',
+      'claudeCompactMetric',
       'agentsVisibleHostIds',
       'agentsFilterRepoIds',
       'agentsShowChildAgents',
@@ -27,6 +28,7 @@ describe('pairing-local UI fields', () => {
       hideWorkspacesFromOtherDevices: true,
       manualRepoOrder: [{ hostId: 'local' as const, repoId: 'repo-a' }],
       workspaceHostOrder: ['local' as const],
+      claudeCompactMetric: 'weekly' as const,
       sidebarWidth: 280,
       activeView: 'tasks' as const
     }

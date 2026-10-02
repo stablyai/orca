@@ -3909,7 +3909,8 @@
             "compact": "압축",
             "footerDetailAria": "사용량 푸터 세부 정보",
             "detailedTooltip": "막대, 레이블, 백분율을 포함한 전체 사용량",
-            "compactTooltip": "압축된 사용: 가장 좁은 창만 사용"
+            "compactTooltip": "간결한 사용량: 제공업체당 하나의 지표",
+            "compactMetricUnavailable": "{{metric}}을(를) 사용할 수 없습니다"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} 업데이트 중",
@@ -3994,6 +3995,10 @@
             "resumingAriaOne": "채팅 1개 재개 중. 자세히 보려면 클릭하세요.",
             "resumingAria": "채팅 {{value0}}개 재개 중. 자세히 보려면 클릭하세요.",
             "resumingTooltip": "중단된 채팅을 복원하고 계속하도록 요청하는 중…"
+          },
+          "ClaudeSwitcherMenu": {
+            "compactMetric": "간략 보기 지표",
+            "compactMetricAuto": "자동"
           }
         }
       },

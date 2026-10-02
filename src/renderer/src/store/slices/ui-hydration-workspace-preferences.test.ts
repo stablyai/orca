@@ -265,6 +265,35 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().statusBarUsageMode).toBe('verbose')
   })
 
+  it('persists and hydrates the Claude compact metric', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    expect(store.getState().claudeCompactMetric).toBe('auto')
+
+    store.getState().setClaudeCompactMetric('weekly')
+
+    expect(store.getState().claudeCompactMetric).toBe('weekly')
+    expect(setUI).toHaveBeenCalledWith({ claudeCompactMetric: 'weekly' })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ claudeCompactMetric: 'fableWeekly' }))
+    expect(store.getState().claudeCompactMetric).toBe('fableWeekly')
+  })
+
+  it('defaults invalid Claude compact metrics to Automatic', () => {
+    const store = createUIStore()
+    const persisted = makePersistedUI()
+    Object.defineProperty(persisted, 'claudeCompactMetric', {
+      value: 'monthly',
+      enumerable: true
+    })
+
+    store.getState().hydratePersistedUI(persisted)
+
+    expect(store.getState().claudeCompactMetric).toBe('auto')
+  })
+
   it('clamps persisted workspace board column width', () => {
     const store = createUIStore()
 

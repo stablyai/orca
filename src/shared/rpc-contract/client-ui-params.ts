@@ -13,6 +13,7 @@ import type { ReleaseChannel } from '../release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from './workspace-cleanup-ui-params'
+import { CLAUDE_COMPACT_METRICS } from '../claude-compact-metric'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance-params'
 
 export const NullableString = z.string().nullable()
@@ -190,6 +191,7 @@ export const UiUpdateFields = z
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
+    claudeCompactMetric: z.enum(CLAUDE_COMPACT_METRICS).optional(),
     dismissedUpdateVersion: NullableString.optional(),
     dismissedUnexpectedSignoutVersion: NullableString.optional(),
     lastUpdateCheckAt: z.number().finite().nullable().optional(),

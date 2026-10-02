@@ -35,6 +35,8 @@ import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import { InlineUsageBars, InlineUsageSkeleton } from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
+import { ClaudeCompactMetricMenu } from './ClaudeCompactMetricMenu'
+import { normalizeClaudeCompactMetric } from '../../../../shared/claude-compact-metric'
 
 // Exported so its account-switch/reset logic is preserved for row drill-in even
 // though the footer now opens the consolidated UsageRosterPanel first.
@@ -64,6 +66,10 @@ export function ClaudeSwitcherMenu({
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const claudeCompactMetric = normalizeClaudeCompactMetric(
+    useAppStore((s) => s.claudeCompactMetric)
+  )
+  const setClaudeCompactMetric = useAppStore((s) => s.setClaudeCompactMetric)
   const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
@@ -224,6 +230,11 @@ export function ClaudeSwitcherMenu({
       open={open}
       onOpenChange={handleOpenChange}
     >
+      <ClaudeCompactMetricMenu
+        claude={claude}
+        value={claudeCompactMetric}
+        onValueChange={setClaudeCompactMetric}
+      />
       <DropdownMenuLabel>
         {translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
       </DropdownMenuLabel>

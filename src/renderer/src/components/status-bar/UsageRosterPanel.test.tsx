@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
+    Object.entries(values ?? {}).reduce(
+      (text, [name, value]) => text.replaceAll(`{{${name}}}`, value),
+      fallback
+    )
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span data-agent-icon={agent} />
@@ -213,6 +217,95 @@ describe('UsageRow', () => {
     expect(markup).not.toContain('25%')
     expect(markup).not.toContain('60%')
   })
+
+  it.each([
+    ['auto', '0%', 'Fable'],
+    ['session', '97%', '5h'],
+    ['weekly', '3%', 'wk'],
+    ['fableWeekly', '0%', 'Fable']
+  ] as const)('shows the selected Claude %s value left', (claudeCompactMetric, value, label) => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          provider: 'claude',
+          session: {
+            usedPercent: 3,
+            windowMinutes: 300,
+            resetsAt: null,
+            resetDescription: null
+          },
+          weekly: {
+            usedPercent: 97,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          },
+          fableWeekly: {
+            usedPercent: 100,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          },
+          updatedAt: 0,
+          status: 'ok',
+          error: null
+        }}
+        display="remaining"
+        mode="compact"
+        claudeCompactMetric={claudeCompactMetric}
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup).toContain(value)
+    expect(markup).toContain(label)
+  })
+
+  it.each([false, true])(
+    'shows an unavailable metric when all windows absent is %s',
+    (allAbsent) => {
+      const markup = renderToStaticMarkup(
+        <UsageRow
+          p={{
+            provider: 'claude',
+            session: allAbsent
+              ? null
+              : {
+                  usedPercent: 3,
+                  windowMinutes: 300,
+                  resetsAt: null,
+                  resetDescription: null
+                },
+            weekly: null,
+            updatedAt: 0,
+            status: 'fetching',
+            error: null
+          }}
+          display="remaining"
+          mode="compact"
+          claudeCompactMetric="weekly"
+          state={
+            allAbsent
+              ? { kind: 'sign-in', statusLabel: 'not signed in' }
+              : { kind: 'usage', statusLabel: null }
+          }
+          showSignInAction={allAbsent}
+          now={mocks.now}
+        />
+      )
+
+      expect(markup).toContain('Weekly --')
+      expect(markup).toContain('<span aria-hidden="true">Weekly --</span>')
+      expect(markup).toContain('<span class="sr-only">Weekly is unavailable</span>')
+      expect(markup).not.toContain('97%')
+      if (allAbsent) {
+        expect(markup).toContain('not signed in')
+        expect(markup).toContain('Sign in')
+      }
+    }
+  )
 
   it('renders every window below the header in verbose mode', () => {
     const markup = renderToStaticMarkup(

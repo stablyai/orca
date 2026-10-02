@@ -61,6 +61,7 @@ export function StatusBarSurface({
     anyFetching,
     anyVisible,
     barRef,
+    claudeCompactMetric,
     collapseUsage,
     collapsedUsageProviders,
     compact,
@@ -155,6 +156,7 @@ export function StatusBarSurface({
                           compact={compact}
                           display={usagePercentageDisplay}
                           mode={usageTightestOnly ? 'compact' : statusBarUsageMode}
+                          claudeCompactMetric={claudeCompactMetric}
                         />
                       </span>
                     ))}
@@ -164,6 +166,7 @@ export function StatusBarSurface({
                           collapsedUsageProviders.includes(p.provider)
                         )}
                         display={usagePercentageDisplay}
+                        claudeCompactMetric={claudeCompactMetric}
                       />
                     ) : null}
                   </button>
@@ -192,6 +195,7 @@ export function StatusBarSurface({
                     canSignIn={(provider) => getUsageProviderAccountsSectionId(provider) !== null}
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
+                    claudeCompactMetric={claudeCompactMetric}
                     renderRow={(p, rowNode) => {
                       // Every provider drills into its detail panel (parity with the
                       // per-provider dropdowns on main); Claude/Codex additionally get
