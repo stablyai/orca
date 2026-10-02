@@ -126,7 +126,7 @@ describe('orca search argument parsing', () => {
 
   it('rejects an unknown --agent and names the known ones', () => {
     expect(() => parseSearch(['search', 'q', '--agent', 'claude', '--agent', 'bogus'])).toThrow(
-      /Unknown --agent "bogus"\. Known agents: claude, codex, /
+      /Unknown --agent "bogus"\. Known agents: claude, codebuddy, codex, /
     )
   })
 

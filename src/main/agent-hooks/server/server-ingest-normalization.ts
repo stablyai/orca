@@ -1,6 +1,7 @@
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import { isOpenCodeSharedServerPost } from '../../../shared/agent-hook-listener/opencode-session-registry'
 import type { NormalizedLocalHook } from './server-types'
 import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
 
@@ -27,8 +28,8 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       const event = normalizeHookPayload(this.state, source, body, this.env)
       if (
         event &&
-        (source === 'opencode' || source === 'mimo-code') &&
-        event.hookEventName === 'SessionStart'
+        event.hookEventName === 'SessionStart' &&
+        isOpenCodeSharedServerPost(source, body)
       ) {
         // Why: a birth just arrived; bind it now instead of waiting out the poll interval.
         this.kickOpenCodeBinder()

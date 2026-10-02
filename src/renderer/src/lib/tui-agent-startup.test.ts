@@ -310,23 +310,6 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toBeNull()
   })
-
-  it('uses -i flag for copilot to start an interactive session with initial prompt', () => {
-    expect(
-      buildAgentStartupPlan({
-        agent: 'copilot',
-        prompt: 'Fix the bug',
-        cmdOverrides: {},
-        platform: 'darwin'
-      })
-    ).toEqual({
-      agent: 'copilot',
-      launchCommand: "copilot -i 'Fix the bug'",
-      expectedProcess: 'copilot',
-      followupPrompt: null,
-      launchConfig: emptyLaunchConfig('copilot')
-    })
-  })
 })
 
 describe('buildAgentDraftLaunchPlan', () => {

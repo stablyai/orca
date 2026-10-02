@@ -3,6 +3,7 @@
 
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionRestartOfferRecords = {
   /** Every pending offer. Read-only; nothing is spent. */
@@ -23,6 +24,7 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
   readFailedMarkers: () => Promise<AgentSessionResumeMarker[]>
   hasSession: (sessionId: string) => boolean
   reveal: (sessionId: string) => Promise<void>
+  logger: StructuredAgentSessionLogger
   now: () => number
   /** The capsule's single mutation lane, shared with the offer's own operations. */
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
@@ -33,7 +35,9 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
     } catch {
       // Recovery is advisory. A malformed capsule must not make ordinary chat actions unusable;
       // the durable bytes stay untouched so an explicit dismissal can remove them.
-      console.warn('[structured-agent-session] reading recovery capsule failed')
+      deps.logger.warn('reading restart offers from the recovery capsule failed', {
+        scope: 'recovery-capsule-read'
+      })
       return []
     }
   }
@@ -69,7 +73,9 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
       void deps
         .enqueue(() => capsule.forgetSuperseded(gone, deps.now()))
         .catch(() => {
-          console.warn('[structured-agent-session] pruning superseded restart offers failed')
+          deps.logger.warn('pruning superseded restart offers failed', {
+            scope: 'restart-offer-prune'
+          })
         })
     }
   }

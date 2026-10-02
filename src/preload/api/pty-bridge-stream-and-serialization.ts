@@ -16,6 +16,12 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),
   confirmForegroundProcess: (id: string): Promise<string | null> =>
     ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
+  isCodexOnSharedServer: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('pty:isCodexOnSharedServer', { id }),
+  disableCodexSharedServerAutoStart: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('pty:disableCodexSharedServerAutoStart', { id }),
+  stopCodexSharedServer: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('pty:stopCodexSharedServer', { id }),
   getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
   getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
     ipcRenderer.invoke('pty:getSize', { id }),
@@ -119,6 +125,11 @@ export const ptyStreamAndSerializationApi = {
     const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) => callback(data)
     ipcRenderer.on('pty:clearBuffer:request', listener)
     return () => ipcRenderer.removeListener('pty:clearBuffer:request', listener)
+  },
+  onResetInputModesRequest: (callback: (data: { ptyId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) => callback(data)
+    ipcRenderer.on('pty:resetInputModes:request', listener)
+    return () => ipcRenderer.removeListener('pty:resetInputModes:request', listener)
   },
   sendSerializedBuffer: (
     requestId: string,

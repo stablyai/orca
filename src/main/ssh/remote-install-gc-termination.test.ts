@@ -11,6 +11,7 @@ import { gcOldRelayVersions } from './remote-install-gc'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { gcRelayNativeDepsCache } from './ssh-relay-native-deps-cache-gc'
 import { gcRemoteRipgrepCache } from './ssh-relay-ripgrep-cache-gc'
+import { REMOTE_INSTALL_ORDER_OK } from './remote-install-previous-version'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all connection access is replaced by execCommand's mock.
@@ -41,8 +42,17 @@ function collectRelayVersions(): Promise<void> {
   return gcOldRelayVersions(conn, home, currentDir, host, { nativeDepsCacheKeys: [nativeKey] })
 }
 
+// ddd is the previous build, so it is pinned and never probed.
+const installOrder = [
+  `${home}/.orca-remote/relay-0.1.0+bbb/.install-complete`,
+  `${home}/.orca-remote/relay-0.1.0+ddd/.install-complete`,
+  `${home}/.orca-remote/relay-0.1.0+aaa/.install-complete`,
+  REMOTE_INSTALL_ORDER_OK
+].join('\n')
+
 const versionSteps = [
-  ['listing', 'relay-0.1.0+aaa\nrelay-0.1.0+ccc'],
+  ['listing', 'relay-0.1.0+aaa\nrelay-0.1.0+ddd'],
+  ['previous install order', installOrder],
   ['install lock probe', 'OPEN'],
   ['completion probe', 'COMPLETE'],
   ['liveness probe', 'DEAD'],
@@ -73,8 +83,8 @@ describe('version GC termination', () => {
     'stops after an unconfirmed stale lock probe with claim held: %s',
     async (claimed) => {
       const replies = claimed
-        ? versionSteps.slice(0, 6).map(([, reply]) => String(reply))
-        : [versionSteps[0][1]]
+        ? versionSteps.slice(0, 7).map(([, reply]) => String(reply))
+        : versionSteps.slice(0, 2).map(([, reply]) => String(reply))
       const error = failAfter([...replies, 'LOCKED'])
 
       await expect(collectRelayVersions()).rejects.toBe(error)

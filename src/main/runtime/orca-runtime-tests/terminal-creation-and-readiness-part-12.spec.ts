@@ -223,4 +223,74 @@ describe('OrcaRuntimeService', () => {
 
     expect(spawn.mock.calls[0]?.[0]?.command).not.toMatch(/--model/)
   })
+
+  // Every agent the runtime builds is attributed, so a launch whose caller named no surface still
+  // counts; only the caller's surface is taken, the rest is derived from the agent it resolved.
+  it.each([
+    ['orchestration', 'orchestration'],
+    [undefined, 'unknown'],
+    ['a_surface_added_later', 'unknown']
+  ])('attributes a startup-agent launch named %s as %s', async (launchSource, expected) => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-attributed' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      startupAgent: 'claude',
+      ...(launchSource ? { launchSource } : {})
+    })
+
+    expect(spawn.mock.calls[0]?.[0]?.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: expected,
+      request_kind: 'new'
+    })
+  })
+
+  it('attributes a fresh agent session the host builds as unknown', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-session' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createAgentSession(
+      {
+        clientOperationId: `${Date.now()}-${'cd'.repeat(16)}`,
+        worktree: `id:${TEST_WORKTREE_ID}`,
+        agent: 'claude'
+      },
+      { clientId: 'remote-desktop', clientKind: 'runtime' }
+    )
+
+    expect(spawn.mock.calls[0]?.[0]?.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'new'
+    })
+  })
+
+  it('leaves a bare agent command the user typed out of launch attribution', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bare' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'claude' })
+
+    expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('claude')
+    expect(spawn.mock.calls[0]?.[0]?.telemetry).toBeUndefined()
+  })
 })

@@ -1,6 +1,9 @@
 import { globSync } from 'node:fs'
 import { defaultExclude } from 'vitest/config'
 
+// Why one constant: the cross-version-wire job runs this directory, so a new file there runs with no list to update.
+export const CROSS_VERSION_WIRE_DIR = 'tests/e2e/cross-version-wire/'
+
 export const UNIT_INCLUDE = [
   'src/**/*.test.ts',
   'src/**/*.test.tsx',
@@ -24,6 +27,7 @@ export const UNIT_EXCLUDE = [
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
   'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
+  'src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts',
   'src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts',
   'src/shared/fish-query-reply-child-stdin.node-pty.test.ts',
   'src/shared/pty-reply-echo-shapes.node-pty.test.ts',
@@ -31,7 +35,7 @@ export const UNIT_EXCLUDE = [
   'src/shared/posix-command-path-lookup.test.ts',
   'tests/e2e/relay-region-compatibility.unit.test.ts',
   'tests/e2e/relay-region-correction.unit.test.ts',
-  'tests/e2e/cross-version-wire/**'
+  `${CROSS_VERSION_WIRE_DIR}**`
 ]
 
 export function discoverUnitFiles(root = process.cwd()) {

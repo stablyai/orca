@@ -12,6 +12,11 @@ import {
 import { resolveStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
+import {
+  readAgentSessionRefusalReference,
+  type AgentSessionRefusalReference
+} from '../../../shared/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
@@ -47,7 +52,9 @@ class StructuredAgentSessionCreateError extends Error {
   constructor(
     message: string,
     /** The wire refusal code, or the RPC error code when the create never reached a handler. */
-    readonly code: string
+    readonly code: string,
+    /** The host's refusal as a reader may word it; absent from an older host or a local failure. */
+    readonly refusal?: AgentSessionRefusalReference
   ) {
     super(message)
   }
@@ -58,8 +65,12 @@ class StructuredAgentSessionCreateError extends Error {
  * `launchStructuredAgentSession` is the only place that decides it against the shared allowlist.
  */
 export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSessionCreateError {
-  constructor(message: string, code: string = 'structured_agent_session_unsupported') {
-    super(message, code)
+  constructor(
+    message: string,
+    code: string = 'structured_agent_session_unsupported',
+    refusal?: AgentSessionRefusalReference
+  ) {
+    super(message, code, refusal)
     this.name = 'StructuredAgentSessionCreateRefusalError'
   }
 }
@@ -70,8 +81,8 @@ export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSes
  * down the same path as a lost reply, which replays the intent and reconciles.
  */
 export class StructuredAgentSessionCreateUnknownOutcomeError extends StructuredAgentSessionCreateError {
-  constructor(message: string, code: string) {
-    super(message, code)
+  constructor(message: string, code: string, refusal?: AgentSessionRefusalReference) {
+    super(message, code, refusal)
     this.name = 'StructuredAgentSessionCreateUnknownOutcomeError'
   }
 }
@@ -95,10 +106,6 @@ function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string
     }
   }
   return null
-}
-
-export function isDefinitiveStructuredAgentSessionCreateError(error: unknown): boolean {
-  return definitiveStructuredAgentSessionCreateErrorCode(error) !== null
 }
 
 export function createStructuredAgentSessionLaunchIntent(
@@ -252,7 +259,8 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
       }
       throw new StructuredAgentSessionCreateUnknownOutcomeError(
         error instanceof Error ? error.message : String(error),
-        code
+        code,
+        readAgentSessionErrorRefusal(error)
       )
     }
   }
@@ -291,20 +299,22 @@ export async function launchStructuredAgentSession(
       abandonStructuredAgentSessionLaunchIntent(intent)
       throw new StructuredAgentSessionCreateRefusalError(
         error instanceof Error ? error.message : String(error),
-        code
+        code,
+        readAgentSessionErrorRefusal(error)
       )
     }
     throw error
   }
   if (!result.ok) {
     const { code, message, ownerVerdict } = result.refusal
+    const refusal = readAgentSessionRefusalReference(result.refusal)
     // A failed operation whose provider is proven gone is a failure a new operation may retry.
     if (!isDefinitiveAgentSessionCreateRefusal(code) && ownerVerdict !== 'exited') {
       // Keep the focus intent: the session may exist, and recovery still has to adopt it.
-      throw new StructuredAgentSessionCreateUnknownOutcomeError(message, code)
+      throw new StructuredAgentSessionCreateUnknownOutcomeError(message, code, refusal)
     }
     abandonStructuredAgentSessionLaunchIntent(intent)
-    throw new StructuredAgentSessionCreateRefusalError(message, code)
+    throw new StructuredAgentSessionCreateRefusalError(message, code, refusal)
   }
   return { sessionId: result.value.sessionId, fence: result.value.fence }
 }

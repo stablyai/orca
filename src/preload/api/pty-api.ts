@@ -84,6 +84,7 @@ export type PtyApi = {
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
+  resetInputModes: (id: string) => void
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
   ackColdRestore: (id: string) => void
   ackData: (id: string, charCount: number, processedChars?: number) => void
@@ -125,6 +126,11 @@ export type PtyApi = {
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
+  /** Local panes only; false for any other pane. */
+  isCodexOnSharedServer: (id: string) => Promise<boolean>
+  /** Runs the fix with the pane's own Codex; true only once verified. Local panes only. */
+  disableCodexSharedServerAutoStart: (id: string) => Promise<boolean>
+  stopCodexSharedServer: (id: string) => Promise<boolean>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
   listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>
@@ -229,6 +235,7 @@ export type PtyApi = {
     }) => void
   ) => () => void
   onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
+  onResetInputModesRequest: (callback: (data: { ptyId: string }) => void) => () => void
   sendSerializedBuffer: (
     requestId: string,
     snapshot: {

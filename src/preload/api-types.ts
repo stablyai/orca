@@ -8,7 +8,7 @@ import type {
 } from './api/agent-account-api'
 import type { HooksApi } from './api/agent-hook-api'
 import type { SkillsApi } from './api/agent-skill-api'
-import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-status-api'
+import type { AgentAwakeApi, AgentStatusApi } from './api/agent-status-api'
 import type {
   ClaudeUsageApi,
   CodexUsageApi,
@@ -106,7 +106,6 @@ export type PreloadApi = {
   claudeAccounts: ClaudeAccountsApi
   cli: CliApi
   codexConfigSync: CodexConfigSyncApi
-  agentTrust: AgentTrustApi
   preflight: PreflightApi
   notifications: NotificationsApi
   onboarding: OnboardingApi

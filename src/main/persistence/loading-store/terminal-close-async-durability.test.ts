@@ -98,9 +98,11 @@ it.each([
   const before = persistedLeafIds()
   const gate = authority.pause()
   let acknowledged = false
-  const closing = runtime.closeTerminalSurfaceFromRenderer(binding.worktreeId, target).then(() => {
-    acknowledged = true
-  })
+  const closing = runtime
+    .closeTerminalSurfaceFromRenderer({ worktreeId: binding.worktreeId, target: target })
+    .then(() => {
+      acknowledged = true
+    })
   try {
     await Promise.race([gate.started.promise, closing])
     expect(acknowledged).toBe(false)
@@ -140,9 +142,12 @@ it('keeps a renderer close when its durable write fails', async () => {
   const { authority, runtime, persistedLeafIds, liveLeafIds } = await closeFixture()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   const gate = authority.pause()
-  const closing = runtime.closeTerminalSurfaceFromRenderer(binding.worktreeId, {
-    kind: 'tab',
-    tabId: binding.tabId
+  const closing = runtime.closeTerminalSurfaceFromRenderer({
+    worktreeId: binding.worktreeId,
+    target: {
+      kind: 'tab',
+      tabId: binding.tabId
+    }
   })
   await Promise.race([gate.started.promise, closing])
   gate.finish.reject(new Error('close disk refused'))
@@ -165,10 +170,13 @@ it('commits nothing for a pane that restarted while its close waited for the wri
     ptyId: 'restarted-pty',
     incarnationId: 'ffffffff-ffff-4fff-8fff-ffffffffffff'
   })
-  const closing = runtime.closeTerminalSurfaceFromRenderer(binding.worktreeId, {
-    kind: 'pane',
-    tabId: binding.tabId,
-    leafId: binding.leafId
+  const closing = runtime.closeTerminalSurfaceFromRenderer({
+    worktreeId: binding.worktreeId,
+    target: {
+      kind: 'pane',
+      tabId: binding.tabId,
+      leafId: binding.leafId
+    }
   })
   gate.finish.resolve()
   await earlierWrite
@@ -193,9 +201,12 @@ it('commits a renderer tab close whose split pane bound while the close waited f
     incarnationId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
     expectedSourceBinding: binding
   })
-  const closing = runtime.closeTerminalSurfaceFromRenderer(binding.worktreeId, {
-    kind: 'tab',
-    tabId: binding.tabId
+  const closing = runtime.closeTerminalSurfaceFromRenderer({
+    worktreeId: binding.worktreeId,
+    target: {
+      kind: 'tab',
+      tabId: binding.tabId
+    }
   })
   gate.finish.resolve()
   await earlierWrite
@@ -209,4 +220,8 @@ it('commits a renderer tab close whose split pane bound while the close waited f
       .getWorkspaceSession()
       .tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)
   ).toBe(false)
+  // Why: skipping the owner fence for the layout owner's own close must not skip its record.
+  expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId?.[binding.tabId]).toEqual(
+    expect.objectContaining({ worktreeId: binding.worktreeId, reason: 'user' })
+  )
 })

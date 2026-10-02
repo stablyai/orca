@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Legacy import runs the existing per-agent transcript decoders and keys the
 // results by identity read off the same raw lines. Fixtures are shaped like the
 // files the providers actually write.
@@ -18,6 +19,7 @@ import { importLegacyTranscriptIntoJournal } from './journal-legacy-import'
 import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
+import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 
 // No shipped decoder emits a subagent roster, so the roster bounds are reached by standing one in.
 const decodedClaudeOverride = vi.hoisted((): { message: NativeChatMessage | null } => ({
@@ -72,7 +74,7 @@ async function open(
 ): Promise<AgentSessionJournal> {
   return openAgentSessionJournal({
     identity: identity(agent, sessionId),
-    journalDir: root,
+    database: openTestJournalHostDatabase(root),
     now: tick,
     mintEpoch: () => `epoch-${clock}`,
     ...overrides
@@ -477,7 +479,9 @@ describe('payload bounds on import', () => {
 describe('import failures', () => {
   it('rejects a legacy source above the fixed 16 MiB import cap before decoding', async () => {
     const journalDir = join(root, 'oversized-source-journal')
-    const journal = await open('claude', CLAUDE_SESSION, { journalDir })
+    const journal = await open('claude', CLAUDE_SESSION, {
+      database: openTestJournalHostDatabase(journalDir)
+    })
     const filePath = join(root, 'oversized-source.jsonl')
     await writeFile(filePath, 'x'.repeat(16 * 1024 * 1024 + 1), 'utf8')
     const epoch = journal.epoch
@@ -501,7 +505,9 @@ describe('import failures', () => {
   it('bounds oversized legacy tool-call input before journal publication', async () => {
     const journalDir = join(root, 'bounded-tool-input-journal')
     const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
-    const journal = await open('claude', CLAUDE_SESSION, { journalDir })
+    const journal = await open('claude', CLAUDE_SESSION, {
+      database: openTestJournalHostDatabase(journalDir)
+    })
     const filePath = await writeFixture('oversized-tool-input.jsonl', [
       {
         parentUuid: null,
@@ -567,7 +573,7 @@ describe('import failures', () => {
     await journal.appendItem(
       { provider: 'codex', threadId: CODEX_SESSION, turnId: 'turn-1', ordinal: 1 },
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'kept' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const before = journal.epoch
     const metadataOnly = await writeFixture('metadata-only.jsonl', [
@@ -629,7 +635,7 @@ describe('multi-block legacy messages', () => {
 
   it('bounds a Claude tool call that shares its message with narration', async () => {
     const journal = await open('claude', CLAUDE_SESSION, {
-      journalDir: join(root, 'claude-mixed-journal')
+      database: openTestJournalHostDatabase(join(root, 'claude-mixed-journal'))
     })
     const filePath = await writeFixture('claude-mixed.jsonl', [
       {
@@ -675,7 +681,7 @@ describe('multi-block legacy messages', () => {
 
   it('bounds a Grok tool call that shares its row with assistant text', async () => {
     const journal = await open('grok', CODEX_SESSION, {
-      journalDir: join(root, 'grok-mixed-journal')
+      database: openTestJournalHostDatabase(join(root, 'grok-mixed-journal'))
     })
     const filePath = await writeFixture('grok-mixed.jsonl', [
       {
@@ -703,7 +709,7 @@ describe('multi-block legacy messages', () => {
 
   it('bounds an omp execution cell, whose invocation always ships with its output', async () => {
     const journal = await open('omp', CODEX_SESSION, {
-      journalDir: join(root, 'omp-mixed-journal')
+      database: openTestJournalHostDatabase(join(root, 'omp-mixed-journal'))
     })
     const filePath = await writeFixture('omp-mixed.jsonl', [
       {

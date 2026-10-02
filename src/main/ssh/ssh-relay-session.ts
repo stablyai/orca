@@ -4,6 +4,8 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { RemoteRuntimeUnavailableError } from './ssh-relay-runtime-resolution'
+import { SshPlainSshModeSession } from './ssh-plain-ssh-session'
 import type { RemoteOpenCodeRuntimePreparation } from './ssh-relay-opencode-runtime-retry'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { writeStringsViaSftp } from './sftp-upload'
@@ -119,6 +121,7 @@ import {
 } from '../../shared/ssh-ai-vault-relay'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { hasClosedTerminalTabRecord } from '../../shared/closed-terminal-tab-tombstones'
 import {
   openSshPtyConsumerSession,
   type OpenSshPtyConsumerSessionOptions,
@@ -331,6 +334,7 @@ export class SshRelaySession {
   // Why: a self-driven repair reconnect must not silently re-negotiate the target's grace window.
   private lastGraceTimeSeconds: number | undefined = undefined
   private hostPlatform: RemoteHostPlatform | null = null
+  private plainSsh: SshPlainSshModeSession | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private openCodeRuntimePreparation: {
     run: RemoteOpenCodeRuntimePreparation
@@ -550,6 +554,14 @@ export class SshRelaySession {
     this.lastGraceTimeSeconds = graceTimeSeconds
 
     try {
+      const deployed = await this.deployRelayOrEnterPlainSsh(
+        conn,
+        graceTimeSeconds,
+        () => this._state === 'deploying'
+      )
+      if (!deployed) {
+        return
+      }
       const {
         transport,
         serverBuildId,
@@ -560,7 +572,7 @@ export class SshRelaySession {
         credentialFile,
         hostPlatform,
         prepareOpenCodeRuntime
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = deployed
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -709,6 +721,14 @@ export class SshRelaySession {
     this.teardownProviders('connection_lost')
 
     try {
+      const deployed = await this.deployRelayOrEnterPlainSsh(
+        conn,
+        graceTimeSeconds,
+        () => this.abortController === abortController && !abortController.signal.aborted
+      )
+      if (!deployed) {
+        return
+      }
       const {
         transport,
         serverBuildId,
@@ -719,7 +739,7 @@ export class SshRelaySession {
         credentialFile,
         hostPlatform,
         prepareOpenCodeRuntime
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = deployed
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -1013,7 +1033,51 @@ export class SshRelaySession {
     })
   }
 
+  /** Rung D connects with plain SSH providers, so the ladder's reason reaches the user connected. */
+  getPlainSshSession(): SshPlainSshModeSession | null {
+    return this.plainSsh
+  }
+
   // ── Private ───────────────────────────────────────────────────────
+
+  private async deployRelayOrEnterPlainSsh(
+    conn: SshConnection,
+    graceTimeSeconds: number | undefined,
+    isAttemptCurrent: () => boolean
+  ): Promise<Awaited<ReturnType<typeof deployAndLaunchRelay>> | null> {
+    try {
+      return await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+    } catch (err) {
+      // Why system SSH is excluded: it has no ssh2 shell or SFTP channel to degrade onto.
+      if (
+        !(err instanceof RemoteRuntimeUnavailableError) ||
+        conn.usesSystemSshTransport?.() === true ||
+        this.isDisposed() ||
+        !isAttemptCurrent()
+      ) {
+        throw err
+      }
+      // Why: a superseded attempt's session must not stay registered beside this one.
+      this.leavePlainSshMode()
+      this.plainSsh = SshPlainSshModeSession.enter({
+        targetId: this.targetId,
+        connection: conn,
+        error: err,
+        onExitAccepted: (payload) => this.retireExitedPty(payload, true)
+      })
+      console.warn(
+        `[ssh-relay-session] ${this.targetId} connected in plain SSH mode: ${err.reason}`
+      )
+      this._state = 'ready'
+      this._onReady?.(this.targetId)
+      return null
+    }
+  }
+
+  private leavePlainSshMode(): void {
+    this.plainSsh?.leave()
+    this.plainSsh = null
+  }
 
   // Why: teardown itself can kill the mux — an aborted request emits rpc.cancel, and a saturated
   // control lane turns that admission failure into mux.dispose('connection_lost'). Every teardown
@@ -1697,6 +1761,7 @@ export class SshRelaySession {
     this.releaseRelayLossWatcher()
     this.pluginSettingsCleanup?.()
     this.pluginSettingsCleanup = null
+    this.leavePlainSshMode()
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null
     for (const cleanup of this.ptyRecoveryNotificationCleanups) {
@@ -2752,9 +2817,19 @@ export class SshRelaySession {
     if (hasLiveCurrentBinding) {
       return false
     }
-    return [lease.tabId, ...currentTabIds]
-      .filter((tabId) => isValidTerminalTabId(tabId))
-      .some(tombstoneMatches)
+    // Why only when no tab holds the leaf: a pane moved out of the tab before it closed lives on.
+    const leaseTabId = lease.tabId
+    const closedByRecord =
+      currentTabIds.length === 0 &&
+      candidates.some((candidate) =>
+        hasClosedTerminalTabRecord(candidate?.closedTerminalTabTombstonesByTabId, leaseTabId)
+      )
+    return (
+      closedByRecord ||
+      [lease.tabId, ...currentTabIds]
+        .filter((tabId) => isValidTerminalTabId(tabId))
+        .some(tombstoneMatches)
+    )
   }
 
   private async suppressRetiredReattachedPty(

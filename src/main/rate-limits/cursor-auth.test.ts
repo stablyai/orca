@@ -35,8 +35,8 @@ vi.mock('node:fs', () => ({
   }
 }))
 
-vi.mock('./cursor-desktop-state-db', () => ({
-  readCursorDesktopProfile: () => desktopState.result
+vi.mock('./cursor-desktop-profile-worker', () => ({
+  readCursorDesktopProfileViaWorker: () => desktopState.result
 }))
 
 import { readCursorAuthSession, readCursorCliIdentity } from './cursor-auth'

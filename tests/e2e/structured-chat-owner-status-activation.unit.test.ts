@@ -18,11 +18,14 @@ import {
   resetHostTestOperationIds
 } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-idle-sweep'
-import { AgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store-test-harness'
 import { useAppStore } from '../../src/renderer/src/store'
 import { runWorktreeAgentActivationGate } from '../../src/renderer/src/lib/worktree-agent-activation-gate'
 import { readWorktreeStructuredActivationInventory } from '../../src/renderer/src/lib/worktree-agent-structured-inventory'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
+import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 
 const WORKTREE = 'repo-1::/workspace/repo'
 
@@ -34,6 +37,7 @@ let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']
 
 function openHost(): void {
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire: async ({ fence, spawnToken }) => ({
@@ -53,7 +57,7 @@ function openHost(): void {
       answerPrompt: async () => undefined,
       setOption: async () => undefined
     },
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     idleSweep: { intervalMs: 5 },
@@ -113,7 +117,7 @@ beforeEach(async () => {
   clock = NOW
   resetHostTestOperationIds()
   closeSession = vi.fn(async () => true)
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   openHost()
   expect(await host.attach({ callerKey: 'client-1' }, hostTestAttachParams(null))).toMatchObject({
     ok: true
@@ -139,7 +143,7 @@ describe('a chat at rest keeps its worktree activatable', () => {
 
   it('after an app restart restored it for reading', async () => {
     await host.flushAllStreamedEvents()
-    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(root)
     openHost()
     await host.restoreReadableSessions()
     expect(host.hasSession(SESSION)).toBe(true)

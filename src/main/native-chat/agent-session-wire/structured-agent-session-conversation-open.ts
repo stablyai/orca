@@ -9,7 +9,8 @@
 // wakes. Nothing here starts a provider child.
 
 import type { AgentJournalResetReason } from '../../../shared/agent-session-journal-types'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournalWithRecovery } from './agent-session-journal-recovery'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -36,13 +37,17 @@ export type OpenedStructuredAgentSessionConversation = {
 export type StructuredAgentSessionConversationOpenDeps = {
   store: Pick<AgentSessionRecordStore, 'getRecord'>
   adapter: Pick<StructuredAgentSessionAdapter, 'historyFilePath'>
-  journalRoot: string
-  onEventSinkError?: StructuredAgentSessionHostDeps['onEventSinkError']
+  journalDatabase: JournalHostDatabase
+  logger: StructuredAgentSessionHostDeps['logger']
 }
 
 /** An acquisition's own open: its reserve cleared the record's death evidence, so it settles
  *  what the gone generation left running itself, from what it read before. */
-export type StructuredAgentSessionConversationOpenOptions = { acquisition?: boolean }
+export type StructuredAgentSessionConversationOpenOptions = {
+  acquisition?: boolean
+  /** A restore's open, which copies no per-chat file: see `AgentSessionJournal.whenImported`. */
+  deferPerSessionImport?: boolean
+}
 
 export type StructuredAgentSessionConversationOpenContext = {
   deps: StructuredAgentSessionConversationOpenDeps
@@ -89,41 +94,71 @@ export async function openStructuredAgentSessionConversationJournal(
   const identity = journalIdentityFor(record, params)
   const opened = await openAgentSessionJournalWithRecovery({
     identity,
-    journalDir: journalDirectoryFor(deps.journalRoot, {
-      workspaceId: record.location.workspaceId,
-      sessionId
-    }),
+    database: deps.journalDatabase,
     fence,
-    historyFilePath: (await deps.adapter.historyFilePath?.({ identity })) ?? null
+    historyFilePath: (await deps.adapter.historyFilePath?.({ identity })) ?? null,
+    deferPerSessionImport: options.deferPerSessionImport
   })
   try {
     // A queued row found here is a leftover the delivery loop's first step rejects; a handed-over
     // one is only doubt, which provider history decides under a won lease.
     await opened.journal.markPendingSubmissionsUnknown(fence)
   } catch (error) {
-    deps.onEventSinkError?.({ sessionId, error })
+    deps.logger.warn('marking pending sends unknown on open failed', {
+      scope: 'open-pending-unknown',
+      sessionId,
+      error
+    })
   }
-  try {
-    // No child in this process writes to a journal nobody had open, so whatever it shows running
-    // belongs to a generation that is gone, whatever the lease still claims. Settled before any
-    // reader or child sees it.
-    if (!options.acquisition) {
-      await settleStaleStructuredAgentSessionState({
-        journal: opened.journal,
-        sessionId,
-        fence,
-        acquisitionGeneration: null,
-        deathEvidence: record.lease.deathEvidence ?? null,
-        failureTextContext: structuredAgentSessionFailureWordsContext(record)
-      })
-    }
-  } catch (error) {
-    // Best effort: the next acquire re-derives it.
-    deps.onEventSinkError?.({ sessionId, error })
+  // No child in this process writes to a journal nobody had open, so whatever it shows running
+  // belongs to a generation that is gone, whatever the lease still claims. Settled before any
+  // reader or child sees it.
+  if (!options.acquisition) {
+    await settleGoneGeneration(deps, record, opened.journal)
   }
   return {
     session: { journal: opened.journal, params, child: null },
     reset: opened.recovery?.reset ?? null
+  }
+}
+
+/**
+ * The open's settle again, for a conversation already open: a proof of death written since it
+ * opened (the startup reconcile, a recovery) revises what the open could only call `unverifiable`.
+ * A record holds a proof only while released, so no child here is writing. A no-op once revised.
+ */
+export async function resettleOpenStructuredAgentSessionConversation(
+  deps: StructuredAgentSessionConversationOpenDeps,
+  sessionId: string,
+  session: StructuredAgentSessionHostSession | undefined
+): Promise<void> {
+  const record = deps.store.getRecord(sessionId)
+  if (session && record?.lease.deathEvidence) {
+    await settleGoneGeneration(deps, record, session.journal)
+  }
+}
+
+async function settleGoneGeneration(
+  deps: Pick<StructuredAgentSessionConversationOpenDeps, 'logger'>,
+  record: AgentSessionRecord,
+  journal: AgentSessionJournal
+): Promise<void> {
+  try {
+    await settleStaleStructuredAgentSessionState({
+      journal,
+      sessionId: record.sessionId,
+      fence: record.lease.runtimeFence,
+      acquisitionGeneration: null,
+      deathEvidence: record.lease.deathEvidence ?? null,
+      failureTextContext: structuredAgentSessionFailureWordsContext(record)
+    })
+  } catch (error) {
+    // Best effort: the next open or acquire re-derives it.
+    deps.logger.warn("settling a gone agent's work on open failed", {
+      scope: 'open-dead-generation',
+      sessionId: record.sessionId,
+      error
+    })
   }
 }
 

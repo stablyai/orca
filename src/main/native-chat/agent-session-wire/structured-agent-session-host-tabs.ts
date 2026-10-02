@@ -1,4 +1,6 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /**
  * Chat-tab visibility is the deletion funnel: every path that removes a chat as a user-facing
@@ -9,6 +11,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 export function setStructuredAgentSessionTabVisibility(
   host: {
     deps: {
+      logger: StructuredAgentSessionLogger
       store: {
         setSessionTabVisibility: (
           sessionId: string,
@@ -25,7 +28,10 @@ export function setStructuredAgentSessionTabVisibility(
 ): Promise<void> {
   if (!visible) {
     void host.restartResume.dismiss([sessionId]).catch(() => {
-      console.warn('[structured-agent-session] forgetting recovery records on chat close failed')
+      host.deps.logger.warn('forgetting recovery records on chat close failed', {
+        scope: 'tab-close-recovery-dismiss',
+        sessionId
+      })
     })
   }
   return host.deps.store.setSessionTabVisibility(sessionId, visible, tabId)
@@ -48,4 +54,45 @@ export function listStructuredAgentSessionTabs(
     workspaceId: session.params.location.workspaceId,
     agent: session.params.provider
   }))
+}
+
+type TabSessions = ReadonlyMap<
+  string,
+  {
+    child?: unknown
+    params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] }
+  }
+>
+
+/** The host's chat-tab surface; reads `host.deps` per call, so it sees the host's wrapped deps. */
+export function createStructuredAgentSessionTabSurface(
+  host: Parameters<typeof setStructuredAgentSessionTabVisibility>[0] & {
+    deps: {
+      store: Pick<
+        AgentSessionRecordStore,
+        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs'
+      >
+    }
+  },
+  sessions: TabSessions,
+  forgetStatus: (sessionId: string) => void
+) {
+  return {
+    listSessionTabs: () => listStructuredAgentSessionTabs(sessions),
+    getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
+    getSessionTabId: (sessionId: string): string | null =>
+      host.deps.store.getSessionTabId(sessionId),
+    showSessionTabs: (sessionIds: readonly string[]) => host.deps.store.showSessionTabs(sessionIds),
+    setSessionTabVisibility: async (
+      sessionId: string,
+      visible: boolean,
+      tabId?: string
+    ): Promise<void> => {
+      await setStructuredAgentSessionTabVisibility(host, sessionId, visible, tabId)
+      // The tab edge of the row's lifetime; the handle close is the other.
+      if (!visible && !sessions.get(sessionId)?.child) {
+        forgetStatus(sessionId)
+      }
+    }
+  }
 }

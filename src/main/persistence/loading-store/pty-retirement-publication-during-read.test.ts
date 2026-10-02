@@ -29,9 +29,6 @@ class RetirementRuntime extends OrcaRuntimeService {
   generations(): number {
     return this.ptyLifecycleGenerationById.size
   }
-  retirements(): number {
-    return this.pendingPtySurfaceRetirementsByPtyId.size
-  }
   async closeTab(): Promise<void> {
     const snapshot = this.snapshot()
     const tab = snapshot?.tabs[0]
@@ -96,10 +93,8 @@ it.each(['read', 'replacement', 'legacy-replacement'] as const)(
     gate.finish.resolve()
     await exiting
     expect(readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]).toBeUndefined()
-    expect(runtime.snapshot()?.tabs).toHaveLength(action === 'read' ? 0 : 1)
-    if (action === 'read') {
-      expect(runtime.retirements()).toBe(0)
-    }
+    // Why every action: the exit retired the leaf in memory before any of them could run.
+    expect(runtime.snapshot()?.tabs).toHaveLength(0)
   }
 )
 

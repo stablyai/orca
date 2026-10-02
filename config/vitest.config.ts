@@ -17,8 +17,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    // Bun's external-module cache otherwise loses Zod named exports across mocked graphs.
-    ...(process.versions.bun ? { server: { deps: { inline: ['zod'] } } } : {}),
     ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
       ? {
           sequence: { sequencer: TimingSequencer },
@@ -30,9 +28,11 @@ export default defineConfig({
     execArgv: ['--no-experimental-webstorage', '--expose-gc'],
     // Why: happy-dom drops MutationObserver callbacks on GC; keep them alive like a browser does.
     setupFiles: [
+      resolve('config/scripts/vitest-real-agent-home-write-guard.ts'),
       resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
       resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
-      resolve('config/scripts/vitest-host-ports-setup.ts')
+      resolve('config/scripts/vitest-host-ports-setup.ts'),
+      resolve('config/scripts/vitest-caller-identity-env-setup.ts')
     ],
     include: UNIT_INCLUDE,
     ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1' ? { exclude: UNIT_EXCLUDE } : {}),

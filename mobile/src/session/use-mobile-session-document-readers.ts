@@ -34,7 +34,10 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
               isDirty: false,
               editable: result.editable === true,
               stale: result.isDirty,
-              readOnlyReason: result.readOnlyReason
+              readOnlyReason: result.readOnlyReason,
+              ...(result.truncated === true
+                ? { truncated: true, byteLength: result.byteLength }
+                : {})
             })
           )
           return
@@ -59,15 +62,16 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
             buildMarkdownDiskFallbackDoc({
               content: fileResult.content,
               truncated: fileResult.truncated,
+              byteLength: fileResult.byteLength,
               tabIsDirty: tab.isDirty
             })
           )
         )
-      } catch {
+      } catch (err) {
         setMarkdownDocs((prev) =>
           new Map(prev).set(tab.id, {
             status: 'error',
-            message: "Couldn't load markdown"
+            message: documentReadErrorMessage(err, "Couldn't load markdown")
           })
         )
       }
@@ -89,15 +93,12 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         })
         setFileDocs((prev) => new Map(prev).set(tab.id, doc))
       } catch (err) {
-        const message = err instanceof Error ? err.message : ''
-        const previewMessage =
-          message === 'binary_file'
-            ? 'Binary preview unavailable'
-            : message === 'file_too_large'
-              ? 'File too large for mobile preview'
-              : tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
-                ? "Couldn't load diff preview"
-                : "Couldn't load file preview"
+        const previewMessage = documentReadErrorMessage(
+          err,
+          tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
+            ? "Couldn't load diff preview"
+            : "Couldn't load file preview"
+        )
         setFileDocs((prev) =>
           new Map(prev).set(tab.id, {
             status: 'error',
@@ -112,6 +113,18 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
     readMarkdownTab,
     readFileTab
   }
+}
+
+// Why: older desktops refuse oversize markdown as a bare runtime_error whose message is the code.
+function documentReadErrorMessage(err: unknown, fallback: string): string {
+  const message = err instanceof Error ? err.message : ''
+  if (message === 'binary_file') {
+    return 'Binary preview unavailable'
+  }
+  if (message === 'file_too_large') {
+    return 'File too large for mobile preview'
+  }
+  return fallback
 }
 
 export type MobileSessionDocumentReadersModel = MobileSessionTabApplicationModel &

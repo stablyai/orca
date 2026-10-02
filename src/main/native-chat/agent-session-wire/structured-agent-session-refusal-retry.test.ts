@@ -16,7 +16,8 @@ import {
   agentSessionRefusalOperationState,
   type AgentSessionRefusalOperationState
 } from '../../../shared/agent-session-refusal-retry'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
@@ -27,6 +28,8 @@ import {
   hostTestAttachParams,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 const METHODS = ['agentSession.setOption', 'agentSession.send'] as const
@@ -57,10 +60,7 @@ function operationId(timestamp = NOW): string {
 
 async function createHarness(options: { attached?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'orca-refusal-oracle-'))
-  const store = await AgentSessionRecordStore.open({
-    directory: join(root, 'store'),
-    hostId: 'local'
-  })
+  const store = await openTestAgentSessionRecordStore(root)
   const setOption = vi.fn<StructuredAgentSessionAdapter['setOption']>(async () => undefined)
   const adapter: StructuredAgentSessionAdapter = {
     acquire: async ({ fence }) => ({
@@ -89,9 +89,10 @@ async function createHarness(options: { attached?: boolean } = {}) {
     setOption
   }
   const host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -347,7 +348,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     }
 
     const unreadable = await createHarness()
-    await unreadable.host.close(SESSION)
+    await unreadable.host.close(SESSION, 'evict')
     unreadable.host.deps.adapter.historyFilePath = async () => {
       throw new Error('transcript unreadable')
     }

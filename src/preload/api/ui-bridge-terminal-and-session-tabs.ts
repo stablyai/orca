@@ -6,6 +6,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalCreateRequestPayload,
@@ -203,6 +204,7 @@ export const uiTerminalAndSessionTabsApi = {
       filePath: string
       relativePath: string
       runtimeEnvironmentId?: string
+      navigation?: RuntimeNavigationTarget
     }) => void
   ): (() => void) => {
     const listener = (
@@ -212,6 +214,7 @@ export const uiTerminalAndSessionTabsApi = {
         filePath: string
         relativePath: string
         runtimeEnvironmentId?: string
+        navigation?: RuntimeNavigationTarget
       }
     ) => callback(data)
     ipcRenderer.on('ui:openFileFromMobile', listener)

@@ -1,12 +1,14 @@
 // Host teardown, made failure-complete.
 //
-// A trailing "close every journal" statement is skipped on exactly the path
-// that leaks: `flushAllEventSinks` throws BY DESIGN when a sink barrier fails,
-// and the attach drain can reject too. Every connection would then be left open
-// with the global runtime reference already cleared — the one state from which
-// nothing can ever close them.
+// Every phase runs whatever an earlier one threw: `flushAllEventSinks` throws BY DESIGN when a
+// sink barrier fails, and the attach drain can reject too. Each conversation is then retired —
+// what it still queues settled, its admitted writes drained — before the runtime closes the one
+// journal connection, last.
 
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
+import { SUPERVISED_GRACEFUL_EXIT_MS } from '../../claude/claude-child-exit-proof-ladder'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../codex/codex-app-server-posix-supervisor'
+import { SNAPSHOT_DRAIN_TIMEOUT_MS } from './structured-agent-session-eviction'
 import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-host'
 import {
   abandonQueuedStructuredAgentSessionMessages,
@@ -14,8 +16,8 @@ import {
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
-import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionTeardownPhase = {
   name: string
@@ -23,12 +25,20 @@ export type StructuredAgentSessionTeardownPhase = {
 }
 
 /** Advisory persistence must not hold shutdown open. */
-const RESUME_MARKER_RECORD_TIMEOUT_MS = 2_000
+export const RESUME_MARKER_RECORD_TIMEOUT_MS = 2_000
 
-/** Eight steps at ten seconds each would outlast the global quit deadline, and a quit that dies
- *  mid-eviction leaves the lease unreleased — the exact state restart has to clean up. Bounded
- *  well below that deadline so the phases after this one still get to run. */
-const CHILD_EVICTION_TIMEOUT_MS = 8_000
+/** Covers a provider's stop observed late on a loaded host. */
+export const EVICTION_MARGIN_MS = 1_000
+
+/** A quit that dies mid-eviction leaves the lease unreleased — the exact state restart has to
+ *  clean up — so this covers the sink drain plus the longest supervised provider close, well below
+ *  the global quit deadline so later phases still run. A close's tree-kill fallback is outside it:
+ *  once main exits the supervisor stops its group itself, and next launch's recovery settles the
+ *  lease. Windows closes have no supervisor and wait less. */
+export const CHILD_EVICTION_TIMEOUT_MS =
+  SNAPSHOT_DRAIN_TIMEOUT_MS +
+  Math.max(SUPERVISED_GRACEFUL_EXIT_MS, PROVIDER_SUPERVISOR_MAX_STOP_MS) +
+  EVICTION_MARGIN_MS
 
 /** Bounds a phase without swallowing its failure, which `withTimeout` alone would. */
 async function withPhaseTimeout(run: () => Promise<void>, timeoutMs: number): Promise<void> {
@@ -57,6 +67,7 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
   /** Opens this teardown's witnesses; each session's own is taken as eviction stops its child. */
   beginResumeMarkers: () => void
   recordResumeMarkers: () => Promise<void>
+  logger: StructuredAgentSessionLogger
 }): StructuredAgentSessionTeardownPhase[] {
   return [
     {
@@ -65,7 +76,9 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
         try {
           collaborators.beginResumeMarkers()
         } catch {
-          console.warn('[structured-agent-session] capturing recovery witnesses failed')
+          collaborators.logger.warn('capturing recovery witnesses for teardown failed', {
+            scope: 'teardown-recovery-witnesses'
+          })
         }
       }
     },
@@ -81,7 +94,9 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
       run: () =>
         withPhaseTimeout(collaborators.recordResumeMarkers, RESUME_MARKER_RECORD_TIMEOUT_MS).catch(
           () => {
-            console.warn('[structured-agent-session] recording recovery capsule failed')
+            collaborators.logger.warn('recording the recovery capsule at teardown failed', {
+              scope: 'teardown-recovery-capsule'
+            })
           }
         )
     },
@@ -89,7 +104,7 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
   ]
 }
 
-export async function tearDownStructuredAgentSessionHost(input: {
+async function tearDownStructuredAgentSessionHost(input: {
   phases: readonly StructuredAgentSessionTeardownPhase[]
   sessions: Map<string, StructuredAgentSessionHostSession>
   retainSessionIds?: ReadonlySet<string>
@@ -109,7 +124,7 @@ export async function tearDownStructuredAgentSessionHost(input: {
   const entries = [...input.sessions.entries()].filter(
     ([sessionId]) => !input.retainSessionIds?.has(sessionId)
   )
-  // `allSettled`, so one rejected close cannot skip the others.
+  // `allSettled`, so one failed settlement cannot skip the others.
   const closed = await Promise.allSettled(
     entries.map(async ([sessionId, session]) => {
       await input.abandonQueued?.(sessionId, session)
@@ -119,8 +134,8 @@ export async function tearDownStructuredAgentSessionHost(input: {
   closed.forEach((result, index) => {
     const sessionId = entries[index]?.[0]
     if (result.status === 'fulfilled') {
-      // Only a FULFILLED close drops the entry. One that rejected stays indexed,
-      // which is what makes a later close a real retry rather than a no-op.
+      // Only a settled conversation drops out. One whose queued sends could not be settled stays
+      // indexed, so a later stop retries that settlement.
       if (sessionId !== undefined) {
         input.sessions.delete(sessionId)
         input.acknowledgeSessionRelease?.(sessionId)
@@ -129,10 +144,6 @@ export async function tearDownStructuredAgentSessionHost(input: {
     }
     failures.push(result.reason)
   })
-
-  // Journals an earlier failure path could not close are retried HERE, which is
-  // the only place that owns them once their caller has unwound.
-  failures.push(...(await agentSessionJournalCloseRetries.retryAll()))
 
   if (failures.length > 0) {
     throw new AggregateError(failures, 'agent session host teardown failed')
@@ -163,13 +174,16 @@ export async function flushStructuredAgentSessionHost(
           retainSessionIds
         ),
       beginResumeMarkers: () => context.restartResume.beginTeardown(context.trigger),
-      recordResumeMarkers: context.restartResume.recordMarkers
+      recordResumeMarkers: context.restartResume.recordMarkers,
+      logger: context.deps.logger
     }),
     sessions: context.sessions,
     retainSessionIds,
     acknowledgeSessionRelease: (sessionId) =>
       context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
-    abandonQueued: (sessionId, session) =>
-      abandonQueuedStructuredAgentSessionMessages(context.deps, sessionId, session.journal)
+    // Quit's is best effort: a failure is reported, and the next open rejects the leftover.
+    abandonQueued: async (sessionId, session) => {
+      await abandonQueuedStructuredAgentSessionMessages(context.deps, sessionId, session.journal)
+    }
   })
 }

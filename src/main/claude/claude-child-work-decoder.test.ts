@@ -193,6 +193,16 @@ describe('Claude child-work decoder', () => {
     expect(decoder.drain(500)).toHaveLength(256)
   })
 
+  it('ends what still runs as stopped when Orca ends the session, and only then', () => {
+    const decoder = decoderWith(backgroundAgent)
+    decoder.stopLive()
+    decoder.clear()
+    expect(decoder.drain(500)).toEqual([
+      expect.objectContaining({ type: 'ended', outcome: 'cancelled' }),
+      { type: 'session-ended', observedAt: 500 }
+    ])
+  })
+
   it('marks the end of the provider session', () => {
     const decoder = decoderWith(backgroundAgent)
     decoder.clear()

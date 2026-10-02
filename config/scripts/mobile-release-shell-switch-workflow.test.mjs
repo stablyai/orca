@@ -171,7 +171,7 @@ describe('what the mobile jobs restore from cache', () => {
     expect(names).toEqual(
       expect.arrayContaining([
         './.github/actions/install-node-dependencies: Cache Electron package archive',
-        './.github/actions/install-node-dependencies: Restore compiled native modules',
+        './.github/actions/prepare-native-runtime: Restore compiled native modules',
         './.github/actions/install-node-dependencies: Setup Node.js',
         'ios-build: Setup Ruby and fastlane'
       ])

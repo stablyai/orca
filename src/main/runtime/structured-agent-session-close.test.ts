@@ -9,6 +9,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -85,8 +86,10 @@ function installHost(options: HostOptions = {}) {
       throw new Error('the event sink could not be flushed')
     }
   })
+  const log = recordingStructuredAgentSessionLogger()
   hostRef.current = {
     deps: {
+      logger: log.logger,
       store: {
         getRecord: (id: string) => (id === SESSION ? entry : null),
         getSessionTabId: (id: string) => {
@@ -101,7 +104,7 @@ function installHost(options: HostOptions = {}) {
     setSessionTabVisibility,
     close
   }
-  return { close, setSessionTabVisibility, visible }
+  return { close, setSessionTabVisibility, visible, log }
 }
 
 describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
@@ -207,11 +210,11 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
   })
 
   it('keeps the original failure when the restore itself throws', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const host = installHost({ stuck: true })
+    const restoreFailure = new Error('agent_session_identity_required')
     host.setSessionTabVisibility.mockImplementation(async (_sessionId, isVisible) => {
       if (isVisible) {
-        throw new Error('agent_session_identity_required')
+        throw restoreFailure
       }
     })
 
@@ -220,7 +223,9 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
     expect(outcome.stopped).toBe(false)
     expect(outcome.closeAttempted).toBe(true)
     expect(outcome.reason).not.toContain('agent_session_identity_required')
-    expect(warn).toHaveBeenCalled()
+    expect(host.log.entries.map((entry) => entry.fields)).toEqual([
+      { scope: 'close-tab-restore', sessionId: SESSION, error: restoreFailure }
+    ])
   })
 
   it('claims nothing when the visible-tab index cannot be read', async () => {

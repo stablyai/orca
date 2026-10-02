@@ -4,6 +4,14 @@
 // in-place rewrite. A row whose version this build does not understand is
 // UNREADABLE, not skippable: the caller must degrade to read-only rather than
 // render a partial timeline or compact past a row it cannot interpret.
+//
+// A row whose KIND this build does not know is UNREADABLE the same way, and kept
+// on disk, when it has the envelope every row keeps: a non-empty `epoch`, an
+// integer `seq` >= 1, an integer `fence` and a numeric `ts`. So a new kind keeps
+// that envelope; changing the envelope is a `v` bump. Builds from before this
+// rule delete the journal from an unknown kind, so a new kind either ships its
+// reader first and is written only once no supported build lacks that reader,
+// or is written at a bumped `v`.
 
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
@@ -12,6 +20,7 @@ import {
   type AgentJournalItemBody,
   type AgentJournalMessageItem,
   type AgentJournalProducerLinkage,
+  type AgentJournalTurnScope,
   type AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import {
@@ -19,6 +28,7 @@ import {
   isAdmissibleAgentJournalMessageBody
 } from '../../../shared/agent-session-journal-schemas'
 import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session-context-usage-schema'
+import type { StructuredAgentSessionStopCause } from '../agent-session-wire/structured-agent-session-stop-cause'
 
 /** Producer linkage rides the row BASE rather than the body: the two nested
  *  prompt shapes are `.strict()`, so an unknown key on a body would make the
@@ -37,6 +47,10 @@ type JournalRowBase = AgentJournalProducerLinkage & {
   ts: number
   /** Set when crash reconciliation appended the row after the fact. */
   recovered?: true
+  /** Which turn the item this row creates belongs to. Rides the base, and is not a `v` bump,
+   *  for the reason linkage does. Absent on rows from hosts that predate it: the reducer
+   *  derives one for them on read. */
+  turnScope?: AgentJournalTurnScope
 }
 
 /** First row of every epoch: binds the epoch to a provider handle and records why it opened. */
@@ -67,6 +81,37 @@ export type JournalTombstoneRow = JournalRowBase & {
   kind: 'tombstone'
   itemId: string
   revision: number
+  /** Present: not a removal but a Stop's event, on an id no item ever takes. */
+  stopEvent?: JournalStopEvent
+  /** Present: not a removal but a person's Resume of the queue, on an id no item ever takes. */
+  queueResume?: true
+}
+
+/** One Stop that took effect. Temporary carrier: a tombstone's extra key, which every host ignores,
+ *  where a host from before the header's rule deletes the journal from a kind it does not know. A
+ *  kind of its own ships its reader first and is written once no supported build lacks that
+ *  reader, or is written at a bumped `v`: an older host must never fold past a person's Stop. */
+export type JournalStopEvent = {
+  /** Persisted: never rename an arm. Only `user-stop` pauses the queue. */
+  reason: StructuredAgentSessionStopCause
+  /** The turn the Stop named, else the one running when it took effect. */
+  turnId?: string
+  /** When it took effect; a rewind's restatement keeps it. */
+  at: number
+  /** Who asked (`StructuredAgentSessionCaller.callerKey`). */
+  caller?: string
+}
+
+/** A tombstone that carries a Stop event or a Resume mark instead of removing an item. */
+export type JournalStopOrResumeRow = JournalTombstoneRow &
+  (
+    | { stopEvent: NonNullable<JournalTombstoneRow['stopEvent']> }
+    | { queueResume: NonNullable<JournalTombstoneRow['queueResume']> }
+  )
+
+/** A Stop's event or a Resume. Any value counts, so a newer build's mark never removes an item. */
+export function isJournalStopOrResumeRow(row: JournalRow): row is JournalStopOrResumeRow {
+  return row.kind === 'tombstone' && (row.stopEvent !== undefined || row.queueResume !== undefined)
 }
 
 /** The write-ahead row. Durable BEFORE the adapter dispatches anything; it
@@ -81,7 +126,17 @@ export type JournalSubmissionRow = JournalRowBase & {
   /** Accepted to be handed over by a later `dispatch{pending}` row; absent on rows whose writer
    *  dispatched in the same step. Older readers keep the key and ignore it. */
   handoverRecorded?: true
+  /** The queued draft this submission hands off; absent for a direct send. Older readers keep
+   *  the key and ignore it. */
+  queuedMessageId?: string
+  /** Who asked for this turn: `client` for a person's send over the client send RPC (typed, or
+   *  a queued card they sent now); `host` for Orca's own — orchestration mail, a restart
+   *  continuation, a launch prompt, the queue's automatic drain. Absent on rows from before it
+   *  was recorded. Older readers keep the key and ignore it. */
+  origin?: JournalSubmissionOrigin
 }
+
+export type JournalSubmissionOrigin = 'client' | 'host'
 
 export type JournalDispatchRow = JournalRowBase & {
   kind: 'dispatch'
@@ -90,6 +145,8 @@ export type JournalDispatchRow = JournalRowBase & {
   /** Provider item identity adopted on accept. */
   providerItemId: string | null
   reason: string | null
+  /** On `pending`: the turn the message was handed into, which becomes its row's scope. */
+  turnScope?: AgentJournalTurnScope
   /** On `rejected`: why, typed. Older readers keep the key and ignore it; a malformed one is
    *  dropped when read, never the row. */
   rejection?: AgentSessionFailureFact
@@ -105,6 +162,7 @@ export type JournalLifecycleMutation =
       itemId: string
       revision: number
       body: AgentJournalItemBody
+      turnScope?: AgentJournalTurnScope
     })
   | { kind: 'tombstone'; itemId: string; revision: number }
 
@@ -130,25 +188,17 @@ export type JournalRowParse =
   | { ok: true; row: JournalRow }
   /** Malformed JSON or a shape this build rejects outright. */
   | { ok: false; unreadable: false }
-  /** A future schema version. The host must not write or compact this journal. */
+  /** A future schema version, or a kind this build does not know. The host must not write or
+   *  compact this journal. */
   | { ok: false; unreadable: true }
-
-const ROW_KINDS = new Set([
-  'epoch',
-  'item',
-  'tombstone',
-  'submission',
-  'dispatch',
-  'lifecycle-batch'
-])
 
 export function serializeJournalRow(row: JournalRow): string {
   return JSON.stringify(row)
 }
 
 /**
- * Parse one persisted line. Older versions are upcast; newer versions are
- * reported as unreadable so the caller fails closed.
+ * Parse one persisted line. Older versions are upcast; newer versions and newer
+ * kinds are reported as unreadable so the caller fails closed.
  */
 export function parseJournalRow(line: string): JournalRowParse {
   let parsed: unknown
@@ -170,15 +220,23 @@ export function parseJournalRow(line: string): JournalRowParse {
   }
   const upcast = upcastRow(record, version)
   dropUnusableProducerLinkage(upcast)
+  dropUnusableTurnScope(upcast)
   if (upcast.kind === 'lifecycle-batch' && Array.isArray(upcast.mutations)) {
     for (const mutation of upcast.mutations) {
       if (isPlainObject(mutation)) {
         dropUnusableProducerLinkage(mutation)
+        dropUnusableTurnScope(mutation)
       }
     }
   }
   dropUnusableContextUsage(upcast)
-  return isJournalRow(upcast) ? { ok: true, row: upcast } : { ok: false, unreadable: false }
+  if (isJournalRow(upcast)) {
+    return { ok: true, row: upcast }
+  }
+  // A newer build's kind is placed by the envelope every row keeps; one without it is damage.
+  const { kind } = upcast
+  const unknownKind = typeof kind === 'string' && kind !== '' && !KNOWN_ROW_KINDS.has(kind)
+  return { ok: false, unreadable: unknownKind && hasJournalRowEnvelope(upcast) }
 }
 
 /** Linkage ids this build cannot trust, removed from a row it still keeps.
@@ -199,6 +257,24 @@ function dropUnusableProducerLinkage(record: Record<string, unknown>): void {
   }
   if (record.attempt !== undefined && !Number.isInteger(record.attempt)) {
     delete record.attempt
+  }
+}
+
+/** A scope this build cannot place, removed like unusable linkage: the row then reads as one
+ *  written before scopes existed, and the reducer derives its scope. */
+function dropUnusableTurnScope(record: Record<string, unknown>): void {
+  const scope = record.turnScope
+  if (
+    scope !== undefined &&
+    !(
+      isPlainObject(scope) &&
+      (scope.kind === 'thread' ||
+        (scope.kind === 'turn' &&
+          typeof scope.turnItemId === 'string' &&
+          scope.turnItemId.length > 0))
+    )
+  ) {
+    delete record.turnScope
   }
 }
 
@@ -247,60 +323,56 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  *  schema — their nested shapes are dereferenced unguarded all the way to the
  *  rendered surface, so a JSON-valid corruption must fail here, not there. */
 function isJournalRow(record: Record<string, unknown>): record is JournalRow {
-  if (typeof record.kind !== 'string' || !ROW_KINDS.has(record.kind)) {
-    return false
-  }
-  if (
-    typeof record.epoch !== 'string' ||
-    !record.epoch ||
-    !Number.isInteger(record.seq) ||
-    (record.seq as number) < 1 ||
-    !Number.isInteger(record.fence) ||
-    typeof record.ts !== 'number'
-  ) {
-    return false
-  }
-  if (record.kind === 'item') {
-    return (
-      typeof record.itemId === 'string' &&
-      Number.isInteger(record.revision) &&
-      isAdmissibleAgentJournalItemBody(record.body)
-    )
-  }
-  if (record.kind === 'tombstone') {
-    return typeof record.itemId === 'string' && Number.isInteger(record.revision)
-  }
-  if (record.kind === 'submission') {
-    return (
-      typeof record.clientMessageId === 'string' &&
-      record.clientMessageId.length > 0 &&
-      typeof record.payloadFingerprint === 'string' &&
-      isPlainObject(record.providerHandle) &&
-      isAdmissibleAgentJournalMessageBody(record.body)
-    )
-  }
-  if (record.kind === 'dispatch') {
-    return (
-      typeof record.clientMessageId === 'string' &&
-      record.clientMessageId.length > 0 &&
-      typeof record.state === 'string' &&
-      record.state.length > 0 &&
-      (record.providerItemId === null || typeof record.providerItemId === 'string') &&
-      (record.reason === null || typeof record.reason === 'string')
-    )
-  }
-  if (record.kind === 'lifecycle-batch') {
-    return (
-      typeof record.settlementId === 'string' &&
-      record.settlementId.length > 0 &&
-      Array.isArray(record.mutations) &&
-      record.mutations.length > 0 &&
-      record.mutations.length <= MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS &&
-      Buffer.byteLength(JSON.stringify(record), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES &&
-      record.mutations.every(isLifecycleMutation)
-    )
-  }
-  return typeof record.reason === 'string' && isPlainObject(record.providerHandle)
+  const fieldCheck = typeof record.kind === 'string' ? KNOWN_ROW_KINDS.get(record.kind) : undefined
+  return fieldCheck !== undefined && hasJournalRowEnvelope(record) && fieldCheck(record)
+}
+
+/** Each kind's own fields, keyed by every kind the union holds: a kind without a check here fails
+ *  to compile, never reads as a newer build's kind. */
+const ROW_FIELD_CHECK_BY_KIND: Record<
+  JournalRow['kind'],
+  (record: Record<string, unknown>) => boolean
+> = {
+  epoch: (record) => typeof record.reason === 'string' && isPlainObject(record.providerHandle),
+  item: (record) =>
+    typeof record.itemId === 'string' &&
+    Number.isInteger(record.revision) &&
+    isAdmissibleAgentJournalItemBody(record.body),
+  tombstone: (record) => typeof record.itemId === 'string' && Number.isInteger(record.revision),
+  submission: (record) =>
+    typeof record.clientMessageId === 'string' &&
+    record.clientMessageId.length > 0 &&
+    typeof record.payloadFingerprint === 'string' &&
+    isPlainObject(record.providerHandle) &&
+    isAdmissibleAgentJournalMessageBody(record.body),
+  dispatch: (record) =>
+    typeof record.clientMessageId === 'string' &&
+    record.clientMessageId.length > 0 &&
+    typeof record.state === 'string' &&
+    record.state.length > 0 &&
+    (record.providerItemId === null || typeof record.providerItemId === 'string') &&
+    (record.reason === null || typeof record.reason === 'string'),
+  'lifecycle-batch': (record) =>
+    typeof record.settlementId === 'string' &&
+    record.settlementId.length > 0 &&
+    Array.isArray(record.mutations) &&
+    record.mutations.length > 0 &&
+    record.mutations.length <= MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS &&
+    Buffer.byteLength(JSON.stringify(record), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES &&
+    record.mutations.every(isLifecycleMutation)
+}
+const KNOWN_ROW_KINDS = new Map(Object.entries(ROW_FIELD_CHECK_BY_KIND))
+
+/** The fields every row keeps whatever its kind: its epoch, its place in it, its writer, its time. */
+function hasJournalRowEnvelope(record: Record<string, unknown>): boolean {
+  return (
+    typeof record.epoch === 'string' &&
+    record.epoch !== '' &&
+    Number.isInteger(record.seq) &&
+    Number(record.seq) >= 1 &&
+    Number.isInteger(record.fence) &&
+    typeof record.ts === 'number'
+  )
 }
 
 function isLifecycleMutation(value: unknown): value is JournalLifecycleMutation {

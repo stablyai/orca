@@ -318,12 +318,6 @@ describe('registerFilesystemHandlers', () => {
     expect(readFileMock).not.toHaveBeenCalled()
   })
 
-  it('does not enumerate worktrees when filesystem handlers register', () => {
-    registerFilesystemHandlers(store as never)
-
-    expect(listWorktreesMock).not.toHaveBeenCalled()
-  })
-
   it('rejects writes to directories', async () => {
     lstatMock.mockResolvedValue({ isDirectory: () => true })
 

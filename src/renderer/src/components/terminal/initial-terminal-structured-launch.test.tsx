@@ -3,21 +3,31 @@ import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
+import {
+  claimEmptyWorkspaceDefaultSurface,
+  releaseEmptyWorkspaceDefaultSurface
+} from '@/lib/empty-workspace-default-surface-claims'
 
 const mocks = vi.hoisted(() => {
   const storeTabsByWorktree: Record<string, unknown[]> = {}
+  const storeClosedRecords: Record<string, { worktreeId: string; closedAt: number }> = {}
   return {
     gate: vi.fn(),
     resume: vi.fn(),
     authority: 'none',
     launchStatus: vi.fn((_worktreeId: string, _provider: string): string => 'idle'),
     createTab: vi.fn(),
-    storeTabsByWorktree
+    storeTabsByWorktree,
+    storeClosedRecords
   }
 })
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => mocks.authority, {
-    getState: () => ({ activeWorktreeId: 'wt-1', tabsByWorktree: mocks.storeTabsByWorktree })
+    getState: () => ({
+      activeWorktreeId: 'wt-1',
+      tabsByWorktree: mocks.storeTabsByWorktree,
+      closedTerminalTabTombstonesByTabId: mocks.storeClosedRecords
+    })
   })
 }))
 vi.mock('@/lib/worktree-agent-activation-gate', () => ({
@@ -39,6 +49,8 @@ vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
   disposeAllParkedTerminalWatchers: vi.fn()
 }))
 
+const PENDING_INTENT = { callerProvidesSurface: false, seedUserDefaultSurface: true }
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined
 afterEach(async () => {
@@ -46,6 +58,7 @@ afterEach(async () => {
   vi.clearAllMocks()
   mocks.authority = 'none'
   mocks.storeTabsByWorktree = {}
+  mocks.storeClosedRecords = {}
 })
 
 function Watcher({ restored = true, hydrated = false, worktreeId = 'wt-1' } = {}): null {
@@ -179,9 +192,50 @@ describe('passive terminal seeding retries until a decision applies', () => {
     const finishGate = deferredGate()
     root = createRoot(document.createElement('div'))
     await act(async () => root?.render(<Watcher />))
+    // closeTab empties the row and records the close in the same store write.
     mocks.storeTabsByWorktree = { 'wt-1': [] }
+    mocks.storeClosedRecords = { 'closed-tab': { worktreeId: 'wt-1', closedAt: Date.now() } }
     await finishGate('empty')
     expect(mocks.createTab).not.toHaveBeenCalled()
+  })
+
+  it('seeds an empty row that has no close record, which legacy data leaves', async () => {
+    const finishGate = deferredGate()
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<Watcher />))
+    mocks.storeTabsByWorktree = { 'wt-1': [] }
+    await finishGate('empty')
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the seed to an activation reseed awaiting agent detection', async () => {
+    const finishGate = deferredGate()
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<Watcher />))
+    claimEmptyWorkspaceDefaultSurface('wt-1', PENDING_INTENT)
+    try {
+      await finishGate('empty')
+      expect(mocks.createTab).not.toHaveBeenCalled()
+    } finally {
+      releaseEmptyWorkspaceDefaultSurface('wt-1')
+    }
+  })
+
+  // Why: that reseed bails once the user leaves, so a workspace left mid-wait must seed on return.
+  it('seeds on return to a workspace left while a reseed awaited agent detection', async () => {
+    mocks.gate.mockResolvedValue('empty')
+    claimEmptyWorkspaceDefaultSurface('wt-1', PENDING_INTENT)
+    root = createRoot(document.createElement('div'))
+    try {
+      await act(async () => root?.render(<Watcher />))
+      expect(mocks.createTab).not.toHaveBeenCalled()
+    } finally {
+      releaseEmptyWorkspaceDefaultSurface('wt-1')
+    }
+
+    await act(async () => root?.render(<Watcher worktreeId="wt-2" />))
+    await act(async () => root?.render(<Watcher />))
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
   })
 
   it('seeds after leaving and returning to a blocked workspace', async () => {

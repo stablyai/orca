@@ -7,7 +7,8 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionStatusEvent
 } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from './structured-agent-session-option-error'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -19,6 +20,8 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 const DEFAULT_MODEL = 'gpt-default'
@@ -119,12 +122,13 @@ beforeEach(async () => {
   closeSessionExit = true
   dispatchedModels.length = 0
   const accountHome = join(root, 'codex-home')
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   router = adapter()
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: router,
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-native',
     now: () => NOW
@@ -210,7 +214,7 @@ describe('structured session options and close', () => {
   it('stops the provider child and forgets the session when the chat closes', async () => {
     expect(host.hasSession(SESSION)).toBe(true)
 
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
 
     expect(closeNativeSession).toHaveBeenCalledWith(SESSION)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -220,15 +224,15 @@ describe('structured session options and close', () => {
     })
     expect(host.hasSession(SESSION)).toBe(false)
 
-    await expect(host.close(SESSION)).resolves.toBeUndefined()
+    await expect(host.close(SESSION, 'evict')).resolves.toBeUndefined()
     expect(closeNativeSession).toHaveBeenCalledOnce()
   })
 
   it('is a no-op for a session it does not hold', async () => {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     closeNativeSession.mockClear()
 
-    await expect(host.close(SESSION)).resolves.toBeUndefined()
+    await expect(host.close(SESSION, 'evict')).resolves.toBeUndefined()
     expect(closeNativeSession).not.toHaveBeenCalled()
   })
 })

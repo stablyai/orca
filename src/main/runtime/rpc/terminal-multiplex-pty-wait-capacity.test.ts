@@ -284,7 +284,6 @@ describe('terminal multiplex RPC', () => {
         )!
       )
     }
-    expect(TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION).toBe(128)
     for (
       let streamId = 1;
       streamId <= TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION + 1;

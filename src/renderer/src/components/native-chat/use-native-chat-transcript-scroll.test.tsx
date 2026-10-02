@@ -23,7 +23,7 @@ function TranscriptHarness({
     contentRef,
     itemCount,
     isWorking: false,
-    showTypingIndicator: false,
+    showsTailRow: false,
     isVisible,
     alignToViewportTop: vi.fn(),
     scrollToEnd,

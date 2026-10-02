@@ -166,6 +166,12 @@ export type ClosedEditorTabSnapshot = Omit<
 
 export const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 
+/**
+ * How an editor open selects its tab. 'focus' (default) selects it as a user action; 'background'
+ * selects it inside its own worktree without stamping its focus time; 'none' only adds it.
+ */
+export type EditorTabSelection = 'focus' | 'background' | 'none'
+
 export type EditorOpenTargetOptions = {
   targetGroupId?: string
   preview?: boolean

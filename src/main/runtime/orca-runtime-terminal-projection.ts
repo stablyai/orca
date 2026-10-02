@@ -41,3 +41,23 @@ export function projectTerminalVisibleLines(emulator: HeadlessEmulator): {
     ...(draft ? { draft: draft.text } : {})
   }
 }
+
+const PROJECTED_PROMPT_GLYPHS: ReadonlySet<string> = new Set(['❯', '›', '»'])
+
+/** Undoes the projection's draft blanking, for rules that read the rows the TUI painted. */
+export function restoreProjectedComposerDraft(
+  lines: readonly string[],
+  draft: string | undefined
+): string[] {
+  const promptRow = draft ? lines.findLastIndex((line) => PROJECTED_PROMPT_GLYPHS.has(line)) : -1
+  if (draft === undefined || promptRow === -1) {
+    return [...lines]
+  }
+  const [first = '', ...rest] = draft.split('\n')
+  return [
+    ...lines.slice(0, promptRow),
+    `${lines[promptRow]} ${first}`,
+    ...rest,
+    ...lines.slice(promptRow + 1)
+  ]
+}

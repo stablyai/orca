@@ -11,7 +11,7 @@ import type {
   openClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
-import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'
@@ -19,14 +19,12 @@ import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionFastModeState
-} from '../../shared/agent-session-wire'
+import type { AgentSessionFastModeState } from '../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
+import type { ClaudeAtRestCommandCatalog } from './claude-at-rest-commands'
 import type { ClaudeSessionStartup } from './claude-structured-session-startup-state'
 
 export type ClaudeAuthDiagnostic = {
@@ -42,11 +40,15 @@ export type ClaudeStructuredSessionEvent =
       type: 'message'
       sessionId: string
       message: Record<string, unknown>
-      /** Present only when this replay acknowledged Orca's in-flight dispatch. */
+      /** Present only when this replay acknowledged Orca's in-flight dispatch
+       *  AND opens a turn; a replay folded into the running turn settles
+       *  delivery without one. */
       startsTurn?: true
       /** Submission instant of the dispatch this replay acknowledged; the origin
        *  of the turn it opens. Absent when the host cannot name a send. */
       requestedAt?: number
+      /** The submission this replay acknowledged, which opens the turn. */
+      clientMessageId?: string
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
     }
@@ -85,18 +87,20 @@ export type ClaudeLateDispatchOutcome =
       providerIdentity: AgentJournalItemIdentity
     }
   | ({ clientMessageId: string; state: 'rejected' } & AgentJournalDispatchRejection)
+  /** The CLI took the send and let it go unanswered: it may have run, so it is never re-sent. */
+  | { clientMessageId: string; state: 'unknown'; reason: string }
 
 export type ClaudeStructuredSessionAdapterDeps = {
+  /** The `/` surface of a chat whose Claude is not running. */
+  atRestCommands?: ClaudeAtRestCommandCatalog
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   /** Direct settlement path for provider-proven late dispatch outcomes. */
   onDispatchSettledLate?: (input: { sessionId: string } & ClaudeLateDispatchOutcome) => void
-  onBackgroundTasksChanged?: (
-    sessionId: string,
-    state: AgentSessionBackgroundTaskState | null
-  ) => void
+  /** The CLI reported `session_state_changed idle`: its turn is over. */
+  onSessionIdle?: (input: { sessionId: string }) => void
   /** What the session's child work did, delivered after the journal handled the frame. */
   onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   openConnection?: typeof openClaudeStreamJsonConnection
@@ -135,8 +139,10 @@ export type ClaudeDispatchWaiter = {
   requestedAt: number | null
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
-  /** The write failed or the child died, but a replay may still name it. */
+  /** Settled with no echo (failed write, child exit, doubt after start); a replay may name it. */
   retired?: boolean
+  /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */
+  commandLifecycle?: 'queued' | 'started'
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
   replayContentKey: string
 }
@@ -152,7 +158,7 @@ export type ClaudeSession = {
   acquisitionGeneration: string
   prompts: ClaudePromptRegistry
   dispatchWaiters: ClaudeDispatchWaiter[]
-  /** Bounded identities for dispatches whose child died or whose write failed. */
+  /** Bounded identities for dispatches settled without an echo; a late replay still accepts one. */
   retiredDispatchWaiters: ClaudeDispatchWaiter[]
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
   replayContentFallbackBlocked: boolean

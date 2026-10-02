@@ -47,6 +47,7 @@ describe('MobileNativeChatTurnStatus', () => {
   function render(props: {
     startedAt: number | null
     workedSeconds?: number | null
+    verdict?: 'interruption' | 'cancellation'
     expanded?: boolean
     onToggleExpanded?: () => void
   }): ReactTestRenderer {
@@ -75,6 +76,24 @@ describe('MobileNativeChatTurnStatus', () => {
     expect(button.props.accessibilityState).toEqual({ expanded: false })
     act(() => button.props.onPress())
     expect(onToggleExpanded).toHaveBeenCalledOnce()
+  })
+
+  it('heads a turn a crash cut off as failed, and a turn the user stopped as interrupted', () => {
+    const crashed = render({
+      startedAt: Date.now(),
+      workedSeconds: 12,
+      verdict: 'interruption',
+      onToggleExpanded: vi.fn()
+    })
+    expect(labels(crashed.root)).toEqual(['Failed after 12s'])
+    act(() => crashed.unmount())
+    const stopped = render({
+      startedAt: Date.now(),
+      workedSeconds: 12,
+      verdict: 'cancellation',
+      onToggleExpanded: vi.fn()
+    })
+    expect(labels(stopped.root)).toEqual(['Interrupted after 12s'])
   })
 
   it('stays a plain row when the settled turn has nothing to disclose', () => {

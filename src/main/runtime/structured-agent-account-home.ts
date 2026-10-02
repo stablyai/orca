@@ -38,23 +38,15 @@ export type StructuredCodexAccountHomeDeps = {
    * null → system-home mapping below, so the two paths cannot drift.
    */
   resolveLaunchHome:
-    | ((input: {
-        workspacePath: string
-        launchEnv: NodeJS.ProcessEnv
-      }) => string | null | Promise<string | null>)
+    | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
     | null
-  /** Empty for a record-less read; only launch preparation consumes it. */
-  workspacePath: string
 }
 
 export async function resolveStructuredCodexAccountHomePath(
   deps: StructuredCodexAccountHomeDeps
 ): Promise<string> {
   // A create has no process yet, so the current selection is what it must follow.
-  const resolvedHome = await deps.resolveLaunchHome?.({
-    workspacePath: deps.workspacePath,
-    launchEnv: deps.launchEnv
-  })
+  const resolvedHome = await deps.resolveLaunchHome?.({ launchEnv: deps.launchEnv })
   const configuredHome = deps.launchEnv.CODEX_HOME
   return (
     resolvedHome?.trim() ||

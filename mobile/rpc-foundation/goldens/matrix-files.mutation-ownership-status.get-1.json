@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "files.mutation-ownership",
   "family": "files.mutation-ownership",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
-  "scenarioSha256": "b9cfb187224a4b42efe8ccfcd96145833730d135c4fffa345716f95991a4700f",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "049e3dd3b1db": {
       "name": "status.get#1",

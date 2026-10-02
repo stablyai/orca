@@ -66,7 +66,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       throw error
     }
     console.error('[pty] failed to persist runtime PTY binding after attach:', error)
-    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(error)), {
       agentSessionOperationOutcome: 'unknown' as const
     })
   }
@@ -156,7 +156,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       if (err instanceof Error && err.message === 'terminal_split_source_not_found') {
         throw err
       }
-      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(err)), {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }

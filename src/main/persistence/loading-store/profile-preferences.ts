@@ -1,7 +1,7 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultOnboardingState } from '../../../shared/constants'
+import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import {
   updateSettings as updateSettingsOperation,

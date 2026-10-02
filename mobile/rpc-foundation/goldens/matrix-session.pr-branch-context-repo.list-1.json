@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.pr-branch-context",
   "family": "session.pr-branch-context",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
-  "scenarioSha256": "d456ec18056eb9663e99d4991784bd802422256d81ddd7509720814da06915f4",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "03628457e494": {
       "name": "repo.list#1",
@@ -451,7 +442,46 @@
         "startedAt": 0
       }
     },
-    "926edf8b660b": {
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "b7d1d887631a": {
+      "name": "repo.list#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "c0f7fd87f4a5": {
       "name": "git.branchCompare#1",
       "ordinal": 7,
       "args": [
@@ -490,53 +520,14 @@
               }
             ],
             "summary": {
-              "baseOid": "base-oid",
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
               "baseRef": "origin/main",
               "changedFiles": 1,
               "compareRef": "feature",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
               "status": "ready"
             }
-          }
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "b7d1d887631a": {
-      "name": "repo.list#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
           }
         }
       }
@@ -750,7 +741,7 @@
       {
         "id": "pr-branch-identity.normal:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -762,7 +753,7 @@
       {
         "id": "pr-branch-identity.result-absent:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "61632cddf4b9", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "61632cddf4b9", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -774,7 +765,7 @@
       {
         "id": "pr-branch-identity.result-null:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "35ed1ca1f704", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "35ed1ca1f704", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -786,7 +777,7 @@
       {
         "id": "pr-branch-identity.inner-ok-missing:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "22bd3b4b3cd0", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "22bd3b4b3cd0", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -798,7 +789,7 @@
       {
         "id": "pr-branch-identity.inner-false-string-error:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "b7d1d887631a", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "b7d1d887631a", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -810,7 +801,7 @@
       {
         "id": "pr-branch-identity.inner-false-object-error:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "16f3b408254b", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "16f3b408254b", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -822,7 +813,7 @@
       {
         "id": "pr-branch-identity.outer-refused:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "d5c9abd94695", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "d5c9abd94695", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -834,7 +825,7 @@
       {
         "id": "pr-branch-identity.outer-refused-no-message:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "235244774153", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "235244774153", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -846,7 +837,7 @@
       {
         "id": "pr-branch-identity.method-not-found:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "4bacf9ca69b3", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "4bacf9ca69b3", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -858,7 +849,7 @@
       {
         "id": "pr-branch-identity.transport-rejection:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "4a8214d9a3ed", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "4a8214d9a3ed", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"
@@ -870,7 +861,7 @@
       {
         "id": "pr-branch-identity.transport-rejection-no-message:identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "03628457e494", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "03628457e494", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"

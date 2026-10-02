@@ -15,20 +15,17 @@ import {
   reviveRetiredValue,
   sameSessionTabsPublicationLineage
 } from '../web-session-tabs-sync/publisher-identity-fences'
+import { knownStructuredSessionWorktreeIds } from '../local-structured-session-tab-retirement'
 import {
-  knownStructuredSessionWorktreeIds,
-  removeStructuredSessionTabsForVersions
-} from '../local-structured-session-tab-retirement'
-import {
-  dropLocalStructuredSessionRestoreLatch,
-  forgetLocalStructuredSessionPublicationCursors,
   localStructuredSessionEpochHistoryByWorktree,
-  localStructuredSessionVersionByWorktree,
-  supersedeLocalStructuredSessionGeneration
+  localStructuredSessionVersionByWorktree
 } from './inventory-generation-fence'
 import { forgetRetiredEpochRepairsOutside } from './retired-epoch-repair'
 import { projectLocalStructuredSessionTabs } from './snapshot-projection'
-import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import {
+  hostSnapshotAffirmsAgentSessions,
+  hostSnapshotAffirmsWorktreeContents
+} from '../host-session-snapshot-authority'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchPublished,
@@ -92,6 +89,9 @@ export function applyStructuredSessionTabSnapshots(
     startStructuredAgentLaunchCancellationCleanup((sessionId) =>
       closeStructuredAgentSession({ kind: 'local' }, sessionId)
     )
+  }
+  // A chat missing from an inventory that cannot list chats is not proof the host dropped it.
+  if (options.authoritative && snapshots.every(hostSnapshotAffirmsAgentSessions)) {
     retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
       new Set(
         snapshots.flatMap((snapshot) =>
@@ -101,29 +101,6 @@ export function applyStructuredSessionTabSnapshots(
       options.authoritativeInventory ?? beginStructuredAgentSessionAuthoritativeInventory()
     )
   }
-}
-
-export function removeLocalStructuredSessionTabs<
-  State extends WebSessionTabsSyncState & WorktreeRuntimeOwnerState
->(state: State, owner = LOCAL_STRUCTURED_SESSION_OWNER, now = Date.now()): State {
-  return removeStructuredSessionTabsForVersions(
-    state,
-    localStructuredSessionVersionByWorktree,
-    owner,
-    now
-  )
-}
-
-export function clearLocalStructuredSessionTabs(): void {
-  // Fence responses from the previous enabled instance before clearing its mirror.
-  supersedeLocalStructuredSessionGeneration()
-  const settleStructuredSessionClear = applyWebSessionTabsStorePatch(
-    (state) => removeLocalStructuredSessionTabs(state),
-    { frames: [] }
-  )
-  settleStructuredSessionClear()
-  dropLocalStructuredSessionRestoreLatch()
-  forgetLocalStructuredSessionPublicationCursors()
 }
 
 export function applyLocalStructuredSessionTabSnapshots<

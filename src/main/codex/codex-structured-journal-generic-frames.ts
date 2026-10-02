@@ -1,4 +1,10 @@
-import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-types'
+import {
+  unhandledProviderFrameJournalItem,
+  type UnhandledProviderFrameJournalItem,
+  type UnhandledProviderFrameJournalItemOptions
+} from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type {
   CodexJournalTranslationAdmission,
@@ -12,7 +18,8 @@ import {
   MAX_CODEX_GENERIC_TURN_BUCKETS
 } from './codex-structured-journal-limits'
 import { readCodexTurnId } from './codex-structured-thread-facts'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
 /** `producer` is absent only on the overflow bucket, which pools every thread's
@@ -58,8 +65,11 @@ export class CodexJournalGenericFrames {
   private cancelSuppressionFlush: (() => void) | null = null
 
   constructor(
-    private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'schedule' | 'coalesceMs'> & {
-      linkageFor: CodexRowLinkage
+    private readonly deps: Pick<
+      CodexJournalTranslatorDeps,
+      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId'
+    > & {
+      attributionFor: CodexRowAttribution
     },
     private readonly activeTurn: (threadId: string) => string | null
   ) {
@@ -70,14 +80,30 @@ export class CodexJournalGenericFrames {
   appendUnhandled(
     kind: string,
     payload: unknown,
-    threadId: string
+    threadId: string,
+    options?: UnhandledProviderFrameJournalItemOptions
   ): CodexJournalTranslationAdmission {
-    const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
+    const translated = unhandledProviderFrameJournalItem(
+      'codex',
+      kind,
+      payload,
+      DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+      options
+    )
     // A frame the classifier declines is deliberately not journaled, which is success.
     // Failing admission here force-closes the provider through the retry queue.
-    if (!translated) {
-      return CODEX_JOURNAL_ADMITTED
+    return translated ? this.appendFrameRow(threadId, payload, translated) : CODEX_JOURNAL_ADMITTED
+  }
+
+  /** One frame's own row, under the identity every frame row gets, however it is worded. */
+  appendFrameRow(
+    threadId: string,
+    payload: unknown,
+    translated: {
+      body: AgentJournalStatusItem
+      classification: UnhandledProviderFrameJournalItem['classification']
     }
+  ): CodexJournalTranslationAdmission {
     const frameTurnId = readCodexTurnId(payload) ?? this.activeTurn(threadId)
     const turnId = frameTurnId ?? 'outside-turn'
     const bucket = this.bucketFor(threadId, turnId)
@@ -100,12 +126,12 @@ export class CodexJournalGenericFrames {
     this.fallbackSequence += 1
     const identity = {
       provider: 'orca' as const,
-      clientMessageId: `provider-frame:codex:${this.fallbackSequence}`
+      clientMessageId: `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
     }
-    const linkage = this.deps.linkageFor(threadId, frameTurnId)
+    const attribution = this.deps.attributionFor(threadId, frameTurnId)
     const admission = this.deps.sink.tryAppendItem
-      ? this.deps.sink.tryAppendItem(identity, translated.body, linkage)
-      : (this.deps.sink.appendItem(identity, translated.body, linkage), CODEX_JOURNAL_ADMITTED)
+      ? this.deps.sink.tryAppendItem(identity, translated.body, attribution)
+      : (this.deps.sink.appendItem(identity, translated.body, attribution), CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
       this.fallbackSequence -= 1
       return admission
@@ -139,11 +165,12 @@ export class CodexJournalGenericFrames {
         provider: 'orca' as const,
         clientMessageId: `provider-frame-suppressed:codex:${bucket}`
       }
+      // A summary across evicted turns names no producer and belongs to no turn.
       const options = {
         coalescingKey: `provider-frame-suppressed:codex:${bucket}`,
         ...(summary.producer
-          ? this.deps.linkageFor(summary.producer.threadId, summary.producer.turnId)
-          : {})
+          ? this.deps.attributionFor(summary.producer.threadId, summary.producer.turnId)
+          : { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
       }
       const admission = this.deps.sink.tryAppendItem
         ? this.deps.sink.tryAppendItem(identity, { kind: 'status', text }, options)

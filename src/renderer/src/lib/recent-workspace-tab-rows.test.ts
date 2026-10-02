@@ -158,12 +158,25 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('permission')
   })
 
-  it('surfaces an interrupted outcome without promoting its sort class', () => {
-    const interrupted = entry('interrupted', 'done', NOW - 1_000, { interrupted: true })
+  it('surfaces a turn a crash cut short as failed', () => {
+    const cut = entry('cut', 'done', NOW - 1_000, {
+      mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: NOW - 1_000 }
+    })
 
-    expect(resolveRecentWorkspaceTabStatus(row('interrupted'), sources([interrupted]), NOW)).toBe(
-      'interrupted'
-    )
+    expect(resolveRecentWorkspaceTabStatus(row('cut'), sources([cut]), NOW)).toBe('failed')
+  })
+
+  it("reads a user's Stop as interrupted though attention demotes it, whether recorded or an old host's flag", () => {
+    const recorded = entry('stopped', 'done', NOW - 1_000, {
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 1_000 }
+    })
+    const legacy = entry('stopped', 'done', NOW - 1_000, { interrupted: true })
+
+    for (const stopped of [recorded, legacy]) {
+      expect(resolveRecentWorkspaceTabStatus(row('stopped'), sources([stopped]), NOW)).toBe(
+        'interrupted'
+      )
+    }
   })
 
   it('surfaces a failed outcome as failed', () => {
@@ -188,10 +201,10 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     ).toBe('working')
   })
 
-  it('does not let a cleanly finished sibling mask an interruption', () => {
+  it("does not let a cleanly finished sibling mask a user's Stop", () => {
     const interrupted = entry('mixed', 'done', NOW - 1_000, {
       paneKey: `mixed:${LEAF_ID}`,
-      interrupted: true
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 1_000 }
     })
     const finished = entry('mixed', 'done', NOW - 2_000, {
       paneKey: 'mixed:22222222-2222-4222-8222-222222222222'

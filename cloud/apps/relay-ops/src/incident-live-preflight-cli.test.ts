@@ -614,11 +614,11 @@ describe('relay incident live preflight', () => {
   })
 
 
-  // Why: the same-cap break-glass skips the sealed 15-minute aggregate evidence,
-  // so this live recheck is the only thing left standing between the dispatch and
-  // a mutation. It must judge the fleet exactly as it does with evidence, and it
-  // must never accept a half-specified override.
-  describe('break-glass without monitor state', () => {
+  // Why: a same-cap wave has no sealed 15-minute evidence, so this live recheck
+  // and the pre-drain sample after it are what stand between the dispatch and a
+  // mutation. It must judge the fleet exactly as it does with evidence, and it
+  // must never accept a half-specified selector.
+  describe('dispatch selector without monitor state', () => {
     const overrideArgs = (extra: string[] = [], membership = canonicalMembership) => [
       '--no-monitor-state',
       '--expected-selector-generation', '1',

@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.pr-branch-context",
   "family": "session.pr-branch-context",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
-  "scenarioSha256": "d1b208a7bee947a603949fdc1f0d145e8c5576926f89f3e32330585f3a115290",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "0fc11d9bf2a5": {
       "name": "worktree.show#1",
@@ -181,7 +172,11 @@
         "startedAt": 0
       }
     },
-    "926edf8b660b": {
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "c0f7fd87f4a5": {
       "name": "git.branchCompare#1",
       "ordinal": 7,
       "args": [
@@ -220,21 +215,17 @@
               }
             ],
             "summary": {
-              "baseOid": "base-oid",
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
               "baseRef": "origin/main",
               "changedFiles": 1,
               "compareRef": "feature",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
               "status": "ready"
             }
           }
         }
       }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
     },
     "d0e28a73dae6": {
       "name": "git.status#1",
@@ -410,7 +401,7 @@
       {
         "id": "identity",
         "observation": {
-          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "926edf8b660b"],
+          "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
             "identity": "ffc37850babd"

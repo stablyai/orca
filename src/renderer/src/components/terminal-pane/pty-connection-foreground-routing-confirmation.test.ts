@@ -359,6 +359,7 @@ describe('connectPanePty', () => {
 
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: 'codex',
+        agentEvidence: 'process-read',
         routingTrusted: true,
         shellForeground: false
       })

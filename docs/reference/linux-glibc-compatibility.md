@@ -105,16 +105,35 @@ finds is published in `status.get`'s `degradations[]` under `terminal_unavailabl
 
 **4. Ship the binary, built from patched sources.**
 [`config/scripts/build-orcad-prebuilds.mjs`](../../config/scripts/build-orcad-prebuilds.mjs)
-(`pnpm run build:orcad-prebuilds`, after `build:orcad`) compiles node-pty for the current
-host and files it under `out/orcad/prebuilds/<slot>/`, where a slot is
-`linux-{x64,arm64}-{glibc,musl}` or `darwin-{x64,arm64}`. libc is part of the slot name
-because node-pty's own loader falls back to `prebuilds/<platform>-<arch>` and cannot tell
-glibc from musl — a glibc binary parked there is loaded on Alpine and dies at `dlopen`.
+(`pnpm run build:orcad-prebuilds`, before `build:orcad`, which copies its target's slot into
+the package's `node_modules/node-pty/build/Release`) compiles node-pty for the current
+host against the pinned Node's hash-verified headers at N-API 8, and files it under
+`out/orcad-prebuilds/<slot>/`, where a slot is `linux-{x64,arm64}-{glibc,musl}`,
+`darwin-{x64,arm64}` or `win32-{x64,arm64}`. Its `manifest.json` records each file's
+sha256, the N-API level and, for glibc slots, the highest `GLIBC_` version the binary
+needs; the loader checks N-API, libc, arch and that glibc version before it installs a
+slot. glibc slots are built in a `manylinux_2_28` (AlmaLinux 8) container and pass the
+same gate at a **glibc 2.28 / `GLIBCXX_3.4.25`** floor instead of the desktop's 2.31, because
+the pinned Node they ship beside already runs on 2.28 and a 2.31 slot would leave 2.28–2.30
+hosts with a runtime but no terminal (design D6). The container's gcc-toolset supplies C++20
+and links newer libstdc++ symbols statically, so the slot needs only RHEL 8's system
+libstdc++. musl slots skip the gate, since they never meet glibc's libraries. libc is part
+of the slot name because node-pty's own loader falls back to `prebuilds/<platform>-<arch>`
+and cannot tell glibc from musl — a glibc binary parked there is loaded on Alpine and dies at `dlopen`.
 The script refuses to compile a tree where `config/patches/node-pty@1.1.0.patch` is not
 applied: without the patch the prebuilt is a #9902 crash shipped as an artifact rather
 than a first-connect error. CI runs it once per slot inside the matching container
 (`--slot=` forces the label), merges the trees, and `--require-slots` fails a release with
-a hole in the matrix.
+a hole in the matrix; `--require-slots <slot>` checks one slot's files against their
+hashes and `--smoke` loads it under the pinned Node and spawns a PTY
+(`.github/workflows/node-server-tests.yml` runs both on every slot's runner).
+
+The opt-in `linux-x64-glibc217` compat slot (rung B, not part of the default matrix) is
+built in `manylinux2014_x86_64` (glibc 2.17, devtoolset C++20) with `-static-libstdc++`,
+gated at a glibc 2.17 floor, refused if `libstdc++.so`/`libgcc_s.so` remains in
+`DT_NEEDED`, and smoked under the unofficial glibc-217 Node pinned in
+`NODE_RUNTIME_COMPAT_ASSETS`. Nothing installs it yet: the loader and the SSH deploy
+still choose only default slots.
 
 ## Adding or upgrading a native dependency
 

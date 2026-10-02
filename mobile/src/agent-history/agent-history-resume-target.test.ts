@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getMobileAiVaultResumeRepoTargetStatus,
-  getMobileAiVaultResumeWorktreeTargetStatus,
-  isSupportedMobileAiVaultResumeTargetStatus,
-  mobileAiVaultResumeTargetBlockMessage,
-  resolveMobileAiVaultSessionResumeTarget
-} from './agent-history-resume-target'
+import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 
@@ -52,27 +46,6 @@ function worktree(overrides: Partial<Worktree> & { worktreeId: string; path: str
 }
 
 describe('mobile AI Vault resume target guards', () => {
-  const worktrees = [
-    { worktreeId: 'local-wt', repoId: 'local-repo' },
-    { worktreeId: 'ssh-wt', repoId: 'ssh-repo' },
-    { worktreeId: 'runtime-wt', repoId: 'runtime-repo' },
-    { worktreeId: 'host-owned-wt', repoId: 'local-repo', hostId: 'ssh:builder' as const },
-    {
-      worktreeId: 'folder:folder-local',
-      repoId: 'folder-workspace:group-local',
-      workspaceKind: 'folder-workspace' as const
-    },
-    {
-      worktreeId: 'folder:folder-ssh',
-      repoId: 'folder-workspace:group-local',
-      workspaceKind: 'folder-workspace' as const
-    },
-    {
-      worktreeId: 'folder:folder-runtime',
-      repoId: 'folder-workspace:group-runtime',
-      workspaceKind: 'folder-workspace' as const
-    }
-  ]
   const repos = [
     { id: 'local-repo', path: '/Users/ada/repo', connectionId: null },
     { id: 'ssh-repo', path: '/home/ada/ssh-repo', connectionId: 'builder' },
@@ -97,68 +70,6 @@ describe('mobile AI Vault resume target guards', () => {
     { id: 'group-local', connectionId: null },
     { id: 'group-runtime', executionHostId: 'runtime:devbox' as const }
   ]
-
-  it('classifies local, SSH, runtime, and unknown repos', () => {
-    expect(getMobileAiVaultResumeRepoTargetStatus(repos[0])).toBe('local')
-    expect(getMobileAiVaultResumeRepoTargetStatus(repos[1])).toBe('ssh')
-    expect(getMobileAiVaultResumeRepoTargetStatus(repos[2])).toBe('runtime')
-    expect(getMobileAiVaultResumeRepoTargetStatus(null)).toBe('unknown')
-  })
-
-  it('classifies worktrees from their repo, with worktree host taking precedence', () => {
-    expect(
-      getMobileAiVaultResumeWorktreeTargetStatus({ worktreeId: 'local-wt', worktrees, repos })
-    ).toBe('local')
-    expect(
-      getMobileAiVaultResumeWorktreeTargetStatus({ worktreeId: 'ssh-wt', worktrees, repos })
-    ).toBe('ssh')
-    expect(
-      getMobileAiVaultResumeWorktreeTargetStatus({ worktreeId: 'runtime-wt', worktrees, repos })
-    ).toBe('runtime')
-    expect(
-      getMobileAiVaultResumeWorktreeTargetStatus({ worktreeId: 'host-owned-wt', worktrees, repos })
-    ).toBe('ssh')
-    expect(
-      getMobileAiVaultResumeWorktreeTargetStatus({
-        worktreeId: 'folder:folder-local',
-        worktrees,
-        repos,
-        folderWorkspaces,
-        projectGroups
-      })
-    ).toBe('local')
-    expect(
-      getMobileAiVaultResumeWorktreeTargetStatus({
-        worktreeId: 'folder:folder-ssh',
-        worktrees,
-        repos,
-        folderWorkspaces,
-        projectGroups
-      })
-    ).toBe('ssh')
-    expect(
-      getMobileAiVaultResumeWorktreeTargetStatus({
-        worktreeId: 'folder:folder-runtime',
-        worktrees,
-        repos,
-        folderWorkspaces,
-        projectGroups
-      })
-    ).toBe('runtime')
-    expect(
-      getMobileAiVaultResumeWorktreeTargetStatus({ worktreeId: 'missing', worktrees, repos })
-    ).toBe('unknown')
-  })
-
-  it('supports local targets only; SSH hosts cannot see host-local transcripts', () => {
-    expect(isSupportedMobileAiVaultResumeTargetStatus('local')).toBe(true)
-    expect(isSupportedMobileAiVaultResumeTargetStatus('ssh')).toBe(false)
-    expect(isSupportedMobileAiVaultResumeTargetStatus('runtime')).toBe(false)
-    expect(mobileAiVaultResumeTargetBlockMessage('runtime')).toContain('runtime-hosted')
-    expect(mobileAiVaultResumeTargetBlockMessage('ssh')).toContain('SSH workspace')
-    expect(mobileAiVaultResumeTargetBlockMessage('ssh')).toContain('local workspace')
-    expect(mobileAiVaultResumeTargetBlockMessage('unknown')).toContain('local workspace')
-  })
 
   it('resolves project-scope rows to the matched session worktree before the route worktree', () => {
     const target = resolveMobileAiVaultSessionResumeTarget({

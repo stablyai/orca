@@ -13,6 +13,7 @@ import {
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
+  type AntigravityUsageEnabledResolver,
   type GeminiCliOAuthEnabledResolver,
   type NormalizedCodexAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget,
@@ -101,6 +102,7 @@ export abstract class RateLimitServiceState {
   protected openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
   protected miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
+  protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null

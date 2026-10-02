@@ -13,6 +13,7 @@ import {
   StructuredAgentSessionResumeAdmission
 } from './structured-agent-session-restart-resume-runner'
 import { marker } from './structured-agent-session-restart-resume-test-harness'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 type Handover = { dispatchState: string; reason?: string | null } | undefined
 
@@ -36,7 +37,7 @@ it('holds each slot from accept until handover or rejection, and frees it when t
     },
     awaitSettlement: async () => ({ dispatchState: 'accepted' }),
     note: async () => undefined,
-    onNoteFailed: () => undefined
+    logger: createStructuredAgentSessionLogger()
   })
   const sessions = Array.from({ length: 8 }, (_, index) => `session-${index}`)
   const outcomes = resumeStructuredAgentSessionsFromRestart(

@@ -17,7 +17,8 @@ let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -45,7 +46,6 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   structuredSessionOperationId: mocks.operationId,
   useStructuredAgentSessionOutbox: () => ({
     outbox: [],
-    blockedClientMessageId: null,
     error: null,
     send: vi.fn(),
     retry: vi.fn()
@@ -322,7 +322,7 @@ describe('useStructuredAgentSession options', () => {
     ).toEqual(['operation-1', 'operation-2'])
   })
 
-  it('reuses an option operation after a pending admission refusal', async () => {
+  it('sends the pick again as a new operation after a pending admission refusal', async () => {
     let attempts = 0
     mocks.call.mockImplementation((_target, method) => {
       if (method !== 'agentSession.setOption') {
@@ -379,14 +379,13 @@ describe('useStructuredAgentSession options', () => {
         ([, , params]) =>
           (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId
       )
-    ).toEqual(['operation-1', 'operation-1'])
+    ).toEqual(['operation-1', 'operation-2'])
     expect(
       mutations.map(
         ([, , params]) =>
           (params as { envelope: { expectedRuntimeFence: number } }).envelope.expectedRuntimeFence
       )
     ).toEqual([3, 4])
-    expect(mocks.operationId).toHaveBeenCalledTimes(1)
   })
 
   it('ignores an option failure from a superseded fence', async () => {

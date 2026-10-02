@@ -14,9 +14,10 @@ import {
   agentJournalItemKey,
   parseAgentJournalItemKey
 } from '../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalTurnItem
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemIdentity,
+  type AgentJournalTurnItem
 } from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { estimateStructuredAgentSessionItemBytes } from '../native-chat/agent-session-wire/structured-agent-session-event-sink-estimate'
@@ -149,7 +150,7 @@ function findTurnRow(
 export type ClaudeTurnRowDelivery = {
   /** False only for a writer that publishes each write itself right after queueing it. */
   publish: boolean
-  options?: StructuredAgentSessionRevisionOptions
+  options?: Omit<StructuredAgentSessionRevisionOptions, 'turnScope'>
 }
 
 /**
@@ -161,8 +162,10 @@ export function writeClaudeTurnRow(
   sink: StructuredAgentSessionEventSink,
   target: ClaudeTurnRowTarget,
   write: ClaudeTurnRowWrite,
-  { publish, options = {} }: ClaudeTurnRowDelivery
+  { publish, options: delivery = {} }: ClaudeTurnRowDelivery
 ): void {
+  // A turn record belongs to no turn.
+  const options = { ...delivery, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   const revise = publish ? sink.tryReviseResolvedItemAndPublish : sink.tryReviseResolvedItem
   if (!revise) {
     if (write.lifecycle && 'identity' in target) {

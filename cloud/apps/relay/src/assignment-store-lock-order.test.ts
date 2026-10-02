@@ -79,6 +79,9 @@ class ReassignmentLockOrderDatabase implements RelayDatabase {
   readonly locks: string[] = []
 
   async query(sql: string): Promise<SqlRow[]> {
+    if (sql.includes('SELECT cell_id FROM relay_assignments')) {
+      return [{ cell_id: 'cell-b' }]
+    }
     if (sql.includes('SELECT cell_id, region FROM relay_cell_regions')) {
       return ['cell-a', 'cell-b'].map((cell_id) => ({ cell_id, region: 'us-central1' }))
     }
@@ -239,6 +242,12 @@ class NewAssignmentLockDatabase implements RelayDatabase {
   ) {}
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
+    // The sticky lane's unlocked pin read sees what the locked read would.
+    if (sql.includes('SELECT cell_id FROM relay_assignments')) {
+      return this.assignmentAppearsAfterFailure && this.generalLockFailed
+        ? [{ cell_id: 'cell-existing' }]
+        : []
+    }
     if (sql.includes('SELECT cell_id, region FROM relay_cell_regions')) {
       return [
         { cell_id: 'cell-existing', region: 'us-central1' },
@@ -480,7 +489,7 @@ describe('RelayAssignmentStore activity lock order', () => {
       'cell-b',
       'assignment',
       'cell-inventory',
-      'cell-b',
+      // No 'cell-b' write: the host holds no units, so there is nothing to release.
       'cell-a'
     ])
   })

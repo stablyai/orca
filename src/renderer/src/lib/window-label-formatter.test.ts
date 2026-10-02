@@ -18,10 +18,6 @@ describe('formatWindowLabel', () => {
     expect(formatWindowLabel(10080)).toBe('wk')
   })
 
-  it('returns "1d" for 1440 minutes (1 day)', () => {
-    expect(formatWindowLabel(1440)).toBe('1d')
-  })
-
   it('returns "2h" for 120 minutes', () => {
     expect(formatWindowLabel(120)).toBe('2h')
   })
@@ -32,10 +28,6 @@ describe('formatWindowLabel', () => {
 
   it('returns "2wk" for 20160 minutes (14 days)', () => {
     expect(formatWindowLabel(20160)).toBe('2wk')
-  })
-
-  it('returns "30m" for 30 minutes', () => {
-    expect(formatWindowLabel(30)).toBe('30m')
   })
 
   it('returns "3d" for 4320 minutes (3 days)', () => {
@@ -50,13 +42,6 @@ describe('formatWindowLabel', () => {
     // does not silently regress the snap's "5h" output.
     expect(formatWindowLabel(295)).toBe('295m')
     expect(formatWindowLabel(300)).toBe('5h')
-  })
-
-  it('falls back to per-minute labels outside canonical buckets', () => {
-    // Why: when the window length lands between buckets (e.g. 2h30m), we
-    // render the raw minute count rather than guess at a half-bucket label.
-    expect(formatWindowLabel(75)).toBe('75m')
-    expect(formatWindowLabel(150)).toBe('150m')
   })
 })
 

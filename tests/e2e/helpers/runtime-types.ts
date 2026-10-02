@@ -1,4 +1,5 @@
 import type { AppState } from '../../../src/renderer/src/store/types'
+import type { PaneManager } from '../../../src/renderer/src/lib/pane-manager/pane-manager'
 import type { OpenFile, RightSidebarTab } from '../../../src/renderer/src/store/slices/editor'
 import type {
   ManagedPane,
@@ -31,6 +32,7 @@ export type PaneManagerLike = {
   getPanes(limit?: number): ManagedPaneHandle[]
   splitPane(paneId: number, direction: 'vertical' | 'horizontal'): ManagedPaneHandle | null
   closePane(paneId: number): void
+  movePane: PaneManager['movePane']
   setActivePane(paneId: number, opts?: { focus?: boolean }): void
   suspendRendering(): void
   resumeRendering(): void

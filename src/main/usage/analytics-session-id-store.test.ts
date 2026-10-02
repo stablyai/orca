@@ -3,6 +3,7 @@ import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import { AnalyticsSessionIdStore } from './analytics-session-id-store'
 
 type WriteGate = { entered: (() => void) | null; wait: Promise<void> | null; fail: boolean }
@@ -43,6 +44,10 @@ function createStore(path = file): AnalyticsSessionIdStore {
   stores.push(store)
   return store
 }
+async function idFor(store: AnalyticsSessionIdStore, key: string) {
+  const [id] = await store.getOrCreate([key])
+  return id
+}
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-analytics-session-id-'))
   file = join(directory, 'identities.json')
@@ -61,49 +66,65 @@ describe('AnalyticsSessionIdStore', () => {
   it('is lazy and persists a random ID before returning it', async () => {
     const store = createStore()
     expect(existsSync(file)).toBe(false)
-    const id = await store.getOrCreate('provider-session-123')
+    const id = await idFor(store, 'provider-session-123')
     expect(id).toMatch(UUID_V4)
     expect(id).not.toContain('provider-session')
     expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
       schemaVersion: 1,
       entries: [['provider-session-123', id]]
     })
-    expect(await store.getOrCreate('provider-session-123')).toBe(id)
+    expect(await idFor(store, 'provider-session-123')).toBe(id)
+  })
+
+  it('persists a batch with one durable write and returns IDs in input order', async () => {
+    const store = createStore()
+    const [known] = await store.getOrCreate(['known'])
+    const write = vi.spyOn(UsageCacheSnapshotWriter.prototype, 'write')
+    const ids = await store.getOrCreate(['a', 'known', 'b', 'a'])
+    expect(write).toHaveBeenCalledOnce()
+    expect(ids[1]).toBe(known)
+    expect(ids[3]).toBe(ids[0])
+    expect(new Set(ids).size).toBe(3)
+    expect(await createStore().getOrCreate(['b', 'a', 'known'])).toEqual([ids[2], ids[0], known])
+    await store.getOrCreate(['known', 'a', 'b'])
+    expect(write).toHaveBeenCalledOnce()
   })
 
   it('restores the ID after a restart or session resume', async () => {
     const original = createStore()
-    const id = await original.getOrCreate('resumed-session')
+    const id = await idFor(original, 'resumed-session')
     await original.flush()
-    expect(await createStore().getOrCreate('resumed-session')).toBe(id)
+    expect(await idFor(createStore(), 'resumed-session')).toBe(id)
   })
 
   it('handles concurrent requests for the same and different sessions without lost writes', async () => {
     const store = createStore()
     const ids = await Promise.all(
-      Array.from({ length: 20 }, (_, index) => store.getOrCreate(`session-${index % 10}`))
+      Array.from({ length: 20 }, (_, index) => idFor(store, `session-${index % 10}`))
     )
     expect(new Set(ids).size).toBe(10)
     expect(ids.slice(0, 10)).toEqual(ids.slice(10))
     const restored = createStore()
     for (let index = 0; index < 10; index++) {
-      expect(await restored.getOrCreate(`session-${index}`)).toBe(ids[index])
+      expect(await idFor(restored, `session-${index}`)).toBe(ids[index])
     }
   })
 
   it('isolates identical provider session IDs across provider and host/profile files', async () => {
     const ids = await Promise.all([
-      createStore(join(directory, 'host-a', 'claude.json')).getOrCreate('same-session'),
-      createStore(join(directory, 'host-a', 'codex.json')).getOrCreate('same-session'),
-      createStore(join(directory, 'host-b', 'claude.json')).getOrCreate('same-session')
+      idFor(createStore(join(directory, 'host-a', 'claude.json')), 'same-session'),
+      idFor(createStore(join(directory, 'host-a', 'codex.json')), 'same-session'),
+      idFor(createStore(join(directory, 'host-b', 'claude.json')), 'same-session')
     ])
     expect(new Set(ids).size).toBe(3)
   })
 
   it.each(['', '   ', 'x'.repeat(1025)])(
-    'rejects invalid keys without creating a mapping',
+    'rejects a batch with an invalid key without minting any ID',
     async (key) => {
-      await expect(createStore().getOrCreate(key)).rejects.toThrow('Invalid provider session ID')
+      await expect(createStore().getOrCreate(['valid', key])).rejects.toThrow(
+        'Invalid provider session ID'
+      )
       expect(existsSync(file)).toBe(false)
     }
   )
@@ -111,10 +132,10 @@ describe('AnalyticsSessionIdStore', () => {
   it('handles prototype names and delimiter characters as ordinary opaque keys', async () => {
     const store = createStore()
     const keys = ['__proto__', 'constructor', 'a::b/c', 'a/b::c']
-    const ids = await Promise.all(keys.map((key) => store.getOrCreate(key)))
+    const ids = await Promise.all(keys.map((key) => idFor(store, key)))
     expect(new Set(ids).size).toBe(keys.length)
     const restored = createStore()
-    expect(await Promise.all(keys.map((key) => restored.getOrCreate(key)))).toEqual(ids)
+    expect(await Promise.all(keys.map((key) => idFor(restored, key)))).toEqual(ids)
   })
 
   it.each([
@@ -124,7 +145,7 @@ describe('AnalyticsSessionIdStore', () => {
     JSON.stringify({ schemaVersion: 1, entries: [], extra: 'secret' })
   ])('fails closed on invalid persisted state without overwriting it', async (content) => {
     writeFileSync(file, content)
-    await expect(createStore().getOrCreate('new-session')).rejects.toThrow(
+    await expect(idFor(createStore(), 'new-session')).rejects.toThrow(
       'Invalid analytics session identity file'
     )
     expect(readFileSync(file, 'utf8')).toBe(content)
@@ -144,7 +165,7 @@ describe('AnalyticsSessionIdStore', () => {
       ]
     ]) {
       writeFileSync(file, JSON.stringify({ schemaVersion: 1, entries }))
-      await expect(createStore().getOrCreate('new-session')).rejects.toThrow(
+      await expect(idFor(createStore(), 'new-session')).rejects.toThrow(
         'Duplicate analytics session identity'
       )
     }
@@ -163,12 +184,12 @@ describe('AnalyticsSessionIdStore', () => {
     const store = createStore()
     let resolved = false
     let flushed = false
-    const first = store.getOrCreate('session').then((id) => {
+    const first = idFor(store, 'session').then((id) => {
       resolved = true
       return id
     })
     await writing
-    const second = store.getOrCreate('session')
+    const second = idFor(store, 'session')
     const flush = store.flush().then(() => {
       flushed = true
     })
@@ -188,10 +209,10 @@ describe('AnalyticsSessionIdStore', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const store = createStore()
     writeGate.fail = true
-    await expect(store.getOrCreate('session')).rejects.toThrow('simulated disk failure')
+    await expect(idFor(store, 'session')).rejects.toThrow('simulated disk failure')
     expect(existsSync(file)).toBe(false)
     writeGate.fail = false
-    const id = await store.getOrCreate('session')
-    expect(await createStore().getOrCreate('session')).toBe(id)
+    const id = await idFor(store, 'session')
+    expect(await idFor(createStore(), 'session')).toBe(id)
   })
 })

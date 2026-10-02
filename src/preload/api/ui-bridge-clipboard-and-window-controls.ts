@@ -10,6 +10,7 @@ import {
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import type { NativeFileDropPayload } from '../../shared/native-file-drop'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
@@ -24,6 +25,7 @@ export const uiClipboardAndWindowControlsApi = {
       relativePath: string
       staged: boolean
       runtimeEnvironmentId?: string
+      navigation?: RuntimeNavigationTarget
     }) => void
   ): (() => void) => {
     const listener = (
@@ -34,6 +36,7 @@ export const uiClipboardAndWindowControlsApi = {
         relativePath: string
         staged: boolean
         runtimeEnvironmentId?: string
+        navigation?: RuntimeNavigationTarget
       }
     ) => callback(data)
     ipcRenderer.on('ui:openDiffFromMobile', listener)
@@ -91,6 +94,8 @@ export const uiClipboardAndWindowControlsApi = {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
+  clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
+  readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   readClipboardImageThumbnail: (): Promise<ClipboardImageThumbnail | null> =>
     ipcRenderer.invoke('clipboard:readImageThumbnail'),
   writeClipboardText: (text: string): Promise<void> =>

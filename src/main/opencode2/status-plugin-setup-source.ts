@@ -1,3 +1,15 @@
+import { getOpenCode2TuiSource } from './status-plugin-tui-source'
+import { openCodeTuiPluginDirName } from '../../shared/opencode-tui-plugin-install'
+
+/** The OpenCode 2 entry points (server setup and TUI reporter) plus the constants they share. */
+export function getOpenCode2ModuleSource(pluginID: string, expectedAgent: string): string[] {
+  return [
+    `const ORCA_TUI_PLUGIN_ENTRY = new URL("./${openCodeTuiPluginDirName(`${pluginID}.js`)}/tui.js", import.meta.url);`,
+    `const ORCA_STATUS_AGENT = "${expectedAgent}";`,
+    ...getOpenCode2SetupSource()
+  ]
+}
+
 export function getOpenCode2SetupSource(): string[] {
   return String.raw`
 // Why: OpenCode owns a form under a session id, and Orca retires a blocker when
@@ -8,8 +20,70 @@ export function getOpenCode2SetupSource(): string[] {
 // session ids; when it does, this set stops matching and those forms block.
 const NON_SESSION_FORM_OWNERS = new Set(["global"]);
 
+// Why one translation: the TUI reporter builds its Needs input payloads with it, so a blocker
+// reaches Orca in the same shape whichever process reported it.
+function translateOpenCode2Event(inputType, data) {
+  let type = inputType;
+  let properties = data || {};
+  if (type === "session.created") {
+    properties = { info: { ...properties, id: properties.sessionID } };
+  } else if (type === "session.execution.started") {
+    type = "session.status";
+    properties = { ...properties, status: { type: "busy" } };
+  } else if (type === "session.execution.succeeded" || type === "session.execution.failed" || type === "session.execution.interrupted") {
+    type = "session.status";
+    properties = { ...properties, status: { type: "idle" } };
+  } else if (type === "permission.asked") {
+    properties = { ...properties, permission: properties.action, patterns: properties.resources };
+  } else if (type === "form.created") {
+    const form = properties.form;
+    // Why: block on every form whose owner is a real session. "metadata" is
+    // optional in OpenCode's schema and its "kind" is a convention no
+    // producer is obliged to stamp, so an unknown shape must surface a
+    // blocker the user can clear rather than vanish while OpenCode waits.
+    if (!form || NON_SESSION_FORM_OWNERS.has(form.sessionID)) return null;
+    // A malformed form must not throw: that would kill the subscription.
+    const fields = Array.isArray(form.fields) ? form.fields : [];
+    type = "question.asked";
+    properties = {
+      ...form,
+      questions: fields.map((field) => ({
+        header: field.title || form.title,
+        question: field.description || field.title || form.title,
+        options: (field.options || []).map((option) => ({ label: option.label || option.value, description: option.description || "" })),
+        multiple: field.type === "multiselect",
+      })),
+    };
+  } else if (type === "form.replied" || type === "form.cancelled") {
+    // A resolution for an ignored form is inert: the blocker key carries the
+    // form id, so it simply matches nothing.
+    type = type === "form.replied" ? "question.replied" : "question.rejected";
+    properties = { ...properties, requestID: properties.id };
+  } else if (type === "session.text.started" || type === "session.text.delta" || type === "session.text.ended") {
+    type = type.replace("session.", "session.next.");
+  }
+  return { type, properties };
+}
+
+// Why: every OpenCode 2 server runs as a "serve" process (the shared service or a
+// --standalone child) whose env names only the pane that spawned it, so each full TUI
+// reports its own pane through the TUI copy of this plugin instead.
+async function tuiReportsPaneLifecycle() {
+  if (!process.argv.includes("serve")) return false;
+  try {
+    const { statSync } = await import("node:fs");
+    // Why: an installer that predates the TUI copy (e.g. an older SSH relay) writes only
+    // this file; without the TUI copy nothing else would report, so keep reporting.
+    return statSync(ORCA_TUI_PLUGIN_ENTRY).isFile();
+  } catch {
+    return false;
+  }
+}
+
 async function setupOpenCode2Status(ctx) {
+  reportingOpenCodeMajor = 2;
   const noop = async () => {};
+  if (isOpenCode2TuiContext(ctx)) return setupOpenCode2Tui(ctx);
   let hooks;
   // Why: OpenCode may probe setup() with no context during startup, and the setup
   // API shape can drift between releases. Never throw from setup — a throw surfaces
@@ -17,6 +91,7 @@ async function setupOpenCode2Status(ctx) {
   // than silently running without status reporting.
   try {
     if (!ctx || typeof ctx.session?.hook !== "function" || typeof ctx.event?.subscribe !== "function") return noop;
+    if (await tuiReportsPaneLifecycle()) return noop;
     const controller = new AbortController();
     // Why the envelope: OpenCode 2's plugin adapter unwraps a single-property
     // { data } success schema, so ctx.session.get resolves to the bare record —
@@ -24,7 +99,8 @@ async function setupOpenCode2Status(ctx) {
     // Without it, resolveRootSessionID returns null for every session and a
     // subagent's work publishes as if it were the root's.
     const client = { session: { get: async (input, options) => { const result = await ctx.session.get(input, options); return result && typeof result.id === "string" ? { data: result } : result; } } };
-    hooks = await OrcaOpenCodeStatusPlugin({ client });
+    // Why: this host disposes plugins on a hot reload while turns keep running.
+    hooks = await OrcaOpenCodeStatusPlugin({ client, sessionsOutliveDispose: true });
     if (!hooks || typeof hooks.event !== "function") return noop;
     const promptRegistration = await ctx.session.hook("prompt", async (properties) => {
       await hooks.event({ event: { type: "session.next.prompt.admitted", properties } });
@@ -32,46 +108,9 @@ async function setupOpenCode2Status(ctx) {
     const consume = async () => {
       for await (const input of ctx.event.subscribe({ signal: controller.signal })) {
         if (controller.signal.aborted) break;
-        let type = input.type;
-        let properties = input.data;
-        if (type === "session.created") {
-          properties = { info: { ...properties, id: properties.sessionID } };
-        } else if (type === "session.execution.started") {
-          type = "session.status";
-          properties = { ...properties, status: { type: "busy" } };
-        } else if (type === "session.execution.succeeded" || type === "session.execution.failed" || type === "session.execution.interrupted") {
-          type = "session.status";
-          properties = { ...properties, status: { type: "idle" } };
-        } else if (type === "permission.asked") {
-          properties = { ...properties, permission: properties.action, patterns: properties.resources };
-        } else if (type === "form.created") {
-          const form = properties.form;
-          // Why: block on every form whose owner is a real session. "metadata" is
-          // optional in OpenCode's schema and its "kind" is a convention no
-          // producer is obliged to stamp, so an unknown shape must surface a
-          // blocker the user can clear rather than vanish while OpenCode waits.
-          if (!form || NON_SESSION_FORM_OWNERS.has(form.sessionID)) continue;
-          // A malformed form must not throw: that would kill the subscription.
-          const fields = Array.isArray(form.fields) ? form.fields : [];
-          type = "question.asked";
-          properties = {
-            ...form,
-            questions: fields.map((field) => ({
-              header: field.title || form.title,
-              question: field.description || field.title || form.title,
-              options: (field.options || []).map((option) => ({ label: option.label || option.value, description: option.description || "" })),
-              multiple: field.type === "multiselect",
-            })),
-          };
-        } else if (type === "form.replied" || type === "form.cancelled") {
-          // A resolution for an ignored form is inert: the blocker key carries the
-          // form id, so it simply matches nothing.
-          type = type === "form.replied" ? "question.replied" : "question.rejected";
-          properties = { ...properties, requestID: properties.id };
-        } else if (type === "session.text.started" || type === "session.text.delta" || type === "session.text.ended") {
-          type = type.replace("session.", "session.next.");
-        }
-        await hooks.event({ event: { type, properties } });
+        const translated = translateOpenCode2Event(input.type, input.data);
+        if (!translated) continue;
+        await hooks.event({ event: translated });
       }
     };
     const consuming = consume().catch((error) => {
@@ -99,7 +138,9 @@ async function setupOpenCode2Status(ctx) {
     return noop;
   }
 }
-`.split('\n')
+`
+    .split('\n')
+    .concat(getOpenCode2TuiSource())
 }
 
 export function getOpenCode2EventNormalizationSource(): string[] {

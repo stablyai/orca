@@ -4,6 +4,7 @@ import type { AgentType } from './agent-status-types'
 // (e.g. native chat's empty state on both surfaces) from one source of truth.
 const WELL_KNOWN_LABELS: Record<string, string> = {
   claude: 'Claude',
+  codebuddy: 'CodeBuddy',
   openclaude: 'OpenClaude',
   codex: 'Codex',
   qoder: 'Qoder CLI',

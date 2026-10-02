@@ -42,8 +42,12 @@ import { computeLocalOrcadBuildHash } from './orcad-local-build-hash'
 import { preflightInstalledOrcad } from './orcad-remote-preflight'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import { installOrcadBundle } from './orcad-remote-install'
+import { join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-environment'
+import type { ServerTarget } from '../../shared/node-runtime-pin'
 import { materializeOrcadArtifact } from './orcad-artifact-materializer'
-import { resolveOrcadDeploymentTarget } from './orcad-deployment-target'
+import { readOrcadBundleTarget, resolveOrcadDeploymentTarget } from './orcad-deployment-target'
+import { materializeNodeRuntimeArchive } from './pinned-runtime-materializer'
 
 export type OrcadDeployOptions = {
   conn: SshConnection
@@ -51,6 +55,10 @@ export type OrcadDeployOptions = {
   remoteHome: string
   /** An already assembled bundle; otherwise materialize the packaged template for this host. */
   localOrcadDir?: string
+  /** The bundle's server target; read from `localOrcadDir` or probed when absent. */
+  target?: ServerTarget
+  /** Where the pinned runtime archive is cached; defaults beside the orcad artifact cache. */
+  runtimeCacheRoot?: string
   nodePath: string
   userDataDir: string
   bindHost: string
@@ -199,13 +207,22 @@ async function restoreIncumbent(
 /** Activate on a healthy verdict; retain changed candidate state for explicit recovery. */
 export async function deployOrcad(input: OrcadDeployOptions): Promise<OrcadDeployResult> {
   assertPosixOrcadHost(input.host)
+  const target =
+    input.target ??
+    (input.localOrcadDir
+      ? readOrcadBundleTarget(input.localOrcadDir)
+      : await resolveOrcadDeploymentTarget(input))
   const options = {
     ...input,
+    target,
+    nodeRuntimeArchive: () =>
+      materializeNodeRuntimeArchive(
+        target,
+        input.runtimeCacheRoot ?? join(getAppEnvironment().getPath('userData'), 'orcad-artifacts'),
+        { signal: input.signal }
+      ),
     localOrcadDir:
-      input.localOrcadDir ??
-      (await materializeOrcadArtifact(await resolveOrcadDeploymentTarget(input), {
-        signal: input.signal
-      }))
+      input.localOrcadDir ?? (await materializeOrcadArtifact(target, { signal: input.signal }))
   }
   const now = options.now ?? ((): Date => new Date())
   const fullVersion = readLocalFullVersion(options.localOrcadDir)

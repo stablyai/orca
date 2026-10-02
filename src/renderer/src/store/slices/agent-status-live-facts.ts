@@ -96,6 +96,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.lastAssistantMessageIsToolOutput !== existing.lastAssistantMessageIsToolOutput ||
       entry.orchestration !== existing.orchestration ||
       entry.subagents !== existing.subagents ||
+      entry.children !== existing.children ||
       entry.providerSession !== existing.providerSession)
   // A verdict moves no clock: a failure keeps a done's completion time, and a main agent that fails
   // while its subagents keep the row working leaves the row's state and start as they were.

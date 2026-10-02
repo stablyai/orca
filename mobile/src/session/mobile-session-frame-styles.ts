@@ -70,6 +70,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   sessionMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
     marginTop: 2
   },
   sessionMetaText: {

@@ -15,10 +15,10 @@ function readSource(relativePath: string): string {
 describe('Terminal auto-create wiring', () => {
   const source = readSource(TERMINAL_PATH)
 
-  it('derives the tombstone from the active worktree row at decision time', () => {
+  it('derives the tombstone from the active worktree row and its close records at decision time', () => {
     // Why the live store: a render-captured row goes stale while the activation check runs.
     expect(source).toMatch(
-      /Object\.hasOwn\(\s*useAppStore\.getState\(\)\.tabsByWorktree,\s*activeWorktreeId\s*\)/
+      /isTerminalWorkspaceEmptiedOnPurpose\(\s*useAppStore\.getState\(\),\s*activeWorktreeId\s*\)/
     )
   })
 

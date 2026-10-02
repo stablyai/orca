@@ -49,7 +49,7 @@ type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
 type SessionBaseline = CompletionFeedCursor & { settled: RequestMark | null }
 
 function settledMark(request: StructuredAgentSessionLatestRequest | null): RequestMark | null {
-  return request && !request.running ? { kind: request.kind, id: request.id } : null
+  return request && request.turnState !== 'running' ? { kind: request.kind, id: request.id } : null
 }
 
 export class StructuredAgentSessionTurnCompletionFeed {
@@ -115,7 +115,7 @@ export class StructuredAgentSessionTurnCompletionFeed {
       return
     }
     baseline.sequence = cursor.sequence
-    if (request?.running) {
+    if (request?.turnState === 'running') {
       // A running turn clears the mark, so this detector fires on each running → settled
       // transition rather than on an id it happens not to have seen.
       baseline.settled = null

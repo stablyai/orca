@@ -245,7 +245,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(startupAgent
         ? {
             startupAgent,
-            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
+            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '',
+            launchSource: 'cli'
           }
         : {})
     })
@@ -303,6 +304,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)
-    printResult(result, json, (value) => `removed: ${value.removed}`)
+    printResult(result, json, (value) =>
+      value.removing
+        ? `removed: ${value.removed}\nOrca is still deleting the checkout in the background.`
+        : `removed: ${value.removed}`
+    )
   }
 }

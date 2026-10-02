@@ -7,7 +7,7 @@
  * harness rather than of the guard.
  */
 
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,8 +24,12 @@ import {
   settleAgentSessionOperation,
   type AgentSessionOperationRow
 } from '../../../../shared/agent-session-operation-ledger'
-import { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { agentSessionStorePath } from '../../agent-session-record-store-file'
+import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import {
+  editPersistedTestAgentSessionStore,
+  openTestAgentSessionRecordStore,
+  readPersistedTestAgentSessionStore
+} from '../../agent-session-record-store-test-harness'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
@@ -120,7 +124,7 @@ beforeEach(async () => {
   attachCallerKeys.length = 0
   createStructuredSession.mockClear()
   directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-replay-'))
-  store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(directory)
   // The launch reaches the ledger through the installed host; nothing else on the host is used,
   // because the structured create below it is mocked out.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `deps.store` is the only member `agent.launch` reads, and a member it omits throws on call.
@@ -241,7 +245,7 @@ describe('a replay answers from the record', () => {
     const params = createLaunch({ operationId: OPERATION_ID })
     const first = await launch(params, runtime)
 
-    const reopened = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    const reopened = await openTestAgentSessionRecordStore(directory)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see the setup above.
     setStructuredAgentSessionHost({
       deps: { store: reopened }
@@ -411,16 +415,13 @@ describe('the recorded row stays readable by a build that predates it', () => {
       runtimeStub({ createSupport: { supported: false, reason: 'agent' } })
     )
 
-    const file: { operations: Record<string, { outcome: Record<string, unknown> }> } = JSON.parse(
-      await readFile(agentSessionStorePath(directory), 'utf-8')
-    )
+    const file: { operations: Record<string, { outcome: Record<string, unknown> }> } =
+      await readPersistedTestAgentSessionStore(directory)
     const outcome = Object.values(file.operations)[0].outcome
 
     // The ratchet, and the reason this is not a new status arm or an optional `sessionId`: a build
-    // without `launch` validates a row by these two fields, one row it rejects returns null for the
-    // whole file, and the schema version cannot be bumped to excuse it — a store is unreadable to
-    // any build whose version is higher than the file's. A downgrade must skip what it cannot
-    // understand, not lose every lease.
+    // without `launch` validates a row by these two fields and drops a row it rejects, losing its
+    // replay. A downgrade must skip only what it cannot understand.
     expect(outcome.status).toBe('succeeded')
     expect(typeof outcome.sessionId).toBe('string')
     expect(outcome.launch).toMatchObject({ outcome: { kind: 'terminal' } })
@@ -428,24 +429,17 @@ describe('the recorded row stays readable by a build that predates it', () => {
 })
 
 describe('an unreadable launch payload costs one replay, never the store', () => {
-  /** The whole file, primary and backup: `loadAgentSessionStore` falls through to the backup, and
-   *  the backup is a copy of the validated primary, so both carry the same payload in real life. */
+  /** The recorded operation row, as a build that wrote another payload shape leaves it. */
   async function rewriteRecordedLaunch(payload: unknown): Promise<void> {
-    const path = agentSessionStorePath(directory)
-    const file: { operations: Record<string, { outcome: Record<string, unknown> }> } = JSON.parse(
-      await readFile(path, 'utf-8')
-    )
-    const row = Object.values(file.operations)[0]
-    row.outcome.launch = payload
-    const written = JSON.stringify(file)
-    await writeFile(path, written)
-    await writeFile(`${path}.bak`, written)
+    await editPersistedTestAgentSessionStore(directory, (persisted) => {
+      const row: { outcome: Record<string, unknown> } = Object.values(persisted.operations)[0]
+      row.outcome.launch = payload
+    })
   }
 
-  it('still admits the row, because one rejected row makes the whole file unparseable', () => {
+  it('still admits the row, because a load drops a row it rejects', () => {
     // The ratchet. `isAgentLaunchResult` mirrors a result type by hand, so a field tightened there
-    // would reject rows this same build wrote — and a primary and backup that both fail to parse
-    // raise `agent_session_store_corrupt`, taking every lease in the profile with them.
+    // would reject rows this same build wrote and lose their replay.
     expect(
       isAgentSessionOperationRow({
         callerKey: 'device-1',
@@ -465,7 +459,7 @@ describe('an unreadable launch payload costs one replay, never the store', () =>
     await launch(params, runtime)
     await rewriteRecordedLaunch({ outcome: { kind: 'structured' }, worktreeId: 'wt-1' })
 
-    const reopened = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    const reopened = await openTestAgentSessionRecordStore(directory)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see the setup above.
     setStructuredAgentSessionHost({
       deps: { store: reopened }

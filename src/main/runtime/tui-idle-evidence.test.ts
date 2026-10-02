@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import { detectAgentStatusFromTitle } from '../../shared/agent-title-status'
+import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
+import { isKnownReadyPromptBody } from './terminal-wait-detection'
+import {
+  evaluateAgentStateRules,
+  readsTrustedScreen
+} from './agent-state-rules/agent-state-rules-engine'
 import {
   evaluateTuiIdle,
+  hasFreshDoneFirstPartyStatus,
+  hasQuietReadyScreen,
   isTuiIdleReadyVerdict,
-  hasQuietMuseReadyPrompt,
   nameOnlyIdleNeedsCorroboration,
   type TuiIdleEvaluationInput,
   type TuiIdleEvidenceRecord
@@ -24,7 +34,8 @@ function input(overrides: Partial<TuiIdleEvaluationInput> = {}): TuiIdleEvaluati
     record: record(),
     readTailBlockedReason: () => null,
     readPositiveBodyEvidence: () => false,
-    readMuseReadyBodyEvidence: () => true,
+    readQuietReadyBodyEvidence: () => true,
+    readAgentRuleVerdict: () => null,
     agent: 'muse',
     firstPartyStatus: null,
     quiescenceMs: QUIESCENCE_MS,
@@ -32,39 +43,38 @@ function input(overrides: Partial<TuiIdleEvaluationInput> = {}): TuiIdleEvaluati
   }
 }
 
-describe('hasQuietMuseReadyPrompt', () => {
+describe('hasQuietReadyScreen', () => {
   it('settles a Muse ready screen once the stream has gone quiet', () => {
-    expect(hasQuietMuseReadyPrompt(record(), 'muse', () => true, QUIESCENCE_MS)).toBe(true)
+    expect(hasQuietReadyScreen(record(), 'muse', () => true, QUIESCENCE_MS)).toBe(true)
   })
 
   it('refuses while the pane is still streaming', () => {
     expect(
-      hasQuietMuseReadyPrompt(
-        record({ lastOutputAt: Date.now() }),
-        'muse',
-        () => true,
-        QUIESCENCE_MS
-      )
+      hasQuietReadyScreen(record({ lastOutputAt: Date.now() }), 'muse', () => true, QUIESCENCE_MS)
     ).toBe(false)
   })
 
   it('refuses without an output clock, like the tier-3 lane', () => {
     expect(
-      hasQuietMuseReadyPrompt(record({ lastOutputAt: null }), 'muse', () => true, QUIESCENCE_MS)
+      hasQuietReadyScreen(record({ lastOutputAt: null }), 'muse', () => true, QUIESCENCE_MS)
     ).toBe(false)
   })
 
   it('refuses without a ready screen', () => {
-    expect(hasQuietMuseReadyPrompt(record(), 'muse', () => false, QUIESCENCE_MS)).toBe(false)
+    expect(hasQuietReadyScreen(record(), 'muse', () => false, QUIESCENCE_MS)).toBe(false)
   })
 
   it('covers adopted panes that carry no launch metadata', () => {
-    expect(hasQuietMuseReadyPrompt(record(), null, () => true, QUIESCENCE_MS)).toBe(true)
-    expect(hasQuietMuseReadyPrompt(record(), undefined, () => true, QUIESCENCE_MS)).toBe(true)
+    expect(hasQuietReadyScreen(record(), null, () => true, QUIESCENCE_MS)).toBe(true)
+    expect(hasQuietReadyScreen(record(), undefined, () => true, QUIESCENCE_MS)).toBe(true)
   })
 
-  it('refuses another agent quoting Muse in its scrollback', () => {
-    expect(hasQuietMuseReadyPrompt(record(), 'codex', () => true, QUIESCENCE_MS)).toBe(false)
+  it('covers Codex, whose title carries no rest signal once idle', () => {
+    expect(hasQuietReadyScreen(record(), 'codex', () => true, QUIESCENCE_MS)).toBe(true)
+  })
+
+  it('refuses another agent quoting Muse or Codex in its scrollback', () => {
+    expect(hasQuietReadyScreen(record(), 'claude', () => true, QUIESCENCE_MS)).toBe(false)
   })
 })
 
@@ -81,7 +91,7 @@ describe('evaluateTuiIdle muse lane', () => {
 })
 
 describe('evaluateTuiIdle ranking', () => {
-  const noMuse = { readMuseReadyBodyEvidence: () => false }
+  const noMuse = { readQuietReadyBodyEvidence: () => false }
 
   it('ranks a blocking prompt in the tail above an explicit idle title', () => {
     const verdict = evaluateTuiIdle(
@@ -121,7 +131,7 @@ describe('evaluateTuiIdle ranking', () => {
     })
     expect(evaluateTuiIdle(input({ ...noMuse, agent: 'claude', record: streaming }))).toEqual({
       kind: 'pending',
-      quietForeground: false
+      quietForeground: 'closed'
     })
     const quiet = record({ lastAgentStatus: 'idle', lastOscTitle: 'claude' })
     expect(evaluateTuiIdle(input({ ...noMuse, agent: 'claude', record: quiet }))).toEqual({
@@ -145,18 +155,100 @@ describe('evaluateTuiIdle ranking', () => {
         firstPartyStatus: { state: 'blocked', updatedAt: Date.now() }
       })
     )
-    expect(verdict).toEqual({ kind: 'pending', quietForeground: false })
+    expect(verdict).toEqual({ kind: 'pending', quietForeground: 'closed' })
   })
 
-  it('leaves the quiet-foreground lane open only for an unidentified pane with no title status', () => {
+  it('leaves the quiet-foreground lane open for an unidentified pane with no title status', () => {
     expect(evaluateTuiIdle(input({ ...noMuse, agent: null }))).toEqual({
       kind: 'pending',
-      quietForeground: true
+      quietForeground: 'open'
     })
-    expect(evaluateTuiIdle(input({ ...noMuse, agent: 'claude' }))).toEqual({
-      kind: 'pending',
-      quietForeground: false
-    })
+  })
+
+  it('closes the quiet-foreground lane for an agent with a stronger rest signal still to come', () => {
+    for (const agent of ['claude', 'codex', 'grok', 'dsh'] as const) {
+      expect(evaluateTuiIdle(input({ ...noMuse, agent }))).toEqual({
+        kind: 'pending',
+        quietForeground: 'closed'
+      })
+    }
+  })
+
+  // Why: a launched agent whose title Orca cannot classify has no other lane; closing this
+  // one for every known agent left `worker start` failing at agent_readiness (STA-7440).
+  it('keeps the quiet-foreground lane for an agent with no other rest signal, after it paints', () => {
+    for (const agent of ['amp', 'goose', 'crush', 'kimi', 'qwen-code', 'rovo', 'aug'] as const) {
+      expect(evaluateTuiIdle(input({ ...noMuse, agent }))).toEqual({
+        kind: 'pending',
+        quietForeground: 'after-paint'
+      })
+    }
+  })
+
+  it('closes the lane once any title has classified, so a title that does arrive outranks it', () => {
+    const verdict = evaluateTuiIdle(
+      input({ ...noMuse, agent: 'amp', record: record({ lastAgentStatus: 'permission' }) })
+    )
+    expect(verdict).toEqual({ kind: 'pending', quietForeground: 'closed' })
+  })
+})
+
+// Why: `none` reopens the quiet-foreground lane, which is only safe where no stronger lane
+// could have settled the wait; the identity-keyed lanes must agree with the declared signal.
+describe('rest signal agrees with the lanes that can settle a wait', () => {
+  it.each(Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent))('%s', (agent) => {
+    const signal = getTuiAgentRestSignal(agent)
+    const hookDone = hasFreshDoneFirstPartyStatus(agent, { state: 'done', updatedAt: Date.now() })
+    expect(hookDone).toBe(signal === 'hook-done')
+    let screenRead = false
+    isKnownReadyPromptBody(
+      '',
+      agent,
+      () => {
+        screenRead = true
+        return null
+      },
+      false
+    )
+    const quietScreenBody = hasQuietReadyScreen(record(), agent, () => true, QUIESCENCE_MS)
+    // Why a screen-ruled `none` is sound: its screen shuts the quiet lane whenever one is readable.
+    if (readsTrustedScreen(agent)) {
+      const refused = ['> not an idle composer']
+      const ruled = (screen: readonly string[] | null) =>
+        evaluateAgentStateRules(agent, { readScreenLines: () => screen })
+      expect(ruled(refused)?.state).toBe('hold')
+      const verdict = (screen: readonly string[] | null) =>
+        evaluateTuiIdle(
+          input({
+            agent,
+            record: record({ lastOscTitle: null }),
+            readQuietReadyBodyEvidence: () => false,
+            readAgentRuleVerdict: () => ruled(screen)
+          })
+        )
+      expect(verdict(refused)).toEqual({ kind: 'pending', quietForeground: 'closed' })
+      expect(verdict(null)).toEqual({
+        kind: 'pending',
+        quietForeground: signal === 'none' ? 'after-paint' : 'closed'
+      })
+      return
+    }
+    // Why not only ready-body: Codex keeps its stronger hook-driven title beside this lane.
+    if (quietScreenBody) {
+      expect(signal).not.toBe('none')
+    }
+    // Why a screen read also counts: Qoder's ready body is its composer, read by identity.
+    if (signal === 'ready-body') {
+      expect(quietScreenBody || screenRead).toBe(true)
+    }
+    if (signal !== 'none') {
+      return
+    }
+    expect({
+      screenRead,
+      syntheticTitle: getSyntheticAgentTerminalTitle(agent, 'done'),
+      processTitle: detectAgentStatusFromTitle(TUI_AGENT_CONFIG[agent].expectedProcess)
+    }).toEqual({ screenRead: false, syntheticTitle: null, processTitle: null })
   })
 })
 
@@ -181,7 +273,8 @@ describe('a DSH pane settles tui-idle on its own hook', () => {
     record: { lastAgentStatus: null, lastOutputAt: null, lastOscTitle: '\u2726 \u{1F40B} repo' },
     rendererTitle: undefined,
     readPositiveBodyEvidence: () => false,
-    readMuseReadyBodyEvidence: () => false,
+    readQuietReadyBodyEvidence: () => false,
+    readAgentRuleVerdict: () => null,
     readTailBlockedReason: () => null,
     agent: 'dsh' as const,
     firstPartyStatus: { state: 'done' as const, updatedAt: Date.now() },

@@ -19,9 +19,9 @@ import {
   resetNativeChatPtySendQueuesForTests,
   NATIVE_CHAT_SUBMIT_DELAY_MS,
   NATIVE_CHAT_QUESTION_STEP_MS,
-  NATIVE_CHAT_ADVANCE_BUFFER_MS,
-  NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT
+  NATIVE_CHAT_ADVANCE_BUFFER_MS
 } from './native-chat-runtime-send'
+import { NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT } from './native-chat-input-clear'
 import {
   NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   sendNativeChatMessageWithImageAttachments
@@ -112,10 +112,6 @@ describe('sendNativeChatMessage', () => {
     handle.cancel()
 
     expect(sendRuntimePtyInput).not.toHaveBeenCalled()
-  })
-
-  it('matches orca-runtime writeTerminalAction Enter gap (500ms)', () => {
-    expect(NATIVE_CHAT_SUBMIT_DELAY_MS).toBe(500)
   })
 
   it('serializes rapid sends on the same PTY so bodies cannot glue before Enter', async () => {

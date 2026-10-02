@@ -277,6 +277,10 @@ export class TerminalHost {
     getAliveTerminalHostSession(this.sessions, sessionId).clearScrollback()
   }
 
+  resetInputModes(sessionId: string): void {
+    getAliveTerminalHostSession(this.sessions, sessionId).resetInputModes()
+  }
+
   // Why: null-not-throw — checkpoint is best-effort against a session that may have just exited.
   getSnapshot(sessionId: string, opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     return getTerminalHostSnapshot(this.sessions.get(sessionId), opts)

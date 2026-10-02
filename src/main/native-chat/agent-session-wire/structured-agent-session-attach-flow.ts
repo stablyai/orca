@@ -44,11 +44,12 @@ import {
 } from '../../observability/agent-session-instrumentation'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
-  journalRoot: string
+  logger: StructuredAgentSessionLogger
   authority: AgentSessionAttachAuthority
   callerKey: string
   params: AgentSessionAttachParams
@@ -207,7 +208,11 @@ export async function performAttach(
     const thrown = failed ? error : preSpawnFailureInWords(error, wording)
     if (failed || thrown !== error) {
       // The answer carries only its sentence, so what failed is kept here.
-      console.warn('[agent-session] provider start failed:', error)
+      input.logger.warn('starting the provider failed', {
+        scope: 'provider-start',
+        sessionId,
+        error
+      })
     }
     return (
       failed ?? {
@@ -227,7 +232,6 @@ export async function performAttach(
     attached = await attachJournal({
       record,
       params,
-      journalRoot: input.journalRoot,
       adapter: input.adapter,
       openConversation: input.openConversation,
       providerHistoryWindow

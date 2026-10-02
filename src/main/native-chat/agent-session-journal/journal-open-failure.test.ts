@@ -2,10 +2,19 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { openJournalDatabase } from './journal-database'
-import { classifyJournalOpenFailure } from './journal-open-failure'
-import { loadJournal } from './journal-open'
-import { journalDatabaseFile } from './journal-paths'
+import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { NO_LEGACY_JOURNAL_RECORDS, openJournalDatabase } from './journal-database'
+import {
+  classifyJournalOpenFailure,
+  createJournalOpenReadRefusals,
+  journalOpenReadRefusal,
+  journalOpenRefusal,
+  journalOpenRefusalError
+} from './journal-open-failure'
+import { AgentSessionJournalError } from './journal-write-guards'
+import { journalDatabasePath } from './journal-host-database'
+import { replayJournal } from './journal-open'
+import { recordingStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger-test-support'
 
 let root: string
 
@@ -17,10 +26,15 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** What the journal's own open throws for the file as it stands. */
+/** What the journal's own open, then a chat's replay, throws for the file as it stands. */
 function openFailure(): unknown {
   try {
-    loadJournal(root, 'session-1')
+    const db = openJournalDatabase(journalDatabasePath(root), NO_LEGACY_JOURNAL_RECORDS).db
+    try {
+      replayJournal(db, 'session-1')
+    } finally {
+      db.close()
+    }
   } catch (error) {
     return error
   }
@@ -38,17 +52,17 @@ function systemError(code: string, errno: number): Error {
 
 describe('classifyJournalOpenFailure', () => {
   it('calls a journal that is not a database corrupt', async () => {
-    await writeFile(journalDatabaseFile(root), 'not a database '.repeat(64))
+    await writeFile(journalDatabasePath(root), 'not a database '.repeat(64))
     const error = openFailure()
     expect(error).toMatchObject({ errcode: 26 })
     expect(classifyJournalOpenFailure(error)).toBe('journalCorrupt')
   })
 
   it('calls a journal whose pages are damaged corrupt', async () => {
-    const path = journalDatabaseFile(root)
-    const opened = openJournalDatabase(path)
-    opened.db.exec('PRAGMA journal_mode = DELETE')
-    opened.db.close()
+    const path = journalDatabasePath(root)
+    const opened = openJournalDatabase(path, NO_LEGACY_JOURNAL_RECORDS).db
+    opened.exec('PRAGMA journal_mode = DELETE')
+    opened.close()
     const bytes = await readFile(path)
     // Page 1 holds the header and schema; every table's root page follows it.
     bytes.fill(0xab, 4096)
@@ -64,15 +78,6 @@ describe('classifyJournalOpenFailure', () => {
     ['SQLITE_CORRUPT_INDEX', 779]
   ])('reads an extended corrupt code as corrupt: %s', (_name, errcode) => {
     expect(classifyJournalOpenFailure(nodeSqliteError(errcode))).toBe('journalCorrupt')
-  })
-
-  it("reads the Bun driver's corrupt code as corrupt", () => {
-    const error = Object.assign(new Error('file is not a database'), {
-      name: 'SQLiteError',
-      code: 'SQLITE_NOTADB',
-      errno: 26
-    })
-    expect(classifyJournalOpenFailure(error)).toBe('journalCorrupt')
   })
 
   it('finds corruption a wrapper names as its cause', () => {
@@ -102,5 +107,95 @@ describe('classifyJournalOpenFailure', () => {
     const second = new Error('second', { cause: first })
     Object.assign(first, { cause: second })
     expect(classifyJournalOpenFailure(first)).toBe('journalUnavailable')
+  })
+})
+
+describe('journalOpenReadRefusal', () => {
+  it('names the reason, keeps the message the code and the storage text only as the cause', () => {
+    const log = recordingStructuredAgentSessionLogger()
+    const storage = nodeSqliteError(26)
+    const refusal = journalOpenReadRefusal(storage, log.logger, 'session-1')
+    expect(refusal.message).toBe('agent_session_journal_unreadable')
+    expect(refusal.refusal).toMatchObject({
+      code: 'agent_session_journal_unreadable',
+      details: { reason: 'journalCorrupt' }
+    })
+    expect(refusal.cause).toBe(storage)
+    expect(log.entries).toEqual([
+      {
+        level: 'warn',
+        message: 'opening the conversation for a read failed',
+        fields: { scope: 'open-for-read', sessionId: 'session-1', error: storage }
+      }
+    ])
+  })
+
+  it('passes a refusal the open already raised through unchanged', () => {
+    const raised = agentSessionRefusalError('agent_session_identity_required', {
+      reason: 'recordMissing'
+    })
+    expect(
+      journalOpenReadRefusal(raised, recordingStructuredAgentSessionLogger().logger, 's')
+    ).toBe(raised)
+  })
+})
+
+describe('createJournalOpenReadRefusals', () => {
+  it('logs a session once per failure until it opens, and each session on its own', () => {
+    const log = recordingStructuredAgentSessionLogger()
+    const logged = () => log.entries.map((entry) => entry.fields.sessionId)
+    const refusals = createJournalOpenReadRefusals(log.logger)
+    const denied = systemError('EACCES', -13)
+    const corrupt = nodeSqliteError(26)
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const refusal = refusals.refusal('session-1', denied)
+      expect(refusal.refusal).toMatchObject({ details: { reason: 'journalUnavailable' } })
+      expect(refusal.cause).toBe(denied)
+    }
+    expect(logged()).toEqual(['session-1'])
+    refusals.refusal('session-2', denied)
+    expect(logged()).toEqual(['session-1', 'session-2'])
+    expect(refusals.refusal('session-1', corrupt).refusal).toMatchObject({
+      details: { reason: 'journalCorrupt' }
+    })
+    expect(logged()).toEqual(['session-1', 'session-2', 'session-1'])
+    refusals.forget('session-1')
+    refusals.refusal('session-1', corrupt)
+    expect(log.scopes()).toEqual([
+      'open-for-read',
+      'open-for-read',
+      'open-for-read',
+      'open-for-read'
+    ])
+  })
+})
+
+// Only an update gets past a journal a newer Orca wrote, so it has a reason of its own: a client
+// that chose words by `journalUnavailable` said to try again, and retrying never cleared it.
+describe('a journal a newer Orca wrote', () => {
+  const readOnly = () =>
+    new AgentSessionJournalError('journal_read_only', 'the journal uses a newer schema')
+
+  it('refuses a write with its own reason, and the words released clients print', () => {
+    // As the wire carries it (the mobile and older-client tests read this shape).
+    expect(JSON.parse(JSON.stringify(journalOpenRefusal(readOnly())))).toEqual({
+      code: 'agent_session_journal_unreadable',
+      message: 'Chats were saved by a newer Orca. Update Orca to keep using them.',
+      details: { reason: 'journalWrittenByNewerOrca' }
+    })
+    expect(journalOpenRefusalError(readOnly()).refusal).toMatchObject({
+      details: { reason: 'journalWrittenByNewerOrca' }
+    })
+  })
+
+  it('refuses a read with the same reason', () => {
+    const { logger } = recordingStructuredAgentSessionLogger()
+    expect(journalOpenReadRefusal(readOnly(), logger, 'session-1').refusal).toMatchObject({
+      details: { reason: 'journalWrittenByNewerOrca' }
+    })
+    expect(
+      createJournalOpenReadRefusals(logger).refusal('session-1', readOnly()).refusal
+    ).toMatchObject({ details: { reason: 'journalWrittenByNewerOrca' } })
   })
 })

@@ -18,16 +18,13 @@ function primaryErrcode(error: unknown): number | null {
   if (!error || typeof error !== 'object') {
     return null
   }
-  const errcode = 'errcode' in error ? error.errcode : 'errno' in error ? error.errno : undefined
+  const errcode = 'errcode' in error ? error.errcode : undefined
   return typeof errcode === 'number' && Number.isFinite(errcode) ? errcode & 0xff : null
 }
 
-/** node:sqlite marks its errors `ERR_SQLITE_ERROR`; Bun names its class `SQLiteError`. */
+/** node:sqlite marks its errors `ERR_SQLITE_ERROR`. */
 function isSqliteDriverError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (('code' in error && error.code === 'ERR_SQLITE_ERROR') || error.name === 'SQLiteError')
-  )
+  return error instanceof Error && 'code' in error && error.code === 'ERR_SQLITE_ERROR'
 }
 
 /** True only when SQLite itself reports the database damaged or not a database at all. */

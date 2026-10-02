@@ -3,7 +3,12 @@ import type {
   AgentSessionSendResult
 } from '../../../../shared/agent-session-wire'
 import {
+  agentSessionRefusalFailure,
+  readAgentSessionErrorRefusal
+} from '../../../../shared/agent-session-write-failure'
+import {
   disposeStructuredAgentSessionSendFailure,
+  disposeStructuredAgentSessionSendRefusal,
   disposeStructuredAgentSessionSendResult,
   type StructuredAgentSessionSendDisposition
 } from '../../../../shared/structured-agent-session-send-disposition'
@@ -15,7 +20,10 @@ import {
   updateStructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
-import { writeOutbox } from './structured-agent-session-outbox-storage'
+import {
+  commitStructuredAgentSessionOutbox,
+  getStructuredAgentSessionOutbox
+} from './structured-agent-session-outbox-storage'
 import {
   getStructuredAgentLaunchPromptDispatch,
   shareStructuredAgentLaunchPromptDispatch
@@ -57,7 +65,8 @@ export function readMountedStructuredAgentSessionOutbox(
   )
 }
 
-/** A send left dispatching when its owner changed goes out again, under the same id. */
+/** A send left dispatching when its owner changed goes out again, under the same id; one a Stop
+ *  outlived is held from there by its mark, until the user's Retry. */
 export function requeueInterruptedStructuredAgentSessionDispatches(
   entries: StructuredAgentSessionOutboxEntry[],
   fence: number | null
@@ -71,16 +80,14 @@ export function requeueInterruptedStructuredAgentSessionDispatches(
 
 export function dispatchStructuredAgentSessionOutboxEntry(args: {
   next: StructuredAgentSessionOutboxEntry
-  persisted: readonly StructuredAgentSessionOutboxEntry[]
+  /** The outbox to stage `next` in: the latest, so a hold only memory keeps survives it. */
+  entries: readonly StructuredAgentSessionOutboxEntry[]
   sessionId: string
   target: RuntimeClientTarget
   fence: number
   dispatchGeneration: number
   dispatchGenerationRef: MutableRef<number>
   inFlightIdRef: MutableRef<string | null>
-  blockedIdRef: MutableRef<string | null>
-  outboxRef: MutableRef<StructuredAgentSessionOutboxEntry[]>
-  setOutbox: (entries: StructuredAgentSessionOutboxEntry[]) => void
   setError: (error: string | null) => void
   applyDisposition: (disposition: StructuredAgentSessionSendDisposition) => void
   createOperationId: () => string
@@ -88,18 +95,25 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
   const start = async (): Promise<boolean> => {
     args.inFlightIdRef.current = args.next.clientMessageId
     const staged = updateStructuredAgentSessionOutboxEntry(
-      args.persisted,
+      args.entries,
       args.next.clientMessageId,
       (entry) => stageStructuredAgentSessionOutboxEntryForSend(entry, Date.now())
     )
-    if (!writeOutbox(args.sessionId, staged)) {
+    if (!commitStructuredAgentSessionOutbox(args.sessionId, staged, { onlyIfSaved: true })) {
       args.inFlightIdRef.current = null
-      args.blockedIdRef.current = args.next.clientMessageId
+      // Held for Retry. Saved if storage takes this one write; otherwise only the open chat's
+      // outbox holds it.
+      commitStructuredAgentSessionOutbox(
+        args.sessionId,
+        updateStructuredAgentSessionOutboxEntry(
+          getStructuredAgentSessionOutbox(args.sessionId),
+          args.next.clientMessageId,
+          (entry) => ({ ...entry, lastFailure: { kind: 'failed' } })
+        )
+      )
       args.setError('Message could not be saved to the outbox')
       return false
     }
-    args.outboxRef.current = staged
-    args.setOutbox(staged)
     // No `finally` release below: `applyDisposition` frees single-flight as part of the state
     // write that re-runs the drain, and a microtask later would leave the queue no trigger.
     try {
@@ -111,29 +125,42 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
       }
       args.applyDisposition(
         disposeStructuredAgentSessionSendResult({
-          entries: args.outboxRef.current,
+          entries: getStructuredAgentSessionOutbox(args.sessionId),
           entry: args.next,
-          blockedClientMessageId: args.blockedIdRef.current,
           result,
           createOperationId: args.createOperationId
         })
       )
-      return result.ok
-        ? result.value.submission.dispatchState === 'accepted' ||
-            result.value.submission.dispatchState === 'pending'
-        : false
+      if (!result.ok) {
+        return false
+      }
+      // A queued answer retired the entry; the queue keeps moving.
+      if ('queued' in result.value) {
+        return true
+      }
+      return (
+        result.value.submission.dispatchState === 'accepted' ||
+        result.value.submission.dispatchState === 'pending'
+      )
     } catch (caught) {
       if (args.dispatchGenerationRef.current !== args.dispatchGeneration) {
         return false
       }
+      const input = { entries: getStructuredAgentSessionOutbox(args.sessionId), entry: args.next }
+      const thrown = readAgentSessionErrorRefusal(caught)
+      const refusal = thrown ? agentSessionRefusalFailure(thrown) : undefined
       args.applyDisposition(
-        disposeStructuredAgentSessionSendFailure({
-          entries: args.outboxRef.current,
-          entry: args.next,
-          blockedClientMessageId: args.blockedIdRef.current,
-          cause: caught,
-          isDeliveryUnknown: isDesktopDeliveryUnknown
-        })
+        refusal
+          ? disposeStructuredAgentSessionSendRefusal({
+              ...input,
+              refusal,
+              createOperationId: args.createOperationId
+            })
+          : disposeStructuredAgentSessionSendFailure({
+              ...input,
+              cause: caught,
+              isDeliveryUnknown: isDesktopDeliveryUnknown
+            })
       )
       return false
     }

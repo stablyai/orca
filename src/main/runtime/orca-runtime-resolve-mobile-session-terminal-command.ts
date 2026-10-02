@@ -64,7 +64,6 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
     if (opts.agentPrompt && startupPlan.followupPrompt) {
       throw new Error(`Agent ${opts.agent} does not support startup prompt quick commands.`)
     }
-    await this.markWorkspaceTrustedForAgent(opts.agent, workspace.connectionId, workspace.path)
     return {
       command: startupPlan.launchCommand,
       env: startupPlan.env,

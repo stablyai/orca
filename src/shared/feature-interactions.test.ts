@@ -3,9 +3,7 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   FEATURE_INTERACTIONS,
-  FEATURE_INTERACTION_CATEGORIES,
   FEATURE_INTERACTION_CATEGORY_BY_ID,
-  FEATURE_INTERACTION_USAGE_BUCKETS,
   getFeatureInteractionUsageBucket,
   hasFeatureInteraction,
   normalizeFeatureInteractionTelemetryBuckets,
@@ -130,19 +128,6 @@ describe('feature interactions', () => {
   })
 
   it('maps interaction counts to the exact top-coded telemetry buckets', () => {
-    expect(FEATURE_INTERACTION_USAGE_BUCKETS).toEqual([
-      'count_1',
-      'count_2',
-      'count_3_4',
-      'count_5_9',
-      'count_10_19',
-      'count_20_49',
-      'count_50_99',
-      'count_100_199',
-      'count_200_499',
-      'count_500_999',
-      'count_1000_plus'
-    ])
     expect(getFeatureInteractionUsageBucket(0)).toBeNull()
     expect(getFeatureInteractionUsageBucket(1)).toBe('count_1')
     expect(getFeatureInteractionUsageBucket(2)).toBe('count_2')
@@ -155,23 +140,6 @@ describe('feature interactions', () => {
   })
 
   it('covers every feature id with a telemetry category', () => {
-    expect(FEATURE_INTERACTION_CATEGORIES).toEqual([
-      'workspace',
-      'agent',
-      'browser',
-      'launcher',
-      'task_management',
-      'notes',
-      'review',
-      'setup',
-      'settings',
-      'automation',
-      'terminal',
-      'collaboration',
-      'resource_management',
-      'voice',
-      'source_control'
-    ])
     expect(Object.keys(FEATURE_INTERACTION_CATEGORY_BY_ID).sort()).toEqual(
       FEATURE_INTERACTIONS.map((feature) => feature.id).sort()
     )

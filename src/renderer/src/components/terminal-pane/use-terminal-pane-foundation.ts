@@ -148,7 +148,9 @@ export function useTerminalPaneFoundation(
   const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
     Record<number, VisiblePtyRecoveryState>
   >({})
-  const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
+  const [sessionStateSaveFailureMessage, setSessionStateSaveFailureMessage] = useState<
+    string | null
+  >(null)
   const daemonActions = useDaemonActions()
   const { refreshMobileOverlays } = useMobileOverlayTicks({
     managerRef,
@@ -235,8 +237,8 @@ export function useTerminalPaneFoundation(
     setTerminalError,
     ptyRecoveryStatesByPaneId,
     setPtyRecoveryStatesByPaneId,
-    sessionStateSaveFailureOpen,
-    setSessionStateSaveFailureOpen,
+    sessionStateSaveFailureMessage,
+    setSessionStateSaveFailureMessage,
     daemonActions,
     refreshMobileOverlays
   }

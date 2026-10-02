@@ -13,6 +13,7 @@ import {
 // Compatibility exports for runtime command modules that historically imported these seams from
 // filesystem-auth. The implementations remain owned by their focused modules.
 export { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+export { invalidateAuthorizedRootsCacheForRepo } from './registered-worktree-roots-scoped-invalidation'
 export { isENOENT } from './filesystem-path-containment'
 
 export const PATH_ACCESS_DENIED_MESSAGE =

@@ -18,10 +18,12 @@ import { readMiniMaxApiKey } from '../minimax/minimax-api-key-store'
 import { createAccountRuntimeTargetSettingsSync } from '../rate-limits/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../claude-accounts/runtime-selection'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
-import { setSystemCodexHomeHookSweepSuppressed } from '../codex/hook-service'
-import { isRealHomeCodexHookLaneUsable } from '../codex/codex-real-home-hook-install'
+import {
+  isRealHomeCodexHookLaneUsable,
+  setRealHomeCodexHooksEnabledReader
+} from '../codex/codex-real-home-hook-install'
+import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
 import { mainProcessState as state } from './main-process-state'
@@ -43,15 +45,8 @@ export function initializeMainProcessAccountServices(): void {
   // Why: an incapable trust-grant host must fall back to the managed home for
   // every consumer (PTY env, rate limits, commit messages) in one place.
   state.codexRuntimeHome.setRealHomeLaneGate(() => isRealHomeCodexHookLaneUsable())
-  // Why: while the real-home lane owns ~/.codex/hooks.json, the legacy
-  // system-home sweep inside managed installs would delete the entry the
-  // real-home installer just appended. Flag OFF, hooks off, or an incapable
-  // trust lane re-arms the sweep so downgrade, opt-out, and rollback converge.
-  setSystemCodexHomeHookSweepSuppressed(
-    () =>
-      state.codexRuntimeHome !== null &&
-      state.codexRuntimeHome.isHostSystemDefaultRealHome() &&
-      isAgentStatusHooksEnabled(state.store?.getSettings())
+  setRealHomeCodexHooksEnabledReader(() =>
+    isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
   )
   state.codexSessionMigration = createCodexSessionMigrationScheduler({
     isEligible: () =>
@@ -135,6 +130,10 @@ export function initializeMainProcessAccountServices(): void {
     }
   })
   state.rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
+  // Reuse the meter switch so hidden Antigravity usage does not spawn agy.
+  state.rateLimits.setAntigravityUsageEnabledResolver(() =>
+    store.getUI().statusBarItems.includes('antigravity')
+  )
   state.rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   state.keybindings = new KeybindingService({
     homePath: app.getPath('home'),

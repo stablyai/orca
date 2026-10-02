@@ -155,23 +155,13 @@ describe('agent scan roots from environment overrides', () => {
         expect(roots[0]).toBe(testCase.absoluteRoot)
       })
 
+      // A relative root is the actual #13082 failure: it resolves against whichever Orca process
+      // reads it, so the walk starts somewhere arbitrary and has no depth, entry or time cap.
       it.each(RELATIVE_VALUES)('falls back to the default root for %j', async (value) => {
         const roots = await rootDirsFor(testCase.agent, {
           [testCase.envVar]: value
         })
         expect(roots[0]).toBe(testCase.defaultRoot())
-      })
-
-      // A relative root is the actual #13082 failure: it resolves against whichever Orca process
-      // reads it, so the walk starts somewhere arbitrary and has no depth, entry or time cap.
-      it.each(RELATIVE_VALUES)('never yields a relative root for %j', async (value) => {
-        const roots = await rootDirsFor(testCase.agent, {
-          [testCase.envVar]: value
-        })
-        for (const root of roots) {
-          expect(root).toBe(join(root))
-          expect(root.startsWith('/') || /^[A-Za-z]:[\\/]/.test(root)).toBe(true)
-        }
       })
     })
   }

@@ -14,7 +14,7 @@ import {
 import { createWorkspaceFromComposerSource } from '../tasks/source-workspace-create'
 import { normalizeWorkspaceAgent } from '../tasks/workspace-agent-selection'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
-import type { AgentLaunchSupport } from '../tasks/agent-launch-worktree-create'
+import type { AgentLaunchSupport } from '../tasks/agent-launch-request'
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import type { WorktreeCreateIdempotencySupport } from '../tasks/worktree-create-idempotency-policy'

@@ -6,6 +6,8 @@ import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
+import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
+import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
@@ -46,6 +48,7 @@ export type FetchAllCyclePrepared = {
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
+  antigravityResultPromise: Promise<SettledProviderResult>
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
@@ -114,6 +117,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const antigravityUsageEnabled = this.antigravityUsageEnabledResolver?.() ?? true
+
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     this.updateState({
       ...previousState,
@@ -127,7 +132,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
-      antigravity: this.withFetchingStatus(previousState.antigravity, 'antigravity'),
+      antigravity: antigravityUsageEnabled
+        ? this.withFetchingStatus(previousState.antigravity, 'antigravity')
+        : (previousState.antigravity ?? antigravityUsageDisabledSnapshot()),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
@@ -149,6 +156,16 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       )
 
     const zcodeResultPromise = fetchZcodeRateLimits({ signal }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+
+    // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
+    const antigravityResultPromise = (
+      antigravityUsageEnabled
+        ? fetchAntigravityRateLimits({ signal })
+        : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
+    ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
@@ -183,7 +200,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           : (missingWslCodexHome ??
             fetchCodexRateLimits({
               codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
               signal
             })),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
@@ -240,7 +256,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise
+      zcodeResultPromise,
+      antigravityResultPromise
     }
   }
 }

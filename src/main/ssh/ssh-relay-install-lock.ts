@@ -72,9 +72,19 @@ export async function acquireInstallLock(
   conn: SshConnection,
   remoteRelayDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
-  options?: { signal?: AbortSignal }
+  options?: {
+    signal?: AbortSignal
+    lockName?: string
+    /** False for a lock whose directory is not a relay version dir, so no GC claim can name it. */
+    relayGcClaim?: boolean
+  }
 ): Promise<void> {
-  const lockDir = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
+  const lockDir = joinRemotePath(host, remoteRelayDir, options?.lockName ?? RELAY_INSTALL_LOCK_NAME)
+  const relayGcClaim = options?.relayGcClaim ?? true
+  const isClaimed = (): Promise<boolean> =>
+    relayGcClaim
+      ? isRelayGcClaimed(conn, remoteRelayDir, host, options?.signal)
+      : Promise.resolve(false)
 
   const start = Date.now()
   let lastStaleCheckAt = Number.NEGATIVE_INFINITY
@@ -82,7 +92,9 @@ export async function acquireInstallLock(
   while (true) {
     // Why: a crashed GC can leave the stable sibling claim behind. The shared
     // waiter recovers stale claims instead of polling that orphan forever.
-    await waitForRelayGcClaimRelease(conn, remoteRelayDir, host, options?.signal)
+    if (relayGcClaim) {
+      await waitForRelayGcClaimRelease(conn, remoteRelayDir, host, options?.signal)
+    }
     options?.signal?.throwIfAborted()
     await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir), {
       signal: options?.signal
@@ -94,12 +106,7 @@ export async function acquireInstallLock(
       if (result.trim().endsWith('OK')) {
         // Why: GC may claim the sibling path between our first probe and lock
         // creation. Recheck while holding the in-tree lock; one side backs off.
-        const claimedAfterAcquire = await isRelayGcClaimed(
-          conn,
-          remoteRelayDir,
-          host,
-          options?.signal
-        ).catch((err) => {
+        const claimedAfterAcquire = await isClaimed().catch((err) => {
           if (isUnconfirmedSshCommandTermination(err)) {
             throw err
           }
@@ -142,12 +149,7 @@ export async function acquireInstallLock(
       if (steal.trim().endsWith('OK')) {
         const reason = steal.trim().endsWith('REBOOT_OK') ? 'previous-boot' : 'stale'
         console.warn(`[ssh-relay] Stealing ${reason} install lock at ${lockDir}`)
-        const claimedAfterSteal = await isRelayGcClaimed(
-          conn,
-          remoteRelayDir,
-          host,
-          options?.signal
-        ).catch((err) => {
+        const claimedAfterSteal = await isClaimed().catch((err) => {
           if (isUnconfirmedSshCommandTermination(err)) {
             throw err
           }

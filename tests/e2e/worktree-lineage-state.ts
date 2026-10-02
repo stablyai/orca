@@ -98,7 +98,7 @@ export async function seedWorkspaceAgentStatus(
 
       const state = store.getState()
       if (!state.worktreeCardProperties.includes('inline-agents')) {
-        state.toggleWorktreeCardProperty('inline-agents')
+        state.setWorktreeCardProperties([...state.worktreeCardProperties, 'inline-agents'])
       }
       if ((state.tabsByWorktree[worktreeId] ?? []).length === 0) {
         state.createTab(worktreeId)

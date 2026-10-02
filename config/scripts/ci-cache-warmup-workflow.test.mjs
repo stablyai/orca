@@ -1,19 +1,34 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { BUN_PERSISTENCE_RUNNERS } from './bun-profile-qualification.mjs'
+import { NODE_SERVER_RUNNERS } from './node-server-qualification.mjs'
 
 const readWorkflow = (name) =>
   parse(readFileSync(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8'))
 const workflow = readWorkflow('ci-cache-warmup')
 const steps = workflow.jobs.warm.steps
 
+it('seeds new native keys on main when any declared build or probe input changes', () => {
+  const native = parse(readFileSync('.github/actions/prepare-native-runtime/action.yml', 'utf8'))
+  const hash = native.runs.steps.find((step) => step.id === 'native-cache-scope').env
+    .NATIVE_SOURCE_HASH
+  const files = [...hash.matchAll(/'([^']+)'/g)].map((match) => match[1])
+  for (const file of files) {
+    expect(
+      workflow.on.push.paths.some((pattern) =>
+        pattern.endsWith('/**') ? file.startsWith(pattern.slice(0, -2)) : file === pattern
+      ),
+      file
+    ).toBe(true)
+  }
+})
+
 it('warms the same Linux Node runtime the PR shards restore', () => {
   const arm = workflow.jobs['warm-linux-arm']
   const install = arm.steps.find(
     (step) => step.uses === './.github/actions/install-node-dependencies'
   )
-  const primer = readWorkflow('pr').jobs.test_native_cache
+  const primer = readWorkflow('pr').jobs.static_analysis
   expect(arm['runs-on']).toBe(primer['runs-on'])
   expect(arm.steps.at(-1).run).toBe('node config/scripts/ensure-native-runtime.mjs --check-only')
   expect(install.with).toMatchObject(primer.steps.find((step) => step.uses === install.uses).with)
@@ -56,17 +71,23 @@ it('bounds warming to the required platforms and validates changes without grant
   expect(workflow.jobs.warm['timeout-minutes']).toBeLessThanOrEqual(10)
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(workflow.on.push.branches).toEqual(['main'])
+  expect(workflow.on.push.paths).toContain('.github/actions/prepare-native-runtime/**')
   expect(workflow.on.schedule).toEqual([{ cron: '41 * * * *' }])
   expect(workflow.on.pull_request.paths).toContain('.github/workflows/ci-cache-warmup.yml')
-  expect(workflow.concurrency['cancel-in-progress']).toBe(true)
-  expect(workflow.concurrency.group).toContain('github.event.pull_request.number || github.ref')
   expect(steps[0].with['persist-credentials']).toBe(false)
+})
+
+it('lets hourly warmers wait while pushes, PR updates, and manual runs can replace active work', () => {
+  expect(workflow.concurrency).toEqual({
+    group: 'ci-cache-warmup-${{ github.event.pull_request.number || github.ref }}',
+    'cancel-in-progress': "${{ github.event_name != 'schedule' }}"
+  })
 })
 
 it('warms and probes both Windows images with the persistence job runtime', () => {
   const job = workflow.jobs['warm-windows']
   expect(job.strategy.matrix.os).toEqual(
-    BUN_PERSISTENCE_RUNNERS.filter((os) => os.startsWith('windows-'))
+    NODE_SERVER_RUNNERS.filter((os) => os.startsWith('windows-'))
   )
   expect(job['runs-on']).toBe('${{ matrix.os }}')
   expect(job.strategy['fail-fast']).toBe(false)

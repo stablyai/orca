@@ -26,12 +26,14 @@ export type OrchestrationSessionParty = OrchestrationParty &
 const NO_EFFECTS = { effectsApplied: false } as const
 
 /** Every param naming a party other than the caller; a new one is added here with its own test. */
-export const ORCHESTRATION_TARGET_PARAM: Readonly<Record<string, 'to' | 'terminal'>> = {
-  'orchestration.send': 'to',
-  'orchestration.ask': 'to',
-  'orchestration.dispatch': 'to',
-  'orchestration.inbox': 'terminal'
-}
+export const ORCHESTRATION_TARGET_PARAM: Readonly<Record<string, 'to' | 'terminal' | 'sessionId'>> =
+  {
+    'orchestration.send': 'to',
+    'orchestration.ask': 'to',
+    'orchestration.dispatch': 'to',
+    'orchestration.inbox': 'terminal',
+    'orchestration.sessionAddress': 'sessionId'
+  }
 
 /** The party an Orca session id names. Throws when it is a worker this host lost the identity of. */
 export function resolveOrcaSessionParty(
@@ -75,6 +77,15 @@ export function resolveOrchestrationParty(
   }
 }
 
+/** How a preamble names a party: a session by its Orca session ID (its `/clear` root), else its handle. */
+export function orcaSessionIdOrHandle(
+  address: string,
+  db: OrchestrationDb | null | undefined
+): string {
+  const { orcaSessionId } = resolveOrchestrationParty(address, db)
+  return orcaSessionId === null ? address : formatOrcaSessionAddress(orcaSessionId)
+}
+
 /** A caller named by a param: naming a chat's address proves nothing, unlike its own session id. */
 export function resolveDeclaredCallerParty(
   address: string,
@@ -84,7 +95,7 @@ export function resolveDeclaredCallerParty(
   if (party.terminalHandle === null) {
     throw new OrchestrationError(
       CODES.chatNotDeclarable,
-      `Agent session ${party.orcaSessionId} is a chat, and a chat is identified only by the session id its own environment sends, never by naming its address. No effects were applied.`,
+      `Agent session ${party.orcaSessionId} is a chat, and a chat is identified only by the Orca session ID its own environment sends, never by naming it. No effects were applied.`,
       NO_EFFECTS
     )
   }

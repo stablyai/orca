@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   StructuredAgentSessionEventSink,
@@ -94,12 +95,16 @@ describe('Claude background task row journal', () => {
     }
     const resolver = new ClaudeBackgroundTaskIdentityResolver()
 
-    expect(writeClaudeBackgroundTaskRow(sink, resolver, 'task-1', task)).toEqual({
+    expect(
+      writeClaudeBackgroundTaskRow(sink, resolver, 'task-1', task, () => AGENT_JOURNAL_THREAD_SCOPE)
+    ).toEqual({
       accepted: false,
       reason: 'backpressure'
     })
     expect(task.lastSerialized).toBeNull()
-    expect(writeClaudeBackgroundTaskRow(sink, resolver, 'task-1', task)).toEqual({
+    expect(
+      writeClaudeBackgroundTaskRow(sink, resolver, 'task-1', task, () => AGENT_JOURNAL_THREAD_SCOPE)
+    ).toEqual({
       accepted: true
     })
     expect(task.lastSerialized).not.toBeNull()
@@ -130,7 +135,13 @@ describe('Claude background task row journal', () => {
     }
 
     expect(
-      writeClaudeBackgroundTaskRow(sink, new ClaudeBackgroundTaskIdentityResolver(), 'task-1', task)
+      writeClaudeBackgroundTaskRow(
+        sink,
+        new ClaudeBackgroundTaskIdentityResolver(),
+        'task-1',
+        task,
+        () => AGENT_JOURNAL_THREAD_SCOPE
+      )
     ).toEqual({ accepted: true })
     expect(calls).toEqual([
       {
@@ -153,7 +164,8 @@ describe('Claude background task row journal', () => {
         publish: vi.fn(),
         tryAppendResolvedItemAndPublish: appendAndPublish
       },
-      isForwardedParentTool: () => true
+      isForwardedParentTool: () => true,
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
 
     rows.observe(START_BASH)
@@ -175,7 +187,8 @@ describe('Claude background task row journal', () => {
         publish: vi.fn(),
         tryAppendResolvedItemAndPublish: appendAndPublish
       },
-      isForwardedParentTool: () => true
+      isForwardedParentTool: () => true,
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
 
     rows.observe({
@@ -203,7 +216,8 @@ describe('Claude background task row journal', () => {
         publish: vi.fn(),
         tryAppendResolvedItemAndPublish: appendAndPublish
       },
-      isForwardedParentTool: () => true
+      isForwardedParentTool: () => true,
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
 
     expect(rows.observe(START_BASH)).toBe(true)
@@ -227,7 +241,8 @@ describe('Claude background task row journal', () => {
         tryAppendResolvedItemAndPublish: appendAndPublish
       },
       isForwardedParentTool: () => true,
-      onPersistenceFailure
+      onPersistenceFailure,
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
 
     rows.observe(START_BASH)
@@ -249,7 +264,8 @@ describe('Claude background task row journal', () => {
         }))
       },
       isForwardedParentTool: () => true,
-      onPersistenceFailure
+      onPersistenceFailure,
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
 
     for (let index = 0; index < 512; index += 1) {
@@ -287,7 +303,13 @@ describe('Claude background task row journal', () => {
     }
 
     expect(
-      writeClaudeBackgroundTaskRow(sink, new ClaudeBackgroundTaskIdentityResolver(), 'task-1', task)
+      writeClaudeBackgroundTaskRow(
+        sink,
+        new ClaudeBackgroundTaskIdentityResolver(),
+        'task-1',
+        task,
+        () => AGENT_JOURNAL_THREAD_SCOPE
+      )
     ).toEqual({ accepted: false, reason })
     expect(task.lastSerialized).toBeNull()
   })

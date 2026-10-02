@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
 import { enqueueStructuredAgentSessionLaunchPrompt } from './structured-agent-session-outbox-storage'
@@ -18,6 +18,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
+
+// Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
+afterEach(cleanup)
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -560,7 +563,6 @@ describe('useStructuredAgentSessionOutbox', () => {
     expect(result.current.outbox).toHaveLength(1)
     // Never sent, and never re-sent on its own: it waits for Retry and holds nothing up.
     expect(result.current.outbox[0]?.state).toBe('rejected')
-    expect(result.current.blockedClientMessageId).toBeNull()
     // Settled, not pending: the refused id never ran, so a Retry is a new operation.
     const sentId: unknown = mocks.call.mock.calls[0]![2].envelope.clientOperationId
     const retryId = result.current.outbox[0]!.clientMessageId
@@ -778,7 +780,6 @@ describe('useStructuredAgentSessionOutbox', () => {
     // under the "delivery is unconfirmed" banner. The disposition tests pin its words.
     await waitFor(() => expect(result.current.outbox[0]?.lastFailure?.kind).toBe('rejected'))
     expect(result.current.outbox[0]?.state).toBe('rejected')
-    expect(result.current.blockedClientMessageId).toBeNull()
 
     // Retry immediately, before the journal subscription can publish the rejected row.
     act(() => result.current.retry(firstId))

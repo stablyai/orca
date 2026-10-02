@@ -1,8 +1,3 @@
-import {
-  AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS,
-  AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
-  parseAgentSessionOperationTimestamp
-} from '../../../src/shared/agent-session-host-authority'
 import type {
   AgentSessionMutationResult,
   AgentSessionWireRefusalCode
@@ -15,8 +10,10 @@ import {
   agentSessionWriteNoticeParts
 } from '../../../src/shared/agent-session-refusal-notice'
 import {
-  agentSessionRpcErrorFailure,
+  agentSessionRefusalFailure,
+  agentSessionThrownFailure,
   agentSessionWriteKindForMethod,
+  readAgentSessionErrorRefusal,
   type AgentSessionWriteKind
 } from '../../../src/shared/agent-session-write-failure'
 import { structuredSessionOperationId } from './structured-session-operation-id'
@@ -30,12 +27,11 @@ export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 export type StructuredAgentSessionMutationCallResult<TValue> =
   | { status: 'accepted'; value: TValue }
   | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
-  | { status: 'failed'; message: string }
-  /** `hostReportedOperationUnknown` separates a host answer about the id from doubt
-   *  about the effect. Whether that id can still be retried is the method's own
-   *  question: a plan that recovers an unknown ledger row replays or reruns it, one
-   *  that does not refuses the same id until the row expires. */
-  | { status: 'unknown'; hostReportedOperationUnknown?: true }
+  /** `hostRejectedByRequestSchema`: the host's schema turned this request away before running
+   *  it, so the same request can never be accepted there. An auth refusal does not set it:
+   *  it says nothing about an earlier delivery of the same id. */
+  | { status: 'failed'; message: string; hostRejectedByRequestSchema?: true }
+  | { status: 'unknown' }
 
 export type StructuredAgentSessionMutationResult<TValue> =
   | { status: 'accepted'; value: TValue; sameFence: boolean }
@@ -51,10 +47,34 @@ export type StructuredAgentSessionMutate = <TValue>(
 class AgentSessionRpcResponseError extends Error {
   constructor(
     readonly code: string,
-    message: string
+    message: string,
+    /** A thrown refusal's reason rides here; its message is only the bare code. */
+    readonly data?: unknown
   ) {
     super(message)
   }
+}
+
+/** A failed read of a chat's history as the pane shows it, from a thrown error or a stream's error
+ *  frame (`{ message, error }`): a thrown refusal's message is its bare code, so its words come
+ *  from the refusal in the error's data. */
+export function agentSessionReadFailureText(failure: unknown): string {
+  const refusal = readAgentSessionErrorRefusal(
+    typeof failure === 'object' && failure !== null && 'error' in failure ? failure.error : failure
+  )
+  if (refusal) {
+    return agentSessionWriteNoticeEnglish(
+      agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
+    )
+  }
+  if (failure instanceof Error) {
+    return failure.message
+  }
+  return typeof failure === 'object' && failure !== null
+    ? 'message' in failure
+      ? String(failure.message ?? '')
+      : ''
+    : String(failure)
 }
 
 export async function callAgentSession<TResult>(
@@ -70,45 +90,13 @@ export async function callAgentSession<TResult>(
     ...(options?.failWhenDisconnected ? { failWhenDisconnected: true } : {})
   })
   if (!response.ok) {
-    throw new AgentSessionRpcResponseError(response.error.code, response.error.message)
+    throw new AgentSessionRpcResponseError(
+      response.error.code,
+      response.error.message,
+      response.error.data
+    )
   }
   return response.result as TResult
-}
-
-function isReplayableStructuredSessionOperationId(operationId: string, now: number): boolean {
-  const timestamp = parseAgentSessionOperationTimestamp(operationId)
-  return (
-    timestamp !== null &&
-    timestamp <= now + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS &&
-    now - timestamp <= AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS
-  )
-}
-
-/**
- * Retains transient non-send mutation ids while the host can still replay them. Structured sends
- * use the durable journal because delivery ambiguity itself does not expire.
- */
-export function retainStructuredSessionOperationId(
-  operationIds: Map<string, string>,
-  key: string,
-  operationId?: string,
-  now: number = Date.now()
-): string {
-  const retainedOperationId =
-    operationId && isReplayableStructuredSessionOperationId(operationId, now)
-      ? operationId
-      : structuredSessionOperationId(now)
-  operationIds.delete(key)
-  operationIds.set(key, retainedOperationId)
-  for (const [retainedKey, retainedId] of operationIds) {
-    if (retainedKey === key) {
-      continue
-    }
-    if (!isReplayableStructuredSessionOperationId(retainedId, now)) {
-      operationIds.delete(retainedKey)
-    }
-  }
-  return retainedOperationId
 }
 
 export function timeoutForDeadline(deadline: number | undefined): number | null {
@@ -172,7 +160,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       (method === 'agentSession.cancel' || method === 'agentSession.conversationCommand') &&
       result.refusal.code === 'agent_session_operation_unknown'
     ) {
-      return { status: 'unknown', hostReportedOperationUnknown: true }
+      return { status: 'unknown' }
     }
     return result.ok
       ? { status: 'accepted', value: result.value }
@@ -186,14 +174,19 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
         }
   } catch (error) {
     const answered =
-      error instanceof AgentSessionRpcResponseError ? agentSessionRpcErrorFailure(error.code) : null
+      error instanceof AgentSessionRpcResponseError
+        ? agentSessionThrownFailure(error, error.code)
+        : null
     if (answered && answered.kind !== 'unconfirmed') {
       // The host turned the request away before running it; its text is written for a log.
       return {
         status: 'failed',
         message: agentSessionWriteNoticeEnglish(
           agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields))
-        )
+        ),
+        ...(error instanceof AgentSessionRpcResponseError && error.code === 'invalid_argument'
+          ? { hostRejectedByRequestSchema: true }
+          : {})
       }
     }
     if (

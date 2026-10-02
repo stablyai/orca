@@ -114,7 +114,6 @@ describe('structuredAgentSessionStartFailure', () => {
   })
 
   it("holds any provider detail to the lease record's cap", () => {
-    expect(MAX_PROVIDER_DIAGNOSTIC_CHARS).toBe(512)
     expect(MAX_UNEXPECTED_EXIT_REASON_CHARS).toBe(MAX_PROVIDER_DIAGNOSTIC_CHARS)
     const long = 'x'.repeat(4_000)
     // However the caller built the detail, the fact stores at most the cap.

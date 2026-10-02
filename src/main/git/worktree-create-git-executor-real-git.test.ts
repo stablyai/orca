@@ -81,7 +81,10 @@ it('creates cold and prepared worktrees with real Git while status capacity is o
         prepared.preparedPath,
         join(root, 'warm'),
         'warm',
-        'main'
+        'main',
+        false,
+        {},
+        prepared.lockReason
       )
       expect(await listWorktrees(repo)).toHaveLength(3)
     })

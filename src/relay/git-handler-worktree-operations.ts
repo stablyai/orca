@@ -12,7 +12,10 @@ import {
   worktreeIsCleanOp
 } from './git-handler-worktree-ops'
 import { annotatePrunableWorktreesByExistence } from './git-handler-worktree-list'
-import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
+import {
+  inspectLocalBaseRefForWorktreeCreateOp,
+  refreshLocalBaseRefForWorktreeCreateOp
+} from './git-handler-local-base-ref-refresh'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError
@@ -170,5 +173,9 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
     return this.runWithGitReadCacheClear(() =>
       refreshLocalBaseRefForWorktreeCreateOp(this.git.bind(this), params, this.gitCapabilities)
     )
+  }
+
+  async inspectLocalBaseRefForWorktreeCreate(params: Record<string, unknown>) {
+    return inspectLocalBaseRefForWorktreeCreateOp(this.git.bind(this), params, this.gitCapabilities)
   }
 }

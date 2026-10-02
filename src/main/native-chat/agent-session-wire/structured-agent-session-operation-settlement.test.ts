@@ -17,9 +17,11 @@ import {
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { sendPlan } from './structured-agent-session-mutation-plans'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 async function context(): Promise<AgentSessionTurnContext> {
   return {
+    logger: createStructuredAgentSessionLogger(),
     sessionId: SESSION,
     journal: await journals.open({
       identity: {
@@ -29,7 +31,7 @@ async function context(): Promise<AgentSessionTurnContext> {
         agent: 'codex',
         providerHandle: { kind: 'codex', threadId: THREAD }
       },
-      journalDir: join(hostTestState().root, 'settlement')
+      stateDirectory: join(hostTestState().root, 'settlement')
     }),
     fence: 1,
     adapter: adapter(),

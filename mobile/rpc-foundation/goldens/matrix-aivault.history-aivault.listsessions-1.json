@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "aiVault.history-scan",
   "family": "aiVault.history",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "ec16931c5431d3dbb05729d4670c381a434bff71648d334b7b5224db188fdccb",
-  "scenarioSha256": "efb8d1cd2a2ff0ade4cdc48a1aacec565e33b405bbe95c100b86534cdde49740",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "03941f1abe9e": {
       "name": "aiVault.listSessions#1",

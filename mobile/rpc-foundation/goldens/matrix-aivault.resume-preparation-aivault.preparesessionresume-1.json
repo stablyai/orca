@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "aiVault.resume-preparation",
   "family": "aiVault.resume-preparation",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
-  "scenarioSha256": "c3b400967b0b1c7bd3f82a278f4b10855ade72d384922ec4d34795c7bb20084d",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "02733b10ba3d": {
       "failure": {

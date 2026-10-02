@@ -6,38 +6,86 @@ import {
 } from './status-bar-density'
 
 const TIGHTEST = STATUS_BAR_DENSITY_LEVELS.length - 1
+const w = (natural: number, fit = natural) => ({ natural, fit })
+
+describe('STATUS_BAR_DENSITY_LEVELS', () => {
+  it('collapses usage into "+N" before right-side segments lose their labels', () => {
+    const firstCollapse = STATUS_BAR_DENSITY_LEVELS.findIndex((level) => level.collapseUsage)
+    const firstIconOnly = STATUS_BAR_DENSITY_LEVELS.findIndex((level) => level.segmentsIconOnly)
+    expect(firstCollapse).toBeGreaterThan(-1)
+    expect(firstCollapse).toBeLessThan(firstIconOnly)
+  })
+})
 
 describe('pickStatusBarDensityLevel', () => {
   it('keeps the roomiest level that fits', () => {
-    expect(pickStatusBarDensityLevel([700, 600, 500, 400, 300], 800)).toBe(0)
-    expect(pickStatusBarDensityLevel([700, 600, 500, 400, 300], 550)).toBe(2)
+    expect(pickStatusBarDensityLevel([w(700), w(600), w(500), w(400), w(300)], 800)).toBe(0)
+    expect(pickStatusBarDensityLevel([w(700), w(600), w(500), w(400), w(300)], 550)).toBe(2)
+  })
+
+  it('fits a collapsing level by its collapsed width, not its natural width', () => {
+    // Level 3 would need 500 with every chip, but 380 with calm chips folded into "+N".
+    expect(pickStatusBarDensityLevel([w(700), w(600), w(500), w(500, 380), w(300)], 400)).toBe(3)
   })
 
   it('probes an unmeasured level before settling on a tighter one', () => {
-    expect(pickStatusBarDensityLevel([700, undefined, 500], 650)).toBe(1)
+    expect(pickStatusBarDensityLevel([w(700), undefined, w(500)], 650)).toBe(1)
     expect(pickStatusBarDensityLevel([], 650)).toBe(0)
   })
 
   it('falls back to the tightest level when nothing fits', () => {
-    expect(pickStatusBarDensityLevel([700, 600, 500, 400, 300], 200)).toBe(TIGHTEST)
+    expect(pickStatusBarDensityLevel([w(700), w(600), w(500), w(400), w(300)], 200)).toBe(TIGHTEST)
   })
 
   it('tolerates sub-pixel rounding at the boundary', () => {
-    expect(pickStatusBarDensityLevel([600.6], 600)).toBe(0)
+    expect(pickStatusBarDensityLevel([w(600.6)], 600)).toBe(0)
   })
 })
 
 describe('recordStatusBarDensityWidth', () => {
   it('fills in a level without disturbing the others', () => {
-    expect(recordStatusBarDensityWidth([700, undefined, 500], 1, 600)).toEqual([700, 600, 500])
+    expect(recordStatusBarDensityWidth([w(700), undefined, w(500)], 1, w(600))).toEqual([
+      w(700),
+      w(600),
+      w(500)
+    ])
   })
 
   it('forgets other levels when a level re-measures differently', () => {
     // A segment appeared or vanished, so the other levels' widths no longer describe the bar.
-    expect(recordStatusBarDensityWidth([700, 600, 500], 1, 640)).toEqual([undefined, 640])
+    expect(recordStatusBarDensityWidth([w(700), w(600), w(500)], 1, w(640))).toEqual([
+      undefined,
+      w(640)
+    ])
+  })
+
+  it('drops only the other collapsing levels when only the collapsed width moves', () => {
+    // Urgency changes which chips collapse, moving fit widths but never the natural one.
+    expect(
+      recordStatusBarDensityWidth(
+        [w(700), w(600), w(500), w(600, 450), w(500, 400)],
+        3,
+        w(600, 430)
+      )
+    ).toEqual([w(700), w(600), w(500), w(600, 430), undefined])
+  })
+
+  it('re-probes a roomier collapsing level once the tightest level sees its fit move', () => {
+    // Level 3's stale fit (450) kept the bar at level 4; fewer urgent chips now let it fit.
+    const settled = [w(700), w(600), w(500), w(600, 450), w(500, 400)]
+    expect(pickStatusBarDensityLevel(settled, 420)).toBe(TIGHTEST)
+    const remeasured = recordStatusBarDensityWidth(settled, TIGHTEST, w(500, 380))
+    expect(remeasured).toEqual([w(700), w(600), w(500), undefined, w(500, 380)])
+    expect(pickStatusBarDensityLevel(remeasured, 420)).toBe(3)
+    const probed = recordStatusBarDensityWidth(remeasured, 3, w(600, 410))
+    expect(pickStatusBarDensityLevel(probed, 420)).toBe(3)
   })
 
   it('keeps other levels on a sub-pixel re-measure', () => {
-    expect(recordStatusBarDensityWidth([700, 600, 500], 1, 600.5)).toEqual([700, 600.5, 500])
+    expect(recordStatusBarDensityWidth([w(700), w(600), w(500)], 1, w(600.5))).toEqual([
+      w(700),
+      w(600.5),
+      w(500)
+    ])
   })
 })

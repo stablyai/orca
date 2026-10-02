@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))
 
 vi.mock('./use-structured-agent-session-read', () => ({
@@ -34,7 +35,6 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   structuredSessionOperationId: () => 'operation-1',
   useStructuredAgentSessionOutbox: () => ({
     outbox: [],
-    blockedClientMessageId: null,
     error: null,
     send: vi.fn(),
     retry: vi.fn()
@@ -43,6 +43,7 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
 
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { i18n } from '@/i18n/i18n'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 const OPTIONS = { models: [], current: {} }
@@ -112,6 +113,78 @@ describe('a chat write the host refused', () => {
 
     expect(mocks.toastError).toHaveBeenCalledWith(
       "Orca couldn't confirm what happened. Check the chat."
+    )
+  })
+
+  it('words a refusal the host threw from its data, never the bare code it carries as its message', async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.options'
+        ? Promise.resolve(OPTIONS)
+        : Promise.reject(
+            new RuntimeRpcCallError({
+              id: 'request-1',
+              ok: false,
+              error: {
+                code: 'runtime_error',
+                message: 'agent_session_journal_unreadable',
+                data: {
+                  refusal: {
+                    code: 'agent_session_journal_unreadable',
+                    details: { reason: 'journalUnavailable' }
+                  }
+                }
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          )
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'claude',
+        isVisible: true
+      })
+    )
+
+    await act(async () => {
+      await expect(result.current.cancel('turn-1')).resolves.toBeNull()
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      "Orca couldn't open this chat's history right now. The agent wasn't stopped. Try again."
+    )
+  })
+
+  it('says to update Orca for a Stop refused on a journal a newer Orca wrote', async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.options'
+        ? Promise.resolve(OPTIONS)
+        : Promise.resolve({
+            ok: false,
+            // As the host answers it (pinned in `journal-open-failure.test.ts`).
+            refusal: {
+              code: 'agent_session_journal_unreadable',
+              message: 'Chats were saved by a newer Orca. Update Orca to keep using them.',
+              details: { reason: 'journalWrittenByNewerOrca' }
+            }
+          })
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'claude',
+        isVisible: true
+      })
+    )
+
+    await act(async () => {
+      await expect(result.current.cancel('turn-1')).resolves.toBeNull()
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      "Chats were saved by a newer Orca. The agent wasn't stopped. Update Orca to keep using them."
     )
   })
 
@@ -189,5 +262,41 @@ describe('a chat write the host refused', () => {
     expect(mocks.toastError).toHaveBeenCalledWith(
       "The agent is still starting. The agent wasn't stopped. Wait for the agent to finish starting."
     )
+  })
+
+  it("words a failed /clear the host ran with the chat's own agent, in the reader's language", async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.options'
+        ? Promise.resolve(OPTIONS)
+        : Promise.resolve({
+            ok: true,
+            value: {
+              command: 'clear',
+              state: 'completed',
+              error: "Codex couldn't start. Run /clear again.",
+              failure: { kind: 'startFailed' }
+            }
+          })
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+
+    await i18n.changeLanguage('fr')
+    try {
+      await act(async () => {
+        await expect(result.current.runConversationCommand('clear')).resolves.toEqual({
+          accepted: false,
+          error: "Codex n'a pas pu démarrer. Relancez /clear."
+        })
+      })
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 })

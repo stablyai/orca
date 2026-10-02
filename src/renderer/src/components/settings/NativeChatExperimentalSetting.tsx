@@ -1,7 +1,9 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { useLocalStructuredAgentSessionsHeld } from '@/runtime/local-structured-chats'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { NativeChatQueueFollowUpsSetting } from './NativeChatQueueFollowUpsSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
 import { SearchableSetting } from './SearchableSetting'
@@ -24,8 +26,11 @@ export function NativeChatExperimentalSetting({
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
   const defaultView: NativeChatDefaultView =
     settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
-  // Structured-only settings; terminal-backed chat never reads them.
-  const structuredChatActive = defaultView === 'native-chat' && structuredNativeChatEnabled
+  // Structured-only settings; terminal-backed chat never reads them. They govern the chats this
+  // machine holds too, which keep running whatever the setting says.
+  const holdsStructuredChats = useLocalStructuredAgentSessionsHeld()
+  const structuredChatActive =
+    (defaultView === 'native-chat' && structuredNativeChatEnabled) || holdsStructuredChats
 
   return (
     <SearchableSetting
@@ -130,7 +135,7 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredCopy',
-                    'Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.'
+                    'Open new Codex and Claude agents as structured chats. Off opens them in the terminal-backed chat. Chats that already exist stay as they are.'
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -183,6 +188,10 @@ export function NativeChatExperimentalSetting({
                 }
               />
             </div>
+          ) : null}
+
+          {structuredChatActive ? (
+            <NativeChatQueueFollowUpsSetting settings={settings} updateSettings={updateSettings} />
           ) : null}
 
           {structuredChatActive ? (

@@ -13,27 +13,36 @@ export type StatusBarDensity = {
   collapseUsage: boolean
 }
 
-// Why: ordered roomiest → tightest so each step gives up the least useful detail first;
-// usage verbosity goes before right-side labels because the Usage popover holds it all.
+// Why: ordered roomiest → tightest so each step gives up the least useful detail first.
+// Usage gives way before right-side labels (collapsing into "+N" before those go
+// icon-only) because the Usage popover holds everything the bar drops.
 export const STATUS_BAR_DENSITY_LEVELS: readonly StatusBarDensity[] = [
   { compact: false, usageTightestOnly: false, segmentsIconOnly: false, collapseUsage: false },
   { compact: true, usageTightestOnly: false, segmentsIconOnly: false, collapseUsage: false },
   { compact: true, usageTightestOnly: true, segmentsIconOnly: false, collapseUsage: false },
+  { compact: true, usageTightestOnly: true, segmentsIconOnly: false, collapseUsage: true },
   { compact: true, usageTightestOnly: true, segmentsIconOnly: true, collapseUsage: true }
 ]
+
+export type StatusBarLevelWidth = {
+  /** Width with every usage chip shown; a change here means the content changed. */
+  natural: number
+  /** Narrowest the level can get: natural, or with calm chips collapsed where the level allows it. */
+  fit: number
+}
 const NO_COLLAPSED_USAGE: readonly string[] = []
 
 const WIDTH_TOLERANCE_PX = 1
 
 /** Roomiest level known to fit; an unmeasured level is returned so it gets probed. */
 export function pickStatusBarDensityLevel(
-  requiredWidths: readonly (number | undefined)[],
+  levelWidths: readonly (StatusBarLevelWidth | undefined)[],
   availableWidth: number
 ): number {
   const tightest = STATUS_BAR_DENSITY_LEVELS.length - 1
   for (let level = 0; level < tightest; level++) {
-    const required = requiredWidths[level]
-    if (required === undefined || required <= availableWidth + WIDTH_TOLERANCE_PX) {
+    const width = levelWidths[level]
+    if (width === undefined || width.fit <= availableWidth + WIDTH_TOLERANCE_PX) {
       return level
     }
   }
@@ -42,16 +51,24 @@ export function pickStatusBarDensityLevel(
 
 /** A level measuring differently than before means the content changed, so every other level's width is stale. */
 export function recordStatusBarDensityWidth(
-  requiredWidths: readonly (number | undefined)[],
+  levelWidths: readonly (StatusBarLevelWidth | undefined)[],
   level: number,
-  required: number
-): (number | undefined)[] {
-  const previous = requiredWidths[level]
-  const next =
-    previous !== undefined && Math.abs(previous - required) > WIDTH_TOLERANCE_PX
-      ? []
-      : [...requiredWidths]
-  next[level] = required
+  width: StatusBarLevelWidth
+): (StatusBarLevelWidth | undefined)[] {
+  const previous = levelWidths[level]
+  const naturalChanged =
+    previous !== undefined && Math.abs(previous.natural - width.natural) > WIDTH_TOLERANCE_PX
+  // Why: urgency can change which chips pin without moving the natural width.
+  const fitChanged =
+    previous !== undefined && Math.abs(previous.fit - width.fit) > WIDTH_TOLERANCE_PX
+  const next = naturalChanged
+    ? []
+    : fitChanged
+      ? levelWidths.map((entry, index) =>
+          STATUS_BAR_DENSITY_LEVELS[index]?.collapseUsage ? undefined : entry
+        )
+      : [...levelWidths]
+  next[level] = width
   return next
 }
 
@@ -65,7 +82,7 @@ function measureWidth(ref: ElementRef): number {
  * Picks the roomiest density at which the usage cluster and the right-side segments fit
  * on one line. Widths are measured from the rendered content, so a transient segment
  * (update ready, chats to resume) condenses the bar only while it is present. At the
- * tightest level it also names the usage chips that give way to a "+N" chip.
+ * collapsing levels it also names the usage chips that give way to a "+N" chip.
  */
 export function useStatusBarDensity(): {
   density: StatusBarDensity
@@ -81,7 +98,7 @@ export function useStatusBarDensity(): {
   const committedLevelRef = useRef(0)
   const overflowingRef = useRef(false)
   const collapsedUsageRef = useRef(NO_COLLAPSED_USAGE)
-  const requiredWidthsRef = useRef<(number | undefined)[]>([])
+  const levelWidthsRef = useRef<(StatusBarLevelWidth | undefined)[]>([])
   const barElementRef = useRef<HTMLElement | null>(null)
   const usageElementRef = useRef<HTMLElement | null>(null)
   const segmentsElementRef = useRef<HTMLElement | null>(null)
@@ -98,12 +115,13 @@ export function useStatusBarDensity(): {
     const usage = measureUsageRow(usageElementRef.current)
     const fixedWidth = (Number.parseFloat(style.columnGap) || 0) + measureWidth(segmentsElementRef)
     const required = usage.naturalWidth + fixedWidth
-    requiredWidthsRef.current = recordStatusBarDensityWidth(
-      requiredWidthsRef.current,
+    const collapses = STATUS_BAR_DENSITY_LEVELS[committedLevelRef.current].collapseUsage
+    levelWidthsRef.current = recordStatusBarDensityWidth(
+      levelWidthsRef.current,
       committedLevelRef.current,
-      required
+      { natural: required, fit: collapses ? usage.pinnedWidth + fixedWidth : required }
     )
-    const nextLevel = pickStatusBarDensityLevel(requiredWidthsRef.current, available)
+    const nextLevel = pickStatusBarDensityLevel(levelWidthsRef.current, available)
     if (nextLevel !== committedLevelRef.current) {
       setLevel(nextLevel)
     }

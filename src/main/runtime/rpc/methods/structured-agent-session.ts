@@ -22,9 +22,9 @@ import {
   requireInstalledStructuredHost as requireInstalledHost,
   requireStructuredCapability,
   requireStructuredCleanupHost,
+  requireStructuredCreateSupportAdmission,
   requireStructuredHost as requireHost,
-  structuredCallerFor as callerFor,
-  supportsStructuredSessions
+  structuredCallerFor as callerFor
 } from './structured-agent-session-gate'
 import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import {
@@ -34,6 +34,7 @@ import {
 } from './structured-agent-session-create'
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-session-hold'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_QUEUED_METHODS } from './structured-agent-session-queued-methods'
 import { STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS } from './structured-agent-session-restart-resume'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import {
@@ -122,9 +123,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
           .conversationReplacements()
           .find((entry) => entry.sourceSessionId === params.envelope.sessionId)
         if (replacement) {
-          await ctx.runtime.replaceStructuredAgentSessionTab(replacement)
+          ctx.runtime.replaceStructuredAgentSessionTab(replacement)
         }
-        await host.close(params.envelope.sessionId)
+        await host.close(params.envelope.sessionId, 'user-close')
       }
       return result
     }
@@ -133,12 +134,16 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.createSupport',
     params: CreateSupportParams,
     handler: async (params, ctx) => {
-      if (!supportsStructuredSessions(ctx)) {
-        throw agentSessionRefusalError('structured_agent_session_unsupported', {
-          reason: 'clientCapabilityMissing'
-        })
-      }
-      return ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
+      requireStructuredCreateSupportAdmission(ctx)
+      const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
+        params.worktree,
+        params.agent
+      )
+      // Optional: older clients ignore it, and a client seeds its picker with what create will use.
+      const seedOptions = support.supported
+        ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
+        : undefined
+      return seedOptions ? { ...support, seedOptions } : support
     }
   }),
   defineMethod({
@@ -201,25 +206,24 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: sendStructuredAgentSessionForClient
   }),
   defineMethod({
-    // Stopping a turn, so it stays available after admission is revoked: see the gate's rule.
     name: 'agentSession.cancel',
     params: CancelParams,
     handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
   }),
+  ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
   defineMethod({
     // Releasing a chat view, not ending a conversation: the record and journal stay on disk so the
     // same session can be attached again. Only the provider child and the in-memory entry go.
     name: 'agentSession.close',
     params: OptionsParams,
     handler: async (params, ctx) => {
-      // Cleanup gate: turning the host setting off must not strand an open chat whose owner can
-      // then never close it. See the rule on `requireStructuredCleanupHost`.
       const host = requireStructuredCleanupHost(ctx)
       // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(params.sessionId, false)
       }
-      await host.close(params.sessionId)
+      // Clients call this only when the user closes this chat's tab or cancels its launch.
+      await host.close(params.sessionId, 'user-close')
       return { ok: true as const }
     }
   }),
@@ -254,11 +258,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.history',
     params: HistoryParams,
-    handler: async (params, ctx) =>
-      projectTurnItemHistory(
-        projectBackgroundTaskHistory(await (await requireInstalledHost(ctx)).history(params), ctx),
-        ctx
+    handler: async (params, ctx) => {
+      const host = await requireInstalledHost(ctx)
+      return projectTurnItemHistory(
+        projectBackgroundTaskHistory(await host.history(params), ctx),
+        ctx,
+        host.sessionAgent(params.sessionId)
       )
+    }
   }),
   defineStreamingMethod({
     name: 'agentSession.subscribe',
@@ -277,7 +284,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       dispose = await host.subscribe({
         id: subscriptionId,
         sessionId: params.sessionId,
-        emit: (event) => emit(projectTurnItemEvent(projectBackgroundTaskEvent(event, ctx), ctx)),
+        emit: (event) =>
+          emit(
+            projectTurnItemEvent(
+              projectBackgroundTaskEvent(event, ctx),
+              ctx,
+              host.sessionAgent(params.sessionId)
+            )
+          ),
         ...(params.cursor ? { cursor: params.cursor } : {})
       })
       if (stream.isClosed()) {
@@ -289,8 +303,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.unsubscribe',
     params: UnsubscribeParams,
     handler: async (params, ctx) => {
-      // Why: cleanup must stay available after the setting is disabled, so an admitted caller can
-      // retire resources it already owns; the base still comes from main's shared helper.
       requireStructuredCleanupHost(ctx)
       const base = subscriptionBaseFor(ctx, params.sessionId)
       if (params.subscriptionId) {

@@ -218,7 +218,20 @@ export async function uploadDirectory(
   sftp: SFTPWrapper,
   localDir: string,
   remoteDir: string,
-  rootRealPath = localDir,
+  root = localDir,
+  options?: { exclusive?: boolean; signal?: AbortSignal }
+): Promise<void> {
+  options?.signal?.throwIfAborted()
+  // Why resolve the root: entries are compared by realpath, so a root under a symlink, junction or
+  // Windows 8.3 short name (RUNNER~1 in TEMP) would otherwise reject every entry as escaped.
+  await uploadDirectoryWithinRoot(sftp, localDir, remoteDir, await realpath(root), options)
+}
+
+async function uploadDirectoryWithinRoot(
+  sftp: SFTPWrapper,
+  localDir: string,
+  remoteDir: string,
+  rootRealPath: string,
   options?: { exclusive?: boolean; signal?: AbortSignal }
 ): Promise<void> {
   options?.signal?.throwIfAborted()
@@ -241,7 +254,7 @@ export async function uploadDirectory(
 
     if (statResult.isDirectory()) {
       await mkdirSftp(sftp, remotePath, { allowExisting: !options?.exclusive })
-      await uploadDirectory(sftp, localPath, remotePath, rootRealPath, options)
+      await uploadDirectoryWithinRoot(sftp, localPath, remotePath, rootRealPath, options)
     } else {
       await uploadFile(sftp, localPath, remotePath, options)
     }

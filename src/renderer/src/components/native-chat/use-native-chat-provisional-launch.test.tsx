@@ -73,7 +73,8 @@ function sessionState(fence: number | null): StructuredAgentSessionState {
     fence,
     items: [],
     submissions: [],
-    retainedItemLimit: 1_024,
+    retainedOwnItemLimit: 1_024,
+    retainedItemCap: 8_192,
     hasOlder: false,
     status: 'ready',
     commands: []

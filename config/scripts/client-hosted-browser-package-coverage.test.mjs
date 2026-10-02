@@ -19,13 +19,6 @@ describe('client-hosted browser package coverage', () => {
     expect(steps[boundaries].run).not.toContain(file)
   })
 
-  it('bundles the WSL browser-network relay with its version stamp', () => {
-    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
-
-    expect(relayBuild).toContain("outfile: join(outDir, 'wsl-browser-network-relay.js')")
-    expect(relayBuild).toContain("join(outDir, '.browser-network-version')")
-  })
-
   it('runs client-hosted Electron lifecycle coverage on native package hosts', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)

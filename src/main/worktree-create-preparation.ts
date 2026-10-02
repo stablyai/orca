@@ -9,6 +9,7 @@ import type { PreparedCheckoutMissReason } from '../shared/worktree/create-types
 import type { AddWorktreeOptions, AddWorktreeResult } from './git/worktree'
 import { measureRetargetDivergence } from './git/worktree-base-divergence'
 import { resolveLocalWorktreeBaseRef } from './git/worktree-base-ref-probe'
+import { WorktreePreparationLockOwnershipError } from './git/worktree-preparation-lock'
 import { preparationPathKey, selectPreparationForCreate } from './worktree-create-preparation-claim'
 import {
   _resetPreparationPoolForTests,
@@ -86,17 +87,19 @@ function canonicalBaseRef(
 export function prepareWorktreeCreateForRepo(
   store: Store,
   repo: Repo,
-  baseBranch: string
+  baseBranch: string,
+  beforeMaterialization?: Promise<void>
 ): Promise<void> {
   return worktreePreparationGit.run(() =>
-    prepareWorktreeCreateInBackground(store, repo, baseBranch)
+    prepareWorktreeCreateInBackground(store, repo, baseBranch, beforeMaterialization)
   )
 }
 
 async function prepareWorktreeCreateInBackground(
   store: Store,
   repo: Repo,
-  baseBranch: string
+  baseBranch: string,
+  beforeMaterialization?: Promise<void>
 ): Promise<void> {
   if (repo.connectionId || isFolderRepo(repo)) {
     return
@@ -116,7 +119,8 @@ async function prepareWorktreeCreateInBackground(
     workspaceRoot,
     baseBranch,
     canonicalBase,
-    options
+    options,
+    beforeMaterialization
   })
 }
 
@@ -285,7 +289,8 @@ export async function consumePreparedWorktreeCreate(
         args.branch,
         args.baseBranch,
         args.refreshLocalBaseRef,
-        options
+        options,
+        entry.lockReason
       )
     const result = args.timing
       ? await args.timing.time('prepared_checkout_finalize', finalize)
@@ -295,7 +300,14 @@ export async function consumePreparedWorktreeCreate(
     const rearm = deferRearmPreparation(entry, reservation, args.baseBranch, claim.canonicalBase)
     return { status: 'hit', retargeted: claim.retargeted, result, rearm }
   } catch (error) {
-    await discardPreparedWorktree(args.repoPath, entry.preparedPath, options).catch(() => {})
+    if (!(error instanceof WorktreePreparationLockOwnershipError)) {
+      await discardPreparedWorktree(
+        args.repoPath,
+        entry.preparedPath,
+        options,
+        entry.lockReason
+      ).catch(() => {})
+    }
     console.warn(
       '[worktree-create] prepared checkout could not be finalized; using normal add',
       error

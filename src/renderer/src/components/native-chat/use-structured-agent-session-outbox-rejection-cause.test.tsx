@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
@@ -14,10 +14,18 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { agentSessionWriteNoticeEnglish } from '../../../../shared/agent-session-refusal-notice'
 import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import {
+  createStructuredAgentSessionOutboxEntry,
+  type StructuredAgentSessionOutboxEntry
+} from '../../../../shared/structured-agent-session-outbox'
+import { writeOutbox } from './structured-agent-session-outbox-storage'
+
+// Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
+afterEach(cleanup)
 
 function shownFailure(entry: StructuredAgentSessionOutboxEntry | undefined): string | undefined {
   return (
@@ -103,7 +111,6 @@ describe('a send the host rejected because the agent never started', () => {
     // Settled as not delivered: it waits for Retry and holds no later message up.
     expect(result.current.error).toBeNull()
     expect(result.current.outbox[0]?.state).toBe('rejected')
-    expect(result.current.blockedClientMessageId).toBeNull()
   })
 
   it('sends a new message past one the host could not start the agent for, without resending it', async () => {
@@ -176,7 +183,6 @@ describe('a send the host rejected because the agent never started', () => {
     await waitFor(() => expect(result.current.outbox[0]?.state).toBe('rejected'))
     expect(shownFailure(result.current.outbox[0])).toBe(reason)
     expect(result.current.error).toBeNull()
-    expect(result.current.blockedClientMessageId).toBeNull()
 
     // Retry is a new message with the same text: a fresh id, sent once.
     act(() => result.current.retry(id))
@@ -269,6 +275,47 @@ describe('a send the host rejected because the agent never started', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
   })
 
+  // After a restart nothing in memory remembers the rejection, and its journal row may be older
+  // than the loaded page: the message's own state is what says a resend needs a new id.
+  it('retries a message rejected before a restart under a new id', async () => {
+    const rejected = createStructuredAgentSessionOutboxEntry({
+      clientMessageId: 'rejected-before-restart',
+      sessionId: 'session-1',
+      text: 'first',
+      attachments: [],
+      queuedAt: 1
+    })
+    writeOutbox('session-1', [
+      {
+        ...rejected,
+        state: 'rejected',
+        lastFailure: {
+          kind: 'rejected',
+          reason: 'The provider did not accept this message.',
+          rejection: { kind: 'providerRejected' }
+        }
+      }
+    ])
+    mocks.call.mockImplementation(async (_target, _method, params) =>
+      acceptedResultFor(String(params.envelope.clientOperationId))
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: { kind: 'local' },
+        fence: 1,
+        submissions: []
+      })
+    )
+    expect(result.current.outbox[0]?.state).toBe('rejected')
+
+    act(() => result.current.retry('rejected-before-restart'))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    const sentId: unknown = mocks.call.mock.calls[0]![2].envelope.clientOperationId
+    expect(sentId).not.toBe('rejected-before-restart')
+    await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+  })
+
   it('keeps the rejection when the journal settles the message before the send answers', async () => {
     const reason = "Codex couldn't restart: spawn codex ENOENT."
     let answer: (value: unknown) => void = () => undefined
@@ -352,7 +399,8 @@ function submission(
   }
 }
 
-// An older host: it restarts the agent inside the send, so a new fence is its word to send again.
+// An older host restarts the agent inside the send. A send it refused was shown as not sent, so it
+// waits for the user's Retry even once the agent has a new owner, as on every host.
 describe('a send refused while its agent restarted', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -365,7 +413,7 @@ describe('a send refused while its agent restarted', () => {
   })
 
   // The live order: the restart takes seconds, so the journal settles the resend before its reply.
-  it('leaves no error behind once a send refused before an agent restart is delivered', async () => {
+  it('waits for its Retry across an agent restart, and leaves no error once that Retry lands', async () => {
     mocks.call
       .mockResolvedValueOnce({
         ok: false,
@@ -391,8 +439,13 @@ describe('a send refused while its agent restarted', () => {
       expect(shownFailure(result.current.outbox[0])).toBe('Your message was not sent.')
     )
 
-    // The pane learns the new owner and sends the same message again.
+    // The pane learns the new owner; the message still waits for its Retry.
     rerender({ fence: 3, submissions: [] })
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)))
+    expect(mocks.call).toHaveBeenCalledTimes(1)
+    expect(shownFailure(result.current.outbox[0])).toBe('Your message was not sent.')
+
+    act(() => result.current.retry(result.current.outbox[0]!.clientMessageId))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     expect(result.current.outbox[0]).toMatchObject({ state: 'dispatching' })
     expect(shownFailure(result.current.outbox[0])).toBeUndefined()
@@ -402,6 +455,89 @@ describe('a send refused while its agent restarted', () => {
     rerender({ fence: 3, submissions: [submission(id, 'accepted')] })
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
     expect(result.current.error).toBeNull()
-    expect(result.current.blockedClientMessageId).toBeNull()
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('a send the host refused by throwing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+  })
+
+  it("keeps the refusal on the message, with the refusal's words and not a bare failure", async () => {
+    // As `mapRuntimeError` sends a thrown refusal (pinned in `rpc/errors.test.ts`).
+    mocks.call.mockRejectedValue(
+      new RuntimeRpcCallError({
+        id: 'req-1',
+        ok: false,
+        error: {
+          code: 'runtime_error',
+          message: 'agent_session_journal_unreadable',
+          data: {
+            refusal: {
+              code: 'agent_session_journal_unreadable',
+              details: { reason: 'journalCorrupt' }
+            }
+          }
+        }
+      })
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: { kind: 'local' },
+        fence: 1,
+        submissions: []
+      })
+    )
+
+    act(() => expect(result.current.send('hello')).toBe(true))
+
+    await waitFor(() =>
+      expect(result.current.outbox[0]?.lastFailure).toEqual({
+        kind: 'refused',
+        code: 'agent_session_journal_unreadable',
+        details: { reason: 'journalCorrupt' }
+      })
+    )
+    expect(shownFailure(result.current.outbox[0])).toBe(
+      'Unable to load this chat. Your message was not sent.'
+    )
+  })
+})
+
+describe('a send refused on a journal a newer Orca wrote', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+  })
+
+  it('says to update Orca, not to try again', async () => {
+    // As the host answers it (pinned in `journal-open-failure.test.ts`).
+    mocks.call.mockResolvedValue({
+      ok: false,
+      refusal: {
+        code: 'agent_session_journal_unreadable',
+        message: 'Chats were saved by a newer Orca. Update Orca to keep using them.',
+        details: { reason: 'journalWrittenByNewerOrca' }
+      }
+    })
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: { kind: 'local' },
+        fence: 1,
+        submissions: []
+      })
+    )
+
+    act(() => expect(result.current.send('hello')).toBe(true))
+
+    await waitFor(() =>
+      expect(shownFailure(result.current.outbox[0])).toBe(
+        'Chats were saved by a newer Orca. Your message was not sent. Update Orca to keep using them.'
+      )
+    )
   })
 })

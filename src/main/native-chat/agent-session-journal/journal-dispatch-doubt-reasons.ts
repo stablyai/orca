@@ -27,6 +27,9 @@ export const DISPATCH_DOUBT_SUBMISSION_MISSING = 'durable_send_submission_missin
  *  left that could still acknowledge the message. */
 export const DISPATCH_DOUBT_PROVIDER_IDLE = 'provider_idle_before_acknowledgement'
 
+/** The provider started the message, then ended its turn before acknowledging it. */
+export const DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED = 'provider_ended_before_acknowledgement'
+
 /** The SDK took the frame, but its input pump did not prove whether the write completed. */
 export const DISPATCH_DOUBT_WRITE_OUTCOME_UNKNOWN = 'provider_write_outcome_unknown'
 

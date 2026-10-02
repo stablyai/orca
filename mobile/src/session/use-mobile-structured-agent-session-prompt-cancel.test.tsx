@@ -121,7 +121,12 @@ function Harness({
     enabled: true,
     connected: true,
     agent: 'codex',
-    hostSupport: { promptCancel: promptCancelSupported, questionAnswers: questionAnswersSupported },
+    hostSupport: {
+      promptCancel: promptCancelSupported,
+      questionAnswers: questionAnswersSupported,
+      queuedMessages: false,
+      quietRepeatedStop: false
+    },
     onSendError: vi.fn()
   })
   return null
@@ -139,7 +144,8 @@ describe('mobile structured prompt cancellation', () => {
       fence: 3,
       items: [runningTurn(), pendingApproval()],
       submissions: [],
-      retainedItemLimit: 1024,
+      retainedOwnItemLimit: 1024,
+      retainedItemCap: 8192,
       hasOlder: false,
       status: 'ready'
     }

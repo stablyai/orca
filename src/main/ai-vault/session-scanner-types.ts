@@ -14,6 +14,7 @@ import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  codebuddyProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
   // Why: tests inject a sandbox "real ~/.codex" so real-home attribution

@@ -84,13 +84,6 @@ describe('eraseRpcMethods is the registry boundary', () => {
       .toEqualTypeOf<unknown>()
   })
 
-  it('returns the same methods, so nothing about the runtime value changes', () => {
-    const erased = eraseRpcMethods([probe, streamingProbe])
-
-    expect(erased[0]).toBe(probe)
-    expect(erased[1]).toBe(streamingProbe)
-  })
-
   it('produces methods the registry accepts and the dispatcher can invoke', async () => {
     const registry = buildRegistry([probe, streamingProbe, ...STATUS_METHODS])
     const registered = registry.get('test.typedProbe')

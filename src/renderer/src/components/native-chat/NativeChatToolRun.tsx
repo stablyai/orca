@@ -38,6 +38,10 @@ import { NativeChatTaskList } from './NativeChatTaskList'
 import { buildNativeChatTaskListRows } from './native-chat-task-list-history'
 import { NativeChatBackgroundTaskRun } from './NativeChatBackgroundTaskRun'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
+import type {
+  NativeChatSubagentDisclosure,
+  NativeChatSubagentRosterState
+} from './native-chat-subagent-sections'
 import { NativeChatToolRunIcon } from './NativeChatToolIcon'
 
 /** Stable empty default: a fresh array literal per render breaks memoization. */
@@ -53,12 +57,13 @@ export function NativeChatToolRun({
   revealedDiff,
   onRevealDiff,
   subagentGroups = NO_SUBAGENT_GROUPS,
+  subagentRoster,
+  subagentDisclosure,
   backgroundTasks = NO_BACKGROUND_TASKS,
   expandSignal,
   activeTurnIsWorking,
   trailing,
   expandOverride,
-  structuredActivityUi = true,
   disclosureId,
   onLinkClick
 }: {
@@ -69,6 +74,9 @@ export function NativeChatToolRun({
   onRevealDiff?: (element: HTMLElement) => void
   /** Spawn-group rosters that belong with this run's activity, one row each. */
   subagentGroups?: NativeChatSubagentGroupBlock[]
+  /** The rosters' list state, and their children whose rows open below this run. */
+  subagentRoster?: NativeChatSubagentRosterState
+  subagentDisclosure?: NativeChatSubagentDisclosure
   /** Background tasks that belong with this run's activity, one row each. */
   backgroundTasks?: NativeChatBackgroundTaskBlock[]
   /** Legacy view-level default; production native-chat entry points pass false. */
@@ -81,7 +89,6 @@ export function NativeChatToolRun({
    *  the agent has already moved past reads as settled even mid-call. Left
    *  unset, a working turn's run is taken to be its last. */
   trailing?: boolean
-  structuredActivityUi?: boolean
   /** Message this run belongs to. Windowing unmounts rows, so a run the reader
    *  opened has to be remembered somewhere that outlives the row. */
   disclosureId?: string
@@ -105,7 +112,20 @@ export function NativeChatToolRun({
   // deciding the row is worth mounting cannot disagree about what draws.
   const subagentRows = subagentGroups
     .filter(isRenderableSubagentGroup)
-    .map((group) => <NativeChatSubagentRun key={group.groupId} block={group} />)
+    .map((group) => (
+      <NativeChatSubagentRun
+        key={group.groupId}
+        block={group}
+        open={subagentRoster?.open}
+        onSetOpen={
+          subagentRoster && subagentDisclosure && disclosureId !== undefined
+            ? (open) => subagentDisclosure.setRosterOpen(disclosureId, open)
+            : undefined
+        }
+        sections={subagentRoster?.sections}
+        onSetSectionOpen={subagentDisclosure?.setSectionOpen}
+      />
+    ))
   // Neither a roster nor a background task is tool activity, so both take every
   // escape below that the tool header does not: a task row outlives the turn
   // that started it and is the only durable report of how it ended.
@@ -130,10 +150,9 @@ export function NativeChatToolRun({
   // caller with no turn state, or a turn blocked on the reader's answer, falls
   // back to the calls themselves.
   const live =
-    structuredActivityUi &&
-    (activeTurnIsWorking === true && !askIsActive
+    activeTurnIsWorking === true && !askIsActive
       ? trailing !== false
-      : selectActiveToolCall(headerBlocks, { activeTurnIsWorking }) !== null)
+      : selectActiveToolCall(headerBlocks, { activeTurnIsWorking }) !== null
   // One sentence for the whole run, or the command itself when the run is one
   // call — the reader recognizes `git push` faster than "Ran 1 command".
   const runSentence = nativeChatToolRunSentence(headerBlocks, { live })
@@ -199,7 +218,6 @@ export function NativeChatToolRun({
   // the grouped row visible here made a failed child command look like the
   // whole response was still running (or had failed) even while collapsed.
   if (
-    structuredActivityUi &&
     expandOverride === false &&
     !(revealedDiff && open) &&
     !live &&
@@ -237,7 +255,7 @@ export function NativeChatToolRun({
           aria-live="polite"
           data-native-chat-tool-run-state={live ? 'live' : 'settled'}
         >
-          {structuredActivityUi && settledHeaderIcon ? (
+          {settledHeaderIcon ? (
             <NativeChatToolRunIcon iconName={settledHeaderIcon} className="text-muted-foreground" />
           ) : null}
           {/* The run in words, in the transcript's own type. Present tense while
@@ -278,7 +296,7 @@ export function NativeChatToolRun({
           {/* Only a stated success is marked done — see nativeChatToolRunOutcome —
               and never while live: between two calls nothing is running, and a
               mark that appeared then would flash on every call. */}
-          {structuredActivityUi && !live && runSucceeded ? (
+          {!live && runSucceeded ? (
             <Check aria-hidden className="size-3 shrink-0 text-muted-foreground" />
           ) : null}
           {latestCallLabel ? (

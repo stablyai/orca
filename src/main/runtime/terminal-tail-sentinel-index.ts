@@ -1,4 +1,4 @@
-import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './terminal-wait-detection'
+import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './agent-state-rules/blocked-text-layer'
 
 /**
  * Which retained tail lines match the wait-blocked sentinel, memoized per

@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -74,11 +75,25 @@ export type MinimaxCredentialsApi = {
     configured: boolean
     cookieConfigured: boolean
     apiKeyConfigured: boolean
+    cookieProtection: SecretAtRestProtection | null
+    apiKeyProtection: SecretAtRestProtection | null
   }>
-  saveCookie: (cookie: string) => Promise<{ cookieConfigured: boolean }>
-  clearCookie: () => Promise<{ cookieConfigured: boolean }>
-  saveApiKey: (key: string) => Promise<{ apiKeyConfigured: boolean }>
-  clearApiKey: () => Promise<{ apiKeyConfigured: boolean }>
+  saveCookie: (cookie: string) => Promise<{
+    cookieConfigured: boolean
+    cookieProtection: SecretAtRestProtection | null
+  }>
+  clearCookie: () => Promise<{
+    cookieConfigured: boolean
+    cookieProtection: SecretAtRestProtection | null
+  }>
+  saveApiKey: (key: string) => Promise<{
+    apiKeyConfigured: boolean
+    apiKeyProtection: SecretAtRestProtection | null
+  }>
+  clearApiKey: () => Promise<{
+    apiKeyConfigured: boolean
+    apiKeyProtection: SecretAtRestProtection | null
+  }>
 }
 
 export type CodexConfigSyncApi = {

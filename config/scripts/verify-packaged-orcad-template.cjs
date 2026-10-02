@@ -1,16 +1,23 @@
 const { createHash } = require('node:crypto')
 const { lstatSync, readFileSync, readdirSync } = require('node:fs')
-const { basename, join } = require('node:path')
+const { basename, join, relative, sep } = require('node:path')
 const {
-  ORCAD_BUILD_TARGET_FILENAME,
+  ORCAD_NODE_RUNTIME_MARKER_FILENAME,
+  ORCAD_SERVER_TARGET_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR,
-  orcadTemplateCommonFilenames
+  orcadTemplateCommonFilenames,
+  orcadTemplateTargetFilenames
 } = require('../../src/shared/orcad-artifacts.ts')
-const { ORCAD_TEMPLATE_TARGETS } = require('../../src/shared/orcad-bun-runtime.ts')
+const {
+  COMPAT_SERVER_TARGETS,
+  ORCAD_TEMPLATE_TARGETS,
+  pinnedNodeRuntimeAsset
+} = require('../../src/shared/node-runtime-pin.ts')
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const BROWSER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+const TEMPLATE_SCHEMA_VERSION = 3
 
 function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
@@ -76,10 +83,23 @@ function requireExactNames(actual, expected, label) {
   }
 }
 
+function listFiles(root) {
+  return readdirSync(root, { recursive: true, withFileTypes: true })
+    .filter((entry) => !entry.isDirectory())
+    .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/'))
+}
+
+function requireContent(path, expected, label) {
+  if (readFileSync(path, 'utf8').trim() !== expected) {
+    throw new Error(`[verify-packaged-orcad-template] ${label} disagrees`)
+  }
+}
+
 function verifyTarget(templateDir, target, value) {
   const targetManifest = requireRecord(value, `${target} manifest`)
-  const targetSha256 = requireSha256(targetManifest.targetSha256, `${target} targetSha256`)
-  const watcherSha256 = requireSha256(targetManifest.watcherSha256, `${target} watcherSha256`)
+  const files = requireRecord(targetManifest.files, `${target} files`)
+  const expectedFiles = orcadTemplateTargetFilenames(target)
+  requireExactNames(Object.keys(files), expectedFiles, `${target} manifest inventory`)
   const hasBrowserName = Object.hasOwn(targetManifest, 'browserName')
   const hasBrowserSha256 = Object.hasOwn(targetManifest, 'browserSha256')
   if (hasBrowserName !== hasBrowserSha256) {
@@ -88,14 +108,21 @@ function verifyTarget(templateDir, target, value) {
     )
   }
   const targetDir = join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR, target)
-  const targetIdentity = join(targetDir, ORCAD_BUILD_TARGET_FILENAME)
-  verifyFile(targetIdentity, targetSha256, `${target} build target`)
-  if (readFileSync(targetIdentity, 'utf8').trim() !== target) {
-    throw new Error(`[verify-packaged-orcad-template] ${target} build target identity disagrees`)
+  for (const filename of expectedFiles) {
+    verifyFile(
+      join(targetDir, ...filename.split('/')),
+      requireSha256(files[filename], `${target} ${filename} checksum`),
+      `${target} ${filename}`
+    )
   }
-  verifyFile(join(targetDir, 'watcher.node'), watcherSha256, `${target} watcher`)
+  requireContent(join(targetDir, ORCAD_SERVER_TARGET_FILENAME), target, `${target} server target`)
+  requireContent(
+    join(targetDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
+    pinnedNodeRuntimeAsset(target).executableSha256,
+    `${target} runtime reference`
+  )
 
-  const expectedFiles = [ORCAD_BUILD_TARGET_FILENAME, 'watcher.node']
+  const inventory = [...expectedFiles]
   if (hasBrowserName) {
     const browserName = targetManifest.browserName
     if (
@@ -110,16 +137,19 @@ function verifyTarget(templateDir, target, value) {
       requireSha256(targetManifest.browserSha256, `${target} browserSha256`),
       `${target} browser`
     )
-    expectedFiles.push(browserName)
+    inventory.push(browserName)
   }
-  requireExactNames(readdirSync(targetDir), expectedFiles, `${target} file inventory`)
+  requireExactNames(listFiles(targetDir), inventory, `${target} file inventory`)
 }
 
-function verifyPackagedOrcadTemplate(resourcesDir) {
+/** `targets` narrows the inventory for a CI-only partial template; packaging checks them all. */
+function verifyPackagedOrcadTemplate(resourcesDir, targets = ORCAD_TEMPLATE_TARGETS) {
   const templateDir = join(resourcesDir, 'orcad-template')
   const manifest = requireRecord(readManifest(templateDir), 'manifest')
-  if (manifest.schemaVersion !== 2) {
-    throw new Error('[verify-packaged-orcad-template] manifest schemaVersion must be 2')
+  if (manifest.schemaVersion !== TEMPLATE_SCHEMA_VERSION) {
+    throw new Error(
+      `[verify-packaged-orcad-template] manifest schemaVersion must be ${TEMPLATE_SCHEMA_VERSION}`
+    )
   }
   const commonSha256 = requireRecord(manifest.commonSha256, 'commonSha256')
   const commonFilenames = orcadTemplateCommonFilenames()
@@ -132,19 +162,24 @@ function verifyPackagedOrcadTemplate(resourcesDir) {
     )
   }
 
-  const targets = requireRecord(manifest.targets, 'targets')
-  requireExactNames(Object.keys(targets), ORCAD_TEMPLATE_TARGETS, 'target manifest inventory')
+  const manifestTargets = requireRecord(manifest.targets, 'targets')
+  // Compat targets (design D6 rung B) are optional: a build without the compat slot omits them.
+  const compatTargets = COMPAT_SERVER_TARGETS.filter((target) =>
+    Object.hasOwn(manifestTargets, target)
+  )
+  const expectedTargets = [...targets, ...compatTargets]
+  requireExactNames(Object.keys(manifestTargets), expectedTargets, 'target manifest inventory')
   requireExactNames(
     readdirSync(join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR)),
-    ORCAD_TEMPLATE_TARGETS,
+    expectedTargets,
     'target directory inventory'
   )
-  for (const target of ORCAD_TEMPLATE_TARGETS) {
-    verifyTarget(templateDir, target, targets[target])
+  for (const target of expectedTargets) {
+    verifyTarget(templateDir, target, manifestTargets[target])
   }
   console.log(
-    `[verify-packaged-orcad-template] OK — verified ${ORCAD_TEMPLATE_TARGETS.length} Bun targets`
+    `[verify-packaged-orcad-template] OK — verified ${expectedTargets.length} Node targets`
   )
 }
 
-module.exports = { verifyPackagedOrcadTemplate }
+module.exports = { TEMPLATE_SCHEMA_VERSION, verifyPackagedOrcadTemplate }

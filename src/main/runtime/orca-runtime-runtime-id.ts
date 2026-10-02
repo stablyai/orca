@@ -48,6 +48,7 @@ import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
 import { TerminalIntentionalStops } from './terminal-intentional-stops'
 import { TerminalRunFactsRegister, type TerminalSpawnCommit } from './terminal-run-facts'
 import type { TuiIdleEvidenceSource } from './tui-idle-evidence'
+import { hasTerminalCommandPainted } from './terminal-command-paint'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
@@ -119,6 +120,9 @@ export class OrcaRuntimeWithRuntimeId {
   }
 
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null
+
+  // Whether the last tab restore ran with chats on disk but no host to list them.
+  protected structuredAgentSessionInventoryUnverifiable = false
 
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
 
@@ -344,13 +348,19 @@ export class OrcaRuntimeWithRuntimeId {
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
     getFirstPartyAgentStatus: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
-    readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId)
+    getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
+    readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
+    readScreenRuledLines: (ptyId) => this.readScreenRuledLines(ptyId)
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
     ...this.tuiIdleEvidenceSource,
     intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
+    hasCommandPainted: (ptyId) => {
+      const pty = this.ptysById.get(ptyId)
+      return pty === undefined || hasTerminalCommandPainted(pty)
+    },
     // Why the runtime's own emulator: a provider snapshot would be a host round trip per tick.
     readVisibleScreen: (ptyId) =>
       this.headlessTerminals.has(ptyId)

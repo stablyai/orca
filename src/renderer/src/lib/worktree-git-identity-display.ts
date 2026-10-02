@@ -11,11 +11,11 @@ export type WorktreeGitIdentityDisplay =
       tooltip: string
     }
 
-export function shortGitHead(head: string | null | undefined): string {
+function shortGitHead(head: string | null | undefined): string {
   return (head ?? '').trim().slice(0, 7)
 }
 
-export function getDetachedHeadTooltip(shortHead: string): string {
+function getDetachedHeadTooltip(shortHead: string): string {
   return `Detached HEAD at ${shortHead}. You are viewing a commit, not a branch.`
 }
 

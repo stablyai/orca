@@ -14,7 +14,10 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
-import type { JournalRow } from '../agent-session-journal/journal-row-schema'
+import {
+  isJournalStopOrResumeRow,
+  type JournalRow
+} from '../agent-session-journal/journal-row-schema'
 
 export type JournalBatchProjection =
   | { ok: true; batch: AgentSessionJournalBatch }
@@ -48,6 +51,10 @@ export function projectJournalBatch(input: {
             mutation.itemId
         )
       }
+      continue
+    }
+    if (isJournalStopOrResumeRow(row)) {
+      // Host-only: no item; the queue pause it feeds is published beside the list.
       continue
     }
     if (row.kind === 'item' || row.kind === 'tombstone') {

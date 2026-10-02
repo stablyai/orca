@@ -38,5 +38,6 @@ export function useStructuredAgentSessionTransport(args: {
   useEffect(() => {
     stateRef.current = read.state
   }, [read.state])
-  return { ...read, ...mutation, providerVisible }
+  // `stateRef`: the read state now, for a reply that lands after the render that sent it.
+  return { ...read, ...mutation, providerVisible, stateRef }
 }

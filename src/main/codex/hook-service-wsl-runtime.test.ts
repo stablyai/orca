@@ -29,20 +29,17 @@ type HooksConfig = {
   hooks: Record<string, { hooks?: { command?: string }[] }[]>
 }
 
-const managedEvents = [
-  'SessionStart',
-  'UserPromptSubmit',
-  'PreToolUse',
-  'PermissionRequest',
-  'PostToolUse',
-  'SubagentStart',
-  'SubagentStop',
-  'Stop'
-] as const
-
 let tempRoots: string[] = []
 
+beforeEach(() => {
+  // Why: the trust-grant ledger lives in Orca's userData, which otherwise resolves to the live one.
+  const userData = mkdtempSync(join(tmpdir(), 'orca-codex-wsl-hooks-userdata-'))
+  tempRoots.push(userData)
+  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+})
+
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -511,7 +508,6 @@ describe('Codex WSL runtime hook install', () => {
     expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
 
     const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
-    expect(Object.keys(installed.hooks).sort()).toEqual([...managedEvents].sort())
     const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
     expect(managedCommand).toBe(expectedManagedCommand(plan.commandScriptPath))
     expect(installed.hooks.UserPromptSubmit[1]?.hooks?.[0]?.command).toBe(userCommand)

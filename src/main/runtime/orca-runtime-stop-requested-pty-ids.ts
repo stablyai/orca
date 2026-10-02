@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrchestrationStructuredMailboxPointerDelivery } from './orchestration/structured-mailbox-pointer-delivery'
 import { createStructuredMailboxPointerHost } from './orchestration/structured-mailbox-pointer-host'
+import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { isStructuredWorkerHandle } from './structured-worker-identity'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { OrcaRuntimeWithRuntimeId } from './orca-runtime-runtime-id'
@@ -23,6 +24,9 @@ import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestrati
 import { RuntimeTerminalList } from './runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from './runtime-pty-foreground-agent'
+import { OpenCodeRunLifetimeStatus } from './opencode-run-lifetime-status'
+import { readLocalPtyForegroundCommandLine } from './local-pty-foreground-command-line'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import { RuntimeTerminalAgentStatusQuery } from './runtime-terminal-agent-status-query'
 import type { OrchestrationDb } from './orchestration/db'
 import { OrchestrationMailboxOwner } from './orchestration/mailbox-owner'
@@ -161,6 +165,33 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     }
   })
 
+  protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
+    isObservablePty: (ptyId) => {
+      const pty = this.ptysById.get(ptyId)
+      // Why: SSH and WSL foregrounds live on another host or in the guest.
+      return !!pty && !pty.connectionId && !pty.wslDistro && !this.wslDistroByPtyId.has(ptyId)
+    },
+    isStatusEnabled: (agent) =>
+      isAgentStatusHooksEnabledForAgent(this.store?.getSettings?.(), agent),
+    readForegroundProcessName: async (ptyId) => {
+      const read = await this.ptyForegroundAgent.read(ptyId)
+      return read?.available ? read.process : null
+    },
+    readForegroundCommandLine: (ptyId, foregroundProcess) =>
+      readLocalPtyForegroundCommandLine(ptyId, foregroundProcess),
+    // Why after the chunk's facts: the renderer drops an exited agent's row on command-finished
+    // unless the row changed after it, so the run's Done must arrive after that fact.
+    publish: (ptyId, payload, yieldsToHookSince) =>
+      this.runAfterPendingTerminalSideEffectFacts(ptyId, () =>
+        this.emitTerminalAgentStatusEvents(
+          ptyId,
+          { payloads: [payload] },
+          { origin: 'process', yieldsToHookSince }
+        )
+      ),
+    now: () => Date.now()
+  })
+
   protected readonly terminalAgentStatus = new RuntimeTerminalAgentStatusQuery({
     getController: () => this.ptyController,
     getLivePty: (handle) => this.getLivePtyForHandle(handle),
@@ -221,6 +252,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
       getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
       resolveStructuredTarget: (mailboxHandle) =>
         this.resolveStructuredMailboxTarget(mailboxHandle),
+      getCliCommand: localOrchestrationCliCommand,
       host: createStructuredMailboxPointerHost()
     })
 

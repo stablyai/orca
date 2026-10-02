@@ -1,7 +1,422 @@
 # CI efficiency and runner capacity
 
 The [September 28 demand rollout](ci-demand-rollout.md) documents staged checks,
-unit-selection evidence, Bun qualification, review cancellation and daily occupancy reports.
+unit-selection evidence, headless runtime qualification, review cancellation and daily occupancy reports.
+
+## Headless server follow-up
+
+[PR #24527](https://github.com/stablyai/orca/pull/24527) adds dependency detection to
+main pushes. Unrelated pushes skip qualification; relevant pushes still run all
+six persistence targets and five Linux compatibility jobs. Explicit Windows or
+Mac PR paths select both architectures plus a Linux smoke, while shared
+execution/storage changes, SSH/provider/relay inputs, native inputs, manifests, and incomplete evidence
+retain the full matrix. Main pushes use the same validated exact Windows slot
+cache as PRs; nightly and release builds still compile freshly.
+
+Main detection runs cannot cancel each other. Only eligible qualification jobs
+share main concurrency groups, so an unrelated push cannot cancel needed tests.
+Release templates, explicit refs, and nightly runs remain isolated.
+
+Draft PRs have no server verdict, so their detector is also skipped. The existing
+`ready_for_review` event performs detection and qualification once the PR is ready.
+This removes the checkout and dependency installation for a result whose platform
+jobs were already ineligible.
+
+The glibc 2.28 prerequisite step checks all five tools before installing anything.
+The pinned ARM image already supplies them, including Git 2.55.0 built under
+`/usr/local/bin`; installing the Git RPM does not change the Git on PATH. A
+missing-tool fallback still installs the original package list and disables EPEL
+for that one command. In
+the baseline x64 log, EPEL metadata took 4 minutes 50 seconds to download although
+every installed package came from AlmaLinux BaseOS or AppStream. The package list,
+compiler image, libc floor, native smoke, and persistence tests stay unchanged.
+The [DNF command reference](https://dnf.readthedocs.io/en/stable/command_ref.html)
+defines `--disablerepo` as a temporary command-level filter, so later commands
+retain the image's repository configuration.
+
+The [PR qualification run](https://github.com/stablyai/orca/actions/runs/36972824276/job/110734327685)
+passed the x64 floor native smoke and persistence suite. Its prerequisite step
+finished within GitHub's one-second timing resolution, compared with 5 minutes
+37 seconds in the baseline job; the supplied tools needed no package install.
+This measures that step, not the complete workflow or its queue time.
+
+A [completed main run](https://github.com/stablyai/orca/actions/runs/36962172614)
+used 42 aggregate runner-minutes across 11 test jobs. The
+[latest daily demand report](https://github.com/stablyai/orca/actions/runs/36965354205)
+estimates 34.9 headless runner-hours, including 23.4 in cancelled runs. These are
+baseline observations; post-merge savings have not yet been measured.
+
+## SSH Windows slot reuse
+
+The SSH Windows host workflow uses the same server-slot preparation action as
+headless qualification. Its four PR jobs can restore the exact slot published by
+fully qualified main runs, then validate its inventory and hashes and run the
+required-slot and pinned-Node smoke checks. Misses or invalid payloads compile
+freshly. Only main headless qualification publishes; manual SSH qualification
+still builds freshly. Both sshd versions, both architectures, all three host
+cells, the process-table addon build, and the template/relay builds remain.
+
+The action is part of the cache fingerprint, so this extraction starts a new
+namespace that needs a successful main seed. The existing hosted measurements
+below suggest about 160 aggregate runner-seconds saved across four warm SSH jobs;
+that is a conditional estimate, not a measured improvement of this consumer.
+Private sshd installation and host execution still dominate this workflow.
+
+## Prepared relay addon reuse
+
+A [completed SSH Windows run](https://github.com/stablyai/orca/actions/runs/36972043877)
+rebuilt the process-table relay addon after native dependency preparation. From
+its builder's start message to the validated staged artifact, x64 took 85.5 seconds
+and ARM64 took 135.6 seconds. These are single-run observations, not medians.
+
+An opt-in reuse path checks the same binary architecture, patched reader and
+launcher exports as staging, then runs the existing native-load and CreationTime
+probe. Repaired source or incomplete evidence requires a fresh build. SSH PRs
+request reuse only following an exact prepared native-cache hit; manual SSH and
+all release builders retain fresh compilation. Subsequent staging checks still
+run. Hosted validation and the reuse interval remain to be measured.
+
+## October 1 Windows and dependency cache follow-up
+
+[PR #24355](https://github.com/stablyai/orca/pull/24355) merged at `197ea3a3`.
+The [next hosted trial](https://github.com/stablyai/orca/actions/runs/36917210453)
+ran four alternating pairs on each Windows architecture and both Mac
+architectures. All six jobs passed. The exact temporary workflow and drivers
+remain available at `ab24952ab5af0f7d8e53a544896ac2486edfb244`; completed trial
+tooling is removed from ordinary PR CI.
+
+### Windows server slots
+
+The existing dependency-native cache and the server's N-API 8 slot serve different
+consumers. Cache the small server slot separately, using the exact compiler image,
+architecture, dependency/patch/runtime inputs and compilation/validation source.
+PR and main-push qualification restore it. Nightly qualification still compiles
+freshly; main saves after persistence/lifecycle tests and the existing x64 Node 18 handoff.
+Templates and explicit-ref calls continue to compile freshly.
+
+| Hosted runner    | Fresh build median | Restore median | Difference |
+| ---------------- | ------------------ | -------------- | ---------- |
+| Windows 2022 x64 | 18.624s            | 4.677s         | 13.947s    |
+| Windows 11 ARM64 | 72.002s            | 6.111s         | 65.891s    |
+
+Both used Node 24.21.0. Each comparison includes actual GitHub cache restoration,
+inter-step time, payload validation, required-slot checks and pinned-Node load/spawn
+smoke. Every fresh build uses the builder's freshly cleared compilation directory.
+Dependency installation, initial seed work, shared download warmup, full qualification
+tests and queues are outside these timing intervals. The x64 payload was 2,935,529
+bytes and ARM64 3,533,557 bytes. These are conditional warm-hit gains, rather than a
+whole-workflow improvement or the roughly 95–117 seconds seen in earlier cold samples.
+
+Restored bytes must match current module/version/headers/N-API/host metadata,
+the complete inventory and hashes, and current vendored ConPTY files. Existing
+patch, PE architecture, post-baseline N-API and MSYS breakaway checks are reused.
+Failed or partial restoration and invalid payloads clear only `out/orcad-prebuilds`
+and fall back to normal compilation. Both fresh seeds and fresh restored consumers
+passed the full existing Windows qualification; x64 also passed Node 18 handoff.
+The final key additionally includes the ten transitive process-wrapper sources.
+
+A bounded sample of 50 first-parent main commits through `197ea3a3` had 45 of 49
+adjacent transitions with identical source inputs, including those ten files.
+This one-day sample holds the new validator and runner image constant. Actual
+image rotation, seed availability and changed PR inputs can reduce reuse.
+
+Keep the original Windows native dependency preparation: artifact-mode tests still
+import checkout `node-pty`, registry and process-reader addons, and the Windows
+artifact builder stages the patched process reader. The cached server slot does
+not replace those dependencies.
+
+### pnpm verification records
+
+Reuse pnpm's existing policy-checked record on Windows x64/ARM64 and Mac Intel,
+while retaining Linux's existing behavior. The exact OS/architecture/pnpm/policy
+key, explicit opt-out, frozen installs and main-only production writes remain.
+Each treatment resets links and registry metadata, retains the identical warm
+download store, and checks unchanged manifests, installed versions and installed
+lockfile bytes. Every platform passed real missing/corrupt-record fallback and
+changed-policy/changed-integrity rejection controls, plus authentic cross-path reuse.
+
+| Platform               | Baseline install | Cached install | Baseline interval | Cached interval |
+| ---------------------- | ---------------- | -------------- | ----------------- | --------------- |
+| Windows x64            | 13.105s          | 9.767s         | 17.717s           | 15.146s         |
+| Windows ARM64          | 96.723s          | 88.443s        | 164.620s          | 157.877s        |
+| Mac Intel              | 31.368s          | 21.042s        | 47.727s           | 41.302s         |
+| Mac ARM, kept disabled | 11.419s          | 8.086s         | 17.905s           | 15.787s         |
+
+Install columns time pnpm alone. Interval columns also include link reset,
+path validation, real cache restoration and inter-step overhead; they exclude
+seed setup, parity checks and queues. Key-resolution overhead is outside the paired
+trial; the real Windows ARM production-shaped step took 0.296s. Windows ARM's first
+pair was slower with the record, while the next three improved, so its median is
+not a guaranteed per-job saving. Macs used their hosted Node 24.19.0 Intel and
+24.20.0 ARM toolchains; Windows used 24.21.0, and all used pnpm 12.0.0.
+
+An earlier complete Mac ARM trial saved only 0.681s in its interval median.
+That small, variable margin does not justify enabling the extra lookup there.
+Only the tiny pnpm-owned record is restored; registry metadata and download-store
+policy are unchanged. Changing the shared action also produces a one-time cold
+native dependency cache key, whose existing hash includes the action bytes.
+
+### Further local screens rejected
+
+A fixed 256-file, 2,471-case cohort preserved every result in twelve invocations.
+Lazy per-file user data showed a noisy 2.0% wall difference with no setup-time
+improvement; combining DOM setup was 1.8% slower. A separate seven-file leaf-import
+screen preserved all 50 assertions and public/hook controls, saving only 0.903
+worker-seconds while elapsed time rose 2.55%. All experiments were reverted.
+Documentation-result reuse also lacked positive eligible demand in the bounded
+sample, and the apparent example changed the actual tested merge/base inputs.
+These results do not justify adding a new coverage-selection or result-reuse policy.
+
+## October 1 PR concurrency follow-up
+
+### Where the next gains are
+
+The [September 30 demand report](https://github.com/stablyai/orca/actions/runs/36816009362)
+samples 282 of 4,194 runs across workflow/conclusion strata. It estimates full job
+duration for runs created in the reporting window, rather than occupancy clipped
+to that window. PR CI accounts for about 537 runner-hours, including about 321
+hours of unit shards, 73 hours of E2E, 41 hours of Windows packaging, 35 hours of
+Linux packaging, 18 hours of static analysis, and 11 hours of typechecking. These
+are weighted estimates, not exact billing totals. Unassigned and incomplete jobs
+are excluded. The report predates the merged planning/setup change below.
+
+The [full reference run](https://github.com/stablyai/orca/actions/runs/36841821670)
+ran 10,310 files exactly once. Across its five shards Vitest reports about 5,063
+worker-seconds importing modules, 2,838 running tests, 685 transforming source,
+267 setting up tests, and 390 preparing environments. Workers overlap, so these
+figures cannot be added to predict job elapsed time. They identify repeated
+imports and real-time test waits as larger targets than line-count reporting,
+which uses about 1.1 runner-hours in the same demand sample.
+
+Parallel steps share the job's CPU and memory. Their
+[background/wait support](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/)
+saves repeated runner setup when independent checks fit together, but does not
+increase machine resources or the account's concurrent-job allowance. Cheap
+preflight checks still gate expensive unit and package jobs.
+
+Organization metadata reported the Team plan on October 1. GitHub documents
+[60 standard concurrent jobs by default](https://docs.github.com/en/actions/reference/limits#job-concurrency-limits-for-github-hosted-runners)
+and allows support requests for increases. The effective configured allowance
+was not exposed by the API. A seven-second, repository-only sample at 10:48 UTC
+found 32 queued jobs and 70 assigned job records marked in progress, including
+one Blacksmith label. Those non-atomic records, runner turnover, other repositories
+and provider labels cannot establish the actual allowance or simultaneous usage.
+These changes reduce demand; they do not change account settings. If queues
+remain, ask GitHub Support to confirm the effective organization limit before
+choosing a larger allowance or paid runners.
+
+The [follow-up PR](https://github.com/stablyai/orca/pull/24355) measures virtual
+readiness deadlines in captured-transcript tests, E2E allocations with no general
+consumer, renderer projection, native setup, Docker fixtures, and Windows store
+restoration. Alternating hosted comparisons check output parity. Completed
+benchmark workflows and drivers are removed; their trial commits retain the
+exact reproduction code.
+
+A [three-pair hosted transcript comparison](https://github.com/stablyai/orca/actions/runs/36849458799)
+on one four-worker ARM runner measured baseline invocations at 127.001 / 114.307 /
+114.265 seconds, versus 28.903 / 28.663 / 28.455 seconds with virtual readiness
+deadlines. Median elapsed time for these five files fell about 75%. All 259
+original named tests passed in every baseline and candidate, and candidates
+also passed three repaint checks. Summed test-body time fell from a median 325.85
+to 31.80 worker-seconds. This comparison includes Vitest startup/import work but
+excludes checkout, dependency setup, and queues; it is not a measured percentage
+improvement in the full unit matrix. Real emulator setup and drains remain real,
+and the same captured bytes, readiness/refusal deadlines, and assertions run.
+
+The same hosted trial passed three forced Electron native rebuilds while the
+external node-gyp path pointed to a nonexistent file. A separate fresh consumer
+then restored the native cache, required a real hit, and passed the existing
+Electron binary probe. The Linux Node-runtime workaround remains intact.
+
+For a network-only E2E selection in that trial, both dedicated network jobs
+passed. The previous allocations consumed 87 seconds for the Electron build,
+34 for the native primer, and 67 for a general job whose log confirmed that
+every selected spec belonged to a dedicated lane. The candidate skipped those
+three jobs before runner allocation, avoiding 188 runner-seconds in this case.
+This single-case measurement excludes queues and does not predict savings for
+mixed selections; the existing dedicated SSH, IME, and ordinary E2E routes remain.
+
+A [controlled cancellation trial](https://github.com/stablyai/orca/actions/runs/36853246785)
+verified both condition outcomes. After intentional cancellation, `always()`
+started another 60-second follow-up, while `!cancelled()` skipped it. Cleanup
+and artifact uploads succeeded in both treatments. A separate deliberately
+failed test still ran its later `!cancelled()` test and cleanup. The 60 seconds
+are synthetic condition evidence, not a measurement of a real SSH test's cost.
+Completed comparison workflows are removed after recording their evidence;
+the exact drivers and workflow remain reproducible at the trial's source commit.
+
+The [first full PR validation](https://github.com/stablyai/orca/actions/runs/36849458648)
+passed all five unit shards and both Linux/Windows package checks. Its reports
+contain 10,326 unique files, each once, with zero unhandled errors. Full shard
+job durations ranged from 544 to 581 seconds. They ran a different merged source
+on different allocations from the earlier reference, so comparing their totals
+does not establish an end-to-end speedup. The alternating transcript comparison
+above is the controlled timing evidence.
+
+The [updated full PR validation](https://github.com/stablyai/orca/actions/runs/36855833565)
+passed all required gates and both package checks. All 10,335 discovered files
+appear once across five passing timing reports, with zero unhandled errors;
+122 modules have the existing expected skipped status. Named merge-tree discovery
+and saved assignment replay match both successful validation runs. The latest
+unit jobs took 520–558 seconds. Refreshing weights with that same measurement set
+would reduce the largest projected load from 1,756.706 to 1,708.187 worker-seconds
+(2.76%), while retaining the same 8,540.831 total. Applying the earlier successful
+run's proposed weights to the latest measurements improves the maximum only
+1.54% and the median 0.68%. These small, variable projections do not establish
+an elapsed-time gain, so the existing weights remain.
+
+A [three-pair Windows store comparison](https://github.com/stablyai/orca/actions/runs/36853246494)
+used fresh dependency trees, stores and pnpm metadata before each treatment. The
+middle pair reversed order. Cached totals include archive restoration and both
+unchanged frozen installs; the mobile install ran every existing postinstall
+generator. Setup/reset time and runner queues are excluded.
+
+| Pair | First treatment | Cached total | Registry total | Registry saving |
+| ---- | --------------- | ------------ | -------------- | --------------- |
+| 1    | Cached          | 71.092s      | 37.500s        | 33.592s         |
+| 2    | Registry        | 73.556s      | 39.935s        | 33.621s         |
+| 3    | Cached          | 75.660s      | 37.001s        | 38.659s         |
+
+Treatment medians were 73.556s cached and 37.500s registry; median paired saving
+was 33.621s. Cache restore and step overhead alone cost a median 27.955s. Policy
+and all six generated-output digests matched across all six treatments. Windows
+x64 PR jobs using the mixed root/mobile key now skip its download-store restore;
+PRs already skip store saves. Root-only Windows stores, Windows ARM64/x86, other
+operating systems, non-PR writers, native/Electron caches and frozen-install policy retain their existing
+behavior. The trial covers this mixed install on Windows 2022, not every Windows
+dependency key or a whole PR's elapsed time.
+
+A [three-pair daemon fixture comparison](https://github.com/stablyai/orca/actions/runs/36853246776)
+reset Docker build caches and the fixture/base image before every treatment.
+Warm totals include the existing action's archive restore/load and the unchanged
+daemon descendant oracle; reset time and runner queues are excluded. The middle
+pair again reversed order.
+
+| Pair | First treatment | Cold total | Warm total | Warm saving |
+| ---- | --------------- | ---------- | ---------- | ----------- |
+| 1    | Cold            | 28.984s    | 20.673s    | 8.311s      |
+| 2    | Warm            | 21.798s    | 28.953s    | -7.155s     |
+| 3    | Cold            | 28.964s    | 17.614s    | 11.350s     |
+
+Treatment medians were 28.964s cold and 20.673s warm; median paired saving was
+8.311s. Oracle medians fell from 28.886s to 4.907s, while archive restore/load
+cost 13.025–24.024s (15.766s median) for a 714,643,456-byte archive. BuildKit
+confirmed warm provisioning was cached and cold provisioning was not; every
+treatment used the same immutable base image, reaped the descendant and kept
+the canary alive. The PR keeps restoration in the background during root/mobile
+installation. One serial pair was slower, so the roughly 24s oracle reduction
+is not a guaranteed total runner saving. The drivers and exact workflows remain
+available at source commit `9231d1be6c76ccc1d2fef741a4e68ae29735a5c8`.
+
+A [three-pair AppImage compression comparison](https://github.com/stablyai/orca/actions/runs/36855833100)
+packaged the same complete Linux x64 app with the pinned 1.0.3 toolset and
+mksquashfs 4.6.1. Each timing includes the private app copy, electron-builder
+and blockmap generation. Tool download, app compilation, extraction, parity
+checks and queues are excluded; the middle pair reversed order.
+
+| Pair | First treatment | Default zstd 15 | PR zstd 3 | Saving  |
+| ---- | --------------- | --------------- | --------- | ------- |
+| 1    | Default         | 22.580s         | 11.760s   | 10.820s |
+| 2    | PR              | 22.612s         | 12.560s   | 10.052s |
+| 3    | Default         | 22.512s         | 11.815s   | 10.697s |
+
+Median packaging time fell from 22.580s to 11.815s (47.7%); median package size
+grew from 213,873,601 to 237,570,611 bytes (11.1%). All six extracted manifests
+matched every path, byte, mode and symlink target: 4,096 files and 601,194,650
+file bytes. The runtime prefix matched the pinned runtime exactly, and stored
+SquashFS options confirmed the actual level-3 override. All static checks passed;
+the representative baseline and candidate each passed the unchanged headless
+and CLI journeys, including all entrypoints and both shutdown signals. The
+directory build passed the existing glibc floor checks on all 19 native binaries.
+
+Only the PR Linux x64 AppImage child receives the private tool overlay. It resolves
+the existing custom-tool override first, checks the pinned tool/version and zstd
+configuration, and reuses the original runtime, validator and libraries. Cleanup
+waits for every package worker even on failure. Release settings, Linux ARM,
+Debian/RPM packaging and all native/package gates retain their existing behavior.
+The isolated AppImage result does not establish the full three-format job's gain.
+
+The same hosted comparison projected one already-built renderer three times per
+treatment, again alternating order. Baseline times were 8.079 / 8.219 / 8.129s;
+candidate times were 2.568 / 2.477 / 2.403s. Median projection fell from 8.129s to
+2.477s (69.5%, 5.653s saved). All six web snapshots matched all 1,137 files and
+51,957,014 bytes, and the renderer input remained unchanged after every run.
+These timings include the projector process but exclude renderer compilation,
+checkout, setup and queues. The drivers and workflow remain available at source
+commit `8ba5c9bf9f734d585f5e89945519aef4f607face`.
+
+Two local cache screens do not justify enabling Node's compile cache. A 96-file
+screen with an explicit worker flush produced a small, noisy difference. A larger
+256-file screen retained all 2,088 tests: baseline elapsed times were
+54.630 / 55.105 / 55.171 seconds, fresh caches 53.719 / 54.577, and a warm cache
+53.732. The roughly 1.7% median difference is too small to justify cache transfer
+and another test hook without stronger hosted evidence.
+
+Vitest 4.1.11's experimental filesystem module cache is more promising locally,
+but raw reuse is unsafe. A 96-file screen fell from about 8.4 to 5.9 seconds with
+a warm cache, while a cold cache cost about 3%. Negative controls then reproduced
+false passes after adding a preferred import extension, retargeting a symlink,
+changing package exports, or changing transform inputs. Cache-disabled controls
+failed correctly. A cache key must cover resolution and transform inputs as well
+as file contents before any production trial; source hashes alone do not suffice.
+
+Affected-test selection remains in shadow mode. Its first merge was September
+28, so October 1 cannot satisfy the documented week of evidence. Seven sampled
+complete reference reports included one red run, but only two evaluated a smaller
+candidate set; each omitted about 177–179 worker-seconds out of 8,073–8,392. Five
+full fallbacks are not selection-validation evidence, and two other sampled red
+runs had no review artifact. These samples support keeping the conservative
+policy, rather than claiming that omitting roughly 12% of files would omit the
+same fraction of work.
+
+### Shared planning and typechecking
+
+PR planning now shares checkout and dependency setup with typechecking. Planning
+runs in the background, with an explicit failure-propagating join before its
+artifact is published. Static analysis remains on a separate runner. Its existing
+native dependency install is pinned to Node 24 so it also fills the unit matrix's
+native cache, replacing the separate conditional PR primer. Daily Node 24/26
+reference planning and priming remain independent.
+
+The planner also avoids constructing the import graph when global changes or
+missing change evidence already require the full suite. This keeps the same
+fallback reason, discovery list and execution coverage. Five PR unit shards,
+static/type gates, package checks and the shadow-selection policy are retained.
+
+A [three-sample hosted comparison](https://github.com/stablyai/orca/actions/runs/36833782900)
+measured standalone type jobs at 35 / 26 / 42 seconds and planning jobs at
+36 / 25 / 24 seconds. Shared type/planning jobs took 38 / 37 / 27 seconds.
+The sum of the separate job medians fell from 60 to 37 seconds. Using that estimate with
+the 139-second median static job models about 12% less preflight occupancy.
+This is not a measured reduction in total CI time or queue delay. All twelve
+plans matched, and three deliberately fresh native-cache producers were reused
+by three successful consumers with the real native dependency probe.
+
+After updating to the current main branch, a
+[six-pair alternating comparison](https://github.com/stablyai/orca/actions/runs/36840171700)
+reset compiler state before every measurement. Direct compiler/planner command
+time was 11.59 / 11.31 / 10.96 seconds sequentially versus
+6.82 / 6.52 / 6.33 seconds together with restored state. With state deleted,
+it was 67.36 / 67.05 / 61.75 versus 55.52 / 60.06 / 55.68 seconds.
+All commands passed and plans matched within each comparison. These command
+timings exclude setup and queues; compiler variation contributes to the cold
+difference. The retained arrangement showed no cold compiler penalty.
+
+Combining static analysis too was rejected. An
+[alternating same-runner comparison](https://github.com/stablyai/orca/actions/runs/36835091650)
+saved runner occupancy, but cold compilation slowed from 61–64 to 83–89 seconds
+under contention. The combined gate would finish roughly 40 seconds after the
+separate static gate. An
+[earlier-compiler trial](https://github.com/stablyai/orca/actions/runs/36837523594)
+did not remove that penalty. Small localization scheduling changes also lacked
+a repeatable gain. The temporary pilot workflows and benchmark tooling are
+available in those runs' commits, rather than retained in normal PR CI.
+
+Line-count reporting stays separate: it uses a small runner and trusted scripts
+with PR write permissions. Sharing that job's credentials with PR-source checks
+would provide little resource benefit. Reducing unit shards would trade saved
+setup for a longer critical path; enabling selected tests requires the existing
+week of representative shadow evidence.
 
 ## September 27 follow-up
 
@@ -27,7 +442,6 @@ minutes saved across 14 consumers, before artifact transfer overhead. Runner
 variation is substantial; this is not a measured workflow wall-time reduction.
 Test coverage and deadlines stay intact.
 
-
 [PR #23368](https://github.com/stablyai/orca/pull/23368) overlaps shell installation
 with dependency setup, starts localization extraction before the orcad smoke,
 and prepares mobile route snapshots while WebKit and the bundle are being built.
@@ -35,14 +449,14 @@ Its 27 checks passed without retries; seven existing conditional checks skipped.
 
 Same-runner comparisons in both orders measured:
 
-| Work | Before | After | Evidence |
-| --- | --- | --- | --- |
-| Static block | 63.5 / 74.7s | 38.9 / 55.6s | [Full comparisons](https://github.com/stablyai/orca/actions/runs/36302208990) |
-| Shell job, downloads warmed equally | 76.8 / 70.3s | 64.4 / 64.0s | [Controlled shell runs](https://github.com/stablyai/orca/actions/runs/36302612626) |
-| Mobile preparation | 19.8–21.6s | 18.0–18.5s | [Eight measurements](https://github.com/stablyai/orca/actions/runs/36302877583) |
-| Web projection and mobile build | 17.2–17.3s | 11.7–12.1s | [Eight measurements](https://github.com/stablyai/orca/actions/runs/36302974324) |
-| Mobile verifier fixture suite | 25.47 / 25.35s | 20.04 / 19.92s | [Four full-suite runs](https://github.com/stablyai/orca/actions/runs/36302692823) |
-| E2E build outputs | 28.6–30.4s | 25.8–27.8s | [Eight measurements](https://github.com/stablyai/orca/actions/runs/36304001325) |
+| Work                                | Before         | After          | Evidence                                                                           |
+| ----------------------------------- | -------------- | -------------- | ---------------------------------------------------------------------------------- |
+| Static block                        | 63.5 / 74.7s   | 38.9 / 55.6s   | [Full comparisons](https://github.com/stablyai/orca/actions/runs/36302208990)      |
+| Shell job, downloads warmed equally | 76.8 / 70.3s   | 64.4 / 64.0s   | [Controlled shell runs](https://github.com/stablyai/orca/actions/runs/36302612626) |
+| Mobile preparation                  | 19.8–21.6s     | 18.0–18.5s     | [Eight measurements](https://github.com/stablyai/orca/actions/runs/36302877583)    |
+| Web projection and mobile build     | 17.2–17.3s     | 11.7–12.1s     | [Eight measurements](https://github.com/stablyai/orca/actions/runs/36302974324)    |
+| Mobile verifier fixture suite       | 25.47 / 25.35s | 20.04 / 19.92s | [Four full-suite runs](https://github.com/stablyai/orca/actions/runs/36302692823)  |
+| E2E build outputs                   | 28.6–30.4s     | 25.8–27.8s     | [Eight measurements](https://github.com/stablyai/orca/actions/runs/36304001325)    |
 
 Full mobile-job timings were dominated by first-run apt installation and browser
 test variation; the controlled preparation measurement is the scheduling evidence.
@@ -109,7 +523,7 @@ before the composites start; the workflow contract now preserves that ordering.
   or still-running check falls back to the full checks. Advisory tests retain
   their normal readiness routing. The mobile and line-count workflows have no
   draft-dependent work, so they no longer run again when a draft becomes ready.
-- Route the Bun matrix using the actual headless build and selected tests'
+- Route the headless-runtime matrix using the actual headless build and selected tests'
   transitive imports, with conservative inclusion for dynamic workers, native
   inputs, fixtures, and toolchain changes. A graph failure runs the full matrix;
   manual dispatch still runs all ten platform jobs. The shared test selectors
@@ -542,3 +956,439 @@ only one potential idle allocation per day, and active development usually
 requires that build. Defer another release-graph change until skip frequency
 justifies it. The substantive remaining release occupancy opportunity is the
 separately documented asynchronous signing policy decision.
+
+## Persistent Vitest transform cache: rejected for now
+
+A local 96-file import-heavy sample with Vitest 4.1.11 took 8.31/8.53 seconds
+without its filesystem module cache, 8.63/8.69 seconds cold, and 5.91/5.91
+seconds warm: about 30% faster warm. The cache held 3,770 modules and 83 MiB.
+These timings exclude hosted cache transfer and do not establish a PR saving.
+
+Correctness probes found eight changes that incorrectly kept a test passing
+against the old transformed import or compiler output:
+
+| Change after warming                                              | Raw cache  | Startup fingerprint |
+| ----------------------------------------------------------------- | ---------- | ------------------- |
+| Add preferred `value.js` beside previously resolved `value.ts`    | False pass | Correctly fails     |
+| Retarget a source symlink while its old target still exists       | False pass | Correctly fails     |
+| Change an inlined package's `exports` to another existing file    | False pass | Correctly fails     |
+| Add a preferred extension in a generated source directory         | False pass | Correctly fails     |
+| Change TypeScript's JSX factory in `tsconfig.json`                | False pass | Correctly fails     |
+| Create the preferred file from setup after startup fingerprinting | False pass | False pass          |
+| Add a preferred file inside an external symlinked directory       | False pass | False pass          |
+| Change an external file read by a transform plugin                | False pass | False pass          |
+
+The fingerprint included file names/types, symlink targets, package/config/
+TypeScript metadata contents, and effective alias/define options. Following
+external symlink inventories and hashing declared transform inputs repaired the
+last two rows, but did not repair files created after fingerprinting. All ten
+cache-disabled changed-input controls failed correctly; initial and repeated
+warm controls passed. Effective alias and simple define changes also invalidated
+correctly without the added fingerprint.
+
+The [Vitest 4.1.11 documentation](https://github.com/vitest-dev/vitest/blob/v4.1.11/docs/config/experimental.md#known-issues)
+documents incomplete plugin-input tracking. Its
+[cache implementation](https://github.com/vitest-dev/vitest/blob/v4.1.11/packages/vitest/src/node/cache/fsModuleCache.ts)
+hashes the module and selected configuration, but retains previously resolved
+import URLs. [Upstream fix #11381](https://github.com/vitest-dev/vitest/pull/11381)
+merged September 29 and revalidates those URLs. A disposable Vitest 5.0.3 probe,
+which contains that fix, reproduced all eight false-pass categories: the old
+target still exists, so checking its resolved URL misses a newly preferred file
+or changed package export. Upgrading alone does not make reuse safe.
+
+To reproduce the simplest negative control outside the worktree:
+
+1. Create `value.ts` containing `export const value = 1`, and a test importing
+   `./value` and asserting `expect(value).toBe(1)`. Use an isolated config/cache,
+   one fork worker, `ORCA_BACKGROUND_LAUNCH=1`, and
+   `NODE_DISABLE_COMPILE_CACHE=1`.
+2. Run the installed CLI with `--experimental.fsModuleCache=true` to warm it.
+   Add `value.js` containing `export const value = 2`; retain `value.ts` and the
+   unchanged test. The same cached invocation incorrectly passes.
+3. Repeat with `--experimental.fsModuleCache=false`. The assertion correctly
+   fails. Vitest 5 uses `--fsModuleCache` for the equivalent controls.
+4. For the startup-inventory control, use unchanged setup code that creates
+   `value.js` only when a runtime environment switch is enabled. Remove that
+   file before each invocation/fingerprint; warm with the switch off, then run
+   with it on. The cached importer still points at `value.ts`, while the fresh
+   module graph correctly fails. This is an additional persistent-cache error,
+   not a claim that normal in-process module reuse supports arbitrary mutation.
+
+Orca currently resolves only pinned Vitest/Vite built-in transform plugins.
+Its setup files install runtime guards/shims and temporary user data, rather
+than custom transforms. A narrower policy could cache only proven immutable
+source/dependency inputs and leave tests, setup, virtual modules, external
+fixtures, and unknown plugins cold. That requires a validated transitive input
+boundary and mutation policy; hashing every source tree on each lookup would
+also spend the gain. Until that policy and hosted transfer cost are measured,
+the local warm result does not justify adding a persistent cache to CI.
+
+## Test fixture imports: reuse the existing narrow builder
+
+The pointer-drag test imported only `makeWorktree` from `store-test-helpers`,
+which also loads the real store slices. Its existing identical export in
+`worktrees-slice-test-fixtures` supplies the same defaults without that graph.
+Changing this single import preserves the five tests, fork workers,
+isolation, and disabled filesystem/Node compile caches.
+
+Three local interleaved before/after pairs took 2.066/2.047/2.031 seconds versus
+0.351/0.388/0.353 seconds: the isolated median fell 82.7%, from 2.047 to 0.353
+seconds. Transformed modules fell from 1,086 to 15. This is an isolated test
+result, not a whole-shard estimate: other tests need the store modules anyway.
+A broader 20-file screening sample saved only 0.295 seconds at its median,
+which does not justify splitting the fixture module across those consumers.
+
+Two further import-only reuses passed the same six-run controls. The kanban
+lane test mocks its card component, so switching its builder import reduced
+the isolated median from 2.202 to 0.495 seconds (77.5%) and transformed modules
+from 1,082 to 13, with all six tests unchanged. The autosave fixture needs
+the real editor slice, but not every store slice: the same import change across
+its three consuming suites reduced the median from 3.027 to 1.301 seconds
+(57.0%), with 1,107 to 320 modules and all 17 tests unchanged. These
+results also measure isolated file groups; they are not additive shard savings.
+The remaining inspected builder-only imports already load the full store as
+their subject, or use builders whose defaults differ from existing exports.
+
+## Vitest threads: retain forks after the scoped pilot
+
+Three local interleaved comparisons kept four workers, `isolate: true`, both
+persistent caches disabled, and the same test assertions/module graph. The
+94-file happy-dom renderer cohort passed all 570 tests: forks took
+17.480/17.382/17.657 seconds and threads 15.048/14.890/15.013 seconds, a 14.1%
+median reduction. A 23-file shared JavaScript cohort passed all 248 tests,
+with its median falling from 1.435 to 1.274 seconds (11.2%). No main-process
+module or native addon loaded; guards reject native loading, `chdir`, and
+process signals. These Mac/Node 24 timings motivated the hosted comparison.
+
+The [pinned Vitest pool documentation](https://github.com/vitest-dev/vitest/blob/v4.1.11/docs/config/pool.md)
+defaults to forks and documents thread limitations around process APIs and
+native libraries. [Node's worker documentation](https://nodejs.org/docs/latest-v24.x/api/worker_threads.html#new-workerfilename-options)
+also excludes V8 flags from worker `execArgv`. Orca's `--expose-gc` worker flag
+fails with `ERR_WORKER_INVALID_EXEC_ARGV` under threads. The experiment starts
+both parent processes with that flag, retains it on fork workers, and removes
+it only from thread worker arguments; GC availability is checked in every
+test environment. Process, native, lifecycle, and GC-retention tests stay out
+of this comparison.
+
+The [hosted pilot](https://github.com/stablyai/orca/actions/runs/36855833033)
+passed on Linux ARM64, four CPUs, Node 24.21.0, and Ubuntu image
+`20260927.135.1`. Three alternating pairs preserved source hashes and complete
+module graphs, with no main-process module or native addon loaded:
+
+| Audited cohort                         | Forks, seconds           | Threads, seconds         | Median saving         |
+| -------------------------------------- | ------------------------ | ------------------------ | --------------------- |
+| 94 renderer files / 570 tests          | 48.591 / 48.144 / 47.299 | 42.486 / 42.402 / 42.221 | 5.742 seconds (11.9%) |
+| 23 shared JavaScript files / 248 tests | 3.386 / 3.330 / 3.424    | 3.203 / 3.237 / 3.278    | 0.149 seconds (4.4%)  |
+
+Each timed group also included two isolation sentinels: totals were 96 files /
+572 tests and 25 files / 250 tests, respectively, with no skips.
+Their graph hashes matched in every pair (4,015 and 251 modules). Separate
+single-worker positive controls passed both sentinels in each pool. With
+isolation disabled, the second sentinel correctly failed on leaked state.
+Missing GC failed setup, and native loading, `chdir`, and process-signal probes
+failed at the guard in both pools. Those expected failures did not pass silently.
+
+The fixed 117-file sample accounts for about 1.5% of the baseline's aggregate
+module time; its isolated gains are not a whole-suite estimate. Maintaining
+that exact file list for this benefit is not justified. A broader route needs
+a safe eligibility policy, Node 26/Windows evidence, and a mixed full-shard
+comparison: separate Vitest projects can repeat shared transforms and erase
+the pool-startup saving. A renderer path alone does not prove that future
+imports avoid process or native behavior. Production retains forks, and the
+temporary workflow, driver, and cohort list were removed after measurement.
+
+## Oxlint scan consolidation: rejected
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/36855833063)
+used one Linux ARM64/four-CPU runner, Node 24.21.0, and three alternating
+baseline/candidate pairs. The baseline kept root lint and anti-slop in parallel,
+then native and type-aware audits in parallel. The candidate merged the first
+three scans and ran the unchanged type-aware audit alongside them.
+
+| Pair/order         | Baseline stage | Candidate stage | Change |
+| ------------------ | -------------- | --------------- | ------ |
+| 1: baseline first  | 49.409 s       | 53.197 s        | +7.7%  |
+| 2: candidate first | 50.249 s       | 60.297 s        | +20.0% |
+| 3: baseline first  | 50.040 s       | 56.672 s        | +13.3% |
+| Median             | 50.040 s       | 56.672 s        | +13.3% |
+
+These complete stage timings include anti-slop synchronization in both variants
+and candidate configuration generation. Candidate preparation took only
+0.141–0.255 seconds. The unchanged type-aware scan took 16.386–17.279 seconds
+in the baseline wave, versus 33.561–55.736 seconds beside the merged scan;
+these timings are consistent with contention on the four-CPU runner.
+
+The corrected local Mac/16-CPU comparison had reduced the median from 16.676
+to 14.381 seconds (13.8%). Both comparisons limited each Oxlint invocation to
+four threads and used identical source configuration hashes. The hosted result
+shows why the local gain did not justify adoption on the actual CI runner.
+
+Coverage controls passed: the merged scan matched the exact 28,621-file union
+with no missing or extra files. Thirty-one fault fixture files produced the
+exact 16-diagnostic union, including all seven active root JavaScript rules.
+Eighteen focused controls preserved nested-mobile exemptions, type-aware
+exclusions, and exit behavior. The native audit's warnings still failed its
+original `--deny-warnings` gate and became errors in the merged scan; root
+warnings remained non-fatal. Every full-repository scan passed cleanly.
+
+Keep the existing production waves. The temporary workflow and 601-line
+benchmark driver were removed after recording this rejected result.
+
+## Native cache ownership: retain the extraction
+
+Native restoration, toolchain recovery, and preparation now belong to
+`.github/actions/prepare-native-runtime/action.yml`. The installer forwards
+its requested key and three build paths; Windows packaging saves the Node
+build before calling the same action for Electron. Existing native load,
+patched-build, Windows job-ownership, registry, and process-table probes remain
+unchanged on restored consumers. Exact keys still separate OS/image or Linux
+container libc, architecture, runtime, resolved Node version, and actual pnpm
+version, without partial-key restoration.
+
+The source hash covers the dedicated action, `pnpm-lock.yaml`,
+`pnpm-workspace.yaml`, `.npmrc`, `.pnpmfile.cjs`, both native dependency patches,
+and these complete build/probe inputs:
+
+- `config/scripts/ensure-native-runtime.mjs`, `rebuild-native-deps.mjs`,
+  `node-pty-job-ownership.cjs`, `windows-pe-machine.cjs`,
+  `windows-process-tree-gyp-rebuild.mjs`, and
+  `windows-process-tree-creation-time.cjs`;
+- `config/scripts/install-electron-package-binary.mjs`,
+  `electron-platform-path.mjs`, `zip-extractor-command.mjs`,
+  `shared-electron-dist-cache.mjs`, `space-sharing-copy.mjs`, and
+  `src/shared/zip-extractor-command.ts`;
+- `native/windows-registry/src/addon.cc`, `binding.gyp`, `package.json`, and
+  `index.js`.
+
+The patches are `config/patches/node-pty@1.1.0.patch` and
+`config/patches/@vscode__windows-process-tree@0.8.0.patch`. Root app version and
+script metadata are excluded; installed package versions remain owned by the
+full lockfile, and the external node-gyp pin belongs to the native action.
+A negative control changing only the installer's
+pnpm verification condition preserves the native key and paths. Every declared
+native input mutation changes the key, and main warming watches those inputs.
+
+This policy creates one cold namespace. The bounded 50-head main sample has
+49 adjacent transitions and three native-key changes under both the old and
+expanded policies: the added node-pty helper export still invalidates #24448.
+There is no measured historical net saving.
+
+The [cold warming run](https://github.com/stablyai/orca/actions/runs/36945655208/attempts/1)
+published all four exact Node keys, and its
+[warm rerun](https://github.com/stablyai/orca/actions/runs/36945655208/attempts/2)
+restored them on fresh runners with the same frozen inputs, Node 24.21.0, and
+pnpm 12.0.0. All five jobs passed in both attempts. These times cover the entire
+native action: runtime validation, key resolution, restore, any toolchain
+recovery, and the unchanged native preparation probes.
+
+| Native Node lane | Cold action | Warm action | Cold post-job save |
+| ---------------- | ----------- | ----------- | ------------------ |
+| Linux x64        | 18.288 s    | 0.993 s     | 0.387 s            |
+| Linux ARM64      | 11.540 s    | 1.062 s     | 1.113 s            |
+| Windows x64      | 104.482 s   | 1.381 s     | 2.424 s            |
+| Windows ARM64    | 256.662 s   | 3.832 s     | 1.243 s            |
+
+Cold Windows jobs rebuilt all three native addons. Warm jobs loaded and probed
+the restored builds; Linux also ran the existing check-only probe before
+skipping the external node-gyp installation. Warm post-job steps recognized
+their primary keys and did not save again. An earlier trial exposed unavailable
+nested composite outputs during post-job saving; both cache variants now use
+the same literal path inventory as the requested output, and the fixed cold
+jobs published their caches without missing-path warnings.
+
+Both [PR package jobs](https://github.com/stablyai/orca/actions/runs/36945659474)
+passed. Windows packaging consumed the same-run Node seed in 1.374 seconds
+before its Node tests and Electron transition. Its Electron cache initially
+missed while the modules were already healthy, so that stage does not establish
+an avoided compilation. Linux's Electron cache was also published, and all 19
+bundled native binaries passed the existing glibc floor check.
+
+The [first six-platform headless run](https://github.com/stablyai/orca/actions/runs/36945658897)
+ran every persistence lane: five passed, while Mac Intel failed waiting for a
+cancel-test worker's ready file before its 500 ms timeout. That lane deliberately
+uses `native-runtime: none`; its separate slot build and smoke passed. The failure
+blocked the five downstream Linux glibc/musl qualifications, so this run does not
+establish complete headless qualification. All six persistence lanes, Node 18
+handoffs, and Linux floor/musl gates remain; final qualification is tracked in
+the [PR's latest checks](https://github.com/stablyai/orca/pull/24476/checks).
+
+These are single cold/warm observations, not paired medians or a measured
+whole-workflow saving. They demonstrate usable exact-key reuse after publication;
+future savings depend on cache availability and unchanged native inputs. The
+trial seeds belong to this PR's merge ref. Other PRs require a main-branch seed
+after merging this new namespace; the existing main push and hourly warming
+jobs provide that seed.
+
+## Separate mobile install verification: retain the current policy
+
+Three local paired pnpm 12 mobile installs reduced the median from 17.155 to
+15.871 seconds, a 1.284-second difference before cache transfer and postinstall
+scripts. That narrow margin does not establish a net hosted saving, so the
+separate mobile verification record was not adopted.
+
+## Unit shard weights: retain the current allocation
+
+The latest five shard wall times were 526/495/503/508/510 seconds. Reweighting
+projected roughly a 4% reduction in the slowest shard without reducing total
+CPU work; the evidence across runs was weak. That estimate does not justify
+changing allocation, so the current weights remain.
+
+## Serializer oracle allocations: retain the change
+
+The serializer round-trip oracle now reloads one xterm cell per buffer traversal
+and writes flag digits directly, avoiding fresh cell objects and flag arrays for
+every comparison. Independent replay terminals, cell descriptors, transcript
+fixtures, resize schedules, ConPTY modes and seeds remain unchanged.
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/36944080887)
+used one Ubuntu 24.04 ARM64 runner, image 20260927.135.1, Node 24.21.0 and one
+isolated fork. The baseline formatter was frozen from f69052e. Byte-parity capture
+ran separately; these three alternating pairs had no payload instrumentation.
+Times cover the complete Vitest invocation, including startup and shutdown.
+
+| Pair/order         | Baseline | Candidate | Change |
+| ------------------ | -------- | --------- | ------ |
+| 1: baseline first  | 70.631 s | 61.661 s  | -12.7% |
+| 2: candidate first | 70.619 s | 62.284 s  | -11.8% |
+| 3: baseline first  | 70.750 s | 62.091 s  | -12.2% |
+| Median             | 70.631 s | 62.091 s  | -12.1% |
+
+Median test-body time fell from 69.519 to 60.953 seconds. All eight full-cohort
+invocations preserved the same 89 passes and two existing conditional skips
+across three files. Separate baseline/candidate captures produced identical
+95,017,559-byte payloads for all 1,435 scenarios and 7,649 checkpoints, with zero
+source crashes; both SHA256 hashes matched the local captures.
+
+Seven focused controls compare against the original allocating oracle, including
+all 128 text-flag combinations, styled blanks, wide cells, cell reuse and immutable
+snapshots. Five deliberate faults were detected: stale cell contents, a missing
+bold flag, changed empty-cell policy, removed scratch reuse and a source-parser
+crash. The last control also proved that crash returns enter the capture.
+
+This measures the three-file oracle cohort. Whole-shard timings include other
+test bodies, imports and transforms, so a whole-suite saving needs separate
+measurement.
+
+## Cache warming: let hourly ticks wait for active work
+
+The hourly warmer previously cancelled an active warmer, even when both used
+the same source. On October 2, the [merge-triggered run](https://github.com/stablyai/orca/actions/runs/36965832780)
+at 8ff6296 was interrupted by the [hourly run](https://github.com/stablyai/orca/actions/runs/36966367896)
+at the same commit. The Windows ARM dependency installation had run for 356
+seconds before cancellation; its native verification was skipped. The other
+four lanes had already succeeded.
+
+Scheduled events now wait in the existing concurrency group. Push, PR and manual
+events still replace active work. This keeps one active workflow and the default
+single pending slot, using GitHub's documented
+[conditional cancellation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+All cache probes, platforms and publication rules remain.
+
+This avoids the observed discarded installation. It does not remove the next
+scheduled run or its repeated successful lanes, and pending replacement still
+applies regardless of the cancellation expression. The bounded 20-run sample
+contains this collision; it does not establish a recurring or whole-CI saving.
+
+## Daemon shutdown fixture: remove build tools after compilation
+
+The fixture now removes compiler and Python build dependencies, plus npm and
+node-gyp caches, in the same Docker layer that installs node-pty. It restores the base image's manual
+package marks, keeps procps and util-linux, and retains the packages owning the
+shared libraries used by Node and the actually loaded PTY addon. This extends
+the [official Node image's package-ownership approach](https://github.com/nodejs/docker-node/blob/main/22/bookworm-slim/Dockerfile)
+to native addons. Dependency checks and a real PTY spawn fail the build if cleanup
+breaks the runtime.
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/36969120786)
+used Ubuntu x64, Docker 28.0.4 and the same resolved Node 22.23.3 base digest for
+both images. All 3,418 common entries under `/usr/local` retained their bytes,
+modes and symlink targets; all seven resolved runtime libraries matched. Only
+two directory-only Python paths disappeared. The 52 removed Debian packages
+were build dependencies; retained package versions stayed identical.
+
+| Image payload      | Baseline      | Candidate     | Reduction |
+| ------------------ | ------------- | ------------- | --------- |
+| Docker archive     | 714,643,456 B | 329,967,616 B | 53.8%     |
+| Compressed archive | 205,819,558 B | 91,888,840 B  | 55.4%     |
+
+Each timed arm started a separate Docker daemon with an empty image store,
+decompressed the archive, loaded it, rebuilt from its inline cache and ran the
+unchanged descendant/canary shutdown check. Every provisioning layer was cached.
+
+| Pair/order         | Baseline | Candidate | Saving  |
+| ------------------ | -------- | --------- | ------- |
+| 1: baseline first  | 16.320 s | 10.198 s  | 6.122 s |
+| 2: candidate first | 16.389 s | 10.141 s  | 6.248 s |
+| 3: baseline first  | 16.351 s | 10.223 s  | 6.129 s |
+| Median             | 16.351 s | 10.198 s  | 6.153 s |
+
+Median decompression fell from 1.059 to 0.493 seconds and loading from 10.723 to
+5.125 seconds. Cached rebuild and shutdown times stayed close. Both seed images
+and all six restored consumers passed the original shutdown/canary assertions;
+both deliberate no-op disposal controls failed with the descendant still live.
+Byte and retained-directory mode faults also failed the inventory comparator.
+All six owned daemons stopped gracefully without a forced kill.
+
+These private daemons used separate classic overlay2 stores and the untouched
+host containerd service. Production storage settings were not captured, the
+filesystem cache was not flushed, and network transfer is excluded. Production
+restores overlap dependency installation, so this 37.6% fixture-sequence saving
+does not establish a six-second PR wall-time improvement. Single cold image
+builds took 19.313 and 22.623 seconds. The Dockerfile change creates one new
+fixture key; the existing main warmer seeds it after merge.
+
+## WebRTC egress fixture: avoid GPU initialization for the data channel
+
+The Linux-only probe disables hardware acceleration before Electron readiness.
+It still creates two independent processes/profiles, a real data channel, offer
+and local description, and checks the exact proxy and UDP policy. The three-second
+host observation, 500 ms drain and 20/30/45-second deadlines remain unchanged.
+
+Two fresh Ubuntu x64 runners compared three alternating pairs each, with identical
+phase instrumentation. The [first trial](https://github.com/stablyai/orca/actions/runs/36967511524)
+started with the baseline; the [second trial](https://github.com/stablyai/orca/actions/runs/36969120786)
+started with the candidate. Their first baseline peer constructors took 4.059
+and 2.546 seconds and logged the GPU command-buffer error seen in an earlier
+package timeout. In the second trial, that baseline delay followed the cold
+candidate's 2.3 ms constructor. Every candidate constructor took 2.0–2.6 ms.
+
+Typical process time stayed near 8.3 seconds: baseline/candidate medians were
+8.288/8.273 seconds in the first trial and 8.298/8.380 in the reverse trial.
+The evidence supports removing an avoidable startup delay, without a measured
+typical throughput gain or an estimate of future timeout frequency.
+
+All 12 full case invocations preserved actual unprotected UDP and zero protected
+UDP. Both trials rejected seven faults: missing policy, a packet at 2.9 seconds,
+a packet during the drain, a missing peer factory or local description, a broken
+packet counter and a hung renderer. The original assertions and deadlines caught
+each fault. The normal package gate runs the uninstrumented fixture.
+
+## Remote resync fixture: keep coalesced frames in one decoder pass
+
+The first [full PR run](https://github.com/stablyai/orca/actions/runs/36971375340)
+passed both package jobs but failed one remote-workspace ordering assertion:
+it observed revisions `[2, 3]` where the fixture expected `[3]`. The decoder can
+yield between two frames after its four-millisecond work budget. Under slow
+scheduling, the first response's promise can publish revision 2 before the
+second frame's revision 3 notification is dispatched.
+
+The fixture now holds its delivery clock at the actual timestamp from multiplexer
+construction through the first coalesced-buffer delivery, following the existing
+decoder test pattern. It restores the clock before asynchronous assertions and
+again before disposal. All four source/order cases retain their exact cache,
+publication, client-identity and follow-up-read assertions. Production decoding,
+its fairness budget and remote messages are unchanged.
+
+Normal focused runs passed all 18 tests. Advancing the clock by four milliseconds
+per call reproduced `[2, 3]` in both original response-first cases; the fixed
+fixture passed all 18 under the same control. Removing the freeze reproduced both
+failures. Bypassing the production read-safety guard still caused `[3, 2]` rollback
+in all four ordering cases and eight failing tests overall. All controls preserved
+the same 18 test identities. This corrects a reproducible fixture assumption;
+one CI failure does not establish a failure-rate reduction.
+
+## Windows server cache metadata: retain the current key
+
+The bounded 50-head main sample ending at 8ff6296 contained no root package
+metadata changes. Removing app-version metadata from the Windows server cache
+key would not improve reuse in that sample, so the key remains unchanged.

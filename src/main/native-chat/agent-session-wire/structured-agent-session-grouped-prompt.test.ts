@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +7,8 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import { encodeAgentSessionQuestionAnswers } from '../../../shared/agent-session-question-answer'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -21,6 +23,8 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -70,30 +74,34 @@ async function seedGroupedQuestion(): Promise<{ itemId: string; revision: number
   if (!events) {
     throw new Error('seedGroupedQuestion requires an acquired session')
   }
-  events.appendItem(identity, {
-    kind: 'question',
-    question: '2 grouped questions from Claude',
-    options: [],
-    questions: [
-      {
-        id: 'q1',
-        question: 'Targets',
-        multiSelect: true,
-        options: [
-          { id: 'target-web', label: 'Web' },
-          { id: 'target-mobile', label: 'Mobile' }
-        ]
-      },
-      {
-        id: 'q2',
-        question: 'Host',
-        multiSelect: false,
-        options: [],
-        freeTextQuestionId: 'q2'
-      }
-    ],
-    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-  })
+  events.appendItem(
+    identity,
+    {
+      kind: 'question',
+      question: '2 grouped questions from Claude',
+      options: [],
+      questions: [
+        {
+          id: 'q1',
+          question: 'Targets',
+          multiSelect: true,
+          options: [
+            { id: 'target-web', label: 'Web' },
+            { id: 'target-mobile', label: 'Mobile' }
+          ]
+        },
+        {
+          id: 'q2',
+          question: 'Host',
+          multiSelect: false,
+          options: [],
+          freeTextQuestionId: 'q2'
+        }
+      ],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
   await host.flushStreamedEvents(SESSION)
   const itemId = agentJournalItemKey(identity)
   const page = await host.history({ sessionId: SESSION, direction: 'tail' })
@@ -124,11 +132,12 @@ beforeEach(async () => {
     }
   }))
   answerPrompt = vi.fn(async ({ commit }) => commit())
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -214,5 +223,58 @@ describe('grouped question admission', () => {
       refusal: { code: 'agent_session_operation_invalid' }
     })
     expect(answerPrompt).not.toHaveBeenCalled()
+  })
+})
+
+describe('a grouped question answered again', () => {
+  const answers = [
+    { questionId: 'q1', optionIds: ['target-web'] },
+    { questionId: 'q2', optionIds: [], other: 'SSH host' }
+  ]
+
+  async function answer(
+    prompt: { itemId: string; revision: number },
+    given: typeof answers
+  ): ReturnType<StructuredAgentSessionHost['respondToPrompt']> {
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, answers: given }
+    return host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:question', fields),
+      kind: 'question',
+      ...fields
+    })
+  }
+
+  it('answers a re-click with the same answers from the resolution it holds', async () => {
+    expect((await host.attach(CALLER, attachParams())).ok).toBe(true)
+    const prompt = await seedGroupedQuestion()
+    const first = await answer(prompt, answers)
+
+    // The reply to the first was lost, so the re-click still names the revision it saw.
+    const again = await answer(prompt, answers)
+
+    expect(first.ok).toBe(true)
+    expect(again).toEqual({ ...first, replayed: false })
+    expect(answerPrompt).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses different answers to a resolved question as moved on', async () => {
+    expect((await host.attach(CALLER, attachParams())).ok).toBe(true)
+    const prompt = await seedGroupedQuestion()
+    await answer(prompt, answers)
+
+    const different = await answer(prompt, [
+      { questionId: 'q1', optionIds: ['target-mobile'] },
+      { questionId: 'q2', optionIds: [], other: 'SSH host' }
+    ])
+
+    expect(different).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_item_revision_stale',
+        details: { reason: 'promptMoved' },
+        resolution: { answers }
+      }
+    })
+    expect(answerPrompt).toHaveBeenCalledTimes(1)
   })
 })

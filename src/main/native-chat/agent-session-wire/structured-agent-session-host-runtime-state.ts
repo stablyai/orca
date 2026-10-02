@@ -26,7 +26,7 @@ export class StructuredAgentSessionHostRuntimeState {
       now: () => deps.now?.() ?? Date.now(),
       // Lease/ownership failures are transient and stay on the visible lease-error path.
       // Only deferred sink I/O failures are terminal and may force-close a provider.
-      onError: ({ sessionId, error }) => deps.onEventSinkError?.({ sessionId, error })
+      logger: deps.logger
     })
   }
 
@@ -67,8 +67,9 @@ export class StructuredAgentSessionHostRuntimeState {
   mintEventSink(sessionId: string): DeferredStructuredAgentSessionEventSink {
     const minted: DeferredStructuredAgentSessionEventSink =
       createDeferredStructuredAgentSessionEventSink({
-        onError: (error) => {
-          this.deps.onEventSinkError?.({ sessionId, error })
+        sessionId,
+        logger: this.deps.logger,
+        onFailed: (error) => {
           // Only the session's own sink may force its provider down; an attempt's never is.
           if (this.eventSinks.get(sessionId) === minted) {
             this.onEventSinkFailure?.(sessionId, error)

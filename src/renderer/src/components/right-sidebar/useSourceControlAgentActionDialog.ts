@@ -3,7 +3,7 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   pickSourceControlLaunchAgent,
   resolveSourceControlLaunchAgentScope
-} from '@/lib/source-control-launch-agent-selection'
+} from '../../../../shared/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'

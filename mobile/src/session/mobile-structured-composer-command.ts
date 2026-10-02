@@ -6,10 +6,7 @@ import {
 } from '../../../src/shared/structured-agent-session-composer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import {
-  requestStructuredAgentSessionMutation,
-  retainStructuredSessionOperationId
-} from './mobile-structured-agent-session-rpc'
+import { requestStructuredAgentSessionMutation } from './mobile-structured-agent-session-rpc'
 
 export async function dispatchMobileStructuredCommand(input: {
   text: string
@@ -17,9 +14,7 @@ export async function dispatchMobileStructuredCommand(input: {
   client: RpcClient
   sessionId: string
   fence: number
-  sessionKey: string
   pending: { current: boolean }
-  operationIds: Map<string, string>
   controller: StructuredAgentSessionComposerOptions
   canRun: () => boolean
   onError: (message: string) => void
@@ -46,12 +41,6 @@ export async function dispatchMobileStructuredCommand(input: {
         }
       }
       input.pending.current = true
-      const key = `${input.sessionKey}:agentSession.conversationCommand:${command}`
-      const clientOperationId = retainStructuredSessionOperationId(
-        input.operationIds,
-        key,
-        input.operationIds.get(key)
-      )
       try {
         const result =
           await requestStructuredAgentSessionMutation<AgentSessionConversationCommandResult>({
@@ -61,7 +50,6 @@ export async function dispatchMobileStructuredCommand(input: {
             method: 'agentSession.conversationCommand',
             fingerprintMethod: 'agentSession.conversationCommand',
             fields: { command },
-            clientOperationId,
             timeoutMs: Math.max(input.timeoutMs, 195_000)
           })
         if (
@@ -71,10 +59,9 @@ export async function dispatchMobileStructuredCommand(input: {
           unknown = true
           return {
             accepted: false,
-            error: 'Conversation operation is unconfirmed; retry checks the same operation.'
+            error: 'Conversation operation was not confirmed.'
           }
         }
-        input.operationIds.delete(key)
         return result.status === 'accepted'
           ? { accepted: !result.value.error, error: result.value.error ?? null }
           : { accepted: false, error: result.message }

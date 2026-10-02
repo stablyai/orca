@@ -274,7 +274,7 @@ _shorten the interpreter chain_ rather than to hide a window.
 #18875 is a worked example of that doctrine. The Claude Code lifecycle hook was
 registered as `powershell.exe -NoProfile -EncodedCommand <...>` whose entire
 decoded payload was a `Test-Path` and a call to `~/.orca/agent-hooks/claude-hook.cmd`.
-It now registers the script path itself (`<path> || echo {}`), so `bash ->
+It now registers the bare script path itself, with no shell operators, so `bash ->
 powershell -> cmd -> curl` became `bash -> cmd -> curl` and one
 `powershell.exe -EncodedCommand` per hook event — a first-class Defender alert
 title — leaves the tree. The reporting box fired ~6 900 of them in five days,
@@ -287,24 +287,24 @@ concurrency, invoked as Claude Code invokes it. **No EDR verdict on either tree
 was measured**, so claim the removed `-EncodedCommand` spelling and the shorter
 chain, not a score. `cmd.exe` remains in the tree, spelled by MSYS's own `.cmd`
 spawn rather than by us — the doc's one "unavoidable for `.cmd`/`.bat`" case,
-carrying an absolute path and two literal tokens, with no caret escaping, no
+carrying only an absolute path, with no caret escaping, no
 encoding and no free text. The encoded launcher is still the shape for profile
 paths the shells cannot carry bare (a space, `%`, `^`, `&`, non-ASCII, a UNC
-profile) and for hosts where Git Bash is not resolvable, because PowerShell 5.1
-rejects `||` (measured: parse error, exit 1).
+profile).
 
-That last clause is the standing assumption of this change, and it is worth
-stating plainly because it is **not** measured. `||` parses in Git Bash, cmd.exe
-and pwsh, but not in Windows PowerShell 5.1, so the direct shape is correct for
-any host that is one of the first three. Claude Code itself is a Git Bash host on
-native Windows. What no one here has verified is which host a _compat consumer_
-uses: cursor-agent and Devin import `~/.claude/settings.json` and run `command`
-through their own launcher (the managed `.cmd` carries a `DEVIN_PROJECT_DIR` skip
-for exactly that). If one of them spawns hook strings through Windows PowerShell
-5.1, its imported Claude events become a parse error with empty stdout, which is
-the fail-closed case #14818 exists to prevent. The encoded launcher had no such
-assumption — it was a `powershell.exe` invocation and therefore parsed anywhere.
-Before widening the direct shape to another agent, measure that consumer's host.
+The direct shape first shipped as `<path> || echo {}`, gated on Git Bash being
+resolvable. That gate guessed at a choice Claude Code makes on its own: it runs
+hooks under Windows PowerShell 5.1 when it picks PowerShell, and 5.1 rejects `||`
+(parse error, exit 1), so every hook failed (STA-8913). The registered command is
+now the bare path, which parses in Git Bash, cmd.exe, pwsh and PowerShell 5.1.
+The neutral `{}` for a missing payload lives in the `claude-hook.cmd` entry, which
+hands off to `claude-hook-impl.cmd` in the same `cmd.exe`; a deleted entry is an
+ordinary non-blocking hook error (never exit 2) until the next install rewrites it.
+Compat consumers such as cursor-agent and Devin import `~/.claude/settings.json`
+and run `command` through their own launcher (the payload carries a
+`DEVIN_PROJECT_DIR` skip for that); one that cannot start a `.cmd` at all still
+gets a launch failure. Before widening the direct shape to another agent, measure
+that consumer's host.
 
 ### Computer use: screen capture, synthetic input, runtime-compiled MSIL
 
@@ -334,6 +334,67 @@ MSIL recompilation nor the interpreter burst repeats. A change doing that is in
 flight and unmerged at the time of writing; check the code rather than this
 paragraph for what the shipped build does. Screen capture and `SendInput` are
 inherent to the feature and no refactor removes them.
+
+### SSH hosts: upload-stage file identity and runtime-store GC
+
+These run on the _remote_ Windows host over SSH, not on the desktop, but the
+host's EDR scores them the same way.
+
+The relay upload stage fences each slot with the directory's file ID (volume
+serial plus file index). That used to come from `Add-Type -TypeDefinition` over
+a P/Invoke of `GetFileInformationByHandle`, compiled in every stage command. When
+the relay runs on Orca's pinned Node (design D5), node.exe is already hashed
+against the pin and has run once, so the stage commands now ask it instead:
+`src/main/ssh/ssh-relay-upload-stage-windows-commands.ts` runs
+`node.exe -e <fixed script> -- <path>`, a fixed `fs.lstatSync(..., { bigint: true })`
+with the path as an argument. libuv fills `dev` and `ino` from the same volume
+serial and file index, so both readers write the same `vol:high:low` lowercase
+hex, and identity files are compared after normalising hex spelling. An old
+client can recover a stage a new one reserved, and the reverse.
+
+Two alternatives were rejected:
+
+- **PowerShell alone.** Neither .NET Framework (Windows PowerShell 5.1) nor .NET
+  exposes a file index without P/Invoke, which is what `Add-Type` compiles.
+  `fsutil file queryfileid` would spawn another binary per lookup and prints a
+  different format, which would break mixed-version recovery.
+- **Host Node.** Relays still on the host's own Node (rung C and the legacy
+  path) keep the `Add-Type` helper, because Orca has not verified that binary.
+  That is the one remaining `Add-Type` site on SSH hosts; it goes when those
+  rungs do.
+
+A lookup costs one short-lived node.exe per existing stage directory the command
+inspects, usually one or two. It is not a loop over the whole pool.
+
+Runtime-store GC (`src/main/ssh/remote-node-runtime-store-windows.ts`) reads the
+store in one PowerShell invocation. It learns which runtimes are in use from a
+single `Get-CimInstance Win32_Process` query, filtered on an image path under
+`runtimes\`. It never matches on the image name, so another program's node.exe
+holds nothing. WMI refuses a standard user's SSH logon, so a refusal falls back to
+`Get-Process`, which reads the image path of the account's own processes — the
+only ones running from its store. If both fail, no process check has run and the
+pass keeps everything. Windows itself also refuses to delete a running image, which is a
+second safeguard.
+
+### SSH hosts: starting the relay outside the session
+
+Win32-OpenSSH puts each session's shell in a job with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK`
+(`contrib/win32/win32compat/w32-doexec.c`, unchanged since 2018), so the relay
+must leave that job to outlive the connection. It used to leave through WMI
+`Win32_Process.Create`, which is both an EDR-scored remote-execution shape
+(T1047) and refused to a standard user's network logon unless an administrator
+grants Remote Enable on `root\cimv2`.
+
+Now `relay.js --windows-breakaway-launch` runs once per launch on the same
+node.exe and calls `spawnOutsideJob` in the staged process-tree addon
+(`src/process_launch.cc` in the patch): one `CreateProcessW` with
+`CREATE_BREAKAWAY_FROM_JOB`, and a handle list that passes only the relay's
+three stdio handles, so no SSH channel pipe is inherited. libuv never passes that
+flag, so Node alone cannot do this. WMI remains only as the fallback for a relay
+built without the addon or a job that refuses breakaway, and a refusal there is
+reported as `ORCA_RELAY_LAUNCH_REFUSED`. The Windows SSH-host lanes run with no
+WMI grant and assert the breakaway route.
 
 ## Signing is not the gate
 

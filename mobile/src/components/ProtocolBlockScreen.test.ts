@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { KnownAppUpdate } from '../storage/app-update-preferences'
 import type { BlockedVerdict } from './ProtocolBlockScreen'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
@@ -9,6 +10,14 @@ const nativeTestState = vi.hoisted(() => {
   const platform: { OS: 'ios' | 'android' } = { OS: 'ios' }
   return { openUrl: vi.fn(), platform }
 })
+
+const wallUpdate = vi.hoisted(() => {
+  const state: { current: KnownAppUpdate | null } = { current: null }
+  return state
+})
+
+// The release the installed app's update check found; the real hook imports the checker module.
+vi.mock('../app-update/use-wall-app-update', () => ({ useWallAppUpdate: () => wallUpdate.current }))
 
 vi.mock('react-native', () => ({
   Linking: { openURL: nativeTestState.openUrl },
@@ -30,7 +39,8 @@ const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 
 let renderer: ReactTestRenderer | null = null
 
-function render(verdict: BlockedVerdict): string {
+function render(verdict: BlockedVerdict, mobileUpdate: KnownAppUpdate | null = null): string {
+  wallUpdate.current = mobileUpdate
   act(() => {
     renderer = create(createElement(ProtocolBlockScreen, { verdict }))
   })
@@ -180,5 +190,44 @@ describe('ProtocolBlockScreen', () => {
     expect(output).toContain('Already updated? Go back to Hosts and refresh the connection.')
     // The presence precondition for the absence asserted on the refresh wall above.
     expect(pressableCount()).toBe(2)
+  })
+
+  describe('with the newest release known', () => {
+    const release = {
+      version: '0.0.52',
+      url: 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.52'
+    }
+
+    it.each(['ios', 'android'] as const)('opens that exact release on %s', (os) => {
+      nativeTestState.platform.OS = os
+      const output = render(
+        { kind: 'blocked', reason: 'bundle-shell-too-old', schemaVersion: 2 },
+        release
+      )
+      expect(output).toContain('Get Orca 0.0.52')
+      expect(output).not.toContain('Open App Store')
+      expect(output).not.toContain('Open GitHub Releases')
+      expect(primaryActionUrl()).toBe(release.url)
+    })
+
+    it('leaves the desktop wall on the desktop releases', () => {
+      const output = render({ kind: 'blocked', reason: 'bundle-unavailable' }, release)
+      expect(output).not.toContain('Get Orca')
+      expect(primaryActionUrl()).toBe(RELEASES_URL)
+    })
+  })
+
+  it.each([
+    ['ios', 'Open App Store', 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'],
+    ['android', 'Open GitHub Releases', RELEASES_URL]
+  ] as const)('keeps the %s store link when no release is known', (os, label, url) => {
+    nativeTestState.platform.OS = os
+    const output = render(
+      { kind: 'blocked', reason: 'mobile-too-old', desktopVersion: 5, requiredMobileVersion: 9 },
+      null
+    )
+    expect(output).toContain(label)
+    expect(output).not.toContain('Get Orca')
+    expect(primaryActionUrl()).toBe(url)
   })
 })

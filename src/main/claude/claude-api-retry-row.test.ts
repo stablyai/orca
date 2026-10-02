@@ -11,6 +11,8 @@ import { openAgentSessionJournal } from '../native-chat/agent-session-journal/jo
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -49,11 +51,11 @@ afterEach(async () => {
 async function statusRowsFor(frames: Record<string, unknown>[]) {
   const journal = await openAgentSessionJournal({
     identity: IDENTITY,
-    journalDir: root,
+    database: openTestJournalHostDatabase(root),
     now: () => 1_700_000_000_000,
     mintEpoch: () => 'epoch-1'
   })
-  const deferred = createDeferredStructuredAgentSessionEventSink()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   deferred.bind({ journal, fence: 1, publish: vi.fn() })
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, fallbackIdPrefix: '1' })
   for (const frame of frames) {

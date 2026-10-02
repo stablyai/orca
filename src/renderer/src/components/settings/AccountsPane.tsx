@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
 import { useEffect, useRef, useState } from 'react'
 import type {
   ClaudeRateLimitAccountsState,
@@ -86,7 +87,11 @@ export function AccountsPane({
   const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
   const [miniMaxApiKeyDraft, setMiniMaxApiKeyDraft] = useState('')
   const [miniMaxApiKeyConfigured, setMiniMaxApiKeyConfigured] = useState(false)
+  const [miniMaxApiKeyProtection, setMiniMaxApiKeyProtection] =
+    useState<SecretAtRestProtection | null>(null)
   const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
+  const [miniMaxCookieProtection, setMiniMaxCookieProtection] =
+    useState<SecretAtRestProtection | null>(null)
   const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
   const localAccountRuntime = getSelectedAccountRuntime(
     settings,
@@ -230,6 +235,8 @@ export function AccountsPane({
       const status = await window.api.minimaxCredentials.getStatus()
       setMiniMaxConfigured(status.cookieConfigured)
       setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
+      setMiniMaxCookieProtection(status.cookieProtection)
+      setMiniMaxApiKeyProtection(status.apiKeyProtection)
     } catch (error) {
       console.error('Failed to load MiniMax credential status:', error)
     }
@@ -241,7 +248,9 @@ export function AccountsPane({
       miniMaxApiKeyDraft,
       setMiniMaxApiKeyDraft,
       setMiniMaxApiKeyConfigured,
+      setMiniMaxApiKeyProtection,
       setMiniMaxConfigured,
+      setMiniMaxCookieProtection,
       setMiniMaxCredentialBusy,
       recordFeatureInteraction
     })
@@ -349,11 +358,13 @@ export function AccountsPane({
     miniMaxApiKeyDraft,
     setMiniMaxApiKeyDraft,
     miniMaxApiKeyConfigured,
+    miniMaxApiKeyProtection,
     saveMiniMaxApiKey,
     clearMiniMaxApiKey,
     miniMaxCookieDraft,
     setMiniMaxCookieDraft,
     miniMaxConfigured,
+    miniMaxCookieProtection,
     miniMaxCredentialBusy,
     saveMiniMaxCookie,
     clearMiniMaxCookie

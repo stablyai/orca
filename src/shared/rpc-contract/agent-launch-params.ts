@@ -18,6 +18,7 @@ import { isValidHostTerminalTabId } from '../terminal-tab-id'
 import { isTuiAgent } from '../tui-agent-config'
 import type { TuiAgent } from '../tui-agent'
 import { WorktreeCreate } from './worktree-create-params'
+import { LaunchSourceParam } from './launch-source-param'
 import { TerminalTabIdParam } from './agent-session-params'
 import { SessionId } from './structured-agent-session-params'
 import { isStructuredAgentSessionIdFor } from '../structured-agent-session-create'
@@ -78,16 +79,7 @@ export const AgentLaunchFields = z.object({
   /** A start directory other than the workspace root. Terminal-only, and the host downgrades a
    *  structured launch that carries one rather than ignoring it. */
   cwd: z.string().min(1, 'Empty launch cwd').optional(),
-  /**
-   * Telemetry attribution, deliberately `z.string()` rather than the closed `launchSourceSchema`.
-   *
-   * Params are validated by the HOST, so a closed enum here is a version claim pointing the wrong
-   * way: a newer client naming a launch surface an older host has never heard of would have its
-   * whole launch refused over a label nothing reads as behaviour. Bookkeeping must not gate a user
-   * action, so the arm set stays open here and the host parses it leniently at the point it is
-   * actually used — the same `safeParse`-and-skip the PTY spawn already does.
-   */
-  launchSource: z.string().optional(),
+  launchSource: LaunchSourceParam.optional(),
   /**
    * The pane a terminal launch should create, minted by a caller that places its own tabs.
    *

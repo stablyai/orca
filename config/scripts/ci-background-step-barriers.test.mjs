@@ -20,6 +20,7 @@ describe('CI background step barriers', () => {
   it('joins every background check without suppressing failures', () => {
     for (const job of [
       pr.jobs.static_analysis,
+      pr.jobs.typecheck,
       pr.jobs.mobile_web_app,
       pr.jobs.package,
       pr.jobs.shell_contracts,
@@ -45,6 +46,14 @@ describe('CI background step barriers', () => {
       }
       expect([...pending]).toEqual([])
     }
+  })
+
+  it('joins planning before publishing the unit artifact', () => {
+    assertJoinedBefore(
+      pr.jobs.typecheck.steps,
+      'unit-plan',
+      (step) => step.uses === 'actions/upload-artifact@v7'
+    )
   })
 
   it('finishes native import-cycle analysis before mobile installation changes resolution', () => {

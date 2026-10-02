@@ -30,6 +30,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // Why: SessionStart lands an idle row (STA-3386) and must also drop stale
       // tool/prompt caches left by the pane's previous session.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
+    case 'codebuddy':
     case 'kimi':
       // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
       return eventName === 'UserPromptSubmit'
@@ -143,6 +144,7 @@ export function extractToolFields(
     case 'claude':
     // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
     // falls through
+    case 'codebuddy':
     case 'kimi':
     // Muse uses Claude-compatible tool fields.
     // falls through

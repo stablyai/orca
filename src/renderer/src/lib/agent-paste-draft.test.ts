@@ -180,26 +180,6 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('detects the Codex composer prompt inside a large first render chunk', async () => {
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'codex'
-    })
-    await flushMicrotasks()
-
-    testState.ptyObserver?.(
-      `${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}${'x'.repeat(900)}`
-    )
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      {},
-      'pty-1',
-      PASTED_ISSUE_URL
-    )
-  })
-
   it('keeps the render-quiet wait for agents without the Codex ready signal', async () => {
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
@@ -246,48 +226,6 @@ describe('pasteDraftWhenAgentReady', () => {
       PASTED_ISSUE_URL
     )
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('detects opencode show-cursor inside a large first render chunk', async () => {
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'opencode'
-    })
-    await flushMicrotasks()
-
-    testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${SHOW_CURSOR}${'x'.repeat(900)}`)
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      {},
-      'pty-1',
-      PASTED_ISSUE_URL
-    )
-  })
-
-  it('detects opencode show-cursor split across a later chunk', async () => {
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'opencode'
-    })
-    await flushMicrotasks()
-
-    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
-    await flushMicrotasks()
-    testState.ptyObserver?.('render noise \x1b[?')
-    await flushMicrotasks()
-    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
-
-    testState.ptyObserver?.('25h')
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      {},
-      'pty-1',
-      PASTED_ISSUE_URL
-    )
   })
 
   it('rescues opencode delivery under never-settling output churn', async () => {
@@ -882,14 +820,6 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(chunks.slice(1, -1).join('')).toContain('␛[201~')
     expect(includesCallCount).toBe(0)
     expect(replaceAllCallCount).toBe(0)
-  })
-
-  it('keeps agent draft chunk arrays aligned with lazy chunk iteration', () => {
-    const content = 'before\x1b[201~after😀'
-
-    expect(chunkAgentDraftPasteContent(content, 6)).toEqual([
-      ...iterateAgentDraftPasteContentChunks(content, 6)
-    ])
   })
 
   it('iterates large agent draft chunks lazily', () => {

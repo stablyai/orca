@@ -9,16 +9,30 @@ on:
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/prepare-native-runtime/**'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-linux-package-fixture/**'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
+      - 'config/docker/daemon-shutdown-descendants/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.pnpmfile.cjs'
       - 'config/tsconfig*.json'
       - 'config/scripts/ensure-native-runtime.mjs'
       - 'config/scripts/rebuild-native-deps.mjs'
+      - 'config/scripts/node-pty-job-ownership.cjs'
+      - 'config/scripts/windows-pe-machine.cjs'
+      - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
+      - 'config/scripts/windows-process-tree-creation-time.cjs'
+      - 'config/scripts/install-electron-package-binary.mjs'
+      - 'config/scripts/electron-platform-path.mjs'
+      - 'config/scripts/zip-extractor-command.mjs'
+      - 'src/shared/zip-extractor-command.ts'
+      - 'config/scripts/shared-electron-dist-cache.mjs'
+      - 'config/scripts/space-sharing-copy.mjs'
       - 'config/patches/node-pty@1.1.0.patch'
       - 'config/patches/@vscode__windows-process-tree@0.8.0.patch'
       - 'native/windows-registry/**'
@@ -29,6 +43,7 @@ on:
       - '.github/actions/prepare-linux-package-fixture/**'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
+      - 'config/docker/daemon-shutdown-descendants/**'
       - 'config/scripts/ci-cache-warmup-workflow.test.mjs'
 
 permissions:
@@ -36,7 +51,8 @@ permissions:
 
 concurrency:
   group: ci-cache-warmup-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Hourly retries must let an active warmer finish publishing its caches.
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
   warm:
@@ -121,6 +137,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        with:
+          fixture: daemon-shutdown-descendants
+          save-cache: ${{ github.event_name != 'pull_request' }}
       - uses: ./.github/actions/prepare-linux-package-fixture
         with:
           fixture: headless-serve-shutdown

@@ -52,8 +52,11 @@ describe('orcad entry', () => {
     'runs the selected disposable probe without starting a server: $flag',
     async ({ flag, nativeFeatures }) => {
       vi.spyOn(process, 'argv', 'get').mockReturnValue(['runtime', 'orcad.js', flag, 'nonce'])
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub only records the call; nothing reads its never return.
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
       await import('./main')
       expect(profileProbe).toHaveBeenCalledExactlyOnceWith('nonce', { nativeFeatures })
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0))
       expect(order).toEqual([])
     }
   )

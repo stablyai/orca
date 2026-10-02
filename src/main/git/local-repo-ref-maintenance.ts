@@ -12,6 +12,11 @@ import {
 import { isWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { withSpan } from '../observability/tracer'
 import { PackRefsLockOwnership } from './pack-refs-lock-ownership'
+import {
+  clearRepoPackIndexMaintenanceCache,
+  isUnsetGitConfigError,
+  maintainRepoPackIndex
+} from './repo-pack-index-maintenance'
 import { gitExecFileAsync } from './runner'
 import { readRepoCommonDirFromGit } from './worktree-list-reader'
 
@@ -96,6 +101,7 @@ export function disposeLocalRepoRefMaintenance(): Promise<void> {
   shared?.dispose()
   shared = null
   repoBusyProbes.clear()
+  clearRepoPackIndexMaintenanceCache()
   return settling
 }
 
@@ -149,6 +155,7 @@ export function _resetLocalRepoRefMaintenanceForTests(
   shared = overrides ? new RepoRefMaintenance({ ...localMaintenanceOptions(), ...overrides }) : null
   activityProbe = null
   repoBusyProbes.clear()
+  clearRepoPackIndexMaintenanceCache()
 }
 
 /**
@@ -174,8 +181,11 @@ function refsDirectoryForMainProcess(commonDir: string, wslDistro: string | unde
 export function isGitAutoMaintenanceDisabled(configOutput: string): boolean {
   return configOutput
     .split('\n')
-    .map((line) => line.trim())
-    .some((line) => line === 'maintenance.auto false' || line === 'gc.auto 0')
+    .some(
+      (line) =>
+        /^\s*maintenance\.auto\s+(?:false|no|off|0)?\s*$/i.test(line) ||
+        /^\s*gc\.auto\s+[+-]?0+(?:[kmg])?\s*$/i.test(line)
+    )
 }
 
 /**
@@ -237,10 +247,24 @@ export function createLocalRepoRefMaintenanceTarget(
           { cwd: args.repoPath, ...gitOptions, admissionTier: 'background', signal }
         )
         return isGitAutoMaintenanceDisabled(stdout)
-      } catch {
-        // Neither key set is the common case and exits non-zero; that is consent.
-        return false
+      } catch (error) {
+        // An unset key is consent; unreadable or invalid config must fail closed.
+        return !isUnsetGitConfigError(error)
       }
+    },
+    async maintainPackIndex(signal, span, canWrite) {
+      const resolved = await resolveCommonDir(signal)
+      if (resolved) {
+        return maintainRepoPackIndex({
+          repoPath: args.repoPath,
+          commonDir: gitCommonDirForMainProcess(resolved, args.wslDistro),
+          ...gitOptions,
+          signal,
+          span,
+          canWrite
+        })
+      }
+      return 'failed'
     },
     async packRefs(lock: PackedRefsLockReporter) {
       const resolved = await resolveCommonDir()

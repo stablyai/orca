@@ -75,7 +75,7 @@ async function send(host: StructuredAgentSessionHost, text: string): Promise<str
     body
   })
   expect(sent, JSON.stringify(sent)).toMatchObject({ ok: true, replayed: false })
-  if (sent.ok) {
+  if (sent.ok && 'submission' in sent.value) {
     answered.set(clientOperationId, sent.value.submission.dispatchState)
   }
   return clientOperationId

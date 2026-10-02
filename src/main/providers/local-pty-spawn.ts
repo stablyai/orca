@@ -91,7 +91,7 @@ export async function spawnLocalPty(
         termName: finalEnv.TERM,
         signal: args.signal ? AbortSignal.any([args.signal, cancellation]) : cancellation,
         getShellReadyConfig: plan.getFallbackShellReadyConfig,
-        launchEnvKeys: plan.primaryLaunchEnvKeys,
+        preLaunchEnv: plan.primaryPreLaunchEnv,
         // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).
         onBeforeFallbackSpawn: fallbackHistory
           ? (env, fallbackShell) => updateHistoryEnvForFallback(env, fallbackShell, fallbackHistory)

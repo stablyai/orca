@@ -1,9 +1,22 @@
+// Why: the shared --focus line describes terminal create's terminal session.
+const FILE_OPEN_FOCUS_HELP =
+  "--focus                Bring the user to the file (switches Orca's window to its worktree)"
+
 /** Per-command flag help, kept out of the shared help chain it would crowd. */
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'skills get': {
     full: '--full                 Print the full guide with bundled references',
     reference: '--reference <name>     Print one bundled reference by name',
     references: '--references           List the bundled reference names for a topic'
+  },
+  'file open': {
+    focus: FILE_OPEN_FOCUS_HELP
+  },
+  'file diff': {
+    focus: FILE_OPEN_FOCUS_HELP
+  },
+  'file open-changed': {
+    focus: FILE_OPEN_FOCUS_HELP
   },
   'skills install': {
     agent: '--agent <names>        Comma-separated install targets; default is detected agents'

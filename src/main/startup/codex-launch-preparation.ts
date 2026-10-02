@@ -1,11 +1,9 @@
 import { app } from 'electron'
 import type { CodexHomeLaunchContext } from '../ipc/pty'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
-import { markCodexProjectTrusted } from '../agent-trust-presets'
-import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
 import { codexHookService } from '../codex/hook-service'
 import { getDefaultWslDistro } from '../wsl'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
 import { mainProcessState as state } from './main-process-state'
 
@@ -18,35 +16,19 @@ export async function prepareCodexRuntimeHomeForLaunch(
   if (!runtimeHome) {
     throw new Error('Codex runtime home service is not initialized')
   }
-  if (
-    target?.runtime !== 'wsl' &&
-    launchContext?.launchAgent === 'codex' &&
-    launchContext.workspacePath
-  ) {
-    try {
-      // Why: renderer quick-launch cannot await trust IPC before its PTY mounts; launch prep runs before every recognized Codex spawn. Bounded so a wedged config lane cannot hang the spawn that waits on this prep.
-      await awaitAgentTrustWriteWithinDeadline(
-        markCodexProjectTrusted(launchContext.workspacePath),
-        {
-          preset: 'codex',
-          workspacePath: launchContext.workspacePath
-        }
-      )
-    } catch (error) {
-      console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
-    }
-  }
   const ensureRealHomeHooksIfSelected = async (): Promise<boolean> => {
     if (target?.runtime === 'wsl' || !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)) {
       return false
     }
-    // Why (flag ON, system default): the hook entry must exist — appended last
-    // and trusted by codex's own app-server grant — in the real ~/.codex before
-    // the pane spawns. An incapable grant flips the lane gate so the launch
-    // below falls back to the managed home instead of a status-blind pane.
+    // Why (flag ON, system default): the hook entry must exist, appended last, in
+    // the real ~/.codex before the pane spawns. This never waits on Codex's
+    // approval: until it lands, the lane gate sends the launch below to the
+    // managed home instead of a pane that would ask the user to review it.
+    // Add-only: another build's entry is left for app start to convert.
     await ensureRealHomeCodexHookState({
-      hooksEnabled: isAgentStatusHooksEnabled(state.store?.getSettings()),
-      userDataPath: app.getPath('userData')
+      hooksEnabled: isAgentStatusHooksEnabledForAgent(state.store?.getSettings(), 'codex'),
+      userDataPath: app.getPath('userData'),
+      writePolicy: 'add-missing-only'
     })
     return true
   }
@@ -77,7 +59,7 @@ export async function prepareCodexRuntimeHomeForLaunch(
     target?.runtime === 'wsl'
       ? { runtime: 'wsl' as const, wslDistro: target.wslDistro?.trim() || getDefaultWslDistro() }
       : target
-  const hooksEnabled = isAgentStatusHooksEnabled(state.store?.getSettings())
+  const hooksEnabled = isAgentStatusHooksEnabledForAgent(state.store?.getSettings(), 'codex')
   try {
     // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
     const status = await codexHookService.prepareRuntimeHomeForLaunch(

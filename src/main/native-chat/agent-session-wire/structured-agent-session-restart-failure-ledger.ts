@@ -31,6 +31,7 @@ import {
   type StructuredAgentSessionResumeOutcome
 } from './structured-agent-session-restart-resume-runner'
 import { RESTART_CONTINUATION_SUPERSEDED } from './structured-agent-session-restart-continuation'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 type FailureCapsule = Pick<
   AgentSessionRecoveryCapsule,
@@ -79,6 +80,7 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
   retryable: (marker: AgentSessionResumeMarker) => boolean
   /** Makes the failed chats readable here, so `retryable` reads each one's journal. */
   reveal: (markers: readonly AgentSessionResumeMarker[]) => Promise<void>
+  logger: StructuredAgentSessionLogger
   now: () => number
   /** The capsule's single mutation lane, shared with the offer's own operations. */
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
@@ -88,7 +90,9 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
       return (await deps.capsule?.listFailed(deps.now())) ?? []
     } catch {
       // Recovery is advisory; a malformed capsule must not make ordinary chat actions unusable.
-      console.warn('[structured-agent-session] reading recovery capsule failed')
+      deps.logger.warn('reading restart failures from the recovery capsule failed', {
+        scope: 'recovery-capsule-read'
+      })
       return []
     }
   }
@@ -176,21 +180,30 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     await deps
       .enqueue(() => capsule.completeResume(operationId, completed, deps.now()))
       .catch(() => {
-        console.warn('[structured-agent-session] restart offer completion failed')
+        deps.logger.warn('completing a restart offer failed', {
+          scope: 'restart-offer-complete',
+          operationId
+        })
       })
     // Filed before the rollback so a failure the user must act on is never reopened as an offer
     // that would silently re-run it.
     await deps
       .enqueue(() => capsule.failResume(operationId, failures, deps.now()))
       .catch(() => {
-        console.warn('[structured-agent-session] restart failure record failed')
+        deps.logger.warn('recording a restart failure failed', {
+          scope: 'restart-failure-record',
+          operationId
+        })
       })
     // This only reopens rows still owned by this operation. Rows removed by completeResume stay
     // removed, even when the write of a later bookkeeping step fails.
     await deps
       .enqueue(() => capsule.rollbackResume(operationId, deps.now()))
       .catch(() => {
-        console.warn('[structured-agent-session] restart offer rollback failed')
+        deps.logger.warn('rolling back a restart offer failed', {
+          scope: 'restart-offer-rollback',
+          operationId
+        })
       })
   }
 

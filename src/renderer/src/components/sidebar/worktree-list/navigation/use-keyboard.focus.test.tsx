@@ -146,7 +146,10 @@ describe('workspace list focus ownership', () => {
     expect(document.activeElement).toBe(list)
     press('ArrowUp')
     expect(activate.mock.calls.map(([id]) => id)).toEqual(['b', 'c', 'b'])
-    expect(activate).toHaveBeenLastCalledWith('b', { executionHostId: 'ssh:fixture' })
+    expect(activate).toHaveBeenLastCalledWith('b', {
+      navigationIntent: 'user-open',
+      executionHostId: 'ssh:fixture'
+    })
     expect(terminal.focus).not.toHaveBeenCalled()
   })
 

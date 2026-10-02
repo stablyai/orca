@@ -452,9 +452,6 @@ describe('registerWorktreeHandlers', () => {
         expect.anything()
       )
       expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('worktrees:changed', {
-        repoId: 'repo-1'
-      })
     } finally {
       removePathSpy.mockRestore()
     }

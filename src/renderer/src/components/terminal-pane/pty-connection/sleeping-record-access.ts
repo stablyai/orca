@@ -156,8 +156,14 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       if (metadata?.launchAgent) {
         // Why: daemon launch identity can outlive the process while Orca is
         // closed. Use it to request confirmation, never as current byte authority.
-        useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
+        const state = useAppStore.getState()
+        const current = state.paneForegroundAgentByPaneKey[session.cacheKey]
+        // Why: re-mounting a parked pane must not demote this session's own read of the same agent.
+        const keepsRead =
+          current?.agent === metadata.launchAgent && current.agentEvidence === 'process-read'
+        state.setPaneForegroundAgent(session.cacheKey, {
           agent: metadata.launchAgent,
+          agentEvidence: keepsRead ? 'process-read' : 'launch-record',
           shellForeground: false
         })
       }

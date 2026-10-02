@@ -88,7 +88,8 @@ export function renderTabBarSurface({
   } = createMenu
   const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
-  const { tabStripRef, tabStripOverflowState, scrollTabStrip } = tabStripNavigation
+  const { tabStripRef, tabStripOverflowState, activeTabDockSide, scrollTabStrip } =
+    tabStripNavigation
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderedItems = renderTabBarItems({
     items: orderedItems,
@@ -144,10 +145,11 @@ export function renderTabBarSurface({
         >
           <div
             ref={tabStripRef}
+            data-active-tab-docked={activeTabDockSide ?? undefined}
             // Why: only `border-r` here — a strip-level `border-l` would render a heavier L-corner than the first tab's own `border-l`.
             className={[
               'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden border-r border-border/70',
-              getTabStripScrollMaskClassName(tabStripOverflowState)
+              getTabStripScrollMaskClassName(tabStripOverflowState, activeTabDockSide)
             ]
               .filter(Boolean)
               .join(' ')}

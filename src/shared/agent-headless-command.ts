@@ -1,3 +1,4 @@
+import { isCodebuddyNonInteractiveCommand } from './codebuddy-headless-command'
 import { isQoderHeadlessCommand } from './qoder-headless-command'
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
 import { isDshNonInteractiveCommand } from './dsh-launch-command'
@@ -18,6 +19,7 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
 > = {
   qoder: isQoderHeadlessCommand,
   claude: isPrintModeHeadlessOneShotCommand,
+  codebuddy: isCodebuddyNonInteractiveCommand,
   trae: isPrintModeHeadlessOneShotCommand,
   'prime-agent': isPrimeAgentHeadlessOneShotCommand,
   ante: isAnteHeadlessOneShotCommand,

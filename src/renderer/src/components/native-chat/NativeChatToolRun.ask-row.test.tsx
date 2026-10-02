@@ -231,7 +231,7 @@ describe('NativeChatToolRun awaiting-input row', () => {
       />
     )
 
-    expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
+    expect(screen.getByText('Awaiting user input')).toBeInTheDocument()
     expect(screen.queryByText(/request_user_input/)).toBeNull()
   })
 })

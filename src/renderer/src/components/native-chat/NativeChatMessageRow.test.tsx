@@ -60,9 +60,9 @@ describe('MessageRow control visibility', () => {
       'can-hover:opacity-0',
       'can-hover:pointer-events-none',
       'group-hover:opacity-100',
-      'group-has-[:focus-visible]:opacity-100',
+      '[.group:has(:focus-visible)_&]:opacity-100',
       'group-hover:pointer-events-auto',
-      'group-has-[:focus-visible]:pointer-events-auto'
+      '[.group:has(:focus-visible)_&]:pointer-events-auto'
     )
     expect(copy.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
     expect(time).not.toHaveAttribute('tabindex')
@@ -79,9 +79,9 @@ describe('MessageRow control visibility', () => {
       'can-hover:opacity-0',
       'can-hover:pointer-events-none',
       'group-hover:opacity-100',
-      'group-has-[:focus-visible]:opacity-100',
+      '[.group:has(:focus-visible)_&]:opacity-100',
       'group-hover:pointer-events-auto',
-      'group-has-[:focus-visible]:pointer-events-auto'
+      '[.group:has(:focus-visible)_&]:pointer-events-auto'
     )
     expect(copy.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
     expect(copy.parentElement!.parentElement).toHaveClass('group')
@@ -160,5 +160,47 @@ describe('MessageRow send mode', () => {
   it('leaves an ordinary user message unmarked', () => {
     renderUser()
     expect(screen.queryByText('Sent as goal')).not.toBeInTheDocument()
+  })
+})
+
+describe('a user message that did not go through', () => {
+  function renderUser(deliveryNotice?: { text: string; onRetry?: () => void }) {
+    return render(
+      <MessageRow
+        message={{
+          id: 'message',
+          role: 'user',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Message text' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+        deliveryNotice={deliveryNotice}
+      />
+    )
+  }
+
+  it('says why under the message, with a Retry that sends this one', () => {
+    const onRetry = vi.fn()
+    renderUser({ text: "The agent couldn't restart. Your message was not sent.", onRetry })
+
+    expect(
+      screen.getByText("The agent couldn't restart. Your message was not sent.")
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+
+  it('offers no Retry where the surface cannot send it again', () => {
+    renderUser({ text: 'Not delivered — check the terminal' })
+
+    expect(screen.getByText('Not delivered — check the terminal')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  it('says nothing when it went through', () => {
+    renderUser()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
 })

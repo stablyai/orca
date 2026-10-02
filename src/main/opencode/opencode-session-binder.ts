@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs'
 import { resolveOpenCodeDataDirectory } from './opencode-data-directory'
 import {
   bindOpenCodeSession,
@@ -14,12 +15,12 @@ import { readOpenCodeDatabase } from '../ai-vault/session-scanner-opencode-sqlit
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { listRegisteredPtys } from '../memory/pty-registry'
-import type SyncDatabase from '../sqlite/sync-database'
 import { isOpenCodeClientProcess, type ProcessIdentityRow } from './opencode-client-sweep'
 import type { HookListenerState } from '../../shared/agent-hook-listener/listener-state'
 
 /**
- * Main-process binder feeding the session→pane registry (#21359).
+ * Main-process binder feeding the session→pane registry (#21359), for OpenCode 1
+ * `serve` + `attach` only (see isOpenCodeSharedServerPost).
  *
  * Each round: read new sessions from the shared server's SQLite store,
  * snapshot panes, sweep for live clients, correlate, bind. Everything the
@@ -212,15 +213,6 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
   return { ownerships }
 }
 
-/** True when the v2 session table has every column the binder reads. */
-function canReadSessionV2(db: SyncDatabase): boolean {
-  return (
-    tableExists(db, 'session_v2') &&
-    columnExists(db, 'session_v2', 'directory') &&
-    columnExists(db, 'session_v2', 'time_created')
-  )
-}
-
 /**
  * Sessions newer than `cursor`, oldest first. The composite
  * `(time_created, id)` position means rows sharing a millisecond with the
@@ -234,10 +226,14 @@ export function listOpenCodeDbSessions(
   cursor: OpenCodeSessionCursor
 ): BinderSessionRow[] {
   try {
+    // Check absence without hiding permission failures as an unused store.
+    statSync(dbPath)
     return readOpenCodeDatabase({
       dbPath,
       read: (db) => {
-        const table = canReadSessionV2(db) ? 'session_v2' : 'session'
+        // Why `session` only: OpenCode 1 writes it; OpenCode 2 writes `session_v2`, and its
+        // posts name their own pane, so its sessions must never bind.
+        const table = 'session'
         if (
           !tableExists(db, table) ||
           !columnExists(db, table, 'directory') ||
@@ -276,6 +272,13 @@ export function listOpenCodeDbSessions(
       }
     })
   } catch (err) {
+    if (
+      err instanceof Error &&
+      'code' in err &&
+      (err.code === 'ENOENT' || err.code === 'ENOTDIR')
+    ) {
+      return []
+    }
     console.warn('[opencode-binder] session store read failed; skipping round', err)
     return []
   }

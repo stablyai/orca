@@ -138,7 +138,8 @@ describe('orca cli worktree awareness', () => {
       callerTerminalHandle: undefined,
       cliProvenanceRequest: {},
       startupAgent: 'codex',
-      startupPrompt: 'hi'
+      startupPrompt: 'hi',
+      launchSource: 'cli'
     })
   })
 
@@ -187,7 +188,8 @@ describe('orca cli worktree awareness', () => {
       callerTerminalHandle: undefined,
       cliProvenanceRequest: {},
       startupAgent: 'codex',
-      startupPrompt: 'hi'
+      startupPrompt: 'hi',
+      launchSource: 'cli'
     })
   })
 

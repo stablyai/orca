@@ -10,11 +10,14 @@ import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'
 
 function createSession(overrides: Record<string, unknown> = {}): ReattachPayloadSession {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test read only these session members.
   return {
     pane: createPane(1),
     rememberReattachPayloadAgentSignal: vi.fn(),
     writeReplayData: vi.fn(),
-    reattachReplayResetSequence: vi.fn(() => '<reset>'),
+    writeInputModeGround: vi.fn(),
+    chooseReattachReplayReset: vi.fn(() => '<reset>'),
+    writeReplayEpilogue: vi.fn(),
     sendFocusedReattachFocusInAfterReplay: vi.fn(),
     kittyKeyboardModes: {
       hasProvenBaseline: true,

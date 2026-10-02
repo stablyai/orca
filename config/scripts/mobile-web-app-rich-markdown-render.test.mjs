@@ -20,7 +20,11 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import { chromium, webkit } from 'playwright-core'
-import { MOBILE_WEB_APP_ROOT_RESET, lucideBarrelPlugin } from './build-mobile-web-app-bundle.mjs'
+import {
+  MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
+  MOBILE_WEB_APP_ROOT_RESET,
+  lucideBarrelPlugin
+} from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { textInputFontSizeFloor } from './mobile-web-app-text-input-font-size-seam.mjs'
 import {
@@ -270,7 +274,8 @@ beforeAll(async () => {
     join(outDir, 'index.html'),
     // The root reset the shipped document carries: every box below the mount is `flex: 1`, so
     // without a definite height on all three the editor measures 0 and paints nothing.
-    `<!doctype html><html><head><meta charset="utf-8">${MOBILE_WEB_APP_ROOT_RESET}</head>` +
+    `<!doctype html><html><head><meta charset="utf-8">${MOBILE_WEB_APP_ROOT_RESET}` +
+      `${MOBILE_WEB_APP_NATIVE_PARITY_STYLE}</head>` +
       '<body><div id="root"></div>' +
       '<script type="module" src="/rich-markdown-check.js"></script></body></html>'
   )
@@ -512,6 +517,28 @@ describeEditor(
          * a paragraph inline reported its own text with no marker, so the bullet the user pressed
          * was gone the moment the host saved what the document reported.
          */
+        it('edits and selects under the shipped document style, which makes other text unselectable', async () => {
+          const { page, consoleErrors } = await openPage(browser)
+          try {
+            await setContent(page, 'alpha', '<p>alpha</p>')
+            const word = page.locator('#first-surface #editor p')
+            await word.click()
+            await page.keyboard.press('End')
+            await page.keyboard.type(' bravo')
+            await page.waitForFunction(
+              () =>
+                document.querySelector('#first-surface #editor p')?.textContent === 'alpha bravo'
+            )
+            // The browser's own gesture, not a Range: `body` is `user-select: none` on the page.
+            await page.evaluate(() => window.getSelection()?.removeAllRanges())
+            await word.dblclick()
+            expect(await page.evaluate(() => window.getSelection()?.toString().trim())).not.toBe('')
+            expect(consoleErrors).toEqual([])
+          } finally {
+            await page.close()
+          }
+        }, 600_000)
+
         it('reports a typed bullet list as a list, and renders that markdown back as one', async () => {
           const { page, consoleErrors } = await openPage(browser)
           try {

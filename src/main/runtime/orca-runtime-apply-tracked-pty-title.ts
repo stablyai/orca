@@ -158,6 +158,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
     this.ptyForegroundAgent.clearDelayedSnapshot(ptyId)
+    this.openCodeRunLifetime.forgetPty(ptyId)
     this.mobileSessionTabsAgentStatusHeartbeat.removePty(ptyId)
     this.clientEvents.clearPtyTitleGate(ptyId)
   }
@@ -191,6 +192,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.managementTitleAt = null
       pty.waitBlockedAt = null
       pty.tailWaitState = undefined
+      pty.commandPaint = undefined
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.lastOscTitle = null

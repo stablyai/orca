@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
 import {
   AgentSessionPreSpawnError,
@@ -16,6 +16,8 @@ import {
 } from './structured-agent-session-attach'
 import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach } from './structured-agent-session-attach-flow'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -65,10 +67,7 @@ function createParams(): AgentSessionAttachParams {
 /** The thrown first answer as the wire sends it, and the ledger's replay of the same operation. */
 async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
   root = await mkdtemp(join(tmpdir(), 'orca-pre-spawn-first-answer-'))
-  const store = await AgentSessionRecordStore.open({
-    directory: join(root, 'store'),
-    hostId: 'local'
-  })
+  const store = await openTestAgentSessionRecordStore(root)
   const unused = async (): Promise<never> => {
     throw new Error('not reached before a spawn')
   }
@@ -84,8 +83,9 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
   const input = {
     store,
     adapter,
-    journalRoot: root,
-    openConversation: openTestAttachConversation(root),
+    logger: createStructuredAgentSessionLogger(),
+    journalDatabase: openTestJournalHostDatabase(root),
+    openConversation: openTestAttachConversation(openTestJournalHostDatabase(root)),
     authority: {
       spawnToken: 'spawn-a',
       claimKeyId: 'key-1',
@@ -159,8 +159,11 @@ describe('a create that fails before any process spawns', () => {
     }
     // What failed is kept for the log.
     expect(warn).toHaveBeenCalledWith(
-      '[agent-session] provider start failed:',
-      expect.objectContaining({ message: raw })
+      '[agent-session] provider-start: starting the provider failed',
+      expect.objectContaining({
+        scope: 'provider-start',
+        error: expect.objectContaining({ message: raw })
+      })
     )
   })
 

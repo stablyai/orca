@@ -9,6 +9,7 @@ import {
 } from './structured-agent-session-reducer'
 
 const CAP = 1024
+const BACKSTOP = 4 * CAP
 
 function item(sequence: number): AgentJournalRenderItem {
   return {
@@ -19,6 +20,14 @@ function item(sequence: number): AgentJournalRenderItem {
     body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: `t-${sequence}` }] }
   }
 }
+
+/** A row a subagent wrote. */
+function childItem(sequence: number): AgentJournalRenderItem {
+  return { ...item(sequence), agentId: 'task-1', producerKind: 'agent' }
+}
+
+const range = (from: number, length: number): number[] =>
+  Array.from({ length }, (_, index) => from + index)
 
 function page(items: AgentJournalRenderItem[], hasOlder: boolean): AgentSessionHistoryPage {
   const oldest = items[0]?.sequence ?? 0
@@ -69,6 +78,32 @@ function streamItems(
       }),
     state
   )
+}
+
+/** One live batch per `size` rows, so a burst costs a few merges rather than one per row. */
+function streamBatches(
+  state: StructuredAgentSessionState,
+  rows: AgentJournalRenderItem[],
+  size = 1_000
+): StructuredAgentSessionState {
+  let current = state
+  for (let offset = 0; offset < rows.length; offset += size) {
+    const batch = rows.slice(offset, offset + size)
+    current = reduceStructuredAgentSession(current, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: batch.at(-1)?.sequence ?? 0 },
+          items: batch,
+          removedItemIds: [],
+          submissions: []
+        }
+      }
+    })
+  }
+  return current
 }
 
 function streamRevision(
@@ -316,5 +351,77 @@ describe('structured agent session item retention', () => {
     })
 
     expect(unchanged.items).toBe(hydrated.items)
+  })
+
+  it("counts the session's own rows, so a subagent's burst keeps the rows before it", () => {
+    const streamed = streamBatches(hydrate([item(0), item(1)]), range(2, CAP + 500).map(childItem))
+
+    expect(streamed.items).toHaveLength(CAP + 502)
+    expect(streamed.items.slice(0, 2).map(({ itemId }) => itemId)).toEqual(['item-0', 'item-1'])
+    expect(streamed.hasOlder).toBe(false)
+  })
+
+  it("trims through the oldest own row the limit passes, with the subagent's rows before it", () => {
+    const rows = range(1, CAP + 1).flatMap((sequence) =>
+      sequence === 1 ? [childItem(sequence)] : [item(sequence)]
+    )
+    const streamed = streamBatches(hydrate([item(0)]), rows)
+
+    // Own rows 0 and 2..CAP+1 are CAP+1 of them: row 0 goes, and child row 1 after it stays.
+    expect(streamed.items[0]?.itemId).toBe('item-1')
+    expect(streamed.items).toHaveLength(CAP + 1)
+    expect(streamed.hasOlder).toBe(true)
+  })
+
+  it("bounds every agent's rows at the backstop, which paging back raises like the limit", () => {
+    const streamed = streamBatches(hydrate([item(0)]), range(1, BACKSTOP + 10).map(childItem))
+
+    expect(streamed.items).toHaveLength(BACKSTOP)
+    expect(streamed.items.at(-1)?.sequence).toBe(BACKSTOP + 10)
+    expect(streamed.hasOlder).toBe(true)
+
+    const older = reduceStructuredAgentSession(streamed, {
+      type: 'older-page',
+      requestedCursor: { epoch: 'epoch-a', sequence: streamed.items[0]?.sequence ?? 0 },
+      page: page(range(0, 11).map(childItem), false)
+    })
+    expect(older.items).toHaveLength(BACKSTOP + 11)
+    // A live batch slides the widened window by one instead of collapsing it back to the cap.
+    const afterLive = streamBatches(older, [childItem(BACKSTOP + 11)])
+    expect(afterLive.items).toHaveLength(BACKSTOP + 11)
+    expect(afterLive.items[0]?.sequence).toBe(1)
+  })
+
+  it("keeps a paged-in run of a subagent's rows at the head until an own row pushes it out", () => {
+    // A full window of own rows, then a page back that holds only a subagent's rows.
+    const hydrated = hydrate(range(2_000, CAP).map(item), true)
+    const older = reduceStructuredAgentSession(hydrated, {
+      type: 'older-page',
+      requestedCursor: { epoch: 'epoch-a', sequence: 2_000 },
+      page: page(range(1_800, 200).map(childItem), true)
+    })
+    expect(older.items[0]?.sequence).toBe(1_800)
+
+    const afterChild = streamBatches(older, [childItem(3_100)])
+    expect(afterChild.items[0]?.sequence).toBe(1_800)
+
+    const afterOwn = streamBatches(afterChild, [item(3_101)])
+    expect(afterOwn.items[0]?.sequence).toBe(2_001)
+  })
+
+  it('trims a transcript with no subagent rows to its newest rows, exactly as before', () => {
+    const hydrated = hydrate(range(0, 300).map(item), true)
+    const streamed = streamBatches(hydrated, range(300, CAP + 77).map(item), 97)
+    const older = reduceStructuredAgentSession(streamed, {
+      type: 'older-page',
+      requestedCursor: { epoch: 'epoch-a', sequence: streamed.items[0]?.sequence ?? 0 },
+      page: page(range((streamed.items[0]?.sequence ?? 0) - 200, 200).map(item), true)
+    })
+    const afterLive = streamBatches(older, range(CAP + 377, 5).map(item))
+
+    const newest = (from: number, length: number) => range(from, length)
+    expect(streamed.items.map(({ sequence }) => sequence)).toEqual(newest(377, CAP))
+    expect(older.items.map(({ sequence }) => sequence)).toEqual(newest(177, CAP + 200))
+    expect(afterLive.items.map(({ sequence }) => sequence)).toEqual(newest(182, CAP + 200))
   })
 })

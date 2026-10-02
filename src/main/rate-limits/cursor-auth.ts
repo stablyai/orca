@@ -7,7 +7,8 @@ import {
   getCursorDesktopStateDbPath,
   type CursorAuthSource
 } from './cursor-auth-paths'
-import { readCursorDesktopProfile, type CursorDesktopProfile } from './cursor-desktop-state-db'
+import type { CursorDesktopProfile } from './cursor-desktop-state-db'
+import { readCursorDesktopProfileViaWorker } from './cursor-desktop-profile-worker'
 import {
   isCursorSessionTokenExpired,
   parseCursorSessionToken,
@@ -190,7 +191,7 @@ export async function readCursorAuthSession(
   // Why not pushed to `errors`: the IDE holds a lock on state.vscdb while it runs,
   // so a busy open is transient. Reporting it would pin an alert-triangle bar on
   // every Cursor IDE user who never set Cursor up in Orca.
-  const desktopRead = readCursorDesktopProfile(desktopDbPath)
+  const desktopRead = await readCursorDesktopProfileViaWorker(desktopDbPath)
   if (desktopRead.status === 'ok' && desktopRead.profile.accessToken) {
     const session = takeLive(
       sessionFrom(desktopRead.profile.accessToken, 'desktop', desktopIdentity(desktopRead.profile))

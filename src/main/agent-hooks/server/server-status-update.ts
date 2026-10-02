@@ -1,3 +1,4 @@
+import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
   reconcileRemoteCodexState,
   markCodexLeadTurnInterrupted
@@ -27,8 +28,22 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
-    const { authorityRestartId, ...payload } = incoming
+    const transitioned = transitionHookPresence(
+      incoming,
+      this.state.lastStatusByPaneKey.get(incoming.paneKey)
+    )
+    if (!transitioned) {
+      return undefined
+    }
+    const { authorityRestartId, ...payload } = { ...incoming, ...transitioned }
     if (!this.canWriteLegacyStatusRow(payload)) {
+      return undefined
+    }
+    if (payload.agentPresence?.ended) {
+      this.reconcileEndedProcessForPaneKeys([payload.paneKey], {
+        preserveResumeIdentity: true,
+        endedPresence: payload.agentPresence
+      })
       return undefined
     }
     if (payload.hookEventName === 'UserPromptSubmit') {
@@ -86,7 +101,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const stateReconciledPayload =
       terminalOwnedPayload.connectionId &&
       terminalOwnedPayload.payload.agentType === 'codex' &&
-      terminalOwnedPayload.hookEventName
+      (terminalOwnedPayload.hookEventName || terminalOwnedPayload.payload.mainAgent)
         ? {
             ...terminalOwnedPayload,
             payload: reconcileRemoteCodexState(

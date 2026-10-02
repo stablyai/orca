@@ -2,7 +2,8 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
-  AgentJournalProducerLinkage
+  AgentJournalProducerLinkage,
+  AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -11,6 +12,7 @@ import { estimateStructuredAgentSessionItemBytes } from './structured-agent-sess
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionSinkAdmission =
   | { accepted: true }
@@ -36,6 +38,11 @@ export type StructuredAgentSessionAppendOptions = AgentJournalProducerLinkage & 
   observedAt?: number
 }
 
+/** An item write states which turn its row belongs to; the write that creates the row decides. */
+export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppendOptions & {
+  turnScope: AgentJournalTurnScope
+}
+
 export type StructuredAgentSessionLifecycleJournal = Pick<
   AgentSessionJournal,
   'epoch' | 'visitItems'
@@ -51,6 +58,12 @@ export type StructuredAgentSessionRevisionJournal = Pick<
   'epoch' | 'visitItems' | 'itemBody'
 >
 
+/** Rows already journaled and who produced each, read by a producer that has to agree with them. */
+export type StructuredAgentSessionLinkageJournal = Pick<
+  AgentSessionJournal,
+  'epoch' | 'visitItemsWithLinkage'
+>
+
 /** The row a revision rewrites and its whole new body, read from the journal at execution. */
 export type StructuredAgentSessionRevisionResolver = (
   journal: StructuredAgentSessionRevisionJournal
@@ -58,7 +71,7 @@ export type StructuredAgentSessionRevisionResolver = (
 
 /** A revision's body is derived from the row it revises, so coalescing one away would lose it. */
 export type StructuredAgentSessionRevisionOptions = Omit<
-  StructuredAgentSessionAppendOptions,
+  StructuredAgentSessionItemAppendOptions,
   'coalescingKey'
 >
 
@@ -69,7 +82,7 @@ export type StructuredAgentSessionEventSink = {
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options?: StructuredAgentSessionAppendOptions
+    options: StructuredAgentSessionItemAppendOptions
   ): void
   appendTombstone(
     identity: AgentJournalItemIdentity,
@@ -84,43 +97,49 @@ export type StructuredAgentSessionEventSink = {
   tryAppendItem?(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options?: StructuredAgentSessionAppendOptions
+    options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
   /** Queues an ordinary append whose identity is resolved after journal bind. */
   tryAppendResolvedItem?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionIdentityResolver,
-    options?: StructuredAgentSessionAppendOptions
+    options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
   /** Queues one resolved append and its publication as a single admitted operation. */
   tryAppendResolvedItemAndPublish?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionIdentityResolver,
-    options?: StructuredAgentSessionAppendOptions
+    options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
   /** Queues a read-modify-write of one row; `reservedBytes` must bound the resolved write. */
   tryReviseResolvedItem?(
     reservedBytes: number,
     resolve: StructuredAgentSessionRevisionResolver,
-    options?: StructuredAgentSessionRevisionOptions
+    options: StructuredAgentSessionRevisionOptions
   ): StructuredAgentSessionSinkAdmission
   /** Queues one revision and its publication as a single admitted operation. */
   tryReviseResolvedItemAndPublish?(
     reservedBytes: number,
     resolve: StructuredAgentSessionRevisionResolver,
-    options?: StructuredAgentSessionRevisionOptions
+    options: StructuredAgentSessionRevisionOptions
   ): StructuredAgentSessionSinkAdmission
   /** Queues one journal-derived lifecycle append; a null resolution is a no-op. */
   tryAppendLifecycleTransition?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionIdentityResolver,
-    options?: StructuredAgentSessionAppendOptions
+    options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
   /** Current durable epoch, when this deferred sink is bound to its journal. */
   journalEpoch?(): string | null
+  /** The bound journal's producer linkage; null until bound. */
+  journalLinkage?(): StructuredAgentSessionLinkageJournal | null
+  /** Whether the bound journal's Stop rule makes turn `turnId`, ending at `endedAt` with no verdict
+   *  of its own, a person's cancellation (`personStopDecidesTurn`); false until bound. `openedBy`:
+   *  the submission that opened it, for a turn whose rows have yet to land. */
+  journalStopDecidesTurn?(turnId: string, endedAt: number, openedBy?: string): boolean
   appendLifecycleBatch?(
     settlementId: string,
     mutations: readonly JournalLifecycleMutationInput[],
@@ -179,18 +198,28 @@ const DEFAULT_WATERMARKS: StructuredAgentSessionSinkWatermarks = {
   maxLifecycleQueuedOperations: 1_024
 }
 
-export function createDeferredStructuredAgentSessionEventSink(
-  deps: {
-    onError?: (error: unknown) => void
-    watermarks?: Partial<StructuredAgentSessionSinkWatermarks>
-    readingControl?: StructuredAgentSessionReadingControl
-    onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
-  } = {}
-): DeferredStructuredAgentSessionEventSink {
+export function createDeferredStructuredAgentSessionEventSink(deps: {
+  /** The session this sink writes for, named in every failure it logs. */
+  sessionId: string
+  logger: StructuredAgentSessionLogger
+  /** The sink failed for good; the owner decides what that costs the provider. */
+  onFailed?: (error: unknown) => void
+  watermarks?: Partial<StructuredAgentSessionSinkWatermarks>
+  readingControl?: StructuredAgentSessionReadingControl
+  onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
+}): DeferredStructuredAgentSessionEventSink {
   const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
+  const failed = (error: unknown): void => {
+    deps.logger.error('writing provider events to the chat journal failed', {
+      scope: 'journal-event-sink',
+      sessionId: deps.sessionId,
+      error
+    })
+    deps.onFailed?.(error)
+  }
   const queue = new StructuredAgentSessionSinkQueue({
     watermarks,
-    ...(deps.onError ? { onError: deps.onError } : {}),
+    onFailed: failed,
     ...(deps.readingControl ? { readingControl: deps.readingControl } : {}),
     ...(deps.onBackpressureChange ? { onBackpressureChange: deps.onBackpressureChange } : {})
   })
@@ -205,6 +234,7 @@ export function createDeferredStructuredAgentSessionEventSink(
       {
         bytes: Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
         coalescingKey: `lifecycle:${settlementId}`,
+        keepsFirst: true,
         run: (bound) =>
           bound.journal.appendLifecycleBatch({
             settlementId,
@@ -230,7 +260,7 @@ export function createDeferredStructuredAgentSessionEventSink(
 
   return {
     sink: {
-      appendItem: (identity, body, options = {}) => {
+      appendItem: (identity, body, options) => {
         queue.submit(
           {
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
@@ -245,7 +275,7 @@ export function createDeferredStructuredAgentSessionEventSink(
           options
         )
       },
-      tryAppendItem: (identity, body, options = {}) =>
+      tryAppendItem: (identity, body, options) =>
         queue.submit(
           {
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
@@ -261,10 +291,12 @@ export function createDeferredStructuredAgentSessionEventSink(
         ),
       ...resolvedAppend,
       journalEpoch: queue.journalEpoch,
+      journalLinkage: queue.journalLinkage,
+      journalStopDecidesTurn: queue.journalStopDecidesTurn,
       appendLifecycleBatch: (settlementId, mutations, options = {}) => {
         const admission = appendLifecycleBatch(settlementId, mutations, options)
         if (!admission.accepted) {
-          deps.onError?.(
+          failed(
             new Error(
               `lifecycle journal batch ${settlementId} rejected by sink ${admission.reason}`
             )

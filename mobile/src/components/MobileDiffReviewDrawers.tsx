@@ -7,6 +7,7 @@ import type { ActionSheetAction } from './ActionSheetModal'
 import { ActionSheetContent } from './ActionSheetModal'
 import { ConfirmContent } from './ConfirmModal'
 import { KeyedBottomDrawer } from './keyed-bottom-drawer'
+import { AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE } from '../session/mobile-existing-agent-launch'
 import {
   mobileReviewCountLabel,
   type ComposerState,
@@ -110,7 +111,12 @@ function useSendActions(
       {
         label: 'New Agent Session',
         icon: Plus,
-        disabled: comments.length === 0,
+        disabled: comments.length === 0 || controller.agentLaunchAvailability !== 'available',
+        ...(controller.agentLaunchAvailability === 'update-required'
+          ? { hint: 'Update Orca on your computer' }
+          : controller.agentLaunchAvailability === 'unverified'
+            ? { hint: AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE }
+            : {}),
         skipAutoClose: true,
         onPress: () => void controller.createTerminalAndSend(comments)
       },

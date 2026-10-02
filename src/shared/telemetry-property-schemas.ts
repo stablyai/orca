@@ -10,6 +10,7 @@ import type { GlobalSettings } from './global-settings-types'
 export const AGENT_KIND_VALUES = [
   'claude-code',
   'claude-agent-teams',
+  'codebuddy',
   'openclaude',
   'codex',
   'autohand',
@@ -140,6 +141,10 @@ export const launchSourceSchema = z.enum([
   'conflict_resolution',
   'source_control_recovery',
   'terminal_context_menu',
+  // Launches the host performs for a caller outside the desktop app.
+  'cli',
+  'mobile',
+  'orchestration',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>

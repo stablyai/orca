@@ -13,15 +13,27 @@ it.each([{ launchAgent: 'omp' }, { command: 'omp' }, { telemetry: { agent_kind: 
     })
   }
 )
-it('leaves ordinary shells and unadvertised keyboard support alone', () => {
+it('keeps Kitty startup support to agent launches', () => {
   expect(
     getStartupTerminalIngressIntent({ command: 'echo hello', terminalKittyKeyboardProtocol: true })
   ).toBeUndefined()
   expect(getStartupTerminalIngressIntent({ launchAgent: 'omp' })).toBeUndefined()
 })
-it('preserves color-only startup on renderers without Kitty support', () => {
+it('seeds the creating viewer colours for every PTY, not only agent launches', () => {
   const colors = { foreground: '#fff', background: '#000' }
   expect(
     getStartupTerminalIngressIntent({ launchAgent: 'omp', terminalColorQueryReplies: colors })
   ).toEqual({ colors, deadlineMs: 5000 })
+  expect(
+    getStartupTerminalIngressIntent({
+      command: 'echo hello',
+      terminalColorQueryReplies: colors,
+      terminalKittyKeyboardProtocol: true
+    })
+  ).toEqual({ colors, deadlineMs: 5000 })
+  expect(
+    getStartupTerminalIngressIntent({
+      terminalColorQueryReplies: { foreground: '#fff', background: 'not-a-color' }
+    })
+  ).toBeUndefined()
 })

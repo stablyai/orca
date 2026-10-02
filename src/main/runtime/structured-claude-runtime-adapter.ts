@@ -1,6 +1,5 @@
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { createClaudeStructuredLaunchResolver } from '../claude/claude-structured-launch-resolution'
@@ -17,6 +16,7 @@ import {
 } from './agent-session-provider-handle-transition'
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
@@ -35,11 +35,8 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   modelCatalog?: ClaudeStructuredSessionAdapterDeps['modelCatalog']
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
-  onBackgroundTasksChanged?: (
-    sessionId: string,
-    state: AgentSessionBackgroundTaskState | null
-  ) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
+  onSessionIdle?: ClaudeStructuredSessionAdapterDeps['onSessionIdle']
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
 }
 
@@ -64,6 +61,8 @@ export function structuredClaudeLifecycleEvent(
       cause: event.cause,
       fence: event.fence,
       acquisitionGeneration: event.acquisitionGeneration,
+      // The instant the translator ended the open turn at; the host reads the exit's turn by it.
+      ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt }),
       ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {})
     }
   }
@@ -75,6 +74,9 @@ export function createStructuredClaudeRuntimeAdapter(
 ): ClaudeStructuredSessionAdapter {
   const { store } = deps
   return new ClaudeStructuredSessionAdapter({
+    atRestCommands: new ClaudeAtRestCommandCatalog({
+      resolveWorkspacePath: deps.resolveWorkspacePath
+    }),
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
@@ -126,10 +128,8 @@ export function createStructuredClaudeRuntimeAdapter(
         deps.onLifecycleEvent(lifecycle)
       }
     },
-    ...(deps.onBackgroundTasksChanged
-      ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
-      : {}),
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
+    ...(deps.onSessionIdle ? { onSessionIdle: deps.onSessionIdle } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.openClaudeConnection ? { openConnection: deps.openClaudeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),

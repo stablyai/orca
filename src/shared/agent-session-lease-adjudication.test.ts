@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   adjudicateAgentSessionRestart,
   agentSessionLeaseAdmitsWriter,
-  classifyObservedAgentSessionSpawnToken,
   evaluateAgentSessionAcquisition,
   isProvenAliveProbe,
   isProvenDeadProbe,
@@ -223,12 +222,26 @@ describe('restart reconciliation', () => {
     expect(result).toEqual({
       disposition: 'evicted',
       nextFence: 8,
+      // The death happened between the last renewal and the probe.
       evidence: {
         kind: 'identity-mismatch',
         detail: 'mismatched process-start-time',
-        observedAt: 9_000
+        observedAt: 9_000,
+        ownerFence: 7,
+        lastProvenAliveAt: 500
       }
     })
+  })
+
+  it('never records the owner alive after the probe that found it gone', () => {
+    // A clock stepped back across the restart would otherwise write an interval load rejects.
+    expect(
+      adjudicateAgentSessionRestart({
+        lease: lease({ lastRenewedAt: 9_500 }),
+        probe: { outcome: 'pid-absent' },
+        observedAt: 9_000
+      })
+    ).toMatchObject({ evidence: { observedAt: 9_000, lastProvenAliveAt: 9_000 } })
   })
 
   it('hands an unverifiable owner to recovery resolution instead of evicting it', () => {
@@ -270,7 +283,13 @@ describe('restart reconciliation', () => {
     ).toEqual({
       disposition: 'evicted',
       nextFence: 8,
-      evidence: { kind: 'pid-absent', detail: 'recorded pid absent on host', observedAt: 9_000 }
+      evidence: {
+        kind: 'pid-absent',
+        detail: 'recorded pid absent on host',
+        observedAt: 9_000,
+        ownerFence: 7,
+        lastProvenAliveAt: 500
+      }
     })
   })
 
@@ -309,32 +328,24 @@ describe('restart reconciliation', () => {
       ).toEqual({
         disposition: 'evicted',
         nextFence: 8,
-        evidence: { kind: 'pid-absent', detail: 'reservation never spawned', observedAt: 9_000 }
+        // The proof is about this reservation's own fence.
+        evidence: {
+          kind: 'pid-absent',
+          detail: 'reservation never spawned',
+          observedAt: 9_000,
+          ownerFence: 7
+        }
       })
     }
   )
 })
 
-describe('writer admission and orphan spawn tokens', () => {
+describe('writer admission', () => {
   it('admits a writer only when reconciled, settled, live, and holding a process', () => {
     expect(agentSessionLeaseAdmitsWriter(lease())).toBe(true)
     expect(agentSessionLeaseAdmitsWriter(lease({ unreconciled: true }))).toBe(false)
     expect(agentSessionLeaseAdmitsWriter(lease({ handoffStage: 'new-owner-proving' }))).toBe(false)
     expect(agentSessionLeaseAdmitsWriter(lease({ claimStatus: 'reserved' }))).toBe(false)
     expect(agentSessionLeaseAdmitsWriter(lease({ ownerProcess: null }))).toBe(false)
-  })
-
-  it('calls a spawn token with no matching lease an orphan', () => {
-    const leases = [lease(), lease({ sessionId: 'session-beta-1', reservedSpawnToken: 'spawn-b' })]
-    expect(classifyObservedAgentSessionSpawnToken({ spawnToken: 'spawn-a', leases })).toBe('owned')
-    expect(classifyObservedAgentSessionSpawnToken({ spawnToken: 'spawn-b', leases })).toBe('owned')
-    expect(classifyObservedAgentSessionSpawnToken({ spawnToken: 'spawn-z', leases })).toBe('orphan')
-  })
-
-  it('still recognises an owner whose reservation token was cleared after proving', () => {
-    const proved = lease({ reservedSpawnToken: null })
-    expect(
-      classifyObservedAgentSessionSpawnToken({ spawnToken: 'spawn-a', leases: [proved] })
-    ).toBe('owned')
   })
 })

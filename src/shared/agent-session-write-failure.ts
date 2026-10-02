@@ -9,7 +9,9 @@ import {
 import type { AgentSessionRewindReason } from './agent-session-rewind'
 import {
   isAgentSessionWireRefusalCode,
+  readAgentSessionRefusalReference,
   type AgentSessionOwnerVerdict,
+  type AgentSessionRefusalReference,
   type AgentSessionWireRefusal,
   type AgentSessionWireRefusalCode
 } from './agent-session-wire-refusals'
@@ -134,6 +136,35 @@ export function agentSessionRpcErrorFailure(code: string | undefined): AgentSess
   return code === 'invalid_argument' || code === 'unauthorized'
     ? { kind: 'refused', code: 'agent_session_operation_invalid' }
     : { kind: 'unconfirmed' }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/** The refusal a failed request's error carries in its data. Takes both shapes a client meets: an
+ *  RPC call's thrown error, whose payload is on `response.error`, and the payload a stream hands
+ *  its error callback. Undefined from an older host, or for a failure that was not a refusal. */
+export function readAgentSessionErrorRefusal(
+  error: unknown
+): AgentSessionRefusalReference | undefined {
+  const payload =
+    isRecord(error) && isRecord(error.response) && isRecord(error.response.error)
+      ? error.response.error
+      : error
+  const data = isRecord(payload) ? payload.data : undefined
+  return isRecord(data) ? readAgentSessionRefusalReference(data.refusal) : undefined
+}
+
+/** What to say about a request that threw: the host's refusal when its error carried one, else
+ *  what the RPC error code proves. Words only: whether the write may have happened stays the
+ *  caller's own classification. */
+export function agentSessionThrownFailure(
+  error: unknown,
+  rpcCode: string | undefined
+): AgentSessionWriteFailure {
+  const refusal = readAgentSessionErrorRefusal(error)
+  return refusal ? agentSessionRefusalFailure(refusal) : agentSessionRpcErrorFailure(rpcCode)
 }
 
 /** A saved failure, or undefined when it is not one this build wrote. */

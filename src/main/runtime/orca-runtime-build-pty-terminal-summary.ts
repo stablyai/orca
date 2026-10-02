@@ -41,6 +41,9 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
       orphaned,
+      ...(orphaned && pane && pane.tabId === pty.tabId && pty.paneKey
+        ? { recordedPaneKey: pty.paneKey }
+        : {}),
       worktreeId: pty.worktreeId,
       worktreePath: worktree?.path ?? '',
       branch: worktree?.branch ?? '',

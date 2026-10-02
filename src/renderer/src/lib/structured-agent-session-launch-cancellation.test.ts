@@ -119,6 +119,60 @@ describe('structured launch cancellation retirement', () => {
     )
   })
 
+  // A runtime refused its chats answers with no chat rows; that absence is not the host's answer.
+  it('keeps a tombstone through an inventory that cannot list chats', async () => {
+    setStructuredLaunchState({
+      identity: `codex:${WORKTREE_ID}`,
+      intent: {
+        worktreeId: WORKTREE_ID,
+        sessionId: SESSION_ID,
+        agent: 'codex',
+        params: {
+          envelope: {
+            sessionId: SESSION_ID,
+            clientOperationId: 'operation-unverifiable',
+            expectedRuntimeFence: null,
+            payloadFingerprint: 'fingerprint-unverifiable'
+          },
+          worktree: `id:${WORKTREE_ID}`,
+          agent: 'codex'
+        }
+      },
+      promptDelivery: 'auto-submit',
+      callers: {
+        outcome: 'pending',
+        entries: new Set(),
+        promptDeliveryResults: new Set(),
+        onSettled: () => undefined
+      },
+      promise: Promise.resolve({ sessionId: SESSION_ID, fence: 1 }),
+      visibilityUnknown: false,
+      cancelled: false,
+      selection: { held: {} }
+    } satisfies StructuredLaunchState)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const frame = (unverifiable: boolean): RuntimeMobileSessionTabsResult => ({
+      ...latePublication(),
+      activeTabId: null,
+      activeTabType: null,
+      tabs: [],
+      ...(unverifiable ? { agentSessionsUnverifiable: true as const } : {})
+    })
+    const call = vi.fn()
+    Object.defineProperty(window, 'api', { configurable: true, value: { runtime: { call } } })
+
+    call.mockResolvedValue({ ok: true, result: { snapshots: [frame(true)], authoritative: true } })
+    await refreshLocalStructuredSessionTabs()
+    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(true)
+
+    call.mockResolvedValue({ ok: true, result: { snapshots: [frame(false)], authoritative: true } })
+    await refreshLocalStructuredSessionTabs()
+    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(
+      false
+    )
+  })
+
   it('drains a restored cancellation before a newer inventory retires it', async () => {
     markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID)
     resetStructuredAgentLaunchRegistryForTests()

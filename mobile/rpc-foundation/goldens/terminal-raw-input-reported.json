@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "terminal.accessory-raw-send",
   "family": "terminal.raw-input",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "42e1fe434b591ab5a945b6b366bbb20b567085d58bade63413f2251e8202b255",
-  "scenarioSha256": "579077efd3a4652a6930af3f6690138c20536270cbcd7274246047d2e322199f",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "11a49f853eb8": {
       "accepted": true

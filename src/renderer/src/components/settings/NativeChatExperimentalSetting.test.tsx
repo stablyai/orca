@@ -1,12 +1,18 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  setLocalRuntimeCapabilitiesForTests(null)
+  vi.unstubAllGlobals()
+})
 
 const SHELL_ENV_TOGGLE = '[aria-label="Toggle using your shell environment"]'
 const NAME_INPUT = '#settings-native-chat-shell-environment-name'
@@ -203,5 +209,52 @@ describe('NativeChatExperimentalSetting shell environment', () => {
     )
 
     expect(nameInput(container).value).toBe('HTTPS_PRO')
+  })
+})
+
+describe('NativeChatExperimentalSetting queue follow-ups', () => {
+  const QUEUE_TOGGLE = '[aria-label="Toggle queue follow-ups"]'
+  const structuredOn = {
+    experimentalNativeChat: true,
+    openAgentTabsInChatByDefault: true,
+    experimentalStructuredNativeChat: true
+  }
+
+  it('shows the switch, with copy naming the image exception, when the host queues messages', () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+    const updateSettings = vi.fn()
+    const { container } = renderSetting(structuredOn, updateSettings)
+    expect(container.textContent).toContain('Messages with images send right away.')
+    fireEvent.click(container.querySelector(QUEUE_TOGGLE)!)
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: false })
+  })
+
+  it('hides the switch when the host does not queue messages, since it would do nothing', () => {
+    setLocalRuntimeCapabilitiesForTests([])
+    const { container } = renderSetting(structuredOn)
+    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
+  })
+
+  it('hides the switch until the host answers, then shows it', async () => {
+    setLocalRuntimeCapabilitiesForTests(null)
+    let answer: (status: { capabilities: string[] }) => void = () => {}
+    vi.stubGlobal('api', {
+      runtime: { getStatus: () => new Promise((resolve) => (answer = resolve)) }
+    })
+    const { container } = renderSetting(structuredOn)
+    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
+    await act(async () =>
+      answer({ capabilities: [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY] })
+    )
+    expect(container.querySelector(QUEUE_TOGGLE)).not.toBeNull()
+  })
+
+  it('stays hidden outside structured chat even when the host queues messages', () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+    const { container } = renderSetting({
+      ...structuredOn,
+      experimentalStructuredNativeChat: false
+    })
+    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
   })
 })

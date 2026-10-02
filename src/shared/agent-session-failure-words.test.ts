@@ -107,16 +107,19 @@ describe('the words written beside a failure fact', () => {
     }
   })
 
-  it('names /clear as the next step for the start a /clear needed', () => {
-    const clear = (kind: AgentSessionFailureKind) =>
-      agentSessionFailureSentence({ kind }, 'row', { agentName: 'Codex', command: 'clear' })
-    expect(clear('notSignedIn')).toBe(
-      'Codex is not signed in for the selected account. Sign in, then run /clear again.'
+  it('names /compact as the next step for the start a /compact needed', () => {
+    const compact = (kind: AgentSessionFailureKind) =>
+      agentSessionFailureSentence({ kind }, 'rejection', {
+        agentName: 'Claude',
+        command: 'compact'
+      })
+    expect(compact('notSignedIn')).toBe(
+      'Claude is not signed in for the selected account. Sign in, then run /compact again.'
     )
-    expect(clear('startFailed')).toBe("Codex couldn't start. Run /clear again.")
-    expect(clear('restartFailed')).toBe("Codex couldn't restart. Run /clear again.")
-    expect(clear('providerStartFailed')).toBe(
-      'Codex stopped before it finished starting. Run /clear again.'
+    expect(compact('startFailed')).toBe("Claude couldn't start. Run /compact again.")
+    expect(compact('restartFailed')).toBe("Claude couldn't restart. Run /compact again.")
+    expect(compact('providerStartFailed')).toBe(
+      'Claude stopped before it finished starting. Run /compact again.'
     )
   })
 
@@ -169,6 +172,23 @@ describe('the words written beside a failure fact', () => {
     ).toBe('The agent stopped before this message was sent.')
   })
 
+  it('says a refused Stop reached the agent, which declined it', () => {
+    const refused = (detail?: { text: string; audience: 'person' | 'log' }, agentName?: string) =>
+      agentSessionFailureWords(
+        { kind: 'stopRefused', ...(detail ? { detail } : {}) },
+        { surface: 'row', agentName }
+      ).text
+    expect(refused(undefined, 'Codex')).toBe('Codex had no turn running to stop.')
+    expect(refused()).toBe('The agent had no turn running to stop.')
+    expect(refused({ text: 'no active turn to interrupt.', audience: 'person' }, 'Codex')).toBe(
+      "Codex didn't stop: no active turn to interrupt."
+    )
+    // Words Codex wrote for the log are never quoted to a person.
+    expect(refused({ text: 'rpc -32600', audience: 'log' }, 'Codex')).toBe(
+      'Codex had no turn running to stop.'
+    )
+  })
+
   it('says what frees a chat a terminal agent still holds, without naming its process', () => {
     expect(
       agentSessionFailureSentence(
@@ -181,6 +201,39 @@ describe('the words written beside a failure fact', () => {
       )
     ).toBe(
       "Codex couldn't restart. This chat is still open in a terminal agent. Quit that agent to continue the chat here."
+    )
+  })
+
+  it("quotes a provider's own retry progress, and keeps a log detail out of it", () => {
+    const retrying = (fact: Omit<AgentSessionFailureFact, 'kind'>) =>
+      agentSessionFailureSentence({ kind: 'providerRetrying', ...fact }, 'row', {
+        agentName: 'Codex'
+      })
+    expect(retrying({ detail: { text: 'Reconnecting... 2/5', audience: 'person' } })).toBe(
+      'Codex is retrying: Reconnecting... 2/5.'
+    )
+    expect(
+      retrying({
+        detail: { text: '{"type":"system","subtype":"api_retry"}', audience: 'log' },
+        retry: { error: 'rate_limit', status: 429 }
+      })
+    ).toBe('Codex is rate-limited and retrying.')
+    expect(retrying({})).toBe('Codex hit a temporary problem and is retrying.')
+  })
+
+  it("puts the provider's account of what failed on the retry row's second line", () => {
+    const retrying = (fact: Omit<AgentSessionFailureFact, 'kind'>) =>
+      agentSessionFailureSentence({ kind: 'providerRetrying', ...fact }, 'row', {
+        agentName: 'Codex'
+      })
+    expect(
+      retrying({
+        detail: { text: 'Reconnecting... 2/5', audience: 'person' },
+        retry: { cause: 'stream disconnected before completion' }
+      })
+    ).toBe('Codex is retrying: Reconnecting... 2/5.\nstream disconnected before completion')
+    expect(retrying({ retry: { status: 429, cause: 'Too many requests' } })).toBe(
+      'Codex is rate-limited and retrying.\nToo many requests'
     )
   })
 

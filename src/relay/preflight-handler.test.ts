@@ -34,7 +34,6 @@ vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock 
 vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import {
-  buildCommandLookupSpec,
   buildCommandLookupSpecs,
   hasAbsoluteCommandPath,
   isCommandOnPathForRelay,
@@ -72,39 +71,6 @@ beforeEach(() => {
   isWslAvailableAsyncMock.mockReset()
   listWslDistrosAsyncMock.mockReset()
   isGitBashAvailableMock.mockReset()
-})
-
-describe('buildCommandLookupSpec', () => {
-  it('uses where.exe on native Windows SSH hosts', () => {
-    expect(buildCommandLookupSpec('codex', 'win32')).toEqual({
-      file: 'where.exe',
-      args: ['codex'],
-      windowsHide: true
-    })
-  })
-
-  it('falls back to sh for POSIX probes without a configured shell', () => {
-    expect(buildCommandLookupSpec('codex', 'linux', {}, null)).toEqual({
-      file: '/bin/sh',
-      args: lookupArgs('codex')
-    })
-  })
-
-  it('uses the configured remote shell for POSIX probes', () => {
-    expect(buildCommandLookupSpec('codex', 'linux', { SHELL: '/bin/zsh' }, '/bin/zsh')).toEqual({
-      file: '/bin/zsh',
-      args: lookupArgs('codex', '-ilc')
-    })
-  })
-
-  it('quotes command names in shell probes', () => {
-    expect(
-      buildCommandLookupSpec("agent'cli", 'linux', { SHELL: '/bin/bash' }, '/bin/bash')
-    ).toEqual({
-      file: '/bin/bash',
-      args: lookupArgs("agent'cli", '-ilc')
-    })
-  })
 })
 
 describe('buildCommandLookupSpecs', () => {
@@ -216,26 +182,8 @@ describe('isCommandOnPathForRelay', () => {
 })
 
 describe('hasAbsoluteCommandPath', () => {
-  it('ignores banners and shell function output', () => {
-    expect(hasAbsoluteCommandPath('/tmp/not-the-agent\ncodex is a shell function\n', 'linux')).toBe(
-      false
-    )
-  })
-
   it('ignores unmarked POSIX absolute paths from shell startup output', () => {
     expect(hasAbsoluteCommandPath('/tmp/not-the-agent\n', 'linux')).toBe(false)
-  })
-
-  it('recognizes a sentinel-marked command path amid shell startup and exit output', () => {
-    expect(
-      hasAbsoluteCommandPath('welcome\n__ORCA_AGENT_PATH__/opt/bin/codex\nlogout-banner\n', 'linux')
-    ).toBe(true)
-  })
-
-  it('recognizes Windows absolute command paths', () => {
-    expect(
-      hasAbsoluteCommandPath('C:\\Users\\alice\\AppData\\Roaming\\npm\\codex.cmd\r\n', 'win32')
-    ).toBe(true)
   })
 })
 

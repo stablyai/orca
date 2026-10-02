@@ -3,26 +3,27 @@
 This implements the September 28 runner-demand analysis. The baseline inventory
 covered September 27 04:00–September 28 04:00 UTC: 4,028 workflow runs, with
 463 stratified job samples. Estimated occupancy was 1,081 runner-hours, dominated
-by PR unit shards (414 hours) and Bun qualification (262 hours). These are
+by PR unit shards (414 hours) and Bun qualification (262 hours, since replaced by the
+pinned-Node headless lanes). These are
 sampled sums of job durations across different runner pools, not billing totals
 or a guaranteed forecast of savings.
 
 ## What runs now
 
-| Work                         | Ordinary draft update                                                          | Ready PR / final checks                       | Main reference                          |
-| ---------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------- | --------------------------------------- |
-| Static analysis and types    | Immediately                                                                    | Immediately                                   | Existing workflows                      |
-| Unit suite                   | Full, with shadow selection evidence                                           | Full                                          | Existing daily Node 24/26 x86 suite     |
-| Packages                     | After successful static analysis and types                                     | Same                                          | Existing release workflows              |
-| Bun persistence              | Linux x64 for ordinary runtime changes; all six platforms for sensitive inputs | All six platforms when Bun inputs changed     | Full nightly qualification at 11:30 UTC |
-| Bun glibc/musl qualification | Sensitive inputs only, after persistence succeeds                              | Both architectures after persistence succeeds | Both architectures                      |
-| E2E                          | Existing targeted routing                                                      | Existing targeted routing                     | One complete run at 17:00 UTC           |
+| Work                                   | Ordinary draft update                                                          | Ready PR / final checks                       | Main reference                          |
+| -------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------- | --------------------------------------- |
+| Static analysis and types              | Immediately                                                                    | Immediately                                   | Existing workflows                      |
+| Unit suite                             | Full, with shadow selection evidence                                           | Full                                          | Existing daily Node 24/26 x86 suite     |
+| Packages                               | After successful static analysis and types                                     | Same                                          | Existing release workflows              |
+| Headless Node persistence              | Linux x64 for ordinary runtime changes; all six platforms for sensitive inputs | All six platforms when server inputs changed  | Full nightly qualification at 11:30 UTC |
+| Headless Node glibc/musl qualification | Sensitive inputs only, after persistence succeeds                              | Both architectures after persistence succeeds | Both architectures                      |
+| E2E                                    | Existing targeted routing                                                      | Existing targeted routing                     | One complete run at 17:00 UTC           |
 
-Bun-sensitive inputs include root/toolchain files, configuration, native code,
+Headless-runtime-sensitive inputs include root/toolchain files, configuration, native code,
 resources, platform-specific paths, persistence, SQLite, orcad, providers,
 daemon, SSH, relay, and child-process code. Dependency discovery failure, a
 missing event or an incomplete diff retains full qualification. An unrelated
-change still skips Bun through the existing dependency classifier. No native
+change still skips these lanes through the existing dependency classifier. No native
 artifact is shared across platforms or ABIs. The routine draft reduction is an
 explicit coverage-placement change; it does not assert identical per-update
 coverage. Every non-draft synchronize event and the ready-for-review event
@@ -36,6 +37,11 @@ slow-test assertions are retained.
 
 ## Unit selection rollout
 
+PR planning runs alongside typechecking after their shared dependency setup; an
+explicit join publishes its artifact before the unit matrix can start. Static
+analysis's Node 24 install also prepares the native cache before matrix fan-out.
+The daily compatibility workflow retains its separate planner and cache primer.
+
 `ci-unit-plan.mjs` discovers the same include/exclude set as Vitest and follows
 static imports, re-exports, literal dynamic imports, CommonJS requires and the
 renderer aliases. Consumers of indirect filesystem/process inputs remain in the
@@ -45,7 +51,10 @@ suite. A shard verifies the plan's source SHA and complete discovery list before
 using it. Missing/stale artifacts fall back to full coverage, even if that means
 running the suite on fewer shards.
 
-The initial policy is **shadow**, with all eight shards retained. The first
+The initial policy is **shadow**, with every shard retained. A full run spends
+`FULL_SHARD_COUNT` (five) concurrency slots: the account is charged a slot per job
+rather than per core, so eight 6.5-minute shards made this matrix 68% of daily slot
+demand while the arm pool queued 10.5 minutes at p95. The first
 local inventory matched Vitest exactly (9,950 files at validation); representative
 source changes retained roughly 88% of files because of indirect input readers.
 That is evidence for conservative coverage, not evidence of the analysis's

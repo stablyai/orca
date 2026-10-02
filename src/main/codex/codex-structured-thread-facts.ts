@@ -47,6 +47,11 @@ export function readCodexTurnStatus(payload: unknown): string | null {
   return nonEmptyString(record(root.turn)?.status) ?? nonEmptyString(root.status)
 }
 
+/** A failed `turn/completed` carries Codex's reason as `turn.error.message`. */
+export function readCodexTurnErrorMessage(payload: unknown): string | null {
+  return nonEmptyString(record(record(record(payload)?.turn)?.error)?.message)
+}
+
 /** Codex's own turn duration, already in milliseconds; absent or malformed reads as null. */
 export function readCodexTurnDurationMs(payload: unknown): number | null {
   const root = record(payload)
@@ -63,10 +68,42 @@ export function readCodexErrorWillRetry(payload: unknown): boolean {
   return record(payload)?.willRetry === true
 }
 
+/** `error.message` on an `error` frame: Codex's own words for the person reading the chat. */
+export function readCodexErrorMessage(payload: unknown): string | null {
+  return nonEmptyString(record(record(payload)?.error)?.message)
+}
+
+/** `error.additionalDetails`: what failed underneath, which Codex shows under its message. */
+export function readCodexErrorAdditionalDetails(payload: unknown): string | null {
+  return nonEmptyString(record(record(payload)?.error)?.additionalDetails)
+}
+
+/** `error.codexErrorInfo` is a bare variant (`"serverOverloaded"`) or one keyed to its fields
+ *  (`{"responseStreamDisconnected":{"httpStatusCode":502}}`); read as the variant and its status. */
+export function readCodexErrorInfo(payload: unknown): { error: string; status?: unknown } | null {
+  const info = record(record(payload)?.error)?.codexErrorInfo
+  const bare = nonEmptyString(info)
+  if (bare) {
+    return { error: bare }
+  }
+  const [variant, fields] = Object.entries(record(info) ?? {})[0] ?? []
+  return variant ? { error: variant, status: record(fields)?.httpStatusCode } : null
+}
+
 /** `thread/status/changed` carries a TAGGED status (`{status:{type}}`), never a
  *  bare string. `idle` and `systemError` are the two arms that mean the thread
  *  is not running; `active` and `notLoaded` are not. */
 export function codexThreadStoppedRunning(payload: unknown): boolean {
   const type = record(record(payload)?.status)?.type
   return type === 'idle' || type === 'systemError'
+}
+
+/** An `active` thread flags each request it has open on the user (an approval, a question). */
+export function codexThreadWaitsOnUser(payload: unknown): boolean {
+  const status = record(record(payload)?.status)
+  const flags = status?.type === 'active' ? status.activeFlags : null
+  return (
+    Array.isArray(flags) &&
+    flags.some((flag) => flag === 'waitingOnApproval' || flag === 'waitingOnUserInput')
+  )
 }

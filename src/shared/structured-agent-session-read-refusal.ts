@@ -1,3 +1,5 @@
+import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
+
 /**
  * The one refusal a structured-session READ can raise that is not a failure to read.
  *
@@ -41,5 +43,19 @@ export function isUnattachedAgentSessionReadRefusal(error: unknown): boolean {
   return (
     code === AGENT_SESSION_UNATTACHED_REFUSAL_CODE ||
     message === AGENT_SESSION_UNATTACHED_REFUSAL_CODE
+  )
+}
+
+/**
+ * A read refusal no retry reads past: SQLite reported the chat's journal damaged. Decided from the
+ * reason, never the message, which is the bare code for every journal refusal; a journal that
+ * failed to open for any other reason can clear, so its read keeps reconnecting.
+ */
+export function isFinalAgentSessionReadRefusal(
+  refusal: AgentSessionRefusalReference | undefined
+): boolean {
+  return (
+    refusal?.code === 'agent_session_journal_unreadable' &&
+    refusal.details?.reason === 'journalCorrupt'
   )
 }

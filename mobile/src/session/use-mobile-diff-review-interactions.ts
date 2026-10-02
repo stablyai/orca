@@ -25,6 +25,7 @@ import { connectionRetryAction } from '../transport/connection-retry-action'
 type InteractionInput = {
   client: RpcClient | null
   connState: ConnectionState
+  hostCapabilities: readonly string[]
   hostId: string
   worktreeId: string
   screenState: ReviewScreenState
@@ -55,6 +56,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
   const {
     client,
     connState,
+    hostCapabilities,
     hostId,
     worktreeId,
     screenState,
@@ -123,6 +125,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     useMobileDiffReviewSendActions({
       client,
       connState,
+      hostCapabilities,
       worktreeId,
       screenState,
       setActionError,

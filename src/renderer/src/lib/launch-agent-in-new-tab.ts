@@ -60,6 +60,8 @@ export type LaunchAgentInNewTabArgs = {
   onPromptDeliveryUnconfirmed?: () => void
   /** Keeps a preflighted route authoritative across workspace creation. */
   agentSessionLaunchPlan?: AgentSessionLaunchPlan
+  /** The launch seeds a workspace being opened, so its PTY spawn must not reshuffle Recent. */
+  pendingActivationSpawn?: boolean
   /** Lets a workspace reveal itself before the selected surface opens. */
   beforeSurfaceOpen?: (
     surface:
@@ -114,6 +116,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     onPromptDelivered,
     onPromptDeliveryUnconfirmed,
     agentSessionLaunchPlan,
+    pendingActivationSpawn,
     beforeSurfaceOpen
   } = args
   const store = useAppStore.getState()
@@ -245,6 +248,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
+    ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...initialViewModeProps
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)

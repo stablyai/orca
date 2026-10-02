@@ -66,9 +66,7 @@ async function fixture(fault: 'rename' | 'commit' | 'exit' | 'read-rollback' | '
   const faultSource =
     fault === 'commit' || fault === 'read-rollback'
       ? `
-      const DatabaseSync = process.versions.bun
-        ? require('bun:sqlite').Database
-        : require('node:sqlite').DatabaseSync
+      const DatabaseSync = require('node:sqlite').DatabaseSync
       const { existsSync } = require('node:fs')
       let writing = false
       const exec = DatabaseSync.prototype.exec

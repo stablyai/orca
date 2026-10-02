@@ -1,3 +1,4 @@
+import { continueMainAgentStatus } from '../../agent-lead-status-fold'
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
@@ -41,6 +42,28 @@ export function normalizeOpenCodeFamilyEvent(
     }
   )
 
+  const rootState = hookPayload.root_state
+  const errorName = hookPayload.root_turn_error_name
+  const mainAgent =
+    (source === 'opencode' || source === 'opencode2') &&
+    (rootState === 'working' || rootState === 'waiting' || rootState === 'done')
+      ? continueMainAgentStatus(
+          eventName === 'SessionStart'
+            ? undefined
+            : state.lastStatusByPaneKey.get(paneKey)?.payload.mainAgent,
+          {
+            state: rootState,
+            outcome:
+              rootState === 'done' && typeof errorName === 'string' && errorName
+                ? errorName === 'MessageAbortedError'
+                  ? 'cancellation'
+                  : 'failure'
+                : undefined
+          },
+          Date.now()
+        )
+      : undefined
+
   return normalizeAgentStatusPayload({
     state: stateName,
     prompt: resolvePrompt(state, paneKey, promptText, {
@@ -55,6 +78,8 @@ export function normalizeOpenCodeFamilyEvent(
     sessionBoundary:
       (source === 'opencode' || source === 'opencode2') && eventName === 'SessionStart'
         ? true
-        : undefined
+        : undefined,
+    ...(mainAgent ? { mainAgent } : {}),
+    ...(stateName === 'done' && mainAgent?.outcome === 'cancellation' ? { interrupted: true } : {})
   })
 }

@@ -28,7 +28,6 @@ function createDeps() {
     store: store as unknown as CreateArgs['deps']['store'],
     ptySpawnAvailable: true,
     createTerminal,
-    markTrusted: vi.fn(),
     pasteDraft: vi.fn(),
     sendFollowup: vi.fn(),
     invalidateResolvedWorktrees: vi.fn(),

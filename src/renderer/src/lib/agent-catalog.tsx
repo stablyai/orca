@@ -1,3 +1,4 @@
+import { getCatalogPlatform } from './agent-catalog-platform'
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
@@ -28,20 +29,6 @@ export type AgentCatalogEntry = {
   faviconDomain?: string
   /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
-}
-
-function getCatalogPlatform(): NodeJS.Platform {
-  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  if (userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  if (userAgent.includes('Mac')) {
-    return 'darwin'
-  }
-  if (userAgent) {
-    return 'linux'
-  }
-  return typeof process === 'undefined' ? 'linux' : process.platform
 }
 
 export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] => [
@@ -349,6 +336,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'codebuddy',
+    label: translate('auto.lib.agent.catalog.codebuddy_label', 'CodeBuddy'),
+    cmd: 'codebuddy',
+    faviconDomain: 'codebuddy.ai',
+    homepageUrl: 'https://www.codebuddy.ai/cli'
   }
 ])
 

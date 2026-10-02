@@ -2,6 +2,7 @@ import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
   type StructuredProviderSessionOwnership
@@ -53,7 +54,8 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
   if (!isPotentialStructuredResumeCommand(command)) {
     return
   }
-  await ensureHost()
+  // A terminal command is not a chat: with chats refused here there is no ownership to check.
+  await ensureStructuredAgentSessionHostUnlessRefused(ensureHost)
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return

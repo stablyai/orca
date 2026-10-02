@@ -42,7 +42,7 @@ describe('Qoder managed configuration', () => {
     }
     expect(installed.hooks.TeammateIdle).toBeUndefined()
     expect(installed.statusLine).toBeUndefined()
-    markQoderWorkspaceTrusted('/new-workspace')
+    markQoderWorkspaceTrusted('/new-workspace', sandbox.home)
     const trusted = JSON.parse(readFileSync(path, 'utf8'))
     expect(trusted.permissions.trustDirectories).toEqual(['/existing', '/new-workspace'])
     expect(trusted.hooks).toEqual(installed.hooks)
@@ -53,11 +53,21 @@ describe('Qoder managed configuration', () => {
     })
   })
 
+  it("writes every Qoder event whatever Claude version is passed, since Claude's table never applies", () => {
+    const path = join(sandbox.home, '.qoder', 'settings.json')
+    writeFileSync(path, JSON.stringify({ hooks: {} }))
+    expect(qoderHookService.install({ claudeVersion: '1.0.62' }).state).toBe('installed')
+    const installed = JSON.parse(readFileSync(path, 'utf8'))
+    expect(Object.keys(installed.hooks).sort()).toEqual([...QODER_HOOK_EVENTS].sort())
+    expect(installed.statusLine).toBeUndefined()
+    expect(qoderHookService.remove().state).toBe('not_installed')
+  })
+
   it('refuses malformed settings instead of overwriting them', () => {
     const path = join(sandbox.home, '.qoder', 'settings.json')
     writeFileSync(path, '{broken')
     expect(qoderHookService.install().state).toBe('error')
-    markQoderWorkspaceTrusted('/new-workspace')
+    markQoderWorkspaceTrusted('/new-workspace', sandbox.home)
     expect(readFileSync(path, 'utf8')).toBe('{broken')
     expect(withQoderTrustedWorkspace({ permissions: 'invalid' }, '/workspace')).toBeNull()
     expect(
@@ -70,16 +80,12 @@ describe('Qoder Windows hook shell', () => {
   it('uses the documented explicit shell without relying on Git Bash or another PowerShell hop', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {
-      const hook = getManagedLifecycleHook(
-        'C:\\Users\\a b\\.orca\\agent-hooks\\qoder-hook.cmd',
-        {
-          configDirName: '.qoder',
-          scriptBaseName: 'qoder-hook',
-          usesWindowsCompatLauncher: true,
-          windowsHookShell: 'powershell'
-        },
-        { gitBashAvailable: true }
-      )
+      const hook = getManagedLifecycleHook('C:\\Users\\a b\\.orca\\agent-hooks\\qoder-hook.cmd', {
+        configDirName: '.qoder',
+        scriptBaseName: 'qoder-hook',
+        usesWindowsCompatLauncher: true,
+        windowsHookShell: 'powershell'
+      })
       expect(hook.shell).toBe('powershell')
       expect(hook.command).toContain('$env:USERPROFILE')
       expect(hook.command).not.toMatch(/EncodedCommand|ExecutionPolicy|\|\|/)

@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -25,7 +27,7 @@ beforeEach(async () => {
       agent: 'codex',
       providerHandle: { kind: 'codex', threadId: 'thread-1' }
     },
-    journalDir: root
+    stateDirectory: root
   })
 })
 
@@ -56,6 +58,7 @@ describe('structured send idempotency', () => {
 
     const result = await performSend(
       {
+        logger: recordingStructuredAgentSessionLogger().logger,
         sessionId: 'session-1',
         journal,
         fence: 2,
@@ -97,6 +100,7 @@ describe('structured send idempotency', () => {
       }
     }))
     const context: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,

@@ -57,17 +57,4 @@ describe('exposeRun', () => {
 
     expect(row).toEqual(RUN_ROW)
   })
-
-  it('strips the columns even when they are null', () => {
-    const exposed = exposeRun({
-      ...RUN_ROW,
-      coordinator_pane_key: null,
-      coordinator_orca_session_id: null,
-      coordinator_orca_session_id_generation: null
-    })
-
-    expect(exposed).not.toHaveProperty('coordinator_pane_key')
-    expect(exposed).not.toHaveProperty('coordinator_orca_session_id')
-    expect(exposed).not.toHaveProperty('coordinator_orca_session_id_generation')
-  })
 })

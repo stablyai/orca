@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.item-checks-files-github",
   "family": "tasks.item-checks-files",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
-  "scenarioSha256": "644a27c1e3fa6bfa73c7822c2949e9534508e5e3a996b0e8e56be6326658d123",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "01a8f1e0db1b": {
       "name": "github.rerunPRChecks#1",

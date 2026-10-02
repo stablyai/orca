@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { buildUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
-import { auditUnitSelection, planUnitSelection, selectUnitFiles } from './ci-unit-selection.mjs'
+import {
+  FULL_SHARD_COUNT,
+  auditUnitSelection,
+  planUnitSelection,
+  selectUnitFiles
+} from './ci-unit-selection.mjs'
 
 const sources = new Map(
   Object.entries({
@@ -57,6 +62,32 @@ describe('conservative unit selection', () => {
     expect(selectUnitFiles(files, changed, graph)).toMatchObject({ files, full: true })
   })
 
+  it.each(
+    [[], ['pnpm-lock.yaml'], ['config/vitest.config.ts', 'src/leaf.ts']].map((changed) => ({
+      changed
+    }))
+  )('keeps full coverage without reading the graph for global evidence: %j', ({ changed }) => {
+    const plan = planUnitSelection({
+      files,
+      changed,
+      graph: () => {
+        throw new Error('Graph must not be read')
+      },
+      timings: {},
+      mode: 'selected',
+      event: { pull_request: { draft: true } }
+    })
+    expect(plan.executionFiles).toEqual(files)
+    expect(plan.selectionAvailable).toBe(false)
+    expect(plan.shards).toHaveLength(FULL_SHARD_COUNT)
+  })
+
+  it('reads lazy graph evidence for source changes', () => {
+    expect(selectUnitFiles(files, ['src/leaf.ts'], () => graph)).toEqual(
+      selectUnitFiles(files, ['src/leaf.ts'], graph)
+    )
+  })
+
   it('keeps full coverage by default and on every non-draft commit', () => {
     const base = { files, changed: ['src/leaf.ts'], graph, timings: {} }
     for (const event of [
@@ -77,6 +108,16 @@ describe('conservative unit selection', () => {
     })
     expect(selected.executionFiles).not.toContain('src/unrelated.test.ts')
     expect(selected.shards).toEqual([{ index: 1, count: 1 }])
+  })
+
+  it('spends five concurrency slots on a full run', () => {
+    const plan = planUnitSelection({ files, changed: ['src/leaf.ts'], graph, timings: {} })
+    expect(plan.shards).toEqual(
+      Array.from({ length: FULL_SHARD_COUNT }, (_, index) => ({
+        index: index + 1,
+        count: FULL_SHARD_COUNT
+      }))
+    )
   })
 
   it('records failures that would have been missed while shadow runs remain full', () => {

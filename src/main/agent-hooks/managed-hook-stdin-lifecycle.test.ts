@@ -34,6 +34,10 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+vi.mock('../codex/codex-hook-trust-grant', () => ({
+  grantManagedCodexHookTrust: async () => ({ lane: 'fallback', reason: 'unsupported' })
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/orca-user-data'
@@ -296,7 +300,7 @@ describe('Windows managed hook stdin structure', () => {
         expect(script, `${fileName} no ORCA_* guard may route to the more.com drain`).not.toMatch(
           /ORCA_[A-Z_]+.*goto :?orca_agent_hook_drain_stdin/
         )
-        // Why: the epilogue stays shared — claude-hook.cmd still jumps to it from the
+        // Why: the epilogue stays shared — claude-hook-impl.cmd still jumps to it from the
         // Devin-imports-.claude skip, which now sits below these guards.
         expect(script, `${fileName} drain epilogue`).toContain(
           [
@@ -310,7 +314,7 @@ describe('Windows managed hook stdin structure', () => {
       // Why (#11549): the Devin skip is the only remaining in-script jump to more.com, so it
       // must sit below the env guards — otherwise a Devin session outside an Orca pane still
       // parks there and strands the hook exactly like the pre-fix guards did.
-      const claude = readFileSync(join(hooksDir, 'claude-hook.cmd'), 'utf8')
+      const claude = readFileSync(join(hooksDir, 'claude-hook-impl.cmd'), 'utf8')
       expect(claude, 'claude devin guard present').toContain(
         'if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin'
       )
@@ -524,7 +528,7 @@ describe('Windows managed hook stdin structure', () => {
             // Why: the encoded launcher resolves %USERPROFILE% at run time, so redirecting it is
             // what makes the script vanish for that shape. The direct launcher (#18875) carries
             // an absolute path, so here it asserts only that a bogus profile changes nothing; its
-            // missing-script fallback is covered live in windows-direct-cmd-hook-command.test.ts.
+            // missing-entry failure (never exit 2) is covered live in windows-direct-cmd-hook-command.test.ts.
             name: 'missing managed script',
             env: hookEnvironment({ USERPROFILE: absentProfile })
           }

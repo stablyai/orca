@@ -93,13 +93,13 @@ function supersedes(candidate: NativeChatMessage, existing: NativeChatMessage): 
 
 // Why: the tail bubbles form fixed tiers that timestamps alone can't express.
 // The streaming preview (null timestamp) must follow real content but sit ahead
-// of the optimistic composer echoes, which carry finite `sentAt` timestamps that
-// would otherwise sort past it. Rank first, then timestamp within a tier.
+// of the optimistic composer echoes and queued sends, which carry finite timestamps
+// that would otherwise sort past it. Rank first, then timestamp within a tier.
 function messageSortRank(message: NativeChatMessage): number {
   if (message.id === NATIVE_CHAT_STREAMING_ID) {
     return 1
   }
-  if (isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
+  if (message.queued || isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
     return 2
   }
   return 0

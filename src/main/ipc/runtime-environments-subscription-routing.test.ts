@@ -3,10 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
-} from '../../shared/protocol-version'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 
 const {
   handleMock,

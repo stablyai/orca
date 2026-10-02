@@ -16,7 +16,7 @@ export type BrowserPageUrlSetter = (
 
 export type BrowserChromeShortcutScope = 'focused' | 'inactive' | 'owned-target'
 
-export type GrabIntent = 'copy' | 'annotate'
+export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
 export type BrowserPageContextMenuState = {
   x: number

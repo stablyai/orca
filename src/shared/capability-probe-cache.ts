@@ -97,6 +97,20 @@ export class CapabilityProbeCache<TCapability> {
     }
   }
 
+  /** runWithFallback that neither waits on nor publishes the shared probe, for
+   *  a caller whose long session must not hold up its siblings. */
+  async runUnshared<T>(
+    capability: TCapability,
+    runPreferred: () => Promise<T>,
+    runFallback: () => Promise<T>,
+    isUnsupportedError: (error: unknown) => boolean
+  ): Promise<T> {
+    if (!this.supportedCapabilities.has(capability) && !this.shouldTry(capability)) {
+      return runFallback()
+    }
+    return this.runPreferredOrFallback(capability, runPreferred, runFallback, isUnsupportedError)
+  }
+
   clear(): void {
     this.retryAfterByCapability.clear()
     this.probesByCapability.clear()

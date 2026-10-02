@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.linear-team-context",
   "family": "tasks.linear-team-context",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
-  "scenarioSha256": "524c2421e61d663dd1344a47ab0552c3bb029ad09e0b6271eac91f1548e8265c",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "045de1beb41b": {
       "name": "prFileCommentDrafts",

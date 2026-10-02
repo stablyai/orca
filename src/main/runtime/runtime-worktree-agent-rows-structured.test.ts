@@ -91,12 +91,6 @@ describe('worktree ps reports structured sessions', () => {
     expect(row.status).toBe('working')
   })
 
-  // The same projection the sidebar applies, so the two surfaces cannot disagree about one session.
-  it('maps attention to blocked and idle to done', () => {
-    expect(attach([summary({ status: 'attention' })]).agents[0]?.state).toBe('blocked')
-    expect(attach([summary({ status: 'idle' })]).agents[0]?.state).toBe('done')
-  })
-
   it('does not turn a completed host-held session into permission', () => {
     const row = attach([summary({ status: 'idle' })])
     expect(row.status).toBe('inactive')

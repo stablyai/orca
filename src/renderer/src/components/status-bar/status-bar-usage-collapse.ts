@@ -8,6 +8,8 @@ export type UsageChipMeasure = {
 export type UsageRowMeasure = {
   /** Width of the usage row as if every chip were shown, so collapsing never reads as a content change. */
   naturalWidth: number
+  /** Width with every calm chip collapsed into "+N", keeping urgent ones. */
+  pinnedWidth: number
   /** Width the row actually occupies right now. */
   renderedWidth: number
   chips: UsageChipMeasure[]
@@ -49,7 +51,14 @@ export function pickCollapsedUsageChips(
 /** Reads the `data-usage-*` markers the status bar renders on its usage chips and "+N" chip. */
 export function measureUsageRow(usage: HTMLElement | null): UsageRowMeasure {
   if (!usage) {
-    return { naturalWidth: 0, renderedWidth: 0, chips: [], moreChipWidth: 0, chipGap: 0 }
+    return {
+      naturalWidth: 0,
+      pinnedWidth: 0,
+      renderedWidth: 0,
+      chips: [],
+      moreChipWidth: 0,
+      chipGap: 0
+    }
   }
   const renderedWidth = usage.getBoundingClientRect().width
   const chipElements = [...usage.querySelectorAll<HTMLElement>('[data-usage-chip]')]
@@ -67,8 +76,15 @@ export function measureUsageRow(usage: HTMLElement | null): UsageRowMeasure {
   const collapsedWidth = chips
     .filter((chip) => chip.collapsed)
     .reduce((sum, chip) => sum + chip.width + chipGap, 0)
+  const naturalWidth = renderedWidth + collapsedWidth - (moreInRow ? moreChipWidth + chipGap : 0)
+  const calmChips = chips.filter((chip) => !chip.urgent)
+  const pinnedWidth =
+    naturalWidth -
+    calmChips.reduce((sum, chip) => sum + chip.width + chipGap, 0) +
+    (calmChips.length > 0 ? moreChipWidth + chipGap : 0)
   return {
-    naturalWidth: renderedWidth + collapsedWidth - (moreInRow ? moreChipWidth + chipGap : 0),
+    naturalWidth,
+    pinnedWidth,
     renderedWidth,
     chips,
     moreChipWidth,

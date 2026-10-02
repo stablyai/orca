@@ -4,8 +4,9 @@
 // so no class instances, Maps, or Dates.
 //
 // Rows are append-only. `schemaVersion` is upcast at read time and never
-// rewritten in place, so a host that cannot read a row refuses to write the
-// journal rather than skipping or compacting past it.
+// rewritten in place, so a host that cannot read a row (a newer version, or a
+// newer kind) refuses to write the journal rather than skipping or compacting
+// past it.
 
 import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentSessionFailureRowWords } from './agent-session-failure-words'
@@ -103,6 +104,9 @@ export type AgentJournalMessageItem = {
   /** Absent ⇒ an ordinary turn input. `goal` ⇒ the text was set as the thread
    *  goal's objective, and the provider pursues it without a turn of its own. */
   sentAs?: AgentJournalMessageSendMode
+  /** Present on a conversation command the user sent, such as `/compact`. The text is what the
+   *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
+  command?: { name: string }
 }
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
@@ -228,6 +232,9 @@ export type AgentJournalTurnLifecycle = {
   /** What the provider said about its context window during or after this turn.
    *  Usually written by a later revision, since the provider answers after the end. */
   contextUsage?: AgentSessionContextUsage
+  /** On a turn a conversation command opened: the provider turn that carried out the command,
+   *  once the provider opened one. Nothing else re-derives it after the command settles. */
+  providerTurnId?: string
 }
 
 /** Provider thread-goal lifecycle. Open like other persisted vocabularies: a
@@ -333,12 +340,26 @@ export type AgentJournalProducerLinkage = {
   /** The producing agent's own parent. Absent ⇒ its parent is the session root. */
   parentAgentId?: string
   /** The provider's own parent reference for this row. Provenance only: it names
-   *  the tool CALL, which is re-minted on every resume, so it is never a join key. */
+   *  the tool CALL, not the agent, and a resumed agent is re-announced under a new
+   *  call, so no reader joins on it. Only its producer reads it back, to recall
+   *  the ids an earlier run of the session resolved. */
   providerParentRef?: string
   producerKind?: AgentJournalProducerKind
   /** Which run of the agent, when past the first. Identity answers "which agent";
    *  this answers "which run of it", and is deliberately not part of the identity. */
   attempt?: number
+}
+
+/** Which turn a row belongs to, stated by the write that created it. `turn` names the turn
+ *  record's journal key; `thread` is a row that belongs to no turn — a notice about the
+ *  conversation, or a message not yet delivered into one. Turn records themselves are `thread`. */
+export type AgentJournalTurnScope = { kind: 'turn'; turnItemId: string } | { kind: 'thread' }
+
+export const AGENT_JOURNAL_THREAD_SCOPE: AgentJournalTurnScope = { kind: 'thread' }
+
+/** Who produced a row and which turn it belongs to: what every item write states. */
+export type AgentJournalRowAttribution = AgentJournalProducerLinkage & {
+  turnScope: AgentJournalTurnScope
 }
 
 /** Where the journal placed an item: the sequence of the row that created it,
@@ -364,6 +385,8 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   recovered?: true
   /** When crash reconciliation wrote this revision; present exactly when `recovered` is. */
   recoveredAt?: number
+  /** Absent only from a host that predates it. */
+  turnScope?: AgentJournalTurnScope
 }
 
 // ─── Submissions ────────────────────────────────────────────────────────────
@@ -398,6 +421,12 @@ export type AgentJournalSubmission = {
   handedOverAt?: number
   /** Host-only: the submission row's sequence, which tells which host process accepted it. */
   acceptedSequence?: number
+  /** The queued draft this submission hands off; absent for a direct send. Read this, never
+   *  a draft id compared with `clientMessageId`. */
+  queuedMessageId?: string
+  /** Host-only: who asked for this turn — a person over the client send RPC, or Orca itself.
+   *  A person's turn is what ends a Stop's queue pause. */
+  origin?: 'client' | 'host'
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

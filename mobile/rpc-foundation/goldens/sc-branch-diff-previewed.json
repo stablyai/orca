@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "source-control.branch-diff-preview",
   "family": "git.branch-diff-preview",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "2077956254c707d904c066ca890dc25f3671fb70",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "48ccada93f208a24160483e98ee94a771ab6d63222f29ac4bbd6979157f98333",
-  "scenarioSha256": "819d010b9a8bb2741b09f104415f648e0e65d797882a2152ccfa4fb8a107cafc",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "009bc53fab97": {
       "preview": {
@@ -20,7 +11,16 @@
         "truncated": false
       }
     },
-    "040bae459f65": {
+    "7ef737811204": {
+      "name": "git.branchDiff#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo42::/p\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"a1b2c3d4e5f60718293a4b5c6d7e8f9012345678\",\"headOid\":\"f0e1d2c3b4a5968778695a4b3c2d1e0f98765432\",\"mergeBase\":\"0123456789abcdef0123456789abcdef01234567\"}}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "b699fd109439": {
       "name": "git.branchDiff#1",
       "ordinal": 1,
       "args": [
@@ -32,10 +32,10 @@
           "name": "params",
           "value": {
             "compare": {
-              "baseOid": "base-oid",
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
               "baseRef": "origin/main",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567"
             },
             "filePath": "src/app.ts",
             "worktree": "id:repo42::/p"
@@ -53,7 +53,7 @@
         "startedAt": 0
       }
     },
-    "1908cad2fe5e": {
+    "dadf774f4471": {
       "name": "git.branchDiff#1",
       "ordinal": 1,
       "args": [
@@ -65,10 +65,10 @@
           "name": "params",
           "value": {
             "compare": {
-              "baseOid": "base-oid",
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
               "baseRef": "origin/main",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base"
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567"
             },
             "filePath": "src/app.ts",
             "worktree": "id:repo42::/p"
@@ -96,15 +96,6 @@
         }
       }
     },
-    "424c6bc6b69b": {
-      "name": "git.branchDiff#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo42::/p\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}"
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
     "e5400edc0fdd": {
       "preview": {
         "kind": "loading"
@@ -125,8 +116,8 @@
       {
         "id": "diff-pending",
         "observation": {
-          "sender": ["040bae459f65"],
-          "payloads": ["424c6bc6b69b"],
+          "sender": ["b699fd109439"],
+          "payloads": ["7ef737811204"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open": "9270aeb7d9c6"
@@ -138,8 +129,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["1908cad2fe5e"],
-          "payloads": ["424c6bc6b69b"],
+          "sender": ["dadf774f4471"],
+          "payloads": ["7ef737811204"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open": "eb79a9b3682a"

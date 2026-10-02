@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
-  getStructuredAgentSessionLaunchLifecycle,
   getStructuredAgentSessionLaunchResumes,
+  relaunchFailedStructuredAgentSessionForMessage,
   retryStructuredAgentSessionLaunch,
-  useStructuredAgentSessionLaunchFailureReason,
+  useStructuredAgentSessionLaunchFailure,
   useStructuredAgentSessionLaunchLifecycle,
   useStructuredAgentSessionLaunchSelection
 } from '@/lib/structured-agent-session-launch'
@@ -66,23 +66,18 @@ export function useNativeChatProvisionalLaunch(
   sessionId: string
 ) {
   const lifecycle = useStructuredAgentSessionLaunchLifecycle(worktreeId ?? '', sessionId)
-  const failureReason = useStructuredAgentSessionLaunchFailureReason(worktreeId ?? '', sessionId)
+  const failure = useStructuredAgentSessionLaunchFailure(worktreeId ?? '', sessionId)
   const launch = useLatchedLaunchView(sessionId, worktreeId, lifecycle !== null)
   const retry = useCallback(() => {
     if (worktreeId) {
       retryStructuredAgentSessionLaunch(worktreeId, sessionId)
     }
   }, [sessionId, worktreeId])
-  // A send into a start that never published relaunches it; the queued message goes out on publish.
   const sendThroughRelaunch = useCallback(
     (send: () => boolean): boolean => {
       const accepted = send()
-      if (
-        accepted &&
-        worktreeId &&
-        getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId) === 'failed'
-      ) {
-        retryStructuredAgentSessionLaunch(worktreeId, sessionId)
+      if (accepted && worktreeId) {
+        relaunchFailedStructuredAgentSessionForMessage(worktreeId, sessionId)
       }
       return accepted
     },
@@ -91,7 +86,7 @@ export function useNativeChatProvisionalLaunch(
   return {
     lifecycle,
     launch,
-    failureReason,
+    failure,
     retry,
     sendThroughRelaunch,
     transportEnabled: lifecycle === null || lifecycle === 'published'

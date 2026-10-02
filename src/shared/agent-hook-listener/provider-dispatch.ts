@@ -1,3 +1,4 @@
+import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
 import { normalizeQoderEvent } from './providers/qoder-events'
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
@@ -53,6 +54,16 @@ export function normalizeProviderEvent(input: {
   let payload: ParsedAgentStatusPayload | null
 
   switch (source) {
+    case 'codebuddy':
+      payload = normalizeCompatibleLifecycleEvent(
+        source,
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload
+      )
+      break
     case 'claude':
       payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
       break

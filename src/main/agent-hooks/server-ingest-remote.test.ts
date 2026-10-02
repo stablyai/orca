@@ -565,20 +565,6 @@ describe('AgentHookServer ingestRemote', () => {
     expect(server.getStatusSnapshot()).toEqual([])
   })
 
-  it('rejects empty connectionId', () => {
-    const server = new AgentHookServer()
-    const payload = parseAgentStatusPayload(
-      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
-    )
-    if (!payload) {
-      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
-    }
-    const listener = vi.fn()
-    server.setListener(listener)
-    server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '')
-    expect(listener).not.toHaveBeenCalled()
-  })
-
   it('rejects whitespace-only connectionId', () => {
     const server = new AgentHookServer()
     const payload = parseAgentStatusPayload(

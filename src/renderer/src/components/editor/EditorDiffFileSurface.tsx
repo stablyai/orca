@@ -4,6 +4,7 @@ import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import { getDiffContentSignature } from './diff-content-signature'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 
 type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
@@ -117,19 +118,25 @@ export function EditorDiffFileSurface({
           )}
         </div>
         <div className="min-h-0 flex-1">
-          <MarkdownPreview
-            key={viewStateScopeId}
+          <MarkdownPreviewSizeGate
+            previewTabId={activeFile.id}
             content={modifiedDiffContent}
-            filePath={activeFile.filePath}
-            sourceFileId={activeFile.id}
-            sourceWorktreeId={activeFile.worktreeId}
-            sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
-            scrollCacheKey={`${diffViewStateKey}:preview`}
-            showTableOfContents={showMarkdownTableOfContents}
-            onCloseTableOfContents={onCloseMarkdownTableOfContents}
-            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-            {...markdownDocuments.previewProps}
-          />
+            isDiff
+          >
+            <MarkdownPreview
+              key={viewStateScopeId}
+              content={modifiedDiffContent}
+              filePath={activeFile.filePath}
+              sourceFileId={activeFile.id}
+              sourceWorktreeId={activeFile.worktreeId}
+              sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
+              scrollCacheKey={`${diffViewStateKey}:preview`}
+              showTableOfContents={showMarkdownTableOfContents}
+              onCloseTableOfContents={onCloseMarkdownTableOfContents}
+              markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+              {...markdownDocuments.previewProps}
+            />
+          </MarkdownPreviewSizeGate>
         </div>
       </div>
     )

@@ -11,7 +11,6 @@ import {
 import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
 import { TerminalAttachCanceledError } from '../daemon-errors'
 import { DaemonProtocolError } from '../types'
-import { canUseBunPty, spawnBunPty } from './bun-pty-process'
 
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 
@@ -85,7 +84,7 @@ function preflightDaemonCwd(): void {
 }
 
 function preflightMacNodePtySpawnEnvironment(): void {
-  if (process.platform !== 'darwin' || canUseBunPty()) {
+  if (process.platform !== 'darwin') {
     return
   }
   let candidates: string[]
@@ -125,9 +124,7 @@ export async function preflightPtySpawn(args: {
   sessionId: string
   signal?: AbortSignal
 }): Promise<void> {
-  if (!canUseBunPty()) {
-    ensureNodePtySpawnHelperExecutable()
-  }
+  ensureNodePtySpawnHelperExecutable()
   preflightUnixPtySpawnEnvironment()
   try {
     if (process.platform === 'win32') {
@@ -163,7 +160,6 @@ export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: s
 }
 
 export async function runPtySpawnHealthProbe(): Promise<void> {
-  const requiresShellIdentity = process.platform === 'win32' && canUseBunPty()
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : resolveSafePtyDefaultCwd()
@@ -179,15 +175,15 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
         env[key] = value
       }
     }
-    proc = canUseBunPty()
-      ? spawnBunPty({ ...command, cols: 2, rows: 1, cwd, env })
-      : (await loadNodePty()).spawn(command.file, command.args, {
-          name: 'xterm-256color',
-          cols: 2,
-          rows: 1,
-          cwd,
-          env
-        })
+    proc = (await loadNodePty()).spawn(command.file, command.args, {
+      name: 'xterm-256color',
+      cols: 2,
+      rows: 1,
+      cwd,
+      env,
+      // Qualify the bundled ConPTY the daemon spawns with (native-pty-spawn.ts), not the OS one.
+      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
+    })
   } catch (err) {
     throw formatPtySpawnError(err, command.file, cwd)
   }
@@ -202,7 +198,9 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
       settled = true
       clearTimeout(timer)
       exitDisposable?.dispose()
-      if (opts?.kill) {
+      // Windows keeps the conout worker thread and pseudoconsole until kill(), even after the
+      // shell exits; left alive, they hold the probing process open.
+      if (opts?.kill || process.platform === 'win32') {
         try {
           proc.kill()
         } catch {
@@ -222,18 +220,7 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
     }, PTY_SPAWN_HEALTH_TIMEOUT_MS)
     exitDisposable = proc.onExit(({ exitCode }) => {
       if (exitCode === 0) {
-        const shellPid = 'shellProcessId' in proc ? proc.shellProcessId : undefined
-        if (
-          requiresShellIdentity &&
-          (typeof shellPid !== 'number' ||
-            !Number.isSafeInteger(shellPid) ||
-            shellPid <= 0 ||
-            shellPid === proc.pid)
-        ) {
-          finish(new Error('PTY spawn health check could not identify the Windows shell'))
-        } else {
-          finish()
-        }
+        finish()
       } else {
         finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
       }
@@ -242,12 +229,10 @@ export async function runPtySpawnHealthProbe(): Promise<void> {
 }
 
 export function preflightPtySpawnHealth(): boolean {
-  if (process.platform === 'win32' && !canUseBunPty()) {
+  if (process.platform === 'win32') {
     return false
   }
-  if (!canUseBunPty()) {
-    ensureNodePtySpawnHelperExecutable()
-  }
+  ensureNodePtySpawnHelperExecutable()
   preflightUnixPtySpawnEnvironment()
   return true
 }

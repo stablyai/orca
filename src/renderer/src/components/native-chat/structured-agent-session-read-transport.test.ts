@@ -9,12 +9,17 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session-wire'
 
-const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
+const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), watchHostContact: vi.fn() }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
+vi.mock('@/runtime/runtime-host-contact-regained', () => ({
+  subscribeRuntimeHostContactRegained: mocks.watchHostContact
+}))
+
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 
 type SubscribeAttempt = {
@@ -311,6 +316,130 @@ describe('structured agent-session read transport unattached refusals', () => {
     }
   })
 
+  it('hands the pane the refusal a read met, and stops reconnecting only past damage', async () => {
+    vi.useFakeTimers()
+    try {
+      const journalRefusal = (reason: string) => ({
+        code: 'runtime_error',
+        message: 'agent_session_journal_unreadable',
+        data: { refusal: { code: 'agent_session_journal_unreadable', details: { reason } } }
+      })
+      const applyError = vi.fn()
+      const transport = startWithHydration(async () => undefined, applyError)
+      await flushPromises()
+      expect(attempts).toHaveLength(1)
+
+      // An open that can clear keeps reconnecting.
+      attempts[0].onError(journalRefusal('journalUnavailable'))
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
+        code: 'agent_session_journal_unreadable',
+        details: { reason: 'journalUnavailable' }
+      })
+      await vi.advanceTimersByTimeAsync(750)
+      expect(attempts).toHaveLength(2)
+
+      // Damage no retry reads past: decided from the reason, not the message, which is the same.
+      attempts[1].onError(journalRefusal('journalCorrupt'))
+      attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
+      await flushPromises()
+      expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
+        code: 'agent_session_journal_unreadable',
+        details: { reason: 'journalCorrupt' }
+      })
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(attempts).toHaveLength(2)
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reads a thrown hydrate refusal the same way, and a new run reads again', async () => {
+    vi.useFakeTimers()
+    try {
+      const corrupt = Object.assign(new Error('agent_session_journal_unreadable'), {
+        response: {
+          error: {
+            code: 'runtime_error',
+            message: 'agent_session_journal_unreadable',
+            data: {
+              refusal: {
+                code: 'agent_session_journal_unreadable',
+                details: { reason: 'journalCorrupt' }
+              }
+            }
+          }
+        }
+      })
+      const hydrate = vi.fn(async () => {
+        throw corrupt
+      })
+      const first = startWithHydration(hydrate, vi.fn())
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(attempts).toHaveLength(0)
+      first.dispose()
+
+      // Reopening the chat is a new run, which reads again.
+      const second = startWithHydration(hydrate, vi.fn())
+      await flushPromises()
+      expect(hydrate).toHaveBeenCalledTimes(2)
+      second.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // As `mapRuntimeError` sends a thrown refusal (pinned in `rpc/errors.test.ts`): its message is the
+  // bare code, and its reason rides in data.
+  function thrownRefusal(details: Record<string, unknown>) {
+    return {
+      code: 'runtime_error',
+      message: 'agent_session_journal_unreadable',
+      data: { refusal: { code: 'agent_session_journal_unreadable', details } }
+    }
+  }
+  const JOURNAL_CORRUPT = {
+    code: 'agent_session_journal_unreadable',
+    details: { reason: 'journalCorrupt' }
+  }
+
+  it("hands the pane a thrown refusal's reason from the stream and a rejected read", async () => {
+    vi.useFakeTimers()
+    try {
+      const applyError = vi.fn()
+      const streamed = startWithHydration(async () => undefined, applyError)
+      await flushPromises()
+      attempts[0].onError(thrownRefusal(JOURNAL_CORRUPT.details))
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      expect(applyError).toHaveBeenCalledExactlyOnceWith(
+        'agent_session_journal_unreadable',
+        JOURNAL_CORRUPT
+      )
+      streamed.dispose()
+
+      const rejectedError = vi.fn()
+      const refused = new RuntimeRpcCallError({
+        id: 'req-1',
+        ok: false,
+        error: thrownRefusal(JOURNAL_CORRUPT.details)
+      })
+      const rejected = startWithHydration(async () => {
+        throw refused
+      }, rejectedError)
+      await flushPromises()
+      expect(rejectedError).toHaveBeenCalledExactlyOnceWith(
+        'agent_session_journal_unreadable',
+        JOURNAL_CORRUPT
+      )
+      rejected.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('re-opens after a failed open and leaves the error once the conversation reads (P2-04)', async () => {
     vi.useFakeTimers()
     try {
@@ -318,7 +447,7 @@ describe('structured agent-session read transport unattached refusals', () => {
       const applyEvent = vi.fn()
       const transport = startWithHydration(async () => undefined, applyError, applyEvent)
       await flushPromises()
-      attempts[0].onError({ code: 'agent_session_journal_unreadable', message: 'disk full' })
+      attempts[0].onError({ code: 'runtime_error', message: 'disk full' })
       attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
       await flushPromises()
       expect(applyError).toHaveBeenCalledExactlyOnceWith('disk full')
@@ -355,5 +484,129 @@ describe('structured agent-session read transport unattached refusals', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('waits twice as long after each failed open, up to 30 s, and starts over once a read lands', async () => {
+    vi.useFakeTimers()
+    try {
+      const unavailable = {
+        code: 'runtime_error',
+        message: 'agent_session_journal_unreadable',
+        data: {
+          refusal: {
+            code: 'agent_session_journal_unreadable',
+            details: { reason: 'journalUnavailable' }
+          }
+        }
+      }
+      const transport = startWithHydration(async () => undefined, vi.fn())
+      await flushPromises()
+      // As a local subscribe does: the open resolves, then the host's refusal arrives.
+      const refuseLatest = async (): Promise<void> => {
+        const attempt = attempts.at(-1)!
+        attempt.closed.resolve({ unsubscribe: attempt.unsubscribe })
+        await flushPromises()
+        attempt.onError(unavailable)
+      }
+      const expectReopenAfter = async (delay: number): Promise<void> => {
+        const opened = attempts.length
+        await vi.advanceTimersByTimeAsync(delay - 1)
+        expect(attempts).toHaveLength(opened)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(attempts).toHaveLength(opened + 1)
+      }
+
+      for (const delay of [750, 1_500, 3_000, 6_000, 12_000, 24_000, 30_000, 30_000]) {
+        await refuseLatest()
+        await expectReopenAfter(delay)
+      }
+
+      // A read that delivers is the success the next failure starts over from.
+      attempts.at(-1)!.closed.resolve({ unsubscribe: attempts.at(-1)!.unsubscribe })
+      await flushPromises()
+      attempts.at(-1)!.onEvent(snapshot(1))
+      attempts.at(-1)!.onError(unavailable)
+      await expectReopenAfter(750)
+      await refuseLatest()
+      await expectReopenAfter(1_500)
+
+      // Damage still ends reconnecting, however far the wait has grown.
+      const latest = attempts.at(-1)!
+      latest.closed.resolve({ unsubscribe: latest.unsubscribe })
+      await flushPromises()
+      latest.onError({
+        ...unavailable,
+        data: {
+          refusal: {
+            code: 'agent_session_journal_unreadable',
+            details: { reason: 'journalCorrupt' }
+          }
+        }
+      })
+      const opened = attempts.length
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(attempts).toHaveLength(opened)
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reads again as soon as a remote host is reachable, not after the grown wait', async () => {
+    vi.useFakeTimers()
+    try {
+      let hostContactRegained = (): void => {}
+      const stopWatch = vi.fn()
+      mocks.watchHostContact.mockImplementation((_environmentId, listener: () => void) => {
+        hostContactRegained = listener
+        return stopWatch
+      })
+      const unavailable = { code: 'runtime_unavailable', message: 'Remote runtime is unavailable.' }
+      const transport = startStructuredAgentSessionReadTransport({
+        applyEvent: vi.fn(),
+        applyError: vi.fn(),
+        getCursor: () => null,
+        onHistoryReadInvalidated: () => undefined,
+        hydrate: async () => undefined,
+        sessionId: 'session-a',
+        target: { kind: 'environment', environmentId: 'env-a' }
+      })
+      expect(mocks.watchHostContact).toHaveBeenCalledWith('env-a', expect.any(Function))
+      await flushPromises()
+      const refuseLatest = async (): Promise<void> => {
+        const attempt = attempts.at(-1)!
+        attempt.closed.resolve({ unsubscribe: attempt.unsubscribe })
+        await flushPromises()
+        attempt.onError(unavailable)
+      }
+      // An outage long enough that the wait reaches its cap.
+      for (const delay of [750, 1_500, 3_000, 6_000, 12_000, 24_000]) {
+        await refuseLatest()
+        await vi.advanceTimersByTimeAsync(delay)
+      }
+      await refuseLatest()
+      const opened = attempts.length
+      await vi.advanceTimersByTimeAsync(29_000)
+      expect(attempts).toHaveLength(opened)
+
+      hostContactRegained()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(attempts).toHaveLength(opened + 1)
+
+      // The wait starts over too, so a failure right after reconnect is retried soon.
+      await refuseLatest()
+      await vi.advanceTimersByTimeAsync(750)
+      expect(attempts).toHaveLength(opened + 2)
+
+      transport.dispose()
+      expect(stopWatch).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not watch host contact for a local read', () => {
+    startWithHydration(async () => undefined, vi.fn()).dispose()
+    expect(mocks.watchHostContact).not.toHaveBeenCalled()
   })
 })

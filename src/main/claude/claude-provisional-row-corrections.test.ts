@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -38,6 +39,7 @@ function ledger(initial: Record<string, ClaudeSubagentLinkageVerdict> = {}) {
       : { kind: 'linked', linkage: { agentId: ref, providerParentRef: ref, producerKind: 'agent' } }
   }
   const corrections = new ClaudeProvisionalRowCorrections({
+    turnScope: () => AGENT_JOURNAL_THREAD_SCOPE,
     linkageFor: (ref) => verdicts.get(ref) ?? { kind: 'pending' },
     settledLinkageFor: (ref) => {
       const verdict = settledFor(ref)
@@ -71,9 +73,11 @@ function ledger(initial: Record<string, ClaudeSubagentLinkageVerdict> = {}) {
 }
 
 describe('ClaudeProvisionalRowCorrections', () => {
-  it("stamps the session's own rows with nothing and owes them nothing", () => {
+  it("stamps the session's own rows with no producer and owes them nothing", () => {
     const { corrections, rewrites } = ledger()
-    expect(corrections.stampFor(null)(identityOf('toolu_2'), RUNNING)).toEqual({})
+    expect(corrections.stampFor(null)(identityOf('toolu_2'), RUNNING)).toEqual({
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     expect(corrections.pending).toBe(0)
     corrections.retry()
     expect(rewrites).toEqual([])

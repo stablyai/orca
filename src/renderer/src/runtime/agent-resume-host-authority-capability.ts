@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY,
@@ -20,6 +21,7 @@ import {
 const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   // These shipped inside agent-session.host-authority.v1's enum, so the generic probe covers them.
   claude: undefined,
+  codebuddy: AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
   codex: undefined,
   qoder: AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
   gemini: undefined,

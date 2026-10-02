@@ -45,9 +45,10 @@ unverified because the available account has exhausted its credits. Hook event
 mapping for these paths follows the official documentation. The China executable
 `qoderclicn` is not registered; it was not available for verification.
 
-New Tab follows the existing manual-launch trust behavior: an untrusted folder
-can show Qoder's trust dialog. Automated workspace/draft launch paths run the
-trust preflight before prompt delivery.
+Every launch Orca starts (New Tab, workspace and draft launches, automations)
+pre-trusts the workspace at spawn while the agent-wide "Trust the folder when
+Orca starts an agent" setting is on. A hand-typed `qodercli` in a plain terminal
+can still show Qoder's trust dialog.
 
 ## Sources
 

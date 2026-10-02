@@ -1,6 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 
 const { restoreRead } = vi.hoisted(() => ({
   restoreRead: vi.fn()
@@ -11,11 +18,20 @@ vi.mock('./structured-agent-session-read-restore', () => ({
 }))
 
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+
+// The restore under test is mocked; the host database only fills the deps' shape.
+const stateDirectory = mkdtempSync(join(tmpdir(), 'orca-restart-restore-'))
+afterAll(() => {
+  closeTestJournalHostDatabases()
+  rmSync(stateDirectory, { recursive: true, force: true })
+})
 
 const NO_OPEN_DEPS = {
   store: { getRecord: () => null, listRecords: () => [] },
-  journalRoot: '/tmp/journals',
-  adapter: {}
+  journalDatabase: openTestJournalHostDatabase(stateDirectory),
+  adapter: {},
+  logger: recordingStructuredAgentSessionLogger().logger
 }
 
 describe('restart journal restoration', () => {
@@ -48,8 +64,8 @@ describe('restart journal restoration', () => {
     const restoration = restoreStructuredAgentSessionsOnRestart({
       openDeps: NO_OPEN_DEPS,
       records,
-      reconcile: async () => null,
-      resolveRecovery: async () => undefined,
+      reconcile: async () => true,
+      resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
       onReadable: () => undefined
@@ -62,6 +78,44 @@ describe('restart journal restoration', () => {
 
     expect(restoreRead).toHaveBeenCalledTimes(records.length)
     expect(peak).toBe(4)
+  })
+
+  it('lets the event loop run between chats', async () => {
+    // Counts turns of the event loop while the restore runs; each open below is synchronous.
+    let turns = 0
+    let ticking = true
+    const tick = (): void => {
+      turns += 1
+      if (ticking) {
+        setImmediate(tick)
+      }
+    }
+    setImmediate(tick)
+    const turnsSeen = new Set<number>()
+    restoreRead.mockImplementation(async () => {
+      turnsSeen.add(turns)
+      return null
+    })
+    const records = Array.from(
+      { length: 12 },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
+      (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
+    )
+
+    await restoreStructuredAgentSessionsOnRestart({
+      openDeps: NO_OPEN_DEPS,
+      records,
+      reconcile: async () => true,
+      resolveRecovery: async () => true,
+      serialize: async (_sessionId, task) => task(),
+      hasSession: () => false,
+      onReadable: () => undefined
+    })
+    ticking = false
+
+    expect(restoreRead).toHaveBeenCalledTimes(records.length)
+    // At most one chat per worker between two turns: never the whole restore in one task.
+    expect(turnsSeen.size).toBeGreaterThanOrEqual(records.length / 4)
   })
 
   it('settles what a gone generation left running after recovery resolution, before publishing', async () => {
@@ -98,9 +152,10 @@ describe('restart journal restoration', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
       records: [{ sessionId: 'session-1' } as AgentSessionRecord],
       openDeps: NO_OPEN_DEPS,
-      reconcile: async () => null,
+      reconcile: async () => true,
       resolveRecovery: async () => {
         calls.push('resolveRecovery')
+        return true
       },
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
@@ -110,6 +165,58 @@ describe('restart journal restoration', () => {
     })
 
     expect(calls).toEqual(['resolveRecovery', 'open', 'onReadable:restored'])
+  })
+
+  // Each failed bookkeeping call stands for one refused store write.
+  describe('once lease bookkeeping fails in a pass', () => {
+    const records = Array.from(
+      { length: 8 },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
+      (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
+    )
+    const restore = (
+      bookkeeping: Pick<
+        Parameters<typeof restoreStructuredAgentSessionsOnRestart>[0],
+        'reconcile' | 'resolveRecovery'
+      >
+    ) =>
+      restoreStructuredAgentSessionsOnRestart({
+        openDeps: NO_OPEN_DEPS,
+        records,
+        ...bookkeeping,
+        serialize: async (_sessionId, task) => task(),
+        hasSession: () => false,
+        onReadable: () => undefined
+      })
+
+    /** A failure that takes a while, as a lock wait does, so the chats open at once overlap it. */
+    const slowFailure = async (): Promise<boolean> => {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      return false
+    }
+
+    beforeEach(() => restoreRead.mockResolvedValue(null))
+
+    it('skips it for every chat when the pass check fails, and still opens them all', async () => {
+      const reconcile = vi.fn(slowFailure)
+      const resolveRecovery = vi.fn(async () => true)
+
+      await restore({ reconcile, resolveRecovery })
+
+      expect(reconcile).toHaveBeenCalledOnce()
+      expect(resolveRecovery).not.toHaveBeenCalled()
+      expect(restoreRead).toHaveBeenCalledTimes(records.length)
+    })
+
+    it('starts no more after the first failed recovery, and still opens every chat', async () => {
+      const resolveRecovery = vi.fn(slowFailure)
+
+      await restore({ reconcile: async () => true, resolveRecovery })
+
+      // Only those already started when the first failed: at most one per chat open at once.
+      expect(resolveRecovery.mock.calls.length).toBeLessThanOrEqual(4)
+      expect(restoreRead).toHaveBeenCalledTimes(records.length)
+    })
   })
 
   it('does not settle again when a second restore finds the session already open', async () => {
@@ -122,8 +229,8 @@ describe('restart journal restoration', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
       records: [{ sessionId: 'session-1' } as AgentSessionRecord],
       openDeps: NO_OPEN_DEPS,
-      reconcile: async () => null,
-      resolveRecovery: async () => undefined,
+      reconcile: async () => true,
+      resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => true,
       onReadable: () => undefined

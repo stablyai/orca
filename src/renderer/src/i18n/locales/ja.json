@@ -11,6 +11,12 @@
     "retrying": "再試行中…"
   },
   "settings": {
+    "terminal": {
+      "optionLayoutAlt": "ABCまたはU.S. — OptionはAlt/Escシーケンスを送信します",
+      "optionLayoutCompose": "この配列ではOptionで@、€、[、]などの文字を入力します",
+      "optionLayoutUnknown": "不明な配列 — Optionで文字を入力します（安全な既定値）",
+      "optionShortcutHint": "Optionショートカットには「両方」、アクセント付き文字や記号には「オフ」、用途を左右のOptionキーに分けるには「左」または「右」を選んでください。"
+    },
     "appearance": {
       "language": {
         "title": "言語",
@@ -497,6 +503,7 @@
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
+          "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode"
         },
         "skill": {
@@ -894,6 +901,23 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "テキストが大きすぎてコピーできません。"
+      },
+      "dropSkipReason": {
+        "missing": "元のパスにもう存在しません。",
+        "symlink": "シンボリックリンクは接続できません。",
+        "permissionDenied": "アクセスが拒否されました。",
+        "unsupported": "サポートされていないファイル形式です。"
+      },
+      "dropTempCopyFailure": {
+        "changed": "コピー中にファイルが変更されました。もう一度ドロップしてください。",
+        "outOfSpace": "ドロップされたファイルをコピーするためのディスク容量が足りません。",
+        "storageUnavailable": "ドロップされたファイル用の保存先を Orca で作成できませんでした。",
+        "storageNotPrivate": "ドロップされたファイル用の Orca の保存先が他のユーザーから読み取れる状態のため、何もコピーしませんでした。",
+        "timedOut": "コピーに時間がかかりすぎました。もう一度ドロップしてください。",
+        "busy": "コピー中のドロップが多すぎます。しばらく待ってから、もう一度お試しください。",
+        "tooLarge": "サイズが大きすぎてコピーできないため、Orca は Agent に渡せませんでした。",
+        "storageFull": "ドロップされたファイル用の Orca の保存先がいっぱいのため、Orca は Agent に渡せませんでした。",
+        "generic": "もう一度ドロップしてください。"
       }
     },
     "hooks": {
@@ -916,11 +940,7 @@
         "5f3d2c8a1b": "MR のベースブランチを特定できませんでした。",
         "dropPartiallyAttached": "{{count}} 個のアイテムのうち {{failureCount}} 個を接続できませんでした。",
         "dropPartiallyAttached_one": "{{count}} アイテムの {{failureCount}} を接続できませんでした。",
-        "dropPartiallyAttached_other": "{{count}} 個のアイテムのうち {{failureCount}} 個を接続できませんでした。",
-        "attachSkipMissing": "もう本来の道には存在しません。",
-        "attachSkipSymlink": "シンボリックリンクは貼れません。",
-        "attachSkipPermissionDenied": "許可が拒否されました。",
-        "attachSkipUnsupported": "サポートされていないファイル形式です。"
+        "dropPartiallyAttached_other": "{{count}} 個のアイテムのうち {{failureCount}} 個を接続できませんでした。"
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "ドロップされたファイルのアップロードに失敗しました。",
@@ -932,7 +952,10 @@
         "nativeDropPathsTooLarge": "ドロップされたパス一覧が大きすぎます。",
         "ownerChanged": "このワークスペースを所有するホストを確認できませんでした。再接続してから、もう一度お試しください。",
         "nativeDropUnresolvedPathsDescription": "まずそれらをディスクに保存してから、保存したファイルをドロップします。",
-        "nativeDropUnresolvedPaths": "Orca はドロップされたファイルのパスを読み取ることができませんでした。"
+        "nativeDropUnresolvedPaths": "Orca はドロップされたファイルのパスを読み取ることができませんでした。",
+        "nativeDropTempCopyFailed": "ドロップされた {{count}} 個のファイルを Orca でコピーできませんでした。",
+        "nativeDropTempCopyFailed_one": "ドロップされた {{count}} 個のファイルを Orca でコピーできませんでした。",
+        "nativeDropTempCopyFailed_other": "ドロップされた {{count}} 個のファイルを Orca でコピーできませんでした。"
       },
       "useIpcEvents": {
         "0e3cf53060": "ブラウザタブ {{value0}} が見つかりません",
@@ -1603,7 +1626,6 @@
         "reuseExistingBranchHint": "既存のブランチから新規ブランチを作成せず、そのブランチをチェックアウトします。",
         "createMultiple": "さらに作成",
         "waitForSetupBeforeAgent": "セットアップが完了するまで待ってから Agent を開始してください",
-        "waitForSetupBeforeAgentHelp": "セットアップによって、起動時に Agent に必要な依存関係、MCP サーバー、または構成ファイルがインストールされるときに、これをオンにします。",
         "destroyDisabled": "破壊は無効です",
         "destroyConfigured": "設定されたものを破棄する",
         "noDestroyConfigured": "破壊しない",
@@ -3034,6 +3056,7 @@
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "クリアスクリーン",
+            "resetTerminal": "ターミナルをリセット",
             "8c17d6786d": "ペインを閉じる",
             "copyTerminalId": "ターミナル ID をコピー",
             "2cf85a6a55": "ペインIDのコピー",
@@ -3970,7 +3993,12 @@
             "checkLabel": "確認が必要なチャット {{value0}} 件",
             "checkAriaOne": "再開後に確認が必要なチャット 1 件。詳細はクリックしてください。",
             "checkAria": "再開後に確認が必要なチャット {{value0}} 件。詳細はクリックしてください。",
-            "checkTooltip": "再起動後に Orca が再開できなかった、または再開を確認できなかったチャット。詳細はクリックしてください。"
+            "checkTooltip": "再起動後に Orca が再開できなかった、または再開を確認できなかったチャット。詳細はクリックしてください。",
+            "resumingLabelOne": "1 件のチャットを再開中",
+            "resumingLabel": "{{value0}} 件のチャットを再開中",
+            "resumingAriaOne": "1 件のチャットを再開中。詳細はクリックしてください。",
+            "resumingAria": "{{value0}} 件のチャットを再開中。詳細はクリックしてください。",
+            "resumingTooltip": "中断されたチャットを復元し、続行を依頼しています…"
           }
         }
       },
@@ -5358,6 +5386,7 @@
           "bdd23b4e07": "GitHub Issue",
           "44713a5d04": "Linear Issue",
           "jiraIssues": "Jira Issue",
+          "host": "ホスト",
           "cc17bd443b": "詳細",
           "0f9b959b31": "PR",
           "e029a2d775": "状態",
@@ -5925,13 +5954,11 @@
           }
         },
         "LinearAgentSkillSetupPrompt": {
-          "missingCliAndSkill": "Orca CLI と Linear Agent スキルがありません。",
           "modalTitle": "Linear チケットアクセスを有効にする",
           "modalDescription": "ターミナルから Linear スキルをインストールします。",
           "modalPrompt": "Agent が添付された Linear チケットを読み書きできるようにします。",
           "dontShowAgain": "今後表示しない",
           "missingBoth": "Orca CLI と Linear Agent スキルがありません。",
-          "missingCli": "Orca CLI がありません。",
           "missingSkill": "Linear Agent スキルがありません。",
           "title": "Linear Agent スキルを設定",
           "remoteCopy": "これはホスト側の設定をインストールします。リモート Agent 環境では別途設定が必要な場合があります。",
@@ -5943,7 +5970,6 @@
           "panelDescription": "リンクされた Linear タスクの引き継ぎ用にホスト Agent スキルをインストールします。",
           "terminalTitle": "Linear Agent スキルをインストール",
           "terminalAria": "Linear Agent スキルのインストールターミナル",
-          "install": "CLI とスキルをインストール",
           "successTitle": "Linear チケットアクセスの準備ができました",
           "successDescription": "Agent はこのワークスペースからリンクされた Linear チケットを読み取り、更新できるようになりました。",
           "successDescriptionWsl": "WSL Agent はこのワークスペースからリンクされた Linear チケットを使用できるようになりました。",
@@ -5952,11 +5978,7 @@
           "done": "完了",
           "wslCopy": "リンクされた Linear 作業からの WSL Agent 引き継ぎ用にインストールします。",
           "wslLabel": "WSL のデフォルト",
-          "toastMissingCliAndSkill": "Orca CLI と Linear スキルがありません",
-          "toastMissingCli": "Orca CLI がありません",
           "toastMissingSkill": "Linear スキルがありません",
-          "toastInstallCliAndSkillDescription": "Orca CLI と Linear スキルをインストールして、Agent が Linear タスクを読み書きできるようにします。",
-          "toastInstallCliDescription": "Orca CLI をインストールして、Agent が Linear タスクを読み書きできるようにします。",
           "toastInstallSkillDescription": "Linear スキルをインストールして、Agent が Orca CLI を通じて Linear タスクを読み書きできるようにします。",
           "toastRemoteDescription": "{{value0}} リモート Agent 環境では独自の設定が必要な場合があります。",
           "toastWslDescription": "{{value0}} この設定は選択した WSL Agent ランタイムで実行されます。"
@@ -6357,7 +6379,6 @@
           "SetupGuideModal": {
             "3598a3ca0c": "Orca を並行 Agent 作業に活用するためのコアワークフローを完了します。",
             "48a9e5ef2d": "はじめる",
-            "28cf59fcb4": "これにより、サイドバーからチェックリストが非表示になります",
             "f3b5ffb2a6": "サイドバーからチェックリストを非表示にする"
           },
           "SetupGuideProgressRing": {
@@ -6831,24 +6852,15 @@
           "af8c83ed61": "Chrome、Edge、またはその他のブラウザから Cookie をインポートすると、Agent がログインを再利用できるようになります。",
           "68ea76eb71": "Browser Use スキルをインストールすると、Agent が Orca のブラウザを操作できるようになります。",
           "2d6ead9ab2": "ブラウザ使用スキルをインストールする",
-          "e9f3f3b488": "設置場所",
-          "9fca1f7f5d": "Orca CLI コマンドを登録して、Agent がシェルからブラウザを調整できるようにします。",
-          "c6065d205d": "Orca CLI を有効化",
-          "c79eff0213": "Agent がブラウザを操作できるように Orca CLI を登録します。",
-          "702488a5f7": "コーディング Agent がログイン情報を使用してこのブラウザを操作できるようにします。以下の 3 つの手順を完了します。",
           "b8a1f2d84d": "Agent ブラウザの使用",
           "96b91c6349": "コーディング Agent がログイン情報を使用してこのブラウザを操作できるようにします。",
           "2ea4617e3a": "{{value1}}{{value2}} から {{value0}} Cookie をインポートしました。",
-          "721aee31b4": "Orca CLI を PATH に登録しました。",
-          "180a9abf3a": "CLI ステータスの読み込みに失敗しました。",
           "2ccfc9cff8": "インポート",
           "0462565413": "再インポート",
           "de9b2f32f3": "有効化",
-          "ad8cb0ee22": "PATH を修正",
-          "0289434ed6": "有効",
-          "8b3054dac7": "登録中…",
           "8f2675c2f3": "ファイルから {{value0}} 個の Cookie をインポートしました。",
-          "5301857d88": "{{value0}} から"
+          "5301857d88": "{{value0}} から",
+          "finishSteps": "コーディング Agent がログイン状態のままこのブラウザを操作できるようにします。以下の手順を完了してください。"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Agent が Orca のブラウザでページに移動して確認できるようにします。",
@@ -6869,7 +6881,6 @@
           "5dae812f50": "更新",
           "52e640f3a0": "CLI ステータスを更新する",
           "38edbb5721": "シェルコマンド",
-          "6930feda9e": "ターミナルから Orca を使用してアプリを開き、ワークツリーを管理し、Orca ターミナルと対話します。",
           "c5c0f2641d": "Orca CLI",
           "d77352f2df": "PATH から {{value0}} を削除できませんでした。",
           "af5540930c": "PATH から {{value0}} を削除しました。",
@@ -6893,7 +6904,8 @@
           "cbe55e4d48": "エクスプローラーで表示",
           "9fd4023db0": "ファイルマネージャーで表示",
           "installFailureUnknownReason": "Orca は CLI 登録を完了できず、理由を報告しませんでした。",
-          "installFailureConflictRemedy": "{{value0}} を削除して、不要になった場合は再度登録してください。"
+          "installFailureConflictRemedy": "{{value0}} を削除して、不要になった場合は再度登録してください。",
+          "outsideOrcaDescription": "Orca のターミナルでは `orca` がすでに使えます。Orca 以外のターミナルから `orca` を使うにはオンにしてください。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -7085,7 +7097,7 @@
             "shellEnvCopy": "Codex と Claude のチャットは、ターミナルと同じく、ログインシェルがエクスポートするすべての変数を引き継いで開始します。オフにすると、渡す変数を選択できます。",
             "shellEnvToggleLabel": "シェル環境の使用の切り替え",
             "structuredTitle": "更新された構造化ネイティブチャットを使用する",
-            "structuredCopy": "Codex と Claude 用のホスト所有の構造化チャットランタイムにオプトインします。 Off では、既存のターミナルを使用したチャットパスが維持されます。",
+            "structuredCopy": "新規の Codex および Claude の Agent を構造化チャットとして開きます。オフにすると、ターミナルを使用したチャットで開きます。既存のチャットはそのまま残ります。",
             "structuredScope": "今のところローカルセッションのみ。 WSL およびリモート実行ホスト (SSH を含む) は引き続きターミナルチャットを使用し、Orca がプロセスの開始時間を読み取ることができない限り、Windows はターミナルチャットにフォールバックします。",
             "structuredToggleLabel": "更新された構造化ネイティブチャットの切り替え",
             "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
@@ -7130,9 +7142,9 @@
           "80c454e8a6": "これをプロバイダーのキャッシュ TTL と一致させます。"
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "リッチエディターモードと Agent のハンドオフ 操作でローカルの markdown ノートコントロールを表示します。",
+          "f80603d293": "すべての markdown ビューで markdown ノートコントロールを表示し、Agent のハンドオフ 操作にそれらのノートを含めます。",
           "4edc104f0f": "Markdown レビューノート",
-          "5f02e6fb21": "リッチエディターモードでローカル markdown レビューノートコントロールを表示します。",
+          "5f02e6fb21": "markdown ファイルでローカル markdown レビューノートコントロールを表示します。",
           "51161d1647": "ファイルの編集時にミニマップの概要を表示します。",
           "6690b1ffb9": "ミニマップ",
           "5a1ea6eaa2": "隠れた",
@@ -7518,15 +7530,9 @@
           "c7f3fe0a6e": "よく使うエミュレータコマンド",
           "d94ca6a623": "Agent がモバイルエミュレータ制御を含む Orca CLI コマンドを使用できるようにします。",
           "67e19ee03c": "Orca CLI スキル",
-          "aaf62a3dd2": "設置場所",
-          "2fef055608": "Orca CLI コマンドを登録して、Agent がシェルからアクティブなエミュレータを制御できるようにします。",
-          "4f2205f3b6": "Orca CLI を有効化",
           "ff4b7e65d6": "コーディング Agent が Orca CLI コマンドを使用してアクティブなモバイルエミュレータを制御できるようにします。",
           "2a674aa810": "Agent モバイルエミュレータ制御",
-          "cdeaed9e37": "Orca CLI を PATH に登録しました。",
-          "3d34423e88": "Orca CLI を登録しています",
-          "3be27641c9": "Agent のシェルからエミュレータコマンドを実行できるようにします。",
-          "3941719a56": "スキル設定を開く前に Orca CLI を確認しています。"
+          "cdeaed9e37": "Orca CLI を PATH に登録しました。"
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "コピー",
@@ -7877,8 +7883,7 @@
           "81057d5f71": "保存中…",
           "da37d6f10e": "コピー",
           "3149964b66": "コピーしました",
-          "waitForSetupBeforeAgent": "セットアップが完了するまで待ってから Agent を開始してください",
-          "waitForSetupBeforeAgentHelp": "セットアップによって、起動時に Agent に必要な依存関係、MCP サーバー、または構成ファイルがインストールされるときに、これをオンにします。"
+          "waitForSetupBeforeAgent": "セットアップが完了するまで待ってから Agent を開始してください"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} リポジトリカラーを使用する",
@@ -8993,6 +8998,9 @@
             "0d1c334987": "蓋",
             "ff8de8a2ad": "ディスプレイ",
             "0d752916f8": "フック",
+            "agent-trust-trust": "信頼",
+            "agent-trust-folder": "フォルダー",
+            "agent-trust-worktree": "ワークツリー",
             "6984d4291a": "状態",
             "13b20636a6": "待機",
             "8599603496": "完了",
@@ -9355,16 +9363,7 @@
               "9d97446873": "Agent",
               "a2d489263e": "スキル",
               "a7e82445fa": "Browser Use スキルをインストールすると、Agent が Orca のブラウザを操作できるようになります。",
-              "a1414dcefb": "ブラウザ使用スキルをインストールする",
-              "e56c7b55c9": "セットアップ",
-              "034c5e8d7f": "有効化",
-              "7e0dcb257a": "シェル",
-              "3ffafc9b95": "コマンド",
-              "30c74aaa1f": "パス",
-              "ff05cbc344": "orca",
-              "85fab5e12c": "CLI",
-              "890ddf943d": "Agent がブラウザを操作できるように Orca CLI を登録します。",
-              "50f0860e18": "Orca CLI を有効化"
+              "a1414dcefb": "ブラウザ使用スキルをインストールする"
             }
           }
         },
@@ -9540,7 +9539,8 @@
               "openclaude": "オープンクロード",
               "omp": "ああ",
               "terminal": "ターミナル",
-              "agent": "Agent"
+              "agent": "Agent",
+              "queue": "キュー"
             },
             "agentDashboard": {
               "title": "Agent ダッシュボード",
@@ -10762,6 +10762,10 @@
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 状態フック",
           "a68a642835": "Orca で作業中、待機中、完了の状態を表示します。オフにすると Orca 管理のフックを削除し、再インストールを停止します。"
+        },
+        "agent-workspace-trust-copy": {
+          "title": "Orca が Agent を起動するときにフォルダーを信頼する",
+          "description": "Orca が起動した Agent は「Do you trust this folder?」の確認を省略するため、プロジェクトの Agent のフックと設定がすぐに実行されます。この設定がオフの場合、各 Agent はフォルダーで初めて実行されるときに確認します。オーケストレーションのワーカー、オートメーション、スマートフォンから起動した Agent など、あなたが見ていない間に動く Agent は、そのターミナルで応答するまでこの確認で待機します。すでに信頼済みのフォルダーは信頼されたままです。"
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "タブタイトルを自動生成",
@@ -13644,9 +13648,8 @@
           "1eee1c7bd8": "PATH 上に Agent が検出されませんでした。後でインストールするものを選択するか、空のターミナルを使用して続行します。",
           "hideAgents": "Agent を非表示にする",
           "showMoreAgents": "{{value0}} 件の Agent をさらに表示→",
-          "yoloPermissionsLabel": "Yolo / 危険: 権限チェックをスキップ",
-          "yoloPermissionsInfo": "Agent 権限情報",
-          "yoloPermissionsTooltip": "Agent の権限チェックをスキップして割り込みを減らす"
+          "yoloModeLabel": "Yolo モード",
+          "yoloPermissionsDescription": "Agent は確認なしでコマンドを実行しファイルを編集します。一部はサンドボックスも回避します。信頼できるプロジェクトでのみ使用してください。"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Enter キーを押してコマンドを実行し、要求されたら npx を確認します。これは、後で [設定] で設定することもできます。",
@@ -13681,7 +13684,6 @@
         "NotificationStep": {
           "3bede04483": "テスト通知を送信する",
           "dc897423e1": "通知音を選択する",
-          "53aaffe49a": "通知音",
           "0fe570690c": "デスクトップ通知が配信された後に Orca が再生するアラートを選択します。",
           "0af746e41f": "サウンドを選択",
           "8124d085a6": "Macの設定を開く",
@@ -14205,7 +14207,8 @@
             "3a59452a67": "スキルコマンドをコピーし、確認用に以下へ挿入しました。",
             "c605f51f2b": "機能セットアップの準備完了",
             "1aa657d8f4": "一部の機能の設定には注意が必要です",
-            "c89534cbe9": "CLIとスキルのインストール"
+            "allInstalled": "すべてのスキルがインストール済み",
+            "installSkills": "スキルをインストール"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例: ollama run llama3.1 {{value0}}",
@@ -14298,7 +14301,6 @@
             "1a6a7d6c80": "設定",
             "713cc529a5": "マイルストーン",
             "b1f1981c5e": "タスクを参照",
-            "0235b268b2": "まだ終わっていない",
             "13294d3405": "完了"
           },
           "FeatureWallSetupWorkflowActions": {
@@ -14409,13 +14411,13 @@
               "setup": {
                 "status": {
                   "8eccfcb314": "インストール済み",
-                  "21d4f79c93": "[CLI とスキルのインストール] をクリックして macOS アクセス設定を開きます",
                   "5c9293e51a": "アプリのアクセスを確認する",
-                  "aae94eeb52": "「CLI とスキルのインストール」をクリックします",
                   "aa8e143a2f": "インストールを確認できませんでした",
                   "9b33e7fb13": "インストールを確認しています",
-                  "4c8e1f92a7": "この Mac で Orca Desktop を開いてください",
-                  "6d2b0a84e1": "このビルドでは利用できません"
+                  "6d2b0a84e1": "このビルドでは利用できません",
+                  "needsMacAccess": "macOS のアクセス許可が必要",
+                  "notInstalled": "未インストール",
+                  "requiresOrcaDesktop": "Orca Desktop が必要"
                 }
               }
             }
@@ -14433,7 +14435,6 @@
                 "checklist": {
                   "localized": {
                     "copy": {
-                      "ec0a363633": "マルチタスク",
                       "62bac8f43c": "2 つの異なるワークツリーで同時に作業します。それぞれは (同じプロジェクト内であっても) 分離されています。 2 つの機能を同時に作業するのに最適です。",
                       "908898c3ee": "Orca のブラウザを使用する",
                       "43781563c3": "Orca を離れることなく Web アプリを閲覧できます。任意の要素を取得し、ワンクリックでその正確なソースとスタイルを Agent に送信します。",
@@ -14441,14 +14442,15 @@
                       "71bd9a8c95": "Agent が終了した瞬間、注意が必要な瞬間、またはブロックされた瞬間を把握します。",
                       "46db810da8": "デフォルトの Agent を選択してください",
                       "b8e5bae17f": "優先 Agent がすでに選択されているため、新規作業をより迅速に開始できます。",
-                      "fee5557b02": "Orca CLI を有効化",
-                      "7bcb4097fa": "Orca シェルコマンドを登録し、ブラウザ、コンピュータ、およびオーケストレーションワークフローの Agent スキルをインストールします。",
                       "ad342dd4c6": "接続連携",
                       "06fe30fdb0": "ワンクリックでタスクから Agent を開始し、PR ステータスを表示したままにします。",
                       "eddc532e58": "ワークスペースのセットアップを自動化する",
                       "56049b74c2": "インストールおよびセットアップのコマンドを自動的に実行することで、すべての新規ワークツリーが Agent に対応できるようになります。",
                       "2cf795433b": "複数のリポジトリで作業を開始する",
-                      "42525ba8a4": "キーリポジトリを Orca に取り込むと、フォルダーを探さずに Agent の作業を開始できます。"
+                      "42525ba8a4": "キーリポジトリを Orca に取り込むと、フォルダーを探さずに Agent の作業を開始できます。",
+                      "workOnTwoTasks": "2つのタスクを同時に進める",
+                      "agentSkillsName": "Agent に Orca スキルを追加",
+                      "agentSkillsDescription": "Agent が Orca のブラウザを操作し、コンピューターを制御し、複数ステップの作業を調整するためのスキルをインストールします。"
                     }
                   }
                 }
@@ -14561,8 +14563,7 @@
             "d6d15077df": "スキルコマンドをコピーし、確認用に以下へ挿入しました。",
             "78e65f19d9": "ブラウザのセットアップに失敗しました",
             "b7345c18db": "予期しないエラーが発生しました。",
-            "5f97caf76b": "インストール中…",
-            "c2df599513": "CLI とスキルをインストール"
+            "5f97caf76b": "インストール中…"
           },
           "ConnectIntegrationsList": {
             "3dddb2d565": "タスク用に接続済み",
@@ -14704,17 +14705,9 @@
                 "agent": {
                   "setup": {
                     "state": {
-                      "fdcca1ec75": "登録中…",
-                      "69fb2c2289": "有効",
-                      "c6705092ba": "PATH を修正",
-                      "7c1b6bdb1e": "有効化",
-                      "51074ccb05": "CLI ステータスの読み込みに失敗しました。",
                       "35dea1ae12": "Agent 制御の準備ができました。",
-                      "9dff3a6338": "スキルがインストールされています。Orca CLI を有効化してセットアップを完了してください。",
-                      "15986a1080": "Orca CLI の準備ができました。スキルをインストールしてセットアップを完了してください。",
-                      "4c26913def": "まだセットアップが完了していません。Agent 制御を有効にするには、両方のステップを完了してください。",
                       "c94ff11e91": "セットアップ状況を再確認できませんでした。",
-                      "2b519eed94": "Orca CLI を PATH に登録しました。"
+                      "skillNotInstalled": "Orca CLI スキルはまだインストールされていません。"
                     }
                   }
                 },
@@ -14732,23 +14725,18 @@
             "2fda9ff015": "Agent 制御をセットアップ",
             "0ac0fef514": "Agent 制御の準備ができました。",
             "2bdfff8763": "Agent 制御（オプション）。",
-            "72736b051f": "Agent にこのシミュレーターを操作させたい場合は、Orca CLI + スキルをセットアップしてください。",
             "d10ae98046": "完了",
             "3756cbeca7": "後で",
             "6d950431d2": "非表示",
             "ebceac65a4": "セットアップ",
-            "3f003507f4": "設定で完全なセットアップを開く"
+            "3f003507f4": "設定で完全なセットアップを開く",
+            "installSkillPrompt": "Agent にこのシミュレーターを操作させたいときは、Orca CLI スキルをインストールしてください。"
           },
           "MobileEmulatorAgentSetupGuideSteps": {
-            "9b49d892e3": "Orca CLI を有効化",
-            "3d8dc52c93": "Agent シェルでエミュレータ制御用の orca コマンドを登録します。",
             "21f5687c07": "Orca CLI スキル",
             "64fb057667": "このワークツリーの orca エミュレータコマンドを Agent に教えます。",
             "5c59ea96ca": "モバイルエミュレータ用 Orca CLI スキルのセットアップ",
-            "bff5341ac3": "モバイルエミュレータ用 Orca CLI スキルのインストール用ターミナル",
-            "3d34423e88": "Orca CLI を登録しています",
-            "3be27641c9": "Agent のシェルからエミュレータコマンドを実行できるようにします。",
-            "3941719a56": "スキル設定を開く前に Orca CLI を確認しています。"
+            "bff5341ac3": "モバイルエミュレータ用 Orca CLI スキルのインストール用ターミナル"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "閉じる",
@@ -15814,6 +15802,7 @@
             "4300f38145": "{{value0}}{{value1}} からダウンロードしています",
             "31375046b7": "{{value0}} からダウンロード",
             "acbe79fd01": "ページ要素の取得 ({{value0}})",
+            "cc4a071d3a": "ページ要素に注釈を付ける ({{value0}})",
             "572046436a": "リモートブラウザ",
             "b313a7275b": "リモートブラウザを開く",
             "5f66313863": "注釈",
@@ -16547,6 +16536,7 @@
             "done": "完了",
             "idle": "アイドル",
             "unverifiable": "最近の更新なし",
+            "unconfirmed": "確認できませんでした",
             "permission": "要対応"
           },
           "filtersSection": "フィルター",
@@ -17361,6 +17351,72 @@
       }
     },
     "native-chat": {
+      "contextMenu": {
+        "copyOrcaSessionId": "Orca セッション ID をコピー",
+        "orcaSessionIdCopied": "Orca セッション ID をコピーしました",
+        "orcaSessionIdCopyFailed": "Orca セッション ID をコピーできませんでした",
+        "orcaSessionIdTooltip": "このチャットに対する Orca の ID です。Agent CLI 独自のセッション ID とは別のものです。Agent は Orca を通じて互いを指すときにこれを使います。"
+      },
+      "failureWords": {
+        "theAgent": "Agent",
+        "providerStartFailed": "{{agent}} は起動が完了する前に停止しました。",
+        "runCommandAgain": "/{{command}} をもう一度実行してください。",
+        "sendToTryAgain": "もう一度試すには、メッセージを送信してください。",
+        "couldNotStart": "{{agent}} を起動できませんでした。",
+        "couldNotRestart": "{{agent}} を再起動できませんでした。",
+        "notSignedIn": "{{agent}} は選択したアカウントでサインインしていません。",
+        "signInFirst": "先にサインインしてください。",
+        "signInThenRunCommand": "サインインしてから、/{{command}} をもう一度実行してください。",
+        "signInThenSend": "サインインしてから、メッセージをもう一度送信してください。",
+        "historyTooLarge": "この会話の履歴は大きすぎるため、ここでは復元できません。",
+        "managedAccountEnvOverride": "この Claude の起動では独自の Anthropic サインイン変数が設定されています。管理対象の Claude アカウントを使用するには、それらを削除してください。",
+        "accountSwitchInProgress": "Claude アカウントの切り替え中です。完了してからもう一度お試しください。",
+        "managedAccountUnsupported": "WSL に Claude アカウントが追加されている間、Claude チャットには Windows の Claude アカウントが必要です。",
+        "chooseClaudeAccount": "Claude アカウントの設定で選択または追加してください。",
+        "chooseClaudeAccountThenRunCommand": "Claude アカウントの設定で選択または追加してから、/{{command}} をもう一度実行してください。",
+        "chooseClaudeAccountThenSend": "Claude アカウントの設定で選択または追加してから、メッセージをもう一度送信してください。",
+        "providerExitedRow": "この応答の途中で {{agent}} が停止しました。この会話で続けることができます。",
+        "providerExitedRejection": "このメッセージが送信される前に {{agent}} が停止しました。",
+        "providerRejected": "プロバイダーはこのメッセージを受け付けませんでした。",
+        "providerRejectedQuoted": "プロバイダーはこのメッセージを受け付けませんでした: {{detail}}。",
+        "attachmentEmpty": "このメッセージの画像が空のため、メッセージは送信されませんでした。",
+        "attachmentTooLarge": "このメッセージの画像が大きすぎるため、メッセージは送信されませんでした。",
+        "attachmentLargerThan": "このメッセージの画像が {{size}} MB を超えているため、メッセージは送信されませんでした。",
+        "attachmentTooMany": "このメッセージには画像が多すぎるため、送信されませんでした。",
+        "attachmentAtMost": "{{agent}} が 1 つのメッセージで受け付ける画像は最大 {{limit}} 枚のため、このメッセージは送信されませんでした。",
+        "attachmentTotalTooLarge": "このメッセージの画像の合計サイズが大きすぎるため、メッセージは送信されませんでした。",
+        "attachmentTotalMoreThan": "このメッセージの画像の合計が {{size}} MB を超えているため、メッセージは送信されませんでした。",
+        "attachmentUnsupportedType": "{{agent}} が受け付けるのは PNG、JPEG、GIF、WebP 画像のみのため、このメッセージは送信されませんでした。",
+        "attachmentNotAFile": "このメッセージの画像がファイルではないため、メッセージは送信されませんでした。",
+        "attachmentNoSource": "このメッセージの画像に送信するファイルがないため、メッセージは送信されませんでした。",
+        "attachmentInvalid": "このメッセージの添付ファイルは Agent に送信できません。",
+        "attachmentUnreadable": "このメッセージの添付ファイルを読み取れなかったため、メッセージは送信されませんでした。",
+        "emptyMessage": "このメッセージは空のため、送信されませんでした。",
+        "queueFull": "Agent を待っているメッセージが多すぎたため、このメッセージは送信されませんでした。",
+        "writeFailed": "Orca はこのメッセージを Agent に渡せなかったため、送信されませんでした。",
+        "cancelled": "このメッセージは Agent が処理を始める前に取り消されました。",
+        "chatClosed": "このメッセージが送信される前にチャットが閉じられました。",
+        "hostRestarted": "このメッセージが送信される前に Orca が再起動しました。",
+        "notDelivered": "このメッセージは配信されませんでした。",
+        "notDeliveredSendAgain": "このメッセージは配信されませんでした。続けるには、もう一度送信してください。",
+        "commandRefused": "このコマンドは実行されませんでした。",
+        "commandRefusedTryAgain": "このコマンドは実行されませんでした。もう一度お試しください。",
+        "compactionFailed": "圧縮に失敗しました。",
+        "compactionFailedQuoted": "圧縮に失敗しました: {{detail}}。",
+        "compactionUnconfirmed": "圧縮の完了は確認されていません。",
+        "cancelUnconfirmed": "キャンセルは確認されませんでした。",
+        "stopRefused": "{{agent}} は停止しませんでした。",
+        "stopRefusedQuoted": "{{agent}} は停止しませんでした: {{detail}}。",
+        "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
+        "answerUnconfirmed": "回答は記録されましたが、Agent は確認しませんでした。",
+        "hostFault": "Orca で問題が発生したため、この操作は完了しませんでした。",
+        "hostFaultTryAgain": "Orca で問題が発生したため、この操作は完了しませんでした。もう一度お試しください。",
+        "hostStopped": "{{agent}} の起動が完了しなかったため、Orca が停止しました。",
+        "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
+        "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
+        "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。",
+        "previousExitUnverifiable": "Orca は {{agent}} の前のプロセスが終了したことを確認できませんでした。Orca が終了を確認するまで、メッセージは送信を待機します。"
+      },
       "writeNotice": {
         "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",
         "notDoneSend": "メッセージは送信されませんでした。",
@@ -17379,6 +17435,8 @@
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
         "historyUnusable": "このチャットを読み込めません。",
         "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+        "savedByNewerOrca": "チャットは新しいバージョンの Orca で保存されました。",
+        "updateOrcaToKeepUsing": "引き続き使用するには、Orca を更新してください。",
         "unsupported": "このチャットを実行している Orca はこの操作に対応していません。Orca を更新してから、もう一度お試しください。",
         "unreachable": "Orca は Agent に接続できませんでした。",
         "recordFailed": "Orca はこのチャットの履歴に記録できませんでした。",
@@ -17427,6 +17485,7 @@
         "pastedImageLabel": "貼り付けた画像",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",
         "worktreeNotReady": "ワークツリーが準備できていません — しばらくしてから再試行してください。",
+        "pasteUnavailable": "貼り付けできません — このチャットは現在入力を受け付けていません。",
         "uploadingAttachments": "{{value0}}個のファイルをリモートにアップロード中…",
         "model": "モデル",
         "effort": "推論レベル",
@@ -17553,6 +17612,8 @@
         "thinking": "考え",
         "workingFor": "{{value0}} 処理中",
         "workedFor": "{{value0}} で完了",
+        "interruptedAfter": "{{value0}} 後に中断",
+        "failedAfter": "{{value0}} 後に失敗",
         "toggleDetails": "ターンの詳細を切り替えます"
       },
       "jumpToLatest": "最新にジャンプ",
@@ -17568,8 +17629,10 @@
         "error": {
           "title": "会話を読み込めませんでした",
           "subtitle": "トランスクリプトを読み取ることができませんでした。作業を続けるには、ターミナルに切り替えてください。",
-          "retryingSubtitle": "トランスクリプトを読み取ることができませんでした。Orca は読み込みを再試行し続けます。"
+          "retryingSubtitle": "トランスクリプトを読み取ることができませんでした。Orca は読み込みを再試行し続けます。",
+          "keepsTrying": "Orca は読み込みを再試行し続けます。"
         },
+        "reconnecting": "このチャットに再接続しています…",
         "pairHost": "ホストをペアリングして、Agent のチャット履歴を表示します。",
         "notAgent": {
           "title": "ここでは会話はありません",
@@ -17694,6 +17757,7 @@
       "railEmptyMessage": "メッセージ",
       "ask": {
         "awaiting": "ユーザー入力を待っています:",
+        "awaitingUnnamed": "ユーザー入力を待っています",
         "asked": "質問:",
         "questionCount": "{{value0}} の質問"
       },
@@ -17717,11 +17781,11 @@
         "startedN": "{{value0}} サブ Agent をキックオフしました",
         "ranOne": "1 人のサブ Agent を実行しました",
         "ranN": "{{value0}} サブ Agent を実行しました",
-        "tokens": "{{value0}} トークン"
+        "tokens": "{{value0}} トークン",
+        "unnamed": "サブ Agent"
       },
       "conversationCommand": {
-        "pendingWork": "このコマンドを使用する前に、保留中の作業とメッセージが完了するまで待ってください。",
-        "unconfirmed": "会話動作は確認できておりません。"
+        "pendingWork": "このコマンドを使用する前に、保留中の作業とメッセージが完了するまで待ってください。"
       },
       "drop": {
         "title": "ドロップしてこのチャットに添付します",
@@ -17753,6 +17817,32 @@
         "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
         "title": "コンテキスト",
         "estimated": "最後の応答から推定。"
+      },
+      "dismissDeliveryNotice": "閉じる",
+      "messageNotSent": "メッセージは送信されませんでした",
+      "deliveryUnconfirmed": "配信を確認できません — 再試行する前にチャットを確認してください",
+      "queuedMessages": {
+        "alreadySent": "このメッセージはすでに送信されています。",
+        "editAlreadySent": "すでに送信されています — テキストは入力欄に残っています。",
+        "listLabel": "キュー内のメッセージ",
+        "behindReturnedHold": "待機中 — 前のメッセージの対応が必要です",
+        "awaitingAnswerHold": "回答を待っています",
+        "steer": "今すぐ送信",
+        "send": "送信",
+        "steerHint": "モデルを中断せずに送信します",
+        "sendHint": "このメッセージを今すぐ送信します",
+        "delete": "削除",
+        "moreActions": "その他の操作",
+        "editMessage": "メッセージを編集",
+        "turnOffQueueing": "キューへの追加をオフにする",
+        "withdrawnHold": "送信前に停止されました",
+        "pausedSendFailed": "送信できませんでした。「送信」を押して再試行してください。",
+        "paused": "一時停止中",
+        "queuePausedStopped": "中断したため、キューを一時停止しました",
+        "queuePausedRestarted": "Orca が再起動したため、キューを一時停止しました",
+        "queuePausedCleared": "会話を消去したため、キューを一時停止しました",
+        "queuePaused": "キューは一時停止中です",
+        "resume": "再開"
       }
     },
     "tab": {
@@ -18007,6 +18097,12 @@
           "unknown": "不明なホスト",
           "candidateName": "{{value0}}、{{value1}}"
         }
+      },
+      "creation": {
+        "worktreeReadyToast": "ワークツリー {{name}} の準備ができました",
+        "workspaceReadyToast": "ワークスペース {{name}} の準備ができました",
+        "goToWorktree": "ワークツリーに移動",
+        "goToWorkspace": "ワークスペースに移動"
       }
     },
     "agentSessionContinuation": {
@@ -18080,7 +18176,15 @@
             "spaces": "スペース"
           }
         }
+      },
+      "nativeChat": {
+        "queueFollowUpsTitle": "フォローアップをキューに入れる",
+        "queueFollowUpsCopy": "Agent の作業中に送信したメッセージは、今すぐ送信・編集・削除できるカードとして待機します。画像付きのメッセージはすぐに送信されます。",
+        "queueFollowUpsToggleLabel": "フォローアップのキューを切り替え"
       }
+    },
+    "agentChildRow": {
+      "ended": "終了"
     }
   },
   "dashboardPopout": {
@@ -18326,6 +18430,11 @@
     },
     "fileLoad": {
       "hostUnresolved": "ホストはこのファイルのワークスペースを見つけることができませんでした。削除されたか、ホストがまだそれを認識していない可能性があります。再試行するか、タブストリップからこのタブを閉じてください。"
+    },
+    "markdownPreview": {
+      "tooLarge": "ファイルがプレビュー上限の {{limit}} を超えています。ソースを表示するにはファイルを開いてください。",
+      "tooLargeInDiff": "ファイルがプレビュー上限の {{limit}} を超えています。差分を表示するにはソースモードに切り替えてください。",
+      "renderAnyway": "それでも表示"
     }
   },
   "featureTips": {
@@ -18413,7 +18522,12 @@
     "genericDetail": "これは多くの場合、グラフィックスドライバーまたはインストールの問題です。リロードして再試行するか、Orca を終了して再起動してください。",
     "title": "Orca がロードに失敗し続ける",
     "stalledMessage": "クラッシュ後のリロード中にアプリウィンドウが応答を停止しました。",
-    "crashLoopMessage": "アプリウィンドウが繰り返しクラッシュし、自動的にリロードされなくなりました。"
+    "crashLoopMessage": "アプリウィンドウが繰り返しクラッシュし、自動的にリロードされなくなりました。",
+    "tryAgain": "再試行",
+    "launchFailedMessage": "Orca はウィンドウを描画するプロセスを起動できませんでした。",
+    "launchFailedDetail": "Orca は {{recoveryCount}} 回再試行しましたが、成功しませんでした。",
+    "processLimitDetail": "ユーザーアカウントのプロセス数が上限に達したため、システムが新しいプロセスの作成を拒否しました。暴走したターミナル、開発サーバー、Agent が原因であることがよくあります。いくつか終了してから「再試行」をクリックしてください。",
+    "launchFailedGenericDetail": "システムが起動を拒否しました。メモリを空けるか他のアプリを終了してから「再試行」をクリックしてください。繰り返し発生する場合は Orca を再インストールしてください。"
   },
   "sessionSearch": {
     "panel": {
@@ -18499,5 +18613,63 @@
   },
   "common": {
     "retry": "再試行"
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "エクスプローラーのルート",
+      "full": "リポジトリのルート",
+      "viewing": "表示中: {{path}}",
+      "back": "{{path}} に戻る",
+      "searchScope": "検索範囲: ワークスペースのファイル",
+      "retry": "再試行",
+      "omittedFiles": "スパースチェックアウトで除外されたファイルは検索されません。",
+      "viewOnly": "スパースチェックアウト · 表示を変えてもチェックアウト済みのファイルは変わりません。",
+      "sparseStatus": "スパースチェックアウト",
+      "scopeDetails": "スパースチェックアウトの範囲について",
+      "scopeExplanation": "フォルダーの選択で変わるのは表示範囲です。チェックアウトされるファイルは変わりません。リポジトリルートには、ルートと親フォルダーにチェックアウトされたファイルも表示されます。",
+      "searchExplanation": "「名前」は表示中のフォルダーを絞り込みます。「内容」はワークスペース全体を検索します。スパースチェックアウトで除外されたファイルは検索されません。",
+      "findInFolder": "{{path}} 内を検索",
+      "folderLoadError": "このフォルダーを読み込めませんでした：",
+      "emptyFolder": "このフォルダーにはファイルがありません"
+    }
+  },
+  "sparsePreset": {
+    "nameRequired": "名前を入力してください。",
+    "nameTooLong": "名前は80文字以内にしてください。",
+    "nameExists": "「{{name}}」というプリセットは既に存在します。",
+    "name": "名前",
+    "namePlaceholder": "Webアプリと共通UI",
+    "directories": "ディレクトリ",
+    "pathHelp": "リポジトリ相対のディレクトリを1行に1つ入力してください。パス内の空白は保持されます。",
+    "coneHelp": "Gitはリポジトリのルートと、選択したディレクトリの親フォルダにあるファイルも保持します。",
+    "cancel": "キャンセル",
+    "save": "プリセットを保存",
+    "new": "新しいスパースプリセット",
+    "edit": "スパースプリセットを編集",
+    "description": "新しいワークスペースでチェックアウトするフォルダを選択してください。",
+    "saveFailed": "プリセットを保存できませんでした。もう一度お試しください。",
+    "loading": "プリセットを読み込み中...",
+    "details": "チェックアウトされるファイルは？",
+    "finishEditing": "ワークスペースの作成を続けるには、プリセットを保存するかキャンセルしてください。",
+    "pathInstructions": "リポジトリルートからの相対パスで、1行に1フォルダーずつ入力します。",
+    "retryLoad": "プリセットの読み込みを再試行",
+    "fullCheckout": "フルチェックアウト",
+    "checkoutPreset": "チェックアウトのプリセット",
+    "search": "プリセットを検索…",
+    "noMatches": "一致するプリセットはありません。",
+    "allFiles": "リポジトリ内のすべてのファイル",
+    "editNamed": "{{name}} を編集",
+    "addPath": "Add a folder",
+    "findPath": "Find a folder…",
+    "noPathMatches": "No folders found.",
+    "repositoryRoot": "Repository root",
+    "loadingPaths": "Reading folders…",
+    "pathsUnavailable": "Could not read this folder. Type the path instead.",
+    "pathAdded": "Added",
+    "openFolder": "Open {{name}}",
+    "findOrTypePath": "Find a folder, or type any path…",
+    "addTypedPath": "Add",
+    "noDirectories": "No folders added yet.",
+    "removePath": "Remove {{name}}"
   }
 }

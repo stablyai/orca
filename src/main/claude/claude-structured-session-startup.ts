@@ -138,7 +138,7 @@ function applyClaudeStartupFacts(session: ClaudeSession, facts: ClaudeStartupFac
   session.fastModeState ??= published.fastModeState
   session.fastModeDisabledReason ??= published.fastModeDisabledReason
   session.options = prepared.options
-  session.capabilities = readClaudeCapabilities(init, initialization)
+  session.capabilities = readClaudeCapabilities(session.capabilities, initialization, init.message)
   // A catalog frame that streamed in after publish is newer than the initialize answer.
   if (session.commands.commands === undefined) {
     session.commands = new ClaudeSlashCommandCatalog(init.message, initialization)

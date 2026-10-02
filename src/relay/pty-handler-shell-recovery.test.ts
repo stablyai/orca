@@ -193,4 +193,17 @@ describe.each([
 
     expect(published()).toBe(`${DYING_COMMAND}${COMMAND_DONE}${PROMPT}`)
   })
+
+  it('grounds replay, not the live stream, on Reset Terminal after an unhooked crash', async () => {
+    // Armed with no command end: nothing the host barrier could ground at.
+    const unhookedCrash = '\x1b[>1u\x1b[?1000h'
+    await stream(unhookedCrash, PROMPT)
+
+    dispatcher.feed(requestFrame(4, 'pty.resetInputModes', { id: ptyId }))
+    await vi.advanceTimersByTimeAsync(50)
+
+    // The client grounds its own view; a zero-raw span would not cross the credit window.
+    expect(published()).toBe(`${unhookedCrash}${PROMPT}`)
+    expect(await replay()).toBe(`${unhookedCrash}${PROMPT}${PROCESS_BOUNDARY_GROUND}`)
+  })
 })

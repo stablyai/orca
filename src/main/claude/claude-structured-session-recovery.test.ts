@@ -9,10 +9,10 @@ import {
   adapterFor,
   fakeClaude,
   identityFor,
-  invokeCanUseTool,
   PROVIDER_SESSION_ID,
   tick
 } from './claude-structured-session-test-support'
+import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 
 describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
   it('shares concurrent close finalization and emits lifecycle once', async () => {

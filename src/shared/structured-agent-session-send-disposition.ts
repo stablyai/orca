@@ -15,7 +15,12 @@ import {
   agentSessionWriteNotDoneParts
 } from './agent-session-refusal-notice'
 import type { AgentSessionWriteNoticePart } from './agent-session-write-notice-copy'
-import { agentSessionRefusalFailure } from './agent-session-write-failure'
+import {
+  agentSessionRefusalFailure,
+  type AgentSessionWriteRefusal
+} from './agent-session-write-failure'
+import type { AgentSessionFailureFact } from './agent-session-failure'
+import type { AgentSessionFailureWordsContext } from './agent-session-failure-words'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import {
   classifyStructuredAgentSessionSendFailure,
@@ -29,17 +34,11 @@ export type StructuredAgentSessionSendDisposition = {
   entries: StructuredAgentSessionOutboxEntry[]
   /** Only for an outcome with no entry left to carry it; a kept entry holds its own failure. */
   error: string | null
-  /** The entry the queue is stuck on, or null when nothing blocks it. Always the
-   *  next value, never "unchanged": the caller assigns it verbatim. */
-  blockedClientMessageId: string | null
-  /** A rejected result arrived before the journal snapshot; Retry must rotate this id. */
-  retryWithFreshClientMessageId: string | null
 }
 
 type SendDispositionInput = {
   entries: readonly StructuredAgentSessionOutboxEntry[]
   entry: StructuredAgentSessionOutboxEntry
-  blockedClientMessageId: string | null
 }
 
 function replaceEntryState(
@@ -82,7 +81,7 @@ function dropEntry(input: SendDispositionInput): StructuredAgentSessionOutboxEnt
  */
 function refusedRedelivery(
   entry: StructuredAgentSessionOutboxEntry,
-  submission: AgentSessionSendResult['submission']
+  submission: AgentJournalSubmission
 ): boolean {
   return (
     entry.retryAfterUnknownSubmittedAt !== null &&
@@ -92,14 +91,16 @@ function refusedRedelivery(
 }
 
 /** Whether the journal already answers a send still in flight, so its own reply adds nothing: the
- *  host holds the message, or rejected it — a later `pending` reply must not undo that. */
+ *  host holds the message, rejected it, or handed it off as a queued draft — a later `pending`
+ *  reply must not undo that. */
 export function journalAnswersInFlightSend(
   submissions: readonly AgentJournalSubmission[],
   clientMessageId: string | null
 ): boolean {
   return submissions.some(
     (submission) =>
-      submission.clientMessageId === clientMessageId && submission.dispatchState !== 'unknown'
+      (submission.clientMessageId === clientMessageId && submission.dispatchState !== 'unknown') ||
+      (clientMessageId !== null && submission.queuedMessageId === clientMessageId)
   )
 }
 
@@ -129,8 +130,14 @@ export function structuredAgentSessionRejectionNotice(
 
 export function structuredAgentSessionRejectionParts(
   reason: string | null,
-  write: 'send' | 'composer-send'
+  write: 'send' | 'composer-send',
+  /** The host's typed fact, which decides when the row carried one. */
+  fact?: AgentSessionFailureFact,
+  context: AgentSessionFailureWordsContext = {}
 ): AgentSessionWriteNoticePart[] {
+  if (fact) {
+    return rejectionFactParts(write, fact, context)
+  }
   if (reason === null) {
     return ['notDoneSend']
   }
@@ -143,13 +150,67 @@ export function structuredAgentSessionRejectionParts(
   return rejection.kind ? agentSessionWriteNotDoneParts(write) : [{ text: reason }]
 }
 
+function rejectionFactParts(
+  write: 'send' | 'composer-send',
+  fact: AgentSessionFailureFact,
+  context: AgentSessionFailureWordsContext
+): AgentSessionWriteNoticePart[] {
+  const { kind } = classifyDispatchRejection({ reason: null, rejection: fact })
+  if (kind === 'writeFailed') {
+    return ['unreachable', ...agentSessionWriteNotDoneParts(write)]
+  }
+  // A fact this build cannot place proves only that the message did not happen.
+  return kind
+    ? [{ failure: { ...fact, kind }, surface: 'rejection', context }]
+    : agentSessionWriteNotDoneParts(write)
+}
+
+/** Kinds whose words need what the message's copy drops: the provider's detail, or the refusal. */
+const WORDED_FROM_WHOLE_FACT: ReadonlySet<AgentSessionFailureFact['kind']> = new Set<
+  AgentSessionFailureFact['kind']
+>(['providerRejected', 'startFailed', 'restartFailed'])
+
 /** What the Retry row says about why its message did not go through. */
 export function structuredAgentSessionAttemptFailureParts(
-  failure: StructuredAgentSessionAttemptFailure
+  failure: StructuredAgentSessionAttemptFailure,
+  context: AgentSessionFailureWordsContext = {},
+  /** The journal's whole fact for a recorded rejection, when its submission is loaded: the
+   *  message's own copy keeps only its kind and attachment. */
+  recorded?: AgentSessionFailureFact
 ): AgentSessionWriteNoticePart[] {
-  return failure.kind === 'rejected'
-    ? structuredAgentSessionRejectionParts(failure.reason, 'send')
-    : agentSessionWriteNoticeParts(failure, 'send')
+  if (failure.kind !== 'rejected') {
+    return agentSessionWriteNoticeParts(failure, 'send', context)
+  }
+  const fact = recorded ?? failure.rejection
+  // Without the journal's fact, the host's sentence still holds what the copy dropped.
+  if (!recorded && fact && WORDED_FROM_WHOLE_FACT.has(fact.kind) && failure.reason !== null) {
+    return [{ text: failure.reason }]
+  }
+  return structuredAgentSessionRejectionParts(failure.reason, 'send', fact, context)
+}
+
+/** A send the host refused, whether it returned the refusal or threw it. */
+export function disposeStructuredAgentSessionSendRefusal(
+  input: SendDispositionInput & {
+    refusal: AgentSessionWriteRefusal
+    createOperationId: () => string
+  }
+): StructuredAgentSessionSendDisposition {
+  // The refusal saved on a message it keeps `queued` is what holds it for the user's Retry.
+  const entries: StructuredAgentSessionOutboxEntry[] = input.entries.map((candidate) =>
+    candidate.clientMessageId === input.entry.clientMessageId
+      ? withLastFailure(
+          requeueStructuredAgentSessionSendRefusal(
+            candidate,
+            input.refusal,
+            input.createOperationId,
+            input.entry.lastAttemptAt !== null
+          ),
+          input.refusal
+        )
+      : candidate
+  )
+  return { entries, error: null }
 }
 
 export function disposeStructuredAgentSessionSendResult(
@@ -160,52 +221,39 @@ export function disposeStructuredAgentSessionSendResult(
 ): StructuredAgentSessionSendDisposition {
   const result = input.result
   if (!result.ok) {
-    const refusedIndex = input.entries.findIndex(
-      (candidate) => candidate.clientMessageId === input.entry.clientMessageId
-    )
-    const refusal = agentSessionRefusalFailure(result.refusal)
-    const entries = input.entries.map((candidate) =>
-      candidate.clientMessageId === input.entry.clientMessageId
-        ? withLastFailure(
-            requeueStructuredAgentSessionSendRefusal(
-              candidate,
-              refusal,
-              input.createOperationId,
-              input.entry.lastAttemptAt !== null
-            ),
-            refusal
-          )
-        : candidate
-    )
-    const refused = entries[refusedIndex]
+    return disposeStructuredAgentSessionSendRefusal({
+      ...input,
+      refusal: agentSessionRefusalFailure(result.refusal)
+    })
+  }
+  if ('queued' in result.value) {
+    // The host holds the draft (or already settled it, on a replay). Either way
+    // the send is spent and the queue owns it now: the outbox entry retires,
+    // and the draft card — not this queue — carries any later refusal.
     return {
-      entries,
-      error: null,
-      // Read back by index rather than from the input: a refusal can rotate the id, and the
-      // refused entry is not always the head now that an admitted one no longer holds the queue.
-      // A rejected one holds nothing: it can no longer land, and it keeps its own Retry.
-      blockedClientMessageId:
-        !refused || refused.state === 'rejected'
-          ? input.blockedClientMessageId
-          : refused.clientMessageId,
-      retryWithFreshClientMessageId: null
+      entries: dropEntry(input),
+      error: null
     }
   }
   const submission = result.value.submission
+  // A replay of a send the host queued and then handed off answers with that hand-off, under its
+  // own id: the host owns the message, and the entry leaves as the reconcile drops it.
+  if (submission.queuedMessageId === input.entry.clientMessageId) {
+    return {
+      entries: dropEntry(input),
+      error: null
+    }
+  }
   if (refusedRedelivery(input.entry, submission)) {
     return {
       entries: dropEntry(input),
-      error: 'Message delivery is unconfirmed and Orca will not send it again',
-      blockedClientMessageId: input.blockedClientMessageId,
-      retryWithFreshClientMessageId: null
+      error: 'Message delivery is unconfirmed and Orca will not send it again'
     }
   }
   if (submission.dispatchState === 'accepted') {
     return {
       entries: dropEntry(input),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId,
-      retryWithFreshClientMessageId: null
+      error: null
     }
   }
   // A Stop's withdrawal failed nothing, first reply or replay: the entry leaves as the reconcile
@@ -216,9 +264,7 @@ export function disposeStructuredAgentSessionSendResult(
   ) {
     return {
       entries: dropEntry(input),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId,
-      retryWithFreshClientMessageId: null
+      error: null
     }
   }
   if (submission.dispatchState === 'rejected') {
@@ -228,9 +274,7 @@ export function disposeStructuredAgentSessionSendResult(
         'rejected',
         structuredAgentSessionRejectedFailure(submission)
       ),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId,
-      retryWithFreshClientMessageId: input.entry.clientMessageId
+      error: null
     }
   }
   if (submission.dispatchState === 'unknown' && submission.recovered) {
@@ -240,9 +284,7 @@ export function disposeStructuredAgentSessionSendResult(
           ? { ...candidate, state: 'unconfirmed', retryAfterUnknownSubmittedAt: -1 }
           : candidate
       ),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId,
-      retryWithFreshClientMessageId: null
+      error: null
     }
   }
   // `pending` is the host saying the message was written and is awaiting the
@@ -256,9 +298,7 @@ export function disposeStructuredAgentSessionSendResult(
       input,
       submission.dispatchState === 'unknown' ? 'unconfirmed' : 'dispatching'
     ),
-    error: null,
-    blockedClientMessageId: input.blockedClientMessageId,
-    retryWithFreshClientMessageId: null
+    error: null
   }
 }
 
@@ -271,14 +311,11 @@ export function disposeStructuredAgentSessionSendFailure(
   const failure = classifyStructuredAgentSessionSendFailure(input.cause, input.isDeliveryUnknown)
   const deliveryUnknown = failure === 'delivery-unknown'
   return {
-    // An unconfirmed entry's Retry row already says delivery is unconfirmed.
+    // An unconfirmed entry's Retry row already says delivery is unconfirmed; the saved failure
+    // holds the other for its Retry.
     entries: deliveryUnknown
       ? replaceEntryState(input, 'unconfirmed')
       : replaceEntryState(input, 'queued', { kind: 'failed' }),
-    error: null,
-    blockedClientMessageId: deliveryUnknown
-      ? input.blockedClientMessageId
-      : input.entry.clientMessageId,
-    retryWithFreshClientMessageId: null
+    error: null
   }
 }

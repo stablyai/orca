@@ -42,7 +42,6 @@ function settle(delivered: 'accepted' | undefined) {
     structuredSession: { host, identity: { sessionId: 's1' } },
     terminalHandle: 'structured_worker_1',
     coordinatorHandle: 'term_c',
-    dispatchCapability: 'capability',
     devMode: undefined,
     requestId: 'r1',
     agent: 'claude',

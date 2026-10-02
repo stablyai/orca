@@ -22,6 +22,7 @@ import {
   ANTIGRAVITY_PRE_TOOL_USE_DECISION,
   type AntigravityEvent
 } from './hook-events'
+import { quotePosixShellString } from '../agent-hooks/posix-hook-command'
 import { getManagedScript, getWindowsWrapperScript } from './hook-script'
 import {
   buildInstalledConfig,
@@ -51,12 +52,14 @@ function getWindowsWrapperScriptPath(event: AntigravityEvent): string {
 }
 
 function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): string {
-  return wrapPosixHookCommand(
+  const command = wrapPosixHookCommand(
     scriptPath,
     { ORCA_ANTIGRAVITY_EVENT: event.eventName },
     // Why: a missing managed script must not brick tools; the guard answers PreToolUse itself instead of staying silent.
     event.eventName === 'PreToolUse' ? { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION } : {}
   )
+  // ACP hosts tokenize the command into argv; the shell must be the executable, not `if`.
+  return `/bin/sh -c ${quotePosixShellString(command)}`
 }
 
 function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {

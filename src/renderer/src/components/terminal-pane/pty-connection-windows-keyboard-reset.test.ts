@@ -182,7 +182,7 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('resets stale keyboard state when a native Windows agent becomes idle', async () => {
+  it('keeps kitty keyboard state when a native Windows agent becomes idle', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -206,7 +206,12 @@ describe('connectPanePty', () => {
 
       idleHandler('* Codex done')
 
+      // Why: a finished turn is not a dead app; its kitty flags stay until the host sees it exit.
       expect(pane.terminal.write).toHaveBeenCalledWith(
+        RESET_TERMINAL_CURSOR_STYLE,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
       )
@@ -318,7 +323,7 @@ describe('connectPanePty', () => {
     }
   )
 
-  it('resets stale keyboard state when native Windows hook status reaches done', async () => {
+  it('resets cursor style when native Windows hook status reaches done', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -359,7 +364,7 @@ describe('connectPanePty', () => {
       notifyStoreSubscribers()
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        RESET_TERMINAL_CURSOR_STYLE,
         expect.any(Function)
       )
     } finally {
@@ -367,7 +372,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('resets stale keyboard state when a batched done→working→done burst lands as one publication', async () => {
+  it('resets cursor style when a batched done→working→done burst lands as one publication', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -413,7 +418,7 @@ describe('connectPanePty', () => {
       notifyStoreSubscribers()
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        RESET_TERMINAL_CURSOR_STYLE,
         expect.any(Function)
       )
     } finally {
@@ -421,7 +426,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('resets stale keyboard state when a batched burst ends on working after a completed turn', async () => {
+  it('resets cursor style when a batched burst ends on working after a completed turn', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -464,7 +469,7 @@ describe('connectPanePty', () => {
       notifyStoreSubscribers()
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        RESET_TERMINAL_CURSOR_STYLE,
         expect.any(Function)
       )
     } finally {
@@ -472,7 +477,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('keeps native Windows same-turn done repaints from re-resetting keyboard state', async () => {
+  it('keeps native Windows same-turn done repaints from re-resetting cursor style', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )

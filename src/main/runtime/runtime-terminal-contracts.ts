@@ -62,6 +62,9 @@ export type TerminalCreateOptions = {
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
+  /** The surface that asked for this `startupAgent` launch; the runtime attributes every one it
+   *  builds, as `unknown` when this is absent or unrecognized. Ignored without `startupAgent`. */
+  launchSource?: string
   title?: string
   focus?: boolean
   rendererBacked?: boolean
@@ -129,6 +132,9 @@ export type RuntimeTerminalAgentStatusEvent = {
    *  reader can rejoin it to the terminal after the pane key moved. */
   terminalHandle?: string
   payload: ParsedAgentStatusPayload
+  /** Set by the process-lifetime producer; see AgentHookServer.ingestTerminalStatus. */
+  origin?: 'process'
+  yieldsToHookSince?: number
 }
 
 export type HookLiveAgentRow = Pick<

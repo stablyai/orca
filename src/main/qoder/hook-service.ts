@@ -1,3 +1,4 @@
+import type { ClaudeManagedHookPlan } from '../claude/claude-managed-hook-events'
 import { ClaudeHookService } from '../claude/hook-service'
 
 // Qoder documents Claude-shaped hooks at https://docs.qoder.com/cli/hooks.
@@ -15,6 +16,14 @@ export const QODER_HOOK_EVENTS = [
   'PostCompact'
 ] as const
 
+// Why: Qoder's own CLI reads these events, so Claude's version table never applies; the statusline
+// usage feed is Claude-only.
+export const QODER_MANAGED_HOOK_PLAN: ClaudeManagedHookPlan = {
+  install: QODER_HOOK_EVENTS.map((eventName) => ({ eventName, definition: {} })),
+  retire: [],
+  statusLine: 'leave'
+}
+
 export const qoderHookService = new ClaudeHookService({
   agent: 'qoder',
   source: 'qoder',
@@ -25,5 +34,5 @@ export const qoderHookService = new ClaudeHookService({
     usesWindowsCompatLauncher: true,
     windowsHookShell: 'powershell'
   },
-  events: QODER_HOOK_EVENTS.map((eventName) => ({ eventName, definition: {} }))
+  hookPlan: QODER_MANAGED_HOOK_PLAN
 })

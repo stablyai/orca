@@ -98,6 +98,9 @@ export const ptySessionControlApi = {
   clearBuffer: (id: string): void => {
     ipcRenderer.send('pty:clearBuffer', { id })
   },
+  resetInputModes: (id: string): void => {
+    ipcRenderer.send('pty:resetInputModes', { id })
+  },
   ackColdRestore: (id: string): void => {
     ipcRenderer.send('pty:ackColdRestore', { id })
   },

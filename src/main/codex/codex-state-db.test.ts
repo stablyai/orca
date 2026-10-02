@@ -1,12 +1,13 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import {
   findNewestCodexStateDbPath,
   isCodexStateDbBackfillPending,
-  readCodexStateDbBackfillStatus
+  readCodexStateDbBackfillStatus,
+  readIndexedCodexThreadIds
 } from './codex-state-db'
 
 const temporaryHomes: string[] = []
@@ -67,10 +68,47 @@ describe('Codex state DB backfill status', () => {
     expect(isCodexStateDbBackfillPending(home)).toBe(true)
   })
 
+  it('counts compressed rollouts, which Codex also backfills', async () => {
+    const home = await createHome()
+    const sessions = join(home, 'sessions', '2026', '08', '04')
+    await mkdir(sessions, { recursive: true })
+    await Promise.all(
+      Array.from({ length: 100 }, (_, index) =>
+        writeFile(join(sessions, `rollout-${index}.jsonl.zst`), '')
+      )
+    )
+
+    expect(isCodexStateDbBackfillPending(home)).toBe(true)
+  })
+
   it('does not call a complete backfill pending', async () => {
     const home = await createHome()
     createBackfillDb(home, 5, 'complete')
 
     expect(isCodexStateDbBackfillPending(home)).toBe(false)
+  })
+})
+
+describe('readIndexedCodexThreadIds', () => {
+  it('returns lower-cased thread ids from the newest state DB', async () => {
+    const home = await createHome()
+    const path = createBackfillDb(home, 5, 'complete')
+    const db = new SyncDatabase(path)
+    db.exec(
+      "CREATE TABLE threads (id TEXT PRIMARY KEY); INSERT INTO threads (id) VALUES ('ABC'), ('def')"
+    )
+    db.close()
+
+    expect(readIndexedCodexThreadIds(home)).toEqual(new Set(['abc', 'def']))
+  })
+
+  it('returns null when there is no state DB or no threads table', async () => {
+    const home = await createHome()
+    expect(readIndexedCodexThreadIds(home)).toBeNull()
+
+    createBackfillDb(home, 5, 'complete')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(readIndexedCodexThreadIds(home)).toBeNull()
+    warn.mockRestore()
   })
 })

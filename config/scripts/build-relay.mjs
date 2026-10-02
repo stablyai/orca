@@ -23,12 +23,15 @@ import { join } from 'node:path'
 import {
   RELAY_BUILD_PLATFORMS,
   RELAY_VERSION_FILENAME,
-  RELAY_WINDOWS_PROCESS_TREE_FILENAME,
   RELAY_OPENCODE_SQLITE_READER_FILENAME,
   relayOptionalArtifactFilenames,
   isWindowsRelayPlatform,
   relayArtifactFilenames
 } from '../../src/shared/relay-artifacts.ts'
+import {
+  parseRequiredRelayAddonArches,
+  stageRelayWindowsProcessTreeAddon
+} from './relay-windows-process-tree-staging.mjs'
 
 const __dirname = import.meta.dirname
 // Why: the script lives under config/scripts, so go two levels up to reach the repo root.
@@ -79,38 +82,16 @@ const NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE = join(
   'relay-assets',
   NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME
 )
-// Written by build-windows-process-tree-relay-addon.mjs, which only runs on a
-// Windows machine.
+// Written by build-windows-process-tree-relay-addon.mjs on Windows, or downloaded
+// from CI's relay-windows-process-tree artifact on other OSes.
 const WINDOWS_PROCESS_TREE_BUILD_DIR = join(ROOT, '.build', 'windows-process-tree')
 
-// Which Windows arches must have the addon, as a comma-separated list ('all' for
-// every arch). Per-arch rather than a flag because arm64 needs the MSVC ARM64
-// cross toolset, an optional VS component: where it is absent that relay should
-// fall back to the scan, not fail the release the x64 relay is riding on.
-const REQUIRED_ADDON_ARCHES = (process.env.ORCA_REQUIRE_RELAY_NATIVE_ADDONS ?? '')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean)
-
-function stageWindowsProcessTreeAddon(platform, outDir) {
-  if (!isWindowsRelayPlatform(platform)) {
-    return
-  }
-  const arch = platform.slice('win32-'.length)
-  const source = join(WINDOWS_PROCESS_TREE_BUILD_DIR, arch, RELAY_WINDOWS_PROCESS_TREE_FILENAME)
-  if (!existsSync(source)) {
-    if (REQUIRED_ADDON_ARCHES.includes(arch) || REQUIRED_ADDON_ARCHES.includes('all')) {
-      throw new Error(
-        `Relay ${platform} needs ${source}. Run: node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${arch} (Windows only).`
-      )
-    }
-    console.log(
-      `Relay ${platform}: no ${RELAY_WINDOWS_PROCESS_TREE_FILENAME}; relay will use the PowerShell scan.`
-    )
-    return
-  }
-  copyFileSync(source, join(outDir, RELAY_WINDOWS_PROCESS_TREE_FILENAME))
-}
+// Per-arch rather than a flag because arm64 needs the MSVC ARM64 cross toolset,
+// an optional VS component: where it is absent that relay should fall back to
+// the scan, not fail the release the x64 relay is riding on.
+const REQUIRED_ADDON_ARCHES = parseRequiredRelayAddonArches(
+  process.env.ORCA_REQUIRE_RELAY_NATIVE_ADDONS
+)
 
 // Why: lets the packaging contract test build into a temp tree instead of
 // clobbering a developer's out/relay or racing tests that read it.
@@ -118,13 +99,7 @@ const OUT_ROOT = process.env.ORCA_RELAY_OUT_ROOT ?? join(ROOT, 'out', 'relay')
 
 const RELAY_VERSION = '0.1.0'
 
-for (const platform of RELAY_BUILD_PLATFORMS) {
-  const outDir = join(OUT_ROOT, platform)
-  // Why: a stale companion left by an earlier build would otherwise satisfy the
-  // manifest check and be hashed into .version, shipping mixed-generation bytes.
-  rmSync(outDir, { recursive: true, force: true })
-  mkdirSync(outDir, { recursive: true })
-
+async function buildRelayBundles(outDir) {
   await build({
     entryPoints: [RELAY_ENTRY],
     bundle: true,
@@ -141,22 +116,6 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
       'process.env.NODE_ENV': '"production"'
     }
   })
-
-  if (isWindowsRelayPlatform(platform)) {
-    copyFileSync(
-      NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
-      join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
-    )
-    copyFileSync(
-      NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE,
-      join(outDir, NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME)
-    )
-  }
-  copyFileSync(
-    NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
-    join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
-  )
-  stageWindowsProcessTreeAddon(platform, outDir)
 
   await build({
     entryPoints: [WATCHER_ENTRY],
@@ -195,7 +154,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     target: 'node18',
     format: 'cjs',
     outfile: join(outDir, RELAY_OPENCODE_SQLITE_READER_FILENAME),
-    external: ['electron', 'bun:sqlite'],
+    external: ['electron'],
     sourcemap: false,
     minify: true,
     define: { 'process.env.NODE_ENV': '"production"' }
@@ -233,6 +192,49 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     define: {
       'process.env.NODE_ENV': '"production"'
     }
+  })
+}
+
+let bundledSourceDir
+let bundledFilenames = []
+
+for (const platform of RELAY_BUILD_PLATFORMS) {
+  const outDir = join(OUT_ROOT, platform)
+  // Why: a stale companion left by an earlier build would otherwise satisfy the
+  // manifest check and be hashed into .version, shipping mixed-generation bytes.
+  rmSync(outDir, { recursive: true, force: true })
+  mkdirSync(outDir, { recursive: true })
+
+  // The JavaScript selects its host at runtime; only native addons and patches vary.
+  if (bundledSourceDir) {
+    for (const filename of bundledFilenames) {
+      copyFileSync(join(bundledSourceDir, filename), join(outDir, filename))
+    }
+  } else {
+    await buildRelayBundles(outDir)
+    bundledSourceDir = outDir
+    bundledFilenames = readdirSync(outDir)
+  }
+
+  if (isWindowsRelayPlatform(platform)) {
+    copyFileSync(
+      NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
+      join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
+    )
+    copyFileSync(
+      NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE,
+      join(outDir, NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME)
+    )
+  }
+  copyFileSync(
+    NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
+    join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
+  )
+  stageRelayWindowsProcessTreeAddon({
+    platform,
+    outDir,
+    buildDir: WINDOWS_PROCESS_TREE_BUILD_DIR,
+    requiredArches: REQUIRED_ADDON_ARCHES
   })
 
   // Why: include a content hash so the deploy check detects code changes even

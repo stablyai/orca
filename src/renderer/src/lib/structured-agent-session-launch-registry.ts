@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionWriteRefusal } from '../../../shared/agent-session-write-failure'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
@@ -26,8 +27,9 @@ export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   /** Fixed by the caller that opened this launch so coalesced prompts use one delivery mode. */
   promptDelivery: StructuredAgentLaunchOptions['promptDelivery']
   callers: StructuredLaunchCallerGroup
-  /** Why the last attempt failed, shown beside Retry; the toast stays generic. */
-  failureReason?: string
+  /** The host's refusal behind the last failed attempt, worded beside Retry; the toast stays
+   *  generic. Absent when the failure named none. */
+  failure?: AgentSessionWriteRefusal
   selection: StructuredLaunchSelection
 }
 
@@ -176,25 +178,25 @@ export function getStructuredAgentSessionLaunchResumes(sessionId: string): boole
   return resumeFrom !== undefined
 }
 
-export function getStructuredAgentSessionLaunchFailureReason(
+export function getStructuredAgentSessionLaunchFailure(
   worktreeId: string,
   sessionId: string
-): string | null {
+): AgentSessionWriteRefusal | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   return state &&
     matchesLaunchWorktree(state, worktreeId) &&
     launchStateLifecycle(state) === 'failed'
-    ? (state.failureReason ?? null)
+    ? (state.failure ?? null)
     : null
 }
 
-export function useStructuredAgentSessionLaunchFailureReason(
+export function useStructuredAgentSessionLaunchFailure(
   worktreeId: string,
   sessionId: string
-): string | null {
+): AgentSessionWriteRefusal | null {
   return useSyncExternalStore(
     subscribeStructuredAgentLaunchStatus,
-    () => getStructuredAgentSessionLaunchFailureReason(worktreeId, sessionId),
+    () => getStructuredAgentSessionLaunchFailure(worktreeId, sessionId),
     () => null
   )
 }

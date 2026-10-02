@@ -21,6 +21,10 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { enqueueStructuredAgentSessionLaunchPrompt } from './structured-agent-session-outbox-storage'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionEntryHeldForRetry } from '../../../../shared/structured-agent-session-outbox-admission'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -32,14 +36,28 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-type SendRequest = { body?: { blocks?: { text?: string }[] } }
+type SendRequest = {
+  body?: { blocks?: { text?: string }[] }
+  envelope?: { clientOperationId?: string }
+}
 
 function requestText(params: SendRequest | undefined): string | undefined {
   return params?.body?.blocks?.[0]?.text
 }
 
+function requestId(params: SendRequest | undefined): string {
+  return String(params?.envelope?.clientOperationId)
+}
+
 function sentTexts(): (string | undefined)[] {
   return mocks.call.mock.calls.map((call) => requestText(call[2]))
+}
+
+/** The messages that wait for their own Retry. */
+function heldIds(outbox: readonly StructuredAgentSessionOutboxEntry[]): string[] {
+  return outbox
+    .filter(structuredAgentSessionEntryHeldForRetry)
+    .map((entry) => entry.clientMessageId)
 }
 
 function submissionResult(
@@ -146,17 +164,26 @@ describe('structured agent session outbox admission', () => {
     expect(mocks.call).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a refused head blocking the queue', async () => {
-    mocks.call.mockResolvedValue(refusedResult('agent_session_ownership_unknown'))
+  // A refused message lands only by its own Retry, so nothing it could be reordered around.
+  it('sends a message past a refused one, which waits for its own Retry', async () => {
+    mocks.call.mockImplementation((_target, _method, params) =>
+      Promise.resolve(
+        requestText(params) === 'first'
+          ? refusedResult('agent_session_ownership_unknown')
+          : submissionResult(requestId(params), 'accepted', 20)
+      )
+    )
     const { result } = renderOutbox()
 
     act(() => expect(result.current.send('first')).toBe(true))
-    await waitFor(() => expect(result.current.blockedClientMessageId).not.toBeNull())
+    await waitFor(() => expect(heldIds(result.current.outbox)).toHaveLength(1))
+    const refusedId = heldIds(result.current.outbox)[0]
     act(() => expect(result.current.send('second')).toBe(true))
-    await settleTimers(200)
+    await waitFor(() => expect(result.current.outbox).toHaveLength(1))
+    await settleTimers(50)
 
-    expect(sentTexts()).not.toContain('second')
-    expect(result.current.blockedClientMessageId).toBe(result.current.outbox[0]?.clientMessageId)
+    expect(sentTexts()).toEqual(['first', 'second'])
+    expect(heldIds(result.current.outbox)).toEqual([refusedId])
   })
 
   it.each(['accepted', 'pending'] as const)(
@@ -218,5 +245,95 @@ describe('structured agent session outbox admission', () => {
     await waitFor(() => expect(sentTexts()).toEqual(['first', 'second']))
     await act(async () => admission.resolve(submissionResult(String(id), 'pending', 10)))
     expect(sentTexts()).toEqual(['first', 'second'])
+  })
+
+  // A message the queue is held on goes out only by its own Retry, never another message's.
+  it("keeps a refused message held when a rejected message's Retry shows while a head waits", async () => {
+    const inFlight = deferred<ReturnType<typeof submissionResult>>()
+    mocks.call.mockImplementation((_target, _method, params) => {
+      const text = requestText(params)
+      const attempt = sentTexts().filter((sent) => sent === text).length
+      const id = requestId(params)
+      if (text === 'held') {
+        return Promise.resolve(refusedResult('agent_session_ownership_unknown'))
+      }
+      if (attempt === 1) {
+        return Promise.resolve(refusedResult('agent_session_owner_restart_failed'))
+      }
+      return text === 'x' ? inFlight.promise : Promise.resolve(submissionResult(id, 'accepted', 20))
+    })
+    const { result } = renderOutbox()
+    for (const text of ['x', 'a', 'c']) {
+      act(() => expect(result.current.send(text)).toBe(true))
+      await waitFor(() => expect(result.current.outbox.at(-1)?.state).toBe('rejected'))
+    }
+    act(() => expect(result.current.send('held')).toBe(true))
+    await waitFor(() => expect(heldIds(result.current.outbox)).toHaveLength(1))
+    const heldId = heldIds(result.current.outbox)[0]
+    const [x, a, c] = result.current.outbox
+
+    // x goes out and stays in flight, so a, retried after it, waits queued ahead of the held one.
+    act(() => result.current.retry(x!.clientMessageId))
+    await waitFor(() => expect(sentTexts()).toEqual(['x', 'a', 'c', 'held', 'x']))
+    act(() => result.current.retry(a!.clientMessageId))
+    await settleTimers(20)
+    // The drain would send a next, so the queue reads as moving and c offers its own Retry.
+    const notices = structuredAgentSessionDeliveryNotices(
+      result.current.outbox,
+      'Claude',
+      () => {},
+      [],
+      [],
+      result.current.failedHere
+    )
+    expect(notices.get(agentJournalSubmissionKey(c!.clientMessageId))?.onRetry).toBeDefined()
+
+    act(() => result.current.retry(c!.clientMessageId))
+    expect(heldIds(result.current.outbox)).toEqual([heldId])
+    await act(async () => inFlight.resolve(submissionResult(x!.clientMessageId, 'accepted', 20)))
+    await waitFor(() => expect(result.current.outbox).toHaveLength(1))
+    await settleTimers(50)
+    expect(sentTexts().filter((text) => text === 'held')).toHaveLength(1)
+    expect(heldIds(result.current.outbox)).toEqual([heldId])
+  })
+
+  it('keeps a refused message held when an unconfirmed message ahead of it is retried', async () => {
+    const none: readonly AgentJournalSubmission[] = []
+    mocks.call.mockImplementation((_target, _method, params) => {
+      const id = requestId(params)
+      if (requestText(params) === 'held') {
+        return Promise.resolve(refusedResult('agent_session_ownership_unknown'))
+      }
+      const sent = sentTexts().filter((text) => text === 'first').length
+      return Promise.resolve(submissionResult(id, sent === 1 ? 'pending' : 'accepted', 10))
+    })
+    const { result, rerender } = renderHook(
+      ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence: 1,
+          submissions
+        }),
+      { initialProps: { submissions: none } }
+    )
+    act(() => expect(result.current.send('first')).toBe(true))
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('dispatching'))
+    act(() => expect(result.current.send('held')).toBe(true))
+    await waitFor(() => expect(heldIds(result.current.outbox)).toHaveLength(1))
+    const heldId = heldIds(result.current.outbox)[0]
+    const firstId = String(result.current.outbox[0]?.clientMessageId)
+    const unknown: AgentJournalSubmission = {
+      ...submissionResult(firstId, 'pending', 10).value.submission,
+      dispatchState: 'unknown'
+    }
+    rerender({ submissions: [unknown] })
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
+
+    act(() => result.current.retry(firstId))
+    await waitFor(() => expect(result.current.outbox).toHaveLength(1))
+    await settleTimers(50)
+    expect(sentTexts()).toEqual(['first', 'held', 'first'])
+    expect(heldIds(result.current.outbox)).toEqual([heldId])
   })
 })

@@ -87,6 +87,13 @@ export type AgentSessionDeathEvidence = {
   kind: 'exit-observed' | 'pid-absent' | 'identity-mismatch'
   detail: string
   observedAt: number
+  /** Fence of the owner (or reservation) this death is about; a fence names exactly one. Absent on
+   *  evidence older builds wrote, which then speaks for no turn. */
+  ownerFence?: number
+  /** The death interval's lower bound: the last time the runtime holding the owner's transport
+   *  proved it alive. Only a probe's proof records it: absent on a surface-release exit, a failed
+   *  start, and evidence older builds wrote. */
+  lastProvenAliveAt?: number
 }
 
 export type AgentSessionLease = {
@@ -102,6 +109,8 @@ export type AgentSessionLease = {
   /** Reserved before any process exists, then matched against the child's environment. */
   reservedSpawnToken: string | null
   leaseDeadlineAt: number
+  /** While `ownerProcess` is set, the last time its transport holder proved it alive; parking in
+   *  `recovering` proves nothing, so it leaves this alone. */
   lastRenewedAt: number
   handoffOperationId: string | null
   journalCheckpoint: AgentSessionJournalCheckpoint | null
@@ -111,8 +120,8 @@ export type AgentSessionLease = {
   /** True from load until the host adjudicates it; no writer is granted while set. */
   unreconciled: boolean
   /**
-   * Lowest fence a future grant may use. Set only after the store recovers from its backup, where
-   * the commit that never landed may already have granted a fence the backup cannot show. The
+   * Lowest fence a future grant may use. Set only when the records file's copy came from its backup,
+   * or sat beside a set-aside copy of the same chat: either may hide a fence already granted. The
    * CURRENT fence is deliberately left alone: `live` means a handle proven at exactly that number,
    * so rewriting it would invalidate the record it is trying to save.
    */
@@ -276,13 +285,20 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
     return false
   }
   const evidence = value as Partial<AgentSessionDeathEvidence>
+  const { observedAt, lastProvenAliveAt, ownerFence } = evidence
   return (
     (evidence.kind === 'exit-observed' ||
       evidence.kind === 'pid-absent' ||
       evidence.kind === 'identity-mismatch') &&
     isBoundedString(evidence.detail, MAX_ID_LENGTH) &&
-    Number.isSafeInteger(evidence.observedAt) &&
-    (evidence.observedAt as number) >= 0
+    typeof observedAt === 'number' &&
+    Number.isSafeInteger(observedAt) &&
+    observedAt >= 0 &&
+    (ownerFence === undefined || (Number.isSafeInteger(ownerFence) && ownerFence >= 0)) &&
+    (lastProvenAliveAt === undefined ||
+      (Number.isSafeInteger(lastProvenAliveAt) &&
+        lastProvenAliveAt >= 0 &&
+        lastProvenAliveAt <= observedAt))
   )
 }
 

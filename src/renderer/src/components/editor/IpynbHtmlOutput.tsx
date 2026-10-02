@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { translate } from '@/i18n/i18n'
-import { useDocumentDarkTheme } from './use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 // Why: an opaque-origin, script-free frame with a no-network CSP keeps output markup inert;
 // its links aim at popups the sandbox blocks.

@@ -1,5 +1,6 @@
 import { memo, useCallback, useRef } from 'react'
-import { Goal } from 'lucide-react'
+import { Goal, RotateCcw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
@@ -21,7 +22,19 @@ import {
   ProviderFrameRow
 } from './NativeChatTranscriptChrome'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
+import type {
+  NativeChatSubagentDisclosure,
+  NativeChatSubagentRosterState
+} from './native-chat-subagent-sections'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+
+/** What a user message says under it when it did not go through, with its own Retry when the
+ *  surface can send it again. */
+export type NativeChatDeliveryNotice = {
+  text: string
+  onRetry?: () => void
+  onDismiss?: () => void
+}
 
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
@@ -39,9 +52,11 @@ export const MessageRow = memo(function MessageRow({
   onScrollMessageToTop,
   onLinkClick,
   allowFileUriLinks = false,
-  deliveryFailed = false,
-  structuredActivityUi = true,
+  deliveryNotice,
   folded = false,
+  subagentRoster,
+  subagentDisclosure,
+  inSubagentSection = false,
   runtimeContext
 }: {
   message: NativeChatMessage
@@ -56,10 +71,14 @@ export const MessageRow = memo(function MessageRow({
   onScrollMessageToTop: (el: HTMLElement) => void
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
-  deliveryFailed?: boolean
-  structuredActivityUi?: boolean
+  deliveryNotice?: NativeChatDeliveryNotice
   /** Behind a folded turn: the row keeps only what outlives the turn. */
   folded?: boolean
+  /** On a roster row: its list's state and the subagents whose rows open below it. */
+  subagentRoster?: NativeChatSubagentRosterState
+  subagentDisclosure?: NativeChatSubagentDisclosure
+  /** Inside a subagent's section, whose border has to reach past the row's controls. */
+  inSubagentSection?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
@@ -162,17 +181,28 @@ export const MessageRow = memo(function MessageRow({
         {/* Copy + timestamp reveal together, mirroring the agent controls row.
             Image-only prompts have no text to copy, so the button is omitted. */}
         {markdown || message.timestamp !== null ? (
-          <div className="flex select-none items-center gap-1 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100">
+          <div className="flex select-none items-center gap-1 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100">
             {markdown ? <NativeChatCopyButton text={markdown} /> : null}
             <NativeChatMessageTimestamp timestamp={message.timestamp} focusable />
           </div>
         ) : null}
-        {deliveryFailed ? (
-          <div className="max-w-[85%] text-[11px] text-destructive/80">
-            {translate(
-              'components.native-chat.launchPromptNotDelivered',
-              'Not delivered — check the terminal'
-            )}
+        {deliveryNotice ? (
+          <div className="flex max-w-[85%] items-center gap-2 text-[11px] text-destructive/80">
+            <span className="min-w-0 break-words">{deliveryNotice.text}</span>
+            {deliveryNotice.onDismiss ? (
+              <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
+                {translate('components.native-chat.dismissDeliveryNotice', 'Dismiss')}
+              </Button>
+            ) : null}
+            {deliveryNotice.onRetry ? (
+              <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onRetry}>
+                <RotateCcw className="size-3" />
+                {translate(
+                  'auto.components.native.chat.NativeChatStructuredSession.a5e7f14068',
+                  'Retry'
+                )}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -218,11 +248,12 @@ export const MessageRow = memo(function MessageRow({
           onRevealDiff={onScrollMessageToTop}
           onLinkClick={onLinkClick}
           subagentGroups={subagentGroups}
+          subagentRoster={subagentRoster}
+          subagentDisclosure={subagentDisclosure}
           backgroundTasks={backgroundTasks}
           expandSignal={expandSignal}
           activeTurnIsWorking={activeTurnIsWorking}
           trailing={trailingRun}
-          structuredActivityUi={structuredActivityUi}
           disclosureId={message.id}
         />
       ) : null}
@@ -231,7 +262,11 @@ export const MessageRow = memo(function MessageRow({
           markdown={markdown}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
-          className="mt-1 -mb-5 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100"
+          className={cn(
+            'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100',
+            // They hang into the gap below; a section keeps them inside its border instead.
+            !inSubagentSection && '-mb-5'
+          )}
         />
       ) : null}
     </div>

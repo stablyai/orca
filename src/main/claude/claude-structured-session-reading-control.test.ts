@@ -1,8 +1,10 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget,
   type StructuredAgentSessionEventSink,
+  type StructuredAgentSessionLinkageJournal,
   type StructuredAgentSessionReadingControl
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -18,6 +20,7 @@ import {
   identityFor,
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 function controlledSink(): {
   sink: StructuredAgentSessionEventSink
@@ -59,6 +62,10 @@ function persistedTarget(
           visit(itemId, 0, body)
         }
       },
+      // This double keeps no producer linkage, so every row reads as the session's own.
+      visitItemsWithLinkage: ((visit) => {
+        persisted.forEach((body, itemId) => visit(itemId, 0, body, {}))
+      }) satisfies StructuredAgentSessionLinkageJournal['visitItemsWithLinkage'],
       itemBody: (itemId: string) => persisted.get(itemId) ?? null,
       epoch: 'test'
     } as unknown as AgentSessionJournal
@@ -206,6 +213,7 @@ describe('Claude structured reading control', () => {
     const persisted = new Map<string, AgentJournalItemBody>()
     const target = persistedTarget(persisted)
     const deferred = createDeferredStructuredAgentSessionEventSink({
+      ...testEventSinkLogging(),
       watermarks: {
         pauseQueuedOperations: 1,
         maxQueuedOperations: 4,
@@ -236,7 +244,8 @@ describe('Claude structured reading control', () => {
     const resumeReading = vi.spyOn(claude.connections[0], 'resumeReading')
     deferred.sink.appendItem(
       { provider: 'orca', clientMessageId: 'blocked-prefill' },
-      { kind: 'message', role: 'system', blocks: [{ type: 'text', text: 'prefill' }] }
+      { kind: 'message', role: 'system', blocks: [{ type: 'text', text: 'prefill' }] },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await appendEntered.promise
     const notification = {

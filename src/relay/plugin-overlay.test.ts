@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -72,6 +75,87 @@ describe('PluginOverlayManager', () => {
     expect(
       readFileSync(join(homeDir, 'xdg', 'opencode', 'plugins', 'orca-opencode2-status.js'), 'utf8')
     ).toBe('v2 plugin')
+    const tuiEntry = join(
+      homeDir,
+      'xdg',
+      'opencode',
+      'plugins',
+      'orca-opencode2-status-tui',
+      'tui.js'
+    )
+    expect(readFileSync(tuiEntry, 'utf8')).toBe('v2 plugin')
+    expect(
+      readFileSync(
+        join(homeDir, 'xdg', 'opencode', 'plugins', 'orca-opencode-status-tui', 'tui.js'),
+        'utf8'
+      )
+    ).toBe('v1 plugin')
+
+    // Why: OpenCode 2 reloads plugins when a plugins/ entry is rewritten, so an unchanged
+    // TUI copy must not be touched on the next launch.
+    const past = new Date('2020-01-01T00:00:00Z')
+    utimesSync(tuiEntry, past, past)
+    manager.installOpenCodePlugin('opencode2', { XDG_CONFIG_HOME: join(homeDir, 'xdg') })
+    expect(statSync(tuiEntry).mtimeMs).toBe(past.getTime())
+  })
+
+  // Why: OpenCode 2 reloads a plugin whose file mtime changed, even with unchanged bytes.
+  it('leaves a current canonical plugin untouched and replaces a stale one', () => {
+    const env = { XDG_CONFIG_HOME: join(homeDir, 'xdg') }
+    const pluginPath = join(homeDir, 'xdg', 'opencode', 'plugins', 'orca-opencode2-status.js')
+    manager.setSources({ opencode2PluginSource: 'v2 plugin' })
+    manager.installOpenCodePlugin('opencode2', env)
+    const past = new Date('2020-01-01T00:00:00Z')
+    utimesSync(pluginPath, past, past)
+
+    expect(manager.installOpenCodePlugin('opencode2', env)).toBe(true)
+    expect(statSync(pluginPath).mtimeMs).toBe(past.getTime())
+
+    manager.setSources({ opencode2PluginSource: 'v2 plugin, next release' })
+    expect(manager.installOpenCodePlugin('opencode2', env)).toBe(true)
+    expect(readFileSync(pluginPath, 'utf8')).toBe('v2 plugin, next release')
+  })
+
+  // Why: OpenCode 2 loads through a file-level symlink (dotfile managers) and stats its target.
+  it.skipIf(process.platform === 'win32')(
+    'leaves a symlinked canonical plugin with current bytes untouched',
+    () => {
+      const env = { XDG_CONFIG_HOME: join(homeDir, 'xdg') }
+      const pluginsDir = join(homeDir, 'xdg', 'opencode', 'plugins')
+      const pluginPath = join(pluginsDir, 'orca-opencode2-status.js')
+      const targetPath = join(homeDir, 'dotfiles-orca-opencode2-status.js')
+      mkdirSync(pluginsDir, { recursive: true })
+      writeFileSync(targetPath, 'v2 plugin')
+      symlinkSync(targetPath, pluginPath)
+      const past = new Date('2020-01-01T00:00:00Z')
+      utimesSync(targetPath, past, past)
+      manager.setSources({ opencode2PluginSource: 'v2 plugin' })
+
+      expect(manager.installOpenCodePlugin('opencode2', env)).toBe(true)
+      expect(lstatSync(pluginPath).isSymbolicLink()).toBe(true)
+      expect(statSync(targetPath).mtimeMs).toBe(past.getTime())
+
+      manager.setSources({ opencode2PluginSource: 'v2 plugin, next release' })
+      expect(manager.installOpenCodePlugin('opencode2', env)).toBe(true)
+      expect(lstatSync(pluginPath).isFile()).toBe(true)
+      expect(readFileSync(pluginPath, 'utf8')).toBe('v2 plugin, next release')
+      expect(readFileSync(targetPath, 'utf8')).toBe('v2 plugin')
+    }
+  )
+
+  // Why: a service that reloads between the two writes must already find the TUI copy and stand down.
+  it('writes the TUI copy before the server plugin file', () => {
+    manager.setSources({ opencode2PluginSource: 'v2 plugin' })
+    const pluginsDir = join(homeDir, 'xdg', 'opencode', 'plugins')
+    // A directory in the server file's place makes that write fail.
+    mkdirSync(join(pluginsDir, 'orca-opencode2-status.js'), { recursive: true })
+
+    expect(
+      manager.installOpenCodePlugin('opencode2', { XDG_CONFIG_HOME: join(homeDir, 'xdg') })
+    ).toBe(false)
+    expect(readFileSync(join(pluginsDir, 'orca-opencode2-status-tui', 'tui.js'), 'utf8')).toBe(
+      'v2 plugin'
+    )
   })
 
   it('mirrors a preexisting remote OpenCode config dir before adding Orca plugin', () => {
@@ -107,13 +191,23 @@ describe('PluginOverlayManager', () => {
       const userConfigDir = join(homeDir, '.config', 'opencode')
       mkdirSync(join(userConfigDir, 'plugins'), { recursive: true })
       writeFileSync(join(userConfigDir, 'plugins', stale), 'stale other-major plugin')
+      const staleTui = stale.replace(/\.js$/, '-tui')
+      mkdirSync(join(userConfigDir, 'plugins', staleTui))
+      writeFileSync(join(userConfigDir, 'plugins', staleTui, 'tui.js'), 'stale other-major plugin')
       writeFileSync(join(userConfigDir, 'plugins', 'user-plugin.js'), 'user plugin')
 
       manager.setSources({ opencodePluginSource: 'v1', opencode2PluginSource: 'v2' })
       const dir = manager.materializeOpenCode('tab-1:0', userConfigDir, agent)
 
       expect(dir).not.toBeNull()
-      expect(readdirSync(join(dir!, 'plugins')).sort()).toEqual([own, 'user-plugin.js'].sort())
+      const ownTui = own.replace(/\.js$/, '-tui')
+      expect(readdirSync(join(dir!, 'plugins')).sort()).toEqual(
+        [own, ownTui, 'user-plugin.js'].sort()
+      )
+      // The TUI copy is the same module; its setup() tells a TUI context from a server one.
+      expect(readFileSync(join(dir!, 'plugins', ownTui, 'tui.js'), 'utf8')).toBe(
+        agent === 'opencode2' ? 'v2' : 'v1'
+      )
     }
   )
 

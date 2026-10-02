@@ -4,17 +4,19 @@
 // not advertise `agent-session.structured.v1` is told the surface does not exist rather than being
 // handed the session journal or mutation surface.
 //
-// This gate no longer implies such a client cannot make the host exist: session-tab restore runs
-// for old mobile clients while structured chat is enabled so they receive a fallback row, and that
-// path constructs the host. `agentSession.*` stays refused either way, which is what this gate is for.
+// This gate does not imply such a client cannot make the host exist: session-tab restore runs for
+// old mobile clients so they receive a fallback row, and that path constructs the host.
+// `agentSession.*` stays refused either way, which is what this gate is for.
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
+import { structuredAgentSessionHostRefusal } from '../../structured-agent-session-host-refusal'
 import {
-  supportsStructuredAgentSessionCapability,
+  createSupportFollowsHostSetting,
+  isStructuredNativeChatEnabled,
   supportsStructuredAgentSessions
 } from './structured-agent-session-policy'
 
@@ -34,52 +36,49 @@ export function requireStructuredCapability(ctx: RpcContext): void {
   }
 }
 
-export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHost {
-  requireStructuredCapability(ctx)
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    throw agentSessionRefusalError('structured_agent_session_unsupported', {
-      reason: 'hostDisabled'
-    })
-  }
-  return host
-}
-
 /**
- * WHICH GATE DOES A NEW `agentSession.*` METHOD GET?
- *
- * The host setting is admission control, and admission can be revoked while sessions are still
- * open. So the surface splits by what a method does to work in flight, not by how dangerous it
- * sounds:
- *
- *   - Starts, extends, retains or reads work -> `requireStructuredHost`. Revoked admission means
- *     no new turns, no new holds, no new reads. create, send, ensure, setOption,
- *     subscribe, hold, reveal, history, options and the status stream all live here.
- *   - Stops or retires work the caller already owns -> `requireStructuredCleanupHost`. close,
- *     cancel, unsubscribe and release live here.
- *
- * Cleanup keeps working after the setting is turned off because the alternative strands the user:
- * a session opened while the setting was on stays open, and refusing its close leaves a chat with
- * a live provider child that its own owner can no longer shut down. Stopping is never the thing
- * the policy exists to prevent.
- *
- * Cleanup is not an escape hatch. It still demands the negotiated wire capability, so a client
- * that never advertised the surface still cannot see it, and it never creates a host — it can
- * only retire what already exists.
+ * `agentSession.createSupport` alone also reads the host setting, for a client that leaves the
+ * launch mode to the host; it gets the refusal it got before, which it reads as "open a terminal".
  */
-export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
-  if (!supportsStructuredAgentSessionCapability(ctx)) {
+export function requireStructuredCreateSupportAdmission(ctx: RpcContext): void {
+  requireStructuredCapability(ctx)
+  if (createSupportFollowsHostSetting(ctx) && !isStructuredNativeChatEnabled(ctx.runtime)) {
     throw agentSessionRefusalError('structured_agent_session_unsupported', {
       reason: 'clientCapabilityMissing'
     })
   }
+}
+
+export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHost {
+  requireStructuredCapability(ctx)
+  return requireHostOrRefusal()
+}
+
+/**
+ * The gate for methods that stop or retire work the caller already owns: close, cancel,
+ * unsubscribe and release. It asks only what no caller can do without (the wire capability and a
+ * host), never an admission condition: refusing a close strands a live provider child its own
+ * owner can no longer shut down. It is `requireStructuredHost` today; keep it apart so a condition
+ * added there for new work never reaches these.
+ */
+export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
+  requireStructuredCapability(ctx)
+  return requireHostOrRefusal()
+}
+
+/**
+ * The host, or why there is none. A process whose journal would not open says so under every
+ * getter, close included: nothing here can stop a child it never started.
+ */
+function requireHostOrRefusal(): StructuredAgentSessionHost {
   const host = getStructuredAgentSessionHost()
-  if (!host) {
-    throw agentSessionRefusalError('structured_agent_session_unsupported', {
-      reason: 'hostDisabled'
-    })
+  if (host) {
+    return host
   }
-  return host
+  throw (
+    structuredAgentSessionHostRefusal() ??
+    agentSessionRefusalError('structured_agent_session_unsupported', { reason: 'hostDisabled' })
+  )
 }
 
 /** Builds the host for a call that may be the first this process sees. Every session is addressed

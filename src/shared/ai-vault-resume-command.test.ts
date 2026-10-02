@@ -28,6 +28,17 @@ describe('buildAiVaultResumeCommand', () => {
     ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && codex resume ""session-1"""')
   })
 
+  it('resumes CodeBuddy sessions with the Claude-compatible --resume flag', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'codebuddy',
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        cwd: '/repo/app',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/repo/app' && codebuddy --resume 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'")
+  })
+
   it('builds a direct queued command for a live cmd shell', () => {
     expect(
       buildAiVaultResumeCommand({

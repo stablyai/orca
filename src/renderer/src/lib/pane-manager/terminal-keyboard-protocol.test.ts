@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildTerminalKeyboardProtocolOptions,
-  prefersKittyKeyboardDespiteWindowsConpty,
   shouldDisableKittyKeyboardForTerminal
 } from './terminal-keyboard-protocol'
 
@@ -17,16 +16,6 @@ const localWindowsConpty = {
   shellOverride: 'powershell.exe' as string | null,
   executionHostId: 'local' as const
 }
-
-describe('prefersKittyKeyboardDespiteWindowsConpty', () => {
-  it('is true only for Grok (needs KKP for modified Enter on ConPTY)', () => {
-    expect(prefersKittyKeyboardDespiteWindowsConpty('grok')).toBe(true)
-    expect(prefersKittyKeyboardDespiteWindowsConpty('claude')).toBe(false)
-    expect(prefersKittyKeyboardDespiteWindowsConpty('codex')).toBe(false)
-    expect(prefersKittyKeyboardDespiteWindowsConpty(null)).toBe(false)
-    expect(prefersKittyKeyboardDespiteWindowsConpty(undefined)).toBe(false)
-  })
-})
 
 describe('shouldDisableKittyKeyboardForTerminal', () => {
   it('disables Kitty keyboard for a local native Windows ConPTY pane', () => {

@@ -8,7 +8,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentSessionRecordStore } from '../../agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
@@ -153,7 +153,7 @@ describe('a replayed launch', () => {
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-caller-'))
-    const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    const store = await openTestAgentSessionRecordStore(directory)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `deps.store` is the only member `agent.launch` reads, and a member it omits throws on call.
     setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
   })

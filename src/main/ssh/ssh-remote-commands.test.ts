@@ -20,13 +20,11 @@ import {
   tryStealInstallLockCommand
 } from './ssh-relay-install-lock-commands'
 import {
-  commandInRemoteDirectory,
   commandWithNodePath,
   listRelayBaseDirsCommand,
   MAX_RELAY_GC_LISTING_ENTRIES,
   makeRemoteDirectoryCommand,
   moveRemoteTreeCommand,
-  promoteRemoteTreeContentsCommand,
   probeDirectoryExistsCommand,
   probeRelayInstalledCommand,
   readRemoteHomeCommand,
@@ -227,29 +225,6 @@ describe('ssh remote command builders', () => {
     expect(windowsScript).toContain('Move-Item -LiteralPath')
     expect(windowsScript).toContain("-Destination 'C:/Users/me/relay/old.gc-tombstone'")
     expect(windowsScript).toContain("'MOVED'")
-  })
-
-  it('enumerates Windows staging children before copying', () => {
-    const script = decodePowerShellCommand(
-      promoteRemoteTreeContentsCommand(windows, 'C:/Users/me/relay.upload-123', 'C:/Users/me/relay')
-    )
-    expect(script).toContain('Get-ChildItem -LiteralPath')
-    expect(script).toContain(' -Force -ErrorAction Stop | Copy-Item -Destination')
-    expect(script).not.toContain('Copy-Item -LiteralPath')
-    expect(script).toContain('Remove-Item -LiteralPath')
-    expect(script).toContain("$ErrorActionPreference = 'Stop'")
-    expect(script).toContain('Copy-Item -Destination')
-  })
-
-  it('removes POSIX staging only after the copy succeeds', () => {
-    const command = promoteRemoteTreeContentsCommand(
-      posix,
-      '/home/u/relay.upload-123',
-      '/home/u/relay'
-    )
-    expect(command).toContain("cp -a '/home/u/relay.upload-123'/. '/home/u/relay'/")
-    expect(command).toContain("&& rm -rf '/home/u/relay.upload-123'")
-    expect(command.indexOf('cp -a')).toBeLessThan(command.indexOf('rm -rf'))
   })
 
   it('emits an explicit POSIX liveness result so GC can fail closed', () => {
@@ -659,9 +634,6 @@ describe('ssh remote command builders', () => {
   )
 
   it('makes Windows remote directory changes fail before running scoped commands', () => {
-    const scopedCommand = decodePowerShellCommand(
-      commandInRemoteDirectory(windows, 'C:/Users/me/.orca-remote/relay-0.1.0', "'READY'")
-    )
     const nodeScopedCommand = decodePowerShellCommand(
       commandWithNodePath(
         windows,
@@ -671,9 +643,6 @@ describe('ssh remote command builders', () => {
       )
     )
 
-    expect(scopedCommand).toContain(
-      "Set-Location -ErrorAction Stop -LiteralPath 'C:/Users/me/.orca-remote/relay-0.1.0'"
-    )
     expect(nodeScopedCommand).toContain(
       "Set-Location -ErrorAction Stop -LiteralPath 'C:/Users/me/.orca-remote/relay-0.1.0'"
     )

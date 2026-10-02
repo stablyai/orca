@@ -31,6 +31,8 @@ async function waitOnReplay(
     size,
     data: ''
   })
+  // Pane creation awaits real timers; replay and polling use the virtual clock.
+  vi.useFakeTimers()
   const bytes = Buffer.from(data, 'utf8')
   const step = readSize ?? bytes.length
   // Why a streaming decoder: a PTY read can end inside a multi-byte character, as a real one does.
@@ -42,14 +44,22 @@ async function waitOnReplay(
   if (options.after) {
     runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, options.after, Date.now())
   }
-  // Why a wide budget: a blocked verdict lands on the first ~2 s poll tick; the slack absorbs load.
-  return runtime.waitForTerminal(handle, {
+  const timeoutMs = options.timeoutMs ?? 15_000
+  const promise = runtime.waitForTerminal(handle, {
     condition: 'tui-idle',
-    timeoutMs: options.timeoutMs ?? 15_000
+    timeoutMs
   })
+  // Attach before advancing so the expected timeout is never an unhandled rejection.
+  promise.catch(() => {})
+  await vi.advanceTimersByTimeAsync(timeoutMs)
+  return promise
 }
 
 describe("Claude's workspace trust dialog, from captured transcripts", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('reports the dialog as a blocking prompt instead of waiting out the whole budget', async () => {
     await expect(waitOnReplay('claude-dialog-trust-workspace', null)).resolves.toMatchObject({
       satisfied: false,

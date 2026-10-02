@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +8,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   journalRecordsThreadGoalChange,
@@ -15,6 +16,7 @@ import {
   threadGoalPlan
 } from './structured-agent-session-thread-goal'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -37,7 +39,7 @@ afterEach(async () => {
 
 async function openJournal(): Promise<AgentSessionJournal> {
   root ??= await mkdtemp(join(tmpdir(), 'orca-thread-goal-'))
-  return journals.open({ identity: IDENTITY, journalDir: root })
+  return journals.open({ identity: IDENTITY, stateDirectory: root })
 }
 
 const GOAL: AgentJournalThreadGoal = {
@@ -57,7 +59,7 @@ function appendGoalRow(
   return journal.appendItem(
     { provider: 'orca', clientMessageId: `goal-row:${journal.snapshot().items.length}` },
     { kind: 'status', text: 'Goal', threadGoal: { state: 'set', goal: { ...GOAL, ...overrides } } },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }
 
@@ -67,6 +69,7 @@ function context(
   flushStreamedEvents: () => Promise<void> = async () => undefined
 ): AgentSessionTurnContext {
   return {
+    logger: createStructuredAgentSessionLogger(),
     sessionId: 'session-1',
     journal,
     fence: 1,

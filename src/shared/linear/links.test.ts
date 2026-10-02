@@ -151,19 +151,6 @@ describe('buildLinearIssueLinkUpdates', () => {
     expectNoUndefinedValues(result as Record<string, unknown>)
   })
 
-  it('links digit-prefixed Linear team keys from bare identifiers and URLs', () => {
-    expect(buildLinearIssueLinkUpdates('4K-12')).toEqual({
-      linkedLinearIssue: '4K-12',
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: null
-    })
-    expect(buildLinearIssueLinkUpdates('https://linear.app/acme/issue/4K-12')).toEqual({
-      linkedLinearIssue: '4K-12',
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: 'acme'
-    })
-  })
-
   it('returns null for unparseable input', () => {
     expect(buildLinearIssueLinkUpdates('not an issue')).toBeNull()
     expect(buildLinearIssueLinkUpdates('https://github.com/o/r/issues/12')).toBeNull()

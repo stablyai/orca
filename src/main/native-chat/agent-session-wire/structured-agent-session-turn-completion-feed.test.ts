@@ -344,6 +344,39 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
     h.feed.observe('session-unknown')
     expect(emit).not.toHaveBeenCalled()
   })
+
+  it('announces no /compact turn and keeps its mark on the last real turn (B6)', () => {
+    const h = harness()
+    h.listen()
+    const real = [userEntry('m1', 1), turnItem(turn('t1', 'completed', 'success'), 2)]
+    const accepted = sent('m1', { dispatchState: 'accepted' })
+    h.setJournal(real, [accepted])
+    h.observe()
+    const command: AgentJournalRenderItem = {
+      ...userEntry('c1', 3),
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/compact' }],
+        command: { name: 'compact' }
+      }
+    }
+    const commandTurn = (lifecycle: AgentJournalTurnLifecycle): AgentJournalRenderItem => ({
+      ...turnItem({ ...lifecycle, userItemId: command.itemId }, 4),
+      itemId: 'orca:command-turn:c1'
+    })
+    h.setJournal(
+      [...real, command, commandTurn(turn('compact:c1', 'running'))],
+      [accepted, pending('c1')]
+    )
+    h.observe()
+    h.setJournal(
+      [...real, command, commandTurn(turn('compact:c1', 'completed', 'success'))],
+      [accepted, sent('c1', { dispatchState: 'accepted' })]
+    )
+    h.observe()
+    expect(h.events).toEqual([])
+  })
 })
 
 describe('a request the agent or its start refused', () => {

@@ -31,6 +31,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'from',
       'retry-request'
     ],
+    identityFlagRoles: { from: 'caller', terminal: 'target' },
     notes: [
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
       'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',

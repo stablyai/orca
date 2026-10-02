@@ -15,7 +15,7 @@ import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { NATIVE_CHAT_ROW_GAP_PX } from './native-chat-row-height-estimate'
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
-import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** Rows kept mounted past each edge of the viewport. Chat rows are tall and
  *  arbitrarily expensive, so this buys smoothness by the row, not by the screen. */
@@ -107,7 +107,7 @@ export function useNativeChatTranscriptWindow({
   )
   // A content-only tail revision must not rebuild measured offsets: doing so
   // breaks the end anchor while the row grows. Structural changes replace it.
-  const encodedItemKeys = JSON.stringify(slots.map((slot) => slot.message.id))
+  const encodedItemKeys = JSON.stringify(slots.map(nativeChatSlotKey))
   const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
   const estimateSize = useCallback(
     (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,
@@ -283,18 +283,27 @@ export function useNativeChatTranscriptWindow({
       return
     }
     finishReaderTakeover()
-    if (virtualizer.scrollElement) {
+    // With no windowed row it would resolve the end from its own rows' height, 0, though rows
+    // drawn after the window (a message shown as not sent) still fill the container.
+    if (virtualizer.scrollElement && slots.length > 0) {
       virtualizer.scrollToEnd({ behavior: 'auto' })
       return
     }
-    // No virtualizer yet (a container without layout): the document's own bottom
-    // is the same offset the virtualizer would resolve for the last row.
+    // No virtualizer yet (a container without layout), or no windowed row: the document's own
+    // bottom is the same offset the virtualizer would resolve for the last row.
     const previous = container.scrollTop
     container.scrollTop = container.scrollHeight
     if (container.scrollTop !== previous) {
       programmaticScrollMarks.mark(container.scrollTop)
     }
-  }, [finishReaderTakeover, isVisible, programmaticScrollMarks, scrollRef, virtualizer])
+  }, [
+    finishReaderTakeover,
+    isVisible,
+    programmaticScrollMarks,
+    scrollRef,
+    slots.length,
+    virtualizer
+  ])
 
   const restoreScrollOffset = useCallback(
     (offset: number) => {

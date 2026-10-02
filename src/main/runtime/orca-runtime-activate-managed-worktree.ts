@@ -12,9 +12,7 @@ import type {
 } from './runtime-worktree-agent-startup'
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft,
-  markLocalWorktreeTrusted,
-  markRemoteWorktreeTrusted
+  buildWorktreeStartupForDraft
 } from './runtime-worktree-agent-startup'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { Worktree } from '../../shared/worktree/types'
@@ -118,7 +116,8 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
   protected async buildStartupForDraft(
     repo: Repo,
     draft: string,
-    requestedAgent?: TuiAgent
+    requestedAgent?: TuiAgent,
+    launchSource?: string
   ): Promise<{
     agent: TuiAgent
     startup: WorktreeStartupLaunch
@@ -131,6 +130,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       repo,
       draft,
       ...(requestedAgent ? { requestedAgent } : {}),
+      ...(launchSource ? { launchSource } : {}),
       settings: this.store.getSettings(),
       getLaunchPlatform: () => this.getAgentLaunchPlatformForRepo(repo)
     })
@@ -160,33 +160,6 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       getLaunchPlatform: () => this.getAgentLaunchPlatformForRepo(repo),
       toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
     })
-  }
-
-  protected async markLocalWorkspaceTrustedForAgent(
-    agent: TuiAgent,
-    workspacePath: string
-  ): Promise<void> {
-    await markLocalWorktreeTrusted(agent, workspacePath)
-  }
-
-  protected async markWorkspaceTrustedForAgent(
-    agent: TuiAgent,
-    connectionId: string | null | undefined,
-    workspacePath: string
-  ): Promise<void> {
-    if (connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(agent, connectionId, workspacePath)
-      return
-    }
-    await this.markLocalWorkspaceTrustedForAgent(agent, workspacePath)
-  }
-
-  protected async markRemoteWorkspaceTrustedForAgent(
-    agent: TuiAgent,
-    connectionId: string,
-    workspacePath: string
-  ): Promise<void> {
-    await markRemoteWorktreeTrusted(agent, connectionId, workspacePath)
   }
 
   protected recordCreatedWorktreeLineage(
@@ -231,25 +204,31 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     sendWorktreeStartupFollowupWhenReady(this.getWorktreeStartupReadinessHost(), handle, followup)
   }
 
-  protected async provisionManagedWorktreeTerminals(args: {
-    worktreeSelector: string
-    worktreeId: string
-    worktreePath: string
-    setup?: CreateWorktreeResult['setup']
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
-    primaryTerminalHandle?: string | null
-    hasStartupTerminal: boolean
-    setupCommandPlatform: 'windows' | 'posix'
-    observeSetupCompletion?: boolean
-    // Why: when the agent startup is sequenced to wait for setup
-    // (waitForAgentStartup), the startup PTY runs a wrapper that already embeds
-    // the setup command. Pass that wrapped command through so the Setup tab runs
-    // the same script the agent is waiting on instead of a bare runner.
-    wrappedSetupCommand?: string
-    // Why: a workspace provisioned in the background must not pull the sidebar
-    // to itself; the user never asked to look at these tabs.
-    surfaceOwner?: false
-  }): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
-    return provisionWorktreeTerminals(this.getWorktreeTerminalProvisioningHost(), args)
+  protected async provisionManagedWorktreeTerminals(
+    args: {
+      worktreeSelector: string
+      worktreeId: string
+      worktreePath: string
+      setup?: CreateWorktreeResult['setup']
+      defaultTabs?: CreateWorktreeResult['defaultTabs']
+      primaryTerminalHandle?: string | null
+      hasStartupTerminal: boolean
+      setupCommandPlatform: 'windows' | 'posix'
+      observeSetupCompletion?: boolean
+      // Why: when the agent startup is sequenced to wait for setup
+      // (waitForAgentStartup), the startup PTY runs a wrapper that already embeds
+      // the setup command. Pass that wrapped command through so the Setup tab runs
+      // the same script the agent is waiting on instead of a bare runner.
+      wrappedSetupCommand?: string
+      // Why: a workspace provisioned in the background must not pull the sidebar
+      // to itself; the user never asked to look at these tabs.
+      surfaceOwner?: false
+    },
+    createdWorktree?: Worktree
+  ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
+    return provisionWorktreeTerminals(
+      this.getWorktreeTerminalProvisioningHost(createdWorktree),
+      args
+    )
   }
 }

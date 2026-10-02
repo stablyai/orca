@@ -1,9 +1,14 @@
 // The sentences a chat notice is made of, each whole so desktop can translate it on its own.
 
+import type { AgentSessionFailureFact } from './agent-session-failure'
 import {
   QUIT_TERMINAL_AGENT,
   START_NEW_CHAT,
   TERMINAL_AGENT_HOLDS_CHAT
+} from './agent-session-failure-copy'
+import type {
+  AgentSessionFailureSurface,
+  AgentSessionFailureWordsContext
 } from './agent-session-failure-words'
 
 /** Every sentence a notice is made of. Desktop translates each whole sentence with this as its
@@ -26,6 +31,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   historyUnreadable: "Orca couldn't read this chat's saved history.",
   historyUnusable: 'Unable to load this chat.',
   historyUnavailable: "Orca couldn't open this chat's history right now.",
+  savedByNewerOrca: 'Chats were saved by a newer Orca.',
+  updateOrcaToKeepUsing: 'Update Orca to keep using them.',
   unsupported: "The Orca running this chat doesn't support this. Update Orca, then try again.",
   unreachable: "Orca couldn't reach the agent.",
   recordFailed: "Orca couldn't record it in this chat's history.",
@@ -60,5 +67,33 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
 } as const
 
 export type AgentSessionWriteNoticeSentence = keyof typeof AGENT_SESSION_WRITE_NOTICE_COPY
-/** A notice as whole sentences, each translated on its own; `text` is a provider's own words. */
-export type AgentSessionWriteNoticePart = AgentSessionWriteNoticeSentence | { text: string }
+/** A failure fact, worded where it is shown so desktop can say it in the reader's language. */
+export type AgentSessionWriteNoticeFailurePart = {
+  failure: AgentSessionFailureFact
+  surface: AgentSessionFailureSurface
+  context: AgentSessionFailureWordsContext
+}
+/** A notice as whole sentences, each translated on its own; `text` is words someone else wrote: a
+ *  provider's, or a host's sentence with no fact beside it. */
+export type AgentSessionWriteNoticePart =
+  | AgentSessionWriteNoticeSentence
+  | { text: string }
+  | AgentSessionWriteNoticeFailurePart
+
+/** Causes that already say the history can't be read here, so no sentence after them says it
+ *  again. */
+export const AGENT_SESSION_HISTORY_UNREAD_CAUSES: ReadonlySet<AgentSessionWriteNoticeSentence> =
+  new Set(['historyUnusable', 'historyUnavailable', 'historyUnreadable', 'savedByNewerOrca'])
+
+/** Whether these words already say this chat's history didn't load, so a pane headed by them need
+ *  only add that it keeps trying. "Chats were saved by a newer Orca" names no one chat for "it". */
+export function agentSessionNoticeSaysThisChatUnread(
+  parts: readonly AgentSessionWriteNoticePart[]
+): boolean {
+  return parts.some(
+    (part) =>
+      typeof part === 'string' &&
+      part !== 'savedByNewerOrca' &&
+      (part === 'notDoneReadHistory' || AGENT_SESSION_HISTORY_UNREAD_CAUSES.has(part))
+  )
+}

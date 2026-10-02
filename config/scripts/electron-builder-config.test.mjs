@@ -162,6 +162,32 @@ describe('electron-builder config', () => {
     expect(packs('out/renderer/index.html')).toBe(true)
   })
 
+  // Why: an AV verdict on the bundled relay.js used to take app.asar with it as a
+  // compound object, gutting the install (#20966). resources/relay is the only copy
+  // a packaged build resolves, so the asar copy was 14MB of pure blast radius.
+  it('keeps the relay bundles out of app.asar and ships them only through extraResources', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const relayPath of [
+      'out/relay/linux-x64/relay.js',
+      'out/relay/win32-x64/relay.js',
+      'out/relay/darwin-arm64/relay-watcher.js',
+      'out/relay/wsl/wsl-agent-hook-relay.js'
+    ]) {
+      expect(packs(relayPath)).toBe(false)
+    }
+
+    for (const platform of ['mac', 'linux', 'win']) {
+      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
+        from: 'out/relay',
+        to: 'relay'
+      })
+    }
+  })
+
   it('keeps runtime resources available through extraResources', () => {
     const bundledPluginResources = expect.objectContaining({
       from: 'resources/plugins/launch',
