@@ -1,9 +1,9 @@
 // The restart-resume offer: list it, act on it, or turn it down.
 //
 // Each method reaches for records on disk this process may not have opened yet, so each builds the
-// host the way hold and reveal do. Listing is read-only and takes nothing live; acting goes through
-// the host's single resume path, which re-derives eligibility rather than trusting the ids it is
-// given.
+// host the way hold and reveal do. Listing takes nothing live and spends no live offer; acting goes
+// through the host's single resume path, which re-derives eligibility rather than trusting the ids
+// it is given.
 
 import { defineMethod } from '../core'
 import {
@@ -64,20 +64,15 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     }
   }),
   defineMethod({
-    // Reattach only, no send. No Orca surface calls it now — the desktop prompt's single action is
-    // resume-and-continue — but it is a PUBLISHED wire method, so dropping it is a wire removal an
-    // older or non-desktop client would meet as an unknown method.
+    // Reattach only, no send. Reattaching is nothing now — an agent starts only for work — so this
+    // answers that nothing was resumed. No Orca surface calls it, but it is a PUBLISHED wire
+    // method, so dropping it is a wire removal an older client would meet as an unknown method.
     name: 'agentSession.restartResume',
     params: RestartResumeParams,
-    handler: async (params, ctx) => {
+    handler: async (_params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
-      const host = requireStructuredHost(ctx)
-      return {
-        results: await host.restartResume.resume(
-          params.sessionIds,
-          structuredCallerFor(ctx).callerKey
-        )
-      }
+      requireStructuredHost(ctx)
+      return { results: [] }
     }
   })
 ]

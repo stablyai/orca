@@ -68,6 +68,22 @@ describe('createIpcPtyTransport', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
+  it('keeps the recovery hint and raw diagnostic from a wrapped spawn error', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    vi.mocked(window.api.pty.spawn).mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'pty:spawn': Error: Close unused terminals, then try again.\nnode-pty: open_slave failed: EMFILE (errno 24)"
+      )
+    )
+    const onError = vi.fn()
+
+    await createIpcPtyTransport({}).connect({ url: '', callbacks: { onError } })
+
+    expect(onError).toHaveBeenCalledWith(
+      'Close unused terminals, then try again.\nnode-pty: open_slave failed: EMFILE (errno 24)'
+    )
+  })
+
   it('threads provider command ownership through the spawn IPC', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const transport = createIpcPtyTransport({

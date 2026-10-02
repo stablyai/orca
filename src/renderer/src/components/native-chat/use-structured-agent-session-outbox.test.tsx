@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
 import { enqueueStructuredAgentSessionLaunchPrompt } from './structured-agent-session-outbox-storage'
@@ -18,6 +18,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
+
+// Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
+afterEach(cleanup)
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -233,6 +236,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   it.each(['agent_session_operation_conflict', 'agent_session_operation_expired'] as const)(
     'rotates a send operation after %s',
     async (code) => {
+      // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
       vi.mocked(globalThis.crypto.randomUUID)
         .mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
         .mockReturnValueOnce('22222222-2222-4222-8222-222222222222')
@@ -247,7 +251,7 @@ describe('useStructuredAgentSessionOutbox', () => {
       )
 
       act(() => expect(result.current.send('hello')).toBe(true))
-      await waitFor(() => expect(result.current.outbox[0]?.state).toBe('queued'))
+      await waitFor(() => expect(result.current.outbox[0]?.state).toBe('rejected'))
       const firstId = (mocks.call.mock.calls[0]![2] as { envelope: { clientOperationId: string } })
         .envelope.clientOperationId
       const retryId = result.current.outbox[0]!.clientMessageId
@@ -322,7 +326,8 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
     const id = result.current.outbox[0]!.clientMessageId
     await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
-    expect(result.current.error).toBe('Message delivery is unconfirmed')
+    // The Retry row already says delivery is unconfirmed; nothing repeats it.
+    expect([result.current.error, result.current.outbox[0]?.lastFailure]).toEqual([null, undefined])
 
     rerender({
       submissions: [
@@ -529,6 +534,47 @@ describe('useStructuredAgentSessionOutbox', () => {
     ).toBe(firstId)
   })
 
+  it('stops on a host that could not restart the agent and keeps its refusal on the message', async () => {
+    const message = "Claude couldn't restart: Not logged in. Please run /login."
+    mocks.call.mockResolvedValue({
+      ok: false,
+      refusal: { code: 'agent_session_owner_restart_failed', message }
+    })
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: []
+      })
+    )
+
+    act(() => expect(result.current.send('hello')).toBe(true))
+    await waitFor(() =>
+      expect(result.current.outbox[0]?.lastFailure).toEqual({
+        kind: 'refused',
+        code: 'agent_session_owner_restart_failed'
+      })
+    )
+    expect(result.current.error).toBeNull()
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+
+    expect(mocks.call).toHaveBeenCalledOnce()
+    expect(result.current.outbox).toHaveLength(1)
+    // Never sent, and never re-sent on its own: it waits for Retry and holds nothing up.
+    expect(result.current.outbox[0]?.state).toBe('rejected')
+    // Settled, not pending: the refused id never ran, so a Retry is a new operation.
+    const sentId: unknown = mocks.call.mock.calls[0]![2].envelope.clientOperationId
+    const retryId = result.current.outbox[0]!.clientMessageId
+    expect(retryId).not.toBe(sentId)
+
+    // A manual Retry sends again, which is what asks the host for another restart.
+    act(() => result.current.retry(retryId))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    const retriedId: unknown = mocks.call.mock.calls[1]![2].envelope.clientOperationId
+    expect(retriedId).toBe(retryId)
+  })
+
   it('persists and dispatches an attachment-only structured send', async () => {
     mocks.call.mockResolvedValue(acceptedResult(1))
     const { result } = renderHook(() =>
@@ -557,6 +603,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it('retries an unknown head and advances a queued tail', async () => {
+    // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -619,6 +666,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it('rotates a history-rejected unknown head so the queued tail can advance', async () => {
+    // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -679,6 +727,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it('rotates the id after a refused write and delivers the message exactly once', async () => {
+    // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -727,16 +776,10 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     const firstId = mocks.call.mock.calls[0]![2].envelope.clientOperationId as string
 
-    // A refused write is answered, not doubted: the entry parks with human copy
-    // rather than under the "delivery is unconfirmed" banner. The durable reason
-    // stays `provider_write_failed: …`; it must not reach the screen.
-    await waitFor(() =>
-      expect(result.current.error).toBe(
-        "Couldn't reach the agent. Your message was not sent — Retry to send it again."
-      )
-    )
-    expect(result.current.outbox[0]?.state).toBe('queued')
-    expect(result.current.blockedClientMessageId).toBe(firstId)
+    // A refused write is answered, not doubted: the entry parks with its rejection rather than
+    // under the "delivery is unconfirmed" banner. The disposition tests pin its words.
+    await waitFor(() => expect(result.current.outbox[0]?.lastFailure?.kind).toBe('rejected'))
+    expect(result.current.outbox[0]?.state).toBe('rejected')
 
     // Retry immediately, before the journal subscription can publish the rejected row.
     act(() => result.current.retry(firstId))
@@ -804,7 +847,9 @@ describe('useStructuredAgentSessionOutbox', () => {
     )
 
     act(() => expect(result.current.send('hello')).toBe(true))
-    await waitFor(() => expect(result.current.error).toBe('agent_session_checkpoint_stale'))
+    const refused = { kind: 'refused', code: 'agent_session_checkpoint_stale' }
+    await waitFor(() => expect(result.current.outbox[0]?.lastFailure).toEqual(refused))
+    expect(result.current.error).toBeNull()
 
     rerender({ sessionId: 'session-2' })
     expect(result.current.error).toBeNull()

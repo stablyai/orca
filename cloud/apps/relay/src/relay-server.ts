@@ -167,6 +167,7 @@ export function createRelayServer(
     recordAssignmentAdmission: (outcome) => observability.recordAssignmentAdmission?.(outcome),
     recordAssignmentRejectionReason: (lane, reason) =>
       observability.recordAssignmentRejectionReason?.(lane, reason),
+    recordDrainReturnRetryAfter: (seconds) => observability.recordDrainReturnRetryAfter?.(seconds),
     recordRegionRequest: (region) => observability.recordRegionRequest?.(region),
     recordRegionSelection: (input) => observability.recordRegionSelection?.(input)
   })
@@ -276,7 +277,7 @@ export function createRelayServer(
       finished = true
       authenticated(source)
       observability.recordAuth(false)
-      socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
+      closeRelayWebSocket(socket, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
     }, RELAY_PROTOCOL_LIMITS.firstFrameDeadlineMs)
     socket.once('message', (raw, binary) => {
       if (finished) return
@@ -285,7 +286,11 @@ export function createRelayServer(
       authenticated(source)
       if (binary) {
         observability.recordAuth(false)
-        socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame must be text')
+        closeRelayWebSocket(
+          socket,
+          RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+          'first frame must be text'
+        )
         return
       }
       void callback(raw).catch((error: unknown) => {
@@ -356,7 +361,11 @@ export function createRelayServer(
               webSocket.send(
                 JSON.stringify({ type: 'relay-hello', ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL })
               )
-              webSocket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid relay auth')
+              closeRelayWebSocket(
+                webSocket,
+                RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+                'invalid relay auth'
+              )
               return
             }
             if (config.role === 'director') {
@@ -376,7 +385,11 @@ export function createRelayServer(
                     code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
                   })
                 )
-                webSocket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid invite')
+                closeRelayWebSocket(
+                  webSocket,
+                  RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+                  'invalid invite'
+                )
                 return
               }
               phoneAdmission?.hostData.release()
@@ -389,7 +402,7 @@ export function createRelayServer(
                   assignmentEpoch: assignment.assignmentEpoch
                 })
               )
-              webSocket.close(RELAY_CLOSE_CODE.DRAINING, 'connect to assigned cell')
+              closeRelayWebSocket(webSocket, RELAY_CLOSE_CODE.DRAINING, 'connect to assigned cell')
               return
             }
             await sessions.acceptClient(
@@ -442,7 +455,11 @@ export function createRelayServer(
             const auth = HostDataAuthSchema.safeParse(firstPayload(raw, 'host-data-auth'))
             if (!auth.success) {
               observability.recordAuth(false)
-              webSocket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid host data auth')
+              closeRelayWebSocket(
+                webSocket,
+                RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+                'invalid host data auth'
+              )
               return
             }
             const accepted = await sessions.acceptHostData(
@@ -565,9 +582,4 @@ export function createRelayServer(
     ready,
     cellIncarnation
   }
-}
-
-export function closeWithDrain(socket: WebSocket, graceMs: number): void {
-  socket.send(JSON.stringify({ type: 'drain', graceMs, recovery: 'resolve-director' }))
-  socket.close(RELAY_CLOSE_CODE.DRAINING, 'resolve configured director')
 }

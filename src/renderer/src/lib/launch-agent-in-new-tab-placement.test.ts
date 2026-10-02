@@ -91,16 +91,18 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
   })
 
-  it('takes the global selection by default', async () => {
+  it('shows terminals in the worktree it launched into', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
     expect(mockCreateTab.mock.calls[0]?.[3]).not.toHaveProperty('activate')
-    expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal')
+    // Why: an unscoped call targets the active worktree — the main window — whatever worktree the
+    // launch landed in, which is how a floating launch dropped the main window off its editor.
+    expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
   })
 
-  it('honours the chat default in a floating launch while keeping it out of the global selection', async () => {
+  it('honours the chat default in a floating launch and scopes its surface to the floating workspace', async () => {
     store.settings = placementSettings({
       experimentalNativeChat: true,
       experimentalStructuredNativeChat: true,
@@ -116,23 +118,22 @@ describe('launchAgentInNewTab terminal tab activation', () => {
 
     launchAgentInNewTab({
       agent: 'codex',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      activate: false
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
 
-    // Why: the floating workspace selects within its own group; activating here would move the
-    // main window's active tab to a tab it does not show.
     expect(mockCreateTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       undefined,
       undefined,
       {
         launchAgent: 'codex',
-        activate: false,
         viewMode: 'chat'
       }
     )
-    expect(mockSetActiveTabType).not.toHaveBeenCalled()
+    expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith(
+      'terminal',
+      FLOATING_TERMINAL_WORKTREE_ID
+    )
     // Why: the panel hosts the chat pane itself, so the launch carries the user's model/effort
     // preferences the same way a main-window launch does.
     expect(mockSeedNativeChatAppliedSessionOptions).toHaveBeenCalledWith('tab-1', 'codex', {

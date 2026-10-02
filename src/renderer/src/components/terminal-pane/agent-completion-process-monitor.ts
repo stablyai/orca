@@ -184,6 +184,11 @@ export function createAgentCompletionProcessMonitor({
     requestInspection,
     scheduleNextPoll,
     clearPollTimer,
+    observeRecognizedProcess: (process: RecognizedAgentProcess) => {
+      if (!state.disposed) {
+        handleRecognizedProcess(process)
+      }
+    },
     start: () => {
       state.pollTrackingStarted = true
       scheduleNextPoll()

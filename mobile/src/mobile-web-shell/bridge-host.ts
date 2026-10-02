@@ -13,7 +13,7 @@ import {
   type BridgeInitRoute
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
-import { BRIDGE_SHELL_ACCEPTS, createBridgeInitFrame } from './bridge/bridge-init-frame'
+import { createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { splitBridgeReply } from './bridge/bridge-reply-chunking'
 import { createBridgeHostFrames } from './bridge-host-frames'
 import { createBridgeHostBack, type BridgeSessionBack } from './bridge-host-back'
@@ -31,9 +31,8 @@ export type BridgeHost = {
    * Hands this session a rewritten route: same screen, different params (ruling 33.1).
    *
    * The held route moves either way, so a page that reloads inside this mount is told the newest
-   * one; the frame goes out only to a page that declared `BRIDGE_ROUTE_UPDATE_ACCEPT`, because a
-   * page too old to name it reads a second `init` as a replacement. A different pathname is a
-   * different screen and is refused here — that is a remount, which is what the shell already does.
+   * one. A different pathname is a different screen and is refused here — that is a remount,
+   * which is what the shell already does.
    *
    * Answers nothing, and nothing is tracked (ruling 34): a frame the view refused is repaired by
    * the next `init`, and the request it carried is spent by the page, which erases the param it
@@ -42,6 +41,8 @@ export type BridgeHost = {
   publishRoute: (next: BridgeInitRoute) => void
   /** Hands this session moved safe-area insets over the same re-sent `init` a route update takes. */
   publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
+  /** Hands this session a moved keyboard height over the same re-sent `init`. */
+  publishKeyboardInset: (next: number) => void
   /**
    * Hands the page one Back press. False when this document never said it takes one, which is
    * every page older than the frame; the caller then leaves the key to the navigator.
@@ -87,7 +88,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       sendInit()
     },
     onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue }),
-    ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets })
+    ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
+    ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset })
   })
   let closed = false
   // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
@@ -163,12 +165,12 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           connection: snapshot(),
           route,
           safeAreaInsets: routes.safeAreaInsets(),
+          keyboardInset: routes.keyboardInset(),
           pageRoutes,
           ...(parsedRouteGrants?.success === true
             ? { pageRouteGrants: parsedRouteGrants.data }
             : {}),
           granted,
-          accepts: BRIDGE_SHELL_ACCEPTS,
           host,
           ...options.readStorage()
         })
@@ -249,16 +251,12 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     // re-asked `ready` from the document already being served is answered the same way.
     if (message.type === 'ready') {
       serving = true
-      routes.readReady(message)
-      back.readReady(message.accepts ?? [])
+      back.readReady()
       // Every time it is asked, not once: the page re-asks on a backoff, and each ask is answered
       // with the route the shell holds now. That is the whole repair path for a frame that never
       // arrived (ruling 34) — nothing here waits on one, and nothing retries one.
       sendInit()
-      // Forwarded verbatim, including a name this shell has never implemented: what each report
-      // means is the caller's, and this host's job is that the list belongs to the document that
-      // just spoke rather than to the one before it.
-      options.onPageReady({ reports: message.reports ?? [], accepts: message.accepts ?? [] })
+      options.onPageReady()
       return
     }
     if (!serving) {
@@ -336,6 +334,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishSafeAreaInsets: (next) => {
       routes.publishSafeAreaInsets(next, deliverable())
+    },
+    publishKeyboardInset: (next) => {
+      routes.publishKeyboardInset(next, deliverable())
     },
     sendBack: back.send,
     readSessionBack: back.read,

@@ -63,7 +63,9 @@ export function journalClaudeMessage(
   startsTurn: boolean,
   observedAt: number,
   /** Host clock on the submission that produced this send, when known. */
-  requestedAt?: number
+  requestedAt?: number,
+  /** The submission this send echo acknowledged. */
+  openedBy?: string
 ): boolean {
   const envelope = readClaudeMessageEnvelope(message)
   if (!envelope) {
@@ -176,6 +178,7 @@ export function journalClaudeMessage(
     startsTurn,
     observedAt,
     ...(requestedAt === undefined ? {} : { requestedAt }),
+    ...(openedBy === undefined ? {} : { openedBy }),
     userItemId: agentJournalItemKey(identity)
   })
   if (sendEchoTurn) {

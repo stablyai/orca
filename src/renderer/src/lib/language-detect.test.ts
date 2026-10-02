@@ -20,6 +20,22 @@ describe('detectLanguage', () => {
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
 
+  it.each([
+    'documents/report.typ',
+    'C:\\documents\\REPORT.TYP',
+    '\\\\server\\share\\report.typ',
+    '/home/user/folder workspace/Report.TyP'
+  ])('maps Typst source %s to the typst language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('typst')
+  })
+
+  it.each(['report.typ.bak', 'report.typx', 'documents.typ/README', 'documents.typ\\README'])(
+    'keeps non-Typst file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')
@@ -37,6 +53,25 @@ describe('detectLanguage', () => {
     expect(detectLanguage('rtl/defs.vh')).toBe('verilog')
     expect(detectLanguage('C:\\rtl\\TOP.SV')).toBe('systemverilog')
   })
+
+  it.each([
+    'report.abap',
+    'src/zcor0260.prog.abap',
+    'src/zcl_demo.clas.abap',
+    'src/zif_demo.intf.abap',
+    'C:\\repo\\src\\ZCL_DEMO.CLAS.ABAP',
+    '\\\\server\\share\\src\\ZREPORT.PROG.ABAP',
+    '/home/user/folder workspace/src/Report.AbAp'
+  ])('maps ABAP source %s to the Monaco built-in abap language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('abap')
+  })
+
+  it.each(['src.abap/README', 'src\\abap.abap\\README', 'report.abap.bak', 'report.abapx'])(
+    'keeps non-ABAP file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
 
   it('maps .proto files to the Monaco built-in proto language id, not the alias', () => {
     expect(detectLanguage('api/v1/service.proto')).toBe('proto')
@@ -77,6 +112,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\theme\\snippets\\CART.LIQUID')).toBe('liquid')
   })
 
+  it('maps .sol files to the Monaco built-in sol language id, not the solidity alias', () => {
+    expect(detectLanguage('contracts/Vault.sol')).toBe('sol')
+    expect(detectLanguage('C:\\repo\\contracts\\TOKEN.SOL')).toBe('sol')
+  })
+
   it('maps Salesforce Apex sources to the apex language id (case-insensitive)', () => {
     expect(detectLanguage('force-app/main/default/classes/AccountService.cls')).toBe('apex')
     expect(detectLanguage('force-app/main/default/triggers/AccountTrigger.trigger')).toBe('apex')
@@ -84,9 +124,88 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\repo\\force-app\\classes\\ACCOUNTSERVICE.CLS')).toBe('apex')
   })
 
+  it.each([
+    'templates/base.twig',
+    'templates/node--article.html.twig',
+    'C:\\theme\\templates\\PAGE.HTML.TWIG',
+    '\\\\server\\share\\templates\\PAGE.TWIG',
+    '/home/user/folder workspace/templates/Base.TwIg'
+  ])('maps Twig template %s to the Monaco built-in twig language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('twig')
+  })
+
+  it.each(['base.twig.bak', 'base.twigx', 'templates.twig/README', 'templates.twig\\README'])(
+    'keeps non-Twig file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
+
   it('keeps .json/.jsonc on the built-in json language and unknown on plaintext', () => {
     expect(detectLanguage('config/settings.json')).toBe('json')
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')
     expect(detectLanguage('notes/scratch.unknownext')).toBe('plaintext')
+  })
+  it.each([
+    ['.env', 'ini'],
+    ['.env.local', 'ini'],
+    ['.env.development', 'ini'],
+    ['.env.production', 'ini'],
+    ['.env.functions.local', 'ini'],
+    ['.env.staging', 'ini'],
+    ['.env.test.example', 'ini'],
+    ['config/.env.development.local', 'ini'],
+    ['.ENV', 'ini'],
+    ['.ENV.STAGING', 'ini'],
+    ['C:\\repo\\.EnV.FUNCTIONS.LOCAL', 'ini'],
+    ['\\\\server\\share\\.env.test.example', 'ini'],
+    ['.env.sh', 'shell'],
+    ['.ENV.SH', 'shell'],
+    ['.env.json', 'json'],
+    ['.env.local.ts', 'typescript'],
+    ['.env/CMakeLists.txt', 'cmake'],
+    ['C:\\repo\\.env.local\\Dockerfile', 'dockerfile'],
+    ['.envrc', 'plaintext'],
+    ['.environment', 'plaintext'],
+    ['env.staging', 'plaintext'],
+    ['dev.env', 'plaintext'],
+    ['other.env.local', 'plaintext'],
+    ['..env.local', 'plaintext'],
+    ['.env.staging/readme', 'plaintext'],
+    ['C:\\repo\\.env.local\\notes', 'plaintext'],
+    ['', 'plaintext']
+  ])('detects dotenv names without overriding specific mappings: %s', (filePath, expected) => {
+    expect(detectLanguage(filePath)).toBe(expected)
+  })
+
+  it.each([
+    ['/Users/me/.zshrc', 'shell'],
+    ['/home/me/.bashrc', 'shell'],
+    ['C:\\Users\\me\\.bash_profile', 'shell'],
+    ['/home/me/.bash_login', 'shell'],
+    ['/home/me/.bash_logout', 'shell'],
+    ['/home/me/.profile', 'shell'],
+    ['/home/me/.zshenv', 'shell'],
+    ['/home/me/.zprofile', 'shell'],
+    ['/home/me/.zlogin', 'shell'],
+    ['/home/me/.zlogout', 'shell']
+  ])('maps shell startup dotfiles to shell: %s', (filePath, expected) => {
+    expect(detectLanguage(filePath)).toBe(expected)
+  })
+
+  it.each([
+    ['/Users/me/.ZSHRC', 'shell'],
+    ['C:\\Users\\me\\.BASHRC', 'shell'],
+    ['/home/me/.Bash_Profile', 'shell'],
+    ['/home/me/.PROFILE', 'shell'],
+    ['/home/me/.ZPROFILE', 'shell'],
+    ['C:\\repo\\DOCKERFILE', 'dockerfile'],
+    ['C:\\repo\\dockerfile', 'dockerfile'],
+    ['C:\\repo\\MAKEFILE', 'makefile'],
+    ['C:\\repo\\makefile', 'makefile'],
+    ['C:\\repo\\CMAKELISTS.TXT', 'cmake'],
+    ['C:\\repo\\.GITIGNORE', 'ini']
+  ])('maps exact filenames case-insensitively: %s', (filePath, expected) => {
+    expect(detectLanguage(filePath)).toBe(expected)
   })
 })

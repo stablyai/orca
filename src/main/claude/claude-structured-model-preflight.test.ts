@@ -18,6 +18,7 @@ const HAIKU = {
 function sessionWith(catalog: readonly Record<string, unknown>[] | 'unavailable') {
   const calls: string[] = []
   return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every session member the option paths under test read.
     session: {
       options: new Map<string, string>(),
       reportedOptions: {} as { model?: string; effort?: string },
@@ -36,7 +37,8 @@ function sessionWith(catalog: readonly Record<string, unknown>[] | 'unavailable'
         setModel: async (model: string) => {
           calls.push(`set_model:${model}`)
         }
-      }
+      },
+      startup: { state: 'proven' }
     } as unknown as ClaudeSession,
     calls
   }

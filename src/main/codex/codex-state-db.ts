@@ -71,6 +71,37 @@ export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStat
   }
 }
 
+/**
+ * Lower-cased thread ids already in Codex's state DB, or null when the DB is
+ * missing or unreadable. Read-only; never creates or mutates Codex's database.
+ */
+export function readIndexedCodexThreadIds(codexHomePath: string): Set<string> | null {
+  const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
+  if (!stateDbPath) {
+    return null
+  }
+  let db: SyncDatabase | null = null
+  try {
+    db = new SyncDatabase(stateDbPath, { readonly: true, fileMustExist: true })
+    const ids = new Set<string>()
+    for (const row of db.prepare('SELECT id FROM threads').all()) {
+      if (typeof row.id === 'string') {
+        ids.add(row.id.toLowerCase())
+      }
+    }
+    return ids
+  } catch (error) {
+    console.warn('[codex-state-db] Failed to read indexed Codex threads:', error)
+    return null
+  } finally {
+    try {
+      db?.close()
+    } catch {
+      // A close failure cannot change the read-only result already collected.
+    }
+  }
+}
+
 export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number): number {
   let count = 0
   const pendingDirectories = [sessionsRoot]
@@ -85,7 +116,11 @@ export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number):
     for (const entry of entries) {
       if (entry.isDirectory()) {
         pendingDirectories.push(join(directory, entry.name))
-      } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+      } else if (
+        entry.isFile() &&
+        // Why: Codex's startup backfill parses compressed rollouts too.
+        (entry.name.endsWith('.jsonl') || entry.name.endsWith('.jsonl.zst'))
+      ) {
         count += 1
         if (count >= limit) {
           break

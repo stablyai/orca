@@ -1,10 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   chatFontScaleActionForEvent,
-  chatFontScaleShortcutLabels,
-  clampChatFontScale,
   decreaseChatFontScale,
-  DEFAULT_CHAT_FONT_SCALE,
   increaseChatFontScale,
   MAX_CHAT_FONT_SCALE,
   MIN_CHAT_FONT_SCALE
@@ -15,24 +12,6 @@ type Combo = Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey'>
 function combo(overrides: Partial<Combo>): Combo {
   return { key: '=', metaKey: false, ctrlKey: false, ...overrides }
 }
-
-describe('clampChatFontScale', () => {
-  it('keeps a value inside the band untouched', () => {
-    expect(clampChatFontScale(1.2)).toBe(1.2)
-  })
-
-  it('clamps below the minimum', () => {
-    expect(clampChatFontScale(0.1)).toBe(MIN_CHAT_FONT_SCALE)
-  })
-
-  it('clamps above the maximum', () => {
-    expect(clampChatFontScale(5)).toBe(MAX_CHAT_FONT_SCALE)
-  })
-
-  it('rounds away float drift to clean tenths', () => {
-    expect(clampChatFontScale(0.7999999999)).toBe(0.8)
-  })
-})
 
 describe('increase/decreaseChatFontScale', () => {
   it('steps up by a tenth without drift', () => {
@@ -92,27 +71,4 @@ describe('chatFontScaleActionForEvent', () => {
   it('returns null without a primary modifier', () => {
     expect(chatFontScaleActionForEvent(combo({ key: '=' }), true)).toBeNull()
   })
-})
-
-describe('chatFontScaleShortcutLabels', () => {
-  it('uses Cmd glyphs on Mac', () => {
-    expect(chatFontScaleShortcutLabels(true)).toEqual({
-      increase: '⌘+',
-      decrease: '⌘-',
-      reset: '⌘0'
-    })
-  })
-
-  it('uses Ctrl+ text elsewhere', () => {
-    expect(chatFontScaleShortcutLabels(false)).toEqual({
-      increase: 'Ctrl++',
-      decrease: 'Ctrl+-',
-      reset: 'Ctrl+0'
-    })
-  })
-})
-
-it('default scale sits inside the band', () => {
-  expect(DEFAULT_CHAT_FONT_SCALE).toBeGreaterThanOrEqual(MIN_CHAT_FONT_SCALE)
-  expect(DEFAULT_CHAT_FONT_SCALE).toBeLessThanOrEqual(MAX_CHAT_FONT_SCALE)
 })

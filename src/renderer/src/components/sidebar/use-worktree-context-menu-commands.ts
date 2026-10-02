@@ -164,7 +164,7 @@ export function useWorktreeContextMenuCommands(args: {
   }, [args])
   const handleOpenParent = useCallback(() => {
     if (args.validParentWorktreeId) {
-      activateAndRevealWorktree(args.validParentWorktreeId)
+      activateAndRevealWorktree(args.validParentWorktreeId, { navigationIntent: 'user-open' })
     }
   }, [args.validParentWorktreeId])
   return {

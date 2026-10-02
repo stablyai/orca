@@ -1,5 +1,6 @@
 import type {
   AgentMainAgentStatus,
+  AgentStatusState,
   AgentSubagentSnapshot,
   AgentWorkingMode
 } from '../../agent-status-types'
@@ -109,16 +110,14 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
+/** The inventory is the only judge of a running shell: it retires the gate when it omits the
+ *  shell, and nothing about how the main agent's turn ended may override what it positively reports. */
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
-  hasRunningNonAgentTask: boolean,
-  /** Lead-turn property. Pass `false` from any non-lead fold: an interrupt clears the gate even when
-   *  the inventory positively reports a running shell, which is a live-shell judgement no new call
-   *  site may inherit by copying this signature. */
-  interrupted: boolean
+  hasRunningNonAgentTask: boolean
 ): void {
-  if (hasRunningNonAgentTask && !interrupted) {
+  if (hasRunningNonAgentTask) {
     state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
   } else {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
@@ -165,11 +164,10 @@ export function claudeMainAgentStatusForPayload(
 export function resolveClaudePaneStatus(
   state: HookListenerState,
   paneKey: string,
-  lead: Pick<ClaudeLeadTurnState, 'state' | 'outcome'>
+  lead: Pick<ClaudeLeadTurnState, 'state'>
 ): ClaudePaneStatusResolution {
   return foldAgentLeadStatus({
     leadState: lead.state,
-    interrupted: mainAgentTurnInterrupted(lead),
     childWorkLiveness: agentChildWorkLivenessFromEvidence({
       // A child's permission wait displaces the main agent record itself (`waitingAgentId`,
       // `stateBeforeWait`) instead of living on the roster, so the roster never carries one.
@@ -183,11 +181,29 @@ export function resolveClaudePaneStatus(
     })
   })
 }
-/** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with no Stop; current Claude sends no hook on a cancel, and a bare Esc is never inferred for Claude); else a later child lifecycle event resurrects the cancelled pane. This is the primary source of `mainAgent.outcome: 'cancellation'` in the CLI lane. */
-export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
-  setClaudeMainAgentTurnState(state, paneKey, { state: 'done', outcome: 'cancellation' })
-  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-  state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+
+/** The SERVER inferred a cancel of a LOCAL pane outside the hook stream (Ctrl+C with no Stop;
+ *  current Claude sends no hook on a cancel, and a bare Esc is never inferred for Claude): record
+ *  the main agent's verdict and fold it with the child work the turn left running, exactly as a
+ *  Stop would be. This is the primary source of `mainAgent.outcome: 'cancellation'` in the CLI
+ *  lane, and the record is what keeps a later child lifecycle event from resurrecting the
+ *  cancelled main agent. Nothing here retires a shell, cron or subagent: they outlive the cancel
+ *  and leave only when their inventory says so. */
+export function markClaudeLeadTurnInterrupted(
+  state: HookListenerState,
+  paneKey: string
+): { state: AgentStatusState; workingMode?: AgentWorkingMode; mainAgent?: AgentMainAgentStatus } {
+  const record = setClaudeMainAgentTurnState(state, paneKey, {
+    state: 'done',
+    outcome: 'cancellation'
+  })
+  const resolved = resolveClaudePaneStatus(state, paneKey, record)
+  const mainAgent = claudeMainAgentStatusForPayload(record)
+  return {
+    state: resolved.stateName,
+    ...(resolved.workingMode ? { workingMode: resolved.workingMode } : {}),
+    ...(mainAgent ? { mainAgent } : {})
+  }
 }
 
 /** Rebuild a pane's working roster from a persisted snapshot; live activity confirms a seed, a complete task inventory may reap an unconfirmed one whose finish hook arrived while Orca was offline. */

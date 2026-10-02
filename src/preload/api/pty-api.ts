@@ -3,6 +3,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
@@ -46,6 +47,8 @@ export type PtyApi = {
     // Why: main sync-flushes the (worktreeId,tabId,leafId→ptyId) binding before pty:spawn returns to close a SIGKILL race (INVESTIGATION.md).
     tabId?: string
     leafId?: string
+    // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
+    replacesPtyId?: string
     // Why: main fires `agent_started` only on spawn success, so launch metadata rides this field (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }) => Promise<{
@@ -73,14 +76,15 @@ export type PtyApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }>
-  write: (id: string, data: string) => void
-  writeAccepted: (id: string, data: string) => Promise<boolean>
+  write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  writeAccepted: (id: string, data: string, inputKind: TerminalInputKind) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
+  resetInputModes: (id: string) => void
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
   ackColdRestore: (id: string) => void
   ackData: (id: string, charCount: number, processedChars?: number) => void
@@ -122,6 +126,11 @@ export type PtyApi = {
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
+  /** Local panes only; false for any other pane. */
+  isCodexOnSharedServer: (id: string) => Promise<boolean>
+  /** Runs the fix with the pane's own Codex; true only once verified. Local panes only. */
+  disableCodexSharedServerAutoStart: (id: string) => Promise<boolean>
+  stopCodexSharedServer: (id: string) => Promise<boolean>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
   listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>
@@ -213,6 +222,8 @@ export type PtyApi = {
       incarnationId?: string
       /** Set only when the owning relay disowned this id; never a claim that the process died. */
       ptySourceDisowned?: true
+      /** Main stopped this PTY so a new process could take its pane; the pane is not dying. */
+      replacedByRestart?: true
     }) => void
   ) => () => void
   onSpawned: (callback: (data: { id: string }) => void) => () => void
@@ -224,6 +235,7 @@ export type PtyApi = {
     }) => void
   ) => () => void
   onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
+  onResetInputModesRequest: (callback: (data: { ptyId: string }) => void) => () => void
   sendSerializedBuffer: (
     requestId: string,
     snapshot: {

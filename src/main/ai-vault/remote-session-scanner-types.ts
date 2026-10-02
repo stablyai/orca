@@ -1,10 +1,17 @@
-import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import type { FileWithMtime } from './session-scanner-types'
 import type { SubagentTranscriptPartition } from './session-scanner-subagent-transcripts'
 import type { AntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+import type { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
+
+export type RemoteOpenCodeSessionReader = Pick<OpenCodeSqliteWorkerClient, 'list' | 'parse'> & {
+  dataDirectory: string
+  databasePath?: string | null
+  parseLegacy: (file: FileWithMtime, platform: NodeJS.Platform) => Promise<AiVaultSession | null>
+}
 
 export type RemoteScannerContext = {
   provider: RemoteSessionFilesystemProvider
@@ -21,6 +28,8 @@ export type RemoteSessionFilesystemProvider = Pick<
 > & {
   /** Available only beside the execution host's disk; never opens a client path. */
   readTranscriptBytes?: (path: string, signal?: AbortSignal) => AsyncIterable<Buffer>
+  /** Execution-host database access; absent from remote filesystem RPC providers. */
+  openCode?: RemoteOpenCodeSessionReader
 }
 
 export type RemoteParserOptions = {
@@ -31,6 +40,11 @@ export type RemoteParserOptions = {
 export type RemoteSessionSource = {
   agent: AiVaultAgent
   rootDir: string
+  discover?: (context: RemoteScannerContext, issues: AiVaultScanIssue[]) => Promise<FileWithMtime[]>
+  parseCandidate?: (
+    file: FileWithMtime,
+    context: RemoteScannerContext
+  ) => Promise<AiVaultSession | null>
   // Codex sources only: the CODEX_HOME the root belongs to, so bridged or
   // backfilled rollout aliases across remote roots collapse to one canonical row.
   codexHome?: string

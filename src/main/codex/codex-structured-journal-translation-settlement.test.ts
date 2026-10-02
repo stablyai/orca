@@ -25,6 +25,7 @@ import {
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -129,6 +130,7 @@ function deferredTarget(
 
 function hardWatermarkDeferred() {
   return createDeferredStructuredAgentSessionEventSink({
+    ...testEventSinkLogging(),
     watermarks: {
       pauseQueuedBytes: 1,
       maxQueuedBytes: 1,
@@ -551,7 +553,8 @@ describe('codex journal translation', () => {
               userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
               startedAt: expect.any(Number),
               completedAt: expect.any(Number)
-            }
+            },
+            turnScope: { kind: 'thread' }
           }
         ]
       }

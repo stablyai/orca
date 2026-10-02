@@ -68,7 +68,11 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'provider_write_failed',
+      rejection: { kind: 'writeFailed' }
+    })
   })
 
   it('requires an acknowledged interrupt and supports controlled options', async () => {
@@ -140,41 +144,49 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     )
   })
 
-  it('does not cancel an acknowledged turn after a later dispatch is still unacknowledged', async () => {
-    const claude = fakeClaude({ replayUuids: ['turn-T', null] })
-    const settled = vi.fn()
-    const adapter = await acquired(claude, {}, [], settled)
+  // Claude's interrupt is session-scoped, so naming the running turn asks for what a Stop naming
+  // no turn does; the later send's missing echo holds neither.
+  it.each([
+    ['names the running turn', { turnId: 'turn-T' }],
+    ['names no turn', {}]
+  ])(
+    'stops an acknowledged turn when the Stop %s, while a later send is unacknowledged',
+    async (_label, target) => {
+      const claude = fakeClaude({ replayUuids: ['turn-T', null] })
+      const settled = vi.fn()
+      const adapter = await acquired(claude, {}, [], settled)
 
-    await expect(
-      adapter.dispatch({
+      await expect(
+        adapter.dispatch({
+          sessionId: 'session-1',
+          clientMessageId: 'client-T',
+          body: USER_MESSAGE,
+          fence: 7
+        })
+      ).resolves.toEqual({ state: 'admitted' })
+      expect(settled).toHaveBeenCalledWith({
         sessionId: 'session-1',
         clientMessageId: 'client-T',
-        body: USER_MESSAGE,
-        fence: 7
+        providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: 'turn-T' }
       })
-    ).resolves.toEqual({ state: 'admitted' })
-    expect(settled).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      clientMessageId: 'client-T',
-      providerIdentity: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: 'turn-T' }
-    })
-    await expect(
-      adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'client-U',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-    ).resolves.toEqual({ state: 'admitted' })
-    expect(claude.connections[0].sent).toHaveLength(2)
+      await expect(
+        adapter.dispatch({
+          sessionId: 'session-1',
+          clientMessageId: 'client-U',
+          body: USER_MESSAGE,
+          fence: 7
+        })
+      ).resolves.toEqual({ state: 'admitted' })
+      expect(claude.connections[0].sent).toHaveLength(2)
 
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-T', fence: 7 })
-    ).resolves.toEqual({ cancelled: false })
-    expect(claude.connections[0].calls.filter((call) => call.subtype === 'interrupt')).toHaveLength(
-      0
-    )
-  })
+      await expect(
+        adapter.cancelTurn({ sessionId: 'session-1', fence: 7, ...target })
+      ).resolves.toEqual({ cancelled: true })
+      expect(
+        claude.connections[0].calls.filter((call) => call.subtype === 'interrupt')
+      ).toHaveLength(1)
+    }
+  )
 
   it('classifies provider-declined options without treating timeouts as settled', async () => {
     const claude = fakeClaude({
@@ -219,6 +231,13 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       }
     })
     const adapter = await acquired(claude)
+    // The model is reported by a cycle's init frame, so start one.
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'seed-cycle',
+      body: USER_MESSAGE,
+      fence: 7
+    })
 
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
       models: [
@@ -247,6 +266,13 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       }
     })
     const adapter = await acquired(claude)
+    // The custom model only reports on the first cycle's init frame.
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'seed-cycle',
+      body: USER_MESSAGE,
+      fence: 7
+    })
     const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
 
     expect(result.models.map((model) => model.id)).toEqual([

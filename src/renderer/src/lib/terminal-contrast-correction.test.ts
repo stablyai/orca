@@ -7,7 +7,7 @@ import {
   normalizeTerminalMinimumContrastRatio,
   resolveTerminalMinimumContrastRatio
 } from './terminal-contrast-correction'
-import { TERMINAL_THEME_CATALOG } from './terminal-themes'
+import { TERMINAL_THEME_CATALOG } from '../../../shared/terminal-themes'
 
 // WCAG relative-luminance contrast ratio, matching xterm's minimumContrastRatio gate.
 function contrastRatio(a: string, b: string): number {

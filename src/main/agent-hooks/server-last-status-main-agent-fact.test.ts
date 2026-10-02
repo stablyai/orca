@@ -102,6 +102,54 @@ describe('The main agent fact across a restart', () => {
     }
   })
 
+  // Current Claude sends no hook on a cancel, so the inferred Ctrl+C is the path users take.
+  it('round-trips an inferred cancel held open by a child through disk and back', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'finish after child' })
+    )
+    await postHookEvent(
+      firstServer,
+      buildBody({ hook_event_name: 'SubagentStart', agent_id: 'arestored-child' })
+    )
+    const baseline = firstServer.getStatusSnapshot()[0]
+    expect(
+      firstServer.inferInterrupt({
+        paneKey: PANE,
+        baselineUpdatedAt: baseline.receivedAt,
+        baselineStateStartedAt: baseline.stateStartedAt,
+        baselinePrompt: baseline.prompt,
+        baselineAgentType: 'claude',
+        intent: 'ctrl-c'
+      })
+    ).toBe(true)
+    const live = firstServer.getStatusSnapshot()[0]
+    expect(live).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done', outcome: 'cancellation' }
+    })
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'arestored-child' })
+      )
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        interrupted: true,
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
   it('maps the legacy child-only flag onto an absent main agent, dated by the turn end', async () => {
     const receivedAt = recentTs()
     writeEntry({

@@ -34,4 +34,34 @@ describe('Codex index-heal contract PR gate', () => {
       'set -euo pipefail'
     )
   })
+
+  it('pins the --no-daemon contract to one Codex version and fails when it is missing', () => {
+    const install = job.steps.find((step) => step.name === 'Install pinned no-daemon Codex CLI')
+    const verify = job.steps.find((step) => step.name === 'Verify Codex --no-daemon contract')
+
+    expect(job.env.CODEX_NO_DAEMON_CLI_VERSION).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(install.run).toContain('"@openai/codex@$CODEX_NO_DAEMON_CLI_VERSION"')
+    expect(verify.env.ORCA_CODEX_NO_DAEMON_CONTRACT_VERSION).toBe(
+      '${{ env.CODEX_NO_DAEMON_CLI_VERSION }}'
+    )
+    expect(verify.env.ORCA_CODEX_NO_DAEMON_CONTRACT_REQUIRED).toBe('1')
+    expect(install.run).toContain('--prefix "$RUNNER_TEMP/codex-cli-no-daemon"')
+    expect(verify.run).toContain(
+      'ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex"'
+    )
+    expect(verify.run).toContain('src/main/pty/codex-no-daemon-binary-contract.test.ts')
+  })
+
+  it('pins the project-trust contract to the no-daemon Codex and fails when it is missing', () => {
+    const verify = job.steps.find((step) => step.name === 'Verify Codex project-trust contract')
+
+    expect(verify.env.ORCA_CODEX_TRUST_CONTRACT_VERSION).toBe(
+      '${{ env.CODEX_NO_DAEMON_CLI_VERSION }}'
+    )
+    expect(verify.env.ORCA_CODEX_TRUST_CONTRACT_REQUIRED).toBe('1')
+    expect(verify.run).toContain(
+      'ORCA_CODEX_TRUST_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex"'
+    )
+    expect(verify.run).toContain('src/main/agent-trust-presets.test.ts')
+  })
 })

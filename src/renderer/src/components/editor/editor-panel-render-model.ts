@@ -14,6 +14,7 @@ import type { FileContent } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getMarkdownRenderMode, type MarkdownRenderState } from './markdown-render-mode'
 import { getCachedMarkdownRichModeEligibility } from './markdown-rich-mode-eligibility-cache'
+import { canRenderMarkdownAtSize } from './markdown-rich-size-limit'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 
@@ -163,7 +164,12 @@ export function getEditorPanelRenderModel({
     ((activeFile.mode === 'markdown-preview' &&
       fileContents[activeFile.id] !== undefined &&
       fileContents[activeFile.id]?.isBinary !== true &&
-      !fileContents[activeFile.id]?.loadError) ||
+      !fileContents[activeFile.id]?.loadError &&
+      canRenderMarkdownAtSize(
+        editorDrafts[activeFile.markdownPreviewSourceFileId ?? activeFile.filePath] ??
+          fileContents[activeFile.id].content,
+        markdownRichModeSizeOverridden
+      )) ||
       (activeFile.mode === 'edit' &&
         fileContents[activeFile.id] !== undefined &&
         !isChangesMode &&

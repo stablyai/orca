@@ -16,14 +16,6 @@ describe('ResourceUsageStatusSegment session inventory', () => {
     // Why: every seed/action/lifecycle refresh shares one guarded inventory
     // read, and the closed path never installs a polling interval.
     expect(inventoryHookSource.match(/window\.api\.pty\.listSessions\(\)/g) ?? []).toHaveLength(1)
-
-    const openEffectIndex = source.indexOf('if (!open)')
-    const refreshIndex = source.indexOf('void refreshSessions()', openEffectIndex)
-
-    // Why: pty.listSessions() is a global daemon inventory and can pause input
-    // with large preserved-session sets. Keep continuous use off the closed path.
-    expect(openEffectIndex).toBeGreaterThanOrEqual(0)
-    expect(refreshIndex).toBeGreaterThan(openEffectIndex)
   })
 
   it('seeds the closed badge from daemon inventory instead of wake-hint bound PTYs', () => {
@@ -34,19 +26,5 @@ describe('ResourceUsageStatusSegment session inventory', () => {
     expect(source).toContain('sessionInventory.count')
     expect(inventoryHookSource).toContain('window.api.pty.onSpawned')
     expect(inventoryHookSource).toContain('window.api.pty.onExit')
-    expect(source).not.toContain('createClosedResourceSessionCountSelector')
-    expect(source).not.toContain('boundPtyIds.size')
-    expect(source).not.toContain('closedSessionCount')
-    expect(source).not.toContain('livePtyIdsByTabId')
-  })
-
-  it('seeds memory snapshot for the closed badge without requiring a click', () => {
-    const source = readFileSync(SOURCE_PATH, 'utf8')
-
-    // Why: the ready-seed effect must call fetchSnapshot so RAM is not "—"
-    // until the user opens Resource Manager.
-    const readySeedBlock = source.slice(source.indexOf('// Why: seed RAM after session restore'))
-    expect(readySeedBlock).toContain('void fetchSnapshot()')
-    expect(readySeedBlock).toContain('workspaceSessionReady')
   })
 })

@@ -1,10 +1,8 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import { buildTailLines } from './terminal-tail-state'
 import { tailMayContainBlockedSignal } from './terminal-tail-sentinel-index'
-import {
-  findActionableTerminalWaitBlockedSignal,
-  TERMINAL_WAIT_BLOCKED_SENTINEL_RE
-} from './terminal-wait-detection'
+import { findActionableTerminalWaitBlockedSignal } from './terminal-wait-detection'
+import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './agent-state-rules/blocked-text-layer'
 
 export function buildTerminalWaitText(
   lines: string[],

@@ -11,15 +11,21 @@ import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structu
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
 import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-outbox'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const CALLER = { callerKey: 'trusted-local:runtime' }
 
 function hostWith(
   send: ReturnType<typeof vi.fn>,
-  journalSnapshot: ReturnType<typeof vi.fn> = vi.fn(() => ({ submissions: [] }))
+  journalSnapshot: ReturnType<typeof vi.fn> = vi.fn(() => ({ submissions: [] })),
+  log = recordingStructuredAgentSessionLogger()
 ): StructuredAgentSessionHost {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the only method this module reaches; any other would throw rather than read a wrong value.
-  return { send, journalSnapshot } as unknown as StructuredAgentSessionHost
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the only members this module reaches; any other would throw rather than read a wrong value.
+  return {
+    send,
+    journalSnapshot,
+    deps: { logger: log.logger }
+  } as unknown as StructuredAgentSessionHost
 }
 
 function commit(host: StructuredAgentSessionHost | null, text = 'do the thing') {
@@ -80,11 +86,15 @@ describe('committing a launch prompt', () => {
   })
 
   it('claims nothing, and does not fail the launch, when no row was committed', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const log = recordingStructuredAgentSessionLogger()
+    const failure = new Error('host gone')
     const send = vi.fn(async () => {
-      throw new Error('host gone')
+      throw failure
     })
-    await expect(commit(hostWith(send))).resolves.toBeNull()
+    await expect(commit(hostWith(send, undefined, log))).resolves.toBeNull()
+    expect(log.entries.map((entry) => entry.fields)).toEqual([
+      { scope: 'launch-prompt', sessionId: 'sess-1', error: failure }
+    ])
   })
 
   it('sends nothing when there is no host or no text', async () => {

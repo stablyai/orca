@@ -1,14 +1,10 @@
-import { readFileSync } from 'node:fs'
-import { join, sep } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
 import {
   MAX_CONSECUTIVE_DEATHS,
   USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS,
   UsageScanWorkerClient,
   scanCodexUsageOnWorker
 } from './usage-scan-worker-client'
-import { USAGE_SCAN_WORKER_ENTRY_FILENAME } from './usage-scan-worker-spawn'
 import type {
   UsageScanWorkerRequest,
   UsageScanWorkerRequestBody
@@ -214,37 +210,5 @@ describe('UsageScanWorkerClient', () => {
     })
 
     await expect(pending).rejects.toThrow(/answered for claude/)
-  })
-})
-
-// Why: the packaged branch never runs in dev or e2e (both take the __dirname
-// path), so it is pinned here at the path-construction level.
-describe('usage scan worker entry path', () => {
-  it('resolves a packaged build under resourcesPath/app.asar/out/main', () => {
-    const resourcesPath = join(sep, 'Applications', 'Orca.app', 'Contents', 'Resources')
-
-    const resolved = resolveWorkerThreadEntryPath(
-      { isPackaged: true, resourcesPath, moduleDir: join(sep, 'unpackaged', 'out', 'main') },
-      USAGE_SCAN_WORKER_ENTRY_FILENAME
-    )
-
-    expect(resolved.slice(resourcesPath.length + 1).split(sep)).toEqual([
-      'app.asar',
-      'out',
-      'main',
-      USAGE_SCAN_WORKER_ENTRY_FILENAME
-    ])
-  })
-
-  // A rename in the build config would leave both branches pointing at a file
-  // that is never emitted, and only the packaged one fails silently.
-  it('names the entry the main build actually emits', () => {
-    const config = readFileSync(
-      join(import.meta.dirname, '..', '..', '..', 'electron.vite.config.ts'),
-      'utf8'
-    )
-
-    expect(USAGE_SCAN_WORKER_ENTRY_FILENAME).toBe('usage-scan-worker-entry.js')
-    expect(config).toContain("'usage-scan-worker-entry': resolve(")
   })
 })

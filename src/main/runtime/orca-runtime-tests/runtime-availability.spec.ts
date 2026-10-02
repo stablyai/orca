@@ -265,6 +265,14 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().capabilities).toContain('browser.screencast.v1')
   })
 
+  // Paired desktops open a chat on this host only when it says it admits them by the client's
+  // chosen launch mode; without it, every paired launch quietly becomes a terminal.
+  it('advertises that it admits structured sessions by the client-chosen launch mode', () => {
+    expect(createRuntime().getStatus().capabilities).toContain(
+      'agent-session.structured.client-launch-mode.v1'
+    )
+  })
+
   it('advertises safe Codex reset-credit RPC support as a static capability', () => {
     const runtime = createRuntime()
 

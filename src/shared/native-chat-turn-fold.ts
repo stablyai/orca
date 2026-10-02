@@ -1,13 +1,10 @@
 // Which rows a settled turn folds behind its "Worked for N" status row.
 //
-// A turn's answer is its last assistant row that renders prose; everything the
-// agent said before it is the work that produced it. The journal carries no
-// "this one is the answer" marker on a message, so the answer is derived rather
-// than read — last prose row wins. A provider that starts publishing one can
-// override this derivation without moving the fold.
-//
-// Shared because desktop and mobile both draw this disclosure, and a fold that
-// hides a different row on each surface is the same bug twice.
+// A turn's answer is its last assistant row that renders prose, or its last
+// failure report; everything before it is the work that produced it. The journal
+// carries no "this one is the answer" marker on a message, so the answer is
+// derived rather than read — last candidate wins. So a failed turn ends on its
+// error, and an error the agent recovered from folds behind the answer after it.
 
 import type { NativeChatRole } from './native-chat-types'
 
@@ -24,6 +21,12 @@ export type NativeChatTurnFoldRow = {
    *  spawn roster or a background task. That row is the durable report of how
    *  the work ended — often the only one — so it never folds. */
   outlivesTurn: boolean
+  /** Whether a system row reports a failure. It competes with prose to be the
+   *  turn's answer, so a turn that failed shows the error as its end. */
+  reportsFailure: boolean
+  /** Whether the row reports a compaction's result. It never folds: hiding it
+   *  would leave the turn's status as the only trace the context was rewritten. */
+  reportsCompaction: boolean
 }
 
 export type NativeChatTurnFold = {
@@ -39,14 +42,18 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** The index of each turn's answer: its last assistant row that renders prose.
- *  A turn with no such row has no answer, and folds whole. */
+/** The index of each turn's answer: its last assistant row that renders prose,
+ *  or its last system row reporting a failure. A turn with neither has no answer,
+ *  and folds whole. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
 ): ReadonlyMap<string, number> {
   const answers = new Map<string, number>()
   for (const [index, row] of rows.entries()) {
-    if (row.turnKey !== undefined && row.role === 'assistant' && row.rendersProse) {
+    const isCandidate =
+      row.rendersProse &&
+      (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
+    if (row.turnKey !== undefined && isCandidate) {
       answers.set(row.turnKey, index)
     }
   }
@@ -77,11 +84,12 @@ export function nativeChatTurnFold({
   for (const [index, row] of rows.entries()) {
     const { turnKey } = row
     // Outside the fold by construction: the reader's own message anchors the
-    // turn, and a roster or background-task row outlives it.
+    // turn, a roster or background-task row outlives it, and a compaction report explains it.
     if (
       turnKey === undefined ||
       row.role === 'user' ||
       row.outlivesTurn ||
+      row.reportsCompaction ||
       !settledTurnKeys.has(turnKey)
     ) {
       continue

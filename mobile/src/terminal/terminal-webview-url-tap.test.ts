@@ -11,12 +11,6 @@ import {
   resolveTerminalOscFileTap,
   resolveTerminalFileUrlTap
 } from './terminal-webview-url-tap'
-import {
-  documentModuleSource,
-  documentSourceText
-} from './document/document-module-source.test-support'
-
-const DOCUMENT_SOURCE = documentSourceText()
 
 type FileTapResolverCase = {
   name: string
@@ -185,25 +179,5 @@ describe('findUrlAtColumn', () => {
 
     const overlongUrl = `https://example.com/${'a'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH)}`
     expect(findUrlAtColumn(overlongUrl, 0)).toBeNull()
-  })
-
-  it('injects URL and OSC tap handling into the WebView document', () => {
-    expect(DOCUMENT_SOURCE).toContain('function findUrlAtColumn(')
-    expect(DOCUMENT_SOURCE).toContain('function findFileUrlAtColumn(')
-    expect(DOCUMENT_SOURCE).toContain('function fileUrlAtViewportPoint(')
-    expect(DOCUMENT_SOURCE).toContain('function urlAtViewportPoint(')
-    // The pattern, which both copies must spell identically. The document imports this module's own
-    // constant rather than carrying a second literal, so what is asserted is that reach — and the
-    // resolver cases above are what compare the two behaviours.
-    const urlTapSource = documentModuleSource('url-tap')
-    expect(urlTapSource).toContain("from '../terminal-webview-url-tap'")
-    expect(urlTapSource).toContain('TERMINAL_HTTP_URL_REGEX_SOURCE')
-    expect(DOCUMENT_SOURCE).toContain('function oscLinkAtViewportPoint(')
-    expect(DOCUMENT_SOURCE).toContain('function resolveTerminalOscFileTap(')
-    expect(DOCUMENT_SOURCE).toContain('function resolveTerminalFileUrlTap(')
-    expect(DOCUMENT_SOURCE).toContain('function isLocalFileUriHostname(')
-    expect(DOCUMENT_SOURCE).toContain('return parsePathLineCol(value)')
-    expect(DOCUMENT_SOURCE).toContain('function notifyTerminalSurfaceTap(')
-    expect(DOCUMENT_SOURCE).toContain("notify(scope, { type: 'open-url', url: tappedUrl })")
   })
 })

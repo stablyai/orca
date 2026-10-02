@@ -1,3 +1,4 @@
+import { agentTokenUsageSchema } from './telemetry-agent-token-usage-schema'
 import {
   agentErrorSchema,
   agentPromptSentSchema,
@@ -21,6 +22,7 @@ import {
   daemonPtyCwdVerdictSchema,
   daemonStartFailedSchema,
   mainThreadHangDetectedSchema,
+  profileStateAuthoritySelectedSchema,
   remoteOutboundBudgetCloseSchema,
   runtimeRpcStartFailedSchema,
   settingsChangedSchema
@@ -94,6 +96,7 @@ import {
   setupScriptPromptShownSchema,
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
+import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
 
 // ── Event registry: the one record the validator consumes ───────────────
 // Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
@@ -115,6 +118,7 @@ export const eventSchemas = {
   setup_script_prompt_shown: setupScriptPromptShownSchema,
   setup_script_prompt_action: setupScriptPromptActionSchema,
 
+  agent_token_usage: agentTokenUsageSchema,
   agent_started: agentStartedSchema,
   agent_prompt_sent: agentPromptSentSchema,
   agent_error: agentErrorSchema,
@@ -132,6 +136,7 @@ export const eventSchemas = {
   daemon_audit_eligibility: daemonAuditEligibilitySchema,
   runtime_rpc_start_failed: runtimeRpcStartFailedSchema,
   remote_outbound_budget_close: remoteOutboundBudgetCloseSchema,
+  profile_state_authority_selected: profileStateAuthoritySelectedSchema,
 
   codex_trust_grant: codexTrustGrantSchema,
 
@@ -193,6 +198,7 @@ export const eventSchemas = {
   editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,
 
   direct_ssh_reconnect_operation: directSshReconnectOperationSchema,
+  ssh_remote_runtime_resolved: sshRemoteRuntimeResolvedSchema,
 
   smart_sort_class_distribution: smartSortClassDistributionSchema,
   smart_sort_class_1_promotion: smartSortClass1PromotionSchema,

@@ -3,7 +3,6 @@ import {
   AGENT_PICKER_QUERY_MAX_BYTES,
   agentPickerBlankTerminalMatches,
   getAgentPickerCommandValue,
-  isAgentPickerQueryTooLarge,
   searchAgentPickerEntries
 } from './agent-picker-search'
 import { AGENT_CATALOG, type AgentCatalogEntry } from './agent-catalog'
@@ -94,7 +93,6 @@ describe('agent picker search', () => {
       }
     ] as AgentCatalogEntry[]
 
-    expect(isAgentPickerQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchAgentPickerEntries(throwingAgents, oversizedQuery)).toEqual([])
     expect(agentPickerBlankTerminalMatches(oversizedQuery)).toBe(false)
     expect(

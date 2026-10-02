@@ -15,6 +15,8 @@ vi.mock('./ssh-relay-gc-tombstone', () => ({
 }))
 vi.mock('./ssh-relay-install-lock', () => ({
   RELAY_INSTALL_LOCK_NAME: '.install-lock',
+  INSTALL_LOCK_STALE_MS: 20 * 60_000,
+  INSTALL_LOCK_STALE_SECONDS: 20 * 60,
   isRelayInstallLockStale: vi.fn().mockResolvedValue(false)
 }))
 
@@ -35,7 +37,7 @@ const mockExec = vi.mocked(execCommand)
  */
 function scriptHost(options: {
   listing: string[]
-  liveness?: Record<string, 'LIVE' | 'DEAD' | 'UNKNOWN'>
+  liveness?: Record<string, 'LIVE' | 'DEAD' | 'UNKNOWN' | Error>
   removed: string[]
 }): void {
   mockExec.mockImplementation(async (_conn, command: string) => {
@@ -45,12 +47,19 @@ function scriptHost(options: {
     if (command.includes('.install-lock')) {
       return 'OPEN'
     }
+    if (command.includes('.store-lock') && command.includes('mkdir')) {
+      return 'OK'
+    }
     if (command.includes('.install-complete')) {
       return 'COMPLETE'
     }
     if (command.includes('.orcad-pid')) {
       const dir = Object.keys(options.liveness ?? {}).find((name) => command.includes(name))
-      return dir ? (options.liveness?.[dir] ?? 'DEAD') : 'DEAD'
+      const result = dir ? (options.liveness?.[dir] ?? 'DEAD') : 'DEAD'
+      if (result instanceof Error) {
+        throw result
+      }
+      return result
     }
     if (command.startsWith('mv ')) {
       const match = command.match(/'([^']*)'/)
@@ -151,5 +160,70 @@ describe('orcad GC', () => {
       record: emptyOrcadActivationRecord()
     })
     expect(removed).toEqual(['orcad-0.0.9+dead'])
+  })
+
+  it('stops before later versions when liveness probe termination is unconfirmed', async () => {
+    const removed: string[] = []
+    const error = Object.assign(new Error('Liveness probe termination is unconfirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+    scriptHost({
+      listing: ['orcad-0.1.0+bb0', 'orcad-0.0.9+dead'],
+      liveness: { 'orcad-0.1.0+bb0': error },
+      removed
+    })
+
+    await expect(
+      gcOldOrcadVersions({
+        conn,
+        host,
+        remoteHome: '/home/u',
+        currentDirAbsPath: '/home/u/.orca-remote/orcad-0.3.0+cc0',
+        record: emptyOrcadActivationRecord()
+      })
+    ).rejects.toBe(error)
+
+    expect(removed).toEqual([])
+    expect(mockExec).toHaveBeenCalledTimes(4)
+    expect(mockExec.mock.calls.at(-1)?.[1]).toContain('.orcad-pid')
+  })
+
+  it('keeps a version after an ordinary probe failure and checks later versions', async () => {
+    const removed: string[] = []
+    scriptHost({
+      listing: ['orcad-0.1.0+bb0', 'orcad-0.0.9+dead'],
+      liveness: { 'orcad-0.1.0+bb0': new Error('Probe failed') },
+      removed
+    })
+
+    await gcOldOrcadVersions({
+      conn,
+      host,
+      remoteHome: '/home/u',
+      currentDirAbsPath: '/home/u/.orca-remote/orcad-0.3.0+cc0',
+      record: emptyOrcadActivationRecord()
+    })
+
+    expect(removed).toEqual(['orcad-0.0.9+dead'])
+  })
+
+  it('collects the runtime store only when the caller names its runtime pins', async () => {
+    const removed: string[] = []
+    scriptHost({ listing: [], removed })
+    const options = {
+      conn,
+      host,
+      remoteHome: '/home/u',
+      currentDirAbsPath: '/home/u/.orca-remote/orcad-0.2.0+bb',
+      record: emptyOrcadActivationRecord()
+    }
+    const inventories = (): number =>
+      mockExec.mock.calls.filter(([, command]) => String(command).includes('RUNTIME_STORE')).length
+
+    await gcOldOrcadVersions(options)
+    expect(inventories()).toBe(0)
+
+    await gcOldOrcadVersions({ ...options, nodeRuntimePins: ['a'.repeat(64)] })
+    expect(inventories()).toBe(1)
   })
 })

@@ -8,6 +8,11 @@
 // child traffic carries no task metadata at all, so the one announcement that
 // said "this is a backgrounded shell, not an agent" has to be remembered or a
 // later frame re-admits it.
+//
+// An alias outlives the process that learned it. A child resumed after its
+// session's provider restarted still parents its frames to the ORIGINAL spawn
+// call, while the announcement this process sees names only the resuming call —
+// so the spawn call's alias is recalled from what the earlier run journaled.
 
 import { isBoundedClaudeTaskId } from './claude-background-task-tracker'
 
@@ -19,16 +24,20 @@ export class ClaudeSubagentIds {
   private readonly canonicalByToolUse = new Map<string, string>()
   private readonly excluded = new Set<string>()
 
+  /** `journaled` answers for aliases an earlier run of this session learned. */
+  constructor(private readonly journaled?: (toolUseId: string) => string | null) {}
+
   /** The task id a tool id stands for, or the id itself when nothing aliases it. */
   canonical(id: string): string {
-    return this.canonicalByToolUse.get(id) ?? id
+    return this.canonicalByToolUse.get(id) ?? this.journaled?.(id) ?? id
   }
 
-  /** Whether an announcement has named this tool id. Distinct from `canonical`
-   *  returning the id unchanged, which is also what an unknown id gets: only
-   *  this says the identity behind the id is settled rather than provisional. */
+  /** Whether an announcement has named this tool id, in this run or an earlier
+   *  one. Distinct from `canonical` returning the id unchanged, which is also
+   *  what an unknown id gets: only this says the identity behind the id is
+   *  settled rather than provisional. */
   isAnnounced(toolUseId: string): boolean {
-    return this.canonicalByToolUse.has(toolUseId)
+    return this.canonicalByToolUse.has(toolUseId) || (this.journaled?.(toolUseId) ?? null) !== null
   }
 
   alias(toolUseId: string, taskId: string): void {

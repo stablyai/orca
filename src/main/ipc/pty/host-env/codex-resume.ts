@@ -30,7 +30,6 @@ export type PrepareCodexResumeHomeArgs = {
   providerSession?: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
-  workspacePath?: string
 }
 
 export function prepareCodexResumeHome(
@@ -49,8 +48,7 @@ export function prepareCodexResumeHome(
     preparation: prepareCodexSessionResume({
       providerSession,
       target: args.target,
-      launchEnv: args.launchEnv,
-      workspacePath: args.workspacePath
+      launchEnv: args.launchEnv
     })
   }
 }

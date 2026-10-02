@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { STATE_INDICATOR_TOOLTIP_DELAY_MS, StateIndicatorTooltip } from './StateIndicatorTooltip'
+import { StateIndicatorTooltip } from './StateIndicatorTooltip'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ delayDuration, children }: { delayDuration: number; children: ReactNode }) => (
@@ -23,7 +23,6 @@ describe('StateIndicatorTooltip', () => {
       </StateIndicatorTooltip>
     )
 
-    expect(STATE_INDICATOR_TOOLTIP_DELAY_MS).toBe(200)
     expect(markup).toContain('data-delay-duration="200"')
     expect(markup).toContain('data-tooltip-content=""')
     expect(markup).toContain('data-side="top"')

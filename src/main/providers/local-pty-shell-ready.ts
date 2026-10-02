@@ -10,7 +10,8 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
+import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
@@ -65,7 +66,11 @@ export function getBashWrapperLaunchArgs(): string[] | null {
 export function getShellLaunchConfig(
   shellPath: string,
   features: readonly ShellStartupFeature[],
-  startupCommand?: string
+  startupCommand?: string,
+  fishLaunch?: {
+    inheritedXdgDataDirs: string | undefined
+    shellArgs?: readonly string[]
+  }
 ): ShellReadyLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
   const wrapperFeatures =
@@ -131,8 +136,8 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why: mirrors daemon/shell-ready.ts; markerless fish stays unwrapped. The
-  // selection is baked into the init command, so fish needs no feature env var.
+  // Why: mirrors daemon/shell-ready.ts; only these need the -C init, plain fish gets
+  // the env-only handoff below. The selection is baked in, so no feature env var.
   if (shellName === 'fish' && (features.includes('ready') || startupCommand !== undefined)) {
     return {
       args: [
@@ -147,6 +152,20 @@ export function getShellLaunchConfig(
       env:
         startupCommand !== undefined ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand } : {},
       supportsReadyMarker: features.includes('ready')
+    }
+  }
+
+  // Why env only: a plain fish pane keeps fish's own argv; the vendor_conf.d
+  // snippet this points at adds Orca's codex function and then undoes itself.
+  if (shellName === 'fish' && wrapperTreeUsable()) {
+    return {
+      args: null,
+      env: getFishXdgDataDirsLaunchEnv(
+        getShellReadyWrapperRoot(),
+        fishLaunch?.inheritedXdgDataDirs,
+        fishLaunch?.shellArgs
+      ),
+      supportsReadyMarker: false
     }
   }
 

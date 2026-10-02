@@ -389,18 +389,18 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([feature.id])
   })
 
-  it('keeps folder-mode main worktrees visible when default branch workspaces are hidden', () => {
-    const folder = makeWorktree('folder')
-    folder.isMainWorktree = true
-    folder.branch = ''
+  it('keeps an empty-branch git main visible when default branch workspaces are hidden', () => {
+    const detached = makeWorktree('detached')
+    detached.isMainWorktree = true
+    detached.branch = ''
 
     const result = computeVisibleWorktreeIds(
-      { repo1: [folder] },
-      [folder.id],
+      { repo1: [detached] },
+      [detached.id],
       visibleOptions({ hideDefaultBranchWorkspace: true })
     )
 
-    expect(result).toEqual([folder.id])
+    expect(result).toEqual([detached.id])
   })
 
   it('filters worktrees to a selected SSH host scope', () => {

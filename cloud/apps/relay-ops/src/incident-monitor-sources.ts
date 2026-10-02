@@ -24,7 +24,7 @@ import {
 const NumericSchema = z.union([z.number(), z.string()])
   .transform(Number)
   .pipe(z.number().finite())
-const MonitoringPointSchema = z.object({
+export const MonitoringPointSchema = z.object({
   interval: z.object({ endTime: z.string() }),
   value: z.object({
     doubleValue: NumericSchema.optional(),
@@ -35,7 +35,7 @@ const MonitoringPointSchema = z.object({
     }).optional()
   })
 })
-const MonitoringResponseSchema = z.object({
+export const MonitoringResponseSchema = z.object({
   timeSeries: z.array(z.object({ points: z.array(MonitoringPointSchema) })).default([]),
   nextPageToken: z.string().optional()
 })
@@ -147,7 +147,7 @@ export const GOOGLE_METRICS: GoogleMetricDefinition[] = [
   }
 ]
 
-function pointValue(point: z.infer<typeof MonitoringPointSchema>): number {
+export function pointValue(point: z.infer<typeof MonitoringPointSchema>): number {
   return (
     point.value.doubleValue ??
     point.value.int64Value ??
@@ -181,7 +181,7 @@ function targetFilter(
   )
 }
 
-async function googleJson(
+export async function googleJson(
   fetchImpl: typeof fetch,
   token: string,
   url: URL | string,

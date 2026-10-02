@@ -4,6 +4,8 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { createServer, type Server } from 'node:http'
+import { runProcess } from '../../shared/child-process/run-process'
 import { findGitBash } from '../agent-hooks/windows-git-bash-path.test-fixture'
 
 const { homedirMock } = vi.hoisted(() => ({
@@ -241,12 +243,15 @@ describe('CursorHookService', () => {
     HOOK_CASE_TIMEOUT_MS
   )
 
-  it(
-    'emits protocol-valid JSON when the managed Cursor script is missing (#15462)',
-    () => {
+  it.each(['ordinary', 'spaced'] as const)(
+    'emits protocol-valid JSON when the script is missing in a %s profile (#15462)',
+    (profileKind) => {
+      const installHome = profileKind === 'spaced' ? join(homeDir, 'profile with spaces') : homeDir
+      mkdirSync(installHome, { recursive: true })
+      homedirMock.mockReturnValue(installHome)
       expect(new CursorHookService().install().state).toBe('installed')
-      const config = readInstalledCursorHooks(homeDir)
-      unlinkSync(join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME))
+      const config = readInstalledCursorHooks(installHome)
+      unlinkSync(join(installHome, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME))
 
       for (const eventName of CURSOR_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
@@ -285,6 +290,63 @@ describe('CursorHookService', () => {
       }
     },
     HOOK_CASE_TIMEOUT_MS
+  )
+
+  it.skipIf(process.platform !== 'win32').each(['ordinary', 'spaced'] as const)(
+    'posts UTF-8 stdin unchanged for a %s profile path',
+    async (profileKind) => {
+      const installHome = profileKind === 'spaced' ? join(homeDir, 'profile with spaces') : homeDir
+      mkdirSync(installHome, { recursive: true })
+      homedirMock.mockReturnValue(installHome)
+      expect(new CursorHookService().install().state).toBe('installed')
+      const command = requireRegisteredCommand(
+        readInstalledCursorHooks(installHome),
+        'afterAgentResponse'
+      )
+      expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+      const payload = JSON.stringify({ text: 'Сердце, почта в ЛК — 日本語 中文 한국어 😀 café' })
+      const posts: string[] = []
+      const server: Server = createServer((req, res) => {
+        const chunks: Buffer[] = []
+        req.on('data', (chunk: Buffer) => chunks.push(chunk))
+        req.on('end', () => {
+          const form = new URLSearchParams(Buffer.concat(chunks).toString('utf8'))
+          const posted = form.get('payload')
+          if (posted !== null) {
+            posts.push(posted)
+          }
+          res.writeHead(204)
+          res.end()
+        })
+      })
+      const port = await new Promise<number>((resolve) => {
+        server.listen(0, '127.0.0.1', () => {
+          const address = server.address()
+          resolve(typeof address === 'object' && address ? address.port : 0)
+        })
+      })
+      try {
+        const result = await runProcess({
+          program: 'cmd.exe',
+          args: ['/d', '/c', command],
+          input: payload,
+          timeoutMs: HOOK_RUN_TIMEOUT_MS,
+          env: {
+            ...process.env,
+            ORCA_AGENT_HOOK_ENDPOINT: '',
+            ORCA_AGENT_HOOK_PORT: String(port),
+            ORCA_AGENT_HOOK_TOKEN: 'token',
+            ORCA_PANE_KEY: 'tab:leaf'
+          }
+        })
+        expect(result.code).toBe(0)
+        expect(result.timedOut).toBe(false)
+        expect(JSON.parse(result.stdout)).toEqual({})
+        expect(posts).toEqual([payload])
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    }
   )
 
   it.skipIf(process.platform !== 'win32')(

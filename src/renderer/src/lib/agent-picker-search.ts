@@ -10,7 +10,7 @@ type RankedAgent = {
 const NO_MATCH = Number.POSITIVE_INFINITY
 export const AGENT_PICKER_QUERY_MAX_BYTES = 2 * 1024
 
-export function isAgentPickerQueryTooLarge(
+function isAgentPickerQueryTooLarge(
   query: string,
   maxBytes = AGENT_PICKER_QUERY_MAX_BYTES
 ): boolean {

@@ -114,4 +114,6 @@ export type UISliceContextual = {
   dismissUsagePercentageDisplayChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
+  codexTerminalServerIsolationNoticeSeen: boolean
+  markCodexTerminalServerIsolationNoticeSeen: () => void
 }

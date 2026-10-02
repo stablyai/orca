@@ -1,3 +1,4 @@
+import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { track } from '../../telemetry/client'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
@@ -21,9 +22,9 @@ import {
 } from '../../../shared/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import { normalizeRemoteEnvelopeFields } from './server-remote-envelope-normalization'
-import { AgentHookServerIngestStructured } from './server-ingest-structured'
+import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
-export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructured {
+export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
   ingestRemote(
     envelope: {
@@ -35,6 +36,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       launchToken?: string
       hasExplicitPrompt?: boolean
       promptInteractionKey?: string
+      agentPresence?: unknown
       hookEventName?: string
       source?: unknown
       providerPromptId?: unknown
@@ -156,6 +158,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     )
     if (
       envelope.providerSessionOnly === true &&
+      !readAgentProcessPresence(envelope.agentPresence)?.ended &&
       !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
     ) {
       return
@@ -256,6 +259,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     })
     const event: AgentHookEventPayload & { authorityRestartId?: string } = {
       paneKey,
+      agentPresence: readAgentProcessPresence(envelope.agentPresence),
       source: effectiveSource,
       ...(restartedAuthority?.authorityRestartId
         ? { authorityRestartId: restartedAuthority.authorityRestartId }

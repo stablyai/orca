@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalQuestion } from '../../../src/shared/agent-session-journal-types'
-import { decodeAgentSessionQuestionAnswers } from '../../../src/shared/agent-session-question-answer'
 import {
   formatQuestionAnswer,
   formatQuestionFreeTextAnswer,
@@ -85,7 +84,7 @@ describe('mobile structured grouped questions', () => {
     expect(second).toMatchObject({ question: 'Which regions? (2 of 2)', multiSelect: true })
   })
 
-  it('submits the whole group as one encoded answer on the last step', () => {
+  it('submits the whole group as one set of answers on the last step', () => {
     const questions = [question(), SECOND]
     const draft: GroupedQuestionDraft = {
       promptKey: PROMPT_KEY,
@@ -102,9 +101,7 @@ describe('mobile structured grouped questions', () => {
     })
 
     expect(result?.kind).toBe('submit')
-    expect(
-      decodeAgentSessionQuestionAnswers(result?.kind === 'submit' ? result.optionId : '')
-    ).toEqual([
+    expect(result?.kind === 'submit' ? result.answers : null).toEqual([
       { questionId: 'q1', optionIds: ['q1:choice-1'] },
       { questionId: 'q2', optionIds: ['q2:choice-1', 'q2:choice-2'] }
     ])
@@ -121,9 +118,9 @@ describe('mobile structured grouped questions', () => {
       promptKey: PROMPT_KEY
     })
 
-    expect(
-      decodeAgentSessionQuestionAnswers(result?.kind === 'submit' ? result.optionId : '')
-    ).toEqual([{ questionId: 'q1', optionIds: [], other: 'DuckDB' }])
+    expect(result?.kind === 'submit' ? result.answers : null).toEqual([
+      { questionId: 'q1', optionIds: [], other: 'DuckDB' }
+    ])
   })
 
   it('keeps selected options and other text for grouped multi-select answers', () => {
@@ -137,9 +134,9 @@ describe('mobile structured grouped questions', () => {
       promptKey: PROMPT_KEY
     })
 
-    expect(
-      decodeAgentSessionQuestionAnswers(result?.kind === 'submit' ? result.optionId : '')
-    ).toEqual([{ questionId: 'q2', optionIds: ['q2:choice-1'], other: 'ap-south' }])
+    expect(result?.kind === 'submit' ? result.answers : null).toEqual([
+      { questionId: 'q2', optionIds: ['q2:choice-1'], other: 'ap-south' }
+    ])
   })
 
   it('gives each step a distinct card key so a selection cannot carry into the next question', () => {

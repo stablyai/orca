@@ -4,7 +4,10 @@ import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
-import type { NativeChatComposerInput } from './native-chat-composer-input'
+import {
+  insertNativeChatPastedText,
+  type NativeChatComposerInput
+} from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 
 afterEach(cleanup)
@@ -142,4 +145,29 @@ describe('native chat skill editor', () => {
     expect(input.value).toBe('$review\nhello')
     expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
   })
+})
+
+it('replaces the selection with literal pasted text as one undoable edit', async () => {
+  const { input, editor } = setup('hello world')
+  act(() => input.setSelectionRange(6, 11))
+  await act(async () => input.insertText?.('안녕\n$literal'))
+  expect(input.value).toBe('hello 안녕\n$literal')
+  await act(async () => {
+    editor.commands.undo()
+  })
+  expect(input.value).toBe('hello world')
+})
+
+it('moves focus into the composer when a paste is routed from elsewhere', async () => {
+  const { input, editor } = setup('hi')
+  act(() => input.setSelectionRange(2, 2))
+  const hiddenTerminal = document.createElement('textarea')
+  document.body.append(hiddenTerminal)
+  hiddenTerminal.focus()
+  await act(async () => {
+    insertNativeChatPastedText(input, ' there')
+  })
+  expect(input.value).toBe('hi there')
+  expect(editor.view.dom.contains(document.activeElement)).toBe(true)
+  hiddenTerminal.remove()
 })

@@ -1,11 +1,11 @@
 // The transcript's scroll behaviour: staying pinned to the bottom while a turn
-// streams, offering the way back when the reader has left, aligning a row or a
-// card to the top, and paging in older history.
+// streams, offering the way back when the reader has left, and aligning a row or
+// a card to the top.
 //
 // Split from the list because windowing changed what these have to be careful
 // about, not what they decide: rows resolving their measured height move the
 // content constantly, so "the content changed" and "the reader scrolled" stopped
-// being the same event and only the latter may ask for another page.
+// being the same event.
 //
 // The offset belongs to the virtualizer — every pin goes through it, so a scroll
 // it is still reconciling is replaced rather than raced. Its public write adapter
@@ -23,7 +23,6 @@ import {
 import {
   distanceFromBottom,
   nextFollowingEnd,
-  shouldLoadEarlier,
   shouldShowJumpToLatest,
   type ScrollGeometry
 } from './native-chat-autoscroll'
@@ -53,11 +52,8 @@ export function useNativeChatTranscriptScroll({
   contentRef,
   itemCount,
   isWorking,
-  showTypingIndicator,
+  showsTailRow,
   isVisible,
-  hasMore,
-  loadingEarlier,
-  loadEarlier,
   alignToViewportTop,
   scrollToEnd,
   restoreScrollOffset,
@@ -68,11 +64,9 @@ export function useNativeChatTranscriptScroll({
   contentRef: React.RefObject<HTMLDivElement | null>
   itemCount: number
   isWorking: boolean
-  showTypingIndicator: boolean
+  /** Whether the list draws a row after the transcript (live activity or a wait). */
+  showsTailRow: boolean
   isVisible: boolean
-  hasMore: boolean
-  loadingEarlier: boolean
-  loadEarlier: () => void
   alignToViewportTop: (element: HTMLElement) => void
   scrollToEnd: () => void
   restoreScrollOffset: (offset: number) => void
@@ -84,9 +78,7 @@ export function useNativeChatTranscriptScroll({
   const detachedScrollTopRef = useRef<number | null>(null)
   const isVisibleRef = useRef(isVisible)
   const previousIsVisibleRef = useRef(isVisible)
-  const previousScrollTopRef = useRef(0)
   const previousDistanceFromEndRef = useRef(Number.POSITIVE_INFINITY)
-  const loadEarlierRequestedAtRef = useRef<number | null>(null)
 
   const syncScrollState = useCallback(
     (event?: Event): ScrollGeometry | null => {
@@ -116,33 +108,14 @@ export function useNativeChatTranscriptScroll({
     [consumeProgrammaticScroll, reconcileReaderScroll, scrollRef]
   )
 
-  // Only a real scroll event pages in older history. Every row that resolves its
-  // true height moves the content and re-fires the size observers; routing those
-  // through here too would ask for the next page once per measurement.
   const onScroll = useCallback<UIEventHandler<HTMLDivElement>>(
     (event) => {
       const geometry = syncScrollState(event.nativeEvent)
-      if (!geometry) {
-        return
-      }
-      const previousScrollTop = previousScrollTopRef.current
-      previousScrollTopRef.current = geometry.scrollTop
-      previousDistanceFromEndRef.current = distanceFromBottom(geometry)
-      if (
-        shouldLoadEarlier({
-          geometry,
-          previousScrollTop,
-          hasMore,
-          loadingEarlier,
-          itemCount,
-          requestedAtItemCount: loadEarlierRequestedAtRef.current
-        })
-      ) {
-        loadEarlierRequestedAtRef.current = itemCount
-        loadEarlier()
+      if (geometry) {
+        previousDistanceFromEndRef.current = distanceFromBottom(geometry)
       }
     },
-    [hasMore, itemCount, loadEarlier, loadingEarlier, syncScrollState]
+    [syncScrollState]
   )
 
   const scrollToEndWhenMeasurable = useCallback(() => {
@@ -184,7 +157,7 @@ export function useNativeChatTranscriptScroll({
     itemCount,
     isWorking,
     restoreScrollOffset,
-    showTypingIndicator,
+    showsTailRow,
     scrollToEndWhenMeasurable
   ])
 

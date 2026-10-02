@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   BRIDGE_PAGE_CLIENT_ID,
-  BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
   BridgePageClientIdentityUnavailableError,
   substituteBridgePageClientIdentity
 } from './bridge-page-client-identity'
@@ -39,7 +38,6 @@ describe('the placeholder a page claims', () => {
     // The composer's send journal refuses a retained operation whose caller changed, and it has no
     // expiry. A per-document identity would turn "send it again" into a permanent refusal.
     expect(BRIDGE_PAGE_CLIENT_ID).toBe('orca-page-client')
-    expect(BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT).toBe('page-client-identity')
   })
 
   it('becomes the device identity in both fields a page carries one in', () => {
@@ -183,12 +181,6 @@ describe('the shell substitutes on both doors to the client', () => {
         code: 'bridge_client_identity_unavailable'
       }
     })
-  })
-
-  it('tells the page it performs the swap, on a list an older page ignores', () => {
-    const bridge = harness({ ready: true })
-    const init = bridge.frames().find((message) => message.type === 'init')
-    expect(init?.accepts).toContain(BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT)
   })
 })
 

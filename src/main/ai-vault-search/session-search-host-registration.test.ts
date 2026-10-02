@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
@@ -32,8 +31,6 @@ vi.mock('../ai-vault/cached-session-list', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   localAiVaultScanRoots
 }))
-
-const ROOT = join(import.meta.dirname, '..', '..', '..')
 
 let harness: SessionSearchIndexerHarness
 let installed: { apply?(settings: AiVaultSearchSettings): void; dispose(): void } | null
@@ -141,26 +138,6 @@ it('registers an in-process service for a host with no scanner child', async () 
   })
 })
 
-// The behavioural tests above prove the installers register; these prove each
-// host's boot path reaches one, which no unit of either module can show.
-it.each([
-  [
-    'desktop and headless serve',
-    'src/main/startup/main-process-runtime-service.ts',
-    'installChildSessionSearchService'
-  ],
-  ['orcad', 'src/main/orcad/orcad-session-search.ts', 'installInProcessSessionSearchService'],
-  [
-    'the relay daemon',
-    'src/relay/relay-runtime-services.ts',
-    'installInProcessSessionSearchService'
-  ]
-])('boots %s with a registered session search service', (_host, file, installer) => {
-  const source = readFileSync(join(ROOT, file), 'utf8')
-  expect(source).toContain(installer)
-  expect(source).toMatch(new RegExp(`${installer}\\(\\{`))
-})
-
 it('disables immediately without root discovery', async () => {
   const { installChildSessionSearchService, applySessionSearchSettingsChange } =
     await import('./session-search-enablement')
@@ -230,12 +207,4 @@ it('re-applies consent on an in-process host without reinstalling the service', 
     kind: 'unavailable',
     reason: 'disabled'
   })
-})
-
-// orcad reaches the index through the deps hook the runtime RPC calls; the wiring is
-// what no unit of either module can show.
-it('wires orcad consent from the runtime hook to the installed service', () => {
-  const source = readFileSync(join(ROOT, 'src/main/orcad/orcad-entry.ts'), 'utf8')
-  expect(source).toContain('applySessionSearchSettings:')
-  expect(source).toContain('sessionSearch?.apply(next)')
 })

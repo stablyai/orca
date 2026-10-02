@@ -1,3 +1,4 @@
+import { isQoderTerminalTitle } from './qoder-terminal-title'
 import { getPiStateTitleBrand } from './pi-state-title-marker'
 import {
   AGY_AGENT_NAME_RE,
@@ -71,6 +72,9 @@ function computeAgentLabel(title: string): string | null {
   const piStateBrand = getPiStateTitleBrand(title)
   if (piStateBrand) {
     return piStateBrand
+  }
+  if (isQoderTerminalTitle(title)) {
+    return 'Qoder CLI'
   }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'

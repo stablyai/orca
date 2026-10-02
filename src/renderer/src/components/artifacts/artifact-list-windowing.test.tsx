@@ -39,7 +39,6 @@ vi.mock('./ArtifactListRow', async (importOriginal) => {
 const { ArtifactCollection } = await import('./ArtifactCollection')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
 const { ARTIFACTS_TABLE_ROW_HEIGHT_PX } = await import('./artifacts-table-layout')
-const { LIST_TABLE_ROW_DIVIDER_CLASS } = await import('@/lib/list-table-layout')
 
 const VIEWPORT_HEIGHT_PX = 600
 /**
@@ -303,11 +302,11 @@ beforeEach(() => {
   root = createRoot(host)
 
   vi.stubGlobal('ResizeObserver', MockResizeObserver)
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
-    function (this: HTMLElement) {
-      return elementHeight(this)
-    }
-  )
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return elementHeight(this)
+  })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const top = topsByElement.get(this) ?? 0
     const height = elementHeight(this)
@@ -696,12 +695,6 @@ describe('artifacts list windowing — above the threshold', () => {
     expect(Number.parseInt(shell.style.height, 10)).toBe(
       499 * SYNTHETIC_ROW_HEIGHT_PX + elementHeight(lastRow)
     )
-  })
-
-  // Why exact: an added token is as damaging as a removed one — `mb-px` alone pushes the real row
-  // to 54px and invalidates the estimate above, and an opacity token restyles every hairline.
-  it('pins the row divider to the one bottom hairline', () => {
-    expect(LIST_TABLE_ROW_DIVIDER_CLASS).toBe('border-b border-border/50')
   })
 
   it('mounts only a bounded window for a 500-artifact list', () => {

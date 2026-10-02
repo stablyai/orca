@@ -4,7 +4,8 @@ export type PythonEnvironment = {
   path: string
   /** `.venv`, `python3`, … — what the kernel picker shows first. */
   name: string
-  version: string
+  /** Absent for a workspace env listed before trust, which is read from disk rather than run. */
+  version?: string
 }
 
 export type PythonEnvironments = {
@@ -16,7 +17,8 @@ export type PythonEnvironments = {
 
 export type KernelStartResult =
   | { status: 'ready' }
-  | { status: 'missing-ipykernel' }
+  /** `externallyManaged`: pip refuses to install into it (PEP 668), so it needs a virtual environment. */
+  | { status: 'missing-ipykernel'; externallyManaged: boolean }
   | { status: 'failed'; detail: string }
 
 /** Kernel output message types the bridge forwards, named as in the Jupyter messaging protocol. */
@@ -36,5 +38,9 @@ export type KernelFrame =
   | { type: 'done'; status: string; execution_count: number | null }
   /** The kernel is gone; `detail` is the tail of its stderr. */
   | { type: 'exit'; detail: string }
+
+export type CreateVenvResult =
+  | { ok: true; environment: PythonEnvironment }
+  | { ok: false; detail: string }
 
 export type KernelFrameEvent = { filePath: string; frame: KernelFrame }

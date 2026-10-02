@@ -65,7 +65,8 @@ async function liveOwner(
       claudeConfigDir: '/accounts/claude',
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: 'resumed-at',
-      resumed: true
+      resumesTranscript: true,
+      continuesChain: true
     }),
     onEvent: (event) => events.push(event),
     openConnection: claude.openConnection,

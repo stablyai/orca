@@ -15,6 +15,9 @@ vi.mock('./session-scanner-worker-spawn', () => ({
   scanAiVaultSessionsInWorker,
   resetAiVaultScannerWorkerForTests: vi.fn()
 }))
+vi.mock('./opencode-wsl-runtime-preparation', () => ({
+  prepareOpenCodeWslReaders: vi.fn(async () => [])
+}))
 
 import { _resetWslCachesForTests, _setWslCachesForTests, listWslDistrosAsync } from '../wsl'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'

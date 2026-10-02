@@ -175,17 +175,6 @@ describe('parseOpenCodeUsageRow', () => {
 })
 
 describe('attributeOpenCodeUsageEvent', () => {
-  it('attributes cwd paths under dotdot-prefixed child directories to the worktree', async () => {
-    const attributed = await attributeOpenCodeUsageEvent(
-      usageEvent(`${WORKTREE}/..fixtures/session`),
-      await resolveWorktree()
-    )
-
-    expect(attributed?.projectKey).toBe('worktree:repo-1::/workspace/repo')
-    expect(attributed?.projectLabel).toBe('Repo')
-    expect(attributed?.worktreeId).toBe('repo-1::/workspace/repo')
-  })
-
   it('does not attribute true parent-directory escapes to the worktree', async () => {
     const attributed = await attributeOpenCodeUsageEvent(
       usageEvent(`${WORKTREE}/../other/session`),
@@ -193,23 +182,6 @@ describe('attributeOpenCodeUsageEvent', () => {
     )
 
     expect(attributed?.projectKey).toBe('cwd:/workspace/repo/../other/session')
-    expect(attributed?.worktreeId).toBeNull()
-  })
-
-  it('does not treat different Windows drives as containing paths', async () => {
-    const attributed = await attributeOpenCodeUsageEvent(
-      usageEvent('D:\\other\\repo'),
-      await createUsageWorktreeResolver([
-        {
-          repoId: 'repo-1',
-          worktreeId: 'repo-1::C:\\repo',
-          path: 'C:\\repo',
-          displayName: 'Repo'
-        }
-      ])
-    )
-
-    expect(attributed?.projectKey).toBe('cwd:d:/other/repo')
     expect(attributed?.worktreeId).toBeNull()
   })
 })

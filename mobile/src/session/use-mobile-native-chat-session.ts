@@ -12,6 +12,7 @@ import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
+import { structuredSessionRandomUuid } from './structured-session-operation-id'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -154,7 +155,12 @@ export function useMobileNativeChatSession(args: {
         agent,
         sessionId,
         limit: limitRef.current,
-        subscriptionId: buildNativeChatSubscriptionId(agent, sessionId),
+        // Why: a token of its own, so another screen on this chat never evicts this feed on the host.
+        subscriptionId: buildNativeChatSubscriptionId(
+          agent,
+          sessionId,
+          structuredSessionRandomUuid()
+        ),
         capabilities: { transcriptPending: 1 },
         ...(transcriptPath ? { transcriptPath } : {})
       },

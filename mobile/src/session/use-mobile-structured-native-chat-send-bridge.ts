@@ -76,6 +76,11 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         }
         return 'accepted'
       }
+      if (outcome === 'queued') {
+        // The host holds the draft and publishes it as a card above the
+        // composer — never an optimistic transcript bubble.
+        return 'queued'
+      }
       if (outcome === 'unknown') {
         if (isHostCommand) {
           restoreRejectedDraft(origin, text)

@@ -11,12 +11,11 @@ import type {
   AgentSessionOperationDecision,
   AgentSessionOperationRow
 } from './agent-session-operation-ledger'
-import {
-  agentSessionLeaseAdmitsWriter,
-  isAgentSessionFenceCurrent
-} from './agent-session-lease-adjudication'
+import { agentSessionLeaseAdmitsWriter } from './agent-session-lease-adjudication'
 import type { AgentSessionLease } from './agent-session-record'
+import { terminalOwnerRefusalMessage } from './agent-session-legacy-handoff-lease'
 import type { AgentSessionMutationEnvelope, AgentSessionWireRefusal } from './agent-session-wire'
+import { refuse } from './agent-session-wire-refusals'
 
 /**
  * Stable digest over the fields that define what this call DOES. Keys are
@@ -66,11 +65,11 @@ export function agentSessionFingerprintConflict(
 ): AgentSessionWireRefusal | null {
   return envelope.payloadFingerprint === hostFingerprint
     ? null
-    : {
-        code: 'agent_session_operation_conflict',
-        message:
-          'The payload does not match the fingerprint the client declared for this operation.'
-      }
+    : refuse(
+        'agent_session_operation_conflict',
+        { reason: 'fingerprintMismatch' },
+        'The payload does not match the fingerprint the client declared for this operation.'
+      )
 }
 
 export type AgentSessionMutationAdmission =
@@ -81,10 +80,11 @@ export type AgentSessionMutationAdmission =
 
 /**
  * Fixed order: fingerprint agreement, then the ledger (so a retry replays
- * before anything else can refuse it), then the lease, then the fence. Putting
- * the ledger ahead of the fence is deliberate — a retry that crossed an owner
- * change must still return its recorded answer instead of a stale-checkpoint
- * refusal the client would then resend as a second effect.
+ * before anything else can refuse it), then the lease.
+ *
+ * `expectedRuntimeFence` is not checked: each write names its own target (a
+ * turn, an item revision, an epoch) or is last-writer-wins, so an owner restart
+ * the client has not seen yet refuses nothing. Older hosts still check it.
  */
 export function admitAgentSessionMutation(input: {
   envelope: AgentSessionMutationEnvelope
@@ -93,6 +93,9 @@ export function admitAgentSessionMutation(input: {
   /** Decision from the durable ledger, evaluated under `hostFingerprint`. */
   ledger: AgentSessionOperationDecision
   lease: AgentSessionLease
+  /** A write to the conversation, not to the provider child: a send is accepted and a Stop
+   *  withdraws queued messages whoever owns the child, so the lease does not admit them. */
+  conversationWrite?: true
 }): AgentSessionMutationAdmission {
   const { envelope, lease, ledger } = input
   const mismatch = agentSessionFingerprintConflict(envelope, input.hostFingerprint)
@@ -102,31 +105,22 @@ export function admitAgentSessionMutation(input: {
   if (ledger.decision === 'refused') {
     return {
       decision: 'refused',
-      refusal: {
-        code: ledger.code,
-        message: `Operation ${envelope.clientOperationId} was refused: ${ledger.code}.`
-      }
+      refusal: refuse(
+        ledger.code,
+        ledger.details,
+        `Operation ${envelope.clientOperationId} was refused: ${ledger.code}.`
+      )
     }
   }
   if (ledger.decision === 'replay') {
     return { decision: 'replay', row: ledger.row }
   }
+  if (input.conversationWrite) {
+    return { decision: 'admit', row: ledger.row }
+  }
   const leaseRefusal = refuseUnlessWriterAdmitted(lease)
   if (leaseRefusal) {
     return { decision: 'refused', refusal: leaseRefusal }
-  }
-  if (
-    envelope.expectedRuntimeFence === null ||
-    !isAgentSessionFenceCurrent(lease, envelope.expectedRuntimeFence)
-  ) {
-    return {
-      decision: 'refused',
-      refusal: {
-        code: 'agent_session_checkpoint_stale',
-        message: `Expected runtime fence ${envelope.expectedRuntimeFence ?? 'none'}; the session is at ${lease.runtimeFence}.`,
-        currentFence: lease.runtimeFence
-      }
-    }
   }
   return { decision: 'admit', row: ledger.row }
 }
@@ -134,29 +128,35 @@ export function admitAgentSessionMutation(input: {
 /** Why the single admission oracle said no, mapped to what the client can do
  *  about it. The predicate itself is never re-implemented here. */
 function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireRefusal | null {
-  if (lease.runtimeKind === 'native' && agentSessionLeaseAdmitsWriter(lease)) {
+  if (agentSessionLeaseAdmitsWriter(lease)) {
     return null
   }
   if (lease.unreconciled) {
-    return {
-      code: 'execution_owner_reconciling',
-      message: 'This host has not yet adjudicated the session lease.'
-    }
+    return refuse(
+      'execution_owner_reconciling',
+      { reason: 'hostReconciling' },
+      'This host has not yet adjudicated the session lease.'
+    )
   }
   if (lease.handoffStage !== null) {
-    return {
-      code: 'agent_session_conflict',
-      message: `The session is mid-handoff (${lease.handoffStage}).`
+    if (lease.claimStatus === 'conflicted') {
+      return refuse(
+        'agent_session_conflict',
+        { reason: 'claimConflicted' },
+        terminalOwnerRefusalMessage(lease)
+      )
     }
+    return lease.handoffStage === 'new-owner-proving'
+      ? refuse('agent_session_conflict', { reason: 'chatStarting' }, 'The chat is still starting.')
+      : refuse(
+          'agent_session_conflict',
+          { reason: 'ownerUnproven' },
+          "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
+        )
   }
-  if (lease.runtimeKind === 'tui' && agentSessionLeaseAdmitsWriter(lease)) {
-    return {
-      code: 'agent_session_conflict',
-      message: 'The agent terminal owns this session.'
-    }
-  }
-  return {
-    code: 'agent_session_ownership_unknown',
-    message: 'The session has no live owner to accept writes.'
-  }
+  return refuse(
+    'agent_session_ownership_unknown',
+    { reason: 'noLiveOwner' },
+    'The session has no live owner to accept writes.'
+  )
 }

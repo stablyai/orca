@@ -328,6 +328,7 @@ export function MobileSourceControlPanel({
             // Gate on the probe too: isGithubRepo=false mid-probe must render loading, not flash "unavailable".
             branchContextLoaded={ready && prController.prSidebarRepoProbeLoaded}
             controller={prController}
+            workspaceLabel={worktreeLabel}
           />
         </View>
       ) : activeTab === 'pr' ? (

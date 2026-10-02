@@ -1,7 +1,7 @@
 import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
@@ -58,7 +58,8 @@ function resolverFor(
   resolveEnv?: () => Record<string, string>,
   stripAuthEnv = false,
   // Manual by default so a test that is not about permissions is not silently about them.
-  agentDefaultArgs: Record<string, string> = { claude: '' }
+  agentDefaultArgs: Record<string, string> = { claude: '' },
+  hasTranscript: () => Promise<boolean> = async () => true
 ) {
   return createClaudeStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
@@ -66,6 +67,7 @@ function resolverFor(
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv }),
     resolvePermissionMode: () => claudeStructuredPermissionModeForSettings({ agentDefaultArgs }),
+    hasTranscript,
     ...(resolveEnv ? { resolveEnv } : {})
   })
 }
@@ -115,7 +117,8 @@ describe('claude structured launch resolution', () => {
       cwd: '/repos/workspace-1',
       claudeConfigDir: '/home/work/.claude',
       resumeLeafUuid: null,
-      resumed: false
+      resumesTranscript: false,
+      continuesChain: false
     })
     expect(first.options).toEqual({
       includePartialMessages: true,
@@ -149,12 +152,26 @@ describe('claude structured launch resolution', () => {
     expect(launch).toMatchObject({
       providerSessionId: 'provider-current',
       resumeLeafUuid: 'leaf-current',
-      resumed: true
+      resumesTranscript: true,
+      continuesChain: true
     })
     expect(launch.options.resume).toBe('provider-current')
     // Claude owns where the conversation continues; a stored leaf would cut or branch it.
     expect(launch.options).not.toHaveProperty('resumeSessionAt')
     expect(launch.options.sessionId).toBeUndefined()
+  })
+
+  it('names the child by the Orca session id, over any id the configured overlay carries', async () => {
+    // The Orca-minted id, never the provider's: the provider id rotates on /clear.
+    const launch = await resolverFor(record(), () => ({
+      ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
+    }))({ identity: IDENTITY })
+
+    expect(launch.env).toMatchObject({
+      ORCA_AGENT_SESSION_ID: SESSION_ID,
+      ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/)
+    })
+    expect(launch.env?.ORCA_AGENT_SESSION_ID).not.toBe(launch.providerSessionId)
   })
 
   it('forces session-state events on when the inherited overlay disables them', async () => {
@@ -200,6 +217,37 @@ describe('claude structured launch resolution', () => {
 
     expect(launch.options.resume).toBe('provider-current')
     expect(launch.options).not.toHaveProperty('resumeSessionAt')
+  })
+
+  it('launches a leafless head fresh under its own id when Claude never wrote its transcript', async () => {
+    // A start that failed before its first turn: `--resume` would exit "No conversation found".
+    const hasTranscript = vi.fn(async () => false)
+    const launch = await resolverFor(
+      record({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle.
+        providerHandleChain: [
+          { handle: { provider: 'claude', sessionId: 'provider-current', leafUuid: null } }
+        ] as AgentSessionRecord['providerHandleChain']
+      }),
+      undefined,
+      false,
+      { claude: '' },
+      hasTranscript
+    )({ identity: identityAt(null) })
+
+    expect(hasTranscript).toHaveBeenCalledWith({
+      providerSessionId: 'provider-current',
+      claudeConfigDir: expect.any(String)
+    })
+    expect(launch.options.resume).toBeUndefined()
+    expect(launch.options.sessionId).toBe('provider-current')
+    expect(launch).toMatchObject({
+      providerSessionId: 'provider-current',
+      resumeLeafUuid: null,
+      resumesTranscript: false,
+      // Launching the id fresh does not start a new conversation: the child continues the chain.
+      continuesChain: true
+    })
   })
 
   // Agent Permissions is stored as the bypass flag inside the launch arguments, so presence of
@@ -457,16 +505,17 @@ describe('claude structured launch resolution', () => {
 
       gate = WSL_ONLY_NORMALIZED
 
-      // Reacquire after the account state changed: refused before anything spawns.
-      await expect(resolve({ identity: identityAt('leaf-current') })).rejects.toBeInstanceOf(
-        AgentSessionPreSpawnError
-      )
+      // Reacquire after the account state changed: refused before anything spawns, naming the
+      // account shape a person can change.
+      const refused = resolve({ identity: identityAt('leaf-current') })
+      await expect(refused).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+      await expect(refused).rejects.toMatchObject({ reason: 'managedAccountUnsupported' })
     })
 
-    it('fails closed when the account state cannot be read', async () => {
-      await expect(
-        resolverWithGate(() => null)({ identity: identityAt('leaf-current') })
-      ).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+    it('fails closed when the account state cannot be read, naming no situation', async () => {
+      const refused = resolverWithGate(() => null)({ identity: identityAt('leaf-current') })
+      await expect(refused).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+      await expect(refused).rejects.toMatchObject({ reason: undefined })
     })
 
     it('keeps resolving when no gate is wired, so other embedders are unaffected', async () => {

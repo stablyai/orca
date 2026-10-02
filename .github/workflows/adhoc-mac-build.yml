@@ -81,7 +81,20 @@ env:
   ADHOC_RETAIN_DAYS: 30
 
 jobs:
+  # Why its own job: this package ships relays for Windows SSH hosts, and only a
+  # Windows runner compiles the addon that launches one outside sshd's job.
+  # Why the unvetted ref is safe here: this job holds no secrets, and the mac job
+  # vets the same ref before it downloads anything, so fork code never gets signed.
+  relay-windows-process-tree:
+    if: github.repository == 'stablyai/orca'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/relay-windows-process-tree.yml
+    with:
+      ref: ${{ inputs.ref || github.ref_name }}
+
   build-adhoc-mac:
+    needs: relay-windows-process-tree
     if: github.repository == 'stablyai/orca'
     # Why an environment: it gives the signing/notary/App secrets somewhere to
     # live that a stale copy of this workflow on an old branch cannot reach.
@@ -259,6 +272,14 @@ jobs:
           fi
           cat "$RUNNER_TEMP/adhoc-identity.txt" >>"$GITHUB_OUTPUT"
 
+      # Only a Windows runner compiles these; the relay-windows-process-tree job
+      # built them for this run.
+      - name: Collect the Windows process-table addons for the relay
+        uses: actions/download-artifact@v8
+        with:
+          name: relay-windows-process-tree
+          path: .build/windows-process-tree
+
       - name: Build app
         run: pnpm build:release
         env:
@@ -267,6 +288,9 @@ jobs:
           # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
           # silent, which is correct for unvetted branch artifacts.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          # Fail the build rather than ship a relay that cannot launch outside
+          # sshd's job for a standard user on a Windows SSH host.
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
 
       # Why the token is minted here and not at the top: installation tokens live
       # one hour, everything before this point writes nothing, and the notary round

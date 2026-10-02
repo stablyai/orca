@@ -10,7 +10,7 @@ import {
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { closeClaudeSession } from './claude-structured-session-close'
@@ -28,6 +28,39 @@ describe('Claude published session close lifecycle', () => {
     await expect(adapter.closeSession('session-1')).rejects.toBeInstanceOf(
       AgentSessionAcquisitionRootExitObservedError
     )
+  })
+
+  it('lets the chat start again after a close that saw the root exit', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const first = claude.connections[0]!
+    first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    first.close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
+    // The owner releases the lease on this verdict, so the next surface resumes the chat.
+    await expect(adapter.closeSession('session-1')).rejects.toBeInstanceOf(
+      AgentSessionAcquisitionRootExitObservedError
+    )
+
+    await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
+
+    expect(claude.connections).toHaveLength(2)
+    expect(first.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts the chat over a live session whose close saw the root exit', async () => {
+    const claude = fakeClaude()
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = adapterFor(claude, {}, events)
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const first = claude.connections[0]!
+    first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    first.close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
+
+    await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
+
+    expect(claude.connections).toHaveLength(2)
+    expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
   })
 
   it('reports the same root-exit verdict while cancelling acquisition', async () => {
@@ -55,7 +88,7 @@ describe('Claude published session close lifecycle', () => {
       .fn<NonNullable<ClaudeStructuredSessionAdapterDeps['persistHandle']>>()
       .mockRejectedValueOnce(persistenceError)
       .mockResolvedValueOnce(undefined)
-    const backgroundStates: (AgentSessionBackgroundTaskState | null)[] = []
+    const childWork: AgentChildWorkEvidence['type'][] = []
     const adapter = adapterFor(
       claude,
       {},
@@ -63,7 +96,7 @@ describe('Claude published session close lifecycle', () => {
       [],
       undefined,
       persistHandle,
-      (_sessionId, state) => backgroundStates.push(state)
+      (_sessionId, evidence) => childWork.push(...evidence.map((edge) => edge.type))
     )
     const journalSink: StructuredAgentSessionEventSink = {
       appendItem: () => {},
@@ -85,15 +118,7 @@ describe('Claude published session close lifecycle', () => {
       task_type: 'local_agent',
       is_backgrounded: true
     })
-    expect(backgroundStates).toEqual([
-      {
-        state: 'monitoring',
-        tasks: [
-          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
-        ],
-        supportsTaskStop: true
-      }
-    ])
+    expect(childWork).toEqual(['live'])
     const session = (
       adapter as unknown as {
         sessions: Map<string, { translator: { dispose: () => void } | null }>
@@ -106,16 +131,8 @@ describe('Claude published session close lifecycle', () => {
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(events.filter((event) => event.type === 'handle')).toHaveLength(0)
     expect(disposeTranslator).toHaveBeenCalledOnce()
-    expect(backgroundStates).toEqual([
-      {
-        state: 'monitoring',
-        tasks: [
-          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
-        ],
-        supportsTaskStop: true
-      },
-      null
-    ])
+    // A close Orca asked for stops the child still running, then the host hears the session end.
+    expect(childWork).toEqual(['live', 'ended', 'session-ended'])
 
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
     expect(persistHandle).toHaveBeenCalledTimes(2)

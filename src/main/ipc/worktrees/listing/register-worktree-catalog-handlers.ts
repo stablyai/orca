@@ -1,6 +1,10 @@
 import { ipcMain } from 'electron'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { getSshGitProvider } from '../../../providers/ssh-git-dispatch'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
 import { getRetiredNameRegistryForRepo } from '../../../worktree-name-retirement'
@@ -28,8 +32,24 @@ import {
   readAllWorktreeMetaForRepo
 } from '../../../persistence/host-qualified-worktree-meta'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import {
+  projectPendingWorktreeRemovals,
+  snapshotPendingWorktreeRemovals,
+  type PendingWorktreeRemovals
+} from '../../../worktree-background-removal'
+import { getLocalWorktreeScanGeneration } from '../../../local-worktree-scan-generation'
+import { getRegisteredWorktreeRootsRevision } from '../../registered-worktree-roots-cache'
 
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
+
+// Why always marked: the desktop renderer ships with this main process, so it reads the marker.
+function markLocalWorktreesUnderRemoval<T extends Worktree>(
+  worktrees: T[],
+  pendingAtScan: PendingWorktreeRemovals
+): T[] {
+  return projectPendingWorktreeRemovals(worktrees, (worktree) => worktree.id, true, pendingAtScan)
+}
 
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
@@ -89,26 +109,32 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
 
     // Why: each local repo listing can spawn `git worktree list`; cap fan-out so large fleets don't start unbounded subprocesses.
     const results = await mapWithConcurrency(repos, WORKTREE_LIST_ALL_CONCURRENCY, async (repo) => {
+      const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
       try {
         let gitWorktrees
         let freshScan = true
         let sideEffectToken: DetectedWorktreeSideEffectToken | undefined
         let metadataPrune: DetectedWorktreeMetadataPrune | undefined
         let hygieneDue: boolean | undefined
+        const pendingAtScan = snapshotPendingWorktreeRemovals()
         if (isFolderRepo(repo)) {
           return listVisibleFolderWorkspaces(store, repo)
-        } else if (repo.connectionId) {
-          const provider = getSshGitProvider(repo.connectionId)
+        } else if (connectionId) {
+          const provider = getSshGitProvider(connectionId)
           if (!provider) {
             warnOnce(
               loggedUnavailableSshGitProviders,
-              `${repo.connectionId}:${repo.id}`,
-              `[worktrees] SSH git provider unavailable; skipping worktree list for repo "${repo.displayName}" (${repo.id}) at ${repo.path} on connection ${repo.connectionId}`
+              `${connectionId}:${repo.id}`,
+              `[worktrees] SSH git provider unavailable; skipping worktree list for repo "${repo.displayName}" (${repo.id}) at ${repo.path} on connection ${connectionId}`
             )
             return listDisconnectedSshWorktrees(store, repo, sshMetaIndexForRepo(repo))
           }
-          loggedUnavailableSshGitProviders.delete(`${repo.connectionId}:${repo.id}`)
+          loggedUnavailableSshGitProviders.delete(`${connectionId}:${repo.id}`)
           try {
+            sideEffectToken = {
+              generation: getLocalWorktreeScanGeneration(repo.id),
+              authorizedRootsRevision: getRegisteredWorktreeRootsRevision(repo.id)
+            }
             gitWorktrees = await provider.listWorktrees(repo.path)
           } catch (err) {
             warnOnce(
@@ -141,9 +167,10 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
         }
         loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
         const metadata = metadataForRepo(repo)
-        return buildDetectedGitWorktrees(store, repo, gitWorktrees, metadata)
+        const worktrees = buildDetectedGitWorktrees(store, repo, gitWorktrees, metadata)
           .filter((worktree) => worktree.visible)
           .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree, metadata))
+        return connectionId ? worktrees : markLocalWorktreesUnderRemoval(worktrees, pendingAtScan)
       } catch (err) {
         warnOnce(
           loggedWorktreeListFailures,
@@ -177,8 +204,9 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
     if (!repo) {
       return []
     }
-    const allMeta = repo.connectionId ? readAllWorktreeMetaForRepo(store, repo) : undefined
-    const sshWorktreeMetaIndex = repo.connectionId
+    const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+    const allMeta = connectionId ? readAllWorktreeMetaForRepo(store, repo) : undefined
+    const sshWorktreeMetaIndex = connectionId
       ? createSshWorktreeMetaIndex(Object.entries(allMeta ?? {}))
       : new Map()
 
@@ -188,20 +216,25 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       let sideEffectToken: DetectedWorktreeSideEffectToken | undefined
       let metadataPrune: DetectedWorktreeMetadataPrune | undefined
       let hygieneDue: boolean | undefined
+      const pendingAtScan = snapshotPendingWorktreeRemovals()
       if (isFolderRepo(repo)) {
         return listVisibleFolderWorkspaces(store, repo)
-      } else if (repo.connectionId) {
-        const provider = getSshGitProvider(repo.connectionId)
+      } else if (connectionId) {
+        const provider = getSshGitProvider(connectionId)
         if (!provider) {
           warnOnce(
             loggedUnavailableSshGitProviders,
-            `${repo.connectionId}:${repo.id}`,
-            `[worktrees] SSH git provider unavailable; skipping worktree list for repo "${repo.displayName}" (${repo.id}) at ${repo.path} on connection ${repo.connectionId}`
+            `${connectionId}:${repo.id}`,
+            `[worktrees] SSH git provider unavailable; skipping worktree list for repo "${repo.displayName}" (${repo.id}) at ${repo.path} on connection ${connectionId}`
           )
           return listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex)
         }
-        loggedUnavailableSshGitProviders.delete(`${repo.connectionId}:${repo.id}`)
+        loggedUnavailableSshGitProviders.delete(`${connectionId}:${repo.id}`)
         try {
+          sideEffectToken = {
+            generation: getLocalWorktreeScanGeneration(repo.id),
+            authorizedRootsRevision: getRegisteredWorktreeRootsRevision(repo.id)
+          }
           gitWorktrees = await provider.listWorktrees(repo.path)
         } catch (err) {
           warnOnce(
@@ -228,9 +261,10 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
       const metadata = allMeta ?? readAllWorktreeMetaForRepo(store, repo)
-      return buildDetectedGitWorktrees(store, repo, gitWorktrees, metadata)
+      const worktrees = buildDetectedGitWorktrees(store, repo, gitWorktrees, metadata)
         .filter((worktree) => worktree.visible)
         .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree, metadata))
+      return connectionId ? worktrees : markLocalWorktreesUnderRemoval(worktrees, pendingAtScan)
     } catch (err) {
       warnOnce(
         loggedWorktreeListFailures,

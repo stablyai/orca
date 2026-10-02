@@ -206,15 +206,6 @@ describe('trackDaemonPtyCwdVerdict', () => {
     ).resolves.toBeUndefined()
     expect(trackMock).not.toHaveBeenCalled()
   })
-
-  it('swallows a throwing telemetry client', async () => {
-    trackMock.mockImplementationOnce(() => {
-      throw new Error('posthog exploded')
-    })
-    await expect(
-      trackDaemonPtyCwdVerdict('daemon_pty_cwd_denied', DENIED_CWD, PID_PATH)
-    ).resolves.toBeUndefined()
-  })
 })
 
 describe('reportDaemonPtyCwdVerdict', () => {

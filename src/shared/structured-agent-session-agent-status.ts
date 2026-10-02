@@ -1,6 +1,9 @@
 import type { AgentSessionStatusSummary } from './agent-session-wire'
 import { foldAgentLeadStatus } from './agent-lead-status-fold'
-import { agentChildWorkLiveness } from './agent-status-child-work-liveness'
+import {
+  agentChildWorkLiveness,
+  type AgentChildWorkLivenessCandidate
+} from './agent-status-child-work-liveness'
 import type { AgentMainAgentStatus, AgentStatusState, AgentWorkingMode } from './agent-status-types'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
@@ -21,21 +24,19 @@ function structuredAgentSessionLeadState(
 
 /** The agent-status state one structured session summary stands for, with its live child
  *  work folded in the same way the hook lane folds a subagent roster. Shared across the
- *  process boundary so `worktree ps`, mobile and the sidebar cannot disagree about one session. */
+ *  process boundary so `worktree ps`, mobile and the sidebar cannot disagree about one session.
+ *  `childWork` is the host's child records (or their views); only an older host's summary, which
+ *  publishes none, is read by its live background tasks. */
 export function structuredAgentSessionAgentStatus(
-  summary: Pick<AgentSessionStatusSummary, 'backgroundTasks' | 'turnOutcome'> & {
+  summary: Pick<AgentSessionStatusSummary, 'turnOutcome'> & {
     status: StructuredAgentSessionProjectedStatus
+    childWork?: readonly AgentChildWorkLivenessCandidate[]
   }
 ): StructuredAgentSessionAgentStatus {
   const leadState = structuredAgentSessionLeadState(summary.status)
   const resolution = foldAgentLeadStatus({
     leadState,
-    // Known divergence from the hook lane, kept on purpose until the cancel policy lands: that
-    // lane hides a still-running shell after an interrupted turn (`updateClaudeRunningNonAgentTask`
-    // calls it a live-shell judgement), so a cancelled turn with a watch loop reads `done` there
-    // and `monitoring` here. This lane never feeds the verdict into the fold — see `mainAgent.outcome`.
-    interrupted: false,
-    childWorkLiveness: agentChildWorkLiveness(summary.backgroundTasks)
+    childWorkLiveness: agentChildWorkLiveness(summary.childWork)
   })
   return {
     state: resolution.stateName,

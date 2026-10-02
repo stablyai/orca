@@ -1,9 +1,6 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  RESET_KITTY_KEYBOARD_PROTOCOL,
-  RESET_TERMINAL_CURSOR_STYLE
-} from '../../../../shared/terminal-mode-reset-profiles'
+import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal-mode-reset-profiles'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from './pty-connection-test-constants'
@@ -456,15 +453,15 @@ describe('connectPanePty', () => {
         expect(deps.dispatchNotification).toHaveBeenCalledWith(expectedNotification)
       }
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        RESET_TERMINAL_CURSOR_STYLE,
         expect.any(Function)
       )
       transport.sendInput.mockClear()
       sendTerminalInputThroughPane(pane, '\x1b[I')
       sendTerminalInputThroughPane(pane, '\x7f')
       expect(transport.sendInput).toHaveBeenCalledTimes(2)
-      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[I')
-      expect(transport.sendInput).toHaveBeenLastCalledWith('\x7f')
+      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[I', 'query-reply')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('\x7f', 'query-reply')
     } finally {
       restoreUserAgent()
     }

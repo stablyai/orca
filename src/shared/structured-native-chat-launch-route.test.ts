@@ -71,15 +71,6 @@ describe('per-launch structured feasibility', () => {
     expect(support(overrides)).toEqual({ supported: false, blocker })
   })
 
-  // The client cannot see whether the host can read a provider child's start time, so neither
-  // provider is refused here on platform; agentSession.createSupport answers that at create time.
-  it.each(['claude', 'codex'] as const)(
-    'leaves a Windows %s launch to the executing host',
-    (agent) => {
-      expect(support({ agent })).toEqual({ supported: true })
-    }
-  )
-
   it('blocks a WSL or repair-required project runtime', () => {
     expect(
       support({

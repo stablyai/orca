@@ -215,6 +215,9 @@ export type RemoveWorktreeResult = {
   preservedBranch?: PreservedWorktreeBranch
   /** Present only when a FAILED archive hook was explicitly waived for this removal (#19334). */
   archiveHookOverride?: ArchiveHookOverride
+  /** The host accepted the removal and is still deleting the checkout. Sent only to clients that
+   *  cannot show a removal in progress; the others get the reply when the delete has finished. */
+  removing?: true
 }
 
 export type ForceDeleteWorktreeBranchResult = {

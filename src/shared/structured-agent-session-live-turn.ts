@@ -10,15 +10,18 @@
 // Each scan reads the turn record BEFORE it checks the producer, which is only
 // safe because a turn row can never carry linkage: a turn is the SESSION'S unit
 // of work, and no producer of a turn-bearing body stamps one. Both lanes were
-// checked — Claude's turn rows are built with no linkage at all, Codex has no
-// linkage concept, the compact row passes only a fence, and the stale-turn
-// sweep goes through the lifecycle-batch path, which cannot carry linkage by
-// type. So a child-linked row can never be what terminates one of these scans.
-// Re-check that before giving any of those sites a producer.
+// checked — Claude's turn rows are built with no linkage at all, Codex writes
+// turn rows only for its primary thread (the one thread it never stamps), the
+// compact row passes only a fence, and the stale-turn and dead-generation
+// sweeps name no producer, so their turn revisions keep the turn row's own
+// (none). So a child-linked row can never be what terminates one of these
+// scans. Re-check that before giving any of those sites a producer.
 
-import type {
-  AgentJournalRenderItem,
-  AgentJournalTurnLifecycle
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem,
+  type AgentJournalTurnLifecycle,
+  type AgentJournalTurnScope
 } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn } from './agent-session-turn-record'
@@ -61,6 +64,22 @@ export function newestStructuredAgentSessionTurnBySequence(
     }
   }
   return newest
+}
+
+/** The scope a row written now joins: the running turn, or the conversation when none runs.
+ *  By sequence, for items held unordered. */
+export function liveStructuredAgentSessionTurnScope(
+  items: Iterable<AgentJournalRenderItem>
+): AgentJournalTurnScope {
+  let newest: AgentJournalRenderItem | null = null
+  for (const item of items) {
+    if ((newest === null || item.sequence >= newest.sequence) && readAgentJournalTurn(item.body)) {
+      newest = item
+    }
+  }
+  return newest && readAgentJournalTurn(newest.body)?.state === 'running'
+    ? { kind: 'turn', turnItemId: newest.itemId }
+    : AGENT_JOURNAL_THREAD_SCOPE
 }
 
 /** Whether that newest turn is still running, which is all most callers want. */
@@ -123,7 +142,7 @@ export function isStructuredAgentSessionThinking(
     ) {
       newestContentIsReasoning = false
     }
-    // Plain status copy is activity chrome, not newer transcript content.
+    // A status row is a notice, not newer transcript content.
   }
   return false
 }

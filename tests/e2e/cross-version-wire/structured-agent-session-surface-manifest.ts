@@ -64,6 +64,23 @@ export const STRUCTURED_CALLS: {
   },
   { method: 'agentSession.send', hostMethod: 'send', result: { ok: true, replayed: false } },
   { method: 'agentSession.cancel', hostMethod: 'cancel', result: { ok: true, replayed: false } },
+  // Draft mutations for mid-turn queueing. Methods exist ahead of the
+  // capability's advertisement; only capability-gated clients ever call them.
+  {
+    method: 'agentSession.queuedMessageSend',
+    hostMethod: 'queuedMessageSend',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessageDelete',
+    hostMethod: 'queuedMessageDelete',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessagesResume',
+    hostMethod: 'queuedMessagesResume',
+    result: { ok: true, replayed: false }
+  },
   {
     method: REWIND_METHOD,
     hostMethod: 'rewind',
@@ -91,11 +108,6 @@ export const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false }
   },
   {
-    method: 'agentSession.requestHandoff',
-    hostMethod: 'requestHandoff',
-    result: { status: { owner: 'native' } }
-  },
-  {
     method: 'agentSession.handoffStatus',
     hostMethod: 'handoffStatus',
     result: { owner: 'native' }
@@ -104,6 +116,11 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.options',
     hostMethod: 'readOptions',
     result: { current: { model: 'gpt-live' } }
+  },
+  {
+    method: 'agentSession.modelCatalog',
+    hostMethod: 'modelCatalog',
+    result: { origin: 'unknown' }
   },
   {
     method: 'agentSession.commands',
@@ -115,7 +132,8 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'revealSession',
     result: { ok: true, sessionId: SESSION, workspaceId: WORKSPACE, agent: 'codex', readable: true }
   },
-  { method: 'agentSession.hold', hostMethod: 'hold', result: { held: true } },
+  // A no-op on a host that starts an agent only for work; it still builds the host.
+  { method: 'agentSession.hold', hostMethod: null, result: { held: true } },
   // The restart-resume surface. Bare additions, not capability-negotiated: an RPC method's
   // absence is explicit (`method_not_found`), which the old-dispatcher case below asserts, so a
   // newer client learns it during negotiation instead of by being met with silence.
@@ -129,17 +147,14 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'restartResumableDismiss',
     result: { dismissed: 0 }
   },
-  {
-    method: 'agentSession.restartResume',
-    hostMethod: 'restartResumeAll',
-    result: { results: [] }
-  },
+  // Reattaching alone is nothing now, so this answers that nothing was resumed.
+  { method: 'agentSession.restartResume', hostMethod: null, result: { results: [] } },
   {
     method: 'agentSession.restartContinue',
     hostMethod: 'restartContinueAll',
     result: { resumed: [], continued: [] }
   },
-  { method: 'agentSession.release', hostMethod: 'release', result: { released: true } },
+  { method: 'agentSession.release', hostMethod: null, result: { released: true } },
   {
     method: 'agentSession.history',
     hostMethod: 'history',
@@ -252,17 +267,16 @@ export function paramsFor(method: string): unknown {
         envelope: envelope({ method: 'agentSession.cancel', fields: { turnId: 'turn-1' }, fence }),
         turnId: 'turn-1'
       }
+    case 'agentSession.queuedMessageSend':
+    case 'agentSession.queuedMessageDelete': {
+      const fields = { messageId: 'queued-1' }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
+    case 'agentSession.queuedMessagesResume':
+      return { envelope: envelope({ method, fields: {}, fence }) }
     case 'agentSession.respondToApproval':
     case 'agentSession.respondToQuestion': {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
-      return { envelope: envelope({ method, fields, fence }), ...fields }
-    }
-    case 'agentSession.requestHandoff': {
-      const fields = {
-        direction: 'to-tui' as const,
-        mode: 'now' as const,
-        action: 'start' as const
-      }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
     case 'agentSession.setOption': {
@@ -275,6 +289,8 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.modelCatalog':
+      return { agent: 'codex', sessionId: SESSION }
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }

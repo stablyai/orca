@@ -1,4 +1,7 @@
-import type { NativeChatComposerInput } from './native-chat-composer-input'
+import {
+  insertNativeChatPastedText,
+  type NativeChatComposerInput
+} from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { HistoryState } from './native-chat-composer-state'
 
@@ -12,7 +15,12 @@ export function useNativeChatTypedInsertion(args: {
   setCaret: Dispatch<SetStateAction<number>>
   setHistory: Dispatch<SetStateAction<HistoryState>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
-}): { insertTypedText: (text: string) => boolean; focus: () => boolean } {
+}): {
+  insertTypedText: (text: string) => boolean
+  insertPastedText: (text: string) => boolean
+  focus: () => boolean
+  contains: (node: Node | null) => boolean
+} {
   const { textareaRef, caret, draft, setDraft, setCaret, setHistory, setActiveSuggestion } = args
 
   const insertTypedText = useCallback(
@@ -38,6 +46,12 @@ export function useNativeChatTypedInsertion(args: {
     [caret, draft, setActiveSuggestion, setCaret, setDraft, setHistory, textareaRef]
   )
 
+  // Reads the live input when a delayed clipboard read settles.
+  const insertPastedText = useCallback(
+    (text: string): boolean => insertNativeChatPastedText(textareaRef.current, text),
+    [textareaRef]
+  )
+
   const focus = useCallback((): boolean => {
     const textarea = textareaRef.current
     if (!textarea || textarea.disabled) {
@@ -47,5 +61,10 @@ export function useNativeChatTypedInsertion(args: {
     return true
   }, [textareaRef])
 
-  return { insertTypedText, focus }
+  const contains = useCallback(
+    (node: Node | null): boolean => textareaRef.current?.contains?.(node) === true,
+    [textareaRef]
+  )
+
+  return { insertTypedText, insertPastedText, focus, contains }
 }

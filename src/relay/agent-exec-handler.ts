@@ -1,3 +1,4 @@
+import { mergeCommandEnvironment } from '../shared/command-environment'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
@@ -148,10 +149,17 @@ export class AgentExecHandler {
       params.env && typeof params.env === 'object' && !Array.isArray(params.env)
         ? (params.env as Record<string, string>)
         : null
-    const spawnEnv = mergeGitConfigEnvProtocol(process.env, extraEnv ?? undefined) as Record<
-      string,
-      string
-    >
+    const baseEnv = mergeCommandEnvironment(
+      process.env,
+      extraEnv ? {} : undefined,
+      process.platform
+    )
+    const overrides = mergeCommandEnvironment({}, extraEnv ?? undefined, process.platform)
+    const spawnEnv = Object.fromEntries(
+      Object.entries(mergeGitConfigEnvProtocol(baseEnv ?? process.env, overrides)).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string'
+      )
+    )
     // Why: this RPC has no interactive terminal, regardless of which wrapper
     // launches the agent or hook command.
     applyTerminalGitCredentialPromptGuard(spawnEnv, {

@@ -527,6 +527,29 @@
   height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
 }
 
+/* A pane-top banner takes real height: the terminal starts below it and refits. */
+.pane-top-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+}
+
+.pane[data-has-title] .pane-top-banner {
+  top: var(--orca-pane-title-height);
+}
+
+.pane:has(> .pane-top-banner) .xterm-container {
+  margin-top: calc(var(--pane-padding-y, 4px) + var(--orca-pane-top-banner-height, 0px));
+  height: calc(100% - var(--pane-padding-y, 4px) - var(--orca-pane-top-banner-height, 0px));
+}
+
+.pane[data-has-title]:has(> .pane-top-banner) .xterm-container {
+  margin-top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-height, 0px));
+  height: calc(100% - var(--orca-pane-title-height) - var(--orca-pane-top-banner-height, 0px));
+}
+
 /* Ghostty-style URL hover: glued to the pane's true bottom-left corner. */
 .pane-link-tooltip {
   position: absolute;

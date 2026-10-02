@@ -9,7 +9,9 @@ import type { AgentSessionConversationOutline } from '../../../shared/agent-sess
 import {
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
 import {
@@ -44,6 +46,22 @@ export function supportsStructuredAgentSessionPromptCancel(
   target: RuntimeClientTarget
 ): Promise<boolean> {
   return structuredAgentSessionHostSupports(target, AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY)
+}
+
+/** Whether the host writes no row for a Stop that stopped nothing, so a repeated Stop is quiet. */
+export function supportsStructuredAgentSessionQuietRepeatedStop(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(target, AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY)
+}
+
+export function supportsStructuredAgentSessionQuestionAnswers(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(
+    target,
+    AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY
+  )
 }
 
 /** Null when the host predates the outline, without calling it. A failed read

@@ -1,7 +1,8 @@
 import {
   buildWindowsAgentHookPostCommand,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand
+  buildWindowsHookPowerShellCommand,
+  wrapWindowsPowerShellEncodedCommand
 } from '../agent-hooks/installer-utils'
 import {
   buildPosixHookPayloadCapture,
@@ -27,14 +28,19 @@ export function getPosixManagedCommand(scriptPath: string, eventName: CursorEven
 }
 
 export function getManagedCommand(scriptPath: string, eventName: CursorEvent): string {
+  if (process.platform !== 'win32') {
+    return getPosixManagedCommand(scriptPath, eventName)
+  }
   const response = getCursorHookResponse(eventName)
-  return process.platform === 'win32'
-    ? wrapWindowsHookCommand(
-        scriptPath,
-        { [CURSOR_HOOK_RESPONSE_ENV]: response },
-        { fallbackStdout: response }
-      )
-    : getPosixManagedCommand(scriptPath, eventName)
+  const command = buildWindowsHookPowerShellCommand(
+    scriptPath,
+    { [CURSOR_HOOK_RESPONSE_ENV]: response },
+    { fallbackStdout: response }
+  )
+  // PowerShell 5.1 defaults to the ANSI code page when translating hook stdin.
+  return wrapWindowsPowerShellEncodedCommand(
+    `[Console]::InputEncoding = New-Object System.Text.UTF8Encoding; $OutputEncoding = [Console]::InputEncoding; ${command}`
+  )
 }
 
 export function getManagedScript(target: 'local' | 'posix' = 'local'): string {

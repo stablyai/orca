@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Context facts ride turn rows. Every kind the writer produces must replay, and
 // one this build cannot read must cost the fact, never the row or the journal.
 
@@ -11,10 +12,13 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { openJournalDatabase } from './journal-database'
-import { journalDatabaseFile } from './journal-paths'
 import { parseJournalRow } from './journal-row-schema'
-import { createTrackedJournalOpener } from './journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase,
+  liveTestJournalRows,
+  updateTestJournalRowJson
+} from './journal-host-database-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -61,7 +65,7 @@ const journals = createTrackedJournalOpener()
 const open = () =>
   journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: () => ++clock,
     mintEpoch: () => 'epoch-1'
   })
@@ -91,7 +95,10 @@ describe('context facts on replayed turn rows', () => {
   it('replays every part and kind the writer produces, unchanged', async () => {
     const journal = await open()
     for (const [index, facts] of FACTS.entries()) {
-      await journal.appendItem(row(index), turn(`turn-${index}`, facts), { fence: 1 })
+      await journal.appendItem(row(index), turn(`turn-${index}`, facts), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
     const written = journal.snapshot().items.map((item) => item.body)
     await journal.close()
@@ -104,27 +111,24 @@ describe('context facts on replayed turn rows', () => {
 
   it('keeps a turn row whose facts it cannot read, and everything after it, minus the facts', async () => {
     const journal = await open()
-    await journal.appendItem(row(0), turn('turn-0', FACTS[0]), { fence: 1 })
+    await journal.appendItem(row(0), turn('turn-0', FACTS[0]), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.appendItem(
       row(1),
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'after' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.close()
-    const opened = openJournalDatabase(journalDatabaseFile(root))
+    const opened = openTestJournalHostDatabase(root)
     try {
-      const stored: unknown = opened.db
-        .prepare('SELECT row_json FROM journal_rows WHERE seq = 2')
-        .get()
-      const rowJson =
-        typeof stored === 'object' && stored !== null && 'row_json' in stored ? stored.row_json : ''
-      const future = JSON.parse(String(rowJson))
+      const rowJson = liveTestJournalRows(opened.db, IDENTITY.sessionId)[1]?.rowJson ?? ''
+      const future = JSON.parse(rowJson)
       future.body.contextUsage = { used: { kind: 'measured-later', tokens: 'many' } }
-      opened.db
-        .prepare('UPDATE journal_rows SET row_json = ? WHERE seq = 2')
-        .run(JSON.stringify(future))
+      updateTestJournalRowJson(opened.db, IDENTITY.sessionId, 2, JSON.stringify(future))
     } finally {
-      opened.db.close()
+      opened.close()
     }
 
     const reopened = await open()

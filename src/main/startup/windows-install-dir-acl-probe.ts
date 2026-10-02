@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
   sanitizeCrashReportString,
@@ -36,23 +38,16 @@ const MODULE_SHORTLIST = ['ffmpeg.dll', 'libGLESv2.dll', 'libEGL.dll', 'icudtl.d
 
 const PROBE_BUDGET_MS = 5_000
 
-/** Raw S-1-15-2-* means icacls could not resolve it — locale-independent. */
-const RAW_PACKAGE_SID = /\bS-1-15-2-[0-9-]+\b/i
+// Why SDDL (`icacls /save`) rather than icacls's display: the display localizes
+// the well-known package names — and on zh/ja/ko even keeps "NT AUTHORITY" English
+// while doing so — so a repaired tree read as poisoned. SDDL prints SIDs on every locale.
+const PACKAGE_SID = /^S-1-15-2-[0-9-]+$/i
 /** ALL RESTRICTED APPLICATION PACKAGES: the grant the reproduced remedy added. */
-const RESTRICTED_PACKAGES_SID = 's-1-15-2-2'
-const WELL_KNOWN_PACKAGE_SIDS = new Set(['s-1-15-2-1', RESTRICTED_PACKAGES_SID])
-// icacls localizes these; the raw SID form is never printed for them. Orphan
-// detection stays SID-form and locale-independent, but this check is not — so we
-// report whether the output looked English at all, making a locale-induced
-// false positive recognizable instead of silent.
-const WELL_KNOWN_PACKAGE_NAMES = /ALL (RESTRICTED )?APPLICATION PACKAGES/i
-const RESTRICTED_PACKAGE_NAME = /ALL RESTRICTED APPLICATION PACKAGES/i
-// Not BUILTIN: fr-FR and es-ES print it verbatim while localizing the package
-// names, so it is evidence of nothing. SYSTEM's ACE is on every install tree.
-const ENGLISH_PRINCIPAL = /\b(NT AUTHORITY|APPLICATION PACKAGE AUTHORITY)\b/i
-// Why: an ACE that denies, or only propagates to children, grants nothing on this
-// object — so it cannot satisfy an orphan the way the reproduced fix did.
-const NON_GRANTING_FLAGS = /\((?:DENY|IO)\)/i
+const RESTRICTED_PACKAGES_SID = 'S-1-15-2-2'
+/** `AC` is SDDL's alias for ALL APPLICATION PACKAGES (S-1-15-2-1). */
+const WELL_KNOWN_PACKAGE_SIDS = new Set(['AC', 'S-1-15-2-1', RESTRICTED_PACKAGES_SID])
+/** (type;flags;rights;object;inheritedObject;sid[;condition]) */
+const SDDL_ACE = /\(([A-Z]+);([A-Z]*);[^;()]*;[^;()]*;[^;()]*;([^;()]+)[;)]/gi
 
 export type WindowsInstallDirAclProbeOptions = {
   platform?: NodeJS.Platform
@@ -69,80 +64,80 @@ type AclFacts = {
   orphanPackageSids: string[]
   hasWellKnownPackageGrant: boolean
   hasRestrictedPackageGrant: boolean
-  sawEnglishPrincipal: boolean
 }
 
-function readDacl(spawnFn: typeof spawn, target: string, deadlineMs: number): Promise<string> {
-  return new Promise((resolve) => {
-    // No flags: icacls with a bare path only reads. Never /T — a recursive walk on
-    // a real profile measured 62s and timed out (see windows-user-data-acl.ts).
-    const child = spawnFn(getIcaclsExePath(), [target], {
-      stdio: ['ignore', 'pipe', 'ignore'],
+function readSavedDacl(spawnFn: typeof spawn, target: string, deadlineMs: number): Promise<string> {
+  const saveFile = join(tmpdir(), `orca-install-acl-${randomUUID()}.txt`)
+  return new Promise<string>((resolve) => {
+    // /save only reads the target (it writes the temp file). Never /T — a recursive
+    // walk on a real profile measured 62s and timed out (see windows-user-data-acl.ts).
+    const child = spawnFn(getIcaclsExePath(), [target, '/save', saveFile], {
+      stdio: ['ignore', 'ignore', 'ignore'],
       windowsHide: true
     })
-    let out = ''
     let settled = false
-    const settle = (value: string): void => {
+    const settle = (read: boolean): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timer)
-      resolve(value)
+      let out = ''
+      try {
+        // An empty read parses as a clean DACL, so a failed /save must stay ''.
+        out = read ? readFileSync(saveFile, 'utf16le') : ''
+      } catch {
+        out = ''
+      }
+      try {
+        // A killed icacls may still hold the file; a leftover temp file is harmless.
+        rmSync(saveFile, { force: true })
+      } catch {
+        // Nothing to do.
+      }
+      resolve(out)
     }
     const timer = setTimeout(() => {
       child.kill()
-      settle('')
+      settle(false)
     }, deadlineMs)
     timer.unref?.()
-    child.stdout?.on('data', (chunk: Buffer) => {
-      out += chunk.toString('utf-8')
-    })
-    child.on('error', () => settle(''))
-    // 'close' not 'exit': exit can fire before stdout drains, and an empty read
-    // would parse as a clean DACL — a false negative in the only case we care about.
-    child.on('close', () => settle(out))
+    child.on('error', () => settle(false))
+    child.on('close', (code) => settle(code === 0))
   })
 }
 
-function collectAclFacts(daclOutput: string): AclFacts {
+function collectAclFacts(savedDacl: string): AclFacts | null {
   const orphanPackageSids: string[] = []
   let hasWellKnownPackageGrant = false
   let hasRestrictedPackageGrant = false
-  let sawEnglishPrincipal = false
-  for (const line of daclOutput.split(/\r?\n/)) {
-    if (ENGLISH_PRINCIPAL.test(line)) {
-      sawEnglishPrincipal = true
-    }
-    // icacls glues the echoed path onto the first principal with no separator, so
-    // match the principal:(flags) tail rather than trying to split the line.
-    const ace = /([^\s:][^:]*):(\([^\s]*\))\s*$/.exec(line.trim())
-    if (!ace) {
+  // A partial DACL can hide a later grant; unsupported ACEs must stay unreadable.
+  const dacl = /^D:[A-Z]*((?:\([^()]*\))*)(?:S:.*)?$/im.exec(savedDacl)
+  if (!dacl) {
+    return null
+  }
+  for (const [, type, flags, rawSid] of dacl[1].matchAll(SDDL_ACE)) {
+    const sid = rawSid.toUpperCase()
+    if (!WELL_KNOWN_PACKAGE_SIDS.has(sid)) {
+      if (PACKAGE_SID.test(sid)) {
+        orphanPackageSids.push(rawSid)
+      }
       continue
     }
-    const [, principal, flags] = ace
-    const rawSid = RAW_PACKAGE_SID.exec(principal)?.[0]
-    const sid = rawSid?.toLowerCase()
-    if (rawSid && !WELL_KNOWN_PACKAGE_SIDS.has(rawSid.toLowerCase())) {
-      orphanPackageSids.push(rawSid)
-      continue
-    }
-    const isWellKnown = sid !== undefined || WELL_KNOWN_PACKAGE_NAMES.test(principal)
-    if (!isWellKnown || NON_GRANTING_FLAGS.test(flags)) {
+    // Why: an ACE that denies, or only propagates to children (IO), grants nothing
+    // on this object — so it cannot satisfy an orphan the way the reproduced fix did.
+    const flagTokens: string[] = flags.toUpperCase().match(/../g) ?? []
+    const inheritOnly = flagTokens.includes('IO')
+    if (type.toUpperCase() !== 'A' || inheritOnly) {
       continue
     }
     hasWellKnownPackageGrant = true
     // Reported, never the verdict: narrows which grant is present for triage.
-    if (sid === RESTRICTED_PACKAGES_SID || (!sid && RESTRICTED_PACKAGE_NAME.test(principal))) {
+    if (sid === RESTRICTED_PACKAGES_SID) {
       hasRestrictedPackageGrant = true
     }
   }
-  return {
-    orphanPackageSids,
-    hasWellKnownPackageGrant,
-    hasRestrictedPackageGrant,
-    sawEnglishPrincipal
-  }
+  return { orphanPackageSids, hasWellKnownPackageGrant, hasRestrictedPackageGrant }
 }
 
 function resolveTargets(installDir: string, fileExists: (path: string) => boolean): string[] {
@@ -162,9 +157,9 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
     for (const target of targets) {
       const remaining = PROBE_BUDGET_MS - (Date.now() - startedAt)
       // Why one shared budget: two targets must never cost two full timeouts.
-      outputs.push(remaining > 0 ? await readDacl(spawnFn, target, remaining) : '')
+      outputs.push(remaining > 0 ? await readSavedDacl(spawnFn, target, remaining) : '')
     }
-    const facts = outputs.map(collectAclFacts)
+    const facts = outputs.map(collectAclFacts).filter((fact) => fact !== null)
     const orphans = [...new Set(facts.flatMap((f) => f.orphanPackageSids))]
     const hasWellKnownPackageGrant = facts.some((f) => f.hasWellKnownPackageGrant)
     const hasRestrictedPackageGrant = facts.some((f) => f.hasRestrictedPackageGrant)
@@ -174,24 +169,22 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
     const poisoned = facts.some(
       (f) => f.orphanPackageSids.length > 0 && !f.hasWellKnownPackageGrant
     )
-    data = outputs.every((out) => out === '')
-      ? { status: 'failed', reason: 'all-targets-unreadable' }
-      : {
-          status: 'ok',
-          probedTargetCount: targets.length,
-          orphanPackageSidCount: orphans.length,
-          // Capped: correlating the same orphan across reports is what would
-          // identify the tool that left it, which is the point of recording it.
-          orphanPackageSids: sanitizeCrashReportString(orphans.slice(0, 3).join(','), 200),
-          // The verdict rides on this one: either well-known grant satisfies the orphan.
-          hasWellKnownPackageGrant,
-          // Diagnostic only — the -1-only shape launches clean on real hardware.
-          hasRestrictedPackageGrant,
-          // False positives are possible on a non-English Windows, where the
-          // well-known ACE resolves to a localized name this cannot match.
-          wellKnownNameCheckReliable: facts.some((f) => f.sawEnglishPrincipal),
-          matchesPoisonSignature: poisoned
-        }
+    data =
+      facts.length === 0
+        ? { status: 'failed', reason: 'all-targets-unreadable' }
+        : {
+            status: 'ok',
+            probedTargetCount: targets.length,
+            orphanPackageSidCount: orphans.length,
+            // Capped: correlating the same orphan across reports is what would
+            // identify the tool that left it, which is the point of recording it.
+            orphanPackageSids: sanitizeCrashReportString(orphans.slice(0, 3).join(','), 200),
+            // The verdict rides on this one: either well-known grant satisfies the orphan.
+            hasWellKnownPackageGrant,
+            // Diagnostic only — the -1-only shape launches clean on real hardware.
+            hasRestrictedPackageGrant,
+            matchesPoisonSignature: poisoned
+          }
   } catch (error) {
     data = { status: 'failed', reason: sanitizeCrashReportString(`probe: ${String(error)}`, 200) }
   }

@@ -3,13 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
 import { lookupOpenCodeSessionPane } from '../../shared/agent-hook-listener/opencode-session-registry'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import SyncDatabase from '../sqlite/sync-database'
 import { AgentHookServer } from './server'
 import type { OpenCodeBinderLoopDeps } from './server/server-opencode-binder'
-import { defaultOpenCodeDbPath, listOpenCodeDbSessions } from '../opencode/opencode-session-binder'
+import { listOpenCodeDbSessions } from '../opencode/opencode-session-binder'
 
 const LEAF_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const LEAF_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -30,8 +29,8 @@ class BinderTestServer extends AgentHookServer {
     this.startOpenCodeBinderLoop()
   }
 
-  public ingest(source: AgentHookSource, body: unknown): void {
-    this.normalizeLocalHookPayload(source, body)
+  public ingest(source: AgentHookSource, body: unknown): string | undefined {
+    return this.normalizeLocalHookPayload(source, body).event?.paneKey
   }
 
   public readRegistry(sessionId: string): string | undefined {
@@ -39,16 +38,16 @@ class BinderTestServer extends AgentHookServer {
   }
 }
 
-function writeDb(dbPath: string, table: 'session_v2' | 'session'): void {
+function writeDb(dbPath: string, table: 'session_v2' | 'session', id = 'ses_live'): void {
   const db = new SyncDatabase(dbPath)
   try {
     db.exec(
-      `CREATE TABLE ${table} (id TEXT PRIMARY KEY, directory TEXT NOT NULL, time_created INTEGER NOT NULL, parent_id TEXT)`
+      `CREATE TABLE IF NOT EXISTS ${table} (id TEXT PRIMARY KEY, directory TEXT NOT NULL, time_created INTEGER NOT NULL, parent_id TEXT)`
     )
     const insert = db.prepare(
       `INSERT INTO ${table} (id, directory, time_created, parent_id) VALUES (?, ?, ?, ?)`
     )
-    insert.run('ses_live', DIR, Date.now() - 60_000, null)
+    insert.run(id, DIR, Date.now() - 60_000, null)
   } finally {
     db.close()
   }
@@ -70,7 +69,13 @@ describe('opencode binder loop', () => {
         { paneKey: PANE_A, directory: DIR, worktreeId: `repo::${DIR}`, shellPid: 111 }
       ],
       sweep: async () => [
-        { pid: 112, ppid: 111, startedAtMs: Date.now() - 120_000, executable: 'opencode', argv: ['opencode'] }
+        {
+          pid: 112,
+          ppid: 111,
+          startedAtMs: Date.now() - 120_000,
+          executable: 'opencode',
+          argv: ['opencode']
+        }
       ]
     })
   })
@@ -80,22 +85,21 @@ describe('opencode binder loop', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('binds a fresh session to its pane', async () => {
-    writeDb(dbPath, 'session_v2')
-    const applied = await server.runBinderRound()
-    expect(applied).toBe(1)
-    expect(server.readRegistry('ses_live')).toBe(PANE_A)
-  })
-
-  it('falls back to the v1 session table', async () => {
+  it('binds a fresh OpenCode 1 session to its pane', async () => {
     writeDb(dbPath, 'session')
     const applied = await server.runBinderRound()
     expect(applied).toBe(1)
     expect(server.readRegistry('ses_live')).toBe(PANE_A)
   })
 
-  it('an opencode SessionStart kicks a round that binds before the poll', async () => {
+  it('never binds an OpenCode 2 session', async () => {
     writeDb(dbPath, 'session_v2')
+    expect(await server.runBinderRound()).toBe(0)
+    expect(server.readRegistry('ses_live')).toBeUndefined()
+  })
+
+  it('an opencode SessionStart kicks a round that binds before the poll', async () => {
+    writeDb(dbPath, 'session')
     vi.useFakeTimers()
     try {
       // Birth arrives stamped with the wrong (server-starter) pane.
@@ -112,8 +116,27 @@ describe('opencode binder loop', () => {
     }
   })
 
+  it('an OpenCode 2 SessionStart kicks no round', async () => {
+    writeDb(dbPath, 'session')
+    const sweep = vi.fn(async () => [])
+    server.bindDeps({ sweep })
+    vi.useFakeTimers()
+    try {
+      server.ingest('opencode', {
+        paneKey: PANE_B,
+        launchToken: '',
+        opencodeMajor: 2,
+        payload: { hook_event_name: 'SessionStart', sessionID: 'ses_live' }
+      })
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(sweep).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('pane teardown unbinds its sessions', async () => {
-    writeDb(dbPath, 'session_v2')
+    writeDb(dbPath, 'session')
     await server.runBinderRound()
     expect(server.readRegistry('ses_live')).toBe(PANE_A)
     server.clearPaneState(PANE_A)
@@ -121,12 +144,12 @@ describe('opencode binder loop', () => {
   })
 
   it('stops the loop without hanging the process', () => {
-    writeDb(dbPath, 'session_v2')
+    writeDb(dbPath, 'session')
     expect(() => server.stop()).not.toThrow()
   })
 
   it('runs a round immediately on loop start', async () => {
-    writeDb(dbPath, 'session_v2')
+    writeDb(dbPath, 'session')
     server.startBinderLoop()
     try {
       await vi.waitFor(() => expect(server.readRegistry('ses_live')).toBe(PANE_A))
@@ -136,7 +159,7 @@ describe('opencode binder loop', () => {
   })
 
   it('discards a round that was in flight across stop', async () => {
-    writeDb(dbPath, 'session_v2')
+    writeDb(dbPath, 'session')
     let releaseSweep!: () => void
     const sweepGate = new Promise<void>((resolve) => {
       releaseSweep = resolve
@@ -163,7 +186,7 @@ describe('opencode binder loop', () => {
   })
 
   it('an obsolete round does not clear the new round running flag', async () => {
-    writeDb(dbPath, 'session_v2')
+    writeDb(dbPath, 'session')
     let releaseFirst!: () => void
     let releaseLater!: () => void
     const firstGate = new Promise<void>((resolve) => {
@@ -207,6 +230,61 @@ describe('opencode binder loop', () => {
   })
 })
 
+// OpenCode 1 `serve` in pane A stamps every post with pane A; `attach` in pane B drives the session.
+describe('OpenCode 1 serve + attach', () => {
+  let dir = ''
+  let dbPath = ''
+  let server: BinderTestServer
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'binder-attach-'))
+    dbPath = join(dir, 'opencode.db')
+    writeDb(dbPath, 'session')
+    const startedAtMs = Date.now() - 120_000
+    server = new BinderTestServer()
+    server.bindDeps({
+      now: () => Date.now(),
+      dbPath: () => dbPath,
+      listPanes: () => [
+        { paneKey: PANE_A, directory: DIR, worktreeId: `repo::${DIR}`, shellPid: 111 },
+        { paneKey: PANE_B, directory: DIR, worktreeId: `repo::${DIR}`, shellPid: 211 }
+      ],
+      sweep: async () => [
+        { pid: 112, ppid: 111, startedAtMs, executable: 'opencode', argv: ['opencode', 'serve'] },
+        {
+          pid: 212,
+          ppid: 211,
+          startedAtMs,
+          executable: 'opencode',
+          argv: ['opencode', 'attach', 'http://127.0.0.1:4096']
+        }
+      ]
+    })
+  })
+
+  afterEach(() => {
+    server.stop()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const busy = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+    paneKey: PANE_A,
+    launchToken: '',
+    ...extra,
+    payload: { hook_event_name: 'SessionBusy', sessionID: 'ses_live' }
+  })
+
+  it("reports the session on the attaching pane, not the server's", async () => {
+    expect(await server.runBinderRound()).toBe(1)
+    expect(server.ingest('opencode', busy())).toBe(PANE_B)
+  })
+
+  it('never moves an OpenCode 2 post with the same shape', async () => {
+    await server.runBinderRound()
+    expect(server.ingest('opencode', busy({ opencodeMajor: 2 }))).toBe(PANE_A)
+  })
+})
+
 describe('listOpenCodeDbSessions', () => {
   let dir = ''
   let dbPath = ''
@@ -220,26 +298,23 @@ describe('listOpenCodeDbSessions', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('reads session_v2 rows newer than the watermark', () => {
-    writeDb(dbPath, 'session_v2')
+  it('reads OpenCode 1 session rows newer than the watermark', () => {
+    writeDb(dbPath, 'session')
     const rows = listOpenCodeDbSessions(dbPath, { ms: 0, id: '' })
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ id: 'ses_live', directory: DIR, parentId: null })
     expect(listOpenCodeDbSessions(dbPath, { ms: Date.now(), id: '' })).toEqual([])
   })
 
+  it('skips OpenCode 2 rows in a database both versions wrote', () => {
+    writeDb(dbPath, 'session', 'ses_v1')
+    writeDb(dbPath, 'session_v2', 'ses_v2')
+    expect(listOpenCodeDbSessions(dbPath, { ms: 0, id: '' }).map((row) => row.id)).toEqual([
+      'ses_v1'
+    ])
+  })
+
   it('returns [] for a missing database instead of throwing', () => {
     expect(listOpenCodeDbSessions(join(dir, 'absent.db'), { ms: 0, id: '' })).toEqual([])
-  })
-
-  it('the default path points at the local opencode store', () => {
-    expect(defaultOpenCodeDbPath()).toMatch(/opencode\.db$/)
-  })
-})
-
-describe('binder registry isolation', () => {
-  it('a fresh listener state starts unbound', () => {
-    const state = createHookListenerState()
-    expect(lookupOpenCodeSessionPane(state, 'ses_live')).toBeUndefined()
   })
 })

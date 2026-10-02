@@ -4,11 +4,16 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { detectAgentStatusFromTitle, isClaudeManagementTitle } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
-import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { structuredWorkerIdentities } from './structured-worker-identity'
-import { isSettledNativeOwner } from './orchestration/structured-session-pointer-delivery'
 import type { StructuredPointerTarget } from './orchestration/structured-mailbox-pointer-delivery'
+import {
+  handleLessCoordinatorSessionId,
+  structuredSessionAddressTarget,
+  structuredSessionMailTarget,
+  structuredSessionIdleEdgeMailboxes,
+  structuredWorkerMailSessionId
+} from './orchestration/structured-session-mail-target'
 import {
   resolveTerminalIdentityFromProbes,
   type RuntimeTerminalIdentity
@@ -189,6 +194,32 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
   }
 
+  /**
+   * Every structured session's status change reaches here. At its idle edge, retry what is parked
+   * on it and re-derive the mailboxes it owns, so mail it could not take earlier (mid-turn, closed)
+   * is pointed again. Workers and chats alike: this is not per-dispatch.
+   */
+  onStructuredSessionStatusForMail(summary: {
+    sessionId: string
+    status: 'working' | 'attention' | 'idle' | null
+  }): void {
+    if (summary.status === 'working' || summary.status === 'attention') {
+      return
+    }
+    // Logged, never thrown: the same status callback goes on to the first-turn workspace rename.
+    try {
+      this.notifyStructuredSessionJournalActivity(summary.sessionId)
+      const openDb = () => this.getExistingOrchestrationDb()
+      const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
+      structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
+    } catch (error) {
+      console.warn('[orchestration] structured session mail redrive failed', {
+        sessionId: summary.sessionId,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
   forgetStructuredSessionMail(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
@@ -207,6 +238,10 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     if (mailboxHandle.startsWith('run:')) {
       return this.resolveStructuredCoordinatorMailboxTarget(mailboxHandle.slice('run:'.length))
     }
+    const addressed = structuredSessionAddressTarget(mailboxHandle, this._orchestrationDb)
+    if (addressed !== undefined) {
+      return addressed
+    }
     if (!mailboxHandle.startsWith('dispatch:')) {
       return this.resolveStructuredWorkerDirectMailboxTarget(mailboxHandle)
     }
@@ -215,11 +250,8 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     if (!assignee) {
       return null
     }
-    const identity = resolveStructuredWorkerAuthority(assignee, this._orchestrationDb)?.identity
-    if (identity) {
-      return { sessionId: identity.sessionId, dispatchId }
-    }
-    return this.resolveAdoptedStructuredMailboxTarget(assignee, dispatchId)
+    const sessionId = this.liveStructuredWorkerSessionId(assignee)
+    return sessionId ? { sessionId, dispatchId } : null
   }
 
   /**
@@ -233,12 +265,17 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   protected resolveStructuredCoordinatorMailboxTarget(
     runId: string
   ): StructuredPointerTarget | null {
-    const coordinator = this._orchestrationDb?.getRun?.(runId)?.coordinator_handle
+    const run = this._orchestrationDb?.getRun?.(runId)
+    const sessionId = run ? handleLessCoordinatorSessionId(run) : null
+    if (sessionId) {
+      return structuredSessionMailTarget(sessionId, this._orchestrationDb)
+    }
+    const coordinator = run?.coordinator_handle
     if (!coordinator) {
       return null
     }
-    const identity = resolveStructuredWorkerAuthority(coordinator, this._orchestrationDb)?.identity
-    return identity ? { sessionId: identity.sessionId, dispatchId: null } : null
+    const workerSessionId = this.liveStructuredWorkerSessionId(coordinator)
+    return workerSessionId ? { sessionId: workerSessionId, dispatchId: null } : null
   }
 
   /**
@@ -251,7 +288,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
    * The worker's ACTIVE dispatch is preferred when it has one, so peer and coordinator nudges share
    * one operation-ledger budget and one set of retain rules. A worker BETWEEN dispatches is still
    * nudged, under a session-scoped budget: the mail is durable, the session is live, and a dispatch
-   * says nothing about whether delivery is safe — the idle gate and the lease fence do that.
+   * says nothing about whether delivery is safe — the idle gate and the writer lease do that.
    */
   protected resolveStructuredWorkerDirectMailboxTarget(
     handle: string
@@ -260,38 +297,19 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     // Answers null for anything that is not a live structured worker of THIS runtime, so `run:`
     // and PTY handles fall through to the PTY lane exactly as before.
     const identity = resolveStructuredWorkerAuthority(handle, db)?.identity
-    if (!identity) {
+    const sessionId = identity ? structuredWorkerMailSessionId(identity.sessionId) : null
+    if (!identity || !sessionId) {
       return null
     }
     const dispatchId = db?.findActiveDispatchForAssignee?.(handle, identity.paneKey)?.id ?? null
-    return { sessionId: identity.sessionId, dispatchId }
+    return { sessionId, dispatchId }
   }
 
-  /**
-   * A PTY-born worker whose pane was since adopted by native chat.
-   *
-   * Its bytes cannot land — every runtime write path re-admits through the same gate — so the
-   * pointer has to travel as a session turn instead. Only a SETTLED native owner qualifies: a
-   * mid-handoff lease may become a TUI again, and redirecting there races the takeover.
-   */
-  protected resolveAdoptedStructuredMailboxTarget(
-    assignee: string,
-    dispatchId: string
-  ): StructuredPointerTarget | null {
-    let ptyId: string | null | undefined
-    try {
-      ptyId = this.getLiveLeafForHandle(assignee).leaf.ptyId
-    } catch {
-      return null
-    }
-    if (!ptyId) {
-      return null
-    }
-    const admission = agentSessionPtyWriteGate.admit(ptyId)
-    if (admission.admitted || !isSettledNativeOwner(admission.refusal)) {
-      return null
-    }
-    return { sessionId: admission.refusal.sessionId, dispatchId, refusal: admission.refusal }
+  /** The live session behind a structured worker handle of this runtime; see
+   *  `structuredWorkerMailSessionId`. */
+  private liveStructuredWorkerSessionId(handle: string): string | null {
+    const identity = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)?.identity
+    return identity ? structuredWorkerMailSessionId(identity.sessionId) : null
   }
 
   protected scheduleRestoredMessageRepoints(): void {

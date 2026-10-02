@@ -73,28 +73,35 @@ import { appendFile, mkdtemp, rename, rm, truncate, unlink, writeFile } from 'no
 import {
   ClaudeTranscriptPreviousCursorMissingError,
   ClaudeTranscriptTailIncompleteError,
-  proveClaudeTranscriptBranch,
-  proveClaudeTranscriptBranchFromJsonl
+  replayClaudeTranscriptBranchAncestry,
+  replayClaudeTranscriptBranchAncestryFromJsonl
 } from './claude-transcript-branch-proof'
 
 const row = (uuid: string, parentUuid: string | null, extra = {}) =>
   `${JSON.stringify({ type: 'user', uuid, parentUuid, sessionId: 'provider', ...extra })}\n`
 const marker = (leafUuid: string, sessionId = 'provider') =>
   `${JSON.stringify({ type: 'last-prompt', leafUuid, sessionId })}\n`
+/** Carries no uuid, so it can be neither a tip nor a marker. */
+const SUMMARY = `${JSON.stringify({ type: 'summary', summary: 'title' })}\n`
 const ROOT = row('root', null)
 const CHILD = row('child', 'root')
 const SOURCE = ROOT + marker('root')
 let directory = ''
-const read = (previousLeafUuid: string | null = null, intentionalRewindUuid?: string) =>
-  proveClaudeTranscriptBranch({
+let replayed: string[] = []
+// The live caller always anchors the replay at the cursor it already holds.
+const replay = (anchorUuid = 'root') =>
+  replayClaudeTranscriptBranchAncestry({
     transcriptPath: state.path,
     providerSessionId: 'provider',
-    previousLeafUuid,
-    ...(intentionalRewindUuid === undefined ? {} : { intentionalRewindUuid })
+    previousLeafUuid: anchorUuid,
+    ancestryAnchorUuid: anchorUuid,
+    onAncestorRecord: (_record, uuid) => replayed.push(uuid)
   })
+const read = async (anchorUuid?: string) => (await replay(anchorUuid)).proof
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-branch-streaming-'))
+  replayed = []
   Object.assign(state, {
     path: join(directory, 'transcript.jsonl'),
     opens: 0,
@@ -121,7 +128,7 @@ afterEach(async () => {
   }
 })
 
-it('decodes UTF-8 across chunks and proves old ancestry beyond large message bodies', async () => {
+it('decodes UTF-8 across chunks and replays ancestry beyond large message bodies', async () => {
   const prefix = JSON.stringify({ type: 'comment', content: '' }).indexOf('"content":"') + 11
   const comment = `${JSON.stringify({ type: 'comment', content: `${'x'.repeat(65535 - prefix)}🙂é漢字` })}\n`
   const contents =
@@ -130,13 +137,18 @@ it('decodes UTF-8 across chunks and proves old ancestry beyond large message bod
     CHILD +
     marker('child').trimEnd()
   await writeFile(state.path, contents)
-  expect(await read('root')).toEqual(
-    proveClaudeTranscriptBranchFromJsonl({
+  const fromString: string[] = []
+  expect(await replay()).toEqual(
+    replayClaudeTranscriptBranchAncestryFromJsonl({
       contents,
       providerSessionId: 'provider',
-      previousLeafUuid: 'root'
+      previousLeafUuid: 'root',
+      ancestryAnchorUuid: 'root',
+      onAncestorRecord: (_record, uuid) => fromString.push(uuid)
     })
   )
+  expect(replayed).toEqual(fromString)
+  expect(replayed).toEqual(['child'])
 })
 
 it.each([
@@ -156,31 +168,36 @@ it.each([
 
 it('proves only the original finite prefix while the same file grows', async () => {
   state.afterStat = () => appendFile(state.path, CHILD + marker('child') + ' '.repeat(1024 * 1024))
-  expect(await read()).toEqual({ leafUuid: 'root', relation: 'initial' })
+  expect(await read()).toEqual({ leafUuid: 'root', relation: 'same' })
   expect(state.bytesRead).toBe(Buffer.byteLength(SOURCE))
 })
 
-it('keeps a proved rewind tied to the original prefix', async () => {
-  await writeFile(state.path, ROOT + CHILD + marker('root'))
-  state.afterStat = () => appendFile(state.path, marker('child'))
-  expect(await read('child', 'root')).toEqual({ leafUuid: 'root', relation: 'intentional-rewind' })
+it('replays the ancestry off the same pinned prefix the proof read', async () => {
+  const contents = ROOT + CHILD
+  await writeFile(state.path, contents)
+  state.afterStat = () => appendFile(state.path, row('grandchild', 'child'))
+  expect(await replay()).toEqual({
+    proof: { leafUuid: 'child', relation: 'descendant' },
+    chain: ['child']
+  })
+  expect(replayed).toEqual(['child'])
+  expect(state.bytesRead).toBe(Buffer.byteLength(contents) * 2)
 })
 
 it.each([
-  ['empty', '', SOURCE, null],
-  ['missing marker', ROOT, marker('root'), null],
+  ['empty', '', SOURCE, 'root'],
   ['missing previous cursor', SOURCE, CHILD + marker('child'), 'child']
 ] as const)(
   'finishes a growing %s proof on the same open handle',
-  async (_name, contents, growth, previous) => {
+  async (_name, contents, growth, anchor) => {
     await writeFile(state.path, contents)
     state.afterStat = () => appendFile(state.path, growth)
-    expect((await read(previous)).leafUuid).toBe(previous ?? 'root')
+    expect((await read(anchor)).leafUuid).toBe(anchor)
     expect(state.opens).toBe(1)
   }
 )
 
-it.each(['', ROOT])('keeps a static missing marker fatal', async (contents) => {
+it.each(['', SUMMARY])('keeps a static missing tip fatal', async (contents) => {
   await writeFile(state.path, contents)
   await expect(read()).rejects.toThrow('missing last-prompt marker')
 })
@@ -190,22 +207,22 @@ it('preserves the typed static missing-cursor error for existing root reproof', 
 })
 
 it.each([
-  ['conflict', ROOT + row('root', 'foreign') + marker('root'), 'conflicting ancestry'],
-  ['wrong session', ROOT + marker('root', 'foreign'), 'invalid last-prompt'],
-  ['append order', CHILD + ROOT + marker('child'), 'parent row follows'],
-  ['missing ancestor', CHILD + marker('child'), 'missing ancestor']
+  ['conflict', ROOT + row('root', 'foreign') + marker('root'), 'root', 'conflicting ancestry'],
+  ['wrong session', ROOT + marker('root', 'foreign'), 'root', 'invalid last-prompt'],
+  ['append order', CHILD + ROOT, 'root', 'parent row follows'],
+  ['missing ancestor', CHILD, 'child', 'missing ancestor']
 ] as const)(
   'does not turn %s into a retry when the file grows',
-  async (_name, contents, message) => {
+  async (_name, contents, anchor, message) => {
     await writeFile(state.path, contents)
     state.afterStat = () => appendFile(state.path, CHILD)
-    await expect(read()).rejects.toThrow(message)
+    await expect(read(anchor)).rejects.toThrow(message)
   }
 )
 
 it('does not infer growth from a failed second stat', async () => {
-  await writeFile(state.path, ROOT)
-  state.afterStat = () => appendFile(state.path, marker('root'))
+  await writeFile(state.path, '')
+  state.afterStat = () => appendFile(state.path, SOURCE)
   state.statErrorOn = 2
   await expect(read()).rejects.toThrow('missing last-prompt marker')
 })
@@ -219,7 +236,7 @@ it('keeps reading the original handle after pathname replacement', async () => {
 })
 
 it('does not use a replacement file to establish growth', async () => {
-  await writeFile(state.path, ROOT)
+  await writeFile(state.path, '')
   state.afterStat = async () => {
     await rename(state.path, `${state.path}.original`)
     await writeFile(state.path, ROOT + CHILD + marker('child'))
@@ -252,16 +269,18 @@ it('completes a record appended after the first observed extent without caller r
 })
 
 it('validates the entire refreshed prefix instead of accepting a malformed repair', async () => {
-  await writeFile(state.path, ROOT)
-  state.afterStat = () => appendFile(state.path, row('root', 'foreign') + marker('root'))
+  const conflicting = row('root', 'foreign')
+  await writeFile(state.path, ROOT + conflicting.slice(0, -5))
+  state.afterStat = () => appendFile(state.path, conflicting.slice(-5))
   await expect(read()).rejects.toThrow('conflicting ancestry')
   expect(state.opens).toBe(1)
 })
 
 it('keeps an unfinished growing repair retryable after one internal refresh', async () => {
-  await writeFile(state.path, ROOT)
-  state.afterStat = () => appendFile(state.path, ROOT)
+  const torn = ROOT.slice(0, -5)
+  await writeFile(state.path, torn)
+  state.afterStat = () => appendFile(state.path, ' ')
   await expect(read()).rejects.toBeInstanceOf(ClaudeTranscriptTailIncompleteError)
   expect(state.opens).toBe(1)
-  expect(state.bytesRead).toBe(Buffer.byteLength(ROOT) * 3)
+  expect(state.bytesRead).toBe(Buffer.byteLength(torn) * 2 + 1)
 })

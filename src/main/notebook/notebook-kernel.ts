@@ -1,6 +1,7 @@
 import bridgePath from '../../../resources/notebook/kernel-bridge.py?asset&asarUnpack'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import { forceTerminateProcessTree } from '../../shared/child-process/process-tree-termination'
+import { createNdjsonParser } from '../../shared/main-process-ndjson-framer'
 import {
   KERNEL_OUTPUT_TYPES,
   type KernelFrame,
@@ -10,25 +11,22 @@ import {
 const STDERR_TAIL_CHARS = 4000
 const SHUTDOWN_GRACE_MS = 5000
 
-type BridgeFrame = KernelFrame | { type: 'ready' } | { type: 'missing' }
+type BridgeFrame = KernelFrame | { type: 'ready' } | { type: 'missing'; externallyManaged: boolean }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function parseFrame(line: string): BridgeFrame | null {
-  let value: unknown
-  try {
-    value = JSON.parse(line)
-  } catch {
-    return null
-  }
+function parseFrame(value: unknown): BridgeFrame | null {
   if (!isRecord(value)) {
     return null
   }
   const { type, content } = value
-  if (type === 'ready' || type === 'missing') {
+  if (type === 'ready') {
     return { type }
+  }
+  if (type === 'missing') {
+    return { type, externallyManaged: value.externallyManaged === true }
   }
   if (type === 'done') {
     return {
@@ -43,17 +41,20 @@ function parseFrame(line: string): BridgeFrame | null {
 
 /** Splits bridge stdout into frames, skipping any line that is not one. */
 export function createFrameReader(onFrame: (frame: BridgeFrame) => void): (text: string) => void {
-  let partial = ''
-  return (text) => {
-    const lines = (partial + text).split('\n')
-    partial = lines.pop() ?? ''
-    for (const line of lines) {
-      const frame = parseFrame(line)
+  // Each frame ships as its line completes; a consumer throw escapes the stdout listener and is fatal anyway.
+  const parser = createNdjsonParser(
+    (value) => {
+      const frame = parseFrame(value)
       if (frame) {
         onFrame(frame)
       }
-    }
-  }
+    },
+    // The bridge keeps fd 1 to itself, so an unreadable line means the frame channel is damaged.
+    (error) => console.warn('[notebook-kernel] Dropped an unreadable bridge record:', error),
+    // Notebook display frames can contain large images; preserve the existing unrestricted size.
+    { maxLineBytes: Number.POSITIVE_INFINITY }
+  )
+  return (text) => parser.feed(text)
 }
 
 export type NotebookKernel = {
@@ -107,7 +108,7 @@ export function startNotebookKernel({
         stderrTail = ''
         settle({ status: 'ready' })
       } else if (frame.type === 'missing') {
-        settle({ status: 'missing-ipykernel' })
+        settle({ status: 'missing-ipykernel', externallyManaged: frame.externallyManaged })
       } else if (!stopping) {
         onFrame(frame)
       }

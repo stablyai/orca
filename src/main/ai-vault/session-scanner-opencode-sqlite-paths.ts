@@ -26,7 +26,8 @@ export function buildOpenCodeSqliteCandidatePath(dbPath: string, sessionId: stri
  * @returns `{ dbPath, sessionId }` if the path is a valid synthetic candidate, `null` otherwise.
  */
 export function splitOpenCodeSqliteCandidate(
-  candidatePath: string
+  candidatePath: string,
+  agent: 'opencode' | 'opencode2' | 'zcode' = 'opencode'
 ): { dbPath: string; sessionId: string } | null {
   const separatorIndex = candidatePath.lastIndexOf(OPENCODE_SQLITE_PATH_SEPARATOR)
   if (separatorIndex <= 0 || separatorIndex === candidatePath.length - 1) {
@@ -39,7 +40,11 @@ export function splitOpenCodeSqliteCandidate(
   }
   // Why: OpenCode DB files are named opencode*.db; reject anything else so we
   // never misroute a real filesystem path that happens to contain '#'.
-  if (!/^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/i.test(basename(dbPath))) {
+  const validName =
+    agent === 'zcode'
+      ? basename(dbPath).toLowerCase() === 'db.sqlite'
+      : /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/i.test(basename(dbPath))
+  if (!validName) {
     return null
   }
   return { dbPath, sessionId }

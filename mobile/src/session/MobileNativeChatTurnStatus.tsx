@@ -7,6 +7,7 @@ import {
   NATIVE_CHAT_TURN_STATUS_COPY,
   nativeChatElapsedSeconds
 } from '../../../src/shared/native-chat-turn-status'
+import type { AgentTurnOutcome } from '../../../src/shared/agent-turn-outcome'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
 /** Seconds tick only while a turn is actually counting, so a settled transcript
@@ -26,38 +27,32 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
   return counting ? nativeChatElapsedSeconds(startedAt, mountedAt, now) : 0
 }
 
-/** The per-turn status row. While the turn runs it is the one live indicator — a
- *  spinner beside what the provider says it is doing, else "Thinking", else
- *  "Working for 12s". It settles to a tappable "Worked for 3m 4s" that discloses
- *  the turn's tool activity. Desktop parity: `NativeChatTurnActivityLine` for the
- *  live row, `NativeChatWorkingStatus` for the settled one. */
+/** The turn bar under the user's message: "Working for 12s" while the turn runs,
+ *  settling in place to a tappable "Worked for 3m 4s" ("Interrupted after" for a Stop,
+ *  "Failed after" for a fault) that discloses the turn's tool activity. Desktop parity:
+ *  `NativeChatWorkingStatus`. */
 export function MobileNativeChatTurnStatus({
   startedAt,
-  thinking,
   workedSeconds,
-  activityText,
+  verdict,
   expanded = false,
   onToggleExpanded
 }: {
   startedAt: number | null
-  thinking: boolean
   workedSeconds?: number | null
-  /** Provider activity copy for a live turn; outranks the other two labels. */
-  activityText?: string | null
+  /** How a settled turn ended; it picks the settled label. */
+  verdict?: AgentTurnOutcome
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
   const settled = workedSeconds != null
-  const counting = !settled && !thinking && !activityText?.trim()
-  const elapsedSeconds = useElapsedSeconds(startedAt, counting)
-  const label = settled
-    ? formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
-    : formatNativeChatActiveTurnLabel({ activityText, thinking, elapsedSeconds })
+  const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
+  const label = formatNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict })
 
   if (settled && onToggleExpanded) {
     return (
       <Pressable
-        style={({ pressed }) => [styles.row, styles.rowSettled, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.row, styles.bar, pressed && styles.pressed]}
         onPress={onToggleExpanded}
         hitSlop={6}
         accessibilityRole="button"
@@ -73,14 +68,33 @@ export function MobileNativeChatTurnStatus({
   }
 
   return (
+    <View style={[styles.row, styles.bar]}>
+      <Text style={styles.label} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  )
+}
+
+/** The live turn's tail line: a spinner beside what the provider says it is doing,
+ *  else "Thinking", else "Working…". The clock stays in the turn bar. Desktop
+ *  parity: `NativeChatTurnActivityLine`. */
+export function MobileNativeChatTurnActivity({
+  thinking,
+  activityText
+}: {
+  thinking: boolean
+  activityText?: string | null
+}): React.JSX.Element {
+  return (
     <View
-      style={[styles.row, settled ? styles.rowSettled : null]}
+      style={styles.row}
       accessibilityLiveRegion="polite"
       accessibilityLabel={NATIVE_CHAT_TURN_STATUS_COPY.responding}
     >
-      {settled ? null : <ActivityIndicator size="small" color={colors.textMuted} />}
+      <ActivityIndicator size="small" color={colors.textMuted} />
       <Text style={styles.label} numberOfLines={1}>
-        {label}
+        {formatNativeChatActiveTurnLabel({ activityText, thinking })}
       </Text>
     </View>
   )
@@ -94,7 +108,7 @@ const styles = StyleSheet.create({
     minHeight: 28,
     paddingHorizontal: spacing.md
   },
-  rowSettled: {
+  bar: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
   },

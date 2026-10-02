@@ -1,10 +1,17 @@
+import { isQoderTerminalTitle } from './qoder-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
-import { containsAgentSpinnerGlyph, isCursorAgentTitle } from './agent-title-core'
+import {
+  containsAgentSpinnerGlyph,
+  isCursorAgentTitle,
+  isDshTerminalTitle
+} from './agent-title-core'
+
+export { DSH_WHALE, isDshTerminalTitle } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -34,6 +41,14 @@ export function containsBrailleSpinner(title: string): boolean {
 }
 
 export function isGeminiTerminalTitle(title: string): boolean {
+  // Why: DSH-TUI's idle prefix is `✦`, Gemini's working glyph. The whale is decisive
+  // and is checked first so a resting DSH pane never reads as a working Gemini.
+  if (isQoderTerminalTitle(title)) {
+    return false
+  }
+  if (isDshTerminalTitle(title)) {
+    return false
+  }
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
     title.includes(GEMINI_PERMISSION) ||
@@ -88,6 +103,11 @@ export function isPiAgentTitle(title: string): boolean {
  */
 function computeIsClaudeAgent(title: string): boolean {
   if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
+    return false
+  }
+  // Why: DSH's working title is `⠂ 🐋 …`/`⠐ 🐋 …`, and the braille branch below would
+  // otherwise claim every frame of it for Claude.
+  if (isDshTerminalTitle(title)) {
     return false
   }
   const lower = title.toLowerCase()
@@ -149,6 +169,13 @@ function computeAgentLabel(title: string): string | null {
     title.startsWith('* ')
   ) {
     return 'Claude Code'
+  }
+  // Why before Gemini: see isDshTerminalTitle — the two share the `✦` glyph.
+  if (isDshTerminalTitle(title)) {
+    return 'DeepSeek Harness'
+  }
+  if (isQoderTerminalTitle(title)) {
+    return 'Qoder CLI'
   }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
@@ -226,9 +253,11 @@ export const getAgentLabel: (title: string) => string | null =
   memoizeTitleClassification(computeAgentLabel)
 
 const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
+  'DeepSeek Harness': 'dsh',
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
   Codex: 'codex',
+  'Qoder CLI': 'qoder',
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',

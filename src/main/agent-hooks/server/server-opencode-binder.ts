@@ -35,7 +35,8 @@ export type OpenCodeBinderLoopDeps = {
 }
 
 /**
- * Session→pane binder loop for the shared OpenCode server (#21359).
+ * Session→pane binder loop for the OpenCode 1 `serve` process shared by
+ * `attach` panes (#21359). OpenCode-1-only: remove with OpenCode 1 support.
  *
  * Sits just above persistence in the chain so ingest layers can kick a round
  * when a birth arrives early, and lifecycle can start/stop the timer. All

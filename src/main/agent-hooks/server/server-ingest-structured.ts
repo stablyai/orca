@@ -11,9 +11,14 @@ import {
 } from '../../../shared/structured-agent-session-projection'
 import {
   continueMainAgentStatus,
-  isAgentStatusHeldOpenByChildWork
+  isAgentStatusHeldOpenByChildWork,
+  mainAgentTurnInterrupted
 } from '../../../shared/agent-lead-status-fold'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import {
+  structuredAgentSessionDatedMainAgent,
+  structuredAgentSessionRowStateStartedAt
+} from '../../../shared/structured-agent-session-status-started-at'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
@@ -39,9 +44,11 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     }
     const previous = this.canonicalStatusStore.getParent(parsed)
     const priorStatus = previous?.status
+    // The host's own child records, not the summary's lossy task list: the summary is derived
+    // from these records, and reading them here keeps the row and every view of it on one source.
     const agentStatus = structuredAgentSessionAgentStatus({
       status: summary.status,
-      backgroundTasks: summary.backgroundTasks,
+      childWork: this.canonicalStatusStore.getChildren(parsed),
       turnOutcome: summary.turnOutcome
     })
     const { state, workingMode } = agentStatus
@@ -49,7 +56,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     // by the journal: a restart's republish is not a new main agent state either.
     const mainAgent = continueMainAgentStatus(
       priorStatus?.mainAgent,
-      agentStatus.mainAgent,
+      structuredAgentSessionDatedMainAgent(agentStatus.mainAgent, summary),
       summary.updatedAt
     )
     const tabId = structuredAgentSessionTabId(parsed.sessionId)
@@ -57,7 +64,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     if (this.state.lastStatusByPaneKey.has(paneKey)) {
       throw new Error('Structured status address conflicts with legacy evidence')
     }
-    const snapshot = this.canonicalStatusStore.getSnapshot()
+    const snapshot = this.canonicalStatusStore.getRevision()
     const observedAt = Math.max(Date.now(), priorStatus?.receivedAt ?? 0)
     const status: AgentStatusIpcPayload = {
       paneKey,
@@ -69,6 +76,8 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       state,
       ...(workingMode ? { workingMode } : {}),
       mainAgent,
+      // Readers that predate `mainAgent` read a cancellation off this flag, as the hook lanes publish it.
+      interrupted: mainAgentTurnInterrupted(mainAgent),
       prompt: summary.latestPrompt,
       agentType: summary.agent,
       ...(summary.model ? { model: summary.model } : {}),
@@ -88,9 +97,10 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       // Continuity is the whole published work identity: `state` alone no longer means "a turn is
       // running", so monitoring that becomes a real turn must restart the clock, not inherit it.
       stateStartedAt:
-        priorStatus?.state === state && priorStatus.workingMode === workingMode
+        structuredAgentSessionRowStateStartedAt({ state, mainAgent }, summary) ??
+        (priorStatus?.state === state && priorStatus.workingMode === workingMode
           ? priorStatus.stateStartedAt
-          : summary.updatedAt,
+          : summary.updatedAt),
       observation: {
         origin: 'structured',
         kind: 'transition',

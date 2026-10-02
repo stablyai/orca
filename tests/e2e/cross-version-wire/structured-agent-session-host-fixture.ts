@@ -53,6 +53,9 @@ export function structuredHostStub(
     })),
     waitForSendSettlement: vi.fn(),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageSend: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageDelete: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessagesResume: vi.fn(async () => ({ ok: true, replayed: false })),
     rewind: vi.fn(async () => ({
       ok: true,
       replayed: false,
@@ -70,11 +73,12 @@ export function structuredHostStub(
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
     changeThreadGoal: vi.fn(async () => ({ ok: true, replayed: false })),
-    requestHandoff: vi.fn(async () => ({ status: { owner: 'native' } })),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
+    modelCatalog: vi.fn(() => ({ origin: 'unknown' as const })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    sessionAgent: vi.fn(() => null),
     journalSnapshot: vi.fn(() => ({
       sessionId,
       cursor: { epoch: 'epoch-a', sequence: 0 },
@@ -102,6 +106,7 @@ export function installableHost(
 ): StructuredAgentSessionHost {
   const host = {
     ...hostCalls,
+    deps: { modelCatalog: { read: hostCalls.modelCatalog } },
     restartResume: {
       list: hostCalls.restartResumableList,
       listFailures: hostCalls.restartResumableFailures,

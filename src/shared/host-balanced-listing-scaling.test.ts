@@ -8,26 +8,26 @@ it('retires exhausted host buckets from subsequent listing rounds', () => {
   ]
   const original = Map.prototype.values
   let reads = 0
-  const spy = vi
-    .spyOn(Map.prototype, 'values')
-    .mockImplementation(function (this: Map<string, number[]>) {
-      const iterator = original.call(this)
-      if (!this.has('large-host')) {
-        return iterator
-      }
-      return iterator.map(
-        (bucket: number[]) =>
-          new Proxy(bucket, {
-            get(target, key, receiver) {
-              if (typeof key === 'string' && /^\d+$/.test(key)) {
-                reads += 1
-              }
-              // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
-              return Reflect.get(target, key, receiver)
+  const spy = vi.spyOn(Map.prototype, 'values').mockImplementation(function (
+    this: Map<string, number[]>
+  ) {
+    const iterator = original.call(this)
+    if (!this.has('large-host')) {
+      return iterator
+    }
+    return iterator.map(
+      (bucket: number[]) =>
+        new Proxy(bucket, {
+          get(target, key, receiver) {
+            if (typeof key === 'string' && /^\d+$/.test(key)) {
+              reads += 1
             }
-          })
-      )
-    })
+            // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
+            return Reflect.get(target, key, receiver)
+          }
+        })
+    )
+  })
   let result: typeof rows
   try {
     result = selectHostBalancedPage(rows, 2000, (row) => row.host)

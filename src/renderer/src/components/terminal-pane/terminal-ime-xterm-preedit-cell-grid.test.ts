@@ -99,12 +99,13 @@ describe('IME preedit advances on the terminal cell grid (#19315)', () => {
       'letterSpacing'
     )!.set!
     // happy-dom drops calc(var(...)); Electron coverage checks the resulting layout.
-    vi.spyOn(CSSStyleDeclaration.prototype, 'letterSpacing', 'set').mockImplementation(
-      function (this: CSSStyleDeclaration, value) {
-        assignedSpacing.set(this, value)
-        setter.call(this, value)
-      }
-    )
+    vi.spyOn(CSSStyleDeclaration.prototype, 'letterSpacing', 'set').mockImplementation(function (
+      this: CSSStyleDeclaration,
+      value
+    ) {
+      assignedSpacing.set(this, value)
+      setter.call(this, value)
+    })
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
       const context: CanvasRenderingContext2D = Object.create(null)
       context.font = '13px monospace'

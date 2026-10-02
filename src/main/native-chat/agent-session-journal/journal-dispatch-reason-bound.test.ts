@@ -4,13 +4,13 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import {
+  classifyDispatchRejection,
   DISPATCH_REJECTED_WRITE_FAILED,
-  dispatchRejectionReasonIsInternal,
-  dispatchRejectionWasTransportWriteFailure
+  isWriteFailureSubmission
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import type { openAgentSessionJournal } from './journal-store-factory'
-import { createTrackedJournalOpener } from './journal-store-test-open'
+import { createTrackedJournalOpener } from './journal-host-database-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -30,7 +30,7 @@ const journals = createTrackedJournalOpener()
 async function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}) {
   return journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: () => (clock += 1),
     mintEpoch: () => `epoch-${clock}`,
     ...overrides
@@ -45,7 +45,14 @@ async function settle(reason: string): Promise<string | null> {
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
     fence: 1
   })
-  await journal.resolveDispatch({ clientMessageId: 'msg-1', state: 'rejected', reason, fence: 1 })
+  await journal.resolveDispatch({
+    clientMessageId: 'msg-1',
+    // A rejection's reason comes only from `agentSessionFailureWords`; an unknown's is still free
+    // text (an adapter's error), so it is what reaches the bound.
+    state: 'unknown',
+    reason,
+    fence: 1
+  })
   return journal.snapshot().submissions[0]?.reason ?? null
 }
 
@@ -81,7 +88,8 @@ describe('dispatch reason bounding', () => {
   it('keeps a clipped transport failure classifiable', async () => {
     const stored = await settle(`${DISPATCH_REJECTED_WRITE_FAILED}: ${HUGE}`)
     expect(stored).not.toBe(`${DISPATCH_REJECTED_WRITE_FAILED}: ${HUGE}`)
-    expect(dispatchRejectionWasTransportWriteFailure(stored)).toBe(true)
-    expect(dispatchRejectionReasonIsInternal(stored)).toBe(true)
+    // Read as an older host wrote it: by the reason alone.
+    expect(isWriteFailureSubmission({ reason: stored })).toBe(true)
+    expect(classifyDispatchRejection({ reason: stored })).toMatchObject({ kind: 'writeFailed' })
   })
 })

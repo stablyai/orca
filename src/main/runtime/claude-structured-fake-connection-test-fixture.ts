@@ -76,7 +76,7 @@ export function fakeClaude(providerSession: string) {
         connection.calls.push({ subtype: 'interrupt', params: {} })
         return undefined
       },
-      cancelAsyncMessage: async () => {},
+      cancelAsyncMessage: async () => false,
       stopTask: async (taskId) => {
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
       },
@@ -89,7 +89,7 @@ export function fakeClaude(providerSession: string) {
       exitVerdict: selfExit?.exitVerdict ?? { root: 'live', tree: 'unverifiable' },
       close: async () => {
         connection.closed = true
-        return selfExit === null
+        return selfExit === null || selfExit.exitVerdict.tree === 'exited'
       }
     }
     connections.push(connection)

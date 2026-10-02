@@ -3,7 +3,7 @@ import type { TerminalDocumentScope } from './document-scope'
 import { getCellHeight } from './fit-scale'
 import { notify } from './host-notify'
 import { applyXtermSelection, selRange } from './selection-range'
-import { viewportToCell } from './viewport-cell'
+import { viewportPoint, viewportToCell } from './viewport-cell'
 import { getTotalScale } from './viewport-transform'
 
 /** How close to an edge a handle drag starts scrolling, in pixels. */
@@ -20,6 +20,7 @@ export function repositionOverlay(scope: TerminalDocumentScope) {
   const sPx = cellToViewportPx(scope, r.start.col, r.start.row)
   const ePx = cellToViewportPx(scope, r.end.col + 1, r.end.row)
   const cellH = getCellHeight(scope) * getTotalScale(scope)
+  const viewport = scope.viewportRect()
   // Why: native iOS pattern — start handle anchors at the TOP of the
   // first selected cell (dot above, stem covers the cell going down);
   // end handle anchors at the BOTTOM of the last selected cell (dot
@@ -28,8 +29,8 @@ export function repositionOverlay(scope: TerminalDocumentScope) {
   scope.handleStart!.style.top = sPx.y + 'px'
   scope.handleEnd!.style.left = ePx.x + 'px'
   scope.handleEnd!.style.top = ePx.y + cellH + 'px'
-  const startVisible = sPx.y >= 0 && sPx.y <= window.innerHeight
-  const endVisible = ePx.y >= 0 && ePx.y <= window.innerHeight
+  const startVisible = sPx.y >= 0 && sPx.y <= viewport.height
+  const endVisible = ePx.y >= 0 && ePx.y <= viewport.height
   scope.handleStart!.style.visibility = startVisible ? 'visible' : 'hidden'
   scope.handleEnd!.style.visibility = endVisible ? 'visible' : 'hidden'
   let menuCenterX: number, menuY: number, vTransform: string, marginTop: string
@@ -38,15 +39,15 @@ export function repositionOverlay(scope: TerminalDocumentScope) {
     menuY = sPx.y
     vTransform = 'translateY(-100%)'
     marginTop = '-12px'
-  } else if (endVisible && ePx.y + cellH + 56 < window.innerHeight) {
+  } else if (endVisible && ePx.y + cellH + 56 < viewport.height) {
     menuCenterX = ePx.x
     menuY = ePx.y + cellH
     vTransform = 'translateY(0)'
     marginTop = '12px'
   } else {
     // selection covers full viewport — pin to visible center
-    menuCenterX = window.innerWidth / 2
-    menuY = window.innerHeight / 2
+    menuCenterX = viewport.width / 2
+    menuY = viewport.height / 2
     vTransform = 'translateY(-50%)'
     marginTop = '0'
   }
@@ -60,7 +61,7 @@ export function repositionOverlay(scope: TerminalDocumentScope) {
   const EDGE_MARGIN = 8
   const menuW = scope.selMenu!.offsetWidth || 0
   const minLeft = EDGE_MARGIN
-  const maxLeft = Math.max(EDGE_MARGIN, window.innerWidth - menuW - EDGE_MARGIN)
+  const maxLeft = Math.max(EDGE_MARGIN, viewport.width - menuW - EDGE_MARGIN)
   const desiredLeft = menuCenterX - menuW / 2
   const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft))
   scope.selMenu!.style.left = clampedLeft + 'px'
@@ -142,9 +143,10 @@ export function handleDragMove(
     return
   }
   repositionOverlay(scope)
-  if (clientY < EDGE_SCROLL_PX) {
+  const y = viewportPoint(scope, clientX, clientY).y
+  if (y < EDGE_SCROLL_PX) {
     startEdgeScroll(scope, -1)
-  } else if (clientY > window.innerHeight - EDGE_SCROLL_PX) {
+  } else if (y > scope.viewportRect().height - EDGE_SCROLL_PX) {
     startEdgeScroll(scope, 1)
   } else {
     stopEdgeScroll(scope)

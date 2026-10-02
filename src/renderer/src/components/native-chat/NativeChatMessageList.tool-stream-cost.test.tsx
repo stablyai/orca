@@ -40,18 +40,11 @@ function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
     agent: 'claude',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier,
     readPhase: 'ready'
   }
-  return (
-    <NativeChatMessageList
-      session={session}
-      isWorking
-      expandSignal
-      fontScale={1}
-      showTurnStatus={false}
-    />
-  )
+  return <NativeChatMessageList session={session} isWorking expandSignal fontScale={1} />
 }
 
 function row(index: number, body: AgentJournalRenderItem['body']): AgentJournalRenderItem {

@@ -4,8 +4,11 @@ import type { AgentType } from './agent-status-types'
 // (e.g. native chat's empty state on both surfaces) from one source of truth.
 const WELL_KNOWN_LABELS: Record<string, string> = {
   claude: 'Claude',
+  codebuddy: 'CodeBuddy',
   openclaude: 'OpenClaude',
   codex: 'Codex',
+  qoder: 'Qoder CLI',
+  qodercli: 'Qoder CLI',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
   amp: 'Amp',
@@ -26,7 +29,9 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   ante: 'Ante',
   trae: 'Trae',
   kimi: 'Kimi',
-  muse: 'Muse'
+  muse: 'Muse',
+  zcode: 'ZCode',
+  dsh: 'DeepSeek Harness'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {

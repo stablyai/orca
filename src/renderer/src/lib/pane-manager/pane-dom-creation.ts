@@ -14,6 +14,7 @@ import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
 import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
+import { installTerminalMouseEncodingTracker } from './terminal-mouse-encoding-tracker'
 
 function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
   return `${uri} (${openLinkHint})`
@@ -51,6 +52,8 @@ export function createPaneDOM(
   // provider registered after this point — addon-internal and Orca's own.
   installGuardedLinkProviderRegistration(terminal)
   installWindowsCtrlAltChordRepair(terminal)
+  // Why here: the tracker must see every byte, including the first snapshot replay.
+  const mouseEncodingTrackerDisposable = installTerminalMouseEncodingTracker(terminal)
   const fitAddon = new FitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
@@ -142,6 +145,7 @@ export function createPaneDOM(
     compositionHandler: null,
     focusClassSyncCleanup: null,
     terminalScrollIntentDisposable: null,
+    mouseEncodingTrackerDisposable,
     linkifierMouseLeaveResetDisposable: null,
     arabicShapingJoinerCleanup: null,
     pendingSplitScrollState: null,

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type ITheme } from '@xterm/xterm'
+import { useShallow } from 'zustand/react/shallow'
 import '@xterm/xterm/css/xterm.css'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
@@ -10,7 +11,8 @@ import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-rep
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import {
   buildPreviewAppearanceOptions,
-  buildPreviewTerminalOptions
+  buildPreviewTerminalOptions,
+  previewAdvertisesKittyKeyboard
 } from './preview-terminal-options'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 import { installPreviewTerminalCompatibility } from './preview-terminal-compatibility'
@@ -71,7 +73,7 @@ export function AgentTerminalPreview({
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
-  const { terminalTheme, terminalMode } = useMemo(() => {
+  const { terminalTheme: composedTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
     }
@@ -82,6 +84,10 @@ export function AgentTerminalPreview({
     )
     return { terminalTheme: theme, terminalMode: appearance.mode }
   }, [settings, systemPrefersDark])
+  // Settings arrive as cloned snapshots; compare theme values before reconnecting.
+  const retainTheme = useShallow((theme: ITheme | null) => theme)
+  const terminalTheme = retainTheme(composedTheme)
+  const terminalMinimumContrastRatio = settings?.terminalMinimumContrastRatio
   // A null snapshot means no serializer knows this pty (it died or was never
   // spawned this session) — say so instead of painting a silent blank terminal.
   const [ptyGone, setPtyGone] = useState(false)
@@ -96,6 +102,7 @@ export function AgentTerminalPreview({
     terminalInputRef.current = terminalInput
   }, [settings, macOptionAsAlt, terminalInput])
 
+  // Font changes retain the replay-driven fit, grid claim and input-owner reset.
   useEffect(() => {
     setPtyGone(false)
     const container = containerRef.current
@@ -110,9 +117,13 @@ export function AgentTerminalPreview({
     let disposeKeyHandler: (() => void) | null = null
     let disposeNativeCopyGutterTrim: (() => void) | null = null
     let disposeTerminalCompatibility: (() => void) | null = null
+    // Why one read: the xterm's advertisement and its mirror must never disagree.
+    const mountTerminalInput = terminalInputRef.current
     // Why: mirrors the pane's tracker — the policy needs the flags the TUI
     // negotiated, and this preview parses the same output stream the pane does.
-    const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker()
+    const kittyKeyboardModes = new TerminalKittyKeyboardModeTracker({
+      kittyKeyboard: previewAdvertisesKittyKeyboard(mountTerminalInput)
+    })
     let refreshInFlight = false
     let refreshAgain = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -217,22 +228,6 @@ export function AgentTerminalPreview({
       })
     }
 
-    const installNativeCopyGutterTrim = (): void => {
-      if (!terminal) {
-        return
-      }
-      disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
-    }
-
-    const installTerminalCompatibility = (): void => {
-      if (!terminal) {
-        return
-      }
-      disposeTerminalCompatibility = installPreviewTerminalCompatibility(terminal, {
-        getSettings: () => settingsRef.current
-      })
-    }
-
     const installInputRouting = (): void => {
       if (!terminal) {
         return
@@ -264,7 +259,7 @@ export function AgentTerminalPreview({
         terminal = new Terminal(
           buildPreviewTerminalOptions({
             settings: settingsRef.current,
-            terminalInput: terminalInputRef.current,
+            terminalInput: mountTerminalInput,
             macOptionIsMeta: macOptionAsAltRef.current === 'true',
             theme: terminalTheme,
             themeMode: terminalMode,
@@ -281,8 +276,10 @@ export function AgentTerminalPreview({
           return
         }
         terminalRef.current = terminal
-        installTerminalCompatibility()
-        installNativeCopyGutterTrim()
+        disposeTerminalCompatibility = installPreviewTerminalCompatibility(terminal, {
+          getSettings: () => settingsRef.current
+        })
+        disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
         installInputRouting()
         installImeNativeTextBridge()
         installKeyHandler()
@@ -412,7 +409,18 @@ export function AgentTerminalPreview({
       terminal?.dispose()
       terminalRef.current = null
     }
-  }, [ptyId, terminalTheme, terminalMode])
+  }, [
+    ptyId,
+    terminalTheme,
+    terminalMode,
+    terminalMinimumContrastRatio,
+    settings?.terminalFontSize,
+    settings?.terminalFontFamily,
+    settings?.terminalFontWeight,
+    settings?.terminalFontWeightBold,
+    settings?.terminalLineHeight,
+    settings?.terminalLigatures
+  ])
 
   // Why: appearance settings must land on the open terminal, and the OS input
   // source can flip Option-as-Alt with no settings change at all. A remount

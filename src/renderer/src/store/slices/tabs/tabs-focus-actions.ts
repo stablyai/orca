@@ -77,7 +77,7 @@ export function createTabsFocusActions(
                 ? {
                     ...item,
                     isPreview: opts?.preservePreview ? item.isPreview : false,
-                    lastFocusedAt: Date.now()
+                    ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
                   }
                 : item
             )

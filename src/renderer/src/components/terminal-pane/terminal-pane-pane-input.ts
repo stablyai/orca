@@ -30,10 +30,9 @@ import {
 } from './xterm-bypass-policy'
 import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll-intent'
 import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll-intent-settle'
-import { resetTerminalKeyboardProtocolAfterInterrupt } from './terminal-pane-lifecycle-primitives'
 
 type PaneInputContext = {
-  pane: ManagedPane
+  pane: Pick<ManagedPane, 'id' | 'terminal'>
   managerRef: React.RefObject<PaneManager | null>
   paneKittyKeyboardModesRef: UseTerminalPaneLifecycleDeps['paneKittyKeyboardModesRef']
   settingsRef: React.RefObject<Record<string, unknown> | null | undefined>
@@ -141,7 +140,6 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
       if (event.type === 'keydown') {
         pendingTerminalInterruptKeyup = true
         pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
-        resetTerminalKeyboardProtocolAfterInterrupt(pane.terminal)
       } else {
         pendingTerminalInterruptKeyup = false
       }

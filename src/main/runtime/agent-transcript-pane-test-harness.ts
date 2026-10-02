@@ -18,6 +18,8 @@ export type TranscriptPaneOptions = {
   /** Simulates a PTY controller whose foreground probe never settles. */
   foregroundProbeHangs?: boolean
   onForegroundProbe?: () => void
+  /** PTY grid the controller reports; the runtime's emulator otherwise defaults to 80x24. */
+  size?: { cols: number; rows: number }
 }
 
 export async function createTranscriptPane(
@@ -39,6 +41,7 @@ export async function createTranscriptPane(
     spawn: vi.fn().mockResolvedValue({ id: TRANSCRIPT_PANE_PTY_ID, incarnationId: 'inc-1' }),
     write: () => true,
     kill: () => true,
+    getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {
       options.onForegroundProbe?.()
       return options.foregroundProbeHangs === true
@@ -87,4 +90,23 @@ export async function createTranscriptPane(
     runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, options.data, Date.now())
   }
   return { runtime, handle: terminal.handle }
+}
+
+/** Advance readiness deadlines after real pane creation and emulator drains. */
+export async function waitForTranscriptIdle(
+  pane: Awaited<ReturnType<typeof createTranscriptPane>>,
+  timeoutMs: number
+) {
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+  })
+  try {
+    const waiting = pane.runtime.waitForTerminal(pane.handle, { condition: 'tui-idle', timeoutMs })
+    // Expected refusals must have a rejection handler before advancing their deadline.
+    void waiting.catch(() => {})
+    await vi.advanceTimersByTimeAsync(timeoutMs)
+    return await waiting
+  } finally {
+    vi.useRealTimers()
+  }
 }

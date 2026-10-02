@@ -116,8 +116,14 @@ it('leaves the switch out of every other workflow, so only a release can set it'
 const MOBILE_WORKFLOWS = ['mobile.yml', 'mobile-android-release.yml', 'mobile-ios-release.yml']
 /** Paths under which a Metro or Expo build cache lives, in the spellings a workflow would use. */
 const BUNDLER_CACHE_PATHS = ['metro-cache', '.expo', 'node_modules/.cache']
-/** The one restored path these workflows compute in a script, and so this test cannot read. */
-const REVIEWED_COMPUTED_PATH = '${{ steps.electron-package-cache.outputs.cache-root }}'
+/** Store/archive paths computed by scripts rather than declared in the workflows. */
+const REVIEWED_COMPUTED_PATHS = [
+  '${{ steps.electron-package-cache.outputs.cache-root }}',
+  '${{ steps.pnpm-store.outputs.path }}',
+  // Only pnpm's lockfile-verified.jsonl record, never Metro transforms.
+  '${{ steps.verification-cache.outputs.path }}',
+  "${{ github.event_name != 'pull_request' && 'pnpm' || '' }} store"
+]
 
 /** Every step a workflow runs, descending into the repository's own composite actions. */
 function stepsIncludingComposites(file) {
@@ -165,7 +171,7 @@ describe('what the mobile jobs restore from cache', () => {
     expect(names).toEqual(
       expect.arrayContaining([
         './.github/actions/install-node-dependencies: Cache Electron package archive',
-        './.github/actions/install-node-dependencies: Restore compiled native modules',
+        './.github/actions/prepare-native-runtime: Restore compiled native modules',
         './.github/actions/install-node-dependencies: Setup Node.js',
         'ios-build: Setup Ruby and fastlane'
       ])
@@ -175,7 +181,7 @@ describe('what the mobile jobs restore from cache', () => {
   it('reads every restored path, rather than passing one it cannot evaluate', () => {
     const computed = MOBILE_CACHE_RESTORES.filter(({ paths }) => paths.includes('${{'))
 
-    expect(computed.map(({ paths }) => paths)).toEqual(computed.map(() => REVIEWED_COMPUTED_PATH))
+    expect(computed.filter(({ paths }) => !REVIEWED_COMPUTED_PATHS.includes(paths))).toEqual([])
   })
 
   it('restores no Metro or Expo build cache, which would decide the shell before the env does', () => {

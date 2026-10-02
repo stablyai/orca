@@ -22,6 +22,8 @@ import {
 import type { ClaudePendingPrompt } from './claude-structured-prompt-replies'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 function sinkState() {
   const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
@@ -253,11 +255,11 @@ describe('Claude structured journal translation', () => {
   it('journals a count-to-200 stream as one assistant item carrying the complete reply', async () => {
     const journal = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
-      journalDir: journalRoot,
+      database: openTestJournalHostDatabase(journalRoot),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({ journal, fence: 1, publish: vi.fn() })
     let scheduled: (() => void) | null = null
     const translator = createClaudeJournalTranslator({
@@ -312,11 +314,11 @@ describe('Claude structured journal translation', () => {
   it('restores a cancelled prompt as terminal history after reopening the journal', async () => {
     const journal = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
-      journalDir: journalRoot,
+      database: openTestJournalHostDatabase(journalRoot),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({ journal, fence: 1, publish: vi.fn() })
     const translator = createClaudeJournalTranslator({ sink: deferred.sink })
     const approval = prompt({
@@ -341,7 +343,7 @@ describe('Claude structured journal translation', () => {
 
     const reopened = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
-      journalDir: journalRoot,
+      database: openTestJournalHostDatabase(journalRoot),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-2'
     })
@@ -869,7 +871,6 @@ function prompt(
   return {
     ...input,
     suggestions: [],
-    answers: new Map(),
     settle: () => {}
   }
 }

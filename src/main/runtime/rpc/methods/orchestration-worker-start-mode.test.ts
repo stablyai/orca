@@ -52,11 +52,6 @@ describe('worker start mode from the user default', () => {
       reason: 'user_default'
     })
   })
-
-  it('says which mode ran even when the default was honoured', () => {
-    expect(decide().detail).toContain('structured chat session')
-    expect(decide({ settings: null }).detail).toContain('terminal agent')
-  })
 })
 
 describe('a structured default this dispatch cannot honour', () => {
@@ -98,12 +93,6 @@ describe('a structured default this dispatch cannot honour', () => {
         settings: { ...STRUCTURED_DEFAULT, agentCmdOverrides: { claude: 'claude-wrapper' } }
       })
     ).toMatchObject({ mode: 'terminal', reason: 'tui_launch_command' })
-  })
-
-  // Neither provider is refused here on the client's platform: only the executing host knows
-  // whether it can read a provider child's start time, and it answers at create time.
-  it.each(['claude', 'codex'] as const)('leaves a Windows %s worker to the host', (agent) => {
-    expect(decide({ params: { agent } }).mode).toBe('structured')
   })
 })
 

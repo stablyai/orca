@@ -132,7 +132,11 @@ export function clearDeliveryResyncProbe(session: PtyIpcSession): void {
 }
 
 export function requestDeliveryResyncForGatedPty(session: PtyIpcSession): void {
-  if (session.deliveryResyncOutstandingRequestId !== null || session.mainWindow.isDestroyed()) {
+  if (
+    session.deliveryResyncOutstandingRequestId !== null ||
+    !session.mainWindow ||
+    session.mainWindow.isDestroyed()
+  ) {
     return
   }
   session.deliveryResyncRequestSerial += 1

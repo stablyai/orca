@@ -14,6 +14,7 @@ import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
+import type { CliStatusCaller } from './orchestration-caller-status'
 
 export type * from './runtime-mobile-session-tab-contracts'
 
@@ -127,6 +128,8 @@ export type CliStatusResult = {
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'
   }
+  /** This process's Orca session ID when it runs as an Orca session; see `CliStatusCaller`. */
+  caller?: CliStatusCaller
 }
 
 export type RuntimeSyncedTab = {
@@ -264,6 +267,15 @@ export type RuntimeMobileSessionTabsResult = {
    * host that never returns cannot hold rows open forever.
    */
   clientHostedPagesUnreconciled?: true
+  /**
+   * Set while this runtime has no structured-chat host that can say which chats exist because the
+   * chat journal will not open. The snapshot is still authoritative about everything else, but its
+   * missing `agent-session` rows mean "cannot tell", not "closed".
+   *
+   * Cleared by the first tab restore a host answers. Not bounded by a deadline: the chats are
+   * durable on disk, so holding their tabs strands nothing.
+   */
+  agentSessionsUnverifiable?: true
 }
 
 export type RuntimeMobileSessionCreateTerminalResult = {

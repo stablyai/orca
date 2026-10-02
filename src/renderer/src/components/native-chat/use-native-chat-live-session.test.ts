@@ -206,6 +206,16 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
+  // A failed older page belongs to one paging generation; a reconnect snapshot must start another.
+  it('starts a new older-history generation on each snapshot', async () => {
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: [], hasMore: false }))
+    const before = latest?.olderHistoryGeneration ?? 0
+    await act(async () => transport.emit({ type: 'snapshot', messages: [], hasMore: false }))
+    expect(latest?.olderHistoryGeneration).toBeGreaterThan(before)
+  })
+
   it('discards a load-earlier resolve from the previous owner after a flip', async () => {
     // Fill the initial window so hasMore is true and load-earlier can fire.
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
@@ -535,6 +545,42 @@ describe('useNativeChatLiveSession — transport routing', () => {
     )
 
     expect(latest?.status).toBe('ready')
+  })
+
+  // Declining a prompt with an interrupt fires no hook, so the row keeps saying
+  // `waiting`; the transcript's marker is what ends the wait.
+  it('ends a hook wait once the transcript records the turn interrupted', async () => {
+    const waitStartedAt = Date.now() - 1_000
+    useAppStore.getState().setAgentStatus(PANE, { state: 'waiting', prompt: '', agentType: AGENT })
+    const row = useAppStore.getState().agentStatusByPaneKey[PANE]
+    if (!row) {
+      throw new Error('the store dropped the status row this test depends on')
+    }
+    useAppStore.setState({
+      agentStatusByPaneKey: { [PANE]: { ...row, stateStartedAt: waitStartedAt } }
+    })
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'go')],
+        hasMore: false,
+        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: waitStartedAt - 500 }
+      })
+    )
+    expect(latest?.hookAwaitingInput).toBe(true)
+    expect(latest?.status).toBe('ready')
+
+    await act(async () =>
+      transport.emit({
+        type: 'appended',
+        messages: [],
+        lifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: Date.now() }
+      })
+    )
+
+    expect(latest?.hookAwaitingInput).toBe(false)
   })
 
   it('does not let an older pagination read rewind a live completion', async () => {

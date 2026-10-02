@@ -1,10 +1,13 @@
 import { z } from 'zod'
+import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { RpcResponse } from '../../transport/types'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge-init-route'
 import { BridgePageRouteGrantsSchema } from './bridge-page-route-grants'
 import { BridgeSafeAreaInsetsSchema } from './bridge-safe-area-insets'
+import { BridgeKeyboardInsetSchema } from './bridge-keyboard-inset'
 import { BridgeNotifySchema } from './bridge-notify-envelope'
 import { BRIDGE_BACK_FRAME } from './bridge-page-back'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
@@ -24,8 +27,6 @@ import {
   PAGE_STORAGE_MAX_VALUE_CHARS
 } from '../page-storage-keys'
 import {
-  BRIDGE_MAX_PAGE_ACCEPT_CHARS,
-  BRIDGE_MAX_PAGE_ACCEPTS,
   BRIDGE_MAX_PAGE_ROUTES,
   BRIDGE_MAX_REPLY_PARTS,
   BRIDGE_MAX_ROUTE_PATHNAME_CHARS,
@@ -90,6 +91,22 @@ export { BridgeInitRouteSchema, type BridgeInitRoute }
 export const BridgeInitHostSchema = z.object({
   id: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
   name: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
+  // Why: `name` alone cannot say whether it is the phone's override or the desktop's name.
+  // Optional and additive: an older shell sends none and the page falls back to classifying `name`.
+  // Salvaged so a value this page cannot read (a newer shell's platform) drops the field, not `init`;
+  // the outer `.optional()` keeps the inferred key optional rather than required `T | undefined`.
+  personalName: salvagedOptional(
+    'personalName',
+    z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS)
+  ).optional(),
+  lastKnownMachineName: salvagedOptional(
+    'lastKnownMachineName',
+    z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS)
+  ).optional(),
+  lastKnownHostPlatform: salvagedOptional(
+    'lastKnownHostPlatform',
+    z.enum(NODE_PLATFORM_NAMES)
+  ).optional(),
   endpoint: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
   lastConnected: z.number().finite()
 })
@@ -152,37 +169,7 @@ const replyPartSchema = z.object({
 const BridgeClientMessageSchema = z.discriminatedUnion('type', [
   z.object({
     v: versionSchema,
-    type: z.literal('ready'),
-    /**
-     * What this page can be sent beyond its first `init`; the names and why live in
-     * `bridge-route-update.ts`, which is the only one there is.
-     *
-     * Optional, and safe in both directions without a version bump: a page that sends none is
-     * never sent a second `init`, and a shell that reads none never sends one. An unknown name is
-     * accepted by the schema and ignored by the shell, which is what a newer page declaring a
-     * capability this shell has never implemented has to look like.
-     */
-    accepts: z
-      .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
-      .max(BRIDGE_MAX_PAGE_ACCEPTS)
-      .optional(),
-    /**
-     * What this page will post that the shell may have to wait for, which today is
-     * `BRIDGE_PAGE_PAINTED` and nothing else.
-     *
-     * `accepts` runs the other way and cannot stand in for this: it says what may be sent *to* the
-     * page. A shell waiting on a frame has to know the page will send one, because the generation
-     * is served by a desktop that updates independently of the installed shell — an undeclared
-     * wait would hide a working page built before the frame existed.
-     *
-     * Optional and additive in both directions, on the same bounds as `accepts`: a page that
-     * declares none is waited for by nothing, and an unknown name is a report this shell does not
-     * act on.
-     */
-    reports: z
-      .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
-      .max(BRIDGE_MAX_PAGE_ACCEPTS)
-      .optional()
+    type: z.literal('ready')
   }),
   z.object({
     v: versionSchema,
@@ -264,8 +251,7 @@ const BridgeHostMessageSchema = z.union([
     connection: BridgeConnectionSnapshotSchema
   }),
   // One Back press, and nothing else: the shell pops what it pushed, so a frame naming where to go
-  // back to would be naming a screen the page cannot see. Sent only to a page whose `ready` listed
-  // `BRIDGE_BACK_FRAME`, because an older page's reader refuses the whole frame.
+  // back to would be naming a screen the page cannot see.
   z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
   z.object({
     v: versionSchema,
@@ -289,6 +275,8 @@ const BridgeHostMessageSchema = z.union([
     route: BridgeInitRouteSchema.optional(),
     /** How much of the WebView is under a system bar; absent reads as zeros. */
     safeAreaInsets: BridgeSafeAreaInsetsSchema.optional(),
+    /** The keyboard height native screens read on the shell's OS; absent reads as 0. */
+    keyboardInset: BridgeKeyboardInsetSchema.optional(),
     host: BridgeInitHostSchema.optional(),
     storage: BridgeInitStorageSchema.optional(),
     /**
@@ -325,19 +313,7 @@ const BridgeHostMessageSchema = z.union([
      * behaviour, an older page ignores it. The grant grammar is the manifest's own, so a name the
      * bundle could not have declared cannot arrive here either.
      */
-    pageRouteGrants: BridgePageRouteGrantsSchema.optional(),
-    /**
-     * What this shell accepts from the page beyond the frames every shell has always taken, which
-     * today is `BRIDGE_ROUTE_PARAM_CLEAR` and nothing else.
-     *
-     * The mirror of `ready.accepts`, and optional for the same reason: a shell that sends none is
-     * never posted a clear, and a page that reads none never posts one. An unknown name is a
-     * capability this page has never heard of and is ignored.
-     */
-    accepts: z
-      .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
-      .max(BRIDGE_MAX_PAGE_ACCEPTS)
-      .optional()
+    pageRouteGrants: BridgePageRouteGrantsSchema.optional()
   })
 ])
 

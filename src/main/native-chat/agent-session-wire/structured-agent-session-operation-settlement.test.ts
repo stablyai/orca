@@ -2,7 +2,6 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   AgentSessionPreDispatchError,
-  AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS,
   runSettledAgentSessionMutation
 } from './structured-agent-session-operation-settlement'
 import {
@@ -18,9 +17,11 @@ import {
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { sendPlan } from './structured-agent-session-mutation-plans'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 async function context(): Promise<AgentSessionTurnContext> {
   return {
+    logger: createStructuredAgentSessionLogger(),
     sessionId: SESSION,
     journal: await journals.open({
       identity: {
@@ -30,7 +31,7 @@ async function context(): Promise<AgentSessionTurnContext> {
         agent: 'codex',
         providerHandle: { kind: 'codex', threadId: THREAD }
       },
-      journalDir: join(hostTestState().root, 'settlement')
+      stateDirectory: join(hostTestState().root, 'settlement')
     }),
     fence: 1,
     adapter: adapter(),
@@ -41,6 +42,9 @@ async function context(): Promise<AgentSessionTurnContext> {
     now: () => 0
   }
 }
+
+/** Longer than any bookkeeping bound: a refusal must already be answered by then. */
+const SETTLED_WAIT_MS = 2_000
 
 afterEach(() => {
   vi.useRealTimers()
@@ -80,7 +84,7 @@ it('returns a pre-dispatch refusal without waiting on redundant uncertainty pers
   })
   try {
     await refusing.promise
-    await vi.advanceTimersByTimeAsync(AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS)
+    await vi.advanceTimersByTimeAsync(SETTLED_WAIT_MS)
     expect(returned).toBe(true)
     expect(writes).toHaveBeenCalledOnce()
     expect(hostTestState().dispatch).not.toHaveBeenCalled()
@@ -129,52 +133,54 @@ it.each([1, 2])(
   }
 )
 
-it.each(['stalled', 'failed', 'stalled-with-refusal-write'] as const)(
-  'refuses a %s admission barrier without late dispatch',
-  async (barrier) => {
-    const ctx = await context()
-    const { store } = hostTestState()
-    vi.spyOn(store, 'recordOperationOutcome').mockResolvedValue()
-    const pending = Promise.withResolvers<void>()
-    const waiting = Promise.withResolvers<void>()
-    const refusing = Promise.withResolvers<void>()
-    if (barrier === 'stalled-with-refusal-write') {
-      vi.spyOn(ctx.journal, 'resolveDispatch').mockImplementationOnce(() => {
-        refusing.resolve()
-        return pending.promise.then(() => ctx.journal.cursor())
-      })
-      vi.spyOn(console, 'warn').mockImplementation(() => {})
-    }
-    ctx.flushStreamedEvents = () => {
-      waiting.resolve()
-      return barrier === 'failed' ? Promise.reject(new Error('disk unavailable')) : pending.promise
-    }
-    const beforeRun = vi.fn()
-    const body = hostTestMessage('Continue the interrupted work')
-    const operation = envelope('agentSession.send', { body })
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const result = runSettledAgentSessionMutation({
-      store,
-      operationCallerKey: 'test',
-      envelope: operation,
-      context: ctx,
-      plan: sendPlan({ envelope: operation, body, beforeRun })
-    }).catch((error: unknown) => error)
-    await waiting.promise
-    await vi.advanceTimersByTimeAsync(AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS)
-    if (barrier === 'stalled-with-refusal-write') {
-      await refusing.promise
-      await vi.advanceTimersByTimeAsync(AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS)
-    }
-    expect(await result).toBeInstanceOf(AgentSessionPreDispatchError)
-    expect(beforeRun).not.toHaveBeenCalled()
-    expect(hostTestState().dispatch).not.toHaveBeenCalled()
-    expect(ctx.journal.submissions()[0]?.dispatchState).toBe(
-      barrier === 'stalled-with-refusal-write' ? 'pending' : 'rejected'
-    )
-    pending.resolve()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(hostTestState().dispatch).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
-  }
-)
+// A send's plan only accepts: it records the submission and never waits on the provider's stream
+// barrier, so a sink that stalls or fails cannot delay or double a send. Handing it over is the
+// delivery loop's.
+it('accepts without touching the event-stream barrier or the provider', async () => {
+  const ctx = await context()
+  const { store } = hostTestState()
+  vi.spyOn(store, 'recordOperationOutcome').mockResolvedValue()
+  const barrier = vi.fn(() => new Promise<void>(() => {}))
+  ctx.flushStreamedEvents = barrier
+  const beforeRun = vi.fn()
+  const body = hostTestMessage('Continue the interrupted work')
+  const operation = envelope('agentSession.send', { body })
+  const result = await runSettledAgentSessionMutation({
+    store,
+    operationCallerKey: 'test',
+    envelope: operation,
+    context: ctx,
+    plan: sendPlan({ envelope: operation, body, beforeRun })
+  })
+  expect(result).toMatchObject({ ok: true })
+  expect(beforeRun).toHaveBeenCalledOnce()
+  expect(hostTestState().dispatch).not.toHaveBeenCalled()
+  expect(ctx.journal.submissions()[0]).toMatchObject({
+    dispatchState: 'pending',
+    handoverRecorded: true
+  })
+  expect(barrier).not.toHaveBeenCalled()
+})
+
+it('refuses a superseded send at acceptance, recording and dispatching nothing', async () => {
+  const ctx = await context()
+  const { store } = hostTestState()
+  vi.spyOn(store, 'recordOperationOutcome').mockResolvedValue()
+  const beforeRun = vi.fn(() => {
+    throw new AgentSessionPreDispatchError('agent_session_restart_work_superseded')
+  })
+  const body = hostTestMessage('Continue the interrupted work')
+  const operation = envelope('agentSession.send', { body })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const result = await runSettledAgentSessionMutation({
+    store,
+    operationCallerKey: 'test',
+    envelope: operation,
+    context: ctx,
+    plan: sendPlan({ envelope: operation, body, beforeRun })
+  }).catch((error: unknown) => error)
+  expect(result).toBeInstanceOf(AgentSessionPreDispatchError)
+  expect(ctx.journal.submissions()).toEqual([])
+  expect(hostTestState().dispatch).not.toHaveBeenCalled()
+  expect(vi.getTimerCount()).toBe(0)
+})

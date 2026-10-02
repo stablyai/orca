@@ -66,6 +66,7 @@ export function runLocalSourceControlPlan(input: {
         args: plan.args,
         cwd,
         env: input.env,
+        commandEnv: plan.env,
         wslDistro: input.wslDistro,
         stdinMode: 'pipe',
         useCwdForNative: true

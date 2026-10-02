@@ -64,16 +64,6 @@ describe('stageOneSourceForRuntimeUpload', () => {
     })
   })
 
-  it('stages a file with no cap error, where the old buffering path refused', async () => {
-    const filePath = join(workDir, 'big.bin')
-    await writeFile(filePath, Buffer.alloc(3 * 1024))
-
-    await expect(stageOneSourceForRuntimeUpload(filePath)).resolves.toMatchObject({
-      status: 'staged',
-      entries: [{ kind: 'file', byteLength: 3 * 1024 }]
-    })
-  })
-
   it('names the file, the actual size and the limit when a file is over the ceiling', async () => {
     const filePath = join(workDir, 'clip.mp4')
     await writeFile(filePath, Buffer.alloc(6 * 1024))

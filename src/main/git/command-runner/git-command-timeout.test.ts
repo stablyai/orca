@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  GIT_READ_TIMEOUT_MS,
-  GitCommandTimeoutError,
-  gitCommandTimeoutMs
-} from './git-command-timeout'
+import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
 
 describe('gitCommandTimeoutMs', () => {
-  it('pins the production read deadline', () => {
-    expect(GIT_READ_TIMEOUT_MS).toBe(120_000)
-  })
-
   it.each([
     [['status', '--porcelain=v2'], 120_000],
     [['show', 'HEAD:file'], 120_000],

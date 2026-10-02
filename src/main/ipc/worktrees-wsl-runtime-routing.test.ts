@@ -211,9 +211,10 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       { wslDistro: 'Ubuntu' }
     )
-    expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', {
-      wslDistro: 'Ubuntu'
-    })
+    expect(listWorktreesMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      expect.objectContaining({ wslDistro: 'Ubuntu' })
+    )
     expectEveryGitCallRoutedTo('Ubuntu')
   })
 

@@ -5,6 +5,7 @@ import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
+import { useMobileNativeChatQueuedSlot } from './use-mobile-native-chat-queued-slot'
 
 type Props = {
   controller: MobileNativeChatController
@@ -59,6 +60,16 @@ export function MobileNativeChatOverlay({
     controller.nativeChatStreamScopeKey,
     controller.nativeChatStreamLive
   )
+  const queued = controller.nativeChatQueued
+  const queuedSlot = useMobileNativeChatQueuedSlot({
+    cards: queued.cards,
+    onSend: queued.send,
+    onDelete: queued.delete,
+    onEdit: queued.edit,
+    pause: queued.pause,
+    onResume: queued.resume,
+    sessionKey: queued.sessionKey
+  })
   if (!controller.showNativeChat) {
     return null
   }
@@ -76,6 +87,7 @@ export function MobileNativeChatOverlay({
         turnIndicator={controller.nativeChatTurnIndicator}
         workingStartedAt={controller.nativeChatWorkingStartedAt}
         settledTurns={controller.nativeChatSettledTurns}
+        turnJournal={controller.nativeChatTurnJournal}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}
@@ -88,6 +100,7 @@ export function MobileNativeChatOverlay({
         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
+        queuedSlot={queuedSlot}
         onOpenFile={onOpenFile}
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}

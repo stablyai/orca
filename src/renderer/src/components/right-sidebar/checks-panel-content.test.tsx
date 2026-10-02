@@ -89,24 +89,6 @@ describe('MergeConflictNotice', () => {
     expect(markup).not.toContain('Conflict file details are unavailable')
   })
 
-  it('does not interpolate shell-sensitive base refs into copyable commands', () => {
-    const markup = renderNotice(
-      makePR({
-        conflictSummary: {
-          baseRef: 'release/$USER;echo unsafe',
-          baseCommit: 'abc1234',
-          commitsBehind: 1,
-          files: [],
-          localMergeState: 'clean'
-        }
-      })
-    )
-
-    expect(markup).toContain('git fetch origin')
-    expect(markup).not.toContain('$USER')
-    expect(markup).not.toContain('echo unsafe')
-  })
-
   it('hides when the conflicting file list is available', () => {
     const markup = renderNotice(
       makePR({

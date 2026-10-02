@@ -12,16 +12,19 @@ import {
 } from '../../../shared/text-search'
 import {
   absorbPendingRipgrepSpawnError,
+  classifySynchronousRipgrepSpawnFailure,
+  isRipgrepMissingCwdExit,
+  isRipgrepSpawnCwdUsable,
   isRipgrepUnavailableExit,
-  killSpawnedRipgrepProcess
+  isTransientRipgrepSpawnError,
+  killSpawnedRipgrepProcess,
+  ripgrepMissingCwdError
 } from '../../../shared/ripgrep-process-availability'
 import { toWindowsWslPath, parseWslPath } from '../../wsl'
-import { wslAwareSpawn } from '../../git/runner'
 import {
   getSshFilesystemProvider,
   requireSshFilesystemProvider
 } from '../../providers/ssh-filesystem-dispatch'
-import { checkRgAvailable } from '../rg-availability'
 import { resolveAuthorizedPath } from '../filesystem-auth'
 import { listQuickOpenFiles } from '../filesystem-list-files'
 import {
@@ -29,7 +32,8 @@ import {
   pathMatchesFileNameFilterTokens,
   splitFileNameFilterTokens
 } from '../../../shared/file-name-filter-tokens'
-import { searchWithGitGrep } from '../filesystem-search-git'
+import { bundledRipgrepUnavailableError } from '../../ripgrep/bundled-ripgrep-path'
+import { spawnBundledRipgrep } from '../../ripgrep/bundled-ripgrep-spawn'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { QuickOpenPathRanker } from '../../../shared/quick-open-path-search'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -58,14 +62,9 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         Math.min(args.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
       )
       const searchKey = `${event.sender.id}:${rootPath}`
-      // Why: WSL's bash exit 127 is ambiguous with a real executable returning 127.
       const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
 
-      if (wslDistroForOutput && !(await checkRgAvailable(rootPath, localGitOptions.wslDistro))) {
-        return searchWithGitGrep(rootPath, args, maxResults, localGitOptions)
-      }
-
-      return new Promise<SearchResult>((resolvePromise) => {
+      return new Promise<SearchResult>((resolvePromise, rejectPromise) => {
         const rgArgs = buildRgArgs(args.query, rootPath, args)
         // Why: kill the prior rg so it stops parsing thousands of matches on the main thread (the large-repo freeze) after the UI moved on.
         const previousChild = activeTextSearches.get(searchKey)
@@ -110,8 +109,8 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
           resolvePromise(result)
         }
         const resolveOnce = (): void => finish(finalize(acc))
-        const resolveWithoutRipgrep = (): void =>
-          finish(searchWithGitGrep(rootPath, args, maxResults, localGitOptions))
+        const rejectUnavailable = (): void =>
+          finish(Promise.reject(bundledRipgrepUnavailableError()))
         const processLine = (line: string): void => {
           const verdict = ingestRgJsonLine(line, rootPath, acc, maxResults, transformAbsPath)
           if (verdict === 'stop' && child) {
@@ -119,11 +118,22 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
           }
         }
 
-        const nextChild = wslAwareSpawn('rg', rgArgs, {
-          cwd: rootPath,
-          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-          stdio: ['ignore', 'pipe', 'pipe']
-        })
+        // A synchronous spawn failure has no child to clean up.
+        let nextChild: ReturnType<typeof spawnBundledRipgrep>
+        try {
+          nextChild = spawnBundledRipgrep(rgArgs, {
+            cwd: rootPath,
+            wslDistro: localGitOptions.wslDistro,
+            wslDistroForOutput,
+            stdio: ['ignore', 'pipe', 'pipe']
+          })
+        } catch (error) {
+          void classifySynchronousRipgrepSpawnFailure(error, rootPath).then(
+            rejectPromise,
+            rejectPromise
+          )
+          return
+        }
         child = nextChild
         activeTextSearches.set(searchKey, nextChild)
 
@@ -133,23 +143,54 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         const handleStderrData = (): void => {
           // Drain stderr so rg cannot block on a full pipe.
         }
-        const handleError = (): void => {
+        const handleError = (error: NodeJS.ErrnoException): void => {
           processErrorObserved = true
+          // Why: fd/process pressure is not a broken install; say so instead of blaming the bundled binary.
+          if (isTransientRipgrepSpawnError(error)) {
+            finish(Promise.reject(new Error(`rg could not start (${error.code}); try again`)))
+            return
+          }
           if (child && isRipgrepUnavailableExit(child, null, null)) {
-            resolveWithoutRipgrep()
+            // Why the cwd check first: spawn reports a missing cwd as ENOENT too, and blaming the
+            // binary for it tells the user to reinstall Orca over a workspace that simply moved.
+            // Why detach close first: a failed spawn emits error THEN close(code < 0), and
+            // close settles synchronously, so this probe would otherwise race it on a sub-ms
+            // margin -- two measurements disagreed on which wins. Detaching makes it deterministic.
+            child.off('close', handleClose)
+            // Why catch: a failed probe must not strand the search; fall back to the prior verdict.
+            void isRipgrepSpawnCwdUsable(rootPath)
+              .catch(() => true)
+              .then((usable) => {
+                // Why re-check: finish() drops its argument once settled, so a rejected promise
+                // built after the close handler already won would go unhandled.
+                if (resolved) {
+                  return
+                }
+                finish(
+                  Promise.reject(
+                    usable ? bundledRipgrepUnavailableError() : ripgrepMissingCwdError(rootPath)
+                  )
+                )
+              })
             return
           }
           resolveOnce()
         }
         const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+          // Why first: this code is above rg's own 0/1/2, so the unavailable check would otherwise
+          // read an unreachable workspace as a broken install and tell the user to reinstall Orca.
+          if (isRipgrepMissingCwdExit(code)) {
+            finish(Promise.reject(ripgrepMissingCwdError(rootPath)))
+            return
+          }
           if (
             child &&
             isRipgrepUnavailableExit(child, code, signal, {
-              classifyNativeLauncherExit: !wslDistroForOutput
+              classifyNativeLauncherExit: true
             })
           ) {
             unavailableExitObserved = true
-            resolveWithoutRipgrep()
+            rejectUnavailable()
             return
           }
           const tail = lines.finish()
@@ -159,9 +200,9 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
           resolveOnce()
         }
 
-        nextChild.stdout!.setEncoding('utf-8')
-        nextChild.stdout!.on('data', handleStdoutData)
-        nextChild.stderr!.on('data', handleStderrData)
+        nextChild.stdout?.setEncoding('utf-8')
+        nextChild.stdout?.on('data', handleStdoutData)
+        nextChild.stderr?.on('data', handleStderrData)
         nextChild.once('error', handleError)
         nextChild.once('close', handleClose)
 

@@ -331,6 +331,23 @@ describe('the worktree factory', () => {
     })
   })
 
+  it("attributes a create by the launch's own source, never a copy inside the create payload", async () => {
+    const createWithSource = {
+      ...CREATE_LAUNCH,
+      target: {
+        kind: 'create-worktree',
+        create: { ...CREATE_LAUNCH.target.create, launchSource: 'cli' }
+      }
+    }
+    const named = runtimeStub({ settings: {} })
+    await launch({ ...createWithSource, launchSource: 'onboarding' }, named)
+    expect(createArgs(named)).toMatchObject({ startupLaunchSource: 'onboarding' })
+
+    const unnamed = runtimeStub({ settings: {} })
+    await launch(createWithSource, unnamed)
+    expect(createArgs(unnamed)).not.toHaveProperty('startupLaunchSource')
+  })
+
   it('preserves an explicit no-arguments value for an agent-first worktree create', async () => {
     const runtime = runtimeStub({ settings: {} })
     await launch({ ...CREATE_LAUNCH, agentArgs: null }, runtime)
@@ -461,7 +478,10 @@ describe('the terminal factory', () => {
     const runtime = runtimeStub({ createSupport: { supported: false, reason: 'wsl' } })
     const result = await launch(CREATE_LAUNCH, runtime)
 
-    expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', { startupAgent: 'claude' })
+    expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', {
+      startupAgent: 'claude',
+      onPtySpawnDispatched: expect.any(Function)
+    })
     expect(createStructuredSession).not.toHaveBeenCalled()
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
     // Never a failed launch, and never a silent downgrade.
@@ -481,7 +501,10 @@ describe('the terminal factory', () => {
     expect(runtime.showManagedTerminalWorkspace).not.toHaveBeenCalled()
     // Resolved to an id first: everything below re-prefixes it, so a raw selector reaches the
     // runtime as `id:id:wt-7`.
-    expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', { startupAgent: 'grok' })
+    expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', {
+      startupAgent: 'grok',
+      onPtySpawnDispatched: expect.any(Function)
+    })
     expect(result.worktreeId).toBe('wt-7')
   })
 })
@@ -548,15 +571,14 @@ describe('launch inputs that cross the wire', () => {
     })
   })
 
-  it('derives agent_kind and request_kind, taking only launch_source from the caller', async () => {
+  it("hands the caller's launch_source to the runtime, which attributes the launch", async () => {
     const runtime = runtimeStub({ settings: {} })
     await launch({ ...EXISTING_LAUNCH, launchSource: 'source_control_recovery' }, runtime)
 
-    expect(terminalOptions(runtime).telemetry).toEqual({
-      agent_kind: 'claude-code',
-      launch_source: 'source_control_recovery',
-      request_kind: 'new'
-    })
+    // The runtime derives agent_kind and request_kind from the agent it builds, so the handler
+    // forwards only the one member it cannot know, and never a prebuilt triple.
+    expect(terminalOptions(runtime)).toMatchObject({ launchSource: 'source_control_recovery' })
+    expect(terminalOptions(runtime)).not.toHaveProperty('telemetry')
   })
 
   it('starts the agent anyway when launch_source is one this build has never heard of', async () => {
@@ -567,16 +589,25 @@ describe('launch inputs that cross the wire', () => {
     )
 
     // The whole point of the open arm set: attribution is bookkeeping, and bookkeeping must never
-    // gate a user action. The row is dropped; the launch is not.
+    // gate a user action. The runtime records it as `unknown`; the launch still starts.
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
-    expect(terminalOptions(runtime)).not.toHaveProperty('telemetry')
+    expect(terminalOptions(runtime)).toMatchObject({ launchSource: 'a_surface_added_later' })
   })
 
-  it('sends no telemetry at all when the caller named no launch source', async () => {
+  it('names no launch source when the caller named none', async () => {
     const runtime = runtimeStub({ settings: {} })
     await launch(EXISTING_LAUNCH, runtime)
 
-    expect(terminalOptions(runtime)).not.toHaveProperty('telemetry')
+    expect(terminalOptions(runtime)).not.toHaveProperty('launchSource')
+  })
+
+  it('keeps a structured preference when the cwd names the workspace root', async () => {
+    // The scope the handler resolves for the target carries the root the fixture reports.
+    const runtime = runtimeStub({})
+    const result = await launch({ ...EXISTING_LAUNCH, cwd: '/tmp/wt-7/' }, runtime)
+
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.receipt).toMatchObject({ mode: 'structured' })
   })
 
   it('routes a structured preference to a terminal when the launch names a cwd', async () => {
@@ -586,5 +617,19 @@ describe('launch inputs that cross the wire', () => {
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
     expect(result.receipt).toMatchObject({ preferred: 'structured', reason: 'tui_launch_command' })
     expect(createStructuredSession).not.toHaveBeenCalled()
+  })
+
+  it('ignores a caller-supplied root, so a subdirectory cannot claim to be one', async () => {
+    const runtime = runtimeStub({})
+    const result = await launch(
+      {
+        ...EXISTING_LAUNCH,
+        target: { ...EXISTING_LAUNCH.target, workspacePath: '/repo/packages/api' },
+        cwd: '/repo/packages/api'
+      },
+      runtime
+    )
+
+    expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'tui_launch_command' })
   })
 })

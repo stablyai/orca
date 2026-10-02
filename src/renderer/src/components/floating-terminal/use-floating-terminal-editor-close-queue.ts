@@ -7,7 +7,7 @@ import type { FloatingTerminalPanelStoreState } from './use-floating-terminal-pa
 
 type FloatingTerminalEditorCloseQueueInput = Pick<
   FloatingTerminalPanelStoreState,
-  'floatingFiles' | 'closeFile' | 'markFileDirty'
+  'floatingFiles' | 'closeFile'
 > &
   Pick<
     FloatingTerminalPanelLocalState,
@@ -17,7 +17,6 @@ type FloatingTerminalEditorCloseQueueInput = Pick<
 export function useFloatingTerminalEditorCloseQueue({
   floatingFiles,
   closeFile,
-  markFileDirty,
   pendingEditorCloseQueueRef,
   pendingReclaimArmByFileIdRef,
   saveDialogFileIdRef
@@ -29,7 +28,7 @@ export function useFloatingTerminalEditorCloseQueue({
     handleSaveDialogSave,
     handleSaveDialogDiscard,
     handleSaveDialogCancel
-  } = useTerminalSaveDialog({ openFiles: floatingFiles, closeFile, markFileDirty })
+  } = useTerminalSaveDialog({ openFiles: floatingFiles, closeFile })
 
   const getNextQueuedEditorClose = useCallback((): string | null => {
     while (pendingEditorCloseQueueRef.current.length > 0) {

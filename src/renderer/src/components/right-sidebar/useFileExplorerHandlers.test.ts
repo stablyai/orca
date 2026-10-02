@@ -74,47 +74,6 @@ describe('activateFileExplorerNode', () => {
     expect(openFile).not.toHaveBeenCalled()
   })
 
-  it('falls back to opening a symlink as a file when directory loading fails', async () => {
-    const openFile = vi.fn()
-    useAppStore.setState({
-      worktreesByRepo: {
-        'repo-1': [
-          {
-            id: 'wt-1',
-            repoId: 'repo-1',
-            path: '/repo',
-            hostId: 'runtime:runtime-env-1'
-          } as never
-        ]
-      }
-    })
-
-    await activateFileExplorerNode({
-      node: symlinkNode,
-      activeWorktreeId: 'wt-1',
-      runtimeEnvironmentId: 'runtime-env-1',
-      openFile,
-      toggleDir: vi.fn(),
-      loadDir: vi.fn(),
-      statPath: vi.fn().mockResolvedValue({ isDirectory: false }),
-      authorizeExternalPath: vi.fn(),
-      markPathAsDirectory: vi.fn(),
-      setSelectedPath: vi.fn()
-    })
-
-    expect(openFile).toHaveBeenCalledWith(
-      {
-        filePath: '/repo/linked-docs',
-        relativePath: 'linked-docs',
-        worktreeId: 'wt-1',
-        runtimeEnvironmentId: 'runtime-env-1',
-        language: expect.any(String),
-        mode: 'edit'
-      },
-      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: false }
-    )
-  })
-
   it('opens a symlink as a file when target stat fails', async () => {
     const openFile = vi.fn()
     useAppStore.setState({

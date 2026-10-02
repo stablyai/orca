@@ -11,8 +11,6 @@ export class AgentSessionPreDispatchError extends Error {
   }
 }
 
-export const AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS = 2_000
-
 export async function runSettledAgentSessionMutation<TValue>(input: {
   store: AgentSessionRecordStore
   operationCallerKey: string
@@ -33,10 +31,7 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
     if (input.plan.markUnknownBeforeRun) {
       await settle({ status: 'unknown' })
     }
-    outcome = await input.plan.run({
-      ...input.context,
-      ...(input.plan.beforeRun ? { beforeDispatch: input.plan.beforeRun } : {})
-    })
+    outcome = await input.plan.run(input.context)
     await settle(
       outcome.ok
         ? (input.plan.settledOutcome?.(outcome.value) ?? {
@@ -46,6 +41,8 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
         : {
             status: 'failed',
             code: outcome.refusal.code,
+            ...(outcome.refusal.details ? { details: outcome.refusal.details } : {}),
+            // The row's own field, which builds before details read; copied from the legacy mirror.
             ...(outcome.refusal.rewindReason ? { rewindReason: outcome.refusal.rewindReason } : {})
           }
     )
@@ -55,14 +52,23 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
     if (input.plan.markUnknownBeforeRun && error instanceof AgentSessionPreDispatchError) {
       throw error
     }
+    const { logger, sessionId } = input.context
     try {
       await settle({ status: 'unknown' })
     } catch {
       // Bookkeeping must not replace the operation's proof of whether dispatch began.
-      console.warn('[structured-agent-session] operation uncertainty persistence failed')
+      logger.warn('recording an operation as unknown failed', {
+        scope: 'operation-unknown-settlement',
+        sessionId,
+        operationId: input.envelope.clientOperationId
+      })
     }
     if (outcome && !outcome.ok) {
-      console.warn('[structured-agent-session] refused operation settlement failed')
+      logger.warn('recording a refused operation failed', {
+        scope: 'operation-refused-settlement',
+        sessionId,
+        operationId: input.envelope.clientOperationId
+      })
       return outcome
     }
     throw error

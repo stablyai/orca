@@ -103,7 +103,7 @@ async function seedHosts(store: GenerationStore): Promise<void> {
 }
 
 function indexedHostKeys(fileSystem: FakeGenerationFileSystem): string[] {
-  return Object.keys(JSON.parse(fileSystem.text(INDEX) ?? '{}')).sort()
+  return [...JSON.parse(fileSystem.text(INDEX) ?? '[]')].sort()
 }
 
 type Sides = { session: () => GenerationStore; removeHost: (hostId: string) => Promise<void> }

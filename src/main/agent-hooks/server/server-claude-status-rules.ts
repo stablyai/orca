@@ -1,5 +1,8 @@
 import { mainAgentStatusEqual } from '../../../shared/main-agent-status'
-import { claudeTeammateIdMatchesName } from '../../../shared/claude-subagent-roster'
+import {
+  claudeTeammateIdMatchesName,
+  isClaudeChildTurnEndEvent
+} from '../../../shared/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -86,7 +89,7 @@ function isClaudePermissionOwningChildEnding(
   if (!ownerId) {
     return false
   }
-  if (next.hookEventName === 'SubagentStop') {
+  if (isClaudeChildTurnEndEvent(next.hookEventName, next.toolAgentId)) {
     return ownerId === next.toolAgentId?.trim()
   }
   return (

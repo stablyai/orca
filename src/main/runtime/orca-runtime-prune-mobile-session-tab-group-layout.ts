@@ -216,9 +216,10 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
   }
 
   // Why: group address resolution (Section 4.5) queries per-handle status and must not throw on stale handles; return null on any error.
-  getAgentStatusForHandle(handle: string): string | null {
+  async getAgentStatusForHandle(handle: string): Promise<string | null> {
     // A structured worker has no pane and no title, so every PTY probe below answers null and
-    // `@idle` would enumerate it and then silently drop it. Its status is the journal's.
+    // `@idle` would enumerate it and then silently drop it. Its status is the journal's, read
+    // through a conversation the idle sweep may have closed.
     const structured = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)
     if (structured) {
       return structuredWorkerAgentStatus(structured.identity.sessionId)

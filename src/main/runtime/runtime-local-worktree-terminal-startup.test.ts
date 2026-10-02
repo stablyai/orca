@@ -41,7 +41,6 @@ function createPorts() {
   })
   const ports: StartupArgs['ports'] = {
     canSpawn: true,
-    markTrusted: vi.fn(),
     createTerminal,
     pasteDraft: vi.fn(),
     sendFollowup: vi.fn(),

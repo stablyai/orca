@@ -122,6 +122,7 @@ function manifestOf(
     buildId: computeMobileWebBundleId(assets),
     minCompatibleRuntimeProtocolVersion: 2,
     runtimeProtocolVersion,
+    pageVersion: 1,
     entrypoint: 'index.html',
     totalBytes: TOTAL_BYTES,
     assets,

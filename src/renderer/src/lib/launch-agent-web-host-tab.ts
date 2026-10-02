@@ -115,7 +115,7 @@ export function launchAgentInWebHostTab(args: {
       )
       return { delivered: false, failureNotified: true }
     }
-    useAppStore.getState().setActiveTabType('terminal')
+    useAppStore.getState().setActiveTabType('terminal', worktreeId)
     if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }

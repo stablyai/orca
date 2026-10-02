@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
@@ -11,6 +12,7 @@ import {
   type StructuredAgentSessionRevisionResolver
 } from './structured-agent-session-event-sink'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
 
 const ROW: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'row' }
 
@@ -60,10 +62,14 @@ const appendSuffix =
 describe('resolved revisions', () => {
   it('reads the row as the journal holds it when each queued revision runs', async () => {
     const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('abc'))
     for (const suffix of ['a', 'b', 'c']) {
-      expect(deferred.sink.tryReviseResolvedItem?.(bytes, appendSuffix(suffix))).toEqual({
+      expect(
+        deferred.sink.tryReviseResolvedItem?.(bytes, appendSuffix(suffix), {
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      ).toEqual({
         accepted: true
       })
     }
@@ -76,8 +82,10 @@ describe('resolved revisions', () => {
 
   it('skips a revision that resolves to nothing', async () => {
     const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
-    deferred.sink.tryReviseResolvedItem?.(1_000, () => null)
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    deferred.sink.tryReviseResolvedItem?.(1_000, () => null, {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const target = journalTarget(rows)
     deferred.bind(target)
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
@@ -86,10 +94,14 @@ describe('resolved revisions', () => {
 
   it('publishes a revision in the operation that writes it, within the same reservation', async () => {
     const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
-    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, appendSuffix('a'))
-    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, () => null)
+    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, appendSuffix('a'), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, () => null, {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const target = journalTarget(rows)
     const published: string[] = []
     vi.mocked(target.publish).mockImplementation(() =>
@@ -103,12 +115,16 @@ describe('resolved revisions', () => {
 
   it('refuses a resolved write larger than the reservation it was admitted with', async () => {
     const rows = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
-    deferred.sink.tryReviseResolvedItem?.(bytes, () => ({
-      identity: ROW,
-      body: text('a'.repeat(64))
-    }))
+    deferred.sink.tryReviseResolvedItem?.(
+      bytes,
+      () => ({
+        identity: ROW,
+        body: text('a'.repeat(64))
+      }),
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
     deferred.bind(journalTarget(rows))
     await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
     expect(rows.size).toBe(0)

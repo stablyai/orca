@@ -1,6 +1,7 @@
 import type { OrchestrationCliCommand } from './cli-command'
 import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
 
 export type PreambleParams = {
   taskId: string
@@ -10,8 +11,8 @@ export type PreambleParams = {
   // prevents stale messages from a previously-failed dispatch from completing
   // or refreshing the retry.
   dispatchId: string
-  dispatchCapability?: string
   taskSpec: string
+  /** A terminal handle, or a session's `orca_session_id:<id>`; each is labelled by its kind. */
   coordinatorHandle: string
   workerHandle: string
   devMode?: boolean
@@ -43,6 +44,18 @@ export type PreambleParams = {
 // cadence tuning is a single-line change (Q1 in DESIGN_DOC_PREAMBLE_FIX.md).
 const HEARTBEAT_INTERVAL_MIN = 5
 
+/** Terminal agents keep their handle's wording; only a session is named by its Orca session ID. */
+function dispatchIdentityLines(params: PreambleParams): string {
+  const isSession = (handle: string) => handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
+  return [
+    isSession(params.coordinatorHandle)
+      ? `Your coordinator's Orca session ID is: ${params.coordinatorHandle}`
+      : `Your coordinator's terminal handle is: ${params.coordinatorHandle}`,
+    `Your task ID is: ${params.taskId}`,
+    ...(isSession(params.workerHandle) ? [`Your Orca session ID is: ${params.workerHandle}`] : [])
+  ].join('\n')
+}
+
 // Why: the dispatch preamble teaches agents about Orca's CLI commands for
 // structured communication. Behavioral rules (body summary, heartbeat cadence,
 // no-AskUserQuestion) live as inline comments above the relevant CLI example,
@@ -57,17 +70,13 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     cli,
     workerKind: params.workerKind ?? 'prompt-returning-agent'
   })
-  const capabilityFlag = params.dispatchCapability
-    ? ` --dispatch-capability ${params.dispatchCapability}`
-    : ''
 
   // Why: one-line recipes paste unchanged in POSIX shells, PowerShell, and cmd.exe.
   // Why fenced: keeps the shell comments executable without rendering them as Chat UI headings.
   // Why plain-reason wording: Claude Code tells the model pasted text may carry instructions
   // the user did not write, and shouted rules read as prompt injection (STA-8200).
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your coordinator's terminal handle is: ${params.coordinatorHandle}
-Your task ID is: ${params.taskId}
+${dispatchIdentityLines(params)}
 
 The coordinator cannot see this terminal, so reach it with the \`${cli} orchestration\`
 commands below; a question or result left only in this terminal never gets to it.
@@ -90,7 +99,7 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
-  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
+  ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 
   # Send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
   # while actively working on the task. The coordinator uses this to
@@ -102,7 +111,7 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # attributes the heartbeat to the specific dispatch context, not just
   # the task, so a straggler heartbeat from a previously-failed dispatch
   # cannot mask a hung retry.
-  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type heartbeat --subject "alive" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --phase "<short: investigating|implementing|reviewing|waiting>"
+  ${cli} orchestration send --from ${params.workerHandle} --type heartbeat --subject "alive" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --phase "<short: investigating|implementing|reviewing|waiting>"
 
   # Ask the coordinator a question and block until it answers.
   #
@@ -114,11 +123,11 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # blocks until the coordinator replies, then prints the reply body. If the
   # call times out or disconnects, resume with the returned message ID instead
   # of creating a duplicate question.
-  ${cli} orchestration ask --from ${params.workerHandle}${capabilityFlag} --question "<your question>" --options "<optional,comma,separated>" --timeout-ms 600000
+  ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>" --options "<optional,comma,separated>" --timeout-ms 600000
 
   # Escalate a blocker or failure (pre-completion, when you need the
   # coordinator to do something before you can continue):
-  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
+  ${cli} orchestration send --from ${params.workerHandle} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
 
   # Read coordinator follow-ups. Nothing interrupts you: a durable message only
   # arrives when you look, so run this at each natural checkpoint — before you
@@ -147,12 +156,13 @@ ${params.taskSpec}`
 
 export type DispatchPreambleSendOptions = Pick<
   RuntimeAgentPromptWriteOptions,
-  'leadLine' | 'acceptQueued' | 'observationTimeoutMs' | 'requestId'
+  'leadLine' | 'acceptQueued' | 'observationTimeoutMs' | 'requestId' | 'inputKind'
 >
 
 export function dispatchPreambleSendOptions(requestId: string): DispatchPreambleSendOptions {
   // Why: a delayed provider hook must not revoke an accepted Dispatch.
   return {
+    inputKind: 'driving',
     leadLine: ORCA_DISPATCH_PROMPT_LEAD_LINE,
     acceptQueued: true,
     observationTimeoutMs: 0,

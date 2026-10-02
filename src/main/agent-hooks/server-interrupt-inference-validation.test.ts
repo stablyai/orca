@@ -400,7 +400,46 @@ describe('the main agent fact on an inferred interrupt', () => {
     }
   })
 
-  it('keeps an already settled main agent behind a watch loop as it was', () => {
+  it('refuses a cancel of a working Codex main agent beside a live child', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            state: 'working',
+            prompt: 'delegate',
+            agentType: 'codex',
+            subagents: [{ id: 'child-1', state: 'working', startedAt: 900 }],
+            mainAgent: { state: 'working', stateStartedAt: 900 }
+          }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+      vi.setSystemTime(1_500)
+      // Why: the synthesized Codex row is a plain done; it would retire the child its combine keeps working.
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'delegate',
+          baselineAgentType: 'codex',
+          intent: 'ctrl-c'
+        })
+      ).toBe(false)
+      expect(server.getStatusSnapshot()[0]).toEqual(baseline)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuses a cancel at the idle prompt of a main agent a watch loop holds open', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -432,12 +471,9 @@ describe('the main agent fact on an inferred interrupt', () => {
           baselineAgentType: 'grok',
           intent: 'ctrl-c'
         })
-      ).toBe(true)
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'done',
-        interrupted: true,
-        mainAgent: settled
-      })
+      ).toBe(false)
+      // Why: the main agent already settled; Ctrl+C at its prompt stops nothing the row shows.
+      expect(server.getStatusSnapshot()[0]).toEqual(baseline)
     } finally {
       vi.useRealTimers()
     }

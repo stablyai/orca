@@ -75,8 +75,8 @@ export function truncateOutlinePreview(text: string, maxChars: number): string {
 
 /** User messages that draw a transcript row, in transcript order. Projected over the
  *  whole journal, not user items alone: whether a user row survives depends on its
- *  neighbours (a harness sidecar folds into the turn before it) and its order on
- *  when it was observed. Previews are uncut; the reply bound owns length. */
+ *  neighbours (a harness sidecar folds into the turn before it), and its order is
+ *  its journal position. Previews are uncut; the reply bound owns length. */
 export function projectAgentSessionConversationOutline(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[]

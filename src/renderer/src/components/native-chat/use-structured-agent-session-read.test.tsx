@@ -343,7 +343,7 @@ describe('useStructuredAgentSessionRead history window', () => {
 // A workspace delete closes its structured chats while the pane is still mounted, so every read
 // against that session refuses `agent_session_ownership_unknown` until the tab retires. A page that
 // lost that race must not leave the pane holding an error the live transport is about to clear.
-describe('useStructuredAgentSessionRead unattached page refusals', () => {
+describe('useStructuredAgentSessionRead older page failures', () => {
   afterEach(cleanup)
 
   beforeEach(() => {
@@ -359,10 +359,12 @@ describe('useStructuredAgentSessionRead unattached page refusals', () => {
     return error
   }
 
+  const tailItems = Array.from({ length: 300 }, (_, index) =>
+    message(`tail-${index}`, 301 + index, 'assistant')
+  )
+
   async function loadedTailThatRefusesOlder(error: Error) {
-    const tailItems = Array.from({ length: 300 }, (_, index) =>
-      message(`tail-${index}`, 301 + index, 'assistant')
-    )
+    let outcome = ''
     mocks.call
       .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
       .mockRejectedValueOnce(error)
@@ -370,21 +372,40 @@ describe('useStructuredAgentSessionRead unattached page refusals', () => {
       useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
     )
     await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
-    await act(async () => result.current.loadOlder())
-    return result
+    await act(async () => {
+      outcome = await result.current.loadOlder()
+    })
+    return { result, outcome }
   }
 
-  it('leaves the transcript alone when an older page hits a closed session', async () => {
-    const result = await loadedTailThatRefusesOlder(refusal('agent_session_ownership_unknown'))
-    expect(result.current.state.status).not.toBe('error')
-    expect(result.current.state.error).toBeUndefined()
-    expect(result.current.state.items).toHaveLength(300)
-    expect(result.current.loadingOlder).toBe(false)
-  })
+  // A failed older page is the list's to retry; it must never replace the loaded conversation.
+  it.each([
+    ['a closed session', refusal('agent_session_ownership_unknown')],
+    ['any other reason', new Error('journal read failed')]
+  ])(
+    'keeps the conversation and reports failed when an older page fails for %s',
+    async (_case, error) => {
+      const { result, outcome } = await loadedTailThatRefusesOlder(error)
+      expect(outcome).toBe('failed')
+      expect(result.current.state.status).not.toBe('error')
+      expect(result.current.state.error).toBeUndefined()
+      expect(result.current.state.items).toHaveLength(300)
+      expect(result.current.loadingOlder).toBe(false)
+    }
+  )
 
-  it('still reports an older page that failed for any other reason', async () => {
-    const result = await loadedTailThatRefusesOlder(new Error('journal read failed'))
-    expect(result.current.state.status).toBe('error')
-    expect(result.current.state.error).toBe('Error: journal read failed')
+  it('starts a new paging generation when the host re-sends its snapshot', async () => {
+    const { result } = await loadedTailThatRefusesOlder(new Error('journal read failed'))
+    const before = result.current.olderHistoryGeneration
+    const onEvent = mocks.subscribe.mock.calls.at(-1)?.[2]
+    act(() => {
+      onEvent?.({
+        type: 'snapshot',
+        sessionId: 'session-a',
+        page: page('tail', tailItems, true),
+        fence: 0
+      })
+    })
+    expect(result.current.olderHistoryGeneration).toBeGreaterThan(before)
   })
 })

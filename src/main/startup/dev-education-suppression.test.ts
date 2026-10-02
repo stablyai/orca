@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { getDefaultUIState } from '../../shared/constants'
 import {
   getDefaultOnboardingState,
-  getDefaultUIState,
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
-} from '../../shared/constants'
+} from '../../shared/onboarding-defaults'
 import { CONTEXTUAL_TOUR_IDS } from '../../shared/contextual-tours'
 import { FEATURE_INTERACTION_IDS } from '../../shared/feature-interactions'
 import { FEATURE_TIP_IDS } from '../../shared/feature-tips'
@@ -133,7 +133,12 @@ describe('suppressDevEducationForStore', () => {
       outcome: 'dismissed',
       lastCompletedStep: 1
     })
-    expect(state.ui.featureTipsSeenIds).toEqual(['voice-dictation', 'orca-cli', 'cmd-j-palette'])
+    expect(state.ui.featureTipsSeenIds).toEqual([
+      'voice-dictation',
+      'agent-session-search',
+      'orca-cli',
+      'cmd-j-palette'
+    ])
     expect(state.ui.contextualToursSeenIds).toEqual([
       'tasks',
       ...CONTEXTUAL_TOUR_IDS.filter((id) => id !== 'tasks')

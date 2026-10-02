@@ -1,5 +1,5 @@
-// The method-to-gate classification from `structured-agent-session-gate.ts`, as a table the
-// suites iterate. Adding an `agentSession.*` method means adding it to exactly one of these.
+// Every `agentSession.*` method with valid params, as tables the suites iterate. Adding a method
+// means adding it to exactly one of these.
 
 import {
   attachParams,
@@ -9,7 +9,7 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 
-/** Stops or retires work the caller already owns, so admission may already have been revoked. */
+/** Stops or retires work the caller already owns; none of these builds a host. */
 export const CLEANUP_METHODS = [
   {
     method: 'agentSession.close',
@@ -21,20 +21,23 @@ export const CLEANUP_METHODS = [
     params: { envelope: envelope(), turnId: 'turn-1' },
     hostCall: 'cancel'
   },
+  // A no-op kept for older clients: it answers without reaching the host.
   {
     method: 'agentSession.release',
     params: { sessionId: SESSION, holderId: 'surface-1' },
-    hostCall: 'release'
+    hostCall: null,
+    result: { released: true }
   },
   {
     method: 'agentSession.unsubscribe',
     params: { sessionId: SESSION },
-    hostCall: 'unsubscribe'
+    hostCall: null,
+    result: { unsubscribed: true }
   }
 ] as const
 
-/** Starts, extends, retains or reads work, so every one stays refused once the setting is off. */
-export const ADMISSION_METHODS = [
+/** Starts, extends, retains or reads work. */
+export const WORK_METHODS = [
   { method: 'agentSession.createSupport', params: { worktree: 'id:workspace-1', agent: 'codex' } },
   {
     method: 'agentSession.create',
@@ -53,6 +56,15 @@ export const ADMISSION_METHODS = [
   },
   { method: 'agentSession.ensure', params: attachParams() },
   { method: 'agentSession.send', params: sendParams() },
+  {
+    method: 'agentSession.queuedMessageSend',
+    params: { envelope: envelope(), messageId: 'queued-1' }
+  },
+  {
+    method: 'agentSession.queuedMessageDelete',
+    params: { envelope: envelope(), messageId: 'queued-1' }
+  },
+  { method: 'agentSession.queuedMessagesResume', params: { envelope: envelope() } },
   {
     method: 'agentSession.rewind',
     params: { envelope: envelope(), itemId: 'chosen', expectedEpoch: 'epoch' }
@@ -73,12 +85,9 @@ export const ADMISSION_METHODS = [
     method: 'agentSession.threadGoal',
     params: { envelope: envelope(), change: { kind: 'clear' } }
   },
-  {
-    method: 'agentSession.requestHandoff',
-    params: { envelope: envelope(), direction: 'to-tui', mode: 'now' }
-  },
   { method: 'agentSession.handoffStatus', params: { sessionId: SESSION } },
   { method: 'agentSession.options', params: { sessionId: SESSION } },
+  { method: 'agentSession.modelCatalog', params: { agent: 'codex', sessionId: SESSION } },
   { method: 'agentSession.history', params: { sessionId: SESSION, direction: 'tail' } },
   { method: 'agentSession.conversationOutline', params: { sessionId: SESSION } },
   { method: 'agentSession.subscribe', params: { sessionId: SESSION } },
