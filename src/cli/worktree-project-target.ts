@@ -1,5 +1,5 @@
 import { normalizeExecutionHostId, type ParsedExecutionHost } from '../shared/execution-host'
-import type { ProjectHostSetup } from '../shared/project-types'
+import type { Project, ProjectHostSetup } from '../shared/project-types'
 import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host-flag'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
@@ -50,21 +50,129 @@ export async function resolveProjectCreateRepoSelector(
   return (await resolveProjectCreateTarget(flags, client))?.repoSelector
 }
 
+function matchesName(value: string | undefined, selector: string): boolean {
+  return value !== undefined && value.trim().toLowerCase() === selector.trim().toLowerCase()
+}
+
+function setupHostId(setup: ProjectHostSetup): string {
+  return normalizeExecutionHostId(setup.hostId) ?? setup.hostId
+}
+
+// Why: `orca project list` shows display names, and the stored projectId is a provider-scoped
+// string ("github:stablyai/orca") nobody keeps in their head — so the name is what gets typed.
+// Matching ids alone reported "not set up" for a project sitting right there in the listing.
+async function findProjectSetups(
+  client: RuntimeClient,
+  ready: readonly ProjectHostSetup[],
+  projectSelector: string
+): Promise<ProjectHostSetup[]> {
+  const byId = ready.filter((candidate) => candidate.projectId === projectSelector)
+  if (byId.length > 0) {
+    return byId
+  }
+  const named = await findProjectsByName(client, projectSelector)
+  if (named === null) {
+    return legacyNameMatchedSetups(ready, projectSelector)
+  }
+  if (named.length > 1) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Ambiguous --project ${projectSelector}: ${named.length} projects are named that. Use the project id.`,
+      {
+        knownProjects: named.map((project) => ({ id: project.id, name: project.displayName })),
+        nextSteps: named.map((project) => `Use --project ${project.id} for ${project.displayName}.`)
+      }
+    )
+  }
+  const matchedId = named[0]?.id
+  return matchedId === undefined
+    ? []
+    : ready.filter((candidate) => candidate.projectId === matchedId)
+}
+
+// Why: a server predating project.list still answers projectHostSetup.list, and those rows carry
+// a display name of their own. It is the repo's name rather than the project's, so this is the
+// weaker match — reachable only on that older server.
+function legacyNameMatchedSetups(
+  ready: readonly ProjectHostSetup[],
+  projectSelector: string
+): ProjectHostSetup[] {
+  const matched = ready.filter((candidate) => matchesName(candidate.displayName, projectSelector))
+  const projectIds = [...new Set(matched.map((candidate) => candidate.projectId))]
+  // Why: two projects can hold repos with the same folder name, and this match is by folder name.
+  // Selecting either would target a project the caller did not name.
+  if (projectIds.length <= 1) {
+    return matched
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `Ambiguous --project ${projectSelector}: ${projectIds.length} projects have a setup named that. Use the project id.`,
+    {
+      knownProjects: projectIds.map((id) => ({ id })),
+      nextSteps: projectIds.map((id) => `Use --project ${id}.`)
+    }
+  )
+}
+
+/** Null when the server has no project.list at all, as opposed to no project by that name. */
+async function findProjectsByName(
+  client: RuntimeClient,
+  selector: string
+): Promise<Project[] | null> {
+  try {
+    const result = await client.call<{ projects: Project[] }>('project.list')
+    return result.result.projects.filter((project) => matchesName(project.displayName, selector))
+  } catch (error) {
+    // Why: only a version gap justifies the weaker fallback. Swallowing everything reported a
+    // network blip or a permission error as "no project by that name", which then surfaced as
+    // "Project is not set up on the selected host" for a project that exists and is set up.
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      return null
+    }
+    throw error
+  }
+}
+
 // Why: the routed runtime can hold both an exact `runtime:<id>` row and a `local` row for the
 // same project; the exact stamp is the one the caller named, so it wins the selection.
-function findReadySetupOnHost(
-  setups: readonly ProjectHostSetup[],
-  projectId: string | undefined,
-  host: ParsedExecutionHost | undefined
+function selectSetupOnHost(
+  candidates: readonly ProjectHostSetup[],
+  host: ParsedExecutionHost | undefined,
+  projectSelector: string | undefined
 ): ProjectHostSetup | undefined {
-  const candidates = setups.filter((candidate) => candidate.projectId === projectId)
-  if (!host) {
+  if (host) {
+    return (
+      candidates.find((candidate) => normalizeExecutionHostId(candidate.hostId) === host.id) ??
+      candidates.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
+    )
+  }
+  // Why: one host is not a choice, so demanding --host for it was ceremony. Two are a choice, and
+  // picking one would run the command on a machine the caller never named.
+  const hostIds = new Set(candidates.map(setupHostId))
+  if (hostIds.size <= 1 || projectSelector === undefined) {
     return candidates[0]
   }
-  return (
-    candidates.find((candidate) => normalizeExecutionHostId(candidate.hostId) === host.id) ??
-    candidates.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `Ambiguous --project ${projectSelector}: it is set up on ${hostIds.size} hosts. Pass --host to choose one.`,
+    {
+      knownProjectHostSetups: candidates.map(summarizeSetup),
+      nextSteps: [
+        ...candidates.map(
+          (candidate) => `Use --host ${setupHostId(candidate)} for ${candidate.path}.`
+        ),
+        'Run `orca host list` to see every machine you can target and the flag for each.'
+      ]
+    }
   )
+}
+
+function summarizeSetup(setup: ProjectHostSetup): {
+  id: string
+  hostId: string
+  path: string
+} {
+  return { id: setup.id, hostId: setupHostId(setup), path: setup.path }
 }
 
 export async function resolveProjectCreateTarget(
@@ -92,15 +200,31 @@ export async function resolveProjectCreateTarget(
     throw error
   }
   const ready = result.result.setups.filter((candidate) => candidate.setupState === 'ready')
+  const candidates =
+    projectId === undefined ? [] : await findProjectSetups(client, ready, projectId)
   const setup = projectHostSetupId
     ? ready.find((candidate) => candidate.id === projectHostSetupId)
-    : findReadySetupOnHost(ready, projectId, host)
+    : selectSetupOnHost(candidates, host, projectId)
   if (!setup) {
+    if (projectHostSetupId) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Project host setup is not ready or was not found: ${projectHostSetupId}`
+      )
+    }
     throw new RuntimeClientError(
       'invalid_argument',
-      projectHostSetupId
-        ? `Project host setup is not ready or was not found: ${projectHostSetupId}`
-        : `Project is not set up on the selected host: ${projectId}${host ? ` on ${host.id}` : ''}`
+      `Project is not set up on the selected host: ${projectId}${host ? ` on ${host.id}` : ''}`,
+      // Why: when the project is set up somewhere just not here, the recoverable answer is which
+      // hosts do have it — otherwise the caller has to go re-derive the listing by hand.
+      candidates.length === 0
+        ? undefined
+        : {
+            knownProjectHostSetups: candidates.map(summarizeSetup),
+            nextSteps: candidates.map(
+              (candidate) => `Use --host ${setupHostId(candidate)} for ${candidate.path}.`
+            )
+          }
     )
   }
   return {
