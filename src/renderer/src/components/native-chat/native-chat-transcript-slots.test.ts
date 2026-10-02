@@ -467,6 +467,33 @@ describe('turn-owned grouping', () => {
     expect(slots[0]?.turnFolds).toBe(true)
   })
 
+  // A stored-only provider event draws nothing, so a disclosure over it would open onto nothing.
+  it('offers no disclosure when the only row besides the answer draws nothing', () => {
+    const wordless: NativeChatMessage = {
+      id: 'frame',
+      role: 'system',
+      blocks: [
+        {
+          type: 'text',
+          text: 'claude · message:system:memory_recall',
+          providerFrame: {
+            provider: 'claude',
+            kind: 'message:system:memory_recall',
+            payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+          }
+        }
+      ],
+      timestamp: 1,
+      source: 'transcript'
+    }
+    const slots = build([text('A', 'go', 'user'), wordless, text('answer', 'Done.')], {
+      turnKeys: ['A', 'A', 'A'],
+      turnStatuses: { active: null, completedByTurn: { A: settled } }
+    })
+    expect(slots.map((slot) => slot.message.id)).toEqual(['A', 'answer'])
+    expect(slots[0]?.turnFolds).toBe(false)
+  })
+
   it('returns every row of the turn when the reader opens it', () => {
     const slots = build(midTurn, {
       turnKeys: ownedKeys,

@@ -168,8 +168,6 @@ export function NativeChatStructuredSession(
         ...(approvalBody.displayName ? { displayName: approvalBody.displayName } : {}),
         ...(approvalBody.description ? { description: approvalBody.description } : {}),
         ...(approvalBody.decisionReason ? { decisionReason: approvalBody.decisionReason } : {}),
-        ...(approvalBody.blockedPath ? { blockedPath: approvalBody.blockedPath } : {}),
-        ...(approvalBody.matchedAskRule ? { matchedAskRule: approvalBody.matchedAskRule } : {}),
         ...(approvalBody.subject ? { subject: approvalBody.subject } : {}),
         ...(approvalBody.detail ? { detail: approvalBody.detail } : {}),
         options: approvalBody.options.map((option) => ({

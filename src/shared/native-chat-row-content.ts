@@ -7,6 +7,7 @@
 // pays once per revision rather than once per consumer.
 
 import { backgroundTaskBlocks, claimBackgroundTaskTwins } from './native-chat-background-task-row'
+import { isWordlessProviderFrameBlock } from './native-chat-provider-frame-summary'
 import { isSubagentGroupFallbackText, subagentGroupBlocks } from './native-chat-subagent-summary'
 import {
   isBackgroundTaskBlock,
@@ -22,7 +23,9 @@ export type NativeChatRowContent = ReturnType<typeof derive>
 const derivations = new WeakMap<object, NativeChatRowContent>()
 
 function derive(blocks: readonly NativeChatBlock[]) {
-  const split = splitNativeChatBlocks(blocks)
+  const split = splitNativeChatBlocks(
+    blocks.filter((block) => !isWordlessProviderFrameBlock(block))
+  )
   const groups = subagentGroupBlocks(split.prose)
   const tasks = backgroundTaskBlocks(split.prose)
   // Both row kinds carry a plain-text twin so a client without the block type

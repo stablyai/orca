@@ -68,8 +68,6 @@ describe('MobileNativeChatPermission', () => {
   it('keeps oversized provider context in a bounded scroller above the actions', async () => {
     const description = `Workspace access ${'description '.repeat(400)}`
     const decisionReason = `Outside the allowed root ${'reason '.repeat(400)}`
-    const blockedPath = `/repo/${'nested/'.repeat(400)}secrets.txt`
-    const ruleContent = `/repo/${'**/'.repeat(400)}`
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatPermission, {
@@ -77,8 +75,6 @@ describe('MobileNativeChatPermission', () => {
             title: 'Claude wants to read secrets.txt '.repeat(400),
             description,
             decisionReason,
-            blockedPath,
-            matchedAskRule: { source: 'project', toolName: 'Read', ruleContent },
             options: [{ label: 'Allow', send: '1' }]
           },
           onRespond: vi.fn(async () => true)
@@ -104,11 +100,48 @@ describe('MobileNativeChatPermission', () => {
     expect(content.props.style).toMatchObject({ maxHeight: 240, minHeight: 0, flexShrink: 1 })
     expect(containsText(description)).toBe(true)
     expect(containsText(decisionReason)).toBe(true)
-    expect(containsText(blockedPath)).toBe(true)
-    expect(containsText(ruleContent)).toBe(true)
     expect(content.findAllByProps({ children: 'Allow' })).toHaveLength(0)
     expect(actions.findAllByProps({ children: 'Allow' })).toHaveLength(1)
     expect(actions.props.style).toMatchObject({ flexShrink: 0 })
+  })
+
+  // Same card as desktop: what is asked and why, never the provider's settings bookkeeping.
+  it('shows the reason but not the matched ask rule, its settings source or a blocked path', async () => {
+    const fromJournal = {
+      title: 'Claude wants to run git push',
+      decisionReason: 'Pushing changes the remote',
+      blockedPath: '/outside/repo',
+      matchedAskRule: {
+        source: 'projectSettings',
+        toolName: 'Bash',
+        ruleContent: 'Bash(git push:*)'
+      },
+      options: [{ label: 'Allow', send: '1' }]
+    }
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: fromJournal,
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+    const content = renderer.root.findByProps({ testID: 'native-chat-approval-content' })
+    const text = content
+      .findAllByType('Text')
+      .flatMap((node) => [node.props.children].flat())
+      .filter((child): child is string => typeof child === 'string')
+      .join('')
+    expect(text).toContain('Pushing changes the remote')
+    for (const internal of [
+      'Ask rule',
+      'Bash(git push:*)',
+      'projectSettings',
+      'Blocked path',
+      '/outside/repo'
+    ]) {
+      expect(text).not.toContain(internal)
+    }
   })
 
   it('renders a plan as markdown inside the same bounded scroller', async () => {

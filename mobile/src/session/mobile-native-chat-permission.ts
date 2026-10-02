@@ -1,7 +1,4 @@
-import type {
-  AgentJournalApprovalMatchedAskRule,
-  AgentJournalApprovalSubject
-} from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalApprovalSubject } from '../../../src/shared/agent-session-journal-types'
 
 // Agent permission asks (e.g. Claude/Codex "Do you want to proceed?") surface
 // as plain TUI text in the agent's last assistant message — there is no
@@ -18,8 +15,6 @@ export type MobileChatPermission = {
   displayName?: string
   description?: string
   decisionReason?: string
-  blockedPath?: string
-  matchedAskRule?: AgentJournalApprovalMatchedAskRule
   subject?: AgentJournalApprovalSubject
   detail?: string
   /** Structured prompt identity, present only when the host can cancel it exactly. */

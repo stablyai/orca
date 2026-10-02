@@ -66,7 +66,8 @@ export function ResumeFailureStatus({
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6} className="max-w-72">
           {status}
-          {/* The code verbatim, so it can be quoted in a report. */}
+          {/* The code verbatim, so it can be quoted in a report. A lost resume request carries this
+              side's own code; its real error is in the renderer log. */}
           <span className="mt-0.5 block font-mono text-[10px] opacity-75">{failure.reason}</span>
         </TooltipContent>
       </Tooltip>

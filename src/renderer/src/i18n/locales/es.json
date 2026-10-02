@@ -14828,14 +14828,6 @@
         "noMatches": "No hay coincidencias."
       },
       "NativeChatResumeOnRestartModal": {
-        "notContinuedOne": "1 chat no pudo reanudarse",
-        "notContinuedMany": "{{value0}} chats no pudieron reanudarse",
-        "notConfirmedOne": "No se pudo confirmar que 1 chat se reanudó",
-        "notConfirmedMany": "No se pudo confirmar que {{value0}} chats se reanudaron",
-        "notConfirmedOtherOne": "No se pudo confirmar que 1 otro chat se reanudó",
-        "notConfirmedOtherMany": "No se pudo confirmar que {{value0}} otros chats se reanudaron",
-        "show": "Mostrar",
-        "dismiss": "Descartar",
         "activityApproval": "Esperando tu aprobación: {{value0}}",
         "activityMidReply": "Estaba respondiendo",
         "activityMonitorMany": "Supervisando {{value0}} tareas en segundo plano",
@@ -14860,8 +14852,8 @@
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca no pudo confirmar que el mensaje “continue” se entregó. Abre el chat y compruébalo antes de enviar otro.",
         "superseded": "Abre el chat y responde. Llegó trabajo nuevo justo después del reinicio, así que Orca no envió su mensaje “continue”.",
-        "conflict": "Otra ventana de Orca o terminal aún conserva esta sesión. Ciérrala e inténtalo de nuevo.",
-        "ownershipUnknown": "Orca aún está determinando qué proceso posee esta sesión. Espera un momento e inténtalo de nuevo.",
+        "conflict": "Este chat está abierto en otra ventana de Orca o en una terminal. Ciérralo allí e inténtalo de nuevo.",
+        "ownershipUnknown": "Este chat aún no está listo para reanudarse. Espera un momento e inténtalo de nuevo.",
         "notAttached": "El chat no se reconectó. Reinténtalo o ábrelo para empezar un turno nuevo.",
         "dispatchRejected": "El agente rechazó el mensaje “continue”. Abre el chat y envía uno tú mismo.",
         "unsupported": "Orca no puede reanudar este chat. Ábrelo para ver dónde se detuvo.",

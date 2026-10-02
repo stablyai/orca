@@ -35,12 +35,7 @@ export function NativeChatApprovalCard({
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
   const hasContext = Boolean(
-    approval.description ||
-    approval.decisionReason ||
-    approval.blockedPath ||
-    approval.matchedAskRule ||
-    approval.subject ||
-    approval.detail
+    approval.description || approval.decisionReason || approval.subject || approval.detail
   )
   useEffect(() => {
     if (shouldFocus) {
@@ -99,26 +94,6 @@ export function NativeChatApprovalCard({
                     {translate('components.native-chat.approval.reason', 'Reason')}:{' '}
                   </span>
                   {approval.decisionReason}
-                </p>
-              ) : null}
-              {approval.blockedPath ? (
-                <p className="break-words">
-                  <span className="font-medium text-foreground/80">
-                    {translate('components.native-chat.approval.blockedPath', 'Blocked path')}:{' '}
-                  </span>
-                  <span className="font-mono">{approval.blockedPath}</span>
-                </p>
-              ) : null}
-              {approval.matchedAskRule ? (
-                <p className="break-words">
-                  <span className="font-medium text-foreground/80">
-                    {translate('components.native-chat.approval.askRule', 'Ask rule')}:{' '}
-                  </span>
-                  {approval.matchedAskRule.ruleContent ?? approval.matchedAskRule.toolName}
-                  <span className="text-muted-foreground/80">
-                    {' · '}
-                    {approval.matchedAskRule.source}
-                  </span>
                 </p>
               ) : null}
               {approval.subject?.kind === 'plan' ? (

@@ -7,16 +7,15 @@ import {
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { useAppStore } from '../store'
 import {
-  announceRestartDismissUnconfirmed,
-  announceRestartResults,
-  announceRestartUnconfirmed,
-  type RestartContinuationOutcome
-} from './native-chat-restart-action-notifications'
-import {
   allResumeSessionIds,
   type ResumeCandidate,
   type ResumeFailure
 } from './native-chat-resume-on-restart-grouping'
+import {
+  forgetUnsentResumes,
+  markUnsentResumes,
+  withUnsentResumes
+} from './native-chat-resume-unsent-requests'
 import {
   consumeNativeChatResumeOnRestartDialogRequest,
   requestNativeChatResumeOnRestartDialog
@@ -78,7 +77,8 @@ function publish(next: NativeChatRestartOffer): void {
 
 /** A confirmed host answer. One with nothing left also retires any open request for the dialog,
  *  which has nothing to show; a failed read only hides rows, so it keeps the request. */
-function publishAnswer(next: NativeChatRestartOffer): void {
+function publishAnswer(answer: NativeChatRestartOffer): void {
+  const next = withUnsentResumes(answer)
   publish(next)
   if (next.candidates.length === 0 && next.failed.length === 0) {
     consumeNativeChatResumeOnRestartDialogRequest()
@@ -257,15 +257,6 @@ export async function refreshNativeChatRestartOffer(): Promise<
   return { candidates: read.candidates, failed: read.failed }
 }
 
-/** What the failure toast can do. The dialog request is external state the toast may raise after
- *  the dialog that started the action has closed. */
-const failureToastActions = {
-  show: () => requestNativeChatResumeOnRestartDialog(),
-  dismiss: (sessionIds: readonly string[]) => {
-    void dismissNativeChatRestartOffer([...sessionIds])
-  }
-}
-
 /**
  * Reattach the offered chats, ask each agent to carry on, then replace the offer with the host's
  * authoritative remaining list. This keeps the modal and status bar synchronized after every
@@ -273,42 +264,41 @@ const failureToastActions = {
  *
  * `sessionIds` is the dialog's selection. An opted-in launch names nothing, so the host acts on
  * whatever it still offers rather than on a list this side captured a moment earlier, and passes
- * `reported` instead: the chats the user was shown, which is what the toasts count.
+ * `reported` instead: the chats the status bar shows as resuming.
  *
- * Never rejects. The payload is unvalidated, and a shape this side did not expect is reported as
- * an unconfirmed delivery — the message may well have gone out.
+ * Says nothing itself: each chat's own note tells what happened to it, and the status bar keeps
+ * whatever the host still lists. Never rejects; a lost answer is followed by a re-read, never a retry.
+ * The chats a rejected request named and the host still offers show as failed, with Retry.
  */
 export async function continueNativeChatRestartOffer(
   sessionIds: readonly string[] | undefined,
   reported: readonly string[] = sessionIds ?? []
 ): Promise<void> {
   actionsBegun += 1
+  forgetUnsentResumes(sessionIds)
   const batch = [...reported]
   resumeBatches.add(batch)
   syncResuming()
   try {
-    const result = await callStructuredAgentSession<
-      HostOfferPayload & {
-        /** Which chats the host reattached. */
-        resumed?: { sessionId: string }[]
-        continued: RestartContinuationOutcome[]
-      }
-    >(LOCAL, 'agentSession.restartContinue', sessionIds ? { sessionIds } : {})
-    const failed = failedFrom(result)
-    announceRestartResults(
-      reported,
-      result.continued,
-      Array.isArray(result.failed) ? failed : undefined,
-      failureToastActions
+    const result = await callStructuredAgentSession<HostOfferPayload>(
+      LOCAL,
+      'agentSession.restartContinue',
+      sessionIds ? { sessionIds } : {}
     )
     if (Array.isArray(result.sessions)) {
-      publishAnswer({ candidates: result.sessions, failed, listedAt: Date.now() })
+      publishAnswer({
+        candidates: result.sessions,
+        failed: failedFrom(result),
+        listedAt: Date.now()
+      })
     } else {
       await refreshNativeChatRestartOffer()
     }
-  } catch {
+  } catch (error) {
+    // The row's reason is this side's own code, so the real error is kept in the log.
+    console.warn('[native-chat-resume] resume request failed before reaching the chats', error)
+    markUnsentResumes(batch, Date.now())
     await refreshNativeChatRestartOffer()
-    announceRestartUnconfirmed(reported.length)
   } finally {
     actionsSettled += 1
     resumeBatches.delete(batch)
@@ -319,8 +309,8 @@ export async function continueNativeChatRestartOffer(
 /**
  * Turning the offer down for good, which explicitly deletes the pending durable records.
  *
- * A failed write or unreachable host leaves the durable record untouched; a later read can restore
- * the offer after the host is available again.
+ * A failed write or unreachable host leaves the durable record untouched. The re-read puts it back
+ * in the status bar; if that read fails too, the entry stays hidden until the next launch reads it.
  */
 export async function dismissNativeChatRestartOffer(sessionIds?: readonly string[]): Promise<void> {
   actionsBegun += 1
@@ -328,10 +318,13 @@ export async function dismissNativeChatRestartOffer(sessionIds?: readonly string
     const result = await callStructuredAgentSession<HostOfferPayload>(
       LOCAL,
       'agentSession.restartResumableDismiss',
-      // Named only for rows the host itself listed as failures, which an older host never does,
-      // so it is never asked to understand the key.
+      // Named only for rows the dialog lists as failed: the host's own failures, or chats this side
+      // marked after a lost resume request, which the host still lists as offers. The host is this
+      // build, and it forgets named records of any state.
       sessionIds ? { sessionIds: [...sessionIds] } : {}
     )
+    // Only a dismissal the host took ends the mark; a failed one leaves the chat shown as failed.
+    forgetUnsentResumes(sessionIds)
     if (Array.isArray(result.sessions)) {
       publishAnswer({
         candidates: result.sessions,
@@ -343,7 +336,6 @@ export async function dismissNativeChatRestartOffer(sessionIds?: readonly string
     }
   } catch {
     await refreshNativeChatRestartOffer()
-    announceRestartDismissUnconfirmed()
   } finally {
     actionsSettled += 1
   }
@@ -409,6 +401,7 @@ export function useNativeChatRestartResuming(): readonly string[] {
 export function _resetNativeChatRestartOffer(): void {
   releaseOfferedChatWatch()
   offer = EMPTY
+  forgetUnsentResumes(undefined)
   resumeBatches.clear()
   resuming = NOTHING_RESUMING
   actionsBegun = 0

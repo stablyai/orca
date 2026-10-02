@@ -20,12 +20,7 @@ function MobileNativeChatPermissionImpl({
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
   const hasContext = Boolean(
-    permission.description ||
-    permission.decisionReason ||
-    permission.blockedPath ||
-    permission.matchedAskRule ||
-    permission.subject ||
-    permission.detail
+    permission.description || permission.decisionReason || permission.subject || permission.detail
   )
   const respond = async (send: string): Promise<void> => {
     if (submittingRef.current) {
@@ -77,20 +72,6 @@ function MobileNativeChatPermissionImpl({
             <Text style={styles.detail}>
               <Text style={styles.contextLabel}>Reason: </Text>
               {permission.decisionReason}
-            </Text>
-          ) : null}
-          {permission.blockedPath ? (
-            <Text style={styles.detail}>
-              <Text style={styles.contextLabel}>Blocked path: </Text>
-              {permission.blockedPath}
-            </Text>
-          ) : null}
-          {permission.matchedAskRule ? (
-            <Text style={styles.detail}>
-              <Text style={styles.contextLabel}>Ask rule: </Text>
-              {permission.matchedAskRule.ruleContent ?? permission.matchedAskRule.toolName}
-              {' · '}
-              {permission.matchedAskRule.source}
             </Text>
           ) : null}
           {permission.subject?.kind === 'plan' ? (

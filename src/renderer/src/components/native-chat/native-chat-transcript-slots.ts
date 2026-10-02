@@ -122,6 +122,7 @@ export function buildNativeChatTranscriptSlots(
     turnKey: turnKeys[index],
     role: message.role,
     rendersProse: nativeChatRowRendersProse(message),
+    draws: receipts.has(message.id) || nativeChatRowRendersContent(message.blocks),
     // The raw blocks, not the renderable ones: a childless roster draws no row
     // and its plain-text twin is then the only record the spawn happened.
     outlivesTurn: message.blocks.some(

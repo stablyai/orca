@@ -3,8 +3,8 @@
 // The continuation is a send like any other: accepted into the conversation, and delivered by the
 // session's delivery loop, which starts the agent. Both the restart prompt and an opted-in launch
 // come here, so a SETTING can reach this send — acceptable because the work is the user's own, the
-// message asks the agent to verify its last action before repeating it, and the launch toast
-// reports what happened.
+// message asks the agent to verify its last action before repeating it, and each chat it reaches
+// carries a note saying Orca asked it to continue.
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -258,7 +258,7 @@ async function noteOutcome(
   }
 }
 
-/** The chat itself carries the failure, so it survives the toast, a dismissed record and a restart,
+/** The chat itself carries the failure, so it survives a dismissed record and a restart,
  *  and the user's next message is what moves past it. */
 async function noteNotContinued(
   deps: Pick<StructuredAgentSessionContinuationDeps, 'note' | 'logger'>,
