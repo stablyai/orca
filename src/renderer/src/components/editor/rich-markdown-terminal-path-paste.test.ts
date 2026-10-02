@@ -109,6 +109,15 @@ describe('rich markdown terminal path paste', () => {
     ).toBe(false)
   })
 
+  it('does not treat valid filename punctuation as the end of a basename', () => {
+    expect(
+      shouldPasteTerminalWindowsPathAsPlainText({
+        plainText: 'Open C:\\Users\\README.md,backup before editing.',
+        htmlText: '<a href="http://README.md">README.md</a>'
+      })
+    ).toBe(false)
+  })
+
   it('does not match a Windows path to an unrelated same-sentence link', () => {
     expect(
       shouldPasteTerminalWindowsPathAsPlainText({
