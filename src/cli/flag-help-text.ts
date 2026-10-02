@@ -71,6 +71,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   workspace: '--workspace <selector> Existing worktree selector for automation runs',
   'workspace-status':
     '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',
+  pin: '--pin                  Pin the workspace to the sidebar Pinned section',
+  unpin: '--unpin                Remove the workspace from the Pinned section',
   staged: '--staged               Open staged source-control changes',
   provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
   'source-context':
