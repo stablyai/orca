@@ -1,0 +1,80 @@
+<!doctype html><meta charset="utf-8" /><meta
+  name="viewport"
+  content="width=device-width,initial-scale=1"
+/><title>Orca 手机高清候选</title>
+<style>
+  html,
+  body {
+    margin: 0;
+    background: #101722;
+    color: white;
+    font-family: system-ui;
+  }
+  main {
+    padding: 16px;
+  }
+  h1 {
+    font-size: 24px;
+  }
+  p {
+    font-size: 16px;
+  }
+  button {
+    font-size: 20px;
+    padding: 12px 28px;
+  }
+  svg {
+    display: block;
+  }
+  #tick {
+    min-height: 24px;
+  }
+</style>
+<main>
+  <h1>Orca 手机高清候选</h1>
+  <p>真实绘制 · Aa 你好 0123456789</p>
+  <p id="viewport"></p>
+  <p id="tick"></p>
+  <svg width="320" height="90" viewBox="0 0 320 90">
+    <rect width="320" height="90" fill="#22314d" />
+    <path d="M10 20H310M10 22H310M10 24H310M10 26H310" stroke="white" />
+    <text x="12" y="75" font-size="30" fill="white">Aa 中文细线</text>
+  </svg>
+  <p><button id="button">点击 +1</button></p>
+  <p id="receipt">点击回执：0</p>
+</main>
+<script>
+  let ticks = 0,
+    clicks = 0,
+    trusted = false
+  function draw() {
+    document.querySelector('#viewport').textContent =
+      `CSS ${innerWidth}×${innerHeight} · DPR ${devicePixelRatio}`
+    document.querySelector('#tick').textContent =
+      `主机变化：${ticks} · ${new Date().toLocaleTimeString()}`
+    document.querySelector('#tick').style.color = ticks % 2 ? '#b1deff' : '#ffffff'
+  }
+  setInterval(() => {
+    ticks++
+    draw()
+  }, 300)
+  window.addEventListener('resize', draw)
+  document.querySelector('#button').onclick = (e) => {
+    clicks++
+    trusted = e.isTrusted
+    document.querySelector('#receipt').textContent = `点击回执：${clicks} · trusted=${trusted}`
+  }
+  window.__rasterProbe = () => {
+    const r = document.querySelector('#button').getBoundingClientRect()
+    return {
+      width: innerWidth,
+      height: innerHeight,
+      dpr: devicePixelRatio,
+      ticks,
+      clicks,
+      trusted,
+      button: { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+    }
+  }
+  draw()
+</script>
