@@ -8,6 +8,32 @@ function resolveEntryPath(root: string, relativePath: string): string {
   return join(root, ...relativePath.split('/'))
 }
 
+// Why: a symlinked parent directory would route a carried write or rollback delete outside the root.
+async function findSymlinkedAncestor(root: string, relativePath: string): Promise<string | null> {
+  let current = root
+  for (const segment of relativePath.split('/').slice(0, -1)) {
+    current = join(current, segment)
+    try {
+      if ((await lstat(current)).isSymbolicLink()) {
+        return current
+      }
+    } catch (error) {
+      if (isDefinitiveAbsence(error)) {
+        return null
+      }
+      throw error
+    }
+  }
+  return null
+}
+
+async function assertNoSymlinkedAncestor(root: string, relativePath: string): Promise<void> {
+  const ancestor = await findSymlinkedAncestor(root, relativePath)
+  if (ancestor !== null) {
+    throw new Error(`Refusing to follow symlinked directory ${ancestor} for ${relativePath}`)
+  }
+}
+
 export async function sumNodeEntrySizes(
   root: string,
   relativePaths: readonly string[]
@@ -26,6 +52,7 @@ export async function copyNodeWorkingTreeEntry(
 ): Promise<void> {
   const from = resolveEntryPath(fromRoot, relativePath)
   const to = resolveEntryPath(toRoot, relativePath)
+  await assertNoSymlinkedAncestor(toRoot, relativePath)
   await mkdir(dirname(to), { recursive: true })
   const stats = await lstat(from)
   if (stats.isSymbolicLink()) {
@@ -40,6 +67,7 @@ export async function removeNodeWorkingTreeEntry(
   root: string,
   relativePath: string
 ): Promise<void> {
+  await assertNoSymlinkedAncestor(root, relativePath)
   // Why: no `recursive` so an unexpected directory errors instead of being deleted wholesale.
   await rm(resolveEntryPath(root, relativePath), { force: true })
 }
@@ -48,6 +76,10 @@ export async function nodeWorkingTreeEntryExists(
   root: string,
   relativePath: string
 ): Promise<boolean> {
+  // Why: a path behind a symlinked target directory is blocked, so the carry refuses before writing.
+  if ((await findSymlinkedAncestor(root, relativePath)) !== null) {
+    return true
+  }
   try {
     await lstat(resolveEntryPath(root, relativePath))
     return true

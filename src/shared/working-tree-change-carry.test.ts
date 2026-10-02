@@ -87,6 +87,19 @@ function ioFailingOnCopyB(overrides: Partial<WorkingTreeCarryIo> = {}): WorkingT
   }
 }
 
+// Why: simulates the parent agent committing after the HEAD check but before `stash create` runs.
+function ioCommittingBeforeStash(source: string, commitArgs: string[]): WorkingTreeCarryIo {
+  return {
+    ...io,
+    git: async (args, cwd) => {
+      if (args.includes('stash') && args.includes('create')) {
+        git(source, ...commitArgs)
+      }
+      return git(cwd, ...args)
+    }
+  }
+}
+
 describe('carryWorkingTreeChanges', () => {
   it('copies tracked edits, staged edits and new files without touching the source', async () => {
     const { source, target } = createRepoWithChild()
@@ -320,6 +333,194 @@ describe('carryWorkingTreeChanges', () => {
 
     expect(result).toEqual({ ok: false, reason: 'target_dirty' })
     expect(readFileSync(join(target, '.env'), 'utf8')).toBe('target-secret\n')
+  })
+
+  it('refuses without writing when the parent commits between the base check and the stash', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'tracked.txt'), 'edited\n')
+    writeFileSync(join(source, 'staged.txt'), 'committed mid-carry\n')
+    const racingIo = ioCommittingBeforeStash(source, [
+      'commit',
+      '--quiet',
+      '-m',
+      'mid',
+      'staged.txt'
+    ])
+
+    expect(await carryWorkingTreeChanges(racingIo, source, target)).toEqual({
+      ok: false,
+      reason: 'base_mismatch'
+    })
+    expect(git(target, 'status', '--porcelain', '--untracked-files=normal')).toBe('')
+    expect(readFileSync(join(target, 'tracked.txt'), 'utf8')).toBe('base\n')
+  })
+
+  it('refuses without writing when the parent commits every tracked edit before the stash', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'tracked.txt'), 'edited\n')
+    writeFileSync(join(source, 'new.txt'), 'new\n')
+    const racingIo = ioCommittingBeforeStash(source, ['commit', '--quiet', '-am', 'mid'])
+
+    expect(await carryWorkingTreeChanges(racingIo, source, target)).toEqual({
+      ok: false,
+      reason: 'base_mismatch'
+    })
+    expect(existsSync(join(target, 'new.txt'))).toBe(false)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses without writing when a carried path sits under a symlinked target directory',
+    async () => {
+      const { source, target } = createRepoWithChild()
+      const outside = join(source, '..', 'outside')
+      mkdirSync(outside)
+      symlinkSync('../outside', join(source, 'link'))
+      git(source, 'add', 'link')
+      git(source, 'commit', '--quiet', '-m', 'add link')
+      git(target, 'reset', '--quiet', '--hard', git(source, 'rev-parse', 'HEAD').trim())
+      // Why: the source swaps the tracked symlink for a real directory; stash create does not record that.
+      rmSync(join(source, 'link'))
+      mkdirSync(join(source, 'link'))
+      writeFileSync(join(source, 'link', 'foo'), 'carried\n')
+
+      const result = await carryWorkingTreeChanges(io, source, target)
+
+      expect(result).toEqual({ ok: false, reason: 'target_dirty' })
+      expect(existsSync(join(outside, 'foo'))).toBe(false)
+      expect(lstatSync(join(target, 'link')).isSymbolicLink()).toBe(true)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses to copy or remove through a symlinked target directory',
+    async () => {
+      const { target } = createRepoWithChild()
+      const outside = join(target, '..', 'outside')
+      mkdirSync(outside)
+      writeFileSync(join(outside, 'foo'), 'precious\n')
+      symlinkSync('../outside', join(target, 'link'))
+      const source = mkdtempSync(join(tmpdir(), 'orca-carry-src-'))
+      tempPaths.push(source)
+      mkdirSync(join(source, 'link'))
+      writeFileSync(join(source, 'link', 'bar'), 'carried\n')
+
+      await expect(copyNodeWorkingTreeEntry(source, target, 'link/bar')).rejects.toThrow(/symlink/)
+      await expect(removeNodeWorkingTreeEntry(target, 'link/foo')).rejects.toThrow(/symlink/)
+      expect(await nodeWorkingTreeEntryExists(target, 'link/foo')).toBe(true)
+      expect(existsSync(join(outside, 'bar'))).toBe(false)
+      expect(readFileSync(join(outside, 'foo'), 'utf8')).toBe('precious\n')
+    }
+  )
+
+  it('removes carried paths before restoring tracked state during rollback', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'tracked.txt'), 'edited\n')
+    writeFileSync(join(source, 'copy-a.txt'), 'a\n')
+    writeFileSync(join(source, 'copy-b.txt'), 'b\n')
+    const steps: string[] = []
+    const failing = ioFailingOnCopyB()
+    const recordingIo: WorkingTreeCarryIo = {
+      ...failing,
+      git: async (args, cwd) => {
+        if (args.includes('--hard')) {
+          steps.push('reset --hard')
+        }
+        return failing.git(args, cwd)
+      },
+      removeEntry: async (root, relativePath) => {
+        steps.push(`remove ${relativePath}`)
+        await failing.removeEntry(root, relativePath)
+      }
+    }
+
+    expect(await carryWorkingTreeChanges(recordingIo, source, target)).toMatchObject({
+      ok: false,
+      reason: 'apply_failed'
+    })
+    // Why: a tracked symlink restored by reset would route the removals outside the target.
+    expect(steps).toEqual(['remove copy-a.txt', 'remove copy-b.txt', 'reset --hard'])
+  })
+
+  it('keeps a target file that appeared mid-carry when copying onto it fails with EEXIST', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'copy-a.txt'), 'a\n')
+    writeFileSync(join(source, 'copy-b.txt'), 'b\n')
+    const racingIo: WorkingTreeCarryIo = {
+      ...io,
+      copyEntry: async (fromRoot, toRoot, relativePath) => {
+        if (relativePath === 'copy-b.txt') {
+          writeFileSync(join(toRoot, 'copy-b.txt'), 'not ours\n')
+        }
+        await copyNodeWorkingTreeEntry(fromRoot, toRoot, relativePath)
+      }
+    }
+
+    const result = await carryWorkingTreeChanges(racingIo, source, target)
+
+    expect(result).toMatchObject({ ok: false, reason: 'apply_failed' })
+    expect(readFileSync(join(target, 'copy-b.txt'), 'utf8')).toBe('not ours\n')
+    expect(existsSync(join(target, 'copy-a.txt'))).toBe(false)
+  })
+
+  it('removes a partially written file when its copy fails for another reason', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'copy-a.txt'), 'a\n')
+    writeFileSync(join(source, 'copy-b.txt'), 'b\n')
+    const failingIo: WorkingTreeCarryIo = {
+      ...io,
+      copyEntry: async (fromRoot, toRoot, relativePath) => {
+        if (relativePath === 'copy-b.txt') {
+          writeFileSync(join(toRoot, 'copy-b.txt'), 'partial')
+          throw Object.assign(new Error('simulated disk failure'), { code: 'EIO' })
+        }
+        await copyNodeWorkingTreeEntry(fromRoot, toRoot, relativePath)
+      }
+    }
+
+    const result = await carryWorkingTreeChanges(failingIo, source, target)
+
+    expect(result).toMatchObject({ ok: false, reason: 'apply_failed' })
+    expect(existsSync(join(target, 'copy-b.txt'))).toBe(false)
+    expect(git(target, 'status', '--porcelain', '--untracked-files=normal')).toBe('')
+  })
+
+  it('returns apply_failed instead of throwing when git cannot stash an intent-to-add file', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'tracked.txt'), 'edited\n')
+    writeFileSync(join(source, 'intent.txt'), 'later\n')
+    git(source, 'add', '-N', 'intent.txt')
+
+    const result = await carryWorkingTreeChanges(io, source, target)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'apply_failed',
+      detail: expect.stringContaining('intent.txt')
+    })
+    expect(git(target, 'status', '--porcelain', '--untracked-files=normal')).toBe('')
+  })
+
+  it('creates the stash with a fixed identity so hosts without user.email can carry', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'tracked.txt'), 'edited\n')
+    const calls: string[][] = []
+    const recordingIo: WorkingTreeCarryIo = {
+      ...io,
+      git: async (args, cwd) => {
+        calls.push(args)
+        return git(cwd, ...args)
+      }
+    }
+
+    expect((await carryWorkingTreeChanges(recordingIo, source, target)).ok).toBe(true)
+    expect(calls).toContainEqual([
+      '-c',
+      'user.name=Orca',
+      '-c',
+      'user.email=orca@localhost',
+      'stash',
+      'create'
+    ])
   })
 })
 
