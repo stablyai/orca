@@ -9,16 +9,10 @@ import {
   writeClaudeManagedCredentialsJson,
   type InactiveClaudeAccount
 } from './claude-managed-account-credentials'
-import { fetchClaudeManagedUsagePanelSupplement } from './claude-managed-usage-panel'
 import { parseClaudeOAuthCredentialsJson } from './claude-oauth-credentials'
 import { fetchClaudeOAuthUsage } from './claude-oauth-usage-request'
 import type { ClaudeManagedAccountUsageOptions } from './claude-usage-fetch-options'
-import {
-  abortedClaudeRateLimitResult,
-  canSupplementClaudeOAuthUsage,
-  mergeClaudeUsageWindows,
-  warnClaudeUsageFetchFailure
-} from './claude-usage-result'
+import { abortedClaudeRateLimitResult } from './claude-usage-result'
 
 function noClaudeManagedCredentialsResult(): ProviderRateLimits {
   return {
@@ -39,7 +33,7 @@ export async function fetchInactiveClaudeAccountUsage(
     return abortedClaudeRateLimitResult()
   }
   const location = resolveClaudeManagedCredentialsLocation(account)
-  let credentialsJson = location ? await readClaudeManagedCredentialsJson(location) : null
+  const credentialsJson = location ? await readClaudeManagedCredentialsJson(location) : null
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
@@ -59,7 +53,6 @@ export async function fetchInactiveClaudeAccountUsage(
       } catch {
         // Keep the refreshed token for this fetch; a later poll can persist it.
       }
-      credentialsJson = refreshed
       token = parseClaudeOAuthCredentialsJson(refreshed, 'credentials-file').token
     }
   }
@@ -67,38 +60,6 @@ export async function fetchInactiveClaudeAccountUsage(
   if (!token) {
     return noClaudeManagedCredentialsResult()
   }
-  const oauthLimits = await fetchClaudeOAuthUsage(token, options.signal)
-  if (options.signal?.aborted) {
-    return abortedClaudeRateLimitResult()
-  }
-  if (
-    !canSupplementClaudeOAuthUsage({
-      oauthLimits,
-      authPreparation: undefined,
-      allowUsagePanelSupplement: options.allowUsagePanelSupplement === true
-    })
-  ) {
-    return oauthLimits
-  }
-
-  try {
-    return mergeClaudeUsageWindows(
-      oauthLimits,
-      await fetchClaudeManagedUsagePanelSupplement({
-        account,
-        location,
-        credentialsJson,
-        oauthLimits,
-        networkProxySettings: options.networkProxySettings,
-        signal: options.signal
-      })
-    )
-  } catch (error) {
-    warnClaudeUsageFetchFailure(
-      undefined,
-      parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file'),
-      error
-    )
-    return oauthLimits
-  }
+  const limits = await fetchClaudeOAuthUsage(token, options.signal)
+  return options.signal?.aborted ? abortedClaudeRateLimitResult() : limits
 }

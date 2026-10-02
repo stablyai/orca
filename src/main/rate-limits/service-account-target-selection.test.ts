@@ -371,7 +371,9 @@ describe('RateLimitService', () => {
       stripAuthEnv: target?.runtime === 'wsl',
       provenance: target?.runtime === 'wsl' ? 'managed:wsl-account:wsl:Ubuntu' : 'system'
     }))
+    const provenanceReader = vi.fn(() => 'system')
     service.setClaudeAuthPreparationResolver(resolver)
+    service.setClaudeAuthProvenanceReader(provenanceReader)
     service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
 
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
@@ -388,15 +390,18 @@ describe('RateLimitService', () => {
           wslLinuxConfigDir: '/home/jin/.claude',
           stripAuthEnv: true
         }),
-        allowPtyFallback: true,
-        allowUsagePanelSupplement: true,
+        cliLoginRefresh: { readCurrentAuthProvenance: expect.any(Function) },
         signal: expect.any(AbortSignal)
       })
     )
+    // The refresh re-reads the login selected for the fetch's own target, not the default one.
+    const permit = vi.mocked(fetchClaudeRateLimits).mock.calls[0]?.[0]?.cliLoginRefresh
+    expect(permit?.readCurrentAuthProvenance()).toBe('system')
+    expect(provenanceReader).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
     expect(service.getState().claudeTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
   })
 
-  it('does not use Claude PTY fallback for system-default usage refreshes', async () => {
+  it('does not allow a Claude CLI login refresh for system-default usage refreshes', async () => {
     const service = new RateLimitService()
     service.setClaudeAuthPreparationResolver(async () => ({
       configDir: '/tmp/.claude',
@@ -416,14 +421,13 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({
         authPreparation: expect.objectContaining({ provenance: 'system' }),
-        allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        cliLoginRefresh: undefined,
         signal: expect.any(AbortSignal)
       })
     )
   })
 
-  it('does not use Claude PTY fallback when Claude auth preparation is unavailable', async () => {
+  it('does not allow a Claude CLI login refresh when Claude auth preparation is unavailable', async () => {
     const service = new RateLimitService()
 
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
@@ -434,14 +438,13 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({
         authPreparation: undefined,
-        allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        cliLoginRefresh: undefined,
         signal: expect.any(AbortSignal)
       })
     )
   })
 
-  it('does not use Claude PTY fallback for WSL system-default usage refreshes', async () => {
+  it('does not allow a Claude CLI login refresh for WSL system-default usage refreshes', async () => {
     const service = new RateLimitService()
     service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
     service.setClaudeAuthPreparationResolver(async () => ({
@@ -462,8 +465,7 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({
         authPreparation: expect.objectContaining({ provenance: 'wsl:Ubuntu:system' }),
-        allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        cliLoginRefresh: undefined,
         signal: expect.any(AbortSignal)
       })
     )
@@ -566,6 +568,7 @@ describe('RateLimitService', () => {
       stripAuthEnv: target?.runtime === 'wsl',
       provenance: target?.runtime === 'wsl' ? 'managed:wsl-account-1:wsl:Ubuntu' : 'system'
     }))
+    service.setClaudeAuthProvenanceReader(() => 'managed:wsl-account-1:wsl:Ubuntu')
 
     vi.mocked(fetchClaudeRateLimits)
       .mockResolvedValueOnce(okProvider('claude', 20, Date.now()))
@@ -579,7 +582,9 @@ describe('RateLimitService', () => {
     })
 
     expect(fetchClaudeRateLimits).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowPtyFallback: true, allowUsagePanelSupplement: true })
+      expect.objectContaining({
+        cliLoginRefresh: { readCurrentAuthProvenance: expect.any(Function) }
+      })
     )
 
     expect(service.getState().inactiveClaudeAccounts).not.toEqual(

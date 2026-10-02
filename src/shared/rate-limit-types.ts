@@ -21,6 +21,7 @@ export type UsageRateLimitFailureKind =
   | 'missing-credentials'
   | 'stale-token'
   | 'refreshable-credentials-without-token'
+  /** Orca cannot renew the login; the user must run the provider's CLI or sign in again. */
   | 'delegated-refresh-required'
   | 'deferred-by-live-session'
   | 'keychain-unavailable'

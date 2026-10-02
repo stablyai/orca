@@ -3880,6 +3880,15 @@
                 "message": "请在运行 Orca 的电脑上的终端中运行 cursor-agent login，然后重新刷新用量。"
               },
               "plan": "套餐"
+            },
+            "claude": {
+              "signedOut": {
+                "label": "已退出登录",
+                "message": "此 Claude 账户已退出登录。请在“设置 → AI 提供商账户”中重新验证以查看其用量。"
+              },
+              "renewFailed": {
+                "message": "Claude 无法续期此账户的登录。请用此账户启动 Claude 会话来续期，或在“设置 → AI 提供商账户”中重新验证。"
+              }
             }
           },
           "SshTargetStatusRow": {

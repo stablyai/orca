@@ -77,7 +77,7 @@ function getDelegatedCliRefreshProvider(
     return null
   }
   // Why: only these providers require a user-run CLI to rotate the read-only
-  // session Orca consumes; Claude handles the same failure kind in-app.
+  // session Orca consumes; Claude has its own copy for the same failure kind.
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
@@ -98,8 +98,15 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
         )
       case 'stale-token':
       case 'refreshable-credentials-without-token':
-      case 'delegated-refresh-required':
         return translate('auto.components.status.bar.tooltip.1804cd8c3f', 'Refreshing sign-in')
+      // Why: Claude already tried to renew this login and could not; only the user can now.
+      case 'delegated-refresh-required':
+        return translate(
+          'auto.components.status.bar.tooltip.minimax.expired.label',
+          'Sign-in expired'
+        )
+      case 'missing-credentials':
+        return translate('auto.components.status.bar.tooltip.claude.signedOut.label', 'Signed out')
       case 'network':
         return translate('auto.components.status.bar.tooltip.f8f0f9d8cc', 'Network issue')
       case 'keychain-unavailable':
@@ -107,7 +114,6 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
       case 'cli-unavailable':
       case 'usage-unavailable':
         return translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')
-      case 'missing-credentials':
       case 'missing-scope':
       case 'no-subscription':
       case 'parse':
@@ -178,10 +184,20 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
         )
       case 'stale-token':
       case 'refreshable-credentials-without-token':
-      case 'delegated-refresh-required':
         return translate(
           'auto.components.status.bar.tooltip.42fdd4da1d',
           'Claude sign-in is being refreshed. Agent sessions may still be signed in.'
+        )
+      // Why: the renewal may have failed on the network or on a revoked login; both end the same way.
+      case 'delegated-refresh-required':
+        return translate(
+          'auto.components.status.bar.tooltip.claude.renewFailed.message',
+          'Claude could not renew this account’s sign-in. Start a Claude session on it to renew, or re-authenticate it in Settings → AI Provider Accounts.'
+        )
+      case 'missing-credentials':
+        return translate(
+          'auto.components.status.bar.tooltip.claude.signedOut.message',
+          'This Claude account is signed out. Re-authenticate it in Settings → AI Provider Accounts to see its usage.'
         )
       case 'missing-scope':
         return p.error
@@ -203,7 +219,6 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.a7517cccb6',
           'Claude usage is unavailable right now.'
         )
-      case 'missing-credentials':
       case 'no-subscription':
       case 'rate-limited':
       case 'unknown':

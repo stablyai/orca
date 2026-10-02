@@ -16,7 +16,10 @@ import { spawnProcess } from '../../shared/child-process/run-process'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
-import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
+import {
+  claudeQueryControlRequester,
+  claudeQuerySettingsReader
+} from './claude-agent-sdk-control-requests'
 import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 
 // Contract pins for @anthropic-ai/claude-agent-sdk, run against the real SDK
@@ -403,6 +406,36 @@ describe('Claude Agent SDK contract pins', () => {
     } finally {
       await session.return(undefined)
     }
+  })
+
+  it('still exposes the runtime control request the usage login refresh sends get_usage through', async () => {
+    // 0.3.251's typed get_usage wrapper cannot send skip_behaviors, so the refresh calls the
+    // undeclared Query.request; this pin fails if a bump drops or reshapes it.
+    const usage = { rate_limits_available: true, rate_limits: { five_hour: null } }
+    const scenario = scriptScenario([{ delayMs: 3_000 }], { get_usage: usage })
+    const session = query({
+      prompt: singleUserTurn(),
+      options: {
+        pathToClaudeCodeExecutable: FAKE_CLI,
+        cwd: scenario.cwd,
+        env: scenarioEnv(scenario)
+      }
+    })
+    try {
+      const request = claudeQueryControlRequester(session)
+      expect(request, 'the SDK no longer exposes Query.request at runtime').not.toBeNull()
+      await expect(
+        request?.({ subtype: 'get_usage', skip_behaviors: true }).then(
+          (envelope) => envelope.response
+        )
+      ).resolves.toEqual(usage)
+    } finally {
+      await session.return(undefined)
+    }
+    expect(scenario.readReport().controlRequests.map((frame) => frame.request)).toContainEqual({
+      subtype: 'get_usage',
+      skip_behaviors: true
+    })
   })
 
   it('maps resume identity to --resume and --resume-session-at', async () => {

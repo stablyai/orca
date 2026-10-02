@@ -60,6 +60,10 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
     return this.getPreparation(target).configDir
   }
 
+  getCurrentAuthProvenance(target?: ClaudeAccountSelectionTarget): string {
+    return this.getPreparation(target).provenance
+  }
+
   private initializeLastSyncedState(): void {
     const settings = this.store.getSettings()
     this.lastSyncedAccountId = getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })

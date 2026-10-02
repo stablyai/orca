@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { primeClaudeFetcherMocks, restorePlatform } from './claude-fetcher-test-harness'
-import { fetchViaPty } from './claude-pty'
+import { refreshClaudeLoginViaCli } from './claude-cli-login-refresh'
 import { readActiveClaudeKeychainCredentialsStrict } from '../claude-accounts/keychain'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 
@@ -34,8 +34,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./claude-pty', () => ({
-  fetchViaPty: vi.fn()
+vi.mock('./claude-cli-login-refresh', () => ({
+  refreshClaudeLoginViaCli: vi.fn()
 }))
 
 vi.mock('../claude-accounts/keychain', () => ({
@@ -98,7 +98,7 @@ describe('fetchClaudeRateLimits', () => {
     })
   })
 
-  it('maps active Fable usage from the scoped OAuth limits array without a PTY read', async () => {
+  it('maps active Fable usage from the scoped OAuth limits array without starting Claude', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
@@ -131,7 +131,10 @@ describe('fetchClaudeRateLimits', () => {
     )
 
     await expect(
-      fetchClaudeRateLimits({ authPreparation, allowUsagePanelSupplement: true })
+      fetchClaudeRateLimits({
+        authPreparation,
+        cliLoginRefresh: { readCurrentAuthProvenance: () => authPreparation.provenance }
+      })
     ).resolves.toMatchObject({
       provider: 'claude',
       status: 'ok',
@@ -141,7 +144,28 @@ describe('fetchClaudeRateLimits', () => {
       },
       usageMetadata: { attemptedSources: ['oauth'] }
     })
-    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(refreshClaudeLoginViaCli).not.toHaveBeenCalled()
+  })
+
+  it('reports OAuth usage without a Fable window as-is instead of starting Claude to look', async () => {
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir: '/Users/test/.claude',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-token' } })
+    )
+
+    const result = await fetchClaudeRateLimits({
+      authPreparation,
+      cliLoginRefresh: { readCurrentAuthProvenance: () => authPreparation.provenance }
+    })
+
+    expect(result).toMatchObject({ status: 'ok', session: { usedPercent: 12 } })
+    expect(result.fableWeekly ?? null).toBeNull()
+    expect(refreshClaudeLoginViaCli).not.toHaveBeenCalled()
   })
 
   it('surfaces inactive scoped Fable usage over the legacy OAuth fallback', async () => {
@@ -217,111 +241,6 @@ describe('fetchClaudeRateLimits', () => {
         resetsAt: Date.parse('2026-07-24T20:00:00+00:00')
       }
     })
-  })
-
-  it('supplements managed-account OAuth usage with Fable from the CLI usage panel', async () => {
-    const configDir = '/Users/test/.claude'
-    const authPreparation: ClaudeRuntimeAuthPreparation = {
-      configDir,
-      envPatch: { CLAUDE_CONFIG_DIR: configDir },
-      stripAuthEnv: false,
-      provenance: 'managed:account-1'
-    }
-    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: 'oauth-token',
-          expiresAt: Date.now() + 60_000
-        }
-      })
-    )
-    netFetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          five_hour: { used_percentage: 23.5, resets_at: 1770000000 },
-          seven_day: { used_percentage: 41.2, resets_at: 1770604800 }
-        }),
-        { status: 200 }
-      )
-    )
-    vi.mocked(fetchViaPty).mockResolvedValueOnce({
-      provider: 'claude',
-      session: { usedPercent: 91, windowMinutes: 300, resetsAt: null, resetDescription: null },
-      weekly: null,
-      fableWeekly: {
-        usedPercent: 12.3,
-        windowMinutes: 10080,
-        resetsAt: null,
-        resetDescription: '3d 2h'
-      },
-      updatedAt: 1,
-      error: null,
-      status: 'ok'
-    })
-
-    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
-      provider: 'claude',
-      status: 'ok',
-      session: { usedPercent: 23.5, resetsAt: 1770000000000 },
-      weekly: { usedPercent: 41.2, resetsAt: 1770604800000 },
-      fableWeekly: { usedPercent: 12.3, resetDescription: '3d 2h' },
-      usageMetadata: {
-        source: 'oauth',
-        attemptedSources: ['oauth', 'cli']
-      }
-    })
-    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
-  })
-
-  it('supplements system OAuth usage when the service explicitly allows usage-panel reads', async () => {
-    const configDir = '/Users/test/.claude'
-    const authPreparation: ClaudeRuntimeAuthPreparation = {
-      configDir,
-      envPatch: { CLAUDE_CONFIG_DIR: configDir },
-      stripAuthEnv: false,
-      provenance: 'system'
-    }
-    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: 'oauth-token',
-          expiresAt: Date.now() + 60_000
-        }
-      })
-    )
-    vi.mocked(fetchViaPty).mockResolvedValueOnce({
-      provider: 'claude',
-      session: null,
-      weekly: null,
-      fableWeekly: {
-        usedPercent: 58,
-        windowMinutes: 10080,
-        resetsAt: null,
-        resetDescription: '4d'
-      },
-      updatedAt: 1,
-      error: null,
-      status: 'ok'
-    })
-
-    await expect(
-      fetchClaudeRateLimits({
-        authPreparation,
-        allowPtyFallback: false,
-        allowUsagePanelSupplement: true
-      })
-    ).resolves.toMatchObject({
-      provider: 'claude',
-      status: 'ok',
-      session: { usedPercent: 12 },
-      weekly: { usedPercent: 34 },
-      fableWeekly: { usedPercent: 58, resetDescription: '4d' },
-      usageMetadata: {
-        source: 'oauth',
-        attemptedSources: ['oauth', 'cli']
-      }
-    })
-    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
   })
 
   it('ignores bare Fable OAuth usage because the window length is ambiguous', async () => {

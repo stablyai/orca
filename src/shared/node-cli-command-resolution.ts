@@ -71,7 +71,7 @@ function findFirstExecutable(
   return null
 }
 
-function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolean {
+export function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolean {
   try {
     const stats = statSync(candidate)
     if (!stats.isFile()) {

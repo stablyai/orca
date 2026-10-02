@@ -2,10 +2,7 @@ import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
-  deleteActiveClaudeKeychainCredentialsStrict,
-  readActiveClaudeKeychainCredentialsStrict,
   readManagedClaudeKeychainCredentials,
-  writeActiveClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
 } from '../claude-accounts/keychain'
 import {
@@ -92,35 +89,6 @@ function resolveOwnedWslClaudeManagedAuthPath(account: InactiveClaudeAccount): s
       return null
     }
     return account.managedAuthPath
-  } catch {
-    return null
-  }
-}
-
-export async function withClaudeManagedPreviewKeychainCredentials<T>(
-  location: ClaudeManagedCredentialsLocation,
-  credentialsJson: string,
-  operation: () => Promise<T>
-): Promise<T> {
-  if (location.kind !== 'keychain') {
-    return operation()
-  }
-  await writeActiveClaudeKeychainCredentials(credentialsJson, location.managedAuthPath)
-  try {
-    return await operation()
-  } finally {
-    await deleteActiveClaudeKeychainCredentialsStrict(location.managedAuthPath).catch(() => {})
-  }
-}
-
-export async function readStagedClaudeManagedPreviewCredentials(
-  location: ClaudeManagedCredentialsLocation
-): Promise<string | null> {
-  if (location.kind !== 'keychain') {
-    return null
-  }
-  try {
-    return await readActiveClaudeKeychainCredentialsStrict(location.managedAuthPath)
   } catch {
     return null
   }

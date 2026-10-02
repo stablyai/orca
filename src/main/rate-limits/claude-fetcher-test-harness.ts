@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { fetchViaPty } from './claude-pty'
+import { refreshClaudeLoginViaCli } from './claude-cli-login-refresh'
+import { resetClaudeLoginRefreshLatchesForTests } from './claude-oauth-recovery'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
   readActiveClaudeKeychainCredentials,
@@ -34,10 +35,11 @@ export function restorePlatform(): void {
   }
 }
 
-/** Default happy-path state: darwin, no keychain credentials, OAuth usage 12/34, PTY session 56. */
+/** Default happy-path state: darwin, no keychain credentials, OAuth usage 12/34, CLI refresh answers. */
 export function primeClaudeFetcherMocks(mocks: ClaudeFetcherHoistedMocks): void {
   setPlatform('darwin')
   vi.clearAllMocks()
+  resetClaudeLoginRefreshLatchesForTests()
   mocks.readFileMock.mockRejectedValue(new Error('missing file'))
   vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
   vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(null)
@@ -56,12 +58,5 @@ export function primeClaudeFetcherMocks(mocks: ClaudeFetcherHoistedMocks): void 
       { status: 200 }
     )
   )
-  vi.mocked(fetchViaPty).mockResolvedValue({
-    provider: 'claude',
-    session: { usedPercent: 56, windowMinutes: 300, resetsAt: null, resetDescription: null },
-    weekly: null,
-    updatedAt: 1,
-    error: null,
-    status: 'ok'
-  })
+  vi.mocked(refreshClaudeLoginViaCli).mockResolvedValue({ kind: 'answered' })
 }

@@ -3880,6 +3880,15 @@
                 "message": "Orca가 실행 중인 컴퓨터의 터미널에서 cursor-agent login을 실행한 뒤 사용량을 다시 시도하세요."
               },
               "plan": "플랜"
+            },
+            "claude": {
+              "signedOut": {
+                "label": "로그아웃됨",
+                "message": "이 Claude 계정은 로그아웃되었습니다. 사용량을 보려면 설정 → AI 제공자 계정에서 다시 인증하세요."
+              },
+              "renewFailed": {
+                "message": "Claude가 이 계정의 로그인을 갱신하지 못했습니다. 이 계정으로 Claude 세션을 시작해 갱신하거나 설정 → AI 제공자 계정에서 다시 인증하세요."
+              }
             }
           },
           "SshTargetStatusRow": {

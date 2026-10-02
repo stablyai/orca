@@ -143,6 +143,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
           announce()
           return Promise.resolve(initialized)
         },
+        getUsage: async () => ({}),
         getContextUsage: () => {
           child.calls.push('get_context_usage')
           return Promise.resolve({})

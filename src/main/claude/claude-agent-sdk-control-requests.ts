@@ -50,6 +50,23 @@ export function claudeQueryAsyncCanceller(
   return typeof cancel === 'function' ? cancel.bind(query) : null
 }
 
+/**
+ * Query.request is the runtime method every typed control call goes through; 0.3.251 omits it
+ * from the declaration, and its typed get_usage wrapper cannot send skip_behaviors. The typeof
+ * guard is its degradation path.
+ */
+type ClaudeQueryControlRequester = {
+  request?: (request: Record<string, unknown>) => Promise<{ response?: unknown }>
+}
+
+export function claudeQueryControlRequester(
+  query: Query
+): ((request: Record<string, unknown>) => Promise<{ response?: unknown }>) | null {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only reads an optional method and checks its type before calling it.
+  const request = (query as unknown as ClaudeQueryControlRequester).request
+  return typeof request === 'function' ? request.bind(query) : null
+}
+
 export type ClaudeControlOptions = { timeoutMs?: number }
 
 /**
@@ -109,6 +126,8 @@ export type ClaudeControlSurface = {
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
   /** The `/context` breakdown; older CLIs reject the request and the caller shows nothing. */
   getContextUsage: (options?: ClaudeControlOptions) => Promise<unknown>
+  /** Plan usage (`/usage`) without the local transcript scan; older CLIs reject the subtype. */
+  getUsage: (options?: ClaudeControlOptions) => Promise<unknown>
 }
 
 type InterruptingQuery = {
@@ -160,6 +179,21 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       runClaudeControl('initialize', () => query.initializationResult(), null),
     getContextUsage: (options) =>
       runClaudeControl('get_context_usage', () => query.getContextUsage(), options?.timeoutMs),
+    getUsage: (options) => {
+      const request = claudeQueryControlRequester(query)
+      return request
+        ? runClaudeControl(
+            'get_usage',
+            () =>
+              request({ subtype: 'get_usage', skip_behaviors: true }).then(
+                (envelope) => envelope?.response
+              ),
+            options?.timeoutMs
+          )
+        : Promise.reject(
+            new ClaudeControlRequestError('get_usage', 'this SDK exposes no control request')
+          )
+    },
     getSettings: (options) => {
       const read = claudeQuerySettingsReader(query)
       return read

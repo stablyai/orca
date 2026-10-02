@@ -3,7 +3,6 @@ import { OAuthUsageError } from './claude-oauth-usage-error'
 
 export type ClaudeUsageErrorClassification = {
   failureKind: UsageRateLimitFailureKind
-  shouldAttemptCliFallback: boolean
   shouldAttemptDelegatedRefresh: boolean
   terminal: boolean
 }
@@ -22,21 +21,21 @@ export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorC
         : recoverableAuth('stale-token')
     }
     if (error.status >= 500) {
-      return fallbackOnly('server')
+      return transientFailure('server')
     }
     return terminal('usage-unavailable')
   }
 
   if (error instanceof SyntaxError) {
-    return fallbackOnly('parse')
+    return transientFailure('parse')
   }
 
   const message = error instanceof Error ? error.message : String(error)
   if (/\babort|network|econn|enotfound|etimedout|fetch failed|dns\b/i.test(message)) {
-    return fallbackOnly('network')
+    return transientFailure('network')
   }
 
-  return fallbackOnly('unknown')
+  return transientFailure('unknown')
 }
 
 export function classifyClaudeCredentialAbsence(input: {
@@ -48,7 +47,7 @@ export function classifyClaudeCredentialAbsence(input: {
     return terminal('deferred-by-live-session')
   }
   if (input.keychainUnavailable) {
-    return fallbackOnly('keychain-unavailable')
+    return transientFailure('keychain-unavailable')
   }
   if (input.hasRefreshableCredentials) {
     return recoverableAuth('refreshable-credentials-without-token')
@@ -59,16 +58,14 @@ export function classifyClaudeCredentialAbsence(input: {
 function recoverableAuth(failureKind: UsageRateLimitFailureKind): ClaudeUsageErrorClassification {
   return {
     failureKind,
-    shouldAttemptCliFallback: true,
     shouldAttemptDelegatedRefresh: true,
     terminal: false
   }
 }
 
-function fallbackOnly(failureKind: UsageRateLimitFailureKind): ClaudeUsageErrorClassification {
+function transientFailure(failureKind: UsageRateLimitFailureKind): ClaudeUsageErrorClassification {
   return {
     failureKind,
-    shouldAttemptCliFallback: true,
     shouldAttemptDelegatedRefresh: false,
     terminal: false
   }
@@ -77,7 +74,6 @@ function fallbackOnly(failureKind: UsageRateLimitFailureKind): ClaudeUsageErrorC
 function terminal(failureKind: UsageRateLimitFailureKind): ClaudeUsageErrorClassification {
   return {
     failureKind,
-    shouldAttemptCliFallback: false,
     shouldAttemptDelegatedRefresh: false,
     terminal: true
   }

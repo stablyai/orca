@@ -3880,6 +3880,15 @@
                 "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況を再試行してください。"
               },
               "plan": "プラン"
+            },
+            "claude": {
+              "signedOut": {
+                "label": "サインアウト済み",
+                "message": "この Claude アカウントはサインアウトしています。使用状況を表示するには、設定 → AI プロバイダーアカウントで再認証してください。"
+              },
+              "renewFailed": {
+                "message": "Claude はこのアカウントのサインインを更新できませんでした。このアカウントで Claude セッションを開始して更新するか、設定 → AI プロバイダーアカウントで再認証してください。"
+              }
             }
           },
           "SshTargetStatusRow": {

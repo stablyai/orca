@@ -101,31 +101,20 @@ export function warnClaudeUsageFetchFailure(
   })
 }
 
-export function mergeClaudeUsageWindows(
-  primary: ProviderRateLimits,
-  supplement: ProviderRateLimits | null
-): ProviderRateLimits {
-  if (!supplement) {
-    return primary
-  }
-  return {
-    ...primary,
-    session: primary.session ?? supplement.session,
-    weekly: primary.weekly ?? supplement.weekly,
-    fableWeekly: primary.fableWeekly ?? supplement.fableWeekly ?? null
-  }
-}
-
-export function canSupplementClaudeOAuthUsage(input: {
-  oauthLimits: ProviderRateLimits
+export function claudeOAuthUsageSuccess(input: {
+  limits: ProviderRateLimits
+  oauthCredentials: ClaudeOAuthCredentialReadResult
+  attempts: ClaudeUsageAttemptState
   authPreparation?: ClaudeRuntimeAuthPreparation
-  allowUsagePanelSupplement: boolean
-}): boolean {
-  return Boolean(
-    input.allowUsagePanelSupplement &&
-    !input.authPreparation?.managedRefreshDeferredByLivePty &&
-    !input.oauthLimits.fableWeekly &&
-    (input.oauthLimits.session || input.oauthLimits.weekly)
+}): ProviderRateLimits {
+  return withClaudeUsageMetadata(
+    input.limits,
+    metadataForClaudeUsageAttempt({
+      attemptedSources: input.attempts.attemptedSources,
+      oauthCredentials: input.oauthCredentials,
+      authPreparation: input.authPreparation,
+      source: 'oauth'
+    })
   )
 }
 

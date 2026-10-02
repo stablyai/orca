@@ -152,6 +152,10 @@ export function fakeClaude(
           ...(options.initAccount === undefined ? {} : { account: options.initAccount })
         }
       },
+      getUsage: async () => {
+        connection.calls.push({ subtype: 'get_usage' })
+        return {}
+      },
       getContextUsage: async () => {
         connection.calls.push({ subtype: 'get_context_usage' })
         return options.contextUsage ?? {}

@@ -6,13 +6,12 @@ import {
 import { OAuthUsageError } from './claude-oauth-usage-error'
 
 describe('classifyClaudeOAuthUsageError', () => {
-  it('treats OAuth unauthorized as stale-token repair/fallback', () => {
+  it('treats OAuth unauthorized as a stale token Claude may renew', () => {
     expect(
       classifyClaudeOAuthUsageError(new OAuthUsageError('Invalid OAuth token', 401, true))
     ).toMatchObject({
       failureKind: 'stale-token',
       shouldAttemptDelegatedRefresh: true,
-      shouldAttemptCliFallback: true,
       terminal: false
     })
   })
@@ -23,7 +22,6 @@ describe('classifyClaudeOAuthUsageError', () => {
     ).toMatchObject({
       failureKind: 'rate-limited',
       shouldAttemptDelegatedRefresh: false,
-      shouldAttemptCliFallback: false,
       terminal: true
     })
   })
@@ -39,10 +37,9 @@ describe('classifyClaudeOAuthUsageError', () => {
     })
   })
 
-  it('allows CLI fallback for network-shaped failures', () => {
+  it('reports network-shaped failures without asking Claude to renew the login', () => {
     expect(classifyClaudeOAuthUsageError(new Error('fetch failed: ENOTFOUND'))).toMatchObject({
       failureKind: 'network',
-      shouldAttemptCliFallback: true,
       shouldAttemptDelegatedRefresh: false
     })
   })
@@ -52,8 +49,7 @@ describe('classifyClaudeCredentialAbsence', () => {
   it('classifies refresh-only credentials as repairable', () => {
     expect(classifyClaudeCredentialAbsence({ hasRefreshableCredentials: true })).toMatchObject({
       failureKind: 'refreshable-credentials-without-token',
-      shouldAttemptDelegatedRefresh: true,
-      shouldAttemptCliFallback: true
+      shouldAttemptDelegatedRefresh: true
     })
   })
 
@@ -65,7 +61,6 @@ describe('classifyClaudeCredentialAbsence', () => {
       })
     ).toMatchObject({
       failureKind: 'keychain-unavailable',
-      shouldAttemptCliFallback: true,
       shouldAttemptDelegatedRefresh: false
     })
   })

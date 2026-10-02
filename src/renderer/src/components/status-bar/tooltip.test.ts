@@ -261,6 +261,33 @@ describe('provider usage error copy', () => {
     )
   })
 
+  it('tells the user to renew a Claude login that Claude itself could not renew', () => {
+    const p = provider({
+      error: 'OAuth API returned 401',
+      usageMetadata: {
+        failureKind: 'delegated-refresh-required',
+        attemptedSources: ['oauth', 'cli']
+      }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Sign-in expired')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Claude could not renew this account’s sign-in. Start a Claude session on it to renew, or re-authenticate it in Settings → AI Provider Accounts.'
+    )
+  })
+
+  it('says a managed Claude account with no login is signed out, not that a refresh failed', () => {
+    const p = provider({
+      error: 'Claude account is signed out',
+      usageMetadata: { failureKind: 'missing-credentials', attemptedSources: [] }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Signed out')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'This Claude account is signed out. Re-authenticate it in Settings → AI Provider Accounts to see its usage.'
+    )
+  })
+
   it('uses structured network copy for Claude usage failures', () => {
     const p = provider({
       error: 'Network error while refreshing OAuth usage: ECONNRESET',

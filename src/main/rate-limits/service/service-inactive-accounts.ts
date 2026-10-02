@@ -45,7 +45,6 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         }
         try {
           const fresh = await fetchManagedAccountUsage(account, {
-            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })

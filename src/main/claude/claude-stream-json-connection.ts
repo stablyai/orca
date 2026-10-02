@@ -44,10 +44,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+/** Sessions use the structured options; a session-less probe adds the isolation ones. */
+export type ClaudeStreamJsonSdkOptions = ClaudeStructuredSdkOptions &
+  Pick<ClaudeAgentSdk.Options, 'persistSession' | 'strictMcpConfig' | 'mcpServers' | 'settings'>
+
 export type ClaudeStreamJsonLaunch = {
   /** Orca's resolved user CLI; the SDK falls back to a bundled binary that is not installed. */
   pathToClaudeCodeExecutable: string
-  options: ClaudeStructuredSdkOptions
+  options: ClaudeStreamJsonSdkOptions
   cwd: string
   env?: Record<string, string>
 }

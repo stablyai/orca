@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { primeClaudeFetcherMocks, restorePlatform } from './claude-fetcher-test-harness'
-import { fetchViaPty } from './claude-pty'
+import { refreshClaudeLoginViaCli } from './claude-cli-login-refresh'
 import {
   readActiveClaudeKeychainCredentials,
   readActiveClaudeKeychainCredentialsStrict
@@ -38,8 +38,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./claude-pty', () => ({
-  fetchViaPty: vi.fn()
+vi.mock('./claude-cli-login-refresh', () => ({
+  refreshClaudeLoginViaCli: vi.fn()
 }))
 
 vi.mock('../claude-accounts/keychain', () => ({
@@ -87,7 +87,7 @@ describe('fetchClaudeRateLimits', () => {
 
     expect(readFileMock).not.toHaveBeenCalled()
     expect(readActiveClaudeKeychainCredentialsStrict).not.toHaveBeenCalled()
-    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(refreshClaudeLoginViaCli).not.toHaveBeenCalled()
   })
 
   it('reads scoped Keychain credentials when the Claude config dir is explicit', async () => {
@@ -162,9 +162,7 @@ describe('fetchClaudeRateLimits', () => {
           )
     })
 
-    await expect(
-      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
-    ).resolves.toMatchObject({
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
       status: 'ok',
       session: { usedPercent: 12 },
@@ -172,7 +170,7 @@ describe('fetchClaudeRateLimits', () => {
     })
 
     expect(netFetchMock).toHaveBeenCalledTimes(2)
-    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(refreshClaudeLoginViaCli).not.toHaveBeenCalled()
   })
 
   it('prefers a legacy access token over scoped refresh-only credentials', async () => {
@@ -221,9 +219,7 @@ describe('fetchClaudeRateLimits', () => {
       })
     )
 
-    await expect(
-      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
-    ).resolves.toMatchObject({
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
       status: 'error'
     })
@@ -256,9 +252,7 @@ describe('fetchClaudeRateLimits', () => {
       })
     )
 
-    await expect(
-      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
-    ).resolves.toMatchObject({
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
       status: 'error'
     })
@@ -286,9 +280,7 @@ describe('fetchClaudeRateLimits', () => {
       })
     )
 
-    await expect(
-      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
-    ).resolves.toMatchObject({
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
       status: 'error'
     })
@@ -355,9 +347,7 @@ describe('fetchClaudeRateLimits', () => {
       })
     )
 
-    await expect(
-      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
-    ).resolves.toMatchObject({
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
       status: 'ok',
       session: { usedPercent: 12 },
@@ -366,7 +356,7 @@ describe('fetchClaudeRateLimits', () => {
 
     expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(configDir)
     expect(readActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
-    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(refreshClaudeLoginViaCli).not.toHaveBeenCalled()
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://api.anthropic.com/api/oauth/usage',
       expect.objectContaining({
@@ -486,6 +476,6 @@ describe('fetchClaudeRateLimits', () => {
       })
     )
     expect(readFileMock).not.toHaveBeenCalled()
-    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(refreshClaudeLoginViaCli).not.toHaveBeenCalled()
   })
 })

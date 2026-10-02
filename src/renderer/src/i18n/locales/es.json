@@ -3552,6 +3552,20 @@
                 "message": "Ejecuta cursor-agent login en una terminal del equipo donde se ejecuta Orca y vuelve a intentar consultar el uso."
               },
               "plan": "Plan"
+            },
+            "claude": {
+              "signedOut": {
+                "label": "Sesión cerrada",
+                "message": "Esta cuenta de Claude no tiene la sesión iniciada. Vuelve a autenticarla en Configuración → Cuentas de proveedores de IA para ver su uso."
+              },
+              "renewFailed": {
+                "message": "Claude no pudo renovar el inicio de sesión de esta cuenta. Inicia una sesión de Claude con ella para renovarlo o vuelve a autenticarla en Configuración → Cuentas de proveedores de IA."
+              }
+            },
+            "minimax": {
+              "expired": {
+                "label": "Inicio de sesión caducado"
+              }
             }
           },
           "SshTargetStatusRow": {

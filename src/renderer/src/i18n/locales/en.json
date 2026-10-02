@@ -4067,6 +4067,15 @@
                 "message": "Run cursor-agent login in a terminal on the computer running Orca, then retry usage."
               },
               "plan": "Plan"
+            },
+            "claude": {
+              "signedOut": {
+                "label": "Signed out",
+                "message": "This Claude account is signed out. Re-authenticate it in Settings → AI Provider Accounts to see its usage."
+              },
+              "renewFailed": {
+                "message": "Claude could not renew this account’s sign-in. Start a Claude session on it to renew, or re-authenticate it in Settings → AI Provider Accounts."
+              }
             }
           },
           "SshTargetStatusRow": {

@@ -55,6 +55,10 @@ export function fakeClaude(providerSession: string) {
         connection.calls.push({ subtype: 'get_settings' })
         return { env: {} }
       },
+      getUsage: async () => {
+        connection.calls.push({ subtype: 'get_usage' })
+        return {}
+      },
       getContextUsage: async () => {
         connection.calls.push({ subtype: 'get_context_usage' })
         return contextUsage()
