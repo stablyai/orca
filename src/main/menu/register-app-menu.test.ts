@@ -78,11 +78,14 @@ describe('registerAppMenu', () => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
       registerAppMenu(buildMenuOptions())
 
-      const minimize = getSubmenu(getTemplate(), 'Window').find((item) => item.role === 'minimize')
-      expect(minimize).toMatchObject({
-        accelerator: platform === 'darwin' ? 'CmdOrCtrl+M' : '',
-        registerAccelerator: platform === 'darwin'
-      })
+      const windowSubmenu = getSubmenu(getTemplate(), 'Window')
+      const minimize = windowSubmenu.find((item) => item.role === 'minimize')
+      expect(minimize).toEqual(
+        platform === 'darwin'
+          ? { role: 'minimize' }
+          : { role: 'minimize', accelerator: '', registerAccelerator: false }
+      )
+      expect(windowSubmenu.find((item) => item.role === 'zoom')).toEqual({ role: 'zoom' })
     }
   )
 

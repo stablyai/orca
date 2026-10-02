@@ -8,8 +8,7 @@ export function createAppWindowMenu(
       {
         // Why: Electron's minimize role otherwise steals Ctrl+M from terminal apps such as Crush.
         role: 'minimize',
-        accelerator: isMac ? 'CmdOrCtrl+M' : '',
-        registerAccelerator: isMac
+        ...(isMac ? {} : { accelerator: '', registerAccelerator: false })
       },
       { role: 'zoom' }
     ]
