@@ -1,0 +1,265 @@
+SOURCE: current working tree with original PR24049 constructor cleanup
+COMMAND: ORCA_BACKGROUND_LAUNCH=1 node .issue-sweep/build-filesystem-proof.cjs after
+EXIT_CODE: 0
+COMMAND: ORCA_BACKGROUND_LAUNCH=1 node .issue-sweep/filesystem-proof-after.cjs after
+PLATFORM: darwin arm64; Node v24.20.0
+MODE: after; every path is a disposable mkdtemp fixture
+{
+  "store": "orca-devices.json",
+  "phase": "before_constructor",
+  "directory": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-mobile-temp-proof-2Pz79w",
+  "files": [
+    {
+      "role": "old_foreign",
+      "name": "orca-devices.json.24611.0.b306bb91.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800001
+    },
+    {
+      "role": "fresh_foreign",
+      "name": "orca-devices.json.24612.0.cafef00d.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 0
+    },
+    {
+      "role": "old_current_process",
+      "name": "orca-devices.json.24610.0.aaaaaaaa.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800001
+    },
+    {
+      "role": "old_other_store",
+      "name": "mobile-notification-dismissals.json.24611.0.bbbbbbbb.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800001
+    },
+    {
+      "role": "old_similar_name",
+      "name": "orca-devices.json-backup.24611.0.cccccccc.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800001
+    },
+    {
+      "role": "old_wrong_suffix",
+      "name": "orca-devices.json.24611.0.dddddddd.tmp.backup",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800000
+    },
+    {
+      "role": "final_store",
+      "name": "orca-devices.json",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 0
+    }
+  ],
+  "entries": [
+    "mobile-notification-dismissals.json.24611.0.bbbbbbbb.tmp",
+    "orca-devices.json",
+    "orca-devices.json-backup.24611.0.cccccccc.tmp",
+    "orca-devices.json.24610.0.aaaaaaaa.tmp",
+    "orca-devices.json.24611.0.b306bb91.tmp",
+    "orca-devices.json.24611.0.dddddddd.tmp.backup",
+    "orca-devices.json.24612.0.cafef00d.tmp"
+  ]
+}
+CONSTRUCTOR_RETURNED: orca-devices.json; loaded_records=[]
+{
+  "store": "orca-devices.json",
+  "phase": "after_constructor",
+  "directory": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-mobile-temp-proof-2Pz79w",
+  "files": [
+    {
+      "role": "old_foreign",
+      "name": "orca-devices.json.24611.0.b306bb91.tmp",
+      "exists": false
+    },
+    {
+      "role": "fresh_foreign",
+      "name": "orca-devices.json.24612.0.cafef00d.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 1203
+    },
+    {
+      "role": "old_current_process",
+      "name": "orca-devices.json.24610.0.aaaaaaaa.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172801204
+    },
+    {
+      "role": "old_other_store",
+      "name": "mobile-notification-dismissals.json.24611.0.bbbbbbbb.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172801204
+    },
+    {
+      "role": "old_similar_name",
+      "name": "orca-devices.json-backup.24611.0.cccccccc.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172801205
+    },
+    {
+      "role": "old_wrong_suffix",
+      "name": "orca-devices.json.24611.0.dddddddd.tmp.backup",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172801204
+    },
+    {
+      "role": "final_store",
+      "name": "orca-devices.json",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 1204
+    }
+  ],
+  "entries": [
+    "mobile-notification-dismissals.json.24611.0.bbbbbbbb.tmp",
+    "orca-devices.json",
+    "orca-devices.json-backup.24611.0.cccccccc.tmp",
+    "orca-devices.json.24610.0.aaaaaaaa.tmp",
+    "orca-devices.json.24611.0.dddddddd.tmp.backup",
+    "orca-devices.json.24612.0.cafef00d.tmp"
+  ]
+}
+VERIFIED: orca-devices.json; old_foreign=removed; all six protected files retained byte-for-byte
+{
+  "store": "mobile-notification-dismissals.json",
+  "phase": "before_constructor",
+  "directory": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-mobile-temp-proof-xJnRQA",
+  "files": [
+    {
+      "role": "old_foreign",
+      "name": "mobile-notification-dismissals.json.24611.0.b306bb91.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800006
+    },
+    {
+      "role": "fresh_foreign",
+      "name": "mobile-notification-dismissals.json.24612.0.cafef00d.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 6
+    },
+    {
+      "role": "old_current_process",
+      "name": "mobile-notification-dismissals.json.24610.0.aaaaaaaa.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800006
+    },
+    {
+      "role": "old_other_store",
+      "name": "orca-devices.json.24611.0.bbbbbbbb.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800005
+    },
+    {
+      "role": "old_similar_name",
+      "name": "mobile-notification-dismissals.json-backup.24611.0.cccccccc.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800004
+    },
+    {
+      "role": "old_wrong_suffix",
+      "name": "mobile-notification-dismissals.json.24611.0.dddddddd.tmp.backup",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172800003
+    },
+    {
+      "role": "final_store",
+      "name": "mobile-notification-dismissals.json",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 1
+    }
+  ],
+  "entries": [
+    "mobile-notification-dismissals.json",
+    "mobile-notification-dismissals.json-backup.24611.0.cccccccc.tmp",
+    "mobile-notification-dismissals.json.24610.0.aaaaaaaa.tmp",
+    "mobile-notification-dismissals.json.24611.0.b306bb91.tmp",
+    "mobile-notification-dismissals.json.24611.0.dddddddd.tmp.backup",
+    "mobile-notification-dismissals.json.24612.0.cafef00d.tmp",
+    "orca-devices.json.24611.0.bbbbbbbb.tmp"
+  ]
+}
+CONSTRUCTOR_RETURNED: mobile-notification-dismissals.json; loaded_records=[]
+{
+  "store": "mobile-notification-dismissals.json",
+  "phase": "after_constructor",
+  "directory": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-mobile-temp-proof-xJnRQA",
+  "files": [
+    {
+      "role": "old_foreign",
+      "name": "mobile-notification-dismissals.json.24611.0.b306bb91.tmp",
+      "exists": false
+    },
+    {
+      "role": "fresh_foreign",
+      "name": "mobile-notification-dismissals.json.24612.0.cafef00d.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 1209
+    },
+    {
+      "role": "old_current_process",
+      "name": "mobile-notification-dismissals.json.24610.0.aaaaaaaa.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172801210
+    },
+    {
+      "role": "old_other_store",
+      "name": "orca-devices.json.24611.0.bbbbbbbb.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172801209
+    },
+    {
+      "role": "old_similar_name",
+      "name": "mobile-notification-dismissals.json-backup.24611.0.cccccccc.tmp",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172801208
+    },
+    {
+      "role": "old_wrong_suffix",
+      "name": "mobile-notification-dismissals.json.24611.0.dddddddd.tmp.backup",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 172801207
+    },
+    {
+      "role": "final_store",
+      "name": "mobile-notification-dismissals.json",
+      "exists": true,
+      "contents": "[]",
+      "age_ms": 1205
+    }
+  ],
+  "entries": [
+    "mobile-notification-dismissals.json",
+    "mobile-notification-dismissals.json-backup.24611.0.cccccccc.tmp",
+    "mobile-notification-dismissals.json.24610.0.aaaaaaaa.tmp",
+    "mobile-notification-dismissals.json.24611.0.dddddddd.tmp.backup",
+    "mobile-notification-dismissals.json.24612.0.cafef00d.tmp",
+    "orca-devices.json.24611.0.bbbbbbbb.tmp"
+  ]
+}
+VERIFIED: mobile-notification-dismissals.json; old_foreign=removed; all six protected files retained byte-for-byte
+EXIT_CODE: 0
