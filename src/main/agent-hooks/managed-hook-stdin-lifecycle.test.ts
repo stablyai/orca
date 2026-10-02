@@ -311,15 +311,18 @@ describe('Windows managed hook stdin structure', () => {
         )
       }
 
-      // Why (#11549): the Devin skip is the only remaining in-script jump to more.com, so it
-      // must sit below the env guards — otherwise a Devin session outside an Orca pane still
-      // parks there and strands the hook exactly like the pre-fix guards did.
+      // Why (#11549): the Devin skip must exit without owning stdin rather than parking in
+      // more.com — otherwise a Devin session outside an Orca pane strands the hook until the
+      // caller's timeout, exactly like the pre-fix guards did.
       const claude = readFileSync(join(hooksDir, 'claude-hook-impl.cmd'), 'utf8')
       expect(claude, 'claude devin guard present').toContain(
-        'if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin'
+        'if not "%DEVIN_PROJECT_DIR%"=="" exit /b 0'
+      )
+      expect(claude, 'claude devin guard must not drain').not.toMatch(
+        /DEVIN_PROJECT_DIR.*goto :?orca_agent_hook_drain_stdin/
       )
       expect(claude.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')).toBeLessThan(
-        claude.indexOf('if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin')
+        claude.indexOf('if not "%DEVIN_PROJECT_DIR%"=="" exit /b 0')
       )
 
       // Why (#11549 class): every Windows-local hook now guards before owning stdin —
