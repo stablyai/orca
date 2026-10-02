@@ -1,13 +1,32 @@
 import type React from 'react'
-import type { AiVaultListResult } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultScanIssue
+} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultScanNoticeIssues,
   blockingAiVaultScanIssue,
-  skippedAiVaultTranscriptCount,
-  skippedAiVaultTranscriptReasons
-} from './ai-vault-scan-issue-state'
+  skippedAiVaultTranscriptIssues
+} from '../../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-state'
 import { translate } from '@/i18n/i18n'
 import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
+
+const SKIPPED_TRANSCRIPT_REASON_LIMIT = 3
+
+// Expose distinct scanner reasons, capped so large issue sets cannot overwhelm the panel.
+function skippedTranscriptReasons(skipped: readonly AiVaultScanIssue[]): string[] {
+  const reasons = new Set<string>()
+  for (const issue of skipped) {
+    const message = aiVaultScanIssueDisplayText(issue).trim()
+    if (message) {
+      reasons.add(message)
+    }
+    if (reasons.size === SKIPPED_TRANSCRIPT_REASON_LIMIT) {
+      break
+    }
+  }
+  return [...reasons]
+}
 
 // Coded scanner copy is translated; other scanner-authored messages carry host/path details verbatim.
 export function AiVaultScanIssueBanners({
@@ -16,10 +35,11 @@ export function AiVaultScanIssueBanners({
   scanResult: AiVaultListResult | null
 }): React.JSX.Element {
   const blocking = blockingAiVaultScanIssue(scanResult)
-  const skippedTranscriptCount = skippedAiVaultTranscriptCount(scanResult)
+  const skipped = skippedAiVaultTranscriptIssues(scanResult)
+  const skippedTranscriptCount = skipped.length
 
   const notices = aiVaultScanNoticeIssues(scanResult)
-  const reasons = skippedAiVaultTranscriptReasons(scanResult)
+  const reasons = skippedTranscriptReasons(skipped)
   const hasNoticeRows = notices.length > 0 || skippedTranscriptCount > 0 || reasons.length > 0
 
   return (

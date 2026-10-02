@@ -7,14 +7,65 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { AutoHeight } from '../components/AutoHeight'
+import type { AiVaultScanIssue } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import {
+  aiVaultScanNoticeIssues,
+  blockingAiVaultScanIssue,
+  skippedAiVaultTranscriptIssues
+} from '../../../src/shared/ai-vault/scanning/ai-vault-scan-issue-state'
 
 type TranscriptIssue = { path: string; message: string }
 
 // Many skipped transcripts scroll inside the notice instead of pushing the list off screen.
 const ISSUE_LIST_MAX_HEIGHT = 160
 
+function scanIssueKey(issue: AiVaultScanIssue): string {
+  return `${issue.executionHostId ?? 'local'}:${issue.kind}:${issue.agent}:${issue.path}:${issue.message}`
+}
+
+/** Splits scan issues like desktop History: host/scope/notice rows keep their own text; only kind-less ones count as skipped. */
+export function AgentHistoryScanNotices({
+  sessions,
+  issues
+}: {
+  sessions: readonly unknown[]
+  issues: readonly AiVaultScanIssue[]
+}) {
+  useMobileColorScheme()
+  const scan = { sessions, issues }
+  const blocking = blockingAiVaultScanIssue(scan)
+  const notices = aiVaultScanNoticeIssues(scan)
+  const skipped = skippedAiVaultTranscriptIssues(scan)
+  return (
+    <>
+      {blocking ? (
+        <View style={styles.notice}>
+          <Text style={styles.hostIssueText}>{blocking.message}</Text>
+        </View>
+      ) : null}
+      {notices.length > 0 ? (
+        <View style={styles.notice}>
+          <AutoHeight maxHeight={ISSUE_LIST_MAX_HEIGHT}>
+            <ScrollView contentContainerStyle={styles.noticeList} nestedScrollEnabled>
+              {notices.map((issue) => (
+                <Text
+                  key={scanIssueKey(issue)}
+                  style={issue.kind === 'host' ? styles.hostIssueText : styles.noticeText}
+                >
+                  {issue.message}
+                </Text>
+              ))}
+            </ScrollView>
+          </AutoHeight>
+        </View>
+      ) : null}
+      {skipped.length > 0 ? <AgentHistorySkippedNotice issues={skipped} /> : null}
+    </>
+  )
+}
+
 /** Says how many transcripts the scan skipped, with the paths and reasons one tap away. */
-export function AgentHistorySkippedNotice({ issues }: { issues: readonly TranscriptIssue[] }) {
+function AgentHistorySkippedNotice({ issues }: { issues: readonly TranscriptIssue[] }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [shown, setShown] = useState(false)
@@ -103,6 +154,13 @@ const styles = themedStyleSheet(() => ({
     flex: 1,
     color: colors.textSecondary,
     fontSize: 13
+  },
+  hostIssueText: {
+    color: colors.statusRed,
+    fontSize: 13
+  },
+  noticeList: {
+    gap: spacing.sm
   },
   noticeAction: {
     color: colors.textPrimary,
