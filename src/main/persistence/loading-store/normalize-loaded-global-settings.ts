@@ -51,7 +51,8 @@ export function normalizeLoadedGlobalSettings(
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,
     normalizedNotifications,
-    normalizedSourceControlGroupOrder
+    normalizedSourceControlGroupOrder,
+    structuredAgentStreaming
   } = profile
 
   return {
@@ -86,6 +87,7 @@ export function normalizeLoadedGlobalSettings(
     terminalRightClickToPasteDefaultedForPlatform: true,
     ...migratedTerminalTuiScrollSensitivity.settings,
     experimentalActivity: migratedExperimentalActivity,
+    ...structuredAgentStreaming,
     experimentalActivityDefaultedOffForAllUsers: true,
     // Preserve the legacy opt-in so the one-time introduction copy can target existing users.
     agentsSidebarMigratedFromExperimental:

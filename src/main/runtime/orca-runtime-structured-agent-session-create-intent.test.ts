@@ -4,6 +4,8 @@ const applyAgentWorkspaceTrust = vi.hoisted(() => vi.fn(async () => ({})))
 vi.mock('../agent-workspace-trust', () => ({ applyAgentWorkspaceTrust }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import { runtimeStoreFixture } from './runtime-store.test-fixture'
+import { getDefaultSettings } from '../../shared/constants'
 
 beforeEach(() => {
   applyAgentWorkspaceTrust.mockClear()
@@ -264,6 +266,72 @@ describe('structured agent-session create intent', () => {
     expect(intent.accountHome).toEqual({
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/accounts/managed/claude-home'
+    })
+  })
+  it('turns an existing provider session into an authoritative resume intent', async () => {
+    const runtime = new OrcaRuntimeService(
+      runtimeStoreFixture({
+        getSettings: () => ({ ...getDefaultSettings('/tmp'), agentDefaultEnv: {} })
+      })
+    )
+    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
+      supported: true
+    })
+    runtime['resolveStructuredAgentSessionLocation'] = vi.fn(async () => ({
+      executionHostId: 'local' as const,
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'git-worktree' as const
+    }))
+    runtime['resolveRuntimeFileTarget'] = vi.fn(async () => ({
+      executionHostId: 'local' as const,
+      worktree: {
+        id: 'workspace-1',
+        repoId: 'repo-1',
+        path: '/repos/workspace-1',
+        head: 'abc',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: false,
+        displayName: '',
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0,
+        parentWorktreeId: null,
+        childWorktreeIds: [],
+        lineage: null,
+        git: {
+          path: '/repos/workspace-1',
+          head: 'abc',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: false
+        }
+      }
+    }))
+
+    const intent = await runtime.resolveStructuredAgentSessionCreateIntent({
+      envelope: { sessionId: 'session-1', clientOperationId: 'operation-1' },
+      worktree: 'id:workspace-1',
+      agent: 'openclaude',
+      providerSessionId: 'provider-session-1'
+    })
+
+    expect(intent).toMatchObject({
+      provider: 'claude',
+      agent: 'openclaude',
+      providerHandle: {
+        kind: 'claude',
+        sessionId: 'provider-session-1',
+        leafUuid: null
+      },
+      accountHome: { variable: 'CLAUDE_CONFIG_DIR' }
     })
   })
 })

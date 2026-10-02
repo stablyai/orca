@@ -52,7 +52,7 @@ function claudeProjectsDirs(): string[] {
 // WSL roots are a separate lazy tier — see resolveCodexSessionFile.
 // Why: resolveOrcaManagedCodexHomePath avoids the mkdirSync performed by the
 // getter; creating the runtime home belongs to launch, not this resolve poll.
-function codexSessionsDirs(): string[] {
+export function codexSessionsDirs(): string[] {
   const candidates = [
     join(resolveOrcaManagedCodexHomePath(), 'sessions'),
     join(process.env.CODEX_HOME?.trim() || join(homedir(), '.codex'), 'sessions')
@@ -131,7 +131,11 @@ export async function resolveSessionFilePath(
   // A guest/UNC hook path is authoritative even when the provider did not
   // attest a distro. Never let its session id resolve to a host or other guest
   // transcript after that exact path misses.
-  if (hookPath && needsWslHostResolution(hookPath)) {
+  if (
+    hookPath &&
+    (needsWslHostResolution(hookPath) ||
+      (transcriptAgent === 'grok' && basename(hookPath) === 'updates.jsonl'))
+  ) {
     if (unavailable) {
       throw unavailable
     }

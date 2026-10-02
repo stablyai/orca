@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentSessionOptionCatalog, mergeCatalogModels } from './agent-session-option-catalog'
+import {
+  getAgentSessionOptionCatalog,
+  mergeCatalogModels,
+  normalizeClaudeSessionOptionValues
+} from './agent-session-option-catalog'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
   resolveNativeChatSessionOptionDefaults,
@@ -13,10 +17,76 @@ describe('agent session option catalog', () => {
 
   it('keeps Claude option sets model-scoped', () => {
     const catalog = getAgentSessionOptionCatalog('claude')
+    expect(catalog?.models.map(({ id }) => id)).toEqual(['fable', 'opus', 'sonnet', 'haiku'])
+    expect(
+      catalog?.models.find((model) => model.id === 'fable')?.options.map(({ id }) => id)
+    ).toEqual(['effort', 'contextWindow'])
     expect(
       catalog?.models.find((model) => model.id === 'opus')?.options.map(({ id }) => id)
-    ).toEqual(['effort', 'fastMode'])
+    ).toEqual(['effort', 'contextWindow', 'fastMode'])
+    expect(
+      catalog?.models.find((model) => model.id === 'sonnet')?.options.map(({ id }) => id)
+    ).toEqual(['effort', 'contextWindow'])
     expect(catalog?.models.find((model) => model.id === 'haiku')?.options).toEqual([])
+  })
+
+  it('composes Claude long context into the provider model alias', () => {
+    expect(
+      resolveAgentSessionOptionLaunch('claude', {
+        model: 'sonnet',
+        effort: 'high',
+        contextWindow: '1m'
+      })
+    ).toEqual({
+      args: ['--model', 'sonnet[1m]', '--effort', 'high'],
+      appliedValues: {
+        model: 'sonnet',
+        effort: 'high',
+        contextWindow: '1m'
+      }
+    })
+  })
+
+  it('applies Codex Fast mode only when it is explicitly known', () => {
+    expect(
+      resolveAgentSessionOptionLaunch('codex', {
+        model: 'gpt-5.6-sol',
+        effort: 'high'
+      }).args
+    ).toEqual(['-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort=high'])
+    expect(
+      resolveAgentSessionOptionLaunch('codex', {
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+        fastMode: true
+      }).args
+    ).toEqual([
+      '-m',
+      'gpt-5.6-sol',
+      '-c',
+      'model_reasoning_effort=high',
+      '-c',
+      'service_tier="priority"'
+    ])
+  })
+
+  it('normalizes Claude latest aliases and their context suffix', () => {
+    expect(normalizeClaudeSessionOptionValues({ model: 'claude-opus-5[1m]' })).toEqual({
+      model: 'opus',
+      contextWindow: '1m'
+    })
+    expect(normalizeClaudeSessionOptionValues({ model: 'Opus 5' })).toEqual({
+      model: 'opus',
+      contextWindow: 'standard'
+    })
+    expect(normalizeClaudeSessionOptionValues({ model: 'claude-opus-4-8[1m]' })).toEqual({
+      model: 'claude-opus-4-8',
+      contextWindow: '1m'
+    })
+    expect(normalizeClaudeSessionOptionValues({ model: 'claude-fable-5[1m]' })).toEqual({
+      model: 'fable',
+      contextWindow: '1m'
+    })
   })
 
   it('merges discovered labels while preserving cataloged option shapes', () => {
@@ -86,7 +156,7 @@ describe('agent session option catalog', () => {
       label: 'Opus (1M context)',
       description: 'Opus 5 with 1M context'
     })
-    expect(parsed[0].options.map(({ id }) => id)).toEqual(['effort', 'fastMode'])
+    expect(parsed[0].options.map(({ id }) => id)).toEqual(['effort', 'contextWindow', 'fastMode'])
     const opusEffort = parsed[0].options[0]
     expect(opusEffort.kind).toMatchObject({ defaultValue: 'high' })
     expect(
@@ -118,7 +188,7 @@ describe('agent session option catalog', () => {
     const sonnet = merged.find((model) => model.id === 'sonnet')!
     expect(sonnet.description).toBe('Sonnet 5 · Efficient')
     expect(sonnet.isDefault).toBe(true)
-    expect(sonnet.options.map(({ id }) => id)).toEqual(['effort'])
+    expect(sonnet.options.map(({ id }) => id)).toEqual(['effort', 'contextWindow'])
   })
 
   it('parses Cursor model discovery without treating headings as models', () => {
@@ -230,7 +300,7 @@ describe('agent session option catalog', () => {
 
     expect(resolveAgentSessionOptionLaunch('claude', defaults)).toEqual({
       args: ['--model', 'sonnet', '--effort', 'high'],
-      appliedValues: { model: 'sonnet', effort: 'high' }
+      appliedValues: { model: 'sonnet', effort: 'high', contextWindow: 'standard' }
     })
   })
 })

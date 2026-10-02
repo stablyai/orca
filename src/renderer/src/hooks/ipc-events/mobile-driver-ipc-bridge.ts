@@ -19,6 +19,7 @@ import type {
   RuntimeTerminalDriverState
 } from '../../../../shared/runtime-types'
 import { useAppStore } from '../../store'
+import { notifyRoomMessage } from '@/components/rooms/room-message-notification'
 
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
 
@@ -106,6 +107,12 @@ export function registerMobileDriverIpcBridge(
   )
   if (unsubscribeLaunchDraftResolution) {
     unsubs.push(unsubscribeLaunchDraftResolution)
+  }
+  const unsubscribeRoomEvents = window.api.runtime.onRoomEvent?.(({ event }) =>
+    notifyRoomMessage(event)
+  )
+  if (unsubscribeRoomEvents) {
+    unsubs.push(unsubscribeRoomEvents)
   }
   unsubs.push(
     window.api.runtime.onBrowserDriverChanged((event) => {

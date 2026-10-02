@@ -38,7 +38,49 @@ export function ompArtifactDirFor(transcriptFilePath: string): string {
 // The count below and the on-demand lister both key off this one predicate so
 // the "N subagents" badge can never disagree with the expanded list.
 export function isOmpSubagentTranscriptFileName(name: string, isFile: boolean): boolean {
-  return isFile && extname(name).toLowerCase() === '.jsonl'
+  return (
+    isFile &&
+    extname(name).toLowerCase() === '.jsonl' &&
+    !name.includes('.bak') &&
+    !name.startsWith('__advisor.')
+  )
+}
+
+/** Current OMP flattens descendants as Parent.Child.jsonl; older sessions nest directories. */
+export async function listOmpSubagentTranscriptPaths(
+  transcriptFilePath: string
+): Promise<string[]> {
+  const stem = basename(transcriptFilePath, extname(transcriptFilePath))
+  const locations = [{ directory: ompArtifactDirFor(transcriptFilePath), prefix: '' }]
+  if (OMP_SUBAGENT_SUBTREE_PATTERN.test(transcriptFilePath)) {
+    locations.push({ directory: dirname(transcriptFilePath), prefix: `${stem}.` })
+  }
+  const paths: string[] = []
+  for (const { directory, prefix } of locations) {
+    let entries
+    try {
+      entries = await wslGatedReaddir(directory, 'scan')
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+      ) {
+        continue
+      }
+      throw error
+    }
+    for (const entry of entries) {
+      if (!isOmpSubagentTranscriptFileName(entry.name, entry.isFile())) {
+        continue
+      }
+      const child = basename(entry.name, extname(entry.name))
+      if (child.startsWith(prefix) && !child.slice(prefix.length).includes('.')) {
+        paths.push(join(directory, entry.name))
+      }
+    }
+  }
+  return paths
 }
 
 /**
@@ -49,14 +91,11 @@ export function isOmpSubagentTranscriptFileName(name: string, isFile: boolean): 
  * belong to their own parents.
  */
 export async function countOmpSubagentTranscripts(transcriptFilePath: string): Promise<number> {
-  let entries
   try {
-    entries = await wslGatedReaddir(ompArtifactDirFor(transcriptFilePath), 'scan')
+    return (await listOmpSubagentTranscriptPaths(transcriptFilePath)).length
   } catch {
     return 0
   }
-  return entries.filter((entry) => isOmpSubagentTranscriptFileName(entry.name, entry.isFile()))
-    .length
 }
 
 /**
@@ -79,7 +118,16 @@ export function partitionOmpSubagentTranscriptPaths(
     }
     const directChild = OMP_SUBAGENT_DIRECT_CHILD_PATTERN.exec(path)
     if (directChild) {
-      const parentTranscriptPath = `${directChild[1]}.jsonl`
+      const fileName = path.split(/[\\/]/).at(-1)!
+      if (!isOmpSubagentTranscriptFileName(fileName, true)) {
+        continue
+      }
+      const stem = fileName.slice(0, -'.jsonl'.length)
+      const dot = stem.lastIndexOf('.')
+      const parentTranscriptPath =
+        dot === -1
+          ? `${directChild[1]}.jsonl`
+          : `${path.slice(0, -fileName.length)}${stem.slice(0, dot)}.jsonl`
       subagentTranscriptCounts.set(
         parentTranscriptPath,
         (subagentTranscriptCounts.get(parentTranscriptPath) ?? 0) + 1

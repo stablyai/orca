@@ -9,6 +9,7 @@ import { commitPtyIpcSpawn } from './spawn-commit'
 import { createPtyIpcSpawnState, type PtyIpcSpawnState } from './spawn-state'
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
+import { normalizeAgentProviderSession } from '../../../../shared/agent-session-resume'
 
 function releaseAbandonedAgentTeamsLeader(ctx: PtyIpcSpawnState): void {
   if (!ctx.agentTeamsLeaderHandle) {
@@ -31,7 +32,10 @@ function restoreProvisionalPtySize(ctx: PtyIpcSpawnState): void {
 }
 
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArgs) {
-  const ctx = createPtyIpcSpawnState(deps, args)
+  const ctx = createPtyIpcSpawnState(deps, {
+    ...args,
+    resumeProviderSession: normalizeAgentProviderSession(args.resumeProviderSession) ?? undefined
+  })
   const replacedPaneKey =
     args.replacesPtyId !== undefined ? resolveEarlyPaneSpawnReservationKey(args) : null
   if (replacedPaneKey) {

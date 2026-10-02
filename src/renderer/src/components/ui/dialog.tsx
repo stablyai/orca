@@ -26,8 +26,11 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
 
 function DialogOverlay({
   className,
+  variant = 'default',
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+}: React.ComponentProps<typeof DialogPrimitive.Overlay> & {
+  variant?: 'default' | 'viewer' | 'floating'
+}) {
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
@@ -36,6 +39,8 @@ function DialogOverlay({
       // blur lifts the canvas behind the dialog without needing per-mode colors.
       className={cn(
         'fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        variant === 'viewer' && 'bg-black/90 backdrop-blur-none',
+        variant === 'floating' && 'pointer-events-none bg-transparent backdrop-blur-none',
         className
       )}
       {...props}
@@ -47,15 +52,22 @@ function DialogContent({
   className,
   children,
   overlayClassName,
+  variant = 'default',
+  highlighted = false,
+  scrollable = false,
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   overlayClassName?: string
+  variant?: 'default' | 'viewer' | 'floating'
+  highlighted?: boolean
+  scrollable?: boolean
   showCloseButton?: boolean
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay className={overlayClassName} />
+      {/* oxlint-disable-next-line shadcn/require-static-classes -- Primitive-owned forwarding of the existing overlayClassName API, not a computed consumer restyle. */}
+      <DialogOverlay variant={variant} className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         // Why: bg-background in dark mode is the same color as the canvas, and
@@ -68,6 +80,11 @@ function DialogContent({
         // panel and pushes justify-end footers outside the visible surface.
         className={cn(
           'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-background/96 p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl duration-200 outline-none dark:border-white/14 dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg',
+          variant === 'viewer' &&
+            'rounded-none border-0 bg-transparent p-0 shadow-none backdrop-blur-none',
+          variant === 'floating' && 'gap-2 p-3',
+          highlighted && 'bg-accent',
+          scrollable && 'overflow-y-auto scrollbar-sleek',
           className
         )}
         {...props}
@@ -89,11 +106,19 @@ function DialogContent({
   )
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
+function DialogHeader({
+  className,
+  inline = false,
+  ...props
+}: React.ComponentProps<'div'> & { inline?: boolean }) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn('flex flex-col gap-2 text-center sm:text-left', className)}
+      className={cn(
+        'flex flex-col gap-2 text-center sm:text-left',
+        inline && 'flex-row items-center pr-8 text-left',
+        className
+      )}
       {...props}
     />
   )
@@ -125,11 +150,19 @@ function DialogFooter({
   )
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+function DialogTitle({
+  className,
+  size = 'default',
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Title> & { size?: 'default' | 'sm' }) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-snug font-semibold break-words', className)}
+      className={cn(
+        'text-lg leading-snug font-semibold break-words',
+        size === 'sm' && 'text-sm',
+        className
+      )}
       {...props}
     />
   )

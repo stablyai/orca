@@ -82,6 +82,7 @@ function composerHandle(): NativeChatComposerHandle & { element: HTMLElement } {
       return true
     }),
     insertTypedText: vi.fn(() => true),
+    replaceDraft: vi.fn(() => true),
     handlePasteEvent: vi.fn(),
     pasteFromClipboard: vi.fn(),
     contains: (node) => element.contains(node)

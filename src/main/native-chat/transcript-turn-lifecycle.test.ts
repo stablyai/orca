@@ -126,6 +126,25 @@ describe('native chat transcript turn lifecycle', () => {
     ).toBeNull()
   })
 
+  it('does not complete Claude synthetic no-response rows', () => {
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'assistant',
+          uuid: 'synthetic-no-response',
+          timestamp: '2026-07-16T23:45:37.608Z',
+          message: {
+            role: 'assistant',
+            model: '<synthetic>',
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: 'No response requested.' }]
+          }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+  })
+
   it('treats Claude assistant rows with omitted stop_reason and content as completed', () => {
     expect(
       decodeClaudeTurnLifecycle(

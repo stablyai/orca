@@ -28,6 +28,18 @@ export type ResumeSleepingAgentSessionsOptions = {
   onSessionLaunched?: (tabId: string) => void
 }
 
+export function closeFailedAutomaticAgentResumeTab(tabId: string): void {
+  const state = useAppStore.getState()
+  if (!state.automaticAgentResumeClaimsByTabId[tabId]) {
+    return
+  }
+  state.closeTab(tabId, {
+    recordInteraction: false,
+    reason: 'cleanup',
+    captureRecentlyClosed: false
+  })
+}
+
 function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)

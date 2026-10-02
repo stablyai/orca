@@ -4,6 +4,7 @@ import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identi
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
+import type { RoomEvent } from '../../shared/rooms'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -60,6 +61,7 @@ export type RuntimeNotifier = {
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      preserveSessionOnClose?: boolean
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -75,6 +77,7 @@ export type RuntimeNotifier = {
     | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
     | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
     | void
+  hideRoomAgentStatusFromRenderer?(paneKey: string): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',
@@ -125,7 +128,7 @@ export type RuntimeNotifier = {
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
   /** Closes the whole tab. */
-  closeTerminal(tabId: string): void
+  closeTerminal(tabId: string, options?: { preserveSessionOnClose?: boolean }): void
   /** Drops one split pane main already closed; never closes its tab. */
   closeTerminalPane?(tabId: string, leafId: string): void
   closeTerminalTab?(
@@ -155,6 +158,7 @@ export type RuntimeNotifier = {
     tabId: string,
     resolution: { text: string; createdAt: number }
   ): void
+  roomEvent?(roomId: string, event: RoomEvent): void
   browserDriverChanged?(browserPageId: string, driver: RuntimeBrowserDriverState): void
   browserRemoteViewersChanged?(browserPageId: string, hasRemoteViewers: boolean): void
   clientHostedBrowserRowsChanged?(event: ClientHostedBrowserRowsEvent): void

@@ -21,10 +21,12 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalProducerLinkage,
   type AgentJournalTurnScope,
+  type AgentJournalTurn,
   type AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import {
   isAdmissibleAgentJournalItemBody,
+  AgentJournalTurnSchema,
   isAdmissibleAgentJournalMessageBody
 } from '../../../shared/agent-session-journal-schemas'
 import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session-context-usage-schema'
@@ -75,6 +77,7 @@ export type JournalItemRow = JournalRowBase & {
   itemId: string
   revision: number
   body: AgentJournalItemBody
+  turn?: AgentJournalTurn
 }
 
 export type JournalTombstoneRow = JournalRowBase & {
@@ -150,6 +153,7 @@ export type JournalDispatchRow = JournalRowBase & {
   /** On `rejected`: why, typed. Older readers keep the key and ignore it; a malformed one is
    *  dropped when read, never the row. */
   rejection?: AgentSessionFailureFact
+  turn?: AgentJournalTurn
 }
 
 /** An item mutation may name its own producer, because one batch can CREATE
@@ -163,6 +167,7 @@ export type JournalLifecycleMutation =
       revision: number
       body: AgentJournalItemBody
       turnScope?: AgentJournalTurnScope
+      turn?: AgentJournalTurn
     })
   | { kind: 'tombstone'; itemId: string; revision: number }
 
@@ -323,6 +328,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  *  schema — their nested shapes are dereferenced unguarded all the way to the
  *  rendered surface, so a JSON-valid corruption must fail here, not there. */
 function isJournalRow(record: Record<string, unknown>): record is JournalRow {
+  if (record.turn !== undefined && !AgentJournalTurnSchema.safeParse(record.turn).success) {
+    return false
+  }
   const fieldCheck = typeof record.kind === 'string' ? KNOWN_ROW_KINDS.get(record.kind) : undefined
   return fieldCheck !== undefined && hasJournalRowEnvelope(record) && fieldCheck(record)
 }
@@ -377,6 +385,9 @@ function hasJournalRowEnvelope(record: Record<string, unknown>): boolean {
 
 function isLifecycleMutation(value: unknown): value is JournalLifecycleMutation {
   if (!isPlainObject(value) || typeof value.itemId !== 'string') {
+    return false
+  }
+  if (value.turn !== undefined && !AgentJournalTurnSchema.safeParse(value.turn).success) {
     return false
   }
   if (value.kind === 'tombstone') {

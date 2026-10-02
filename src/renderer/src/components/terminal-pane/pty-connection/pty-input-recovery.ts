@@ -13,6 +13,7 @@ import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { resolveTerminalColorSchemeMode } from '../../../../../shared/terminal-color-scheme-protocol'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { terminalRendersInlineImages } from '@/lib/pane-manager/pane-inline-images'
+import { closeFailedAutomaticAgentResumeTab } from '@/lib/sleeping-agent-session-launch'
 import {
   CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
@@ -125,6 +126,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
         session.pane.leafId,
         session.executionHostId
       ),
+    onProviderSessionResumeFailure: () => closeFailedAutomaticAgentResumeTab(session.deps.tabId),
     ...(session.mainSideEffectAuthority
       ? {}
       : {

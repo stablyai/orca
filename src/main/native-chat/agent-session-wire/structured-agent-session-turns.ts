@@ -87,10 +87,11 @@ async function dispatchSafely(
   ctx: AgentSessionHandoverContext,
   clientMessageId: string,
   body: AgentJournalMessageItem,
-  requestedAt: number
+  requestedAt: number,
+  dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) => ctx.adapter.dispatch(input)
 ): Promise<AgentSessionDispatchOutcome> {
   try {
-    return await ctx.adapter.dispatch({
+    return await dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
       body,
@@ -126,6 +127,7 @@ export async function performSend(
     body: AgentJournalMessageItem
     /** Who asked for the turn; absent on callers that predate it. */
     origin?: 'client' | 'host'
+    retryUnknown?: true
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal

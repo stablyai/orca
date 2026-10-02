@@ -23,7 +23,10 @@ import {
   resolveOpenCodeSharedServerEnvelope,
   trackOpenCodePaneLaunchToken
 } from './agent-hook-listener/opencode-session-registry'
+import { extractCodexToolActivity } from './agent-hook-listener/providers/codex-tool-fields'
 import { readString } from './agent-hook-listener/tool-input-preview'
+
+export type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
   'prompt_input_exit',
@@ -196,8 +199,12 @@ export function normalizeHookPayload(
     eventName === 'session_start' &&
     providerSession !== null
   // A transcript session_start carries resume identity while idle; receivers discard the placeholder row.
+  const providerPayload =
+    source === 'claude' && record.agent === 'openclaude' && dispatched.payload
+      ? { ...dispatched.payload, agentType: 'openclaude' as const }
+      : dispatched.payload
   const transportPayload =
-    dispatched.payload ??
+    providerPayload ??
     (providerSessionOnly
       ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
       : null)
@@ -207,6 +214,11 @@ export function normalizeHookPayload(
     return null
   }
   const grokActiveTurn = source === 'grok' ? state.grokActiveTurnByPaneKey.get(paneKey) : undefined
+  const toolUseId = readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId'])
+  const toolActivity =
+    source === 'codex' && toolUseId
+      ? extractCodexToolActivity(eventName, hookPayloadRecord)
+      : undefined
 
   return {
     paneKey,
@@ -236,7 +248,8 @@ export function normalizeHookPayload(
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
-    toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
+    toolUseId,
+    ...(toolActivity ? { toolActivity } : {}),
     toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
     teammateName:
       source === 'claude' && eventName === 'TeammateIdle'

@@ -21,6 +21,10 @@ import {
   normalizeNotificationSettings,
   persistedNotificationSettingsRepaired
 } from '../applying-settings/onboarding-normalization'
+import {
+  normalizeEnabledStructuredMachineAgents,
+  type StructuredMachineAgent
+} from '../../../shared/structured-agent-provider'
 
 export type PreparedLoadedProfileSettings = {
   migratedExperimentalActivity: GlobalSettings['experimentalActivity']
@@ -53,6 +57,10 @@ export type PreparedLoadedProfileSettings = {
   normalizedSourceControlGroupOrder: GlobalSettings['sourceControlGroupOrder']
   normalizedOnboarding: PersistedState['onboarding']
   normalizedProjectGroups: ProjectGroup[]
+  structuredAgentStreaming: {
+    experimentalStructuredNativeChat: boolean
+    enabledHarnessStreamingAgents: StructuredMachineAgent[]
+  }
 }
 
 export function prepareLoadedProfileSettings(
@@ -231,6 +239,24 @@ export function prepareLoadedProfileSettings(
   ) {
     markNeedsSave()
   }
+  const legacyHarnessStreaming =
+    parsed.settings && 'experimentalHarnessStreaming' in parsed.settings
+      ? parsed.settings.experimentalHarnessStreaming
+      : undefined
+  const enabledHarnessStreamingAgents = normalizeEnabledStructuredMachineAgents(
+    parsed.settings?.enabledHarnessStreamingAgents
+  )
+  const rawEnabledHarnessStreamingAgents = parsed.settings?.enabledHarnessStreamingAgents
+  if (
+    typeof legacyHarnessStreaming === 'boolean' ||
+    !Array.isArray(rawEnabledHarnessStreamingAgents) ||
+    rawEnabledHarnessStreamingAgents.length !== enabledHarnessStreamingAgents.length ||
+    rawEnabledHarnessStreamingAgents.some(
+      (agent, index) => agent !== enabledHarnessStreamingAgents[index]
+    )
+  ) {
+    markNeedsSave()
+  }
   return {
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
@@ -252,6 +278,13 @@ export function prepareLoadedProfileSettings(
     normalizedNotifications,
     normalizedSourceControlGroupOrder,
     normalizedOnboarding,
-    normalizedProjectGroups
+    normalizedProjectGroups,
+    structuredAgentStreaming: {
+      experimentalStructuredNativeChat:
+        typeof legacyHarnessStreaming === 'boolean'
+          ? legacyHarnessStreaming
+          : parsed.settings?.experimentalStructuredNativeChat === true,
+      enabledHarnessStreamingAgents
+    }
   }
 }

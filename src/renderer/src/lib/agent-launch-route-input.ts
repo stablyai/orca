@@ -26,6 +26,11 @@ import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-v
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import {
+  isRuntimeHostContactRevoked,
+  lastVerifiedRuntimeStatus
+} from '../../../shared/runtime-host-status'
+import type { RuntimeStatusSlice } from '@/store/slices/runtime-status-types'
 
 export type ProspectiveWorkspaceKind = NonNullable<AgentLaunchRoutingInput['workspaceKind']>
 
@@ -51,7 +56,10 @@ export type AgentLaunchRouteStore = {
   folderWorkspaces?: AppState['folderWorkspaces']
 } & Parameters<typeof getExecutionHostIdForWorktree>[0] &
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[0] &
-  Parameters<typeof getConnectionIdFromState>[0]
+  Parameters<typeof getConnectionIdFromState>[0] & {
+    settings?: AgentLaunchRoutingInput['settings']
+    runtimeStatusByEnvironmentId?: RuntimeStatusSlice['runtimeStatusByEnvironmentId']
+  }
 
 export type AgentLaunchRouteArgs = {
   agent: TuiAgent
@@ -116,11 +124,21 @@ export function buildAgentLaunchRouteInput(
 ): AgentLaunchRoutingInput {
   const { agent, workspace, tuiCustomization } = args
   const executionHostId = resolveExecutionHostId(store, workspace)
+  const host = parseExecutionHostId(executionHostId)
+  const remoteStatus =
+    host?.kind === 'runtime'
+      ? store.runtimeStatusByEnvironmentId?.get(host.environmentId)
+      : undefined
   return {
     agent,
     settings: store.settings,
     executionHostId,
-    hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
+    hostCapabilities:
+      host?.kind === 'local'
+        ? readLocalRuntimeCapabilitiesOrUnknown()
+        : host?.kind === 'runtime' && !isRuntimeHostContactRevoked(remoteStatus)
+          ? (lastVerifiedRuntimeStatus(remoteStatus)?.capabilities ?? null)
+          : null,
     workspaceKind: workspace.kind,
     projectRuntime: resolveProjectRuntime(store, workspace, executionHostId),
     promptDelivery: args.promptDelivery,

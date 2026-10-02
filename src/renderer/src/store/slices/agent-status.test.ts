@@ -80,6 +80,18 @@ describe('agent status routing attribution', () => {
     vi.useRealTimers()
   })
 
+  it('retains the room delivery owning the current turn', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus('tab-1:1', {
+      state: 'working',
+      prompt: 'room prompt',
+      agentType: 'codex',
+      roomDeliveryId: 'delivery-1'
+    })
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].roomDeliveryId).toBe('delivery-1')
+  })
+
   it('stores worktree and tab attribution from accepted hook events', () => {
     vi.useFakeTimers()
     const store = createTestStore()

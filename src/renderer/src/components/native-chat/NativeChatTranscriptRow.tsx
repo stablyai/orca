@@ -3,12 +3,14 @@ import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/Comme
 import { cn } from '@/lib/utils'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
+import type { NativeChatImageLoadContext } from './NativeChatImageAttachments'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
 import { NativeChatSubagentSectionHead } from './NativeChatSubagentSectionHead'
 import { NativeChatSubagentEntries } from './NativeChatSubagentRun'
 import type { NativeChatSubagentDisclosure } from './native-chat-subagent-sections'
+import { AgentSubagentTurnLink } from '../agent-subagents/AgentSubagentContext'
 import type { NativeChatTaskListPredecessors } from './native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
@@ -22,8 +24,10 @@ export type NativeChatTranscriptRowContext = {
   expandedTurnIds: ReadonlySet<string>
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  subagentSourceKey?: string
   allowFileUriLinks: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  imageLoadContext?: NativeChatImageLoadContext
   onLinkClick?: CommentMarkdownLinkClickHandler
   onToggleExpandedTurn: (turnKey: string) => void
   subagentDisclosure: NativeChatSubagentDisclosure
@@ -112,9 +116,21 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           subagentDisclosure={context.subagentDisclosure}
           inSubagentSection={slot.depth > 0}
           runtimeContext={context.runtimeContext}
+          imageLoadContext={context.imageLoadContext}
         />
       )}
       {slot.statusAbove ? null : statusRow}
+      {status && context.subagentSourceKey ? (
+        <AgentSubagentTurnLink
+          sourceKey={context.subagentSourceKey}
+          startedAt={status.startedAt}
+          completedAt={
+            status.startedAt == null || status.workedSeconds == null
+              ? null
+              : status.startedAt + status.workedSeconds * 1_000
+          }
+        />
+      ) : null}
       {turnDiff ? (
         <NativeChatTurnDiffRollup diff={turnDiff} onReveal={context.onRevealDiff} />
       ) : null}

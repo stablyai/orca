@@ -7,6 +7,7 @@ import type {
   NativeChatTurnLifecycle
 } from '../../../../shared/native-chat-types'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
+import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
 
 export type ReadState =
   | { phase: 'loading' }
@@ -25,6 +26,8 @@ export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): bool
 
 /** A live session plus the older-history pagination controls the view needs. */
 export type NativeChatLiveSession = NativeChatSession & {
+  context: AgentSessionContextSnapshot
+  markCompactionRequested: () => void
   /** Latest provider turn boundary, used to settle orphaned running tool rows. */
   transcriptLifecycle?: NativeChatTurnLifecycle
   /** The pane's hook says the agent stopped mid-turn for the reader, and the transcript

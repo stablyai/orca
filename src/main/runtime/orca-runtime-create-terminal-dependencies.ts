@@ -35,3 +35,8 @@ export const BACKGROUND_TERMINAL_SPAWN_FLAGS = {
   initiallyHidden: true,
   persistHostSessionBinding: true
 } as const
+export function throwIfTerminalCreateAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new Error('client_disconnected')
+  }
+}

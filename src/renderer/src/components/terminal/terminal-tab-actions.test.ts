@@ -493,6 +493,17 @@ describe('closeTerminalTab', () => {
           }
         ]
       },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'unified-tab-1',
+            tabOrder: ['unified-tab-1', 'unified-tab-2']
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       activeWorktreeId: 'wt-1',
       activeTabId: 'terminal-entity-1',
       openFiles: [],

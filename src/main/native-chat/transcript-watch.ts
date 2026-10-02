@@ -14,6 +14,7 @@ import type {
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 import { observeRunningWslDistros } from './wsl-transcript-running-observer'
+import { mergeNativeChatHookActivity, nativeChatHookActivityStore } from './hook-activity-store'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
 export { getActiveNativeChatWatcherCount } from './transcript-watcher-count'
@@ -276,19 +277,60 @@ export async function subscribeNativeChatTranscript(
     return { unsubscribe: () => {}, watching: false }
   }
 
-  let installed: NativeChatTranscriptSubscription | null
+  const mergeActivity = (messages: NativeChatMessage[]): NativeChatMessage[] =>
+    mergeNativeChatHookActivity(
+      messages,
+      nativeChatHookActivityStore.read(args.agent, args.sessionId),
+      true
+    )
+  const unsubscribeActivity = nativeChatHookActivityStore.subscribe(
+    args.agent,
+    args.sessionId,
+    (message) => args.onAppend([message])
+  )
+  const mergedArgs: SubscribeNativeChatTranscriptArgs = {
+    ...args,
+    onInitialSnapshot: args.onInitialSnapshot
+      ? (messages, hasMore, beforeOffset, error, lifecycle) =>
+          args.onInitialSnapshot!(mergeActivity(messages), hasMore, beforeOffset, error, lifecycle)
+      : undefined,
+    onReplace: args.onReplace
+      ? (messages, hasMore, beforeOffset, lifecycle) =>
+          args.onReplace!(mergeActivity(messages), hasMore, beforeOffset, lifecycle)
+      : undefined
+  }
+
   try {
-    installed = await attemptInstall(args, decode, setupSignal)
-  } catch (error) {
+    let installed: NativeChatTranscriptSubscription | null
+    try {
+      installed = await attemptInstall(mergedArgs, decode, setupSignal)
+    } catch (error) {
+      setupSignal?.throwIfAborted()
+      // Why: a gate-refused resolve (stalled WSL distro) must degrade to the
+      // resolve-poll fallback below, not fail the subscribe outright.
+      void wslTranscriptFsRefusal(error) // rethrows anything that is not a gate refusal
+      installed = null
+    }
+    if (installed) {
+      return combinedSubscription(installed, unsubscribeActivity)
+    }
     setupSignal?.throwIfAborted()
-    // Why: a gate-refused resolve (stalled WSL distro) must degrade to the
-    // resolve-poll fallback below, not fail the subscribe outright.
-    void wslTranscriptFsRefusal(error) // rethrows anything that is not a gate refusal
-    installed = null
+    return combinedSubscription(subscribeViaResolvePoll(mergedArgs, decode), unsubscribeActivity)
+  } catch (error) {
+    unsubscribeActivity()
+    throw error
   }
-  if (installed) {
-    return installed
+}
+
+function combinedSubscription(
+  transcript: NativeChatTranscriptSubscription,
+  unsubscribeActivity: () => void
+): NativeChatTranscriptSubscription {
+  return {
+    watching: transcript.watching,
+    unsubscribe: () => {
+      transcript.unsubscribe()
+      unsubscribeActivity()
+    }
   }
-  setupSignal?.throwIfAborted()
-  return subscribeViaResolvePoll(args, decode)
 }

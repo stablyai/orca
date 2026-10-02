@@ -12,6 +12,7 @@ import type {
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
 
 let restoreViewport = (): void => {}
 beforeAll(() => {
@@ -37,7 +38,9 @@ const session: NativeChatLiveSession = {
   loadingEarlier: false,
   olderHistoryGeneration: 0,
   loadEarlier: vi.fn(),
-  readPhase: 'ready'
+  readPhase: 'ready',
+  context: EMPTY_AGENT_SESSION_CONTEXT,
+  markCompactionRequested: vi.fn()
 }
 
 describe('NativeChatMessageList assistant messages', () => {

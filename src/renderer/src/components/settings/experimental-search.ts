@@ -5,6 +5,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getStructuredAgentStreamingExperimentalSearchEntry } from './structured-agent-streaming-experimental-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -47,6 +48,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNativeChatExperimentalSearchEntry(),
+    getStructuredAgentStreamingExperimentalSearchEntry(),
     {
       title: translate(
         'auto.components.settings.experimental.search.agentDashboard.title',
@@ -200,6 +202,12 @@ export function getExperimentalSearchEntry() {
     pet: findEntry(translate('auto.components.settings.experimental.search.87d99e634b', 'Pet')),
     nativeChat: findEntry(
       translate('auto.components.settings.experimental.search.nativeChat.title', 'Chat UI')
+    ),
+    structuredAgentStreaming: findEntry(
+      translate(
+        'auto.components.settings.ExperimentalPane.harnessStreaming.title',
+        'Live agent streaming'
+      )
     ),
     agentDashboard: findEntry(
       translate(

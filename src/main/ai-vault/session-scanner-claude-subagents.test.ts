@@ -88,6 +88,7 @@ describe('listClaudeSubagentSessions', () => {
       'Check latest news',
       'Map the scanner internals'
     ])
+    expect(result.sessions.map((session) => session.sessionId)).toEqual(['newer', 'older'])
     // No task notifications in the parent and freshly written transcripts:
     // both count as still running.
     expect(result.sessions.map((session) => session.subagent)).toEqual([

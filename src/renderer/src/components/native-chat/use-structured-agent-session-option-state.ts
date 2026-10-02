@@ -47,6 +47,9 @@ export function useStructuredAgentSessionOptionState(args: {
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
+    fence: number | null
+    identity: string
+    canSteer: boolean
     threadGoal: AgentSessionOptionsResult['threadGoal']
     contextUsage: AgentSessionOptionsResult['contextUsage']
   } | null>(null)
@@ -94,7 +97,7 @@ export function useStructuredAgentSessionOptionState(args: {
   // Refresh options each turn to confirm which model the provider actually selected, and once
   // the provider starts: only then has the host read what it will run.
   useEffect(() => {
-    if (!providerVisible || (providerStarting && !readsBeforeStart) || !optionCatalog) {
+    if (!providerVisible || (providerStarting && !readsBeforeStart)) {
       return
     }
     let stale = false
@@ -108,6 +111,9 @@ export function useStructuredAgentSessionOptionState(args: {
       if (!stale && optionMutationGeneration.current === readGeneration) {
         setConversationSupport({
           sessionId,
+          fence,
+          identity,
+          canSteer: result.canSteer === true,
           commands: result.conversationCommands ?? [],
           threadGoal: result.threadGoal,
           contextUsage: result.contextUsage
@@ -127,6 +133,7 @@ export function useStructuredAgentSessionOptionState(args: {
     }
   }, [
     fence,
+    identity,
     optionCatalog,
     providerStarting,
     providerVisible,

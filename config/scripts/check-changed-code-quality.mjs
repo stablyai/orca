@@ -13,6 +13,8 @@ const CASTING_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*typescript\/consistent-type-assertions/
 const ANTI_SLOP_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
+const DESIGN_SYSTEM_DISABLE_PATTERN =
+  /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\bshadcn\//
 export const OXLINT_SCANS = [
   {
     // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
@@ -47,7 +49,12 @@ export const OXLINT_SCANS = [
     // Why changed-lines only: the renderer carries ~4.7k pre-existing restyle/raw-color
     // findings. Gating added lines holds the line without a repo-wide migration.
     label: 'design system',
-    args: ['--config', 'config/oxlint-design-system.json']
+    args: [
+      '--config',
+      'config/oxlint-design-system.json',
+      '--report-unused-disable-directives-severity',
+      'warn'
+    ]
   }
 ]
 
@@ -362,6 +369,18 @@ export function isAntiSlopDirectiveUnusedWarning(diagnostic, root) {
   )
 }
 
+// The root scan does not load shadcn; its dedicated scan checks these directives.
+export function isDesignSystemDirectiveUnusedWarning(diagnostic, root) {
+  if (!/^Unused (?:oxlint|eslint)-disable/.test(diagnostic.message ?? '')) {
+    return false
+  }
+  return (diagnostic.labels ?? []).some((label) =>
+    diagnosticHighlightedLines(root, diagnostic.filename, label.span).some((line) =>
+      DESIGN_SYSTEM_DISABLE_PATTERN.test(line)
+    )
+  )
+}
+
 // Why: oxlint cannot see the AGENTS.md requirement that every casting suppression carry a
 // line-specific SAFETY: rationale, so the directive text itself is checked over added lines.
 export function findCastingDirectivesMissingSafety(root, rangesByFile) {
@@ -437,6 +456,9 @@ export function main(
         !isSuppressedDiagnostic(diagnostic, root) &&
         !isCastingDirectiveUnusedWarning(diagnostic, root) &&
         !isAntiSlopDirectiveUnusedWarning(diagnostic, root) &&
+        !(
+          scan.label === 'code quality' && isDesignSystemDirectiveUnusedWarning(diagnostic, root)
+        ) &&
         diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks)
     )
     for (const diagnostic of diagnostics) {

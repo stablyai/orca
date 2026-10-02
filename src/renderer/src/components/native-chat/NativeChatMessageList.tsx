@@ -1,6 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown } from 'lucide-react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
@@ -10,7 +9,6 @@ import { nativeChatTaskListPredecessors } from './native-chat-task-list-history'
 import { NativeChatTaskList } from './NativeChatTaskList'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 import {
@@ -22,7 +20,6 @@ import {
   NativeChatWaitingTranscriptItems
 } from './NativeChatTranscriptItems'
 import type { NativeChatTranscriptRowContext } from './NativeChatTranscriptRow'
-import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import {
   buildNativeChatTranscriptSlots,
   splitNativeChatSlotsWaitingBehindLiveTurn,
@@ -82,8 +79,10 @@ export function NativeChatMessageList({
   settledTurns,
   deliveryNotices,
   awaitingInput = null,
+  subagentSourceKey,
   turnActivity,
-  runtimeContext
+  runtimeContext,
+  imageLoadContext
 }: {
   session: NativeChatLiveSession
   journalItems?: readonly AgentJournalRenderItem[]
@@ -103,13 +102,15 @@ export function NativeChatMessageList({
   /** Recorded turn durations keyed by user message id (the host's, or the transcript's).
    *  A turn missing here shows the duration this list observed, if it saw the turn run. */
   settledTurns?: NativeChatSettledTurns
-  onLinkClick?: CommentMarkdownLinkClickHandler
+  onLinkClick?: NativeChatTranscriptRowContext['onLinkClick']
   allowFileUriLinks?: boolean
-  deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  deliveryNotices?: NativeChatTranscriptRowContext['deliveryNotices']
   /** Set while the turn waits on the reader; the live activity line yields to it. */
   awaitingInput?: NativeChatAwaitingInput | null
+  subagentSourceKey?: string
   turnActivity?: NativeChatTurnActivity | null
-  runtimeContext?: RuntimeFileOperationArgs | null
+  runtimeContext?: NativeChatTranscriptRowContext['runtimeContext']
+  imageLoadContext?: NativeChatTranscriptRowContext['imageLoadContext']
 }): React.JSX.Element {
   const [navigationRequest, setNavigationRequest] = useState<NativeChatNavigationRequest | null>(
     null
@@ -334,8 +335,10 @@ export function NativeChatMessageList({
       taskListPredecessors,
       expandedTurnIds,
       deliveryNotices,
+      subagentSourceKey,
       allowFileUriLinks,
       runtimeContext,
+      imageLoadContext,
       onLinkClick,
       onToggleExpandedTurn: toggleExpandedTurn,
       subagentDisclosure,
@@ -347,10 +350,12 @@ export function NativeChatMessageList({
       expandSignal,
       expandedTurnIds,
       deliveryNotices,
+      subagentSourceKey,
       onLinkClick,
       revealDiff,
       revealedDiff,
       runtimeContext,
+      imageLoadContext,
       scrollMessageToTop,
       taskListPredecessors,
       subagentDisclosure,

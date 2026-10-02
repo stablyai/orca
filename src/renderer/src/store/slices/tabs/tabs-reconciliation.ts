@@ -122,7 +122,11 @@ export function projectWorktreeTabModelReconciliation(
     if (tab.contentType === 'browser') {
       return liveBrowserIds.has(tab.entityId)
     }
-    if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
+    if (
+      tab.contentType === 'simulator' ||
+      tab.contentType === 'agent-session' ||
+      tab.contentType === 'room'
+    ) {
       return true
     }
     return liveEditorIds.has(tab.entityId)

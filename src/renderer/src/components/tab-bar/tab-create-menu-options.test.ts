@@ -17,6 +17,7 @@ describe('tab create menu options', () => {
     hasNewBrowser: true,
     hasNewMarkdown: true,
     hasOpenMarkdown: true,
+    hasRooms: true,
     hasSimulator: true,
     simulatorIsGoTo: false
   })
@@ -35,6 +36,7 @@ describe('tab create menu options', () => {
       hasNewBrowser: true,
       hasNewMarkdown: true,
       hasOpenMarkdown: false,
+      hasRooms: true,
       hasSimulator: true,
       simulatorIsGoTo: true
     })
@@ -51,6 +53,9 @@ describe('tab create menu options', () => {
     expect(
       findMatchingTabCreateMenuOptions('browser', defaultOptions).map((option) => option.kind)
     ).toEqual(['new-browser'])
+    expect(
+      findMatchingTabCreateMenuOptions('rooms', defaultOptions).map((option) => option.kind)
+    ).toEqual(['rooms'])
   })
 
   it('keeps terminal and markdown results when client-impossible actions are omitted', () => {
@@ -59,6 +64,7 @@ describe('tab create menu options', () => {
       hasNewBrowser: false,
       hasNewMarkdown: true,
       hasOpenMarkdown: true,
+      hasRooms: false,
       hasSimulator: false,
       simulatorIsGoTo: false
     })
@@ -78,6 +84,7 @@ describe('tab create menu options', () => {
       hasNewBrowser: false,
       hasNewMarkdown: false,
       hasOpenMarkdown: false,
+      hasRooms: false,
       hasSimulator: false,
       simulatorIsGoTo: false,
       windowsShellEntries: [

@@ -9,6 +9,7 @@ import { structuredRunningChildWork } from '../../../shared/agent-child-work-lis
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
 import { tryReadQueuePublication } from './structured-agent-session-queued-publication'
 import type { AgentSessionHistoryScope } from './agent-session-history-page'
+import { scopeStructuredSessionTranscript } from './structured-agent-session-transcript-scope'
 import type {
   AgentSessionSubscribers,
   AgentSessionSubscribeInput
@@ -76,6 +77,30 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const backgroundTasks = this.state(input.sessionId)
     return this.subscribers.open({
       ...input,
+      emit: (event) => {
+        if (event.type === 'end') {
+          input.emit(event)
+          return
+        }
+        const record = this.deps.store.getRecord(input.sessionId)
+        input.emit(
+          event.type === 'batch'
+            ? {
+                ...event,
+                batch: {
+                  ...event.batch,
+                  items: scopeStructuredSessionTranscript(event.batch.items, record)
+                }
+              }
+            : {
+                ...event,
+                page: {
+                  ...event.page,
+                  items: scopeStructuredSessionTranscript(event.page.items, record)
+                }
+              }
+        )
+      },
       journal: session.journal,
       fence: structuredAgentSessionConversationFence(this.deps.store, input.sessionId),
       ...(backgroundTasks !== undefined ? { backgroundTasks } : {})

@@ -207,7 +207,7 @@ export async function acquireCodexStructuredSession(input: {
         threadId: opened.threadId,
         ...(opened.supersededThreadId
           ? { resumed: false, supersedesThreadId: opened.supersededThreadId }
-          : { resumed: launch.resumeThreadId !== null }),
+          : { resumed: launch.resumeThreadId !== null, ...(launch.resumeOrigin === 'adopted' ? { origin: 'adopted' as const } : {}) }),
         fence: acquireInput.fence,
         linkId: deps.mintLinkId?.(),
         observedAt: deps.now?.() ?? Date.now()

@@ -8,7 +8,9 @@ import {
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
 
 type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInsertion>[0] &
-  Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'>
+  Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'> & {
+    replaceDraft: NativeChatComposerHandle['replaceDraft']
+  }
 
 /** Typed and pasted insertion for the composer, exposed on the handle the chat
  *  root uses to route keystrokes and pastes into it. Returns the paste handler. */
@@ -16,7 +18,7 @@ export function useNativeChatComposerHandle(
   ref: ForwardedRef<NativeChatComposerHandle>,
   args: UseNativeChatComposerHandleArgs
 ): (event: ClipboardEventLike) => void {
-  const { textareaRef, draft, setDraft, setHistory, setActiveSuggestion, ...pasteArgs } = args
+  const { textareaRef, draft, setDraft, setHistory, setActiveSuggestion, replaceDraft, ...pasteArgs } = args
   const { insertTypedText, insertPastedText, focus, contains } = useNativeChatTypedInsertion({
     textareaRef,
     caret: args.caret,
@@ -34,8 +36,8 @@ export function useNativeChatComposerHandle(
 
   useImperativeHandle(
     ref,
-    () => ({ focus, insertTypedText, handlePasteEvent, pasteFromClipboard, contains }),
-    [focus, insertTypedText, handlePasteEvent, pasteFromClipboard, contains]
+    () => ({ focus, insertTypedText, handlePasteEvent, pasteFromClipboard, contains, replaceDraft }),
+    [focus, insertTypedText, handlePasteEvent, pasteFromClipboard, contains, replaceDraft]
   )
   return handlePasteEvent
 }

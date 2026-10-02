@@ -1,9 +1,16 @@
-import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
-import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import {
+  settleStructuredAgentLaunchPrompt,
+  type StructuredPromptDeliveryResult
+} from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 
 export type StructuredAgentLaunchOptions = {
+  target?: RuntimeClientTarget
+  groupId?: string
+  sessionOptions?: Record<string, SessionOptionValue>
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void

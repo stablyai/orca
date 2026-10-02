@@ -10,7 +10,10 @@
 // each chat is reopened. Restart is the one boundary that forgets, and restoring readable sessions
 // republishes them.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  agentSessionRecordAgent,
+  type AgentSessionRecord
+} from '../../../shared/agent-session-record'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
 import type {
@@ -48,7 +51,11 @@ export type StructuredAgentSessionStatusSubscriber = {
 
 type StatusFeedSession = {
   journal: AgentSessionJournal
-  params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
+  params: {
+    location: AgentSessionRecord['location']
+    provider: AgentSessionRecord['provider']
+    agent?: string
+  }
   child?: Pick<StructuredAgentSessionProviderChild, 'phase' | 'generation' | 'fence'> | null
 }
 
@@ -150,7 +157,10 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     const { children: _children, backgroundTasks: _backgroundTasks, ...rest } = previous
-    const retained = { ...rest, ...this.childWorkFields(sessionId, previous.agent) }
+    const retained = {
+      ...rest,
+      ...structuredStatusChildWork(this.readChildWork(sessionId), previous.agent)
+    }
     this.published.set(sessionId, retained)
     this.broadcast({ type: 'status', session: retained })
   }
@@ -272,7 +282,9 @@ export class StructuredAgentSessionStatusFeed {
     return {
       sessionId,
       workspaceId: session.params.location.workspaceId,
-      agent: session.params.provider,
+      agent: record
+        ? agentSessionRecordAgent(record)
+        : (session.params.agent ?? session.params.provider),
       ...(session.child
         ? {
             hostExecutionOwned: true as const,
@@ -285,29 +297,9 @@ export class StructuredAgentSessionStatusFeed {
         ? { rewindBlockedReason: 'outcome-unknown' as const }
         : {}),
       ...(model ? { model } : {}),
-      ...this.childWorkFields(sessionId, session.params.provider),
+      ...structuredStatusChildWork(this.readChildWork(sessionId), session.params.provider),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
-    }
-  }
-
-  /** The summary's child fields, from the records the store holds for the session. Usage is
-   *  dropped on purpose: a `task_progress` tick would otherwise fail the equality check and
-   *  re-broadcast a full summary to every remote subscriber for a number no session list renders.
-   *  Tokens stay live on the background-task channel. */
-  private childWorkFields(
-    sessionId: string,
-    provider: StatusFeedSession['params']['provider']
-  ): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> {
-    const { children, backgroundTasks } = structuredStatusChildWork(
-      this.readChildWork(sessionId),
-      provider
-    )
-    return {
-      ...(backgroundTasks && backgroundTasks.length > 0
-        ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
-        : {}),
-      ...(children ? { children } : {})
     }
   }
 

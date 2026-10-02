@@ -30,10 +30,7 @@ import {
   readCommandMarkerCache,
   type NativeChatCommandMarker
 } from './native-chat-command-marker'
-import {
-  deriveNativeChatStreamingText,
-  nativeChatStreamingMessage
-} from '../../../../shared/native-chat-streaming'
+import * as streaming from '../../../../shared/native-chat-streaming'
 import { shouldFocusNativeChatPaneFromPointerTarget } from './native-chat-typing-redirect'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
 import {
@@ -46,9 +43,12 @@ import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
-import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
+import { nativeChatImageLoadContext } from './native-chat-image-load-context'
+import { NativeChatPtyQueue, type NativeChatPtyQueueHandle } from './NativeChatPtyQueue'
+import type { NativeChatQueuedMessage } from '../../../../shared/native-chat-queue'
 
 /** Renders the bridge UI after NativeChatSessionGate resolves its agent session. */
 export function NativeChatResolvedView({
@@ -62,6 +62,7 @@ export function NativeChatResolvedView({
   terminalTabId,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
+  restartSession,
   readTerminalScreen,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
@@ -98,6 +99,7 @@ export function NativeChatResolvedView({
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  const reportedModel = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.model ?? null)
   // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
   const hookPreviewIsToolOutput = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessageIsToolOutput === true
@@ -115,12 +117,18 @@ export function NativeChatResolvedView({
   const previousWorkingEpochRef = useRef<number | null>(null)
   // True while a question card owns the input region, so the composer is hidden.
   const [questionActive, setQuestionActive] = useState(false)
+  const [ptyQueueHasItems, setPtyQueueHasItems] = useState(false)
+  const [editingQueuedMessage, setEditingQueuedMessage] = useState<NativeChatQueuedMessage | null>(
+    null
+  )
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
+  const queueRef = useRef<NativeChatPtyQueueHandle>(null)
   // The question card's free-text row; keeps Paste working while the card
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
   const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
+  const imageLoadContext = nativeChatImageLoadContext(fileLinkContext)
   const pasteClipboardIntoComposer = useNativeChatPasteBridge({
     rootRef,
     composerRef,
@@ -180,9 +188,7 @@ export function NativeChatResolvedView({
     [record]
   )
   const onSlashCommand = useCallback(
-    (command: string) => {
-      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command))
-    },
+    (command: string) => setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command)),
     [commandMarkerScope]
   )
 
@@ -228,7 +234,7 @@ export function NativeChatResolvedView({
     [pending, sessionAfterCommandBoundaries.messages]
   )
   const streamingText = useMemo(() => {
-    return deriveNativeChatStreamingText({
+    return streaming.deriveNativeChatStreamingText({
       messages:
         pendingMessages.length > 0
           ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
@@ -253,7 +259,7 @@ export function NativeChatResolvedView({
       messages: [
         ...sessionAfterCommandBoundaries.messages,
         ...commandMarkersAsMessages(commandMarkers),
-        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
+        ...(streamingText ? [streaming.nativeChatStreamingMessage(streamingText)] : []),
         ...pendingMessages
       ]
     }
@@ -297,6 +303,7 @@ export function NativeChatResolvedView({
     // settles, so cancelPendingSends no longer sees the optimistic id. Clear
     // the echo cache here so a cancelled prompt cannot stick as a ghost bubble.
     clear()
+    void queueRef.current?.pause()
     interactiveSend.cancel()
   }, [interactiveSend, clear])
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
@@ -348,12 +355,8 @@ export function NativeChatResolvedView({
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        {viewState.kind === 'loading' ? (
-          <NativeChatEmptyState kind="loading" />
-        ) : viewState.kind === 'error' ? (
-          <NativeChatEmptyState kind="error" message={viewState.message} />
-        ) : viewState.kind === 'empty' ? (
-          <NativeChatEmptyState kind="empty" agent={agent} />
+        {viewState.kind !== 'ready' ? (
+          <NativeChatEmptyState {...viewState} agent={agent} />
         ) : (
           <NativeChatMessageList
             session={sessionWithPending}
@@ -366,6 +369,7 @@ export function NativeChatResolvedView({
             onLinkClick={onLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             deliveryNotices={deliveryNotices}
+            imageLoadContext={imageLoadContext}
           />
         )}
       </div>
@@ -383,23 +387,57 @@ export function NativeChatResolvedView({
           the pty, the composer shows its guarded state instead of racing the
           mobile driver (R8). */}
       {questionActive ? null : (
-        <NativeChatComposer
-          ref={composerRef}
-          terminalTabId={terminalTabId}
-          paneKey={paneKey}
-          targetPtyId={targetPtyId}
-          agent={agent}
-          canSend={canSend}
-          isWorking={isWorking}
-          onStop={stopAgent}
-          onOptimisticSend={onOptimisticSend}
-          onOptimisticSendCanceled={delivery.cancel}
-          optimisticSendOutcome={delivery}
-          onSlashCommand={onSlashCommand}
-          onSwitchToTerminal={onSwitchToTerminal}
-          readTerminalScreen={readTerminalScreen}
-          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft }}
-        />
+        <>
+          <NativeChatPtyQueue
+            ref={queueRef}
+            paneKey={paneKey}
+            terminalTabId={terminalTabId}
+            targetPtyId={targetPtyId}
+            agent={agent}
+            isWorking={isWorking}
+            imageLoadContext={imageLoadContext}
+            onDelivered={onOptimisticSend}
+            onDeliveryCanceled={delivery.cancel}
+            onCommand={onSlashCommand}
+            onQueueStateChange={setPtyQueueHasItems}
+            editingMessageId={editingQueuedMessage?.id ?? null}
+            onEditMessage={(message) => {
+              setEditingQueuedMessage(message)
+              composerRef.current?.replaceDraft(message.text, message.imagePaths)
+            }}
+          />
+          <NativeChatComposer
+            ref={composerRef}
+            terminalTabId={terminalTabId}
+            paneKey={paneKey}
+            targetPtyId={targetPtyId}
+            agent={agent}
+            reportedModel={session.context.model ?? reportedModel}
+            reportedEffort={session.context.effort ?? null}
+            context={session.context}
+            onCompactionRequested={session.markCompactionRequested}
+            restartSession={restartSession}
+            canSend={canSend}
+            isWorking={isWorking}
+            queueOnly={ptyQueueHasItems}
+            onStop={stopAgent}
+            onQueue={(text, imagePaths, kind) => {
+              const operation = editingQueuedMessage
+                ? queueRef.current?.edit(editingQueuedMessage.id, text, imagePaths, kind)
+                : queueRef.current?.enqueue(text, imagePaths, kind)
+              return (
+                operation ?? Promise.reject(new Error('conversation_queue_unavailable'))
+              ).then(() => setEditingQueuedMessage(null))
+            }}
+            onOptimisticSend={onOptimisticSend}
+            onOptimisticSendCanceled={delivery.cancel}
+            optimisticSendOutcome={delivery}
+            onSlashCommand={onSlashCommand}
+            onSwitchToTerminal={onSwitchToTerminal}
+            readTerminalScreen={readTerminalScreen}
+            launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft }}
+          />
+        </>
       )}
       {contextMenu.menu}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />

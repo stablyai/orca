@@ -142,7 +142,7 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     session.runtimeEnvironmentId !== null
       ? registerRendererOwnedAgentStatusPane(session.cacheKey, session.runtimeEnvironmentId)
       : null
-  session.handleRendererOwnedAgentStatus = (payload): void => {
+  session.handleRendererOwnedAgentStatus = (payload, meta?: { roomDeliveryId?: string }): void => {
     const currentState = useAppStore.getState()
     const routing = session.resolveCurrentAgentStatusRouting()
     if (!routing) {
@@ -151,7 +151,10 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     const title = currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
     const authoritativePaneAgent = session.getAuthoritativePaneAgent()
     const agentType = resolveCompatibleAgentTypeForOwner(payload.agentType, authoritativePaneAgent)
-    const statusPayload = agentType === payload.agentType ? payload : { ...payload, agentType }
+    const resolvedPayload = agentType === payload.agentType ? payload : { ...payload, agentType }
+    const statusPayload = meta?.roomDeliveryId
+      ? { ...resolvedPayload, roomDeliveryId: meta.roomDeliveryId }
+      : resolvedPayload
     const observedStatusPayload = {
       ...statusPayload,
       observation: rendererAgentStatusObservations.observe(session.cacheKey, {

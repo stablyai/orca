@@ -54,7 +54,7 @@ export function registerAgentHookHandlers(
       agentHookServer
         .getStatusSnapshot()
         // Same rule as the live push: the renderer's feed bridge owns structured rows for now.
-        .filter((entry) => entry.structuredHost === undefined)
+        .filter((entry) => entry.structuredHost === undefined && runtime?.shouldPublishAgentStatusToRenderer?.(entry.paneKey) !== false)
         .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
     )
   })

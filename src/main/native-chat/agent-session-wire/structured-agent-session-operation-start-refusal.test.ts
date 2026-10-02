@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { ensureStructuredAgentSessionAgentForOperation } from './structured-agent-session-agent-start'
 import { recordStructuredAgentSessionOptionIntent } from './structured-agent-session-options-read'
@@ -40,6 +41,30 @@ describe('an operation whose agent start throws', () => {
 })
 
 describe('an option picked while the chat is at rest', () => {
+  it.each(['grok', 'omp'] as const)(
+    'persists a %s model pick without starting the provider',
+    async (agent) => {
+      const record: AgentSessionRecord = { ...agentSessionRecordFixture(), agent, provider: 'acp' }
+      const persistOptions = vi.fn(async () => {})
+      const context = { sessionId: SESSION, persistOptions, publish: vi.fn() }
+      const store = { getRecord: () => record }
+      await expect(
+        recordStructuredAgentSessionOptionIntent(store, context, {
+          key: 'model',
+          value: 'provider-model'
+        })
+      ).resolves.toMatchObject({ ok: true, value: { options: { model: 'provider-model' } } })
+      expect(persistOptions).toHaveBeenCalledExactlyOnceWith({ model: 'provider-model' })
+      await expect(
+        recordStructuredAgentSessionOptionIntent(store, context, {
+          key: 'notAnOption',
+          value: 'x'
+        })
+      ).resolves.toMatchObject({ ok: false })
+      expect(persistOptions).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it('refuses a key the provider would not accept as a rejected option', async () => {
     const persistOptions = vi.fn(async () => {})
     const refused = await recordStructuredAgentSessionOptionIntent(

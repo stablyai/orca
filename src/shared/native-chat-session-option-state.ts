@@ -134,6 +134,10 @@ export function applyNativeChatReportedSessionOptions(
     return false
   }
   const modelChanged = record.model?.value !== modelId
+  // Do not roll a dispatched selection back to lagging provider telemetry.
+  if (modelChanged && record.model?.source === 'dispatched') {
+    return false
+  }
   let changed = modelChanged || record.model?.source !== sourceFor('model')
   record.model = { value: modelId, source: sourceFor('model') }
   const modelValues = modelChanged ? {} : { ...record.valuesByModel[modelId] }
@@ -142,6 +146,9 @@ export function applyNativeChatReportedSessionOptions(
       continue
     }
     const current = modelValues[id]
+    if (current?.source === 'dispatched' && current.value !== value) {
+      continue
+    }
     if (current?.value !== value || current.source !== sourceFor(id)) {
       changed = true
     }

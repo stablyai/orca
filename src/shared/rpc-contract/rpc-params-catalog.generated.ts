@@ -39,6 +39,7 @@ import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
 import {
   AiVaultListSessionsParams,
+  AiVaultListSubagentSessionsParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from './ai-vault-params'
@@ -347,6 +348,15 @@ import {
 import { CreateProject } from './linear-project-create-params'
 import { NativeChatSession, NativeChatUnsubscribe } from './native-chat-params'
 import {
+  NativeChatQueueAcceptParams,
+  NativeChatQueueClaimParams,
+  NativeChatQueueEditParams,
+  NativeChatQueueEnqueueParams,
+  NativeChatQueueReadParams,
+  NativeChatQueueRejectParams,
+  NativeChatQueueReorderParams
+} from './native-chat-queue-params'
+import {
   NotificationGetMissedSinceParams,
   NotificationRegisterPushParams,
   NotificationUnsubscribeParams,
@@ -436,6 +446,62 @@ import {
   RepoSparsePresetSave,
   RepoUpdate
 } from './repo-params'
+import {
+  RoomsAttachmentsDownloadCancelParams,
+  RoomsAttachmentsDownloadReadParams,
+  RoomsAttachmentsDownloadStartParams,
+  RoomsAttachmentsUploadAppendParams,
+  RoomsAttachmentsUploadCancelParams,
+  RoomsAttachmentsUploadFinishParams,
+  RoomsAttachmentsUploadStartParams
+} from './rooms-attachments-params'
+import {
+  RoomsCreateParams,
+  RoomsDeliveriesRetryParams,
+  RoomsListParams,
+  RoomsMessagesDeleteParams,
+  RoomsMessagesListParams,
+  RoomsMessagesSendParams,
+  RoomsMessagesUpdateParams,
+  RoomsParticipantsAddParams,
+  RoomsParticipantsCompactParams,
+  RoomsParticipantsConfigureParams,
+  RoomsParticipantsControlParams,
+  RoomsParticipantsRemoveParams,
+  RoomsParticipantsRevealParams,
+  RoomsParticipantsUpdateParams,
+  RoomsReadParams,
+  RoomsSnapshotParams,
+  RoomsSubscribeParams,
+  RoomsUnsubscribeParams
+} from './rooms-core-params'
+import {
+  RoomsArchiveExportReadParams,
+  RoomsArchiveExportStartParams,
+  RoomsArchiveImportAppendParams,
+  RoomsArchiveImportFinishParams,
+  RoomsArchiveImportStartParams,
+  RoomsArchiveTransferCancelParams,
+  RoomsDeleteParams,
+  RoomsPinsRemoveParams,
+  RoomsPinsSetParams,
+  RoomsRolesDeleteParams,
+  RoomsRolesSaveParams,
+  RoomsUpdateParams
+} from './rooms-management-params'
+import { RoomsNotificationsReplayParams } from './rooms-notifications-params'
+import { RoomsParticipantsExistingParams } from './rooms-participant-existing-params'
+import {
+  RoomsDeliveriesQueueParams,
+  RoomsDeliveriesReorderParams,
+  RoomsDeliveriesSteerParams,
+  RoomsMessagesBeginQueueEditParams,
+  RoomsMessagesCancelQueueEditParams,
+  RoomsMessagesFinishQueueEditParams,
+  RoomsMessagesReorderQueueParams,
+  RoomsMessagesRetargetParams
+} from './rooms-queue-params'
+import { RoomsWorkResumeParams, RoomsWorkStopParams } from './rooms-work-params'
 import { BrowserTarget } from './rpc-param-primitives'
 import { ClientCapabilitiesUpdate } from './runtime-client-capabilities-params'
 import { SessionTabsUnsubscribeAllParams } from './session-tabs-params'
@@ -484,6 +550,7 @@ import {
   RewindParams,
   SendParams,
   SetOptionParams,
+  SubagentsParams,
   SubscribeParams,
   ThreadGoalParams,
   UnsubscribeParams
@@ -597,6 +664,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
   'agentSession.setOption': SetOptionParams,
+  'agentSession.steer': SendParams,
+  'agentSession.subagents': SubagentsParams,
   'agentSession.subscribe': SubscribeParams,
   'agentSession.subscribeStatus': null,
   'agentSession.subscribeTurnCompletions': null,
@@ -605,6 +674,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
   'aiVault.listSessions': AiVaultListSessionsParams,
+  'aiVault.listSubagentSessions': AiVaultListSubagentSessionsParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
   'aiVault.searchSessions': AiVaultSearchRequestSchema,
@@ -977,6 +1047,18 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
+  'nativeChat.queue.accept': NativeChatQueueAcceptParams,
+  'nativeChat.queue.beginEdit': NativeChatQueueAcceptParams,
+  'nativeChat.queue.claim': NativeChatQueueClaimParams,
+  'nativeChat.queue.edit': NativeChatQueueEditParams,
+  'nativeChat.queue.enqueue': NativeChatQueueEnqueueParams,
+  'nativeChat.queue.pause': NativeChatQueueClaimParams,
+  'nativeChat.queue.read': NativeChatQueueReadParams,
+  'nativeChat.queue.reject': NativeChatQueueRejectParams,
+  'nativeChat.queue.remove': NativeChatQueueAcceptParams,
+  'nativeChat.queue.reorder': NativeChatQueueReorderParams,
+  'nativeChat.queue.resume': NativeChatQueueClaimParams,
+  'nativeChat.queue.retry': NativeChatQueueAcceptParams,
   'nativeChat.readSession': NativeChatSession,
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
@@ -1076,6 +1158,56 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.show': RepoSelector,
   'repo.sparsePresets': RepoSelector,
   'repo.update': RepoUpdate,
+  'rooms.archive.export.read': RoomsArchiveExportReadParams,
+  'rooms.archive.export.start': RoomsArchiveExportStartParams,
+  'rooms.archive.import.append': RoomsArchiveImportAppendParams,
+  'rooms.archive.import.finish': RoomsArchiveImportFinishParams,
+  'rooms.archive.import.start': RoomsArchiveImportStartParams,
+  'rooms.archive.transfer.cancel': RoomsArchiveTransferCancelParams,
+  'rooms.attachments.download.cancel': RoomsAttachmentsDownloadCancelParams,
+  'rooms.attachments.download.read': RoomsAttachmentsDownloadReadParams,
+  'rooms.attachments.download.start': RoomsAttachmentsDownloadStartParams,
+  'rooms.attachments.upload.append': RoomsAttachmentsUploadAppendParams,
+  'rooms.attachments.upload.cancel': RoomsAttachmentsUploadCancelParams,
+  'rooms.attachments.upload.finish': RoomsAttachmentsUploadFinishParams,
+  'rooms.attachments.upload.start': RoomsAttachmentsUploadStartParams,
+  'rooms.create': RoomsCreateParams,
+  'rooms.delete': RoomsDeleteParams,
+  'rooms.deliveries.queue': RoomsDeliveriesQueueParams,
+  'rooms.deliveries.reorder': RoomsDeliveriesReorderParams,
+  'rooms.deliveries.retry': RoomsDeliveriesRetryParams,
+  'rooms.deliveries.steer': RoomsDeliveriesSteerParams,
+  'rooms.list': RoomsListParams,
+  'rooms.messages.beginQueueEdit': RoomsMessagesBeginQueueEditParams,
+  'rooms.messages.cancelQueueEdit': RoomsMessagesCancelQueueEditParams,
+  'rooms.messages.delete': RoomsMessagesDeleteParams,
+  'rooms.messages.finishQueueEdit': RoomsMessagesFinishQueueEditParams,
+  'rooms.messages.list': RoomsMessagesListParams,
+  'rooms.messages.reorderQueue': RoomsMessagesReorderQueueParams,
+  'rooms.messages.retarget': RoomsMessagesRetargetParams,
+  'rooms.messages.send': RoomsMessagesSendParams,
+  'rooms.messages.update': RoomsMessagesUpdateParams,
+  'rooms.notifications.replay': RoomsNotificationsReplayParams,
+  'rooms.participants.add': RoomsParticipantsAddParams,
+  'rooms.participants.compact': RoomsParticipantsCompactParams,
+  'rooms.participants.configure': RoomsParticipantsConfigureParams,
+  'rooms.participants.control': RoomsParticipantsControlParams,
+  'rooms.participants.existing': RoomsParticipantsExistingParams,
+  'rooms.participants.remove': RoomsParticipantsRemoveParams,
+  'rooms.participants.reveal': RoomsParticipantsRevealParams,
+  'rooms.participants.update': RoomsParticipantsUpdateParams,
+  'rooms.participants.wake': RoomsParticipantsRemoveParams,
+  'rooms.pins.remove': RoomsPinsRemoveParams,
+  'rooms.pins.set': RoomsPinsSetParams,
+  'rooms.read': RoomsReadParams,
+  'rooms.roles.delete': RoomsRolesDeleteParams,
+  'rooms.roles.save': RoomsRolesSaveParams,
+  'rooms.snapshot': RoomsSnapshotParams,
+  'rooms.subscribe': RoomsSubscribeParams,
+  'rooms.unsubscribe': RoomsUnsubscribeParams,
+  'rooms.update': RoomsUpdateParams,
+  'rooms.work.resume': RoomsWorkResumeParams,
+  'rooms.work.stop': RoomsWorkStopParams,
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
   'runtime.clientEvents.subscribe': null,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,

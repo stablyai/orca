@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
@@ -44,7 +45,7 @@ export type ConversationReplacement = {
   sourceSessionId: string
   sessionId: string
   workspaceId: string
-  agent: 'claude' | 'codex'
+  agent: StructuredMachineAgent
 }
 
 const clearFingerprintOf = (sessionId: string) =>

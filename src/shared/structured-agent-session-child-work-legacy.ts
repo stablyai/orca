@@ -11,7 +11,6 @@
 // must be decided here for those older readers too. `structuredChildWorkLegacySubagents` is not wire:
 // it feeds in-app readers of `AgentStatusEntry.subagents`, and dies when they read `children`.
 
-import type { AgentSessionHandleProvider } from './agent-session-provider-handle'
 import { codexChildCommandDescription } from './codex-child-command-description'
 import {
   projectAgentChildWorkLegacyBackgroundTasks,
@@ -29,7 +28,7 @@ export function codexAgentBackgroundTaskId(threadId: string): string {
 
 function withLegacyIds(
   views: readonly AgentChildWorkView[],
-  provider: AgentSessionHandleProvider
+  provider: string
 ): AgentChildWorkView[] {
   return views.map((view) =>
     provider === 'codex' && view.kind === 'agent' && view.providerId !== undefined
@@ -59,7 +58,7 @@ function withCodexChildCommands(views: readonly AgentChildWorkView[]): AgentChil
 
 export function structuredChildWorkLegacyTasks(
   views: readonly AgentChildWorkView[],
-  provider: AgentSessionHandleProvider
+  provider: string
 ): AgentChildWorkLegacyBackgroundProjection {
   return projectAgentChildWorkLegacyBackgroundTasks(
     withLegacyIds(provider === 'codex' ? withCodexChildCommands(views) : views, provider)
@@ -68,7 +67,7 @@ export function structuredChildWorkLegacyTasks(
 
 export function structuredChildWorkLegacySubagents(
   views: readonly AgentChildWorkView[],
-  provider: AgentSessionHandleProvider
+  provider: string
 ): AgentSubagentSnapshot[] | undefined {
   return projectAgentChildWorkLegacySubagents(withLegacyIds(views, provider))
 }

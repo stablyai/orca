@@ -19,6 +19,16 @@ export function parseBuiltSessionOptionCommand(
   build: (value: SessionOptionValue) => string,
   command: string
 ): string | null {
+  const enabledCommand = build(true)
+  const disabledCommand = build(false)
+  if (enabledCommand !== disabledCommand) {
+    if (command === enabledCommand) {
+      return 'true'
+    }
+    if (command === disabledCommand) {
+      return 'false'
+    }
+  }
   const marker = '__orca_session_option_value__'
   const template = build(marker)
   const markerIndex = template.indexOf(marker)
@@ -90,7 +100,7 @@ function recordCommandApply(args: {
    *  prose that merely starts with it (`/model` parses `is a weird word` out of
    *  "/model is a weird word"), and tracking that renders raw prose as the
    *  current value — and, for the model, drops every option the model owns. */
-  canonicalize: (value: string) => string | null
+  canonicalize: (value: string) => SessionOptionValue | null
   /** The model the picker draws this option under. Reading the tracked model alone
    *  would drop a typed `/effort low` under a CLI default, and treat a typed
    *  `/model <that default>` as a switch that resets the model's tracked state. */
@@ -106,7 +116,11 @@ function recordCommandApply(args: {
     return true
   }
   if (isSessionOptionAgentPickerCommand(midSession, command)) {
-    clearNativeChatSessionModel(record)
+    if (optionId === 'model') {
+      clearNativeChatSessionModel(record)
+    } else {
+      clearTrackedSessionOption(record, effectiveModelId, optionId)
+    }
     return true
   }
   if (midSession.kind !== 'command') {
@@ -117,11 +131,14 @@ function recordCommandApply(args: {
     return false
   }
   const value = canonicalize(parsed)
-  if (!value) {
+  if (value === null) {
     return false
   }
   const previousModelId = effectiveModelId
   if (optionId === 'model') {
+    if (typeof value !== 'string') {
+      return false
+    }
     if (previousModelId !== value) {
       // Why: a model command can reset model-scoped state, so an older value
       // from a prior visit is no longer evidence about this live session.
@@ -185,11 +202,12 @@ export function recordNativeChatSessionOptionCommand(args: {
         optionId: option.id,
         midSession: option.apply.midSession,
         command,
-        canonicalize: (value) =>
-          option.kind.type === 'select' &&
-          !option.kind.choices.some((choice) => choice.value === value)
-            ? null
-            : value,
+        canonicalize: (value) => {
+          if (option.kind.type === 'boolean') {
+            return value === 'true' ? true : value === 'false' ? false : null
+          }
+          return option.kind.choices.some((choice) => choice.value === value) ? value : null
+        },
         effectiveModelId: modelId,
         persist
       }) || changed

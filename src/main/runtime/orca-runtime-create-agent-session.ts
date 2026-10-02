@@ -56,6 +56,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.promptDelivery ?? null,
           request.agentArgs ?? null,
           request.agentArgs === undefined ? 'host-default' : 'client-override',
+          request.extraAgentArgs ?? null,
           request.launchPreferences?.model ?? null,
           request.launchPreferences?.effort ?? null,
           request.launchPreferences?.mode ?? null,
@@ -64,6 +65,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
           request.viewMode ?? null,
+          request.surfaceOwner ?? null,
+          request.persistHostSessionBinding ?? null,
           ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
         ])
       )
@@ -133,6 +136,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.promptDelivery ?? null,
             request.agentArgs ?? null,
             request.agentArgs === undefined ? 'host-default' : 'client-override',
+            request.extraAgentArgs ?? null,
             request.launchPreferences?.model ?? null,
             request.launchPreferences?.effort ?? null,
             request.launchPreferences?.mode ?? null,
@@ -141,6 +145,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
             request.viewMode ?? null,
+            request.surfaceOwner ?? null,
+            request.persistHostSessionBinding ?? null,
             ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
           ])
         )
@@ -159,6 +165,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
         ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
       })
+      startupArgs.agentArgs = this.appendExtraAgentLaunchArgs(startupArgs.agentArgs, request.extraAgentArgs)
       const startup =
         request.promptDelivery === 'draft'
           ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
@@ -209,6 +216,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           leafId: operationLeafId,
           preAllocatedHandle: operationHandle,
           viewMode: request.viewMode,
+          persistHostSessionBinding: request.persistHostSessionBinding ?? true,
+          ...(request.surfaceOwner === false ? { surfaceOwner: false } : {}),
           agentSessionCreateOperationId: executionOperationId,
           signal: caller.signal,
           onPtySpawnCommitted: () => {

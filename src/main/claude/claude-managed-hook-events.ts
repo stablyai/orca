@@ -115,10 +115,9 @@ export function getClaudeManagedHookPlan(
   }
 }
 
-// Why: OpenClaude reads its own settings file and accepts every event Orca writes. The statusline
-// usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
+// OpenClaude has separate settings and its statusline reports its own provider identity.
 export const OPENCLAUDE_MANAGED_HOOK_PLAN: ClaudeManagedHookPlan = {
   install: CLAUDE_EVENTS,
   retire: [CLAUDE_SESSION_END_EVENT],
-  statusLine: 'leave'
+  statusLine: 'install'
 }

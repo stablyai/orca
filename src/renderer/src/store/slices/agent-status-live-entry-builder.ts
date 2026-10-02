@@ -250,6 +250,7 @@ export function buildAgentStatusLiveEntry(
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,
     ...(payload.observation ? { observation: payload.observation } : {}),
+    ...(payload.roomDeliveryId ? { roomDeliveryId: payload.roomDeliveryId } : {}),
     interrupted: payload.interrupted,
     sessionBoundary:
       payload.sessionBoundary ??

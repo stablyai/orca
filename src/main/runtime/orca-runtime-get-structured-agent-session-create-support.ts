@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { OrcaRuntimeWithGetWorktreePs } from './orca-runtime-get-worktree-ps'
+import { homedir } from 'node:os'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -24,11 +25,15 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
+import {
+  isStructuredMachineAgent,
+  type StructuredMachineAgent
+} from '../../shared/structured-agent-provider'
 
 export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
-    agent: 'claude' | 'codex'
+    agent: StructuredMachineAgent
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
     return resolveStructuredAgentSessionCreateSupport({
@@ -37,7 +42,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       adapterSupportsCreate:
         agent === 'claude'
           ? supportsClaudeStructuredLocation(location)
-          : supportsCodexStructuredLocation(location),
+          : isStructuredMachineAgent(agent) && supportsCodexStructuredLocation(location),
       getSettings: () => this.requireStore().getSettings()
     })
   }
@@ -45,7 +50,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   /** The saved selection a new chat here starts with. createSupport reports it too, so a client's
    *  picker shows what create will run; one resolver keeps the two from drifting. */
   structuredAgentSessionLaunchSeedOptions(
-    agent: 'claude' | 'codex'
+    agent: StructuredMachineAgent
   ): Record<string, string> | undefined {
     return resolveStructuredLaunchSeedOptions(
       this.requireStore().getSettings().nativeChatSessionOptions,
@@ -93,30 +98,47 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   async resolveStructuredAgentSessionCreateIntent(input: {
     envelope: { sessionId: string; clientOperationId: string }
     worktree: string
-    agent: 'claude' | 'codex'
+    agent: StructuredMachineAgent
     callerKey?: string
     resumeFrom?: { providerSessionId: string }
+    providerSessionId?: string
   }): Promise<AgentSessionAttachParams> {
-    if (input.agent === 'claude') {
-      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) =>
-        resolveStructuredClaudeAccountHomePath({
-          launchEnv,
-          wslDistro: location.wslDistro,
-          getClaudeConfigDirectory: (target) => this.accounts.getClaudeConfigDirectory(target)
-        })
-      )
+    const params = await this.resolveStructuredAgentSessionIntent(
+      input,
+      async ({ launchEnv, location }) => {
+        if (input.agent === 'codex') {
+          await applyStructuredCodexWorkspaceTrust({
+            workspacePath: (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path,
+            launchEnv,
+            settings: this.requireStore().getSettings()
+          })
+          return resolveStructuredCodexAccountHomePath({
+            launchEnv,
+            resolveLaunchHome: this.prepareCodexStructuredLaunchFn
+          })
+        }
+        if (input.agent === 'claude' || input.agent === 'openclaude') {
+          return resolveStructuredClaudeAccountHomePath({
+            launchEnv,
+            wslDistro: location.wslDistro,
+            getClaudeConfigDirectory: (target) => this.accounts.getClaudeConfigDirectory(target)
+          })
+        }
+        return launchEnv.HOME?.trim() || homedir()
+      }
+    )
+    if (!input.providerSessionId) {
+      return params
     }
-    return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv }) => {
-      await applyStructuredCodexWorkspaceTrust({
-        workspacePath: (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path,
-        launchEnv,
-        settings: this.requireStore().getSettings()
-      })
-      return resolveStructuredCodexAccountHomePath({
-        launchEnv,
-        resolveLaunchHome: this.prepareCodexStructuredLaunchFn
-      })
-    })
+    return {
+      ...params,
+      providerHandle:
+        params.provider === 'codex'
+          ? { kind: 'codex', threadId: input.providerSessionId }
+          : params.provider === 'claude'
+            ? { kind: 'claude', sessionId: input.providerSessionId, leafUuid: null }
+            : { kind: 'acp', agent: input.agent, sessionId: input.providerSessionId }
+    }
   }
 
   /**
@@ -156,7 +178,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     input: {
       envelope: { sessionId: string; clientOperationId: string }
       worktree: string
-      agent: 'claude' | 'codex'
+      agent: StructuredMachineAgent
       callerKey?: string
       resumeFrom?: { providerSessionId: string }
     },
@@ -213,10 +235,20 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
         payloadFingerprint: ''
       },
       location,
-      provider: input.agent,
+      provider:
+        input.agent === 'grok' || input.agent === 'omp'
+          ? 'acp'
+          : input.agent === 'openclaude'
+            ? 'claude'
+            : input.agent,
       agent: input.agent,
       accountHome: {
-        variable: input.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+        variable:
+          input.agent === 'codex'
+            ? 'CODEX_HOME'
+            : input.agent === 'claude' || input.agent === 'openclaude'
+              ? 'CLAUDE_CONFIG_DIR'
+              : 'HOME',
         path: adoption ? adoption.accountHomePath : selectedAccountHomePath
       },
       ...(options ? { options } : {}),

@@ -24,7 +24,12 @@ export function registerFilesystemGitModelDiscoveryHandlers(
     'git:discoverCommitMessageModels',
     async (
       _event,
-      args: { agentId: string; worktreePath?: string; connectionId?: string }
+      args: {
+        agentId: string
+        worktreePath?: string
+        connectionId?: string
+        includeSessionDefaults?: boolean
+      }
     ): Promise<DiscoverCommitMessageModelsResult> => {
       const agentId = args.agentId
       const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
@@ -59,7 +64,9 @@ export function registerFilesystemGitModelDiscoveryHandlers(
         localRuntimeTarget = wslDistro
           ? { runtime: 'wsl', wslDistro }
           : getLocalAgentRuntimeTarget(gitOptions)
-        localDiscoveryOptions = wslDistro ? { cwd: worktreePath, wslDistro } : { cwd: worktreePath }
+        localDiscoveryOptions = wslDistro
+          ? { cwd: worktreePath, wslDistro, includeSessionDefaults: args.includeSessionDefaults }
+          : { cwd: worktreePath, includeSessionDefaults: args.includeSessionDefaults }
       }
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         agentId,
@@ -76,7 +83,20 @@ export function registerFilesystemGitModelDiscoveryHandlers(
             agentCommandOverride,
             localDiscoveryOptions
           )
-        : discoverCommitMessageModelsLocal(agentId as TuiAgent, localEnv.env, agentCommandOverride)
+        : args.includeSessionDefaults === undefined
+          ? discoverCommitMessageModelsLocal(
+              agentId as TuiAgent,
+              localEnv.env,
+              agentCommandOverride
+            )
+          : discoverCommitMessageModelsLocal(
+              agentId as TuiAgent,
+              localEnv.env,
+              agentCommandOverride,
+              {
+                includeSessionDefaults: args.includeSessionDefaults
+              }
+            )
     }
   )
 }

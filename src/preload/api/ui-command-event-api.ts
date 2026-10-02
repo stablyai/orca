@@ -166,6 +166,7 @@ export type UiCommandEventApi = {
       focus?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      preserveSessionOnClose?: boolean
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -240,7 +241,8 @@ export type UiCommandEventApi = {
   ) => () => void
   onMobileMarkdownRequest: (callback: (request: RuntimeMobileMarkdownRequest) => void) => () => void
   respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse) => void
-  onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void) => () => void
+  onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget & { preserveSessionOnClose?: boolean }) => void) => () => void
+  notifyTerminalSurfaceClosed: (tabId: string) => void
   onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void

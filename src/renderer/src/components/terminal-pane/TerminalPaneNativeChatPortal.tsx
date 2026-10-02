@@ -13,6 +13,7 @@ export function TerminalPaneNativeChatPortal({
   controller: TerminalPaneController
 }): React.JSX.Element | null {
   const {
+    restartCodexSession,
     chatPane,
     chatPaneLaunchAgent,
     chatPaneOwnsTabWideLaunchDraft,
@@ -76,6 +77,11 @@ export function TerminalPaneNativeChatPortal({
         resolvedAgent={chatPaneResolvedAgent}
         ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
         onSwitchToTerminal={switchNativeChatToTerminal}
+        restartSession={(values, sessionId) => {
+          if (!restartCodexSession(chatPane.id, values, sessionId)) {
+            throw new Error('Codex session cannot be resumed with the selected options.')
+          }
+        }}
         readTerminalScreen={readNativeChatTerminalScreen}
         contextMenuActions={contextMenuActions}
       />

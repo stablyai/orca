@@ -27,8 +27,17 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
-vi.mock('./NativeChatSessionOptionPickers', () => ({
-  NativeChatSessionOptionPickers: () => <div data-testid="session-option-pickers" />
+vi.mock('../agent-session-controls/AgentSessionControls', () => ({
+  AgentSessionControls: ({ showContextIndicator }: { showContextIndicator: boolean }) => (
+    <div
+      data-testid="session-option-pickers"
+      data-context-indicator={String(showContextIndicator)}
+    />
+  )
+}))
+
+vi.mock('./NativeChatContextUsageRing', () => ({
+  NativeChatContextUsageRing: () => <div data-testid="context-usage-ring" />
 }))
 
 import { NativeChatComposerActions } from './NativeChatComposerActions'
@@ -36,6 +45,35 @@ import { NativeChatComposerActions } from './NativeChatComposerActions'
 afterEach(() => cleanup())
 
 describe('NativeChatComposerActions', () => {
+  it.each([false, true])('renders one context indicator when usage is reported: %s', (reported) => {
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        isWorking={false}
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={vi.fn()}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+        contextUsage={
+          reported
+            ? { usedTokens: 10, windowTokens: 100, percentage: 10, estimated: false, rows: [] }
+            : null
+        }
+      />
+    )
+    expect(
+      screen.getByTestId('session-option-pickers').getAttribute('data-context-indicator')
+    ).toBe(String(!reported))
+    expect(screen.queryAllByTestId('context-usage-ring')).toHaveLength(reported ? 1 : 0)
+  })
+
   it('places session option pickers immediately beside dictation', () => {
     render(
       <NativeChatComposerActions
@@ -112,6 +150,34 @@ describe('NativeChatComposerActions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop the agent' }), { detail: 2 })
 
     expect(onSend).not.toHaveBeenCalled()
+    expect(onStop).not.toHaveBeenCalled()
+  })
+
+  it('turns a working composer into Add to queue when sending remains available', () => {
+    const onSend = vi.fn()
+    const onStop = vi.fn()
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        isWorking
+        sendWhileWorking
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={onSend}
+        onStop={onStop}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
+    expect(onSend).toHaveBeenCalledOnce()
     expect(onStop).not.toHaveBeenCalled()
   })
 })

@@ -11,6 +11,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'aiVault.listSessions',
   'aiVault.searchSessions',
   'aiVault.searchStatus',
+  'aiVault.listSubagentSessions',
   'aiVault.resolveSessionTitles',
   'aiVault.prepareSessionResume',
   'browser.back',
@@ -231,6 +232,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'agentSession.conversationCommand',
   'agentSession.commands',
   'agentSession.history',
+  'agentSession.subagents',
   'agentSession.subscribe',
   'agentSession.unsubscribe',
   // No-ops on a current host; kept until MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION passes the

@@ -330,6 +330,10 @@ describe('startup and other non-chat work without a structured host', () => {
       // Once a person moves the file aside, a chat request installs the host.
       await unlink(journalDatabasePath(root))
       const host = await install()
+      vi.spyOn(host, 'getPersistedVisibleSessionTabIndex').mockReturnValue({
+        present: true,
+        sessionIds: ['claude-1']
+      })
       vi.spyOn(host, 'listSessionTabs').mockReturnValue([
         { workspaceId: 'workspace-1', sessionId: 'claude-1', agent: 'claude' }
       ])

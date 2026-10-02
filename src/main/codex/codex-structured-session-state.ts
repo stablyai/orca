@@ -33,6 +33,7 @@ export type CodexStructuredLaunch = {
   cwd: string
   codexHome: string | null
   resumeThreadId: string | null
+  resumeOrigin?: 'adopted' | 'resumed'
   resumePath?: string | null
   /** The resumed thread is this session's own creation: when Codex answers that it holds no
    *  rollout for it, start a new thread in its place. Never set for a thread a resume proved. */

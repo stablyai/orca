@@ -1,11 +1,11 @@
 import React from 'react'
-import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
+import type { ActivityBarPosition } from '@/store/slices/editor'
 import type { CheckStatus } from '../../../../shared/github/pull-request-types'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { ActivityBarButton, TopActivityOverflowMenu } from './activity-bar-buttons'
-import type { ActivityBarItem } from './activity-bar-buttons'
+import type { ActivityBarItem, RightSidebarActivityTab } from './activity-bar-buttons'
 import { ActivityBarPositionMenu } from './activity-bar-position-menu'
 import {
   RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
@@ -27,8 +27,8 @@ export function RightSidebarTopActivityBar({
   hasDesktopWindowChrome: boolean
   topActivityStripRef: (node: HTMLDivElement | null) => void
   topActivityLayout: { visibleItems: ActivityBarItem[]; overflowItems: ActivityBarItem[] }
-  effectiveTab: ActiveRightSidebarTab
-  onSelectTab: (tab: ActiveRightSidebarTab) => void
+  effectiveTab: RightSidebarActivityTab
+  onSelectTab: (tab: RightSidebarActivityTab) => void
   checksStatus: CheckStatus | null
   closeButton: React.ReactNode
   activityBarPosition: ActivityBarPosition

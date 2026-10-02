@@ -6,9 +6,6 @@ function savedSessionId(tab: Tab): string | null {
   if (tab.executionHostId && tab.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
     return null
   }
-  if (tab.agentSessionAgent === 'claude') {
-    return null
-  }
   return tab.contentType === 'agent-session' ? tab.entityId : null
 }
 

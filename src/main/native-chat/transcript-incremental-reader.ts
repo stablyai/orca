@@ -1,12 +1,10 @@
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
-import {
-  MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
-  type NativeChatLineDecoder
-} from './transcript-tail-reader'
+import { MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES } from './transcript-tail-boundary'
+import type { NativeChatLineDecoder } from './transcript-line-decoders'
 import { openTranscriptReadStream, wslGatedStat } from './wsl-transcript-fs-access'
 
-const APPEND_BATCH_MESSAGE_LIMIT = 40
+export const APPEND_BATCH_MESSAGE_LIMIT = 40
 
 export type IncrementalTranscriptState = {
   offset: number
@@ -41,7 +39,8 @@ export async function readIncrementalTranscriptMessages(
   onBatch?: (messages: NativeChatMessage[]) => void,
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onOversizedRecord?: () => void
 ): Promise<NativeChatMessage[]> {
   const end = (await wslGatedStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
@@ -88,6 +87,7 @@ export async function readIncrementalTranscriptMessages(
     }
     state.pendingBytes += part.length
     if (state.pendingBytes > MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES) {
+      onOversizedRecord?.()
       state.pendingChunks.length = 0
       state.droppingOversizedRecord = true
       return

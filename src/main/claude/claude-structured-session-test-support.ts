@@ -161,6 +161,7 @@ export function fakeClaude(
         // Shape measured from Claude Code 2.1.258: {applied, effective, sources},
         // and the only place the session's current effort is reported.
         return (
+          routed('get_settings') ??
           options.settings ?? {
             applied: { model: 'claude-sonnet-5', effort: 'high', advisor: null, ultracode: false },
             effective: { model: 'claude-sonnet-5', effortLevel: 'high', env: {} },

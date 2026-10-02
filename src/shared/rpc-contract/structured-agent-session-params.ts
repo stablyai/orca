@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
+import { STRUCTURED_MACHINE_AGENTS } from '../structured-agent-provider'
 import { isAgentSessionId } from '../agent-session-record'
 import { normalizeExecutionHostId } from '../execution-host'
 import {
@@ -70,6 +71,13 @@ export const ProviderHandle = z.discriminatedUnion('kind', [
       sessionId: Identifier('Invalid provider session id'),
       leafUuid: Identifier('Invalid leaf uuid').nullable()
     })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('acp'),
+      agent: z.enum(STRUCTURED_MACHINE_AGENTS),
+      sessionId: Identifier('Invalid provider session id')
+    })
     .strict()
 ])
 
@@ -92,7 +100,7 @@ export const ExecutionLocation = z
 
 export const AccountHome = z
   .object({
-    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME']),
+    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HOME']),
     path: z.string().min(1).max(4096)
   })
   .strict()
@@ -101,7 +109,7 @@ export const AttachParams = z
   .object({
     envelope: MutationEnvelope,
     location: ExecutionLocation,
-    provider: z.enum(['codex', 'claude']),
+    provider: z.enum(['codex', 'claude', 'acp']),
     agent: Identifier('Invalid agent'),
     accountHome: AccountHome,
     runtimeKind: z.literal('native'),
@@ -122,7 +130,7 @@ export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex']),
+    agent: z.enum(STRUCTURED_MACHINE_AGENTS),
     resumeFrom: ResumeSource.optional(),
     /**
      * The tab id the client reserved for this chat, so it can place the tab before the reply. The
@@ -141,7 +149,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex'])
+    agent: z.enum(STRUCTURED_MACHINE_AGENTS)
   })
   .strict()
 
@@ -185,6 +193,8 @@ export const SendParams = z
       )
   })
   .strict()
+
+export const SteerParams = SendParams
 
 export const CancelParams = z
   .object({
@@ -290,6 +300,9 @@ export const SetOptionParams = z
   .strict()
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const SubagentsParams = OptionsParams.extend({
+  parentFilePath: z.string().min(1).max(4096).optional()
+})
 
 /** `sessionId` scopes the catalog to that session's pinned account; without a
  *  session record the host keys it by the account a new launch would pin.

@@ -140,6 +140,7 @@ const Question = z
     question: z.string(),
     header: z.string().optional(),
     multiSelect: z.boolean(),
+    secret: z.boolean().optional(),
     options: z.array(PromptOption),
     freeTextQuestionId: z.string().optional()
   })
@@ -179,7 +180,8 @@ const MessageBody = z.object({
   blocks: z.array(Block),
   // Open like roles: a send mode a newer build writes must not turn the row malformed.
   sentAs: z.string().min(1).optional(),
-  command: z.object({ name: z.string().min(1) }).optional()
+  command: z.object({ name: z.string().min(1) }).optional(),
+  assistantPhase: z.string().optional()
 })
 
 const ThreadGoal = z.object({
@@ -295,6 +297,10 @@ export const AgentJournalProducerLinkageFields = {
   producerKind: z.string().min(1).optional(),
   attempt: z.number().int().optional()
 } as const
+export const AgentJournalTurnSchema = z.object({
+  turnId: z.string().min(1),
+  root: z.literal(true).optional()
+})
 
 /** Open like the other persisted vocabularies: a scope kind a newer host states must not turn
  *  the row malformed. A reader places only `turn` with an id; anything else reads as `thread`. */
@@ -310,6 +316,8 @@ export const AgentJournalRenderItemSchema = z.object({
   sequence: z.number().int(),
   sequenceIndex: z.number().int().nonnegative().optional(),
   observedAt: z.number(),
+  updatedAt: z.number().optional(),
+  turn: AgentJournalTurnSchema.optional(),
   recovered: z.literal(true).optional(),
   recoveredAt: z.number().optional(),
   turnScope: AgentJournalTurnScopeSchema.optional(),

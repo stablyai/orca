@@ -1,4 +1,5 @@
 import { closeSync, openSync, readSync, readdirSync, statSync, type Stats } from 'node:fs'
+import { acceptCodexRolloutRecord, type CodexRolloutScope } from './codex-rollout-scope'
 
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
@@ -6,6 +7,7 @@ const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
 
 /** Resume point for an incremental read of one Codex rollout file. */
 export type JsonlCursor = {
+  scope?: CodexRolloutScope
   filePath?: string
   offset: number
   carry: string
@@ -38,6 +40,7 @@ export function readJsonlCursor(
   if (stats.size < cursor.offset) {
     cursor.offset = 0
     cursor.carry = ''
+    cursor.scope = undefined
   }
   if (stats.size === cursor.offset) {
     return []
@@ -75,7 +78,7 @@ export function readJsonlCursor(
     }
     try {
       const parsed = record(JSON.parse(line) as unknown)
-      if (parsed) {
+      if (parsed && acceptCodexRolloutRecord((cursor.scope ??= {}), parsed)) {
         records.push(parsed)
       }
     } catch {

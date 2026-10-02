@@ -144,6 +144,31 @@ describe('structured Codex session options', () => {
     ).toEqual({ model: 'gpt-live', effort: 'high' })
   })
 
+  it('exposes model, effort, and Fast mode to structured clients', async () => {
+    const session = optionSession(
+      vi.fn(async () => ({
+        data: [
+          {
+            model: 'gpt-live',
+            serviceTiers: [{ id: 'priority', name: 'Fast' }],
+            supportedReasoningEfforts: [{ reasoningEffort: 'medium' }, { reasoningEffort: 'high' }],
+            defaultReasoningEffort: 'medium'
+          }
+        ],
+        nextCursor: null
+      }))
+    )
+    session.options.set('serviceTier', 'priority')
+
+    const result = await readLiveCodexSessionOptions(session, undefined)
+
+    expect(result.descriptors?.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
+    expect(result.descriptors?.find(({ id }) => id === 'fastMode')).toMatchObject({
+      kind: { type: 'boolean', currentValue: true },
+      settable: true
+    })
+  })
+
   it('reconciles an incompatible effort when only the model changes', async () => {
     const session = optionSession(
       vi.fn(async () => ({

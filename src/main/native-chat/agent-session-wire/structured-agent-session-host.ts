@@ -33,8 +33,6 @@ import {
   structuredAgentSessionMutationDelegates,
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-host-mutations'
-import { settleStructuredAgentSessionLateDispatch } from './structured-agent-session-late-dispatch'
-import { releaseStructuredAgentSessionUnansweredDispatches } from './structured-agent-session-unanswered-dispatch-release'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type {
   StructuredAgentSessionCaller,
@@ -54,6 +52,7 @@ import { createStructuredAgentSessionConversationDelivery } from './structured-a
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
+import { listHostSubagentSessions } from './structured-agent-session-subagents'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
@@ -61,6 +60,8 @@ export class StructuredAgentSessionHost {
     () => this.mutationContext(),
     this
   )
+  listSubagentSessions = (sessionId: string, parentFilePath?: string) =>
+    listHostSubagentSessions(this.deps, this.sessions, sessionId, parentFilePath)
   private readonly sessions = new StructuredAgentSessionConversations({
     deliver: (sessionId, journal) => {
       this.subscribers.publish(sessionId, journal)
@@ -180,7 +181,7 @@ export class StructuredAgentSessionHost {
   private now = (): number => this.deps.now?.() ?? Date.now()
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
-  sessionAgent = (sessionId: string) => this.deps.store.getRecord(sessionId)?.provider ?? null
+  hasProviderChild = (id: string): boolean => this.sessions.get(id)?.child != null
 
   handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
     this.eventRecovery.handle(event)
@@ -243,12 +244,11 @@ export class StructuredAgentSessionHost {
 
   private serialize = this.tasks.serialize.bind(this.tasks)
 
-  attach(
+  attach = (
     caller: StructuredAgentSessionCaller,
     params: AgentSessionAttachParams
-  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionAttachResult>> {
-    return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
-  }
+  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionAttachResult>> =>
+    attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
 
   flushStreamedEvents = (sessionId: string): Promise<void> =>
     this.runtimeState.flushEventSink(sessionId)
@@ -298,8 +298,9 @@ export class StructuredAgentSessionHost {
   queuedMessagesResume = this.queued.queuedMessagesResume
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
-
   private mutations = structuredAgentSessionMutationDelegates(() => this.mutationContext())
+  sessionAgent = this.mutations.sessionAgent
+  steer = this.mutations.steer
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
   setOption = this.mutations.setOption
@@ -314,6 +315,11 @@ export class StructuredAgentSessionHost {
   conversationReplacements = () => this.conversationCommands.replacements()
   /** Undefined means unavailable; an empty array is an authoritative catalog. */
   readCommands = (sessionId: string) => ({ commands: this.clientDelivery.readCommands(sessionId) })
+
+  readContext = (sessionId: string) => this.deps.adapter.readContext?.(sessionId) ?? null
+
+  readConfiguration = (sessionId: string) =>
+    this.deps.adapter.readConfiguration?.(sessionId) ?? null
 
   /** From the record store, never the session map: an idle-released chat has no map entry. */
   handoffStatus = (sessionId: string): SessionWire.AgentSessionHandoffStatus =>
@@ -330,12 +336,8 @@ export class StructuredAgentSessionHost {
   subscribe = (input: AgentSessionSubscribeInput): Promise<() => void> =>
     this.backgroundTasks.subscribe(input)
 
-  settleLateDispatch = (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
-    settleStructuredAgentSessionLateDispatch(this.mutationContext(), input)
-
-  releaseUnansweredDispatches = (
-    input: Parameters<typeof releaseStructuredAgentSessionUnansweredDispatches>[1]
-  ) => releaseStructuredAgentSessionUnansweredDispatches(this.mutationContext(), input)
+  settleLateDispatch = this.mutations.settleLateDispatch
+  releaseUnansweredDispatches = this.mutations.releaseUnansweredDispatches
 
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)

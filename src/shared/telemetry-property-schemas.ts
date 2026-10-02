@@ -202,6 +202,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalPet',
   'experimentalNativeChat',
   'experimentalStructuredNativeChat',
+  'experimentalRoomLiveSteering',
   'experimentalActivity',
   'experimentalAgentDashboardPopout',
   'experimentalTerminalAttention',

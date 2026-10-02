@@ -1,7 +1,10 @@
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
+import type { ClaudeConversationActivity } from '../harness-conversation/claude-activity'
+import type { StructuredProviderConfiguration } from '../../shared/structured-agent-provider'
 import type {
   AgentJournalItemIdentity,
+  AgentJournalTurn,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -51,6 +54,7 @@ export type ClaudeStructuredSessionEvent =
       clientMessageId?: string
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
+      turn?: AgentJournalTurn
     }
   | { type: 'provider-frame'; sessionId: string; kind: string; payload: unknown }
   | { type: 'prompt'; sessionId: string; prompt: ClaudePendingPrompt }
@@ -148,6 +152,8 @@ export type ClaudeDispatchWaiter = {
 }
 
 export type ClaudeSession = {
+  contextActivity?: ClaudeConversationActivity
+  configuration?: StructuredProviderConfiguration
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
   /** Latest main-chain message seen on the live stream, mid-turn included. */

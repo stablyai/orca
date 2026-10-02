@@ -12,6 +12,7 @@ import {
 } from './transcript-incremental-reader'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
 import { emitTranscriptUnavailableSnapshot } from './transcript-unavailable-snapshot'
+import { detectTranscriptReplacement } from './transcript-replacement-detection'
 import { transcriptWatcherPathIsInstallable } from './transcript-watcher-install-probe'
 import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
 import type {
@@ -27,6 +28,8 @@ import {
 } from './wsl-transcript-watcher-running-guard'
 import { observeWslTranscriptRunningState } from './wsl-transcript-running-observer'
 import { trackActiveNativeChatWatcher } from './transcript-watcher-count'
+import { grokUpdatesReplayDrain } from './transcript-grok-updates-replay'
+import { readTranscriptWatchAppends } from './transcript-watch-appends'
 
 /** Install a live tail, or return null when the resolved file is not readable yet. */
 export async function installTranscriptWatcher(
@@ -39,62 +42,44 @@ export async function installTranscriptWatcher(
   if (!(await transcriptWatcherPathIsInstallable(filePath, signal))) {
     return null
   }
-  const { onAppend, onInitialSnapshot, onReplace, initialLimit } = args
+  const { onInitialSnapshot, onReplace, initialLimit } = args
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
 
   const state = createIncrementalTranscriptState()
+  const grokReplay = grokUpdatesReplayDrain(filePath, args, state)
   let watchedVersion: TranscriptFileVersion | null = null
   let watchedBoundary = ''
   let initialDrain = true,
     initialErrorEmitted = false
   let closed = false
-  // Why: every gated call on the drain path must detach the moment we
-  // unsubscribe, instead of holding a waiter until its 30s deadline, and an
-  // aborted signal also makes the gate refuse admission for anything the
-  // in-flight drain would start after teardown.
+  // Why: teardown must abort every gated operation, including work queued by a drain.
   const gateAbort = new AbortController()
   let reading = false
   let pendingReadRequested = false
   let rotationRetryCount = 0
 
   function scheduleRotationRetry(): void {
-    if (closed) {
-      return
-    }
-    const retryDelay = Math.min(25 * 2 ** Math.min(rotationRetryCount, 7), 2_000)
-    if (scheduler.scheduleRetry(retryDelay)) {
-      rotationRetryCount += 1
+    if (!closed) {
+      rotationRetryCount = scheduler.scheduleRotationRetry(rotationRetryCount)
     }
   }
 
-  async function readAndEmitAppends(): Promise<void> {
-    let lifecycle: NativeChatTurnLifecycle | undefined
-    const remaining = await readIncrementalTranscriptMessages(
+  const readAndEmitAppends = (): Promise<void> =>
+    readTranscriptWatchAppends({
       filePath,
       state,
       decode,
-      (messages) => {
-        if (!closed) {
-          onAppend(messages)
-        }
-      },
-      decodeLifecycle ?? undefined,
-      (nextLifecycle) => {
-        lifecycle = nextLifecycle
-      },
-      gateAbort.signal
-    )
-    if (!closed && (remaining.length > 0 || lifecycle)) {
-      onAppend(remaining, lifecycle)
-    }
-  }
+      args,
+      decodeLifecycle,
+      signal: gateAbort.signal,
+      isClosed: () => closed
+    })
 
   async function finishSuccessfulDrain(startVersion: TranscriptFileVersion): Promise<void> {
     watchedBoundary = await boundaryFingerprint(filePath, state.offset, gateAbort.signal)
     const completedVersion = await readTranscriptFileVersion(filePath, gateAbort.signal)
     if (transcriptFileVersionChanged(completedVersion, startVersion)) {
-      // Why: a write racing this drain needs another pass even when the reader
-      // happened to reach its new EOF; timestamp-only rewrites may need replace.
+      // Why: a racing write or timestamp-only rewrite needs another pass.
       watchedVersion = startVersion
       pendingReadRequested = true
     } else {
@@ -118,17 +103,13 @@ export async function installTranscriptWatcher(
     if (closed) {
       return
     }
-    const identityChanged = watchedVersion !== null && current.identity !== watchedVersion.identity
-    const sameSizeVersionChanged =
-      watchedVersion !== null &&
-      current.identity === watchedVersion.identity &&
-      current.size === watchedVersion.size &&
-      transcriptFileVersionChanged(current, watchedVersion)
-    const contentReplaced =
-      identityChanged ||
-      sameSizeVersionChanged ||
-      current.size < state.offset ||
-      (state.offset > 0 && watchedBoundary !== currentBoundary)
+    const { identityChanged, contentReplaced } = detectTranscriptReplacement(
+      current,
+      watchedVersion,
+      state.offset,
+      currentBoundary,
+      watchedBoundary
+    )
     if (identityChanged) {
       nativeWatcher.invalidate()
     }
@@ -138,9 +119,14 @@ export async function installTranscriptWatcher(
     // Why: subscriber callbacks may replace the path before the drain can finish.
     watchedVersion ??= current
 
+    if (grokReplay) {
+      await grokReplay(gateAbort.signal)
+      initialDrain = false
+      return finishSuccessfulDrain(current)
+    }
+
     const replacementSnapshot =
-      // Why: 0 is a valid window — an explicit undefined check keeps an empty
-      // snapshot empty instead of falling back to an unbounded incremental read.
+      // Why: 0 is a valid window and must not fall back to an unbounded read.
       contentReplaced && !initialDrain && onReplace && initialLimit !== undefined
         ? await readNativeChatTranscriptTailFile(
             filePath,
@@ -243,11 +229,7 @@ export async function installTranscriptWatcher(
         try {
           await drainOnce()
         } catch (error) {
-          // Why: unlink/recreate can detach fs.watch from the pathname. Keep one
-          // capped-backoff retry alive until a successor appears or we unsubscribe.
-          // A still-pending initial drain also surfaces one error snapshot so a
-          // watching client isn't stranded at 'loading' when the read keeps
-          // throwing; initialDrain stays true so a recovered read can still win.
+          // Why: unlink/recreate detaches fs.watch; retry and surface one initial error.
           initialErrorEmitted ||=
             !closed &&
             initialDrain &&

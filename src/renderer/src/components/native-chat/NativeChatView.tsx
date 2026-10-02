@@ -30,6 +30,7 @@ function NativeChatBridgeView({
   resolvedAgent,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
+  restartSession,
   readTerminalScreen,
   contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
@@ -57,6 +58,9 @@ function NativeChatBridgeView({
           terminalTabId={terminalTabId}
           ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
           onSwitchToTerminal={onSwitchToTerminal}
+          restartSession={
+            restartSession ? (values) => restartSession(values, resolution.sessionId) : undefined
+          }
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
         />

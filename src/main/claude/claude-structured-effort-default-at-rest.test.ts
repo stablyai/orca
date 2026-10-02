@@ -127,6 +127,7 @@ function restingRecord(options: Record<string, string>): AgentSessionRecord {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
   return {
     provider: 'claude',
+    providerHandleChain: [],
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME },
     location: { wslDistro: null },
     options
@@ -232,6 +233,7 @@ describe('Claude effort default at rest', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
     const record = {
       provider: 'codex',
+      providerHandleChain: [],
       accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
       location: { wslDistro: null },
       options: { model: 'gpt-unlisted', effort: 'high' }
@@ -307,6 +309,7 @@ describe('Claude effort default at rest', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
     const record = {
       provider: 'codex',
+      providerHandleChain: [],
       accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
       location: { wslDistro: null },
       options: { model: 'gpt-5.5', effort: 'high' }
@@ -324,6 +327,7 @@ describe('Claude effort default at rest', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
     const record = {
       provider: 'codex',
+      providerHandleChain: [],
       accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
       location: { wslDistro: null },
       options: { model: 'gpt-5.5' }

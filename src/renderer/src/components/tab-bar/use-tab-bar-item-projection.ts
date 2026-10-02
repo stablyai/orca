@@ -25,7 +25,8 @@ export function useTabBarItemProjection({
   unifiedTabs,
   unifiedTabByVisibleId,
   generatedTabTitlesEnabled,
-  statusByRelativePath
+  statusByRelativePath,
+  activeGroupTabId
 }: {
   props: TabBarProps
   resolvedGroupId: string
@@ -33,6 +34,7 @@ export function useTabBarItemProjection({
   unifiedTabByVisibleId: Map<string, Tab>
   generatedTabTitlesEnabled: boolean
   statusByRelativePath: Map<string, GitFileStatus>
+  activeGroupTabId: string | null
 }): TabBarItemProjection {
   const {
     tabs,
@@ -78,6 +80,13 @@ export function useTabBarItemProjection({
     () => agentSessionTabs?.map((tab) => tab.id) ?? [],
     [agentSessionTabs]
   )
+  const roomTabIds = useMemo(
+    () =>
+      unifiedTabs
+        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'room')
+        .map((tab) => tab.id),
+    [resolvedGroupId, unifiedTabs]
+  )
   const orderedItems = useMemo(
     () =>
       buildOrderedTabItems({
@@ -87,6 +96,7 @@ export function useTabBarItemProjection({
         browserTabIds,
         simulatorTabIds,
         agentSessionTabIds,
+        roomTabIds,
         terminalMap,
         editorMap,
         browserMap,
@@ -100,6 +110,7 @@ export function useTabBarItemProjection({
       browserTabIds,
       simulatorTabIds,
       agentSessionTabIds,
+      roomTabIds,
       terminalMap,
       editorMap,
       browserMap,
@@ -121,7 +132,8 @@ export function useTabBarItemProjection({
         activeFileId,
         activeBrowserTabId,
         activeSimulatorTabId,
-        activeTabType
+        activeTabType,
+        activeGroupTabId
       }),
     [
       activeBrowserTabId,
@@ -129,6 +141,7 @@ export function useTabBarItemProjection({
       activeSimulatorTabId,
       activeTabId,
       activeTabType,
+      activeGroupTabId,
       orderedItems
     ]
   )

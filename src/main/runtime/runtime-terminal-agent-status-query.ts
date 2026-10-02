@@ -45,23 +45,30 @@ export class RuntimeTerminalAgentStatusQuery {
 
   constructor(private readonly deps: Dependencies) {}
 
-  async getStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
-    const existing = this.inFlight.get(handle)
+  async getStatus(
+    handle: string,
+    options?: { confirmForeground?: boolean }
+  ): Promise<RuntimeTerminalAgentStatus> {
+    const requestKey = `${handle}\0${options?.confirmForeground === true ? 'confirmed' : 'cached'}`
+    const existing = this.inFlight.get(requestKey)
     if (existing) {
       return existing
     }
-    const request = this.readStatus(handle)
-    this.inFlight.set(handle, request)
+    const request = this.readStatus(handle, options)
+    this.inFlight.set(requestKey, request)
     try {
       return await request
     } finally {
-      if (this.inFlight.get(handle) === request) {
-        this.inFlight.delete(handle)
+      if (this.inFlight.get(requestKey) === request) {
+        this.inFlight.delete(requestKey)
       }
     }
   }
 
-  private async readStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
+  private async readStatus(
+    handle: string,
+    options?: { confirmForeground?: boolean }
+  ): Promise<RuntimeTerminalAgentStatus> {
     const ptyId = this.getPtyId(handle)
     const terminal = this.getSnapshot(handle, ptyId)
     const explicitStatus = this.deps.getExplicitStatus(handle)
@@ -83,6 +90,13 @@ export class RuntimeTerminalAgentStatusQuery {
       lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
     )
     if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
+      if (
+        options?.confirmForeground &&
+        (await this.terminalHasShellForegroundProcess(handle, ptyId))
+      ) {
+        this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
+        return { handle, isRunningAgent: false, status: null }
+      }
       return { handle, isRunningAgent: true, status: 'permission' }
     }
     if (
@@ -91,6 +105,13 @@ export class RuntimeTerminalAgentStatusQuery {
       (blockedByWaitText === 'agent-approval-prompt' ||
         (newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt))
     ) {
+      if (
+        options?.confirmForeground &&
+        (await this.terminalHasShellForegroundProcess(handle, ptyId))
+      ) {
+        this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
+        return { handle, isRunningAgent: false, status: null }
+      }
       return { handle, isRunningAgent: true, status: 'permission' }
     }
     if (explicitStatus) {
@@ -121,10 +142,19 @@ export class RuntimeTerminalAgentStatusQuery {
           status: isRunningAgent ? terminal.titleStatus : null
         }
       }
+      if (
+        options?.confirmForeground &&
+        (await this.terminalHasShellForegroundProcess(handle, ptyId))
+      ) {
+        this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
+        return { handle, isRunningAgent: false, status: null }
+      }
       return { handle, isRunningAgent: true, status: terminal.titleStatus }
     }
 
-    const isRunningAgent = await this.deps.isRunning(handle)
+    const isRunningAgent = options?.confirmForeground
+      ? !(await this.terminalHasShellForegroundProcess(handle, ptyId))
+      : await this.deps.isRunning(handle)
     this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
     return { handle, isRunningAgent, status: null }
   }

@@ -1,5 +1,5 @@
 import React from 'react'
-import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import { FilePlus, FileText, Globe, MessagesSquare, Smartphone, TerminalSquare } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -29,7 +29,8 @@ export function TabBarStaticCreateMenu({
   newSimulatorShortcut,
   newFileShortcut,
   openMarkdownShortcut,
-  queueNewActiveTerminalFocusAfterNewTabMenuClose
+  queueNewActiveTerminalFocusAfterNewTabMenuClose,
+  onOpenRooms
 }: {
   props: TabBarProps
   terminalOnly: boolean
@@ -49,6 +50,7 @@ export function TabBarStaticCreateMenu({
   newFileShortcut: string
   openMarkdownShortcut: string | null
   queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void
+  onOpenRooms: () => void
 }): React.ReactNode {
   const {
     newTabMenuOrder = 'default',
@@ -177,6 +179,15 @@ export function TabBarStaticCreateMenu({
     onNewSimulatorTab ? (
       <MobileEmulatorTabIntroCallout />
     ) : null
+  const roomsMenuItem = !terminalOnly ? (
+    <DropdownMenuItem
+      onSelect={onOpenRooms}
+      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+    >
+      <MessagesSquare className="size-4 text-muted-foreground" />
+      {translate('rooms.menu.label', 'Rooms')}
+    </DropdownMenuItem>
+  ) : null
 
   return newTabMenuOrder === 'markdown-first' ? (
     <>
@@ -186,6 +197,7 @@ export function TabBarStaticCreateMenu({
       {newBrowserMenuItem}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}
+      {roomsMenuItem}
     </>
   ) : (
     <>
@@ -195,6 +207,7 @@ export function TabBarStaticCreateMenu({
       {openMarkdownMenuItem}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}
+      {roomsMenuItem}
     </>
   )
 }

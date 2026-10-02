@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
@@ -9,7 +10,16 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 function sinkState() {
   const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
   const sink: StructuredAgentSessionEventSink = {
-    appendItem: (identity, body) => items.push({ identity, body }),
+    appendItem: (identity, body) => {
+      const index = items.findIndex(
+        (item) => agentJournalItemKey(item.identity) === agentJournalItemKey(identity)
+      )
+      if (index === -1) {
+        items.push({ identity, body })
+      } else {
+        items[index] = { identity, body }
+      }
+    },
     appendTombstone: () => {},
     publish: vi.fn()
   }

@@ -6,9 +6,10 @@ import {
   structuredAgentLaunchSupported
 } from './agent-launch-routing'
 
-const settings = {
+const settings: NonNullable<Parameters<typeof resolveAgentLaunchRoute>[0]['settings']> = {
   experimentalNativeChat: true,
   experimentalStructuredNativeChat: true,
+  enabledHarnessStreamingAgents: ['codex', 'claude'],
   openAgentTabsInChatByDefault: true
 }
 
@@ -91,10 +92,25 @@ describe('resolveAgentLaunchRoute', () => {
   })
 
   it.each([
-    ['SSH', 'ssh:host-a'],
-    ['paired runtime', 'runtime:environment-a']
-  ])('preserves execution ownership on %s', (_name, executionHostId) => {
-    expect(route({ executionHostId })).toBe('legacy-native-chat')
+    ['SSH', 'ssh:host-a', 'legacy-native-chat'],
+    ['paired runtime', 'runtime:environment-a', 'structured-native-chat']
+  ])('preserves execution ownership on %s', (_name, executionHostId, expected) => {
+    expect(route({ executionHostId })).toBe(expected)
+  })
+
+  it('requires each harness to be enabled, with Codex as the default selection', () => {
+    expect(
+      route({
+        agent: 'claude',
+        settings: { ...settings, enabledHarnessStreamingAgents: undefined }
+      })
+    ).toBe('legacy-native-chat')
+    expect(route({ settings: { ...settings, enabledHarnessStreamingAgents: undefined } })).toBe(
+      'structured-native-chat'
+    )
+    expect(route({ settings: { ...settings, enabledHarnessStreamingAgents: [] } })).toBe(
+      'legacy-native-chat'
+    )
   })
 
   it.each(['git-worktree', 'folder'] as const)(

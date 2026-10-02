@@ -7,7 +7,8 @@ import {
 } from '../ssh/ssh-channel-multiplexer'
 import {
   discoverCommitMessageModelsLocal,
-  discoverCommitMessageModelsRemote
+  discoverCommitMessageModelsRemote,
+  parseCodexAppServerModelDiscovery
 } from './commit-message-text-generation'
 import {
   createChildTerminationExpectation,
@@ -34,6 +35,42 @@ vi.mock('child_process', async (importOriginal) => {
 const spawnMock = vi.mocked(spawn)
 
 const expectChildTerminated = createChildTerminationExpectation(terminateWindowsProcessTreeMock)
+
+describe('parseCodexAppServerModelDiscovery', () => {
+  it('uses the account catalog and effective configured model and effort', () => {
+    expect(
+      parseCodexAppServerModelDiscovery(
+        {
+          data: [
+            {
+              id: 'gpt-5.6-sol',
+              displayName: 'GPT-5.6 Sol',
+              isDefault: true,
+              hidden: false,
+              defaultReasoningEffort: 'high',
+              supportedReasoningEfforts: [{ reasoningEffort: 'high' }, { reasoningEffort: 'xhigh' }]
+            },
+            { id: 'hidden', hidden: true }
+          ]
+        },
+        { config: { model: 'gpt-5.6-sol', model_reasoning_effort: 'xhigh' } }
+      )
+    ).toEqual({
+      defaultModelId: 'gpt-5.6-sol',
+      models: [
+        {
+          id: 'gpt-5.6-sol',
+          label: 'GPT-5.6 Sol',
+          thinkingLevels: [
+            { id: 'high', label: 'High' },
+            { id: 'xhigh', label: 'Extra high' }
+          ],
+          defaultThinkingLevel: 'xhigh'
+        }
+      ]
+    })
+  })
+})
 
 beforeEach(() => {
   terminateWindowsProcessTreeMock.mockClear()

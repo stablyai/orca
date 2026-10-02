@@ -8,6 +8,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { decodeGrokTranscriptUpdate } from './transcript-line-decoders-grok-updates'
 
 /**
  * Grok `chat_history.jsonl` rows: user/assistant/reasoning/tool records with
@@ -21,6 +22,9 @@ export function decodeGrokTranscriptLine(
   const record = parseJsonObject(line)
   if (!record) {
     return null
+  }
+  if (record.method === 'session/update') {
+    return decodeGrokTranscriptUpdate(record, fallbackId)
   }
   const type = extractString(record.type)
   if (!type) {

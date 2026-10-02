@@ -64,7 +64,7 @@ export function isMainTerminalSideEffectAuthorityForPty(args: {
 }
 
 export type TerminalSideEffectFactConsumerCallbacks = {
-  onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
+  onAgentStatus?: (payload: ParsedAgentStatusPayload, meta?: { roomDeliveryId?: string }) => void
   /** `meta.staleWorkingTitleClear` marks facts derived from main's 3s
    *  stale-title timer — policy must clear title/cache state without
    *  scheduling task-complete notifications or unread attention. */
@@ -73,8 +73,11 @@ export type TerminalSideEffectFactConsumerCallbacks = {
     rawTitle: string,
     meta?: { staleWorkingTitleClear?: boolean }
   ) => void
-  onBell?: () => void
-  onAgentBecameIdle?: (title: string, meta?: { staleWorkingTitleClear?: boolean }) => void
+  onBell?: (meta?: { roomDeliveryId?: string; roomCompletion?: true }) => void
+  onAgentBecameIdle?: (
+    title: string,
+    meta?: { staleWorkingTitleClear?: boolean; roomDeliveryId?: string }
+  ) => void
   onAgentBecameWorking?: () => void
   onAgentExited?: () => void
   /** OSC 133;D — same policy hook the byte-mode commandLifecycle drove
@@ -104,10 +107,16 @@ type ConsumerEntry = {
 const consumersByPtyId = new Map<string, ConsumerEntry>()
 let channelUnsubscribe: (() => void) | null = null
 
-function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: number): void {
+function applyLiveFact(
+  entry: ConsumerEntry,
+  fact: TerminalSideEffectFact,
+  seq: number,
+  roomDeliveryId?: string,
+  roomCompletionBell = false
+): void {
   switch (fact.kind) {
     case 'agent-status':
-      entry.callbacks.onAgentStatus?.(fact.payload)
+      entry.callbacks.onAgentStatus?.(fact.payload, roomDeliveryId ? { roomDeliveryId } : undefined)
       return
     case 'title':
       entry.lastLiveTitleSeq = seq
@@ -118,7 +127,11 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       )
       return
     case 'bell':
-      entry.callbacks.onBell?.()
+      entry.callbacks.onBell?.(
+        roomDeliveryId
+          ? { roomDeliveryId, ...(roomCompletionBell ? { roomCompletion: true } : {}) }
+          : undefined
+      )
       return
     case 'agent-working':
       entry.callbacks.onAgentBecameWorking?.()
@@ -126,7 +139,12 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
     case 'agent-idle':
       entry.callbacks.onAgentBecameIdle?.(
         fact.title,
-        fact.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : undefined
+        fact.staleWorkingTitleClear || roomDeliveryId
+          ? {
+              ...(fact.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {}),
+              ...(roomDeliveryId ? { roomDeliveryId } : {})
+            }
+          : undefined
       )
       return
     case 'agent-exited':
@@ -167,8 +185,16 @@ function applyBatchToConsumer(entry: ConsumerEntry, batch: TerminalSideEffectBat
     }
     return
   }
+  const roomCompletionBell = Boolean(
+    batch.roomDeliveryId &&
+    batch.facts.some(
+      (fact) =>
+        (fact.kind === 'agent-idle' && !fact.staleWorkingTitleClear) ||
+        (fact.kind === 'agent-status' && fact.payload.state === 'done')
+    )
+  )
   for (const fact of batch.facts) {
-    applyLiveFact(entry, fact, batch.seq)
+    applyLiveFact(entry, fact, batch.seq, batch.roomDeliveryId, roomCompletionBell)
   }
 }
 

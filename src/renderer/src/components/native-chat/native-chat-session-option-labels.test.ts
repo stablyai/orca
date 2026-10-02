@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import {
   nativeChatModelPillLabel,
+  nativeChatOptionsPillLabel,
   nativeChatSessionChoiceLabel
 } from './native-chat-session-option-labels'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
@@ -59,5 +60,45 @@ describe('nativeChatSessionChoiceLabel', () => {
       'components.native-chat.composer.optionValue.ultra',
       'Ultra'
     )
+  })
+})
+
+describe('nativeChatOptionsPillLabel', () => {
+  const fast: SessionOptionDescriptor = {
+    id: 'fastMode',
+    label: 'Fast mode',
+    kind: { type: 'boolean', currentValue: false },
+    valueSource: 'reported',
+    transport: 'agent-session',
+    settable: true
+  }
+
+  it.each([
+    [false, 'high', 'High'],
+    [true, 'high', 'High · Fast'],
+    [false, 'xhigh', 'Extra high'],
+    [false, 'custom-effort', 'custom-effort'],
+    [false, undefined, 'Options']
+  ] as const)('keeps reported effort %s / %s without adding controls', (enabled, value, label) => {
+    const options = [{ ...fast, kind: { type: 'boolean' as const, currentValue: enabled } }]
+    const original = structuredClone(options)
+    expect(nativeChatOptionsPillLabel(options, value)).toBe(label)
+    expect(options).toEqual(original)
+  })
+
+  it.each([
+    ['reported', 'low', 'Low'],
+    ['unknown', undefined, 'Effort']
+  ] as const)('does not replace a %s effort descriptor', (valueSource, currentValue, label) => {
+    const effort: SessionOptionDescriptor = {
+      id: 'effort',
+      label: 'Effort',
+      category: 'thought_level',
+      kind: { type: 'select', currentValue, choices: [] },
+      valueSource,
+      transport: 'agent-session',
+      settable: false
+    }
+    expect(nativeChatOptionsPillLabel([effort, fast], 'high')).toBe(label)
   })
 })

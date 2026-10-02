@@ -37,6 +37,7 @@ export function createWebRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime'
     onTerminalFitOverrideChanged: () => noopUnsubscribe,
     onTerminalDriverChanged: () => noopUnsubscribe,
     onNativeChatLaunchDraftResolved: () => noopUnsubscribe,
+    onRoomEvent: () => noopUnsubscribe,
     onBrowserDriverChanged: () => noopUnsubscribe,
     onBrowserRemoteViewersChanged: () => noopUnsubscribe,
     onClientHostedBrowserRowsChanged: () => noopUnsubscribe

@@ -6,7 +6,7 @@ import {
 /** Who a conversation's agent is and how it launches: the same whether it is created or founded. */
 export type AgentSessionRecordIdentity = Pick<
   AgentSessionRecord,
-  'sessionId' | 'location' | 'provider' | 'accountHome' | 'options' | 'launchArgs'
+  'sessionId' | 'location' | 'provider' | 'agent' | 'accountHome' | 'options' | 'launchArgs'
 >
 
 export function agentSessionRecordIdentityFields(
@@ -18,6 +18,7 @@ export function agentSessionRecordIdentityFields(
     sessionId: identity.sessionId,
     location: identity.location,
     provider: identity.provider,
+    ...(identity.agent ? { agent: identity.agent } : {}),
     accountHome: identity.accountHome,
     ...(identity.options ? { options: { ...identity.options } } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),

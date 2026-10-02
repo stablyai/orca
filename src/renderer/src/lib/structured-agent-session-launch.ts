@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import {
   abandonStructuredAgentSessionLaunchIntent,
@@ -194,10 +194,10 @@ function restartStructuredLaunchState(state: StructuredLaunchState): void {
 
 function structuredAgentLaunchState(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: StructuredMachineAgent,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
-  const identity = structuredLaunchIdentity(worktreeId, agent, options.resumeFrom)
+  const identity = structuredLaunchIdentity(worktreeId, agent, options.resumeFrom, options.target)
   const existing = getStructuredLaunchState(identity)
   if (existing) {
     const retrying = existing.visibilityUnknown || existing.callers.outcome === 'failed'
@@ -229,9 +229,18 @@ function structuredAgentLaunchState(
   // Only pass the third argument when adopting: every ordinary launch keeps the two-argument call
   // it has always made, so this change adds no trailing `undefined` for call-site assertions to
   // absorb.
-  const intent = options.resumeFrom
-    ? createStructuredAgentSessionLaunchIntent(worktreeId, agent, options.resumeFrom)
-    : createStructuredAgentSessionLaunchIntent(worktreeId, agent)
+  const intent =
+    options.target || options.groupId
+      ? createStructuredAgentSessionLaunchIntent(
+          worktreeId,
+          agent,
+          options.resumeFrom,
+          options.target,
+          options.groupId
+        )
+      : options.resumeFrom
+        ? createStructuredAgentSessionLaunchIntent(worktreeId, agent, options.resumeFrom)
+        : createStructuredAgentSessionLaunchIntent(worktreeId, agent)
   const text = outboxPromptText(options)
   const stagedPrompt = text
     ? enqueueStructuredAgentSessionLaunchPrompt(intent.sessionId, text)
@@ -247,7 +256,7 @@ function structuredAgentLaunchState(
     cancelled: false,
     onVisibilityChanged: notifyStructuredLaunchListeners,
     callers,
-    selection: { seed: intent.seedOptions, held: {} }
+    selection: { seed: intent.seedOptions, held: Object.fromEntries(Object.entries(options.sessionOptions ?? {}).map(([key, value]) => [key, String(value)])) }
   }
   callers.onSettled = () => maybeCleanupLaunchState(state)
   state.promise =
@@ -289,7 +298,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
 
 export function startStructuredAgentLaunch(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: StructuredMachineAgent,
   options: StructuredAgentLaunchOptions = {}
 ): StructuredAgentLaunchResult {
   const { state, caller } = structuredAgentLaunchState(worktreeId, agent, options)

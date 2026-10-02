@@ -62,7 +62,10 @@ vi.mock('@/lib/agent-catalog', () => ({
 
 import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import {
+  markStructuredAgentSessionLaunchPublished,
+  resetStructuredAgentLaunchRegistryForTests
+} from './structured-agent-session-launch-registry'
 
 function launchIntent(worktreeId: string, sessionId: string): StructuredAgentSessionLaunchIntent {
   return {
@@ -153,15 +156,24 @@ describe('structured agent launch reload recovery', () => {
           lifecycle: 'pending',
           clientOperationId: 'operation-reloaded',
           payloadFingerprint: 'fingerprint-reloaded',
-          expectedRuntimeFence: null
+          expectedRuntimeFence: null,
+          heldOptions: { model: 'selected-model', fastMode: 'false' }
         }
       ])
     )
     mocks.launch.mockResolvedValueOnce({ sessionId, fence: 4 })
+    mocks.callStructuredAgentSession.mockImplementation((_target, method, params) =>
+      Promise.resolve(
+        method === 'agentSession.setOption'
+          ? { ok: true, value: { key: params.key, value: params.value } }
+          : { ok: true, page: { fence: 4 } }
+      )
+    )
     mocks.refresh
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([publishedSnapshot(worktreeId, sessionId)])
 
+    expect(markStructuredAgentSessionLaunchPublished(worktreeId, sessionId)).toBe(false)
     expect(retryStructuredAgentSessionLaunch(worktreeId, sessionId)).toBe(true)
     await flushLaunchSettlement()
 
@@ -177,5 +189,13 @@ describe('structured agent launch reload recovery', () => {
         })
       })
     )
+    expect(
+      mocks.callStructuredAgentSession.mock.calls
+        .filter(([, method]) => method === 'agentSession.setOption')
+        .map(([, , params]) => [params.key, params.value])
+    ).toEqual([
+      ['model', 'selected-model'],
+      ['fastMode', 'false']
+    ])
   })
 })

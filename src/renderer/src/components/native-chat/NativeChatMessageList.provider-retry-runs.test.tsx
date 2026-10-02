@@ -1,3 +1,4 @@
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -50,6 +51,8 @@ function transcript(items: AgentJournalRenderItem[]) {
         loadingEarlier: false,
         olderHistoryGeneration: 0,
         loadEarlier: vi.fn(),
+        context: EMPTY_AGENT_SESSION_CONTEXT,
+        markCompactionRequested: () => undefined,
         readPhase: 'ready'
       }}
       isWorking={false}

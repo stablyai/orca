@@ -64,6 +64,53 @@ describe('parseClaudeStatusLineBody', () => {
     expect(parsed?.sevenDay).toEqual({ used_percentage: 8, resets_at: undefined })
   })
 
+  it('attributes OpenClaude and preserves provider-declared estimated context', () => {
+    const parsed = parseClaudeStatusLineBody({
+      ...formBody({
+        context_window: {
+          context_window_size: 200_000,
+          used_percentage: null,
+          current_usage: {
+            input_tokens: 10,
+            cache_creation_input_tokens: 20,
+            cache_read_input_tokens: 30,
+            is_estimated: true
+          }
+        }
+      }),
+      agent: 'openclaude',
+      paneKey: 'tab:pane'
+    })
+
+    expect(parsed).toMatchObject({
+      agent: 'openclaude',
+      paneKey: 'tab:pane',
+      context: {
+        usedTokens: 60,
+        maxTokens: 200_000,
+        remainingTokens: 199_940,
+        estimated: true
+      }
+    })
+    expect(parsed?.context?.usedPercent).toBeCloseTo(0.03)
+  })
+
+  it('keeps provider model and effort authoritative without usage fields', () => {
+    expect(
+      parseClaudeStatusLineBody(
+        formBody({
+          model: { id: 'claude-opus-5', display_name: 'Opus 5' },
+          effort: 'high'
+        })
+      )
+    ).toMatchObject({
+      model: 'claude-opus-5',
+      effort: 'high',
+      fiveHour: null,
+      sevenDay: null
+    })
+  })
+
   it('returns null when rate_limits is absent or empty', () => {
     expect(
       parseClaudeStatusLineBody(formBody({ context_window: { used_percentage: 8 } }))

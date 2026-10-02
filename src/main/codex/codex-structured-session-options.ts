@@ -1,4 +1,10 @@
 import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionSnapshot
+} from '../../shared/structured-agent-session-options'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import type { CodexSession, CodexSessionCatalogAccess } from './codex-structured-session-state'
 import { isCodexTurnOptionKey } from './codex-structured-turn-start'
@@ -195,9 +201,15 @@ export async function readLiveCodexSessionOptions(
     )?.supportsFastMode
   })
   const fastMode = decodeCodexFastMode(session.options)
-  return fastMode === undefined
+  const result = fastMode === undefined
     ? catalog.result
     : { ...catalog.result, current: { ...catalog.result.current, fastMode } }
+  return {
+    ...result,
+    descriptors: structuredAgentSessionOptionSnapshot(
+      applyStructuredAgentSessionOptions(createStructuredAgentSessionOptionState('codex'), CODEX_SESSION_OPTION_CATALOG, result)
+    )
+  }
 }
 
 export async function applyCodexStructuredSessionOption(

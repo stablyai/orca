@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
+import {
+  AGENT_PROMPT_BRACKETED_PASTE_END,
+  buildAgentPromptPasteBytes
+} from '../../shared/agent-prompt-injection'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../shared/agent-tui-input-clear'
 import {
   AGENT_PROMPT_TEST_WORKTREE_PATH,
   createAgentPromptSubmissionRuntime
@@ -32,6 +36,32 @@ vi.mock('../git/worktree', () => ({
 
 describe('agent prompt submission runtime', () => {
   afterEach(() => vi.useRealTimers())
+
+  it('clears input and pastes each attachment before one prompt submission', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data === '\r') {
+        runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+      }
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'Describe these', {
+      inputKind: 'driving',
+      clearInput: true,
+      imagePaths: ['/tmp/first image.png', '/tmp/second.png']
+    })
+    await vi.runAllTimersAsync()
+    expect(writes).toEqual([
+      AGENT_TUI_CLEAR_INPUT_MAX,
+      buildAgentPromptPasteBytes('/tmp/first image.png'),
+      buildAgentPromptPasteBytes('/tmp/second.png'),
+      buildAgentPromptPasteBytes('Describe these'),
+      '\r'
+    ])
+    await expect(submission).resolves.toMatchObject({
+      accepted: true,
+      bytesWritten: Buffer.byteLength(writes.slice(1).join(''), 'utf8')
+    })
+  })
 
   it('submits exactly once after an observed lifecycle transition', async () => {
     vi.useFakeTimers()

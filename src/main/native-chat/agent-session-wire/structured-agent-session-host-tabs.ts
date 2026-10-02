@@ -1,6 +1,7 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { AgentType } from '../../../shared/agent-status-types'
 
 /**
  * Chat-tab visibility is the deletion funnel: every path that removes a chat as a user-facing
@@ -40,19 +41,25 @@ export function setStructuredAgentSessionTabVisibility(
 export type StructuredAgentSessionTab = {
   sessionId: string
   workspaceId: string
-  agent: AgentSessionRecord['provider']
+  agent: AgentType
 }
 
 export function listStructuredAgentSessionTabs(
   sessions: ReadonlyMap<
     string,
-    { params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] } }
+    {
+      params: {
+        location: { workspaceId: string }
+        provider: AgentSessionRecord['provider']
+        agent: AgentType
+      }
+    }
   >
 ): StructuredAgentSessionTab[] {
   return [...sessions.entries()].map(([sessionId, session]) => ({
     sessionId,
     workspaceId: session.params.location.workspaceId,
-    agent: session.params.provider
+    agent: session.params.agent
   }))
 }
 
@@ -60,7 +67,7 @@ type TabSessions = ReadonlyMap<
   string,
   {
     child?: unknown
-    params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] }
+    params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider']; agent: AgentType }
   }
 >
 

@@ -1,4 +1,8 @@
 import { useSyncExternalStore } from 'react'
+import {
+  agentSessionWriteNoticeEnglish,
+  agentSessionWriteNoticeParts
+} from '../../../shared/agent-session-refusal-notice'
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
@@ -11,6 +15,7 @@ import {
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import {
   StructuredAgentSessionLaunchCancelledError,
   type StructuredAgentLaunchReceipt
@@ -82,6 +87,7 @@ export function holdStructuredAgentSessionLaunchOption(
 }
 
 async function setLaunchOption(
+  target: RuntimeClientTarget,
   sessionId: string,
   fence: number,
   key: string,
@@ -91,7 +97,7 @@ async function setLaunchOption(
   try {
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionOptionResult>
-    >({ kind: 'local' }, 'agentSession.setOption', {
+    >(target, 'agentSession.setOption', {
       envelope: {
         sessionId,
         clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid),
@@ -144,8 +150,7 @@ function settleHeldOption(
 
 /**
  * Applies the picks held during launch against the create receipt's fence, model first so an
- * effort lands under the model it was picked against, until none is left. A refused pick is
- * reported to its picker and never keeps the launch from publishing.
+ * effort lands under the model it was picked against. Refusals without a live picker block launch.
  */
 export async function applyStructuredLaunchHeldOptions(
   state: StructuredLaunchState,
@@ -156,12 +161,29 @@ export async function applyStructuredLaunchHeldOptions(
       throw new StructuredAgentSessionLaunchCancelledError()
     }
     const { held } = state.selection
-    const id = STRUCTURED_LAUNCH_SEED_OPTION_IDS.find((key) => held[key] !== undefined)
+    const id =
+      STRUCTURED_LAUNCH_SEED_OPTION_IDS.find((key) => held[key] !== undefined) ??
+      Object.keys(held)[0]
     const encoded = id ? held[id] : undefined
     if (!id || encoded === undefined) {
       return receipt
     }
-    const outcome = await setLaunchOption(state.intent.sessionId, receipt.fence, id, encoded)
+    const outcome = await setLaunchOption(
+      state.intent.target ?? { kind: 'local' },
+      state.intent.sessionId,
+      receipt.fence,
+      id,
+      encoded
+    )
+    if (
+      outcome.kind === 'refused' &&
+      state.selection.held[id] === encoded &&
+      !repliesFor(state).has(id)
+    ) {
+      throw new Error(
+        agentSessionWriteNoticeEnglish(agentSessionWriteNoticeParts(outcome.failure, 'option'))
+      )
+    }
     settleHeldOption(state, id, encoded, outcome)
   }
 }

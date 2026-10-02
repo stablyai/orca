@@ -69,8 +69,8 @@ describe('ActiveViewPreference', () => {
     })
   })
 
-  it('ignores an invalid sidecar and invalid updates', () => {
-    writeFileSync(getActiveViewPreferenceFile(dataFile), '{"activeView":"unknown"}', 'utf-8')
+  it('migrates the removed rooms view to the workspace and ignores invalid updates', () => {
+    writeFileSync(getActiveViewPreferenceFile(dataFile), '{"activeView":"rooms"}', 'utf-8')
     const preference = new ActiveViewPreference(dataFile, 'not-a-view')
 
     expect(preference.get()).toBe('terminal')

@@ -131,6 +131,8 @@ export type RuntimeTerminalAgentStatusEvent = {
   /** The pane's terminal handle, when it is bound to one. Stamped on the stored row so a
    *  reader can rejoin it to the terminal after the pane key moved. */
   terminalHandle?: string
+  providerSession?: AgentProviderSessionMetadata
+  force?: boolean
   payload: ParsedAgentStatusPayload
   /** Set by the process-lifetime producer; see AgentHookServer.ingestTerminalStatus. */
   origin?: 'process'
@@ -213,6 +215,9 @@ export type RuntimeProviderSnapshotReadOptions = {
 export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, 'inputKind'> & {
   /** `launch` for the prompt an agent starts with; `driving` for any prompt sent to a running one. */
   inputKind: Exclude<TerminalInputKind, 'query-reply'>
+  clearInput?: boolean
+  imagePaths?: readonly string[]
+  prefixPastePayloads?: readonly string[]
   /** Raw prompt text for submit scheduling; not written, only used for line-aware delays. */
   promptForSchedule?: string
   /** See buildAgentPromptPasteBytes. */

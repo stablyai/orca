@@ -40,7 +40,7 @@ export function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: AgentLeadStatusResolution & { updateLead: boolean }
+  options: AgentLeadStatusResolution & { updateLead: boolean; sessionBoundary?: boolean }
 ): ParsedAgentStatusPayload | null {
   const snapshot = options.updateLead
     ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
@@ -63,6 +63,7 @@ export function buildCodexStatusPayload(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted: mainAgentTurnInterrupted(lead),
+    sessionBoundary: options.sessionBoundary,
     subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
     mainAgent: codexMainAgentStatusForPayload(lead)
   })
@@ -163,27 +164,28 @@ export function normalizeCodexEvent(
   ) {
     return null
   }
+  const agentId = readString(hookPayload, 'agent_id')
+  const rootSessionStart = eventName === 'SessionStart' && !agentId
 
   // Why: Codex's request_user_input (0.145+) is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting like grok's ask_user_question.
   const isUserInputPreTool =
     eventName === 'PreToolUse' &&
     isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
   const stateName =
-    eventName === 'SessionStart' ||
+    (eventName === 'SessionStart' && !rootSessionStart) ||
     eventName === 'UserPromptSubmit' ||
     (eventName === 'PreToolUse' && !isUserInputPreTool) ||
     eventName === 'PostToolUse'
       ? 'working'
       : eventName === 'PermissionRequest' || isUserInputPreTool
         ? 'waiting'
-        : eventName === 'Stop' || eventName === 'Interrupt'
+        : rootSessionStart || eventName === 'Stop' || eventName === 'Interrupt'
           ? 'done'
           : null
   if (!stateName) {
     return null
   }
 
-  const agentId = readString(hookPayload, 'agent_id')
   const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
   if (eventName === 'SessionStart' && !agentId) {
     // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
@@ -260,6 +262,7 @@ export function normalizeCodexEvent(
   })
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     ...resolveCodexPaneStatus(state, paneKey, record),
-    updateLead: true
+    updateLead: true,
+    sessionBoundary: rootSessionStart
   })
 }

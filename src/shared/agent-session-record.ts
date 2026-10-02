@@ -7,6 +7,8 @@ import {
   type PersistedAgentSessionLease,
   type PersistedAgentSessionRecord
 } from './agent-session-legacy-handoff-lease'
+import type { AgentType } from './agent-status-types'
+import { isOptionalAgentSessionTranscript } from './agent-session-provider-transcript'
 /**
  * Durable agent-session record and its single-writer lease.
  *
@@ -45,7 +47,7 @@ export type AgentSessionExecutionLocation = {
 
 /** Account root pinned at launch by the account selector, so a resume cannot drift to another login. */
 export type AgentSessionAccountHome = {
-  variable: 'CLAUDE_CONFIG_DIR' | 'CODEX_HOME'
+  variable: 'CLAUDE_CONFIG_DIR' | 'CODEX_HOME' | 'HOME'
   /** Host-resolved absolute path in the execution host's own path syntax. */
   path: string
 }
@@ -135,6 +137,7 @@ export type AgentSessionRecord = {
   sessionId: string
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
+  agent?: AgentType
   providerHandleChain: AgentSessionProviderHandleLink[]
   accountHome: AgentSessionAccountHome
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
@@ -144,6 +147,8 @@ export type AgentSessionRecord = {
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
   conversationName?: string
   launchArgs?: AgentSessionLaunchArgs
+  /** Host-observed transcript location, bound to the proven provider conversation. */
+  providerTranscript?: { path: string; handleRoot: string }
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -232,7 +237,9 @@ function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccount
   }
   const home = value as Partial<AgentSessionAccountHome>
   return (
-    (home.variable === 'CLAUDE_CONFIG_DIR' || home.variable === 'CODEX_HOME') &&
+    (home.variable === 'CLAUDE_CONFIG_DIR' ||
+      home.variable === 'CODEX_HOME' ||
+      home.variable === 'HOME') &&
     isBoundedString(home.path, MAX_PATH_LENGTH)
   )
 }
@@ -346,7 +353,11 @@ export function isPersistedAgentSessionRecord(
     record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
     isAgentSessionId(record.sessionId) &&
     isAgentSessionExecutionLocation(record.location) &&
-    (record.provider === 'claude' || record.provider === 'codex') &&
+    (record.provider === 'claude' || record.provider === 'codex' || record.provider === 'acp') &&
+    (record.agent === undefined ||
+      (typeof record.agent === 'string' &&
+        record.agent.trim().length > 0 &&
+        record.agent.length <= 128)) &&
     isAgentSessionProviderHandleChain(record.providerHandleChain) &&
     isAgentSessionAccountHome(record.accountHome) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
@@ -356,6 +367,7 @@ export function isPersistedAgentSessionRecord(
     (record.conversationName === undefined ||
       isAgentSessionConversationName(record.conversationName)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
+    isOptionalAgentSessionTranscript(record.providerTranscript) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isPersistedAgentSessionLease(record.lease) &&
     record.lease.sessionId === record.sessionId &&
@@ -373,4 +385,9 @@ export function isPersistedAgentSessionRecord(
         head?.linkId === validated.lease.provenHandleLinkId &&
         head.mintedAtFence === validated.lease.runtimeFence))
   )
+}
+
+export function agentSessionRecordAgent(record: AgentSessionRecord): AgentType {
+  const handle = record.providerHandleChain.at(-1)?.handle
+  return record.agent ?? (handle?.provider === 'acp' ? handle.agent : record.provider)
 }

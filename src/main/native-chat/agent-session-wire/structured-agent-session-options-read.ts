@@ -11,7 +11,11 @@ import {
   type AgentSessionOptionResult,
   type AgentSessionOptionsResult
 } from '../../../shared/agent-session-wire'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  agentSessionRecordAgent,
+  type AgentSessionRecord
+} from '../../../shared/agent-session-record'
+import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
 import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
 import { decodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -42,9 +46,9 @@ async function readStructuredAgentSessionOptionsAtRest(
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
-  const catalog = (await deps.modelCatalog
-    ?.read({ agent: record.provider, sessionId })
-    .catch(() => null)) ?? { origin: 'unknown' as const }
+  const catalog = (record.provider !== 'acp'
+    ? await deps.modelCatalog?.read({ agent: record.provider, sessionId }).catch(() => null)
+    : null) ?? { origin: 'unknown' as const }
   const listed =
     catalog.origin === 'unknown' ? restingFallbackModels(record.provider) : catalog.models
   const models = listed ?? []
@@ -86,10 +90,19 @@ export async function recordStructuredAgentSessionOptionIntent(
   input: { key: string; value: string }
 ): Promise<TurnOutcome<AgentSessionOptionResult>> {
   const record = store.getRecord(ctx.sessionId)
+  const catalog =
+    record?.provider === 'acp' && getAgentSessionOptionCatalog(agentSessionRecordAgent(record))
   const accepted =
     record?.provider === 'codex'
       ? isCodexTurnOptionKey(input.key)
-      : record?.provider === 'claude' && isClaudeStructuredOptionKey(input.key)
+      : record?.provider === 'claude'
+        ? isClaudeStructuredOptionKey(input.key)
+        : !!catalog &&
+          (input.key === 'model' ||
+            [
+              ...catalog.models.flatMap((model) => model.options),
+              ...(catalog.unknownModelOptions ?? [])
+            ].some((option) => option.id === input.key))
   if (!record || !accepted) {
     return {
       ok: false,
@@ -132,7 +145,8 @@ export async function readStructuredAgentSessionOptions(
   // Re-acquired after the reads above: the handle they saw may have closed and reopened since.
   const session = await context.conversation(sessionId)
   const phase = store.getRecord(sessionId)?.rewind?.phase
-  const agent = session.params.provider
+  const record = store.getRecord(sessionId)
+  const agent = record ? agentSessionRecordAgent(record) : session.params.provider
   return {
     ...options,
     rewind:

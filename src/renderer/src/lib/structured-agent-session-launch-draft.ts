@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { useAppStore } from '@/store'
 import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
@@ -7,7 +7,7 @@ import type { StructuredAgentLaunchOptions } from './structured-agent-session-la
  *  and a structured session has no TUI copy, so a gated seed here would be a lost prompt. */
 export function seedStructuredAgentLaunchDraft(
   sessionId: string,
-  agent: AgentSessionHandleProvider,
+  agent: StructuredMachineAgent,
   options: StructuredAgentLaunchOptions
 ): void {
   if (options.promptDelivery !== 'draft' || !options.prompt) {

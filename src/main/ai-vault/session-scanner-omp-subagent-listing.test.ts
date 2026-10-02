@@ -22,6 +22,162 @@ function childTranscript(id: string, timestamp: string, prompt: string): string 
 }
 
 describe('listOmpSubagentSessions', () => {
+  it('keeps flat descendants under their parent and uses provider results rather than yield-aborted tails', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'orca-omp-nested-'))
+    tempRoots.push(workspace)
+    const parentPath = join(workspace, `${SESSION_STEM}.jsonl`)
+    const artifactDir = join(workspace, SESSION_STEM)
+    await mkdir(artifactDir)
+    const timestamp = '2026-05-01T10:02:00.000Z'
+    const result = (id: string, exitCode: number, aborted = false) =>
+      JSON.stringify({
+        type: 'message',
+        timestamp,
+        message: {
+          role: 'toolResult',
+          toolName: 'task',
+          details: { results: [{ id, exitCode, aborted }] }
+        }
+      })
+    await writeFile(parentPath, result('Worker', 0))
+    await writeFile(
+      join(artifactDir, 'Worker.jsonl'),
+      [
+        childTranscript('worker-session', '2026-05-01T10:01:00.000Z', 'Run children'),
+        JSON.stringify({ type: 'session_init', agent: 'worker' }),
+        JSON.stringify({
+          type: 'message',
+          timestamp,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'toolCall', name: 'task' }],
+            stopReason: 'toolUse'
+          }
+        }),
+        result('Worker.Done', 0),
+        result('Worker.Failed', 1),
+        result('Worker.Stopped', 1, true),
+        JSON.stringify({
+          type: 'message',
+          timestamp,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Finished' }],
+            stopReason: 'aborted'
+          }
+        })
+      ].join('\n')
+    )
+    for (const name of ['Done', 'Failed', 'Stopped']) {
+      await writeFile(
+        join(artifactDir, `Worker.${name}.jsonl`),
+        childTranscript(name, timestamp, 'Child prompt')
+      )
+    }
+    await writeFile(
+      join(artifactDir, 'Worker.Done.Nested.jsonl'),
+      childTranscript('deep', timestamp, 'Deep prompt')
+    )
+    const root = await listOmpSubagentSessions({ parentFilePath: parentPath })
+    expect(root.sessions).toHaveLength(1)
+    expect(root.sessions[0]).toMatchObject({
+      title: 'Worker',
+      messageCount: 2,
+      subagentTranscriptCount: 3,
+      subagent: { status: 'completed', agentType: 'worker' }
+    })
+    const children = await listOmpSubagentSessions({
+      parentFilePath: join(artifactDir, 'Worker.jsonl')
+    })
+    expect(children.sessions.map((s) => [s.title, s.subagent?.status]).sort()).toEqual([
+      ['Worker.Done', 'completed'],
+      ['Worker.Failed', 'failed'],
+      ['Worker.Stopped', 'stopped']
+    ])
+    expect(children.sessions.find((s) => s.title === 'Worker.Done')?.subagentTranscriptCount).toBe(
+      1
+    )
+  })
+
+  it('does not reuse a previous task result after the child receives another prompt', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'orca-omp-revived-'))
+    tempRoots.push(workspace)
+    const parentPath = join(workspace, `${SESSION_STEM}.jsonl`)
+    const artifactDir = join(workspace, SESSION_STEM)
+    await mkdir(artifactDir)
+    await writeFile(
+      parentPath,
+      JSON.stringify({
+        type: 'message',
+        timestamp: '2026-05-01T10:00:00Z',
+        message: {
+          role: 'toolResult',
+          toolName: 'task',
+          details: { results: [{ id: 'Worker', exitCode: 0 }] }
+        }
+      })
+    )
+    await writeFile(
+      join(artifactDir, 'Worker.jsonl'),
+      childTranscript('worker', '2026-05-01T10:01:00Z', 'New prompt')
+    )
+    const result = await listOmpSubagentSessions({ parentFilePath: parentPath })
+    expect(result.sessions[0]?.subagent?.status).toBeNull()
+  })
+
+  it('retains older nested-directory transcripts without exposing grandchildren in the root list', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'orca-omp-legacy-'))
+    tempRoots.push(workspace)
+    const parentPath = join(workspace, `${SESSION_STEM}.jsonl`)
+    const artifactDir = join(workspace, SESSION_STEM)
+    await mkdir(join(artifactDir, 'Worker'), { recursive: true })
+    await writeFile(parentPath, '')
+    await writeFile(
+      join(artifactDir, 'Worker.jsonl'),
+      childTranscript('worker', '2026-05-01T10:00:00Z', 'Parent task')
+    )
+    await writeFile(
+      join(artifactDir, 'Worker', 'Nested.jsonl'),
+      childTranscript('nested', '2026-05-01T10:00:01Z', 'Nested task')
+    )
+    const root = await listOmpSubagentSessions({ parentFilePath: parentPath })
+    expect(root.sessions.map((s) => s.title)).toEqual(['Worker'])
+    expect(root.sessions[0]?.subagentTranscriptCount).toBe(1)
+    const nested = await listOmpSubagentSessions({
+      parentFilePath: join(artifactDir, 'Worker.jsonl')
+    })
+    expect(nested.sessions.map((s) => s.title)).toEqual(['Nested'])
+    expect(nested.sessions[0]?.subagent?.parentSessionId).toBe('worker')
+  })
+
+  it('uses explicit progress for a silent running child and leaves an unreported child unknown', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'orca-omp-progress-'))
+    tempRoots.push(workspace)
+    const parentPath = join(workspace, `${SESSION_STEM}.jsonl`)
+    const artifactDir = join(workspace, SESSION_STEM)
+    await mkdir(artifactDir)
+    await writeFile(
+      parentPath,
+      JSON.stringify({
+        type: 'message',
+        timestamp: '2026-05-01T10:00:00Z',
+        message: {
+          role: 'toolResult',
+          toolName: 'task',
+          details: { progress: [{ id: 'Running', status: 'running' }] }
+        }
+      })
+    )
+    for (const id of ['Running', 'Unknown']) {
+      await writeFile(
+        join(artifactDir, `${id}.jsonl`),
+        childTranscript(id, '2026-05-01T10:00:00Z', 'Wait')
+      )
+    }
+    const result = await listOmpSubagentSessions({ parentFilePath: parentPath })
+    expect(result.sessions.find((s) => s.title === 'Running')?.subagent?.status).toBe('running')
+    expect(result.sessions.find((s) => s.title === 'Unknown')?.subagent?.status).toBeNull()
+  })
   it('lists artifact-dir transcripts under the parent, titled by task label', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'orca-omp-subagent-list-'))
     tempRoots.push(workspace)

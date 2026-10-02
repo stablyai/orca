@@ -1,3 +1,4 @@
+import { isStructuredMachineAgentEnabled } from '../../../shared/structured-agent-provider'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
@@ -20,6 +21,7 @@ export type AgentLaunchRoutingInput = {
   settings:
     | Pick<
         GlobalSettings,
+        | 'enabledHarnessStreamingAgents'
         | 'experimentalNativeChat'
         | 'experimentalStructuredNativeChat'
         | 'openAgentTabsInChatByDefault'
@@ -68,6 +70,7 @@ export function structuredAgentLaunchSupported(
 ): boolean {
   return (
     input.settings?.experimentalStructuredNativeChat === true &&
+    isStructuredMachineAgentEnabled(input.agent, input.settings.enabledHarnessStreamingAgents) &&
     resolveStructuredNativeChatSupport({
       agent: input.agent,
       executionHostId: input.executionHostId,

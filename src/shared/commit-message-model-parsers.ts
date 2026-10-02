@@ -2,6 +2,21 @@ import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit
 import { parseClaudeModelList } from './claude-model-list-probe'
 import { labelFromModelId } from './model-id-label'
 import type { CommitMessageModel, ThinkingLevel } from './commit-message-agent-spec'
+import { z } from 'zod'
+
+const codexModelsSchema = z.object({
+  models: z
+    .array(
+      z.object({
+        slug: z.string().optional(),
+        display_name: z.string().optional(),
+        supported_reasoning_levels: z.array(z.object({ effort: z.string().optional() })).optional(),
+        default_reasoning_level: z.string().optional(),
+        additional_speed_tiers: z.array(z.string()).optional()
+      })
+    )
+    .optional()
+})
 
 export const COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 64 * 1024,
@@ -96,14 +111,7 @@ export function parseClaudeModels(stdout: string): CommitMessageModel[] {
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
   try {
     assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
-    const parsed = JSON.parse(stdout) as {
-      models?: {
-        slug?: string
-        display_name?: string
-        supported_reasoning_levels?: { effort?: string }[]
-        default_reasoning_level?: string
-      }[]
-    }
+    const parsed = codexModelsSchema.parse(JSON.parse(stdout))
     return uniqueModels(
       (parsed.models ?? [])
         .filter((model) => model.slug && model.display_name)
@@ -121,7 +129,8 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
                   })),
                 defaultThinkingLevel: model.default_reasoning_level ?? 'low'
               }
-            : {})
+            : {}),
+          ...(model.additional_speed_tiers?.includes('fast') ? { supportsFastMode: true } : {})
         }))
     )
   } catch {

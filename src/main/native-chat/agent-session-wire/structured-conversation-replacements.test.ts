@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
 
 function replacements(records: AgentSessionRecord[], visible: string[]) {
@@ -16,14 +20,23 @@ function replacements(records: AgentSessionRecord[], visible: string[]) {
 }
 
 function record(id: string, next?: string): AgentSessionRecord {
+  const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: id }))
   return {
-    sessionId: id,
+    ...base,
     provider: 'codex',
-    location: { workspaceId: 'folder' },
+    providerHandleChain: [],
+    location: { ...base.location, workspaceId: 'folder' },
     conversationCommand: next
-      ? { command: 'clear', phase: 'committed', replacementSessionId: next }
+      ? {
+          command: 'clear',
+          phase: 'committed',
+          state: 'completed',
+          operationId: `clear-${id}`,
+          callerKey: 'test',
+          replacementSessionId: next
+        }
       : undefined
-  } as AgentSessionRecord
+  }
 }
 
 describe('conversation replacement projection', () => {

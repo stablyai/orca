@@ -111,11 +111,16 @@ const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal' }
 ]
 
+const GROK_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'compact', description: 'Compact the conversation' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
   codex: CODEX_COMMANDS,
-  omp: OMP_COMMANDS
+  omp: OMP_COMMANDS,
+  grok: GROK_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the

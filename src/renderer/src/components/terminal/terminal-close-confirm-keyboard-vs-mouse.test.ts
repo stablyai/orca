@@ -90,6 +90,28 @@ describe('#10142 close confirmation policy is the same for keyboard and mouse', 
     })
   })
 
+  it('hides a revealed room terminal without closing its busy session', () => {
+    const notifyTerminalSurfaceClosed = vi.fn()
+    vi.stubGlobal('window', {
+      api: { ui: { notifyTerminalSurfaceClosed } }
+    })
+    getStateMock.mockReturnValue({
+      ...stateWithBusyTerminalTab(closeTab),
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-busy', preserveSessionOnClose: true }, { id: 'tab-other' }]
+      }
+    })
+
+    try {
+      closeTerminalTab('tab-busy')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+
+    expect(closeTab).toHaveBeenCalledWith('tab-busy', { preserveSessionOnClose: true })
+    expect(notifyTerminalSurfaceClosed).toHaveBeenCalledWith('tab-busy')
+    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
+  })
   // Control: the harness does observe a guard when one exists — pinning blocks the same mouse close.
   it('mouse close routes a pinned tab through its confirmation guard', () => {
     const state = stateWithBusyTerminalTab(closeTab)

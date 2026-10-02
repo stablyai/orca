@@ -8,12 +8,17 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
 
-function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
+function Command({
+  className,
+  bordered = false,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive> & { bordered?: boolean }) {
   return (
     <CommandPrimitive
       data-slot="command"
       className={cn(
         'flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground',
+        bordered && 'border border-border bg-background',
         className
       )}
       {...props}
@@ -127,9 +132,10 @@ function CommandInput({
 
 function CommandList({
   className,
+  variant = 'default',
   ref,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.List>) {
+}: React.ComponentProps<typeof CommandPrimitive.List> & { variant?: 'default' | 'cards' }) {
   const internalRef = React.useRef<HTMLDivElement>(null)
 
   // Why: Radix Dialog applies react-remove-scroll which calls preventDefault()
@@ -172,6 +178,7 @@ function CommandList({
       data-slot="command-list"
       className={cn(
         'max-h-[min(400px,60vh)] overflow-y-auto overflow-x-hidden scrollbar-sleek scroll-pb-4 scroll-pt-4',
+        variant === 'cards' && 'p-1 [&_[cmdk-list-sizer]]:space-y-2',
         className
       )}
       {...props}
@@ -216,16 +223,29 @@ const commandItemVariants = cva('', {
 function CommandItem({
   className,
   selection,
+  variant = 'default',
+  current = false,
   ref,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Item> & VariantProps<typeof commandItemVariants>) {
+}: React.ComponentProps<typeof CommandPrimitive.Item> & {
+  variant?: 'default' | 'multiline' | 'card'
+  current?: boolean
+  selection?: VariantProps<typeof commandItemVariants>['selection']
+}) {
   return (
     <CommandPrimitive.Item
       ref={ref}
       data-slot="command-item"
+      aria-current={current || undefined}
       className={cn(
         'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4',
         commandItemVariants({ selection }),
+        variant === 'multiline' && 'py-2',
+        variant === 'card' && 'gap-3 rounded-lg border p-3 transition-colors',
+        variant === 'card' &&
+          (current
+            ? 'border-primary/50 bg-accent'
+            : 'border-border hover:border-foreground/30 hover:bg-accent/40'),
         className
       )}
       {...props}

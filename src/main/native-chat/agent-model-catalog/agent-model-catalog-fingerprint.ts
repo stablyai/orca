@@ -37,6 +37,9 @@ export function agentModelCatalogFingerprint(identity: AgentModelCatalogIdentity
 export function agentModelCatalogIdentityForRecord(
   record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
 ): AgentModelCatalogIdentity {
+  if (record.provider !== 'claude' && record.provider !== 'codex') {
+    throw new Error('Provider does not use the Claude/Codex model catalog')
+  }
   return {
     agent: record.provider,
     accountHomeVariable: record.accountHome.variable,

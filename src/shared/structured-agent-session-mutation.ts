@@ -1,4 +1,5 @@
 import { sha256 } from './sha256'
+import type { StructuredMachineAgent } from './structured-agent-provider'
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -41,7 +42,7 @@ export function structuredAgentSessionDomainFingerprint(input: {
 export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
-  agent: 'claude' | 'codex'
+  agent: StructuredMachineAgent
   resumeFrom?: { providerSessionId: string }
   tabId?: string
 }): string {

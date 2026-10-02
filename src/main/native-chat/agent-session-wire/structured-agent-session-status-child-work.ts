@@ -6,7 +6,6 @@
 // to change the minute a "no update" reading shows. The background-task channel, which only an
 // open chat subscribes to, carries every tick.
 
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
@@ -31,7 +30,7 @@ export type StructuredStatusChildWork = {
  *  the two cannot disagree. */
 export function structuredStatusChildWork(
   views: readonly AgentChildWorkView[] | undefined,
-  provider: AgentSessionHandleProvider
+  provider: string
 ): StructuredStatusChildWork {
   const running = views ? structuredRunningChildWork(views) : []
   if (running.length === 0) {
@@ -42,7 +41,12 @@ export function structuredStatusChildWork(
   // reads a failed one's legacy `blocked` as still running. Dies with the legacy shapes; see the
   // death condition in `structured-agent-session-child-work-legacy`.
   const { tasks } = structuredChildWorkLegacyTasks(children, provider)
-  return { children, ...(tasks ? { backgroundTasks: tasks } : {}) }
+  return {
+    children,
+    ...(tasks && tasks.length > 0
+      ? { backgroundTasks: tasks.map(({ totalTokens: _tokens, ...task }) => task) }
+      : {})
+  }
 }
 
 export function structuredStatusChildrenEqual(

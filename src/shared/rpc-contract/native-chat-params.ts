@@ -40,7 +40,8 @@ export const NativeChatSession = z.object({
   // that advertise this semantic may receive one; legacy clients treat it as a
   // settled empty read and can overwrite retention / unblock launch drafts.
   capabilities: z.object({ transcriptPending: z.literal(1).optional() }).optional(),
-  beforeOffset: z.number().int().nonnegative().optional()
+  beforeOffset: z.number().int().nonnegative().optional(),
+  paneKey: z.string().min(1).optional()
 })
 
 export const NativeChatUnsubscribe = z.object({

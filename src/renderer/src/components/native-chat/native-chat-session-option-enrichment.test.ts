@@ -10,6 +10,7 @@ import {
   getNativeChatModelEnrichmentEntryCountForTests,
   NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES,
   readNativeChatEnrichedModels,
+  readNativeChatEnrichedReportedValues,
   resolveNativeChatLaunchSessionOptions,
   subscribeNativeChatEnrichedModels
 } from './native-chat-session-option-enrichment'
@@ -48,7 +49,7 @@ describe('native chat session option enrichment', () => {
     const context = { settings: {}, worktreeId: 'repo::/worktree', worktreePath: '/worktree' }
 
     const local = await discoverNativeChatCatalogModels('codex', context, 'local')
-    expect(local?.map(({ id }) => id)).toEqual(['gpt-host'])
+    expect(local?.models.map(({ id }) => id)).toEqual(['gpt-host'])
     expect(mocks.discoverRuntimeCommitMessageModels).not.toHaveBeenCalled()
 
     // A paired runtime's key also covers its SSH and WSL worktrees, which its
@@ -56,7 +57,7 @@ describe('native chat session option enrichment', () => {
     mocks.callStructuredAgentSession.mockClear()
     const paired = await discoverNativeChatCatalogModels('codex', context, 'runtime:env-1')
     expect(mocks.callStructuredAgentSession).not.toHaveBeenCalled()
-    expect(paired?.map(({ id }) => id)).toContain('gpt-cli')
+    expect(paired?.models.map(({ id }) => id)).toContain('gpt-cli')
   })
 
   it('bounds settled host enrichment entries', async () => {
@@ -64,7 +65,7 @@ describe('native chat session option enrichment', () => {
       ensureNativeChatModelEnrichment({
         agent: 'cursor',
         hostKey: `ssh:${index}`,
-        discover: async () => []
+        discover: async () => ({ models: [] })
       })
     }
     await Promise.resolve()
@@ -76,10 +77,18 @@ describe('native chat session option enrichment', () => {
   })
 
   it('keeps reads synchronous while one host-scoped probe is in flight', async () => {
-    let resolveDiscovery: ((models: CatalogModel[]) => void) | undefined
+    let resolveDiscovery:
+      | ((value: {
+          models: CatalogModel[]
+          reportedValues: { model: string; effort: string }
+        }) => void)
+      | undefined
     const discover = vi.fn(
       () =>
-        new Promise<CatalogModel[]>((resolve) => {
+        new Promise<{
+          models: CatalogModel[]
+          reportedValues: { model: string; effort: string }
+        }>((resolve) => {
           resolveDiscovery = resolve
         })
     )
@@ -92,10 +101,13 @@ describe('native chat session option enrichment', () => {
     expect(readNativeChatEnrichedModels('cursor', 'ssh:one')).toBeNull()
     expect(discover).toHaveBeenCalledOnce()
 
-    resolveDiscovery?.([
-      { id: 'gpt-5.3-codex', label: 'GPT 5.3 live', options: [] },
-      { id: 'account-model', label: 'Account model', options: [] }
-    ])
+    resolveDiscovery?.({
+      models: [
+        { id: 'gpt-5.3-codex', label: 'GPT 5.3 live', options: [] },
+        { id: 'account-model', label: 'Account model', options: [] }
+      ],
+      reportedValues: { model: 'account-model', effort: 'high' }
+    })
     await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce())
 
     const models = readNativeChatEnrichedModels('cursor', 'ssh:one')!
@@ -104,6 +116,10 @@ describe('native chat session option enrichment', () => {
       options: expect.arrayContaining([expect.objectContaining({ id: 'effort' })])
     })
     expect(models.at(-1)).toMatchObject({ id: 'account-model' })
+    expect(readNativeChatEnrichedReportedValues('cursor', 'ssh:one')).toEqual({
+      model: 'account-model',
+      effort: 'high'
+    })
     expect(readNativeChatEnrichedModels('cursor', 'ssh:two')).toBeNull()
   })
 
@@ -118,10 +134,16 @@ describe('native chat session option enrichment', () => {
     expect(readNativeChatEnrichedModels('cursor', 'local')).toBeNull()
   })
 
-  it('does not probe agents whose catalogs have no discovery command', () => {
+  it('does not probe agents without catalogs', () => {
     const discover = vi.fn()
-    ensureNativeChatModelEnrichment({ agent: 'gemini', hostKey: 'local', discover })
+    ensureNativeChatModelEnrichment({ agent: 'openclaude', hostKey: 'local', discover })
     expect(discover).not.toHaveBeenCalled()
+  })
+
+  it('uses the shared capability discovery for Claude too', () => {
+    const discover = vi.fn().mockResolvedValue(null)
+    ensureNativeChatModelEnrichment({ agent: 'claude', hostKey: 'local', discover })
+    expect(discover).toHaveBeenCalledOnce()
   })
 
   it('keeps WSL discovery separate from the Windows host and other distros', () => {
@@ -183,14 +205,14 @@ describe('native chat session option enrichment', () => {
     await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce())
 
     const models = readNativeChatEnrichedModels('claude', 'ssh:host')!
-    expect(models.map(({ id }) => id)).toEqual(['opus[1m]', 'sonnet'])
+    expect(models.map(({ id }) => id)).toEqual(['opus', 'sonnet'])
     const sonnetEffort = models.find(({ id }) => id === 'sonnet')?.options[0]
     expect(sonnetEffort?.kind).toMatchObject({
       type: 'select',
       choices: [{ value: 'medium', label: 'Medium' }]
     })
-    expect(models.find(({ id }) => id === 'opus[1m]')).toMatchObject({
-      id: 'opus[1m]',
+    expect(models.find(({ id }) => id === 'opus')).toMatchObject({
+      id: 'opus',
       description: 'Opus 5 with 1M context',
       options: [
         expect.objectContaining({
@@ -202,6 +224,7 @@ describe('native chat session option enrichment', () => {
             ]
           })
         }),
+        expect.objectContaining({ id: 'contextWindow' }),
         expect.objectContaining({ id: 'fastMode' })
       ]
     })
@@ -303,14 +326,18 @@ describe('native chat session option enrichment', () => {
         worktreeId: 'repo::/worktree',
         worktreePath: '/worktree'
       })
-    ).resolves.toEqual([{ id: 'auto', label: 'Auto', options: [] }])
+    ).resolves.toEqual({ models: [{ id: 'auto', label: 'Auto', options: [] }] })
   })
 
   it('uses the authoritative merge for grok and the additive one for cursor', async () => {
     // Both branches of the same ternary: deleting the authoritative arm typechecks
     // and leaves every additive-agent test passing.
-    const discoverGrok = vi.fn().mockResolvedValue([{ id: 'grok-5', label: 'Grok 5', options: [] }])
-    const discoverCursor = vi.fn().mockResolvedValue([{ id: 'extra', label: 'Extra', options: [] }])
+    const discoverGrok = vi
+      .fn()
+      .mockResolvedValue({ models: [{ id: 'grok-5', label: 'Grok 5', options: [] }] })
+    const discoverCursor = vi
+      .fn()
+      .mockResolvedValue({ models: [{ id: 'extra', label: 'Extra', options: [] }] })
     ensureNativeChatModelEnrichment({ agent: 'grok', hostKey: 'm', discover: discoverGrok })
     ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'm', discover: discoverCursor })
     await vi.waitFor(() => {
@@ -335,7 +362,9 @@ describe('native chat session option enrichment', () => {
       effort: 'low'
     })
 
-    const discover = vi.fn().mockResolvedValue([{ id: 'grok-5', label: 'Grok 5', options: [] }])
+    const discover = vi
+      .fn()
+      .mockResolvedValue({ models: [{ id: 'grok-5', label: 'Grok 5', options: [] }] })
     ensureNativeChatModelEnrichment({ agent: 'grok', hostKey: 'local', discover })
     await vi.waitFor(() => expect(readNativeChatEnrichedModels('grok', 'local')).not.toBeNull())
 
@@ -364,5 +393,32 @@ describe('native chat session option enrichment', () => {
         worktreePath: '/worktree'
       })
     ).resolves.toBeNull()
+  })
+
+  it('publishes Codex Fast mode only for models that advertise it', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      defaultModelId: 'gpt-5.6-sol',
+      models: [
+        {
+          id: 'gpt-5.6-sol',
+          label: 'GPT-5.6 Sol',
+          thinkingLevels: [{ id: 'high', label: 'High' }],
+          defaultThinkingLevel: 'high',
+          supportsFastMode: true
+        },
+        { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' }
+      ]
+    })
+
+    const result = await discoverNativeChatCatalogModels('codex', {
+      settings: {},
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    })
+
+    expect(result?.models[0].options.map(({ id }) => id)).toEqual(['effort', 'fastMode'])
+    expect(result?.models[1].options).toEqual([])
   })
 })

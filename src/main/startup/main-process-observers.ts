@@ -50,10 +50,14 @@ export function initializeMainProcessObservers(): void {
     agentHookServer,
     () => state.runtime
   )
+  const unsubscribeRoomStatus = agentHookServer.subscribeEnrichedStatus((enriched) => {
+    state.runtime?.ingestRoomAgentStatus(enriched)
+  })
   state.unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
     unsubscribeStatusFreshness()
     uninstallHookStatusRepublish()
+    unsubscribeRoomStatus()
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)

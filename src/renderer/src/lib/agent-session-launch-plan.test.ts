@@ -71,6 +71,7 @@ describe('planAgentSessionLaunch', () => {
       agent: 'claude',
       workspace: { kind: 'folder', worktreeId: 'folder:ws-1' },
       prompt: 'Review this',
+      initialSessionOptions: { model: 'selected-model', effort: 'high', fastMode: false },
       promptDelivery: 'submit-after-ready',
       resumeFrom,
       onPromptDelivered
@@ -82,6 +83,7 @@ describe('planAgentSessionLaunch', () => {
       'claude',
       {
         prompt: 'Review this',
+        sessionOptions: { model: 'selected-model', effort: 'high', fastMode: false },
         promptDelivery: 'submit-after-ready',
         resumeFrom,
         onPromptDelivered

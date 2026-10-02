@@ -58,8 +58,8 @@ describe('per-launch structured feasibility', () => {
 
   const blockerCases: [string, Partial<StructuredNativeChatSupportInput>, string][] = [
     ['a reused PTY agent', { reusesTerminal: true }, 'reused-terminal'],
-    ['grok', { agent: 'grok' }, 'agent-without-structured-session'],
-    ['openclaude', { agent: 'openclaude' }, 'agent-without-structured-session'],
+    ['grok on an older host', { agent: 'grok' }, 'runtime-capability'],
+    ['openclaude on an older host', { agent: 'openclaude' }, 'runtime-capability'],
     ['a floating workspace', { workspaceKind: 'floating' }, 'floating-workspace'],
     ['a custom TUI launch command', { requiresTuiLaunchCommand: true }, 'tui-launch-command'],
     ['an SSH host', { executionHostId: 'ssh:host-a' }, 'remote-execution-host'],

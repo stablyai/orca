@@ -54,6 +54,7 @@ const STRUCTURED_SETTINGS = {
   experimentalNativeChat: true,
   openAgentTabsInChatByDefault: true,
   experimentalStructuredNativeChat: true,
+  enabledHarnessStreamingAgents: ['claude' as const, 'codex' as const],
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
@@ -335,6 +336,46 @@ describe('buildAgentLaunchRouteInput', () => {
     })
     expect(input.hostCapabilities).toBeNull()
   })
+
+  it.each(['unavailable', 'blocked'] as const)(
+    'keeps remote capabilities only while contact is not revoked (%s)',
+    (verification) => {
+      const appStore = store()
+      appStore.runtimeStatusByEnvironmentId = new Map([
+        [
+          'remote',
+          {
+            status: null,
+            checkedAt: 1,
+            snapshot: {
+              environmentId: 'remote',
+              pairingRevision: 1,
+              sequence: 1,
+              checkedAt: 1,
+              verification,
+              transport: 'disconnected',
+              status: {
+                runtimeId: 'remote',
+                rendererGraphEpoch: 1,
+                graphStatus: 'ready',
+                authoritativeWindowId: null,
+                liveTabCount: 0,
+                liveLeafCount: 0,
+                capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+              }
+            }
+          }
+        ]
+      ])
+      const input = buildAgentLaunchRouteInput(appStore, {
+        agent: 'codex',
+        workspace: { kind: 'folder', runtimeEnvironmentId: 'remote' }
+      })
+      expect(input.hostCapabilities).toEqual(
+        verification === 'blocked' ? null : [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+      )
+    }
+  )
 })
 
 describe('workspaceKindForWorktreeId', () => {

@@ -35,7 +35,7 @@ type MobileCreateTestNotifier = {
   revealTerminalSession: TestMock
   splitTerminal: TestMock
   renameTerminal: TestMock
-  closeTerminal: (tabId: string, leafId?: string) => void
+  closeTerminal: (tabId: string, options?: { preserveSessionOnClose?: boolean }) => void
   closeSessionTab: TestMock
   sleepWorktree: TestMock
   terminalFitOverrideChanged: TestMock
@@ -327,7 +327,7 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
 
 // Why: the five #7587 mobile-create tests share one notifier factory so interface changes live in one place.
 function createMobileCreateTestNotifier(
-  closeTerminal: (tabId: string, leafId?: string) => void
+  closeTerminal: MobileCreateTestNotifier['closeTerminal']
 ): MobileCreateTestNotifier {
   return {
     focusTerminal: vi.fn(),

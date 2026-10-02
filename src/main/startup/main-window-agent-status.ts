@@ -78,6 +78,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       const runtime = state.runtime
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+      const roomDeliveryId = runtime?.getRoomDeliveryIdForPaneKey(paneKey)
       const statusEvent = {
         ...(authorityRestartId && isReplay !== true ? { authorityRestartId } : {}),
         ...payload,
@@ -95,7 +96,8 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(observation ? { observation } : {}),
-        ...(orchestration ? { orchestration } : {})
+        ...(orchestration ? { orchestration } : {}),
+        ...(roomDeliveryId ? { roomDeliveryId } : {})
       }
       state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
       getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)

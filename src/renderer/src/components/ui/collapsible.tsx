@@ -16,9 +16,18 @@ function CollapsibleTrigger({
 }
 
 function CollapsibleContent({
+  animated = false,
   ...props
-}: React.ComponentProps<typeof CollapsiblePrimitive.Content>): React.JSX.Element {
-  return <CollapsiblePrimitive.Content data-slot="collapsible-content" {...props} />
+}: React.ComponentProps<typeof CollapsiblePrimitive.Content> & {
+  animated?: boolean
+}): React.JSX.Element {
+  return (
+    <CollapsiblePrimitive.Content
+      data-slot="collapsible-content"
+      data-animated={animated || undefined}
+      {...props}
+    />
+  )
 }
 
 export { Collapsible, CollapsibleTrigger, CollapsibleContent }

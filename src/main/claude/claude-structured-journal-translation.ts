@@ -1,6 +1,6 @@
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
@@ -60,7 +60,6 @@ export function createClaudeSessionJournalTranslator(
       })
     : null
 }
-
 export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
 ): ClaudeJournalTranslator {
@@ -126,8 +125,15 @@ export function createClaudeJournalTranslator(
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
     persist: (identity, text, options) => {
-      const body = claudeStreamingMessageBody(text)
-      deps.sink.appendItem(identity, body, { ...options, turnScope: turnScope() })
+      const reasoning =
+        identity.provider === 'orca' && identity.clientMessageId.startsWith('claude-thinking:')
+      deps.sink.appendItem(
+        identity,
+        reasoning
+          ? { kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text }] }
+          : { ...claudeStreamingMessageBody(text), assistantPhase: 'commentary' },
+        { ...options, turnScope: turnScope() }
+      )
       deps.sink.publish()
     }
   })
@@ -152,6 +158,9 @@ export function createClaudeJournalTranslator(
     if (!delta) {
       return false
     }
+    if (delta.role === 'assistant' && delta.parentToolUseId === null) {
+      messageContext.lastAssistant = { identity: delta.identity, groupKey: turn.groupKey }
+    }
     streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
     return true
   }
@@ -166,19 +175,16 @@ export function createClaudeJournalTranslator(
     backgroundTasks,
     providerFallback,
     corrections,
-    turn
+    turn,
+    lastAssistant: null
   }
 
-  const resultContext: ClaudeResultJournalContext = { ...messageContext, prompts, context }
-
-  const handleMessage = (
-    message: Record<string, unknown>,
-    startsTurn: boolean,
-    observedAt: number,
-    requestedAt?: number,
-    openedBy?: string
-  ): boolean =>
-    journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt, openedBy)
+  const resultContext: ClaudeResultJournalContext = {
+    ...messageContext,
+    prompts,
+    context,
+    messages: messageContext
+  }
 
   return {
     handle: (event) => {
@@ -242,12 +248,14 @@ export function createClaudeJournalTranslator(
         )
         const kind = claudeProviderFrameKind(event.message)
         if (
-          !handleMessage(
+          !journalClaudeMessage(
+            messageContext,
             event.message,
             event.startsTurn === true,
             event.observedAt ?? Date.now(),
             event.requestedAt,
-            event.clientMessageId
+            event.clientMessageId,
+            event.turn
           )
         ) {
           providerFallback.append(

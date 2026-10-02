@@ -1,4 +1,10 @@
 {
+  "agentSubagents": {
+    "messageCount_one": "{{count}} message",
+    "turn": {
+      "count_one": "{{count}} subagent"
+    }
+  },
   "agentsSidebarIntro": {
     "migrated": {
       "action": "Open Agents"

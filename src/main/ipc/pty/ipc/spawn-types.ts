@@ -19,7 +19,7 @@ import type {
   PrepareCodexSessionResume
 } from '../host-env/types'
 import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/codex-resume'
-import type { StablePaneOwner } from '../pane/stable-owner'
+import type { PtyOutputBoundary, StablePaneOwner } from '../pane/stable-owner'
 
 export type PtySpawnIpcArgs = {
   cols: number
@@ -77,6 +77,7 @@ export type AdoptStablePaneResult = {
   result: PtySpawnResult
   owner: StablePaneOwner
   materialized?: true
+  outputBoundary?: PtyOutputBoundary
 }
 
 export type PtySpawnIpcDeps = {

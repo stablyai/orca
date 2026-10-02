@@ -434,6 +434,7 @@ describe('group order matches the rendered tab strip', () => {
       browserTabIds: [],
       simulatorTabIds: [],
       agentSessionTabIds: [],
+      roomTabIds: [],
       terminalMap: terminalMap as never,
       editorMap: new Map(),
       browserMap: new Map(),

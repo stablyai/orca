@@ -30,13 +30,29 @@ export function decodeCodexTranscriptLine(
   const timestamp = parseTimestamp(record.timestamp)
   const baseId = extractString(payload.id) ?? fallbackId
 
-  if (record.type === 'response_item') {
-    return codexResponseItem(payload, baseId, timestamp)
+  if (record.type === 'inter_agent_communication_metadata') {
+    return {
+      id: baseId,
+      role: 'system',
+      blocks: [],
+      timestamp,
+      source: 'transcript',
+      subagentEvent: {
+        kind: 'turn-boundary',
+        triggerTurn: payload.trigger_turn === true
+      }
+    }
   }
-  if (record.type === 'event_msg') {
-    return codexEventMessage(payload, baseId, timestamp)
-  }
-  return null
+  const message =
+    record.type === 'response_item'
+      ? codexResponseItem(payload, baseId, timestamp)
+      : record.type === 'event_msg'
+        ? codexEventMessage(payload, baseId, timestamp)
+        : null
+  const turnId =
+    extractString(payload.turn_id) ??
+    extractString(asRecord(payload.internal_chat_message_metadata_passthrough)?.turn_id)
+  return message && turnId ? { ...message, turnId } : message
 }
 
 function codexUnwrappedResponseItem(
@@ -59,6 +75,20 @@ function codexResponseItem(
   id: string,
   timestamp: number | null
 ): NativeChatMessage | null {
+  if (payload.type === 'agent_message') {
+    return {
+      id,
+      role: 'system',
+      blocks: [],
+      timestamp,
+      source: 'transcript',
+      subagentEvent: {
+        kind: 'agent-message',
+        author: extractString(payload.author),
+        recipient: extractString(payload.recipient)
+      }
+    }
+  }
   if (payload.type === 'message') {
     const role =
       payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : null
@@ -91,7 +121,13 @@ function codexResponseItem(
     payload.type === 'local_shell_call' ||
     payload.type === 'custom_tool_call'
   ) {
-    const name = extractString(payload.name) ?? 'tool'
+    const name =
+      extractString(payload.name) ?? (payload.type === 'local_shell_call' ? 'shell' : 'tool')
+    // Why: Codex records the orchestration wrapper as custom `exec`; native
+    // Pre/PostToolUse hooks provide the real nested operations instead.
+    if (payload.type === 'custom_tool_call' && name === 'exec') {
+      return null
+    }
     const callId = extractString(payload.call_id)
     return {
       id,
@@ -103,11 +139,14 @@ function codexResponseItem(
       source: 'transcript'
     }
   }
-  if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
+  if (payload.type === 'custom_tool_call_output') {
+    return null
+  }
+  if (payload.type === 'function_call_output') {
     return {
       id,
       role: 'tool',
-      blocks: [codexToolResult(payload.output)],
+      blocks: [codexToolResult(payload.output, extractString(payload.call_id) ?? undefined)],
       timestamp,
       source: 'transcript'
     }
@@ -225,11 +264,12 @@ function codexCallInput(payload: Record<string, unknown>): unknown {
   return payload.input ?? payload.action ?? null
 }
 
-function codexToolResult(output: unknown): NativeChatBlock {
+function codexToolResult(output: unknown, callId?: string): NativeChatBlock {
   const record = asRecord(output)
   const isError = record?.success === false || record?.is_error === true
   return {
     type: 'tool-result',
+    ...(callId ? { callId } : {}),
     output: toolResultOutput(record?.content ?? record?.output ?? output),
     ...(isError ? { isError: true } : {})
   }

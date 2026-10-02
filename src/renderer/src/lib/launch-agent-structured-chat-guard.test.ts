@@ -56,6 +56,8 @@ function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1
   return {
     sessionId,
     worktreeId,
+    agent: 'codex',
+    target: { kind: 'local' },
     params: {
       envelope: {
         sessionId,
@@ -80,6 +82,7 @@ const store = {
     activeRuntimeEnvironmentId: null,
     experimentalNativeChat: true,
     experimentalStructuredNativeChat: true,
+    enabledHarnessStreamingAgents: ['codex', 'claude', 'openclaude', 'grok', 'omp'],
     openAgentTabsInChatByDefault: true,
     nativeChatSessionOptions: undefined as
       | Record<
@@ -304,7 +307,7 @@ describe('structured chat adoption guard on the launch path', () => {
   it('keeps a native-chat agent with no structured adapter on the terminal-backed path', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'openclaude', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ agent: 'gemini', worktreeId: 'wt-1' })
 
     expect(mockCreateStructuredCodexSessionLaunchIntent).not.toHaveBeenCalled()
     expect(mockCreateTab).toHaveBeenCalled()

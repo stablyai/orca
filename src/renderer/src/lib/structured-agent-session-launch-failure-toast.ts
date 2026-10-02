@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
 import {
@@ -9,7 +9,7 @@ import {
 
 /** Why one toast per launch, not per caller: coalesced callers share the launch and its failure. */
 export function trackStructuredLaunchFailureToast(
-  agent: AgentSessionHandleProvider,
+  agent: StructuredMachineAgent,
   launchResult: Promise<StructuredAgentLaunchReceipt>
 ): void {
   void launchResult.catch(async (error) => {

@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
   cancelStructuredAgentLaunch,
@@ -90,7 +90,7 @@ async function settleStartedStructuredAgentLaunch(
 /** Exposes the durable identity before host acquisition so its chat can render immediately. */
 export function beginStructuredAgentLaunchSettlement(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: StructuredMachineAgent,
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): StructuredAgentLaunchHandle {
@@ -106,7 +106,7 @@ export function beginStructuredAgentLaunchSettlement(
 /** Compatibility wrapper for callers that do not need the provisional identity. */
 export function settleStructuredAgentLaunch(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: StructuredMachineAgent,
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): Promise<StructuredAgentLaunchSettlement> {

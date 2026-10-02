@@ -4,6 +4,7 @@ import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
+import type { StructuredMachineAgent } from './structured-agent-provider'
 
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
@@ -97,7 +98,7 @@ export type RuntimeMobileSessionAgentTab = {
   title: string
   sessionId: string
   replacesSessionId?: string
-  agent: 'claude' | 'codex'
+  agent: StructuredMachineAgent
   color?: string | null
   isPinned?: boolean
   isActive: boolean

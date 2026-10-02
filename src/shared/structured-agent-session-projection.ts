@@ -35,6 +35,7 @@ import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
+import { codexSubagentProviderFrame } from './codex-subagent-items'
 
 // Re-exported so the live-turn readers' and the unanswered-send rule's existing consumers keep one
 // import site.
@@ -68,7 +69,10 @@ function itemBlocks(item: AgentJournalRenderItem): {
   role: NativeChatMessage['role']
   blocks: NativeChatBlock[]
 } | null {
-  const body = item.body
+  const body =
+    item.body.kind === 'status' && item.body.providerFrame
+      ? (codexSubagentProviderFrame(item.body.providerFrame) ?? item.body)
+      : item.body
   if (body.kind === 'message') {
     return { role: body.role, blocks: body.blocks }
   }
@@ -169,6 +173,9 @@ export function projectStructuredItemToNativeChat(
         ...agentJournalLinkageFields(item),
         role: projected.role,
         blocks: projected.blocks,
+        ...(item.body.kind === 'message' && item.body.assistantPhase
+          ? { assistantPhase: item.body.assistantPhase }
+          : {}),
         // A send mode this build cannot name renders as an ordinary message.
         ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {})
       }

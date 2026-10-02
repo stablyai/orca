@@ -1,4 +1,5 @@
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import { agentSessionRecordAgent } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type {
@@ -7,8 +8,11 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
-type RoutedAgent = 'claude' | 'codex'
 type SessionRoute = { adapter: StructuredAgentSessionAdapter; state: 'live' | 'stopped' }
+import {
+  isStructuredMachineAgent,
+  type StructuredMachineAgent
+} from '../../../shared/structured-agent-provider'
 
 export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessionAdapter {
   private readonly routes = new Map<string, SessionRoute>()
@@ -16,13 +20,17 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   private closePromise: Promise<void> | null = null
 
   constructor(
-    private readonly adapters: Record<RoutedAgent, StructuredAgentSessionAdapter>,
+    private readonly adapters: Partial<
+      Record<StructuredMachineAgent, StructuredAgentSessionAdapter>
+    >,
     private readonly closeAdapters: () => Promise<void>
   ) {}
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean => {
     const adapter = this.adapterForAgent(agent)
-    return adapter ? (adapter.supportsLocation?.(location) ?? false) : false
+    return adapter
+      ? (adapter.supportsCreate?.(location, agent) ?? adapter.supportsLocation?.(location) ?? false)
+      : false
   }
 
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
@@ -132,7 +140,8 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.liveOwnerOrNull(sessionId)?.readCommands?.(sessionId)
 
   atRestCommands: StructuredAgentSessionAtRestCommands = {
-    read: (record) => this.adapters[record.provider].atRestCommands?.read(record),
+    read: (record) =>
+      this.adapterForAgent(agentSessionRecordAgent(record))?.atRestCommands?.read(record),
     onChange: (listener) => {
       const stops = Object.values(this.adapters).flatMap((adapter) =>
         adapter.atRestCommands ? [adapter.atRestCommands.onChange(listener)] : []
@@ -151,6 +160,14 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.liveOwnerOrNull(sessionId)?.awaitOptionWritable?.(sessionId) ?? Promise.resolve()
   awaitStarted = (sessionId: string): Promise<void | SubmissionRejectionFact> =>
     this.liveOwnerOrNull(sessionId)?.awaitStarted?.(sessionId) ?? Promise.resolve()
+  readContext = (sessionId: string) =>
+    this.liveOwnerOrNull(sessionId)?.readContext?.(sessionId) ?? null
+
+  readSubagents = (sessionId: string) =>
+    this.liveOwnerOrNull(sessionId)?.readSubagents?.(sessionId) ?? []
+
+  readConfiguration = (sessionId: string) =>
+    this.liveOwnerOrNull(sessionId)?.readConfiguration?.(sessionId) ?? null
 
   readOptions = (input: { sessionId: string; fence: number }) => {
     const reader = this.owner(input.sessionId).readOptions
@@ -262,6 +279,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   }
 
   private adapterForAgent(agent: string): StructuredAgentSessionAdapter | null {
-    return agent === 'claude' || agent === 'codex' ? this.adapters[agent] : null
+    return isStructuredMachineAgent(agent) ? (this.adapters[agent] ?? null) : null
   }
 }

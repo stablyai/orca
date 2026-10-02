@@ -1,12 +1,16 @@
 import React, { useMemo, useState } from 'react'
-import { PanelRight } from 'lucide-react'
+import { MessagesSquare, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { getTopActivityBarLayout } from './activity-bar-overflow'
-import { ActivityBarButton } from './activity-bar-buttons'
+import {
+  ActivityBarButton,
+  type ActivityBarItem,
+  type RightSidebarActivityTab
+} from './activity-bar-buttons'
 import { getActiveChecksStatus } from './active-checks-status'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
@@ -30,7 +34,13 @@ import { useWindowWidth } from './use-window-width'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
-function RightSidebarInner(): React.JSX.Element {
+function RightSidebarInner({
+  roomMode = false,
+  roomPanelRef
+}: {
+  roomMode?: boolean
+  roomPanelRef?: (node: HTMLDivElement | null) => void
+}): React.JSX.Element {
   const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
     platform: getRendererAppPlatform(),
     isWebClient: isPairedWebClientWindow()
@@ -45,19 +55,47 @@ function RightSidebarInner(): React.JSX.Element {
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
   const {
-    visibleItems,
+    visibleItems: standardVisibleItems,
     activeFolderWorkspaceKey,
     pluginSystemEnabled,
     pluginFetchStatus,
     installedPluginTabKeys
   } = useRightSidebarActivityItems({ rightSidebarOpen })
-  const { effectiveTab, selectActivityTab } = useRightSidebarTabRouting({
-    visibleItems,
-    activeFolderWorkspaceKey,
-    pluginSystemEnabled,
-    pluginFetchStatus,
-    installedPluginTabKeys
-  })
+  const { effectiveTab: standardEffectiveTab, selectActivityTab: selectStandardActivityTab } =
+    useRightSidebarTabRouting({
+      visibleItems: standardVisibleItems,
+      activeFolderWorkspaceKey,
+      pluginSystemEnabled,
+      pluginFetchStatus,
+      installedPluginTabKeys
+    })
+  const [roomPanelSelected, setRoomPanelSelected] = useState(roomMode)
+  const visibleItems = useMemo<ActivityBarItem[]>(
+    () => [
+      ...(roomMode
+        ? [
+            {
+              id: 'room' as const,
+              icon: MessagesSquare,
+              title: translate('rooms.inspector.room', 'Room'),
+              shortcut: ''
+            }
+          ]
+        : []),
+      ...standardVisibleItems.filter((item) => !roomMode || item.id !== 'vault')
+    ],
+    [roomMode, standardVisibleItems]
+  )
+  const effectiveTab: RightSidebarActivityTab =
+    roomMode && roomPanelSelected ? 'room' : standardEffectiveTab
+  const selectActivityTab = (tab: RightSidebarActivityTab): void => {
+    if (tab === 'room') {
+      setRoomPanelSelected(true)
+      return
+    }
+    setRoomPanelSelected(false)
+    selectStandardActivityTab(tab)
+  }
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
@@ -91,7 +129,11 @@ function RightSidebarInner(): React.JSX.Element {
           property) rather than in a bottom-docked dashboard panel that
           competed with file Explorer/Search for vertical space. The right
           sidebar is back to tab-only content. */}
-      <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
+      <RightSidebarPanelContent
+        effectiveTab={effectiveTab}
+        rightSidebarOpen={rightSidebarOpen}
+        roomPanelRef={roomPanelRef}
+      />
     </div>
   ) : null
 

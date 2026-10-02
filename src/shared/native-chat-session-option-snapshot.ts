@@ -57,12 +57,13 @@ function actionForApply(
   apply: { midSession?: CatalogMidSessionApply },
   tracked: TrackedNativeChatSessionOption | undefined,
   mode: NativeChatSessionOptionMode,
-  liveTransport: NativeChatLiveOptionTransport
+  liveTransport: NativeChatLiveOptionTransport,
+  restartAgentPickerOptions = false
 ): SessionOptionDescriptor['action'] {
   if (mode !== 'live' || liveTransport === 'agent-session') {
     return undefined
   }
-  if (apply.midSession?.kind === 'agent-picker') {
+  if (apply.midSession?.kind === 'agent-picker' && !restartAgentPickerOptions) {
     return { type: 'agent-picker' }
   }
   // Why: only unknown flip-only options are actions; once we have a tracked
@@ -77,16 +78,33 @@ function optionDescriptor(args: {
   liveTransport: NativeChatLiveOptionTransport
   modelIsCliDefault: boolean
   composedModelApply: AgentSessionOptionCatalog['modelApply']
+  restartAgentPickerOptions?: boolean
 }): SessionOptionDescriptor | null {
-  const { option, tracked, mode, liveTransport, modelIsCliDefault, composedModelApply } = args
-  const action = actionForApply(option.apply, tracked, mode, liveTransport)
+  const {
+    option,
+    tracked,
+    mode,
+    liveTransport,
+    modelIsCliDefault,
+    composedModelApply,
+    restartAgentPickerOptions
+  } = args
+  const action = actionForApply(
+    option.apply,
+    tracked,
+    mode,
+    liveTransport,
+    restartAgentPickerOptions
+  )
   const settable = settableState({ mode, liveTransport, apply: option.apply, composedModelApply })
   // Why: the launch only emits `values[id] ?? defaultValue` alongside a model flag, so
   // a draft names this option's value exactly when a model was picked. Under the CLI's
   // own default no flag is sent at all, so its choice is nameable only where its listing states it.
   const cliStatesDefault =
     modelIsCliDefault && option.kind.type === 'select' && option.kind.defaultIsCliDefault === true
-  const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
+  const showDefault =
+    !tracked &&
+    (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault && option.launchDefault !== false))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
     const choices = choiceWithCurrent(option.kind.choices, tracked)
@@ -210,11 +228,11 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
   modelLabel: string
-  /** Required, not defaulted: this is the only place a descriptor is built, so a
-   *  producer that must state its lane here cannot silently inherit the other's. */
   liveTransport: NativeChatLiveOptionTransport
+  restartAgentPickerOptions?: boolean
 }): SessionOptionDescriptor[] {
-  const { catalog, models, record, mode, modelLabel, liveTransport } = args
+  const { catalog, models, record, mode, modelLabel, liveTransport, restartAgentPickerOptions } =
+    args
   if (models.length === 0) {
     return []
   }
@@ -230,7 +248,13 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   const trackedModelId = typeof modelTracked?.value === 'string' ? modelTracked.value : null
   const defaultModelId = cliDefaultModelId(catalog, models, trackedModelId)
   const effectiveModelId = trackedModelId ?? defaultModelId
-  const modelAction = actionForApply(catalog.modelApply, modelTracked, mode, liveTransport)
+  const modelAction = actionForApply(
+    catalog.modelApply,
+    modelTracked,
+    mode,
+    liveTransport,
+    restartAgentPickerOptions
+  )
   const snapshot: SessionOptionDescriptor[] = [
     {
       id: 'model',
@@ -259,7 +283,8 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       mode,
       liveTransport,
       modelIsCliDefault: effectiveModelId === defaultModelId,
-      composedModelApply: catalog.modelApply
+      composedModelApply: catalog.modelApply,
+      restartAgentPickerOptions
     })
     if (descriptor) {
       snapshot.push(descriptor)

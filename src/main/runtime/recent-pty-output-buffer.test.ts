@@ -225,6 +225,61 @@ describe('RecentPtyOutputBuffer', () => {
     expect(buffer.retainedChunks().chunks).toEqual([reference])
   })
 
+  it('retains only output appended after a process-generation mark', () => {
+    const buffer = new RecentPtyOutputBuffer()
+    buffer.append('old-a')
+    buffer.append('old-b')
+    const mark = buffer.mark()
+    buffer.append('new-a')
+    buffer.append('new-b')
+
+    expect(buffer.retainAfter(mark)).toBe(true)
+    expect(buffer.read()).toBe('new-anew-b')
+    expect(buffer.retainedChunks()).toEqual({
+      chunks: ['new-a', 'new-b'],
+      headChunkIsPartial: false
+    })
+  })
+
+  it('retains a marked suffix after head trimming, compaction and cap eviction', () => {
+    const trimmed = new RecentPtyOutputBuffer({ limit: 12 })
+    trimmed.append('0123456789ab')
+    trimmed.append('cd')
+    const trimmedMark = trimmed.mark()
+    trimmed.append('fresh')
+    expect(trimmed.retainAfter(trimmedMark)).toBe(true)
+    expect(trimmed.read()).toBe('fresh')
+
+    const compacted = new RecentPtyOutputBuffer({ limit: 12 })
+    compacted.append('old')
+    compacted.compact()
+    const compactedMark = compacted.mark()
+    compacted.append('new')
+    expect(compacted.retainAfter(compactedMark)).toBe(true)
+    expect(compacted.read()).toBe('new')
+
+    const evicted = new RecentPtyOutputBuffer({ limit: 5 })
+    evicted.append('old')
+    const evictedMark = evicted.mark()
+    evicted.append('fresh-output')
+    expect(evicted.retainAfter(evictedMark)).toBe(true)
+    expect(evicted.read()).toBe('utput')
+  })
+
+  it('fails closed for an invalid mark and ignores a mark from another buffer', () => {
+    const buffer = new RecentPtyOutputBuffer()
+    buffer.append('old')
+    const mark = buffer.mark()
+    buffer.append('new')
+    expect(buffer.retainAfter({ ...mark, totalAppended: mark.totalAppended + 100 })).toBe(false)
+    expect(buffer.read()).toBe('')
+
+    const other = new RecentPtyOutputBuffer()
+    other.append('untouched')
+    expect(other.retainAfter(mark)).toBe(false)
+    expect(other.read()).toBe('untouched')
+  })
+
   it('retainedChunks window-trimmed join always equals read()', () => {
     const rng = mulberry32(0xfeed)
     const buffer = new RecentPtyOutputBuffer()

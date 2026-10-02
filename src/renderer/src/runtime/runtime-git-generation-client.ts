@@ -31,7 +31,7 @@ export async function generateRuntimeCommitMessage(
         : {}),
       ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
-    }) as Promise<RuntimeGenerateCommitMessageResult>
+    })
   }
   const compatibilityError = await antigravityGenerationCompatibilityError(
     target.environmentId,
@@ -60,15 +60,17 @@ export async function generateRuntimeCommitMessage(
 
 export async function discoverRuntimeCommitMessageModels(
   context: RuntimeGitContext,
-  agentId: string
+  agentId: string,
+  options?: { includeSessionDefaults?: boolean }
 ): Promise<RuntimeDiscoverCommitMessageModelsResult> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.discoverCommitMessageModels({
       agentId,
       worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId
-    }) as Promise<RuntimeDiscoverCommitMessageModelsResult>
+      connectionId: context.connectionId,
+      ...(options?.includeSessionDefaults ? { includeSessionDefaults: true } : {})
+    })
   }
   return callRuntimeRpc<RuntimeDiscoverCommitMessageModelsResult>(
     target,
@@ -76,6 +78,7 @@ export async function discoverRuntimeCommitMessageModels(
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       agentId,
+      ...(options?.includeSessionDefaults ? { includeSessionDefaults: true } : {}),
       ...(context.settings?.agentCmdOverrides
         ? { agentCmdOverrides: context.settings.agentCmdOverrides }
         : {})
@@ -122,7 +125,7 @@ export async function generateRuntimePullRequestFields(
         : {}),
       ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
-    }) as Promise<RuntimeGeneratePullRequestFieldsResult>
+    })
   }
   const compatibilityError = await antigravityGenerationCompatibilityError(
     target.environmentId,

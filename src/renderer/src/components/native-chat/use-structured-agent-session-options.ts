@@ -64,7 +64,7 @@ export function useStructuredAgentSessionOptions(args: {
   // Published but not attached: the launch no longer holds picks and there is no fence to send one.
   const acceptsPicks = !transportEnabled || fence !== null
   const optionCatalog = useMemo(() => getAgentSessionOptionCatalog(agent), [agent])
-  const identity = `${agent}:${sessionId}`
+  const identity = JSON.stringify([target, agent, sessionId])
   const {
     optionState,
     optionStateRef,
@@ -150,7 +150,7 @@ export function useStructuredAgentSessionOptions(args: {
             .then((refreshed) => {
               if (isCurrent()) {
                 updateOptionState((latest) =>
-                  latest.record === targetRecord && optionCatalog
+                  latest.record === targetRecord
                     ? applyStructuredAgentSessionOptions(latest, optionCatalog, refreshed)
                     : latest
                 )
@@ -210,9 +210,8 @@ export function useStructuredAgentSessionOptions(args: {
   const setStructuredOption = useCallback(
     async (id: string, value: string | boolean): Promise<boolean> => {
       const view = structuredAgentSessionOptionView(optionStateRef.current, launchSeedOptions, held)
-      const encoded = encodeStructuredAgentSessionOptionValue(id, value)
+      const encoded = view.descriptors ? String(value) : encodeStructuredAgentSessionOptionValue(id, value)
       if (
-        !optionCatalog ||
         encoded === null ||
         !canSetStructuredAgentSessionOption(view, id, value)
       ) {
@@ -270,8 +269,9 @@ export function useStructuredAgentSessionOptions(args: {
   )
 
   const support =
-    transportEnabled && conversationSupport?.sessionId === sessionId ? conversationSupport : null
+    transportEnabled && conversationSupport?.identity === identity && conversationSupport.fence === fence ? conversationSupport : null
   return {
+    canSteer: providerVisible && support?.canSteer === true,
     conversationCommands: support?.commands ?? [],
     /** Absent unless this host and session can change the goal. */
     threadGoal: support?.threadGoal,

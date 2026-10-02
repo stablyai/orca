@@ -131,7 +131,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
         acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
         const producer = journalBatchMutationProducer(row, mutation)
         const scope = statedOrDerivedTurnScope(state, mutation)
-        const item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
+        const item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex, mutation.turn)
         upsertJournalItem(state, itemId, revision, item, row.fence)
       } else {
         removeJournalItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
@@ -202,11 +202,15 @@ export function journalEchoClaimant(
   if (!body || !isProviderUserMessageEcho(itemId, body)) {
     return null
   }
-  const fingerprint = structuredAgentSessionPayloadFingerprint({
-    method: 'agentSession.send',
-    sessionId: state.sessionId,
-    fields: { body }
-  })
+  const fingerprints = new Set(
+    ['agentSession.send', 'agentSession.steer'].map((method) =>
+      structuredAgentSessionPayloadFingerprint({
+        method,
+        sessionId: state.sessionId,
+        fields: { body }
+      })
+    )
+  )
   // Exact payload plus queue order preserves repeated identical sends one-for-one.
   // A submission an echo may not claim is one that says the message never reached
   // the provider, so an item resembling it is somebody else's. That is `rejected`
@@ -219,7 +223,7 @@ export function journalEchoClaimant(
       (candidate) =>
         candidate.dispatchState !== 'rejected' &&
         !isWriteFailureSubmission(candidate) &&
-        candidate.payloadFingerprint === fingerprint &&
+        fingerprints.has(candidate.payloadFingerprint) &&
         state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
     )
   return submission ? agentJournalSubmissionKey(submission.clientMessageId) : null

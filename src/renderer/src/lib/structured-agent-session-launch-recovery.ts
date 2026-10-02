@@ -1,3 +1,7 @@
+import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
+import { useAppStore } from '@/store'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session-wire'
 import {
   launchStructuredAgentSession,
@@ -31,6 +35,30 @@ function throwIfLaunchCancelled(state: StructuredLaunchRecoveryState): void {
 }
 
 async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Promise<void> {
+  const target = state.intent.target
+  if (target?.kind === 'environment') {
+    await refreshWebRuntimeSessionTabsSnapshot(target.environmentId, state.intent.worktreeId, {
+      acceptCurrentSnapshot: true,
+      afterCurrentInFlight: true,
+      errorMode: 'throw'
+    })
+    throwIfLaunchCancelled(state)
+    const store = useAppStore.getState()
+    const published =
+      getExecutionHostIdForWorktree(store, state.intent.worktreeId) ===
+        toRuntimeExecutionHostId(target.environmentId) &&
+      store.unifiedTabsByWorktree[state.intent.worktreeId]?.some(
+        (tab) =>
+          tab.contentType === 'agent-session' &&
+          tab.entityId === state.intent.sessionId &&
+          (!tab.executionHostId ||
+            tab.executionHostId === toRuntimeExecutionHostId(target.environmentId))
+      )
+    if (!published) {
+      throw new Error('structured session tab publication unavailable')
+    }
+    return
+  }
   const snapshots = await refreshLocalStructuredSessionTabs(undefined, { authoritative: true })
   throwIfLaunchCancelled(state)
   const published = snapshots.some(
@@ -50,7 +78,7 @@ async function recoverPublishedSessionReceipt(
 ): Promise<StructuredAgentLaunchReceipt> {
   await verifyPublishedSession(state)
   const history = await callStructuredAgentSession<AgentSessionHistoryResult>(
-    { kind: 'local' },
+    state.intent.target ?? { kind: 'local' },
     'agentSession.history',
     { sessionId: state.intent.sessionId, direction: 'tail', limit: 1 }
   )

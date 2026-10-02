@@ -20,6 +20,7 @@ import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireInstalledStructuredHost as requireInstalledHost,
+  requireStructuredAgentCapability,
   requireStructuredCapability,
   requireStructuredCleanupHost,
   requireStructuredCreateSupportAdmission,
@@ -58,11 +59,13 @@ import {
   HistoryParams,
   HandoffStatusParams,
   OptionsParams,
+  SubagentsParams,
   RespondParams,
   RespondToQuestionParams,
   RewindParams,
   SendParams,
   SetOptionParams,
+  SteerParams,
   SubscribeParams,
   UnsubscribeParams
 } from './structured-agent-session-schemas'
@@ -135,6 +138,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: CreateSupportParams,
     handler: async (params, ctx) => {
       requireStructuredCreateSupportAdmission(ctx)
+      requireStructuredAgentCapability(ctx, params.agent)
       const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
         params.worktree,
         params.agent
@@ -160,6 +164,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       // a client can tell "nothing was created" from "the outcome is unknown".
       const prepared = await resolveUncommittedStructuredCreate(async () => {
         if ('worktree' in params) {
+          requireStructuredAgentCapability(ctx, params.agent)
           const conflict = agentSessionFingerprintConflict(
             params.envelope,
             structuredAgentSessionCreateIntentFingerprint(params)
@@ -206,6 +211,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: sendStructuredAgentSessionForClient
   }),
   defineMethod({
+    name: 'agentSession.steer',
+    params: SteerParams,
+    handler: async (params, ctx) => requireHost(ctx).steer(callerFor(ctx), params)
+  }),
+  defineMethod({
+    // Stopping a turn, so it stays available after admission is revoked: see the gate's rule.
     name: 'agentSession.cancel',
     params: CancelParams,
     handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
@@ -265,6 +276,21 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         ctx,
         host.sessionAgent(params.sessionId)
       )
+    }
+  }),
+  defineMethod({
+    name: 'agentSession.subagents',
+    params: SubagentsParams,
+    handler: async (params, ctx) => {
+      await ensureHostInstalled(ctx)
+      const result = await requireHost(ctx).listSubagentSessions(
+        params.sessionId,
+        params.parentFilePath
+      )
+      return {
+        ...result,
+        ...(params.parentFilePath ? { parentFilePath: params.parentFilePath } : {})
+      }
     }
   }),
   defineStreamingMethod({

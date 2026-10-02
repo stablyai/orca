@@ -1,5 +1,9 @@
 import type { AgentJournalQuestion, AgentJournalQuestionItem } from './agent-session-journal-types'
 
+export function encodeAgentSessionQuestionAnswer(questionId: string, answer: string): string {
+  return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
+}
+
 const GROUP_ANSWER_PREFIX = 'question-group:'
 
 /** A single-question item has no question list; the client and host must agree on its id. */
@@ -87,7 +91,9 @@ export function legacyAgentSessionQuestionAnswers(
   body: Pick<AgentJournalQuestionItem, 'question' | 'options' | 'questions' | 'freeTextQuestionId'>,
   optionId: string
 ): AgentSessionQuestionAnswer[] | null {
-  const grouped = body.questions ? decodeAgentSessionQuestionAnswers(optionId) : null
+  const grouped = body.questions
+    ? decodeAgentSessionQuestionAnswers(optionId, body.questions)
+    : null
   if (grouped) {
     return grouped
   }
@@ -115,8 +121,45 @@ export function encodeAgentSessionQuestionAnswers(
 }
 
 export function decodeAgentSessionQuestionAnswers(
-  encoded: string
+  encoded: string,
+  questions?: readonly AgentJournalQuestion[]
 ): AgentSessionQuestionAnswer[] | null {
+  if (questions && encoded.startsWith('answers:')) {
+    try {
+      const value: unknown = JSON.parse(encoded.slice('answers:'.length))
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return null
+      }
+      const answers: AgentSessionQuestionAnswer[] = []
+      for (const [questionId, labels] of Object.entries(value)) {
+        const question = questions.find((entry) => entry.id === questionId)
+        if (
+          !question ||
+          !Array.isArray(labels) ||
+          !labels.every((label) => typeof label === 'string')
+        ) {
+          return null
+        }
+        const optionIds: string[] = []
+        const other: string[] = []
+        for (const label of labels) {
+          const option = question.options.find((entry) => entry.label === label)
+          if (option) {
+            optionIds.push(option.id)
+          } else {
+            other.push(label)
+          }
+        }
+        if (other.length > 1) {
+          return null
+        }
+        answers.push({ questionId, optionIds, ...(other[0] ? { other: other[0] } : {}) })
+      }
+      return answers
+    } catch {
+      return null
+    }
+  }
   if (!encoded.startsWith(GROUP_ANSWER_PREFIX)) {
     return null
   }

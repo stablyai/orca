@@ -1,5 +1,7 @@
 import { conversationCommandInFlight } from './structured-conversation-command-admission'
 import { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
+import { agentSessionRecordAgent } from '../../../shared/agent-session-record'
+import { isStructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import {
   runStructuredConversationCommand,
   type ConversationCommandParams
@@ -81,6 +83,10 @@ export class StructuredConversationCommandController {
       return target
     }
     return records.flatMap((record) => {
+      const agent = agentSessionRecordAgent(record)
+      if (!isStructuredMachineAgent(agent)) {
+        return []
+      }
       const target = destination(record.sessionId)
       const sessionId = target !== record.sessionId ? target : null
       // Explicit history reveals remain readable; closed replacements stay closed.
@@ -90,7 +96,7 @@ export class StructuredConversationCommandController {
               sourceSessionId: record.sessionId,
               sessionId,
               workspaceId: record.location.workspaceId,
-              agent: record.provider
+              agent
             }
           ]
         : []

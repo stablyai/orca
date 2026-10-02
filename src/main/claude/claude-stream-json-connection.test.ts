@@ -354,6 +354,7 @@ describe('Claude stream-json connection', () => {
           id: 'msg_01',
           role: 'assistant',
           content: [{ type: 'text', text: 'STREAMOK_ELEC_64E632' }],
+          assistantPhase: 'final',
           stop_reason: null
         }
       },
@@ -407,7 +408,8 @@ describe('Claude stream-json connection', () => {
       {
         kind: 'message',
         role: 'assistant',
-        blocks: [{ type: 'text', text: 'STREAMOK_ELEC_64E632' }]
+        blocks: [{ type: 'text', text: 'STREAMOK_ELEC_64E632' }],
+        assistantPhase: 'final'
       }
     ])
     expect(assistant.map((item) => item.itemId)).toEqual([`claude:${SESSION_ID}:uuid-block-start`])
@@ -541,7 +543,8 @@ describe('Claude stream-json connection', () => {
       connection,
       options: new Map<string, string>(),
       reportedOptions: {},
-      startup: { state: 'proven' }
+      startup: { state: 'proven' },
+      commands: {}
     } as unknown as ClaudeSession
 
     const options = await readClaudeStructuredSessionOptions(session, 5_000)
@@ -558,7 +561,7 @@ describe('Claude stream-json connection', () => {
         { value: 'high', label: 'High' }
       ]
     })
-    expect(options.current.model).toBe('opus')
+    expect(options.current.model).toBe('')
   })
 
   it('feeds the auth diagnostic from the settings the running child reports', async () => {

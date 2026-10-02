@@ -62,7 +62,7 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { settings } })
   })
 
-  it('rejects paired attempts to mutate the host-owned structured chat setting', async () => {
+  it('forwards paired updates to the host-owned structured chat setting', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateClientSettings: vi.fn()
@@ -74,10 +74,11 @@ describe('client UI RPC methods', () => {
     )
 
     expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'invalid_argument' }
+      ok: true
     })
-    expect(runtime.updateClientSettings).not.toHaveBeenCalled()
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      experimentalStructuredNativeChat: true
+    })
   })
 
   it('persists the runtime host task source settings for mobile Tasks', async () => {
@@ -131,6 +132,7 @@ describe('client UI RPC methods', () => {
         visibleTaskProviders: ['github', 'linear'],
         defaultTaskViewPreset: 'my-prs',
         experimentalNewWorktreeCardStyle: true,
+        experimentalRoomLiveSteering: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
@@ -156,6 +158,7 @@ describe('client UI RPC methods', () => {
       visibleTaskProviders: ['github', 'linear'],
       defaultTaskViewPreset: 'my-prs',
       experimentalNewWorktreeCardStyle: true,
+      experimentalRoomLiveSteering: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',

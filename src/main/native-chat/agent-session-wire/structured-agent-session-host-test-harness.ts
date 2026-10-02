@@ -6,7 +6,10 @@ import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionHistoryPage
+} from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -14,6 +17,7 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -212,6 +216,26 @@ export function hostTestState() {
     cancelTurn,
     answerPrompt,
     setOption
+  }
+}
+
+export function hostTestStub(
+  overrides: Partial<StructuredAgentSessionHost>
+): StructuredAgentSessionHost {
+  return Object.assign(host, overrides)
+}
+
+export function hostTestHistoryPage(items: AgentJournalRenderItem[] = []): AgentSessionHistoryPage {
+  return {
+    sessionId: SESSION,
+    epoch: 'epoch-1',
+    direction: 'tail',
+    items,
+    removedItemIds: [],
+    submissions: [],
+    window: { oldest: null, newest: null, nextCursor: { epoch: 'epoch-1', sequence: 0 } },
+    hasOlder: false,
+    hasNewer: false
   }
 }
 

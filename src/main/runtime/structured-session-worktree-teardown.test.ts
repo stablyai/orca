@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 import type { IPtyProvider } from '../providers/types'
 
 const hostRef: { current: unknown } = { current: null }
@@ -23,26 +27,31 @@ const OTHER_WORKTREE = 'repo_1::/tmp/wt-b'
 function record(
   sessionId: string,
   workspaceId: string,
-  options: { provider?: 'claude' | 'codex'; executionHostId?: string } = {}
+  options: {
+    provider?: 'claude' | 'codex'
+    executionHostId?: AgentSessionRecord['location']['executionHostId']
+  } = {}
 ): AgentSessionRecord {
   return {
+    ...agentSessionRecordFixture(),
     sessionId,
     provider: options.provider ?? 'claude',
+    providerHandleChain: [],
     location: {
       executionHostId: options.executionHostId ?? 'local',
       wslDistro: null,
       workspaceId,
       workspaceKind: 'folder'
     },
-    lease: {
+    lease: agentSessionLeaseFixture({
       sessionId,
       runtimeKind: 'native',
       claimStatus: 'live',
       handoffStage: null,
       runtimeFence: 1,
       deathEvidence: null
-    }
-  } as unknown as AgentSessionRecord
+    })
+  }
 }
 
 function installHost(options: {

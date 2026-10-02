@@ -78,7 +78,7 @@ export function createWorkspaceTabCloseCommands({
       if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
         return
       }
-    } else if (item.contentType === 'simulator') {
+    } else if (item.contentType === 'simulator' || item.contentType === 'room') {
       closeUnifiedTab(item.id)
     } else {
       const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)

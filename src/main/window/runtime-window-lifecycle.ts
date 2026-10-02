@@ -35,6 +35,23 @@ export function registerRuntimeWindowLifecycle(
     onFailure: (reason) => runtime.markGraphReloadFailed(mainWindow.id, reason)
   })
   const send = rendererNotifications.send
+  const onTerminalSurfaceClosed = (
+    event: Electron.IpcMainEvent,
+    payload: { tabId?: unknown }
+  ): void => {
+    if (
+      event.sender !== mainWebContents ||
+      typeof payload?.tabId !== 'string' ||
+      payload.tabId.length === 0 ||
+      payload.tabId.length > 256
+    ) {
+      return
+    }
+    void runtime.hideRoomTerminalSurfaceFromRenderer(payload.tabId).catch((error) => {
+      console.warn('[rooms] failed to hide renderer terminal surface', error)
+    })
+  }
+  ipcMain.on('ui:terminalSurfaceClosed', onTerminalSurfaceClosed)
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
@@ -127,6 +144,7 @@ export function registerRuntimeWindowLifecycle(
           activate: opts.activate !== false,
           ...(opts.presentation ? { presentation: opts.presentation } : {}),
           ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {}),
+          ...(opts.preserveSessionOnClose ? { preserveSessionOnClose: true } : {}),
           // Why: pre-minted tabId aligns the renderer tab id with the paneKey baked into the PTY env, so hook events route right.
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
@@ -143,6 +161,8 @@ export function registerRuntimeWindowLifecycle(
           reject(new Error('runtime_unavailable'))
         }
       }),
+    hideRoomAgentStatusFromRenderer: (paneKey) =>
+      send('agentStatus:clear', { paneKey, rendererSurfaceHidden: true }),
     resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {
         paneKey,
@@ -200,7 +220,7 @@ export function registerRuntimeWindowLifecycle(
         baseVersion,
         content
       }) as Promise<RuntimeMarkdownSaveTabResult>,
-    closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
+    closeTerminal: (tabId, options) => send('ui:closeTerminal', { kind: 'tab', tabId, ...options }),
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
@@ -212,6 +232,7 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:terminalDriverChanged', { ptyId, driver }),
     nativeChatLaunchDraftResolved: (tabId, resolution) =>
       send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
+    roomEvent: (roomId, event) => send('runtime:roomEvent', { roomId, event }),
     browserDriverChanged: (browserPageId, driver) =>
       send('runtime:browserDriverChanged', { browserPageId, driver }),
     browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
@@ -235,6 +256,7 @@ export function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     rendererNotifications.close()
+    ipcMain.removeListener('ui:terminalSurfaceClosed', onTerminalSurfaceClosed)
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {
       // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.

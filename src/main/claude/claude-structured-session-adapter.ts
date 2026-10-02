@@ -12,7 +12,11 @@ import { releaseClaudeAcquisition } from './claude-structured-acquisition-releas
 import { acquireClaudeSession } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import { setClaudeStructuredSessionOption } from './claude-structured-options'
-import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
+import {
+  readClaudeStructuredSessionOptions,
+  readClaudeStructuredContext,
+  readClaudeStructuredConfiguration
+} from './claude-structured-session-options'
 import {
   claudeStartupFailureFact,
   claudeStartupSettledWithin
@@ -153,6 +157,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       session?.childWork.observe(event.message)
       session?.backgroundTasks.observe(event.message, event.startsTurn === true)
     }
+    if (event.type === 'message') {
+      session?.contextActivity?.observeContext(event.message)
+    }
     if (event.type === 'message' && session?.commands.observe(event.message)) {
       session.events?.publish()
     }
@@ -256,6 +263,12 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     readClaudeStructuredSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
   // Provider-level: a session at rest still reports the usage its journal recorded.
   recordsContextUsage = (): boolean => true
+
+  readContext = (sessionId: string) => readClaudeStructuredContext(this.sessions.get(sessionId))
+  readConfiguration = (sessionId: string) => {
+    const session = this.sessions.get(sessionId)
+    return session ? readClaudeStructuredConfiguration(session) : null
+  }
 
   readOptionRestoreFailures = (sessionId: string): readonly string[] => [
     ...(this.sessions.get(sessionId)?.restoreSkippedOptions ?? [])

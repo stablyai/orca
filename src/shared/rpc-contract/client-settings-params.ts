@@ -10,6 +10,7 @@ import {
 import { MACHINE_NAME_MAX_LENGTH } from '../machine-name'
 import { normalizePRBotAuthorOverrides } from '../pr-bot-author-overrides'
 import { WorktreeVisibilityDefaultsUpdate } from './worktree-visibility-defaults-params'
+import { STRUCTURED_MACHINE_AGENTS } from '../structured-agent-provider'
 
 export const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
   message: 'Unknown task provider'
@@ -108,6 +109,9 @@ export const SettingsUpdate = z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
+    experimentalStructuredNativeChat: z.boolean().optional(),
+    experimentalRoomLiveSteering: z.boolean().optional(),
+    enabledHarnessStreamingAgents: z.array(z.enum(STRUCTURED_MACHINE_AGENTS)).optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),

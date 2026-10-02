@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveOmpSessionsDir } from './omp-session-root'
+import { codexSessionsDirs } from '../native-chat/session-file-resolver'
 
 // The default local roots for the two agents whose subagent transcripts are
 // read back by renderer-supplied path (Claude and OMP). Discovery scans these;
@@ -35,6 +36,19 @@ export function ompSessionsRootDirs(args: {
       // process cwd — an empty root would silently allowlist it.
       .filter((rootDir) => rootDir.trim().length > 0)
   )
+}
+
+// The local host's Codex sessions roots plus each WSL distro's native and
+// Orca-managed runtime homes. Callers reading Codex session files by path use
+// these roots to reject arbitrary paths.
+export function codexSessionsRootDirs(args: { wslHomeDirs?: readonly string[] }): string[] {
+  return [
+    ...codexSessionsDirs(),
+    ...normalizedWslHomeDirs(args.wslHomeDirs).flatMap((homeDir) => [
+      join(homeDir, '.codex', 'sessions'),
+      join(homeDir, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions')
+    ])
+  ]
 }
 
 export function normalizedWslHomeDirs(homeDirs: readonly string[] | undefined): string[] {

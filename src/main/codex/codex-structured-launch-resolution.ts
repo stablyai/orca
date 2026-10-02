@@ -93,8 +93,13 @@ export function createCodexStructuredLaunchResolver(
     // concern, and the permission posture they used to smuggle in is derived per acquisition.
     const permissionPolicy = deps.resolvePermissionPolicy?.()
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
-    // The same saved options every turn sends, so the thread and its turns name one model.
+    const resumeOrigin = head?.handle.provider === 'codex' ? 'resumed' : 'adopted'
+    const resumeThreadId =
+      head?.handle.provider === 'codex'
+        ? head.handle.threadId
+        : identity.providerHandle.kind === 'codex'
+          ? identity.providerHandle.threadId
+          : null
     const model = record.options?.model
     return {
       command,
@@ -102,8 +107,8 @@ export function createCodexStructuredLaunchResolver(
       cwd: await deps.resolveWorkspacePath(location.workspaceId),
       codexHome: accountHome.path,
       ...(environment ? { env: { ...environment } as Record<string, string> } : {}),
-      // An empty chain is a session that has never proved a thread, so it
-      // starts one; anything else resumes the last link this session proved.
+      // The durable chain wins after first acquisition; the journal identity carries the
+      // adopted thread only until that first proof is committed to the chain.
       resumeThreadId,
       // Only a thread this session created may still be one Codex never saved: a resumed,
       // forked or adopted head names a conversation Codex held.
@@ -112,6 +117,7 @@ export function createCodexStructuredLaunchResolver(
       ...(model ? { model } : {}),
       ...(resumeThreadId
         ? {
+            resumeOrigin,
             resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(
               accountHome.path,
               resumeThreadId

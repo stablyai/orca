@@ -50,7 +50,13 @@ export class CodexJournalPrompts {
         promptKey: event.promptKey,
         params: event.params
       })
-      const promptItems = questions.map(({ identity, body }) => ({ identity, body }))
+      const promptItems = questions.map(({ identity, body }) => ({
+        identity: {
+          ...identity,
+          ...(turnId ? { turn: { turnId } } : {})
+        },
+        body
+      }))
       const admission = this.admit(event, turnId, promptItems)
       if (!admission.accepted) {
         return admission
@@ -76,6 +82,9 @@ export class CodexJournalPrompts {
       threadId: event.threadId,
       promptKey: event.promptKey
     })
+    if (turnId) {
+      identity.turn = { turnId }
+    }
     const body = codexApprovalItem({
       method: event.method,
       params: event.params,

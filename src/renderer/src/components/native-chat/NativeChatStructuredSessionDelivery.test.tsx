@@ -3,13 +3,23 @@
 
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderView,
+  screen,
+  waitFor
+} from '@testing-library/react'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import React, { forwardRef, useImperativeHandle, useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
+
+const render = (ui: React.ReactNode) => renderView(ui, { wrapper: TooltipProvider })
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),

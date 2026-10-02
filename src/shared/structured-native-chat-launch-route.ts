@@ -8,10 +8,14 @@
  * drifts.
  */
 
-import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { isStructuredMachineAgent } from './structured-agent-provider'
+import { parseExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_MACHINE_PROVIDERS_CAPABILITY
+} from './protocol-version'
 import type { TuiAgent } from './tui-agent'
 import type { WorkspaceLaunchKind } from './workspace-launch-kind'
 
@@ -74,13 +78,14 @@ export function prefersStructuredNativeChatByDefault(
 export function resolveStructuredNativeChatSupport(
   input: StructuredNativeChatSupportInput
 ): StructuredNativeChatSupport {
-  if (input.executionHostId !== 'local') {
+  const host = parseExecutionHostId(input.executionHostId)
+  if (!host || host.kind === 'ssh') {
     return { supported: false, blocker: 'remote-execution-host' }
   }
   if (input.reusesTerminal === true) {
     return { supported: false, blocker: 'reused-terminal' }
   }
-  if (!isAgentSessionHandleProvider(input.agent)) {
+  if (!isStructuredMachineAgent(input.agent)) {
     return { supported: false, blocker: 'agent-without-structured-session' }
   }
   if (input.workspaceKind === 'floating') {
@@ -97,6 +102,13 @@ export function resolveStructuredNativeChatSupport(
     return { supported: false, blocker: 'runtime-capability-unknown' }
   }
   if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
+    return { supported: false, blocker: 'runtime-capability' }
+  }
+  if (
+    input.agent !== 'claude' &&
+    input.agent !== 'codex' &&
+    !input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_MACHINE_PROVIDERS_CAPABILITY)
+  ) {
     return { supported: false, blocker: 'runtime-capability' }
   }
   return { supported: true }

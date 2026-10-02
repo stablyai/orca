@@ -13,6 +13,7 @@ import {
   namesAgentJournalProducer
 } from '../../../shared/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalIdentityTurn } from '../../../shared/agent-session-journal-turn'
 import type { JournalReducerState } from './journal-reducer'
 import type {
   JournalDispatchRow,
@@ -109,6 +110,9 @@ export function journalDispatchRowBuilder(
     state: input.state,
     providerItemId,
     reason: boundedDispatchReason(input),
+    ...(input.state === 'accepted' && input.providerIdentity
+      ? { turn: agentJournalIdentityTurn(input.providerIdentity) }
+      : {}),
     ...(input.state === 'rejected' ? { rejection: input.rejection } : {}),
     ...journalRowBase(state().epoch, seq, input.fence, ts),
     ...(input.recovered ? { recovered: input.recovered } : {}),
@@ -169,6 +173,9 @@ export function journalLifecycleMutationRow(
         revision,
         body: mutation.body,
         turnScope: mutation.turnScope,
+        ...(agentJournalIdentityTurn(mutation.identity, mutation.body)
+          ? { turn: agentJournalIdentityTurn(mutation.identity, mutation.body) }
+          : {}),
         ...agentJournalLinkageFields(mutation.linkage)
       }
     : { kind: 'tombstone', itemId, revision }
@@ -268,7 +275,10 @@ export function buildJournalItemRow(input: {
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [body]),
     ...(input.recovered ? { recovered: input.recovered } : {}),
     turnScope: input.turnScope,
-    ...agentJournalLinkageFields(input.linkage)
+    ...agentJournalLinkageFields(input.linkage),
+    ...(agentJournalIdentityTurn(input.identity, input.body)
+      ? { turn: agentJournalIdentityTurn(input.identity, input.body) }
+      : {})
   }
 }
 

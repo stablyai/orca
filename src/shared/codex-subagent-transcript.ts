@@ -49,7 +49,10 @@ export type CodexSubagentTranscriptState = {
 }
 
 // Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
-function childDayDirectory(parentPath: string, startedAt: number): string | undefined {
+export function codexSubagentDayDirectory(
+  parentPath: string,
+  startedAt: number
+): string | undefined {
   const dayDir = dirname(parentPath)
   const monthDir = dirname(dayDir)
   const yearDir = dirname(monthDir)
@@ -74,7 +77,7 @@ function childDayDirectory(parentPath: string, startedAt: number): string | unde
   )
 }
 
-function resolveChildTranscript(
+export function resolveCodexSubagentTranscript(
   parentPath: string,
   threadId: string,
   startedAt: number,
@@ -85,7 +88,7 @@ function resolveChildTranscript(
   }
   const suffix = `-${threadId}.jsonl`
   const parentDir = dirname(parentPath)
-  const childDir = childDayDirectory(parentPath, startedAt)
+  const childDir = codexSubagentDayDirectory(parentPath, startedAt)
   const directories = childDir && childDir !== parentDir ? [parentDir, childDir] : [parentDir]
   for (const directory of directories) {
     let entries = entriesByDirectory.get(directory)
@@ -101,11 +104,11 @@ function resolveChildTranscript(
   return undefined
 }
 
-function readActivity(recordValue: JsonRecord):
+export function readCodexSubagentActivity(recordValue: JsonRecord):
   | {
       id: string
       description?: string
-      kind: 'started' | 'interacted' | 'interrupted'
+      kind: 'started' | 'interacted' | 'interrupted' | 'completed'
       startedAt: number
     }
   | undefined {
@@ -120,7 +123,10 @@ function readActivity(recordValue: JsonRecord):
   const rawKind = typeof payload.kind === 'string' ? payload.kind.toLowerCase() : ''
   if (
     !SAFE_THREAD_ID.test(id) ||
-    (rawKind !== 'started' && rawKind !== 'interacted' && rawKind !== 'interrupted')
+    (rawKind !== 'started' &&
+      rawKind !== 'interacted' &&
+      rawKind !== 'interrupted' &&
+      rawKind !== 'completed')
   ) {
     return undefined
   }
@@ -136,9 +142,7 @@ function readActivity(recordValue: JsonRecord):
   }
 }
 
-/** Latest model from the child's own `turn_context` records. A child can be
- *  launched on a different model than its parent, so this is read from the
- *  child rollout rather than inherited. */
+/** Read the child's model; it may differ from its parent's. */
 function readChildModel(records: JsonRecord[]): string | undefined {
   let model: string | undefined
   for (const recordValue of records) {
@@ -227,11 +231,11 @@ export function reconcileCodexSubagentTranscript(
       ? undefined
       : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
   for (const recordValue of parentRecords ?? []) {
-    const activity = readActivity(recordValue)
+    const activity = readCodexSubagentActivity(recordValue)
     if (!activity) {
       continue
     }
-    if (activity.kind === 'interrupted') {
+    if (activity.kind === 'interrupted' || activity.kind === 'completed') {
       finishCodexSubagent(roster, activity.id)
       state.subagents.delete(activity.id)
       continue
@@ -254,7 +258,7 @@ export function reconcileCodexSubagentTranscript(
   const now = Date.now()
   for (const [id, tracked] of state.subagents) {
     if (!tracked.filePath) {
-      tracked.filePath = resolveChildTranscript(
+      tracked.filePath = resolveCodexSubagentTranscript(
         normalizedPath,
         id,
         tracked.startedAt,

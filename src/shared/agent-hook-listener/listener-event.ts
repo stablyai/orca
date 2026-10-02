@@ -1,6 +1,6 @@
 import type { AgentProcessPresence } from '../agent-process-presence'
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
-import type { AgentHookSource } from '../agent-hook-relay'
+import type { AgentHookSource, AgentHookToolActivity } from '../agent-hook-relay'
 import type { AgentProviderSessionMetadata } from '../agent-session-resume'
 
 export type AgentHookEventPayload = {
@@ -31,6 +31,8 @@ export type AgentHookEventPayload = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool-use identifier when the hook source exposes one. */
   toolUseId?: string
+  /** Full native tool arguments/result for consumers that render activity. */
+  toolActivity?: AgentHookToolActivity
   /** Claude agent/subagent identifier when the hook source exposes one. */
   toolAgentId?: string
   /** Claude teammate name carried by TeammateIdle. */

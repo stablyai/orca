@@ -15,6 +15,7 @@ import {
 } from './claude-structured-provider-fallback'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
+import { claudeMessageIdentity, claudeText } from './claude-structured-item-translation'
 
 export type ClaudeResultJournalContext = Pick<
   ClaudeMessageJournalContext,
@@ -28,6 +29,7 @@ export type ClaudeResultJournalContext = Pick<
 > & {
   prompts: ClaudeJournalPrompts
   context: ClaudeContextFacts
+  messages: ClaudeMessageJournalContext
 }
 
 export function journalClaudeResult(
@@ -40,7 +42,8 @@ export function journalClaudeResult(
     corrections,
     turn,
     prompts,
-    context
+    context,
+    messages
   }: ClaudeResultJournalContext,
   message: Record<string, unknown>,
   observedAt: number
@@ -63,12 +66,25 @@ export function journalClaudeResult(
     turnId !== null &&
     sink.journalStopDecidesTurn?.(turnId, observedAt, turn.openedBy ?? undefined) === true
   if (settlesTurn) {
+    const end = commandEnd ?? claudeTurnEndForResult(message, observedAt, leftToStop)
+    const finalText = end.outcome === 'success' ? claudeText(message.result) : null
+    const sessionId = claudeText(message.session_id)
+    if (finalText && sessionId && turn.id) {
+      const identity = messages.lastAssistant?.groupKey === turn.groupKey
+        ? messages.lastAssistant.identity
+        : claudeMessageIdentity({ sessionId, uuid: claudeText(message.uuid) ?? `${turn.id}:final` })
+      sink.appendItem(identity, {
+        kind: 'message', role: 'assistant', assistantPhase: 'final',
+        blocks: [{ type: 'text', text: finalText }]
+      }, { turnScope: endedTurnScope })
+    }
+    messages.lastAssistant = null
     prompts.retryPendingCancellations()
     turn.suppressReopenOnFailure(message.is_error === true)
     // The turn is over however it ended, so a foreground child still
     // reported as working will never be settled by an event.
     subagents.settleTurn(turn.groupKey)
-    context.settle(message, commandEnd ?? claudeTurnEndForResult(message, observedAt, leftToStop))
+    context.settle(message, end)
     // The turn is over. A block still awaiting its final keeps the text the
     // flush above journaled, but its live state goes: an interrupted turn
     // would otherwise retain that text for the life of the session.

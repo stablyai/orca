@@ -1,22 +1,26 @@
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
+import { Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ComposerRunButton } from '@/components/ComposerRunButton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
-import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
+import { AgentSessionControls } from '../agent-session-controls/AgentSessionControls'
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
   dictationDisabled: boolean
   sendDisabled: boolean
   isWorking: boolean
+  sendWhileWorking?: boolean
   isDictating: boolean
   isDictationHoldMode: boolean
   onAttach: () => void
@@ -32,6 +36,9 @@ export type NativeChatComposerActionsProps = {
   onExitGoalMode?: () => void
   /** Absent until the session has reported or the transcript can estimate. */
   contextUsage?: NativeChatContextUsageSummary | null
+  context?: AgentSessionContextSnapshot
+  canCompact?: boolean
+  onCompact?: () => Promise<void>
 }
 
 export function NativeChatComposerActions({
@@ -39,6 +46,7 @@ export function NativeChatComposerActions({
   dictationDisabled,
   sendDisabled,
   isWorking,
+  sendWhileWorking = false,
   isDictating,
   isDictationHoldMode,
   onAttach,
@@ -51,7 +59,10 @@ export function NativeChatComposerActions({
   sessionOptionsSnapshot,
   sessionOptionsPickerRequest,
   onExitGoalMode,
-  contextUsage
+  contextUsage,
+  context = EMPTY_AGENT_SESSION_CONTEXT,
+  canCompact = false,
+  onCompact
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
     // A double-click commonly lands after the first send has started and the button has
@@ -59,12 +70,13 @@ export function NativeChatComposerActions({
     if (event.detail > 1) {
       return
     }
-    if (isWorking) {
+    if (isWorking && !sendWhileWorking) {
       onStop?.()
     } else {
       onSend()
     }
   }
+  const stopMode = isWorking && !sendWhileWorking
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
@@ -93,12 +105,16 @@ export function NativeChatComposerActions({
       </div>
       <div className="ml-auto flex items-center gap-1.5">
         {/* Why: keep session controls beside the actions they affect; the
-        model trigger is ordered last so only the context ring separates it from dictation. */}
-        <NativeChatSessionOptionPickers
+        model trigger is ordered last so it sits directly next to dictation. */}
+        <AgentSessionControls
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
           pickerRequest={sessionOptionsPickerRequest}
+          context={context}
+          showContextIndicator={!contextUsage}
+          canCompact={canCompact}
+          onCompact={onCompact}
         />
         {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
         <Tooltip>
@@ -145,26 +161,18 @@ export function NativeChatComposerActions({
             {dictationLabel}
           </TooltipContent>
         </Tooltip>
-        <Button
-          type="button"
-          data-native-chat-critical-action={isWorking ? 'stop' : undefined}
-          aria-label={
-            isWorking
+        <ComposerRunButton
+          mode={stopMode ? 'stop' : 'send'}
+          label={
+            stopMode
               ? translate('components.native-chat.stop', 'Stop the agent')
-              : translate('components.native-chat.composer.send', 'Send')
+              : isWorking
+                ? translate('components.native-chat.queue.add', 'Add to queue')
+                : translate('components.native-chat.composer.send', 'Send')
           }
           disabled={sendDisabled}
           onClick={handleCriticalAction}
-          variant={isWorking ? 'secondary' : 'default'}
-          size="icon"
-          className="size-8 rounded-full pointer-coarse:size-10"
-        >
-          {isWorking ? (
-            <Square className="size-3.5 fill-current" />
-          ) : (
-            <ArrowUp className="size-4" />
-          )}
-        </Button>
+        />
       </div>
     </div>
   )

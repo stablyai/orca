@@ -5,6 +5,7 @@ import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { buildRuntimeAgentTeamsLaunchPlan } from './orca-runtime-agent-teams-launch-plan'
 import { createPtySpawnCommitReporter } from './orca-runtime-report-pty-spawn-commit'
 import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
+import { createStablePaneCreateRelease } from './stable-pane-create-release'
 
 export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   async createTerminal(
@@ -42,34 +43,29 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = dependencies.allocateTerminalPaneIdentity(launchOpts)
-      const claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
-        worktreeId: workspace.id,
-        connectionId: workspace.connectionId,
-        tabId,
-        leafId
-      })
-      let stablePaneCreateReleased = false
-      const releaseStablePaneCreate = (): void => {
-        if (stablePaneCreateReleased) {
-          return
-        }
-        stablePaneCreateReleased = true
-        claimedStablePaneCreate?.()
-      }
-      try {
-        if (launchOpts.signal?.aborted) {
-          throw new Error('client_disconnected')
-        }
-        const adoptedBeforeLaunch = await this.ptyController.adoptStablePane?.({
-          cols: 120,
-          rows: 40,
-          cwd,
-          connectionId: workspace.connectionId,
+      const releaseStablePaneCreate = createStablePaneCreateRelease(
+        this.ptyController.claimStablePaneCreate?.({
           worktreeId: workspace.id,
-          preAllocatedHandle,
+          connectionId: workspace.connectionId,
           tabId,
           leafId
         })
+      )
+      try {
+        dependencies.throwIfTerminalCreateAborted(launchOpts.signal)
+        const adoptedBeforeLaunch =
+          launchOpts.agentSessionClaim || launchOpts.agentSessionCreateOperationId
+            ? null
+            : await this.ptyController.adoptStablePane?.({
+                cols: 120,
+                rows: 40,
+                cwd,
+                connectionId: workspace.connectionId,
+                worktreeId: workspace.id,
+                preAllocatedHandle,
+                tabId,
+                leafId
+              })
         const launchToken = launchOpts.launchConfig
           ? (launchOpts.launchToken ?? dependencies.randomUUID())
           : undefined
@@ -170,7 +166,8 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
-            ...dependencies.BACKGROUND_TERMINAL_SPAWN_FLAGS
+            ...dependencies.BACKGROUND_TERMINAL_SPAWN_FLAGS,
+            persistHostSessionBinding: launchOpts.persistHostSessionBinding !== false
           })
         } finally {
           releaseStablePaneCreate?.()
@@ -233,7 +230,12 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-        if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
+        if (
+          pty &&
+          !adoptedStablePane &&
+          launchOpts.deferMobileSessionPublish !== true &&
+          launchOpts.persistHostSessionBinding !== false
+        ) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
             leafId,

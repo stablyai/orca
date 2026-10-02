@@ -2,16 +2,18 @@ export class StructuredAgentSessionRestartRestoreGate {
   private current: Promise<void> | null = null
 
   run(restore: () => Promise<void>): Promise<void> {
-    if (this.current) {
-      return this.current
-    }
-    const tracked = restore().catch((error: unknown) => {
-      if (this.current === tracked) {
+    // Serialize batches without discarding a later batch's session IDs.
+    const run = (this.current ?? Promise.resolve()).then(restore)
+    const tail = run.then(
+      () => undefined,
+      () => undefined
+    )
+    this.current = tail
+    void tail.then(() => {
+      if (this.current === tail) {
         this.current = null
       }
-      throw error
     })
-    this.current = tracked
-    return tracked
+    return run
   }
 }

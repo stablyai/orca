@@ -32,6 +32,8 @@ import {
   type StructuredAgentSessionHostDeps
 } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
+import { MachineStructuredSessionAdapter } from '../harness-conversation/machine-structured-session-adapter'
+import type { HarnessConversationDriverFactory } from '../harness-conversation/driver'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   readClaudeManagedAccountGateSettings,
@@ -62,6 +64,7 @@ import {
   modelCatalogHostDeps,
   type RuntimeAgentAccountHomeResolver
 } from './structured-agent-model-catalog-wiring'
+import { canStartEmptyClaudeSession } from '../claude/claude-empty-session'
 
 /** Whether this profile holds a structured chat: a record or tab in the journal database, or the
  *  records file a profile from before it carries while the database still owes its copy. */
@@ -120,6 +123,7 @@ export type StructuredAgentSessionRuntimeDeps = {
   /** Where every failure the runtime and its host carry on past is reported. Required, so no path
    *  can drop one: the desktop and headless hosts both pass the trace-file logger. */
   logger: StructuredAgentSessionLogger
+  createMachineDriver?: HarnessConversationDriverFactory
   /** Every structured-session status projection, for host-side reactions such as the first-work
    *  workspace rename that CLI agents get from their hooks. */
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
@@ -301,9 +305,30 @@ async function installOnJournal(
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     modelCatalog: agentModelCatalogStore
   })
-  const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
-    await Promise.all([codex.closeAll(), claude.closeAll()])
+  const machine = new MachineStructuredSessionAdapter({
+    canStartEmptyClaudeSession: (sessionId) =>
+      canStartEmptyClaudeSession(store.getRecord(sessionId), journalDatabase),
+    createDriver:
+      deps.createMachineDriver ??
+      (() => Promise.reject(new Error('structured machine providers are unavailable'))),
+    resolveWorkspacePath: ({ workspaceId }) => deps.resolveWorkspacePath(workspaceId),
+    resolveProviderEnvironment: async ({ sessionId }) => {
+      const record = store.getRecord(sessionId)
+      return record ? { [record.accountHome.variable]: record.accountHome.path } : {}
+    },
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+    onEvent: (event) => {
+      if (event.type === 'ended' && event.cause === 'unexpected-exit') {
+        lifecycle.deliver(event)
+      }
+    }
   })
+  const adapter = new StructuredAgentSessionAdapterRouter(
+    { codex, claude, openclaude: machine, grok: machine, omp: machine },
+    async () => {
+      await Promise.all([codex.closeAll(), claude.closeAll(), machine.closeAll()])
+    }
+  )
   host = new StructuredAgentSessionHost({
     store,
     adapter,

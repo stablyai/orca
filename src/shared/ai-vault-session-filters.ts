@@ -305,6 +305,13 @@ function getGroupIdentity(
   return { key: folderGroupKey(session.cwd), label: folderLabel(session.cwd) }
 }
 
+export function isAiVaultSessionInWorkspacePath(
+  workspacePath: string,
+  sessionCwd: string
+): boolean {
+  return createAiVaultWorkspaceMatcher(workspacePath)(normalizeRuntimePathForComparison(sessionCwd))
+}
+
 function createAiVaultWorkspaceMatcher(workspacePath: string): (normalizedCwd: string) => boolean {
   const matches = createNormalizedPathInsideOrEqualMatcher(workspacePath)
   const workspaceWslPath = parseWslUncPath(workspacePath)

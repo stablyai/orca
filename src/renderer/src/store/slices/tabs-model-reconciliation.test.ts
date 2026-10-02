@@ -27,6 +27,19 @@ describe('TabsSlice', () => {
   })
 
   describe('reconcileWorktreeTabModel', () => {
+    it('keeps room tabs without a terminal or editor backing entity', () => {
+      const room = store.getState().createUnifiedTab(WT, 'room', {
+        entityId: 'room-1',
+        label: 'Research room'
+      })
+
+      expect(store.getState().reconcileWorktreeTabModel(WT)).toMatchObject({
+        renderableTabCount: 1,
+        activeRenderableTabId: room.id
+      })
+      expect(store.getState().unifiedTabsByWorktree[WT]).toContainEqual(room)
+    })
+
     it('drops unified tabs whose backing content no longer exists', () => {
       const groupId = 'g-1'
       store.setState({

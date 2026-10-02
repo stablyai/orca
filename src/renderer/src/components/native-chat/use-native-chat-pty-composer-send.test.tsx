@@ -34,6 +34,8 @@ function send(
       draft,
       imageAttachments: imagePaths.map((path) => ({ path })),
       disabled: false,
+      isWorking: false,
+      queueOnly: false,
       isDispatchingSessionOption: false,
       launchDraftResolved: true,
       resolveTarget: () => ({ ptyId: 'pty', settings: null }),

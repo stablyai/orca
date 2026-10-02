@@ -9,6 +9,8 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
   sessionId: string
   onAppend: (messages: NativeChatMessage[], lifecycle?: NativeChatTurnLifecycle) => void
+  /** File advanced but produced neither chat messages nor lifecycle state. */
+  onOpaqueAppend?: () => void
   onInitialSnapshot?: (
     messages: NativeChatMessage[],
     hasMore: boolean,

@@ -118,6 +118,7 @@ describe('subscribeRuntimeClientEvents', () => {
     })
     const onEvent = vi.fn()
     const onReplayed = vi.fn()
+    const onReady = vi.fn()
 
     vi.stubGlobal('window', {
       api: {
@@ -125,16 +126,21 @@ describe('subscribeRuntimeClientEvents', () => {
       }
     })
 
-    await subscribeRuntimeClientEvents('env-1', onEvent, vi.fn(), onReplayed)
+    await subscribeRuntimeClientEvents('env-1', onEvent, vi.fn(), onReplayed, onReady)
     if (!capturedOnResponse) {
       throw new Error('Expected subscription callbacks')
     }
 
     capturedOnResponse({
       ok: true,
-      result: { type: 'ready', subscriptionId: 'sub-1' }
+      result: {
+        type: 'ready',
+        subscriptionId: 'sub-1',
+        snapshot: { roomNotificationSequence: 42 }
+      }
     })
     expect(onReplayed).not.toHaveBeenCalled()
+    expect(onReady).toHaveBeenLastCalledWith(false, { roomNotificationSequence: 42 })
 
     capturedOnResponse({
       ok: true,
@@ -142,6 +148,7 @@ describe('subscribeRuntimeClientEvents', () => {
       _replayedAfterReconnect: true
     })
     expect(onReplayed).toHaveBeenCalledTimes(1)
+    expect(onReady).toHaveBeenLastCalledWith(true, undefined)
 
     // A replay-tagged event frame both signals and still delivers the event.
     capturedOnResponse({

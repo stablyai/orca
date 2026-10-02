@@ -2,6 +2,7 @@ import { wslGatedRead } from './wsl-transcript-fs-access'
 import type { TranscriptFileHandle } from './wsl-transcript-fs-access'
 
 export const TAIL_CHUNK_BYTES = 64 * 1024
+export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
 /**
  * The byte at `position`, or null when the file shrank below it between the

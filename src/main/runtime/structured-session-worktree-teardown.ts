@@ -26,6 +26,8 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { STILL_LIVE_DETAIL_PREFIX } from '../../shared/worktree/removal'
+import type { AgentType } from '../../shared/agent-status-types'
+import { agentSessionRecordAgent } from '../../shared/agent-session-record'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   observeStructuredWorker,
@@ -38,7 +40,7 @@ import type { OrcaRuntimeService } from './orca-runtime'
 
 export type StructuredSessionInWorkspace = {
   sessionId: string
-  agent: 'claude' | 'codex'
+  agent: AgentType
 }
 
 export type UnclosedStructuredSession = StructuredSessionInWorkspace & {
@@ -131,7 +133,7 @@ export function listStructuredSessionsForWorktree(
       (record) =>
         record.location.workspaceId === worktreeId && record.location.executionHostId === hostId
     )
-    .map((record) => ({ sessionId: record.sessionId, agent: record.provider }))
+    .map((record) => ({ sessionId: record.sessionId, agent: agentSessionRecordAgent(record) }))
   return {
     members,
     live: members.filter(

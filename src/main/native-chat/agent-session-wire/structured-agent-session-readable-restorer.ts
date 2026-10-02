@@ -3,8 +3,6 @@ import type { StructuredAgentSessionReadRestoreDeps } from './structured-agent-s
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
 
 export class StructuredAgentSessionReadableRestorer {
-  private restorePromise: Promise<void> | null = null
-
   constructor(
     private readonly input: StructuredAgentSessionReadRestoreDeps & {
       supportsRecord: (record: AgentSessionRecord) => boolean
@@ -12,11 +10,7 @@ export class StructuredAgentSessionReadableRestorer {
   ) {}
 
   restore(sessionIds?: readonly string[]): Promise<void> {
-    this.restorePromise ??= this.restoreReadableSessions(sessionIds).catch((error: unknown) => {
-      this.restorePromise = null
-      throw error
-    })
-    return this.restorePromise
+    return this.restoreReadableSessions(sessionIds)
   }
 
   private async restoreReadableSessions(sessionIds?: readonly string[]): Promise<void> {

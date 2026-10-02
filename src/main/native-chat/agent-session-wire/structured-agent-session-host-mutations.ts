@@ -8,6 +8,7 @@
 // an operation only the provider can perform starts it before admission.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import { agentSessionRecordAgent } from '../../../shared/agent-session-record'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -34,17 +35,46 @@ import {
   cancelPlan,
   promptPlan,
   sendPlan,
+  steerPlan,
   setOptionPlan
 } from './structured-agent-session-mutation-plans'
 import { runQueueableStructuredAgentSessionSend } from './structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
+import { settleStructuredAgentSessionLateDispatch } from './structured-agent-session-late-dispatch'
+import { releaseStructuredAgentSessionUnansweredDispatches } from './structured-agent-session-unanswered-dispatch-release'
 export type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import {
   readStructuredAgentSessionOptions,
   recordStructuredAgentSessionOptionIntent
 } from './structured-agent-session-options-read'
+
+export function steerStructuredAgentSessionTurn(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  params: {
+    envelope: AgentSessionMutationEnvelope
+    body: AgentJournalMessageItem
+    retryUnknown?: true
+  }
+): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
+  const plan = steerPlan(params)
+  return mutateStructuredAgentSession(
+    context,
+    caller,
+    params.envelope,
+    {
+      ...plan,
+      run: (ctx) =>
+        Promise.resolve(
+          structuredAgentSessionSendBlock(context.deps.store.getRecord(ctx.sessionId)) ??
+            plan.run(ctx)
+        )
+    },
+    sendPreparation(context, params.envelope)
+  )
+}
 
 export function sendStructuredAgentSessionTurn(
   context: StructuredAgentSessionMutationContext,
@@ -183,6 +213,19 @@ export function structuredAgentSessionMutationDelegates(
   context: () => StructuredAgentSessionMutationContext
 ) {
   return {
+    sessionAgent: (sessionId: string) => {
+      const record = context().deps.store.getRecord(sessionId)
+      return record ? agentSessionRecordAgent(record) : null
+    },
+    steer: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof steerStructuredAgentSessionTurn>[2]
+    ) => steerStructuredAgentSessionTurn(context(), caller, params),
+    settleLateDispatch: (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
+      settleStructuredAgentSessionLateDispatch(context(), input),
+    releaseUnansweredDispatches: (
+      input: Parameters<typeof releaseStructuredAgentSessionUnansweredDispatches>[1]
+    ) => releaseStructuredAgentSessionUnansweredDispatches(context(), input),
     cancel: (
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof cancelStructuredAgentSessionTurn>[2]

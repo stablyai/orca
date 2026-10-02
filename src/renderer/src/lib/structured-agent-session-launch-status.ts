@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import {
   getStructuredAgentLaunchStatus,
   subscribeStructuredAgentLaunchStatus
@@ -7,7 +7,7 @@ import {
 
 export function useStructuredAgentLaunchStatus(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: StructuredMachineAgent
 ): ReturnType<typeof getStructuredAgentLaunchStatus> {
   return useSyncExternalStore(
     subscribeStructuredAgentLaunchStatus,

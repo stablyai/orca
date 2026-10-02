@@ -57,7 +57,7 @@ export type CodexTurnHost = {
   turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>
 }
 
-function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] {
+export function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] {
   const input: Record<string, unknown>[] = []
   for (const block of body.blocks as NativeChatBlock[]) {
     if (block.type === 'text' && block.text.length > 0) {

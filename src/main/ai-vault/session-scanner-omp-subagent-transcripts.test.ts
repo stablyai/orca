@@ -54,11 +54,17 @@ describe('countOmpSubagentTranscripts', () => {
     await writeFile(parentPath, '')
     await writeFile(join(artifactDir, 'AuthAndPreflight.jsonl'), '')
     await writeFile(join(artifactDir, 'BitbucketDcApi.jsonl'), '')
+    await writeFile(join(artifactDir, 'AuthAndPreflight.Child.jsonl'), '')
+    await writeFile(join(artifactDir, '__advisor.jsonl'), '')
+    await writeFile(join(artifactDir, 'AuthAndPreflight.bak.jsonl'), '')
     // Artifacts are not transcripts; nested files belong to their own parents.
     await writeFile(join(artifactDir, 'notes.md'), '')
     await writeFile(join(artifactDir, 'local', 'plan.jsonl'), '')
 
     await expect(countOmpSubagentTranscripts(parentPath)).resolves.toBe(2)
+    await expect(
+      countOmpSubagentTranscripts(join(artifactDir, 'AuthAndPreflight.jsonl'))
+    ).resolves.toBe(1)
   })
 
   it('returns 0 when the session never delegated (no artifact dir)', async () => {
@@ -113,6 +119,22 @@ describe('partitionOmpSubagentTranscriptPaths', () => {
 
     expect(partition.sessionFilePaths).toEqual([parent])
     expect(partition.subagentTranscriptCounts.get(parent)).toBe(1)
+  })
+
+  it('attributes flat dotted descendants to their direct parent and excludes advisor/backups', () => {
+    const root = `/home/user/.omp/agent/sessions/workspace/${SESSION_STEM}`
+    const result = partitionOmpSubagentTranscriptPaths([
+      `${root}/Worker.jsonl`,
+      `${root}/Worker.Child.jsonl`,
+      `${root}/Worker.Child.Nested.jsonl`,
+      `${root}/__advisor.jsonl`,
+      `${root}/Worker.bak.jsonl`
+    ])
+    expect([...result.subagentTranscriptCounts]).toEqual([
+      [`${root}.jsonl`, 1],
+      [`${root}/Worker.jsonl`, 1],
+      [`${root}/Worker.Child.jsonl`, 1]
+    ])
   })
 })
 

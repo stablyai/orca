@@ -231,5 +231,9 @@ export function readClaudeSessionOptionsFromTerminalScreen(
   if (effort && model.options.some((option) => option.id === 'effort')) {
     result.effort = effort
   }
+  if (model.options.some((option) => option.id === 'contextWindow')) {
+    // The frame names the resolved variant ("Opus 5 (1M context)").
+    result.contextWindow = /\[1m\]|\b1m\b/i.test(descriptorCell ?? '') ? '1m' : 'standard'
+  }
   return result
 }

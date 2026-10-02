@@ -281,8 +281,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     )
   }
 
-  readOptions = (input: { sessionId: string; fence: number }) =>
-    readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
+  readOptions = async (input: { sessionId: string; fence: number }) => ({
+    ...(await readLiveCodexSessionOptions(
+      this.session(input.sessionId),
+      this.deps.requestTimeoutMs
+    )),
+    canSteer: true
+  })
 
   historyFilePath = async (input: {
     identity: AgentSessionJournalIdentity

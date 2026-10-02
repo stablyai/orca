@@ -81,7 +81,7 @@ describe('decodeOmpTranscriptLine', () => {
   it('decodes a tool result', () => {
     const decoded = decodeOmpTranscriptLine(
       message('toolResult', [{ type: 'text', text: 'ok' }], {
-        toolCallId: 'call-1',
+        callId: 'call-1',
         toolName: 'goal',
         isError: false
       }),
@@ -94,7 +94,7 @@ describe('decodeOmpTranscriptLine', () => {
   it('flags an errored tool result', () => {
     const decoded = decodeOmpTranscriptLine(
       message('toolResult', [{ type: 'text', text: 'boom' }], {
-        toolCallId: 'call-2',
+        callId: 'call-2',
         isError: true
       }),
       'f'

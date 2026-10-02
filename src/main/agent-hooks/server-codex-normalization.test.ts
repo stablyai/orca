@@ -208,7 +208,7 @@ describe('Codex hook normalization', () => {
       buildBody({ hook_event_name: 'SessionStart' }),
       'production'
     )
-    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.state).toBe('done')
     expect(result?.payload.lastAssistantMessage).toBeUndefined()
   })
 
@@ -226,7 +226,38 @@ describe('Codex hook normalization', () => {
       buildBody({ hook_event_name: 'SessionStart' }),
       'production'
     )
-    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.state).toBe('done')
     expect(result?.payload.prompt).toBe('')
+  })
+
+  it('preserves native tool input and output for activity consumers', () => {
+    const input = { cmd: 'git status' }
+    const started = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'exec_command',
+        tool_input: input,
+        tool_use_id: 'call_native'
+      }),
+      'production'
+    )
+    const completed = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'exec_command',
+        tool_input: input,
+        tool_response: { text_result_for_llm: 'clean' },
+        tool_use_id: 'call_native'
+      }),
+      'production'
+    )
+
+    expect(started).toMatchObject({ toolUseId: 'call_native', toolActivity: { input } })
+    expect(completed).toMatchObject({
+      toolUseId: 'call_native',
+      toolActivity: { input, output: 'clean' }
+    })
   })
 })

@@ -1,16 +1,21 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
+import { isAgentSessionOptions } from '../../../shared/agent-session-record'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import { isStructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 
 export type StructuredAgentLaunchPersistedLifecycle = 'pending' | 'visibility-unknown' | 'failed'
 
 export type StructuredAgentLaunchPersistedRecord = {
   sessionId: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredMachineAgent
   lifecycle: StructuredAgentLaunchPersistedLifecycle
   clientOperationId: string
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  target?: RuntimeClientTarget
+  heldOptions?: Readonly<Record<string, string>>
 }
 
 const LAUNCH_STORAGE_KEY = 'orca:structuredAgentLaunches:v1'
@@ -42,14 +47,27 @@ function validRecord(value: unknown): value is StructuredAgentLaunchPersistedRec
     expectedRuntimeFence
   } = value
   const resumeFrom = 'resumeFrom' in value ? value.resumeFrom : undefined
+  const target = 'target' in value ? value.target : undefined
+  const heldOptions = 'heldOptions' in value ? value.heldOptions : undefined
   return (
+    (heldOptions === undefined || isAgentSessionOptions(heldOptions)) &&
     typeof sessionId === 'string' &&
     sessionId.length > 0 &&
-    (agent === 'claude' || agent === 'codex') &&
+    typeof agent === 'string' &&
+    isStructuredMachineAgent(agent) &&
     (lifecycle === 'pending' || lifecycle === 'visibility-unknown' || lifecycle === 'failed') &&
     typeof clientOperationId === 'string' &&
     typeof payloadFingerprint === 'string' &&
     (expectedRuntimeFence === null || typeof expectedRuntimeFence === 'number') &&
+    (target === undefined ||
+      (target !== null &&
+        typeof target === 'object' &&
+        'kind' in target &&
+        (target.kind === 'local' ||
+          (target.kind === 'environment' &&
+            'environmentId' in target &&
+            typeof target.environmentId === 'string' &&
+            target.environmentId.trim().length > 0)))) &&
     (resumeFrom === undefined ||
       (typeof resumeFrom === 'object' &&
         resumeFrom !== null &&

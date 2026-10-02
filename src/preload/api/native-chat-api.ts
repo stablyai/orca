@@ -3,12 +3,14 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
+import type { AgentSessionContextSnapshot } from '../../shared/agent-session-context'
 
 // notFound marks a not-yet-on-disk miss (retry-worthy) vs a real read/parse error (#8401).
 export type NativeChatReadSessionResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
+      context?: AgentSessionContextSnapshot
     }
   | { error: string; notFound?: true }
 
@@ -25,17 +27,20 @@ export type NativeChatSubscriptionFrame =
       /** No transcript exists behind this window yet — render it, but do not
        *  treat it as a settled read of the session's history. */
       pending?: boolean
+      context?: AgentSessionContextSnapshot
     }
   | {
       type: 'replacement'
       messages: NativeChatMessage[]
       hasMore: boolean
       lifecycle?: NativeChatTurnLifecycle
+      context?: AgentSessionContextSnapshot
     }
   | {
       type: 'appended'
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
+      context?: AgentSessionContextSnapshot
     }
 
 /** Wire payload for the `nativeChat:appended` push channel. */
@@ -52,6 +57,8 @@ export type NativeChatSubscribeArgs = {
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
+  /** Stable pane identity for per-session statusline telemetry. */
+  paneKey?: string
   /** First snapshot size; later readSession calls grow this for pagination. */
   limit?: number
 }
@@ -63,7 +70,8 @@ export type NativeChatApi = {
     agent: AgentType,
     sessionId: string,
     limit?: number,
-    transcriptPath?: string
+    transcriptPath?: string,
+    paneKey?: string
   ) => Promise<NativeChatReadSessionResult>
   /** Live-tail a transcript. The first frame is a bounded race-safe snapshot;
    *  later frames contain only newly appended messages. */

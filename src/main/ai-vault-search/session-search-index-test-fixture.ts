@@ -2,7 +2,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { aiVaultSessionFixture as syntheticSession } from '../../shared/ai-vault-session.test-fixture'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { TranscriptMessageChannel } from '../ai-vault/session-transcript-channel'
 import type {
@@ -32,32 +32,7 @@ export function syntheticCandidate(
   }
 }
 
-export function syntheticSession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
-  const at = new Date(1740000000000).toISOString()
-  return {
-    id: 'fixture',
-    executionHostId: 'local',
-    agent: 'claude',
-    sessionId: 'fixture',
-    title: 'fixture session',
-    cwd: '/fixture',
-    branch: null,
-    model: null,
-    filePath: SYNTHETIC_TRANSCRIPT,
-    codexHome: null,
-    createdAt: at,
-    updatedAt: at,
-    modifiedAt: at,
-    messageCount: 0,
-    totalTokens: 0,
-    previewMessages: [],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: '',
-    subagent: null,
-    ...overrides
-  }
-}
+export { syntheticSession }
 
 export function userMessages(text: string, count: number): TranscriptMessage[] {
   return Array.from({ length: count }, (_unused, index) => ({

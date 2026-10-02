@@ -1702,6 +1702,7 @@ export class SshRelaySession {
           grokPromptBoundary: envelope.grokPromptBoundary === true ? true : undefined,
           compactTrigger: envelope.compactTrigger,
           toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
+          toolActivity: envelope.toolActivity,
           toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
           teammateName:
             typeof envelope.teammateName === 'string' ? envelope.teammateName : undefined,

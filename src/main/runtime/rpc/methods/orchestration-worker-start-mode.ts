@@ -52,11 +52,15 @@ export function decideWorkerStartMode(args: {
   params: WorkerStartModePlacement
   settings: AgentLaunchModeSettings | null | undefined
 }): WorkerStartModeReceipt {
-  return decideAgentLaunchMode({
+  const receipt = decideAgentLaunchMode({
     placement: args.params,
     settings: args.settings,
     vocabulary: WORKER_START_VOCABULARY
   })
+  // Federation still starts PTY workers, even when paired hosts support structured chats.
+  return args.params.on
+    ? downgradeWorkerStartModeForHost(receipt, { supported: false, reason: 'remote' })
+    : receipt
 }
 
 export async function resolveWorkerStartModeOnHost(

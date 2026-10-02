@@ -115,9 +115,12 @@ export function resolveStructuredWorkerAuthority(
  * reconciler stamps the frozen journal archive with whatever it is told here.
  */
 export function structuredWorkerAgent(identity: StructuredWorkerIdentity): 'claude' | 'codex' {
-  return (
+  const agent =
     identity.agent ?? readStructuredAgentSessionRecord(identity.sessionId)?.provider ?? 'claude'
-  )
+  if (agent !== 'claude' && agent !== 'codex') {
+    throw new Error('structured_worker_provider_unsupported')
+  }
+  return agent
 }
 
 export type StructuredWorkerObservation = {

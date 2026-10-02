@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
+import type { StreamingMarkdownFade } from '@/components/sidebar/streaming-markdown-fade'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -27,6 +28,8 @@ import type {
   NativeChatSubagentRosterState
 } from './native-chat-subagent-sections'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { literalRoomTransportText } from './native-chat-room-transport'
+import type { NativeChatImageLoadContext } from './NativeChatImageAttachments'
 
 /** What a user message says under it when it did not go through, with its own Retry when the
  *  surface can send it again. */
@@ -57,7 +60,9 @@ export const MessageRow = memo(function MessageRow({
   subagentRoster,
   subagentDisclosure,
   inSubagentSection = false,
-  runtimeContext
+  runtimeContext,
+  imageLoadContext,
+  streamingFade
 }: {
   message: NativeChatMessage
   previousTodoWrite?: NativeChatToolCallBlock
@@ -80,6 +85,8 @@ export const MessageRow = memo(function MessageRow({
   /** Inside a subagent's section, whose border has to reach past the row's controls. */
   inSubagentSection?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  imageLoadContext?: NativeChatImageLoadContext
+  streamingFade?: StreamingMarkdownFade
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set, shared with the list that decides whether this row
@@ -90,6 +97,9 @@ export const MessageRow = memo(function MessageRow({
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
   const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
+  const isSubagentTask = message.subagentEvent?.kind === 'task'
+  const literalTransport = literalRoomTransportText(markdown)
+  const renderedText = literalTransport ?? markdown
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -148,27 +158,33 @@ export const MessageRow = memo(function MessageRow({
         {/* User turns get a distinct muted fill (not the card/canvas color) so
             the prompt reads apart from the assistant's body copy. */}
         <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
-          {markdown ? (
+          {renderedText ? (
             <>
               <NativeChatImageAttachments
                 blocks={prose}
                 runtimeContext={runtimeContext}
                 enablePreview={runtimeContext !== undefined}
+                loadContext={imageLoadContext}
               />
-              <CommentMarkdown
-                content={markdown}
-                variant="document"
-                className="text-sm"
-                renderCodeBlock={NativeChatCodeBlock}
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
-              />
+              {literalTransport !== null ? (
+                <div className="whitespace-pre-wrap break-words">{renderedText}</div>
+              ) : (
+                <CommentMarkdown
+                  content={renderedText}
+                  variant="document"
+                  className="text-sm"
+                  renderCodeBlock={NativeChatCodeBlock}
+                  onLinkClick={onLinkClick}
+                  allowFileUriLinks={allowFileUriLinks}
+                />
+              )}
             </>
           ) : (
             <NativeChatImageAttachments
               blocks={prose}
               runtimeContext={runtimeContext}
               enablePreview={runtimeContext !== undefined}
+              loadContext={imageLoadContext}
             />
           )}
         </div>
@@ -209,9 +225,20 @@ export const MessageRow = memo(function MessageRow({
     )
   }
 
+  if (isSubagentTask) {
+    return (
+      <div
+        ref={rowRef}
+        className="w-fit rounded-md border border-border bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground"
+      >
+        {markdown}
+      </div>
+    )
+  }
+
   // Plain assistant prose is the copyable unit; reasoning/system asides stay
   // chrome-free. Controls reveal on hover/keyboard focus and stay visible on touch.
-  const showControls = !isReasoning && !isSystem && markdown.length > 0
+  const showControls = !isReasoning && !isSystem && renderedText.length > 0
 
   return (
     <div
@@ -227,17 +254,23 @@ export const MessageRow = memo(function MessageRow({
         blocks={prose}
         runtimeContext={runtimeContext}
         enablePreview={runtimeContext !== undefined}
+        loadContext={imageLoadContext}
       />
-      {markdown ? (
-        <CommentMarkdown
-          content={markdown}
-          variant="document"
-          className="text-sm"
-          renderCodeBlock={NativeChatCodeBlock}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
-          linkifyFilePaths={onLinkClick !== undefined}
-        />
+      {renderedText ? (
+        literalTransport !== null ? (
+          <div className="whitespace-pre-wrap break-words">{renderedText}</div>
+        ) : (
+          <CommentMarkdown
+            content={renderedText}
+            variant="document"
+            className="text-sm"
+            renderCodeBlock={NativeChatCodeBlock}
+            onLinkClick={onLinkClick}
+            allowFileUriLinks={allowFileUriLinks}
+            streamingFade={streamingFade}
+            linkifyFilePaths={onLinkClick !== undefined}
+          />
+        )
       ) : null}
       {tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
         <NativeChatToolRun
@@ -259,7 +292,7 @@ export const MessageRow = memo(function MessageRow({
       ) : null}
       {showControls ? (
         <NativeChatAgentControls
-          markdown={markdown}
+          markdown={renderedText}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
           className={cn(

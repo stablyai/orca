@@ -322,6 +322,32 @@ describe('picks made while a chat launches', () => {
     ])
   })
 
+  it('blocks the first turn when an initial option is refused and retains it for retry', async () => {
+    mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
+    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+      prompt: 'first turn',
+      sessionOptions: { model: 'gpt-missing' }
+    })
+    await settle()
+    setOptionReplies[0]!.resolve({
+      ok: false,
+      refusal: { code: 'agent_session_option_invalid', message: 'Model unavailable' }
+    })
+    await launch.promptDeliveryResult
+    expect(lifecycle()).toBe('failed')
+    expect(getStructuredAgentSessionLaunchSelection(SESSION_ID)?.held).toEqual({
+      model: 'gpt-missing'
+    })
+    expect(markStructuredAgentSessionLaunchPublished(WORKTREE_ID, SESSION_ID)).toBe(false)
+    expect(mutations().map(({ method }) => method)).toEqual(['agentSession.setOption'])
+    expect(retryStructuredAgentSessionLaunch(WORKTREE_ID, SESSION_ID)).toBe(true)
+    await settle()
+    expect(setOptionReplies).toHaveLength(2)
+    setOptionReplies[1]!.resolve(ACCEPTED)
+    await settle()
+    expect(lifecycle()).toBeNull()
+  })
+
   it('discards them when the tab closes before the launch publishes', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)

@@ -1,9 +1,8 @@
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
-import type { ActivityBarItem } from './activity-bar-buttons'
 
 type ResolveRightSidebarEffectiveTabParams = {
   normalizedActiveTab: ActiveRightSidebarTab
-  visibleItems: readonly Pick<ActivityBarItem, 'id'>[]
+  visibleItems: readonly { id: ActiveRightSidebarTab }[]
   activeFolderWorkspaceKey: string | null
   rememberedFolderTab: ActiveRightSidebarTab | null | undefined
 }

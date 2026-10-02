@@ -96,10 +96,10 @@ describe('Claude model before the first turn', () => {
     }
   )
 
-  it('falls back to the listing default only when the CLI reports no applied model', async () => {
+  it('leaves the model unknown when the CLI reports no applied model', async () => {
     const current = await readCurrent({ effective: {}, sources: [] })
 
-    expect(current.model).toBe('opus[1m]')
+    expect(current.model).toBe('')
     expect(current.effort).toBeUndefined()
   })
 

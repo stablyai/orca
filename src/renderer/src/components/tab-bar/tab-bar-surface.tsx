@@ -25,6 +25,7 @@ import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import { RoomSelectorDialog } from '../rooms/RoomSelectorDialog'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
@@ -69,11 +70,17 @@ export function renderTabBarSurface({
     newBrowserShortcut,
     newSimulatorShortcut,
     newFileShortcut,
-    openMarkdownShortcut
+    openMarkdownShortcut,
+    roomProjectId,
+    activeGroupTabId,
+    runtimeTarget,
+    unifiedTabs
   } = runtime
   const {
     newTabMenuOpen,
     setNewTabMenuOpen,
+    roomSelectorOpen,
+    setRoomSelectorOpen,
     setCreateMenuQuery,
     createMenuOptions,
     windowsShellEntries,
@@ -249,6 +256,7 @@ export function renderTabBarSurface({
           ) : null}
           {showStaticCreateMenuItems ? (
             <TabBarStaticCreateMenu
+              onOpenRooms={() => setRoomSelectorOpen(true)}
               props={props}
               terminalOnly={terminalOnly}
               mobileEmulatorEnabled={mobileEmulatorEnabled}
@@ -281,6 +289,20 @@ export function renderTabBarSurface({
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      {!terminalOnly && roomSelectorOpen ? (
+        <RoomSelectorDialog
+          activeRoomId={
+            unifiedTabs.find((tab) => tab.id === activeGroupTabId && tab.contentType === 'room')
+              ?.entityId ?? null
+          }
+          groupId={resolvedGroupId}
+          open={roomSelectorOpen}
+          onOpenChange={setRoomSelectorOpen}
+          projectId={roomProjectId}
+          target={runtimeTarget}
+          worktreeId={worktreeId}
+        />
+      ) : null}
     </div>
   )
 }

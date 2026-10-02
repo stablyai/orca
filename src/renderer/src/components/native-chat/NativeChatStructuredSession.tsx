@@ -6,7 +6,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
-import { NativeChatMessageList } from './NativeChatMessageList'
+import { NativeChatSubagentMessageList } from './NativeChatSubagentMessageList'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
@@ -33,6 +33,8 @@ import { structuredAgentSessionDeliveryNotices } from './structured-agent-sessio
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
+import { nativeChatImageLoadContext } from './native-chat-image-load-context'
 
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
@@ -99,6 +101,8 @@ export function NativeChatStructuredSession(
                 : 'ready',
       sessionId: props.sessionId,
       agent: props.agent,
+      context: EMPTY_AGENT_SESSION_CONTEXT,
+      markCompactionRequested: () => {},
       ...(controller.error ? { error: controller.error } : {}),
       hasMore: controller.hasOlder,
       loadingEarlier: controller.loadingOlder,
@@ -160,6 +164,7 @@ export function NativeChatStructuredSession(
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
+  const imageLoadContext = nativeChatImageLoadContext(fileLinkContext)
   const prompt = controller.prompts[0] ?? null
   const approvalBody = prompt?.body.kind === 'approval' ? prompt.body : null
   const approval = approvalBody
@@ -279,7 +284,8 @@ export function NativeChatStructuredSession(
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={props.agent} />
         ) : (
-          <NativeChatMessageList
+          <NativeChatSubagentMessageList
+            subagents={{ structuredSessionId: props.sessionId, target: props.target }}
             session={session}
             journalItems={controller.journalItems}
             journalSubmissions={controller.submissions}
@@ -297,6 +303,7 @@ export function NativeChatStructuredSession(
             allowFileUriLinks={onLinkClick !== undefined}
             runtimeContext={imageRuntimeContext}
             deliveryNotices={deliveryNotices}
+            imageLoadContext={imageLoadContext}
           />
         )}
       </div>
@@ -377,7 +384,7 @@ export function NativeChatStructuredSession(
                 const optionId = question.options[optionIndex]?.id
                 return optionId ? [optionId] : []
               })
-              return { questionId: question.id, optionIds, ...(other ? { other } : {}) }
+              return { questionId: question.id, optionIds: question.multiSelect || !other ? optionIds : [], ...(other ? { other } : {}) }
             })
             if (chosen.every((answer) => answer.optionIds.length > 0 || answer.other)) {
               void controller.respond(prompt, { kind: 'answers', answers: chosen })

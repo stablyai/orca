@@ -552,7 +552,7 @@ describe('web settings preload API', () => {
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
   })
 
-  it('hydrates new worktree card style from a paired runtime', async () => {
+  it('hydrates runtime-backed experimental settings from a paired runtime', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -561,7 +561,12 @@ describe('web settings preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { settings: { experimentalNewWorktreeCardStyle: true } },
+            result: {
+              settings: {
+                experimentalNewWorktreeCardStyle: true,
+                experimentalRoomLiveSteering: true
+              }
+            },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -576,12 +581,14 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.get()
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      experimentalNewWorktreeCardStyle?: boolean
-    }
+    const stored: unknown = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')
 
     expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
-    expect(stored.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(settings.experimentalRoomLiveSteering).toBe(true)
+    expect(stored).toMatchObject({
+      experimentalNewWorktreeCardStyle: true,
+      experimentalRoomLiveSteering: true
+    })
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
   })
 
@@ -702,7 +709,7 @@ describe('web settings preload API', () => {
     ])
   }, 15_000)
 
-  it('forwards new worktree card style updates to a paired runtime', async () => {
+  it('forwards runtime-backed experimental setting updates to a paired runtime', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -711,7 +718,12 @@ describe('web settings preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { settings: { experimentalNewWorktreeCardStyle: true } },
+            result: {
+              settings: {
+                experimentalNewWorktreeCardStyle: true,
+                experimentalRoomLiveSteering: true
+              }
+            },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -726,12 +738,20 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.set({
-      experimentalNewWorktreeCardStyle: true
+      experimentalNewWorktreeCardStyle: true,
+      experimentalRoomLiveSteering: true
     })
 
     expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(settings.experimentalRoomLiveSteering).toBe(true)
     expect(runtimeCalls).toEqual([
-      { method: 'settings.update', params: { experimentalNewWorktreeCardStyle: true } }
+      {
+        method: 'settings.update',
+        params: {
+          experimentalNewWorktreeCardStyle: true,
+          experimentalRoomLiveSteering: true
+        }
+      }
     ])
   })
 

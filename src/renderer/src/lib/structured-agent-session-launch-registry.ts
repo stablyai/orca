@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionWriteRefusal } from '../../../shared/agent-session-write-failure'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { StructuredMachineAgent } from '../../../shared/structured-agent-provider'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
@@ -70,12 +71,16 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
 // Why keyed by conversation: a resume must not coalesce onto an unrelated blank launch.
 export function structuredLaunchIdentity(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
-  resumeFrom?: StructuredAgentSessionResumeSource
+  agent: StructuredMachineAgent,
+  resumeFrom?: StructuredAgentSessionResumeSource,
+  target?: RuntimeClientTarget
 ): string {
-  return resumeFrom
+  const identity = resumeFrom
     ? `${agent}:${worktreeId}:resume:${resumeFrom.providerSessionId}`
     : `${agent}:${worktreeId}`
+  return target?.kind === 'environment'
+    ? JSON.stringify([target.environmentId, identity])
+    : identity
 }
 
 export function getStructuredLaunchState(identity: string): StructuredLaunchState | undefined {
@@ -120,20 +125,17 @@ function persistStructuredLaunchState(state: StructuredLaunchState): void {
     clientOperationId: envelope.clientOperationId,
     payloadFingerprint: envelope.payloadFingerprint,
     expectedRuntimeFence: envelope.expectedRuntimeFence,
+    ...(Object.keys(state.selection.held).length > 0 ? { heldOptions: state.selection.held } : {}),
+    ...(state.intent.target ? { target: state.intent.target } : {}),
     ...(resumeFrom ? { resumeFrom } : {})
   }
   writeStructuredAgentLaunchRecord(record)
 }
 
-export function getPersistedStructuredAgentLaunchRecord(
-  sessionId: string
-): StructuredAgentLaunchPersistedRecord | undefined {
-  return readStructuredAgentLaunchRecord(sessionId)
-}
+export const getPersistedStructuredAgentLaunchRecord = readStructuredAgentLaunchRecord
 
-export function structuredLaunchStates(): IterableIterator<StructuredLaunchState> {
-  return pendingStructuredLaunchesByIdentity.values()
-}
+export const structuredLaunchStates = (): IterableIterator<StructuredLaunchState> =>
+  pendingStructuredLaunchesByIdentity.values()
 
 function launchStateLifecycle(state: StructuredLaunchState): StructuredAgentSessionLaunchLifecycle {
   if (state.cancelled || state.callers.outcome === 'cancelled') {
@@ -148,13 +150,6 @@ function launchStateLifecycle(state: StructuredLaunchState): StructuredAgentSess
   return state.callers.outcome === 'failed' ? 'failed' : 'pending'
 }
 
-function matchesLaunchWorktree(
-  state: StructuredLaunchState | undefined,
-  worktreeId: string
-): boolean {
-  return state?.intent.worktreeId === worktreeId
-}
-
 export function getStructuredAgentSessionLaunchLifecycle(
   worktreeId: string,
   sessionId: string
@@ -163,7 +158,7 @@ export function getStructuredAgentSessionLaunchLifecycle(
     return 'cancelled'
   }
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  if (state && matchesLaunchWorktree(state, worktreeId)) {
+  if (state && state.intent.worktreeId === worktreeId) {
     return launchStateLifecycle(state)
   }
   return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
@@ -183,9 +178,7 @@ export function getStructuredAgentSessionLaunchFailure(
   sessionId: string
 ): AgentSessionWriteRefusal | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  return state &&
-    matchesLaunchWorktree(state, worktreeId) &&
-    launchStateLifecycle(state) === 'failed'
+  return state && state.intent.worktreeId === worktreeId && launchStateLifecycle(state) === 'failed'
     ? (state.failure ?? null)
     : null
 }
@@ -227,14 +220,14 @@ export function markStructuredAgentSessionLaunchPublished(
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state) {
     const persisted = getPersistedStructuredAgentLaunchRecord(sessionId)
-    if (!persisted) {
+    if (!persisted || Object.keys(persisted.heldOptions ?? {}).length > 0) {
       return false
     }
     deleteStructuredAgentLaunchRecord(sessionId)
     notifyStructuredLaunchListeners()
     return true
   }
-  if (!matchesLaunchWorktree(state, worktreeId) || state.cancelled) {
+  if (state.intent.worktreeId !== worktreeId || state.cancelled) {
     return false
   }
   if (state.callers.outcome === 'published') {
@@ -243,6 +236,9 @@ export function markStructuredAgentSessionLaunchPublished(
   // Still in flight: its own settlement publishes once the picks held during launch land.
   if (state.callers.outcome === 'pending') {
     return true
+  }
+  if (Object.keys(state.selection.held).length > 0) {
+    return false
   }
   state.callers.outcome = 'published'
   deleteStructuredAgentLaunchRecord(sessionId)
@@ -258,7 +254,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
 ): boolean {
   const alreadyCancelled = hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId)
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  if (matchesLaunchWorktree(state, worktreeId) && state) {
+  if (state && state.intent.worktreeId === worktreeId) {
     markStructuredAgentLaunchCancellation(sessionId, alreadyCancelled, state.promise)
     state.cancelled = true
     state.callers.outcome = 'cancelled'
@@ -324,15 +320,12 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
 
 export function getStructuredAgentLaunchStatus(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: StructuredMachineAgent
 ): StructuredAgentLaunchStatus {
   // Any launch for this pair, including adopted conversations, means a chat is starting here.
-  const states = [
-    getStructuredLaunchState(structuredLaunchIdentity(worktreeId, agent)),
-    ...[...pendingStructuredLaunchesByIdentity.entries()]
-      .filter(([identity]) => identity.startsWith(`${agent}:${worktreeId}:resume:`))
-      .map(([, state]) => state)
-  ].filter((state): state is StructuredLaunchState => Boolean(state))
+  const states = [...pendingStructuredLaunchesByIdentity.values()].filter(
+    (state) => state.intent.worktreeId === worktreeId && state.intent.agent === agent
+  )
   if (states.length === 0) {
     return 'idle'
   }

@@ -13,7 +13,7 @@ import type { JournalHostDatabase } from '../agent-session-journal/journal-host-
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournalWithRecovery } from './agent-session-journal-recovery'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionRecordAgent, type AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   attachFingerprintFields,
   journalIdentityFor,
@@ -178,7 +178,7 @@ export function attachParamsForRecord(
     },
     location: record.location,
     provider: record.provider,
-    agent: record.provider,
+    agent: agentSessionRecordAgent(record),
     accountHome: record.accountHome,
     runtimeKind: 'native'
   }

@@ -3,13 +3,11 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
+  nativeChatLineDecoderForAgent,
+  type NativeChatLineDecoder
 } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import {
@@ -18,6 +16,7 @@ import {
 } from './transcript-turn-lifecycle'
 import {
   findLastCompleteLineEnd,
+  MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   readTranscriptByteAt,
   TAIL_CHUNK_BYTES
 } from './transcript-tail-boundary'
@@ -28,27 +27,12 @@ import {
   wslGatedStat
 } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import { mergeNativeChatHookActivity, nativeChatHookActivityStore } from './hook-activity-store'
+import { isGrokUpdatesPath, readGrokUpdatesReplay } from './transcript-grok-updates-replay'
 
-export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
+export { MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES }
 
-export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
-
-export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
-  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (transcriptAgent === 'claude') {
-    return decodeClaudeTranscriptLine
-  }
-  if (transcriptAgent === 'codex') {
-    return decodeCodexTranscriptLine
-  }
-  if (transcriptAgent === 'grok') {
-    return decodeGrokTranscriptLine
-  }
-  if (transcriptAgent === 'omp') {
-    return decodeOmpTranscriptLine
-  }
-  return null
-}
+export { nativeChatLineDecoderForAgent, type NativeChatLineDecoder }
 
 export async function readNativeChatTranscriptTailFile(
   filePath: string,
@@ -68,6 +52,9 @@ export async function readNativeChatTranscriptTailFile(
   oversizedRecordCount?: number
 }> {
   signal?.throwIfAborted()
+  if (decode === decodeGrokTranscriptLine && isGrokUpdatesPath(filePath)) {
+    return readGrokUpdatesReplay(filePath, limit, endOffset, includeTrailingLine, signal)
+  }
   const end = Math.min(
     (await wslGatedStat(filePath, 'exact', signal)).size,
     endOffset ?? Number.MAX_SAFE_INTEGER
@@ -85,6 +72,24 @@ export async function readNativeChatTranscriptTailFile(
   let oversizedRecordCount = 0
   let ignoreNextMalformedRecord = false
   try {
+    if (decode.seedHistoryMode) {
+      const buffer = Buffer.allocUnsafe(Math.min(end, 64 * 1024))
+      const { bytesRead } = await wslGatedRead(
+        handle,
+        filePath,
+        buffer,
+        0,
+        buffer.length,
+        0,
+        'exact',
+        signal
+      )
+      signal?.throwIfAborted()
+      const newline = buffer.subarray(0, bytesRead).indexOf(0x0a)
+      decode.seedHistoryMode(
+        buffer.subarray(0, newline === -1 ? bytesRead : newline).toString('utf8')
+      )
+    }
     signal?.throwIfAborted()
     const consumedTo = includeTrailingLine
       ? end
@@ -263,7 +268,11 @@ export async function readNativeChatTranscriptTail(
     )
     signal?.throwIfAborted()
     return {
-      messages: result.messages,
+      messages: mergeNativeChatHookActivity(
+        result.messages,
+        nativeChatHookActivityStore.read(args.agent, args.sessionId),
+        args.beforeOffset === undefined
+      ),
       // Why: an older pagination page must not rewind the live lifecycle; only
       // the current transcript tail can authoritatively describe turn state.
       ...(args.beforeOffset === undefined && result.lifecycle

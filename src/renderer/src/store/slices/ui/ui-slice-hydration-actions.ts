@@ -104,6 +104,11 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             s.rightSidebarWidth,
             MAX_RIGHT_SIDEBAR_WIDTH
           ),
+          subagentSheetWidth: sanitizePersistedSidebarWidth(
+            ui.subagentSheetWidth,
+            s.subagentSheetWidth,
+            MAX_RIGHT_SIDEBAR_WIDTH
+          ),
           markdownTocPanelWidth: clampMarkdownTocPanelWidth(
             ui.markdownTocPanelWidth,
             undefined,

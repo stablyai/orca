@@ -103,7 +103,5 @@ export function currentModelId(models: ListedModel[], reportedModel: string | un
           (reportedModel === 'default' && model.isDefault)
       )
     : undefined
-  return (
-    matched?.id ?? reportedModel ?? models.find((model) => model.isDefault)?.id ?? models[0]!.id
-  )
+  return matched?.id ?? reportedModel ?? ''
 }

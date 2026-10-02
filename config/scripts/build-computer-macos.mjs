@@ -67,6 +67,9 @@ function resolveSigningIdentity() {
   if (explicitIdentity) {
     return explicitIdentity
   }
+  if (process.env.CSC_IDENTITY_AUTO_DISCOVERY === 'false') {
+    return '-'
+  }
   const identities = spawnSync('security', ['find-identity', '-v', '-p', 'codesigning'], {
     encoding: 'utf8'
   })

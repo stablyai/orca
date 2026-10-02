@@ -36,7 +36,7 @@ export function agentSessionWriteKindForMethod(
   fingerprintMethod: string,
   fields: Record<string, unknown>
 ): AgentSessionWriteKind {
-  if (fingerprintMethod === 'agentSession.send') {
+  if (fingerprintMethod === 'agentSession.send' || fingerprintMethod === 'agentSession.steer') {
     return 'send'
   }
   if (fingerprintMethod === 'agentSession.cancel') {

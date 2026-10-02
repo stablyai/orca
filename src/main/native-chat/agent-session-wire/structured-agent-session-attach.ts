@@ -1,3 +1,4 @@
+import type { AgentType } from '../../../shared/agent-status-types'
 // Attach: reserve the session record, then open its journal.
 //
 // `create` and `ensure` are the same transition with a different starting
@@ -55,7 +56,7 @@ export type AgentSessionAttachParams = {
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
-  agent: AgentSessionHandleProvider
+  agent: AgentType
   accountHome: AgentSessionAccountHome
   /** Always `native`; kept on the params because the operation fingerprint covers it. */
   runtimeKind: 'native'
@@ -76,7 +77,7 @@ export type AgentSessionAttachParams = {
    * without adopting — presence of a handle must never be what triggers a resume.
    */
   adopt?: {
-    providerHandle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+    providerHandle: Extract<AgentSessionProviderHandle, { kind: 'claude' | 'codex' }>
     /** Omitted only when the exact committed operation replays an already-imported journal. */
     transcriptPath?: string
   }
@@ -152,7 +153,9 @@ export function journalIdentityFor(
             sessionId: head.handle.sessionId,
             leafUuid: head.handle.leafUuid
           }
-        : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
+        : head?.handle.provider === 'acp'
+          ? { kind: 'acp', agent: head.handle.agent, sessionId: head.handle.sessionId }
+          : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
   return {
     sessionId: record.sessionId,
     workspaceId: params.location.workspaceId,
@@ -265,7 +268,7 @@ async function reconcileAgainstProviderHistory(input: {
 const ADOPTED_HANDLE_FENCE = 1
 
 function adoptedProviderHandleLink(
-  handle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>,
+  handle: Extract<AgentSessionProviderHandle, { kind: 'claude' | 'codex' }>,
   observedAt: number
 ): AgentSessionProviderHandleLink {
   return handle.kind === 'claude'
@@ -299,6 +302,7 @@ export function reserveRequestFor(input: {
     sessionId: input.sessionId,
     location: params.location,
     provider: params.provider,
+    agent: params.agent,
     accountHome: params.accountHome,
     ...(params.options ? { options: params.options } : {}),
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId

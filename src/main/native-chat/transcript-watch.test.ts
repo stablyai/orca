@@ -123,6 +123,29 @@ describe('subscribeNativeChatTranscript', () => {
     expect(snapshots).toEqual([[]])
   })
 
+  it('signals an opaque Codex token record without inventing a chat message', async () => {
+    const filePath = await tempFile('')
+    let opaque = -1
+    const appends: NativeChatMessage[][] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'codex',
+      sessionId: 'ignored',
+      filePath,
+      onInitialSnapshot: () => (opaque = 0),
+      onAppend: (messages) => appends.push(messages),
+      onOpaqueAppend: () => (opaque += 1),
+      debounceMs: 5
+    })
+    await waitFor(() => opaque === 0)
+    await appendFile(
+      filePath,
+      `${JSON.stringify({ type: 'event_msg', payload: { type: 'token_count' } })}\n`
+    )
+    await waitFor(() => opaque === 1)
+    sub.unsubscribe()
+    expect(appends).toEqual([])
+  })
+
   it('replays and appends provider-authored turn lifecycle markers', async () => {
     const filePath = await tempFile(claudeLine('u-1', 'user', 'first'))
     const lifecycles: NativeChatTurnLifecycle[] = []

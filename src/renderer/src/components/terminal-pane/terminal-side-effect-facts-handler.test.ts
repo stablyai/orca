@@ -184,6 +184,28 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     ])
   })
 
+  it('identifies a room completion bell without classifying standalone bells', () => {
+    const bells: unknown[] = []
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: { onBell: (meta) => bells.push(meta) }
+    })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'agent-idle', title: 'Codex' }, { kind: 'bell' }], {
+        roomDeliveryId: 'delivery-1'
+      })
+    )
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'bell' }], { roomDeliveryId: 'delivery-1' })
+    )
+
+    expect(bells).toEqual([
+      { roomDeliveryId: 'delivery-1', roomCompletion: true },
+      { roomDeliveryId: 'delivery-1' }
+    ])
+  })
+
   it('routes command-finished and pr-link facts to the registered consumer', () => {
     const events: unknown[][] = []
     registerTerminalSideEffectFactConsumer({

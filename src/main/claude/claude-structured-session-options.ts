@@ -1,3 +1,10 @@
+import type { AgentSessionContextSnapshot } from '../../shared/agent-session-context'
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionSnapshot
+} from '../../shared/structured-agent-session-options'
 import type {
   AgentSessionFastModeState,
   AgentSessionFastModeSupport,
@@ -223,6 +230,21 @@ export function claudeCatalogAdmitsModel(models: readonly ListedModel[], modelId
     models.some((model) => model.id === modelId || model.resolvedModel === modelId)
   )
 }
+export function readClaudeStructuredConfiguration(session: ClaudeSession) {
+  const commands = (session.commands.commands ?? []).map(({ name, description, argumentHint }) => ({
+    name,
+    ...(description ? { description } : {}),
+    ...(argumentHint ? { inputHint: argumentHint } : {})
+  }))
+  const canCompact = commands.some((command) => command.name === 'compact')
+  return {
+    commands,
+    options: session.configuration?.options ?? [],
+    canCompact,
+    canFork: true,
+    canSteer: true
+  }
+}
 
 type WireClaudeModel = AgentSessionOptionsResult['models'][number]
 
@@ -331,6 +353,7 @@ export function claudeStructuredSessionOptionsFrom(
   catalog: unknown[] | null,
   readMutationSequence = session.optionMutationSequence
 ): AgentSessionOptionsResult {
+  const { commands, canCompact } = readClaudeStructuredConfiguration(session)
   const discovered = listedModels(catalog ? { models: catalog } : null)
   writeClaudeCatalogThrough(session, discovered)
   const listed = discovered.length > 0 ? discovered : seedModels()
@@ -373,7 +396,7 @@ export function claudeStructuredSessionOptionsFrom(
       ? ['fastMode']
       : [])
   ]
-  return {
+  const result: AgentSessionOptionsResult = {
     models: wireClaudeModels(models),
     ...(support ? { fastModeSupport: support } : {}),
     current: {
@@ -382,6 +405,40 @@ export function claudeStructuredSessionOptionsFrom(
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),
       ...(confirmed.length > 0 ? { confirmed } : {})
-    }
+    },
+    canSteer: true,
+    canCompact
+  }
+  const options = structuredAgentSessionOptionSnapshot(
+    applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      result
+    )
+  )
+  session.configuration = { commands, options, canCompact, canFork: true, canSteer: true }
+  return { ...result, descriptors: options }
+}
+
+export function readClaudeSettingsModel(settings: unknown): string | null {
+  return text(record(record(settings)?.applied)?.model)
+}
+
+export function readClaudeStructuredContext(
+  session: ClaudeSession | undefined
+): AgentSessionContextSnapshot | null {
+  if (!session?.contextActivity) {
+    return null
+  }
+  return {
+    ...session.contextActivity.context,
+    ...(session.reportedOptions.fastMode !== undefined
+      ? { fastMode: session.reportedOptions.fastMode }
+      : {}),
+    model: readClaudeCurrentModel(session).id ?? session.contextActivity.context.model,
+    effort:
+      session.options.get('effort') ??
+      session.reportedOptions.effort ??
+      session.contextActivity.context.effort
   }
 }

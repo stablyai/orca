@@ -2,7 +2,8 @@ import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage,
   AgentJournalRenderItem,
-  AgentJournalTurnScope
+  AgentJournalTurnScope,
+  AgentJournalTurn
 } from '../../../shared/agent-session-journal-types'
 import {
   agentJournalLinkageFields,
@@ -23,7 +24,8 @@ export function journalRenderItem(
   turnScope: AgentJournalTurnScope,
   producer: AgentJournalProducerLinkage = row,
   /** Which of the row's writes this is; only a lifecycle batch has more than one. */
-  sequenceIndex = 0
+  sequenceIndex = 0,
+  turn: AgentJournalTurn | undefined = 'turn' in row ? row.turn : undefined
 ): AgentJournalRenderItem {
   return {
     itemId,
@@ -35,7 +37,8 @@ export function journalRenderItem(
     ...(row.recovered ? { recoveredAt: row.ts } : {}),
     ...(row.recovered ? { recovered: row.recovered } : {}),
     turnScope,
-    ...agentJournalLinkageFields(producer)
+    ...agentJournalLinkageFields(producer),
+    ...(turn ? { turn } : {})
   }
 }
 

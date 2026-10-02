@@ -65,6 +65,7 @@ export function upsertJournalItem(
     sequence: existing.sequence,
     ...(existing.sequenceIndex !== undefined ? { sequenceIndex: existing.sequenceIndex } : {}),
     observedAt: existing.observedAt,
+    updatedAt: next.observedAt,
     turnScope: existing.turnScope ?? next.turnScope
   })
   state.tombstones.delete(itemId)

@@ -15,6 +15,7 @@ import {
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
+import { useNativeChatToggleRequest } from '../native-chat/native-chat-shortcut'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {
@@ -243,6 +244,15 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       setTabViewMode(unifiedTabId, 'terminal')
     }
   }, [chatLeafId, setChatLeafId, setTabViewMode, unifiedTabId])
+  useNativeChatToggleRequest({
+    chatLeafId,
+    effectiveChatViewMode,
+    managerRef,
+    setChatLeafId,
+    setTabViewMode,
+    tabId,
+    unifiedTabId
+  })
   const readNativeChatTerminalScreen = useCallback((): string | null => {
     if (!chatLeafId) {
       return null

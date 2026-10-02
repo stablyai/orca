@@ -1,3 +1,4 @@
+import { agentSessionRecordAgent } from '../../../shared/agent-session-record'
 import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
@@ -36,7 +37,7 @@ export function adapterSupportsRecord(
   record: AgentSessionRecord
 ): boolean {
   if (adapter.supportsCreate) {
-    return adapter.supportsCreate(record.location, record.provider)
+    return adapter.supportsCreate(record.location, agentSessionRecordAgent(record))
   }
   // Old Codex records stay readable unless the adapter explicitly rejects their location.
   return record.provider === 'codex' && (adapter.supportsLocation?.(record.location) ?? true)

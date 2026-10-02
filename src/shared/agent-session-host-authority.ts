@@ -2,7 +2,8 @@ import {
   hasUnsafeProviderSessionIdChars,
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
-  type ResumableTuiAgent
+  type ResumableTuiAgent,
+  type SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runtime-types'
 import { isTerminalLeafId } from './stable-pane-id'
@@ -114,9 +115,20 @@ export type RuntimeEnsureAgentSessionRequest =
       terminalKittyKeyboardProtocol?: boolean
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
+      /** Trusted local UI startup metadata. Remote callers remain host-owned. */
+      command?: string
+      env?: Record<string, string>
+      envToDelete?: string[]
+      launchConfig?: SleepingAgentLaunchConfig
+      /** Appended after the resolved launch args (room-owned panes suppress
+       *  interactive CLI nudges that would deadlock an unwatched pane). */
+      extraAgentArgs?: string
       launchPreferences?: AgentLaunchPreferences
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
+      /** Trusted host-only launches can keep a live PTY outside user tab surfaces. */
+      surfaceOwner?: false
+      persistHostSessionBinding?: boolean
     }
 
 export type RuntimeEnsureAgentSessionResult = {
@@ -133,11 +145,16 @@ export type RuntimeCreateAgentSessionRequest = {
   promptDelivery?: AgentPromptDelivery
   /** Explicit client override. Omission keeps launch defaults host-owned. */
   agentArgs?: string | null
+  /** Appended after the resolved launch args (see the ensure-request field). */
+  extraAgentArgs?: string
   launchPreferences?: AgentLaunchPreferences
   startupCwd?: string
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
   viewMode?: 'terminal' | 'chat'
+  /** Trusted host-only launches can keep a live PTY outside user tab surfaces. */
+  surfaceOwner?: false
+  persistHostSessionBinding?: boolean
 }
 
 export type RuntimeCreateAgentSessionResult = {

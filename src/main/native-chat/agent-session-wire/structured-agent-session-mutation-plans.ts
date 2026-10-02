@@ -59,6 +59,14 @@ export type MutationPlan<TValue> = {
   settledOutcome?: (value: TValue) => AgentSessionOperationOutcome
 }
 
+export function steerPlan(params: {
+  envelope: AgentSessionMutationEnvelope
+  body: AgentJournalMessageItem
+  retryUnknown?: true
+}): MutationPlan<AgentSessionSendResult> {
+  return { ...sendPlan(params), method: 'agentSession.steer' }
+}
+
 export function sendPlan(params: {
   envelope: AgentSessionMutationEnvelope
   body: AgentJournalMessageItem

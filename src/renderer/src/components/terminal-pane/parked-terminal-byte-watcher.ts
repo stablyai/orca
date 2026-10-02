@@ -124,8 +124,13 @@ export function startParkedTerminalByteWatcher(
         state.updateTabTitle(tabId, title)
       }
     },
-    onBell: (): void => {
+    onBell: (meta?: { roomDeliveryId?: string; roomCompletion?: true }): void => {
       const state = useAppStore.getState()
+      const roomDeliveryId =
+        meta?.roomDeliveryId ?? state.agentStatusByPaneKey[paneKey]?.roomDeliveryId
+      if (roomDeliveryId && (meta?.roomCompletion || hasPendingAgentTaskCompleteNotification())) {
+        return
+      }
       state.markWorktreeUnread(worktreeId)
       state.markTerminalTabUnread(tabId, 'terminal-bell')
       if (state.settings?.experimentalTerminalAttention === true) {
@@ -137,7 +142,10 @@ export function startParkedTerminalByteWatcher(
         scheduleTerminalBellNotification()
       }
     },
-    onAgentBecameIdle: (title: string, meta?: { staleWorkingTitleClear?: boolean }): void => {
+    onAgentBecameIdle: (
+      title: string,
+      meta?: { staleWorkingTitleClear?: boolean; roomDeliveryId?: string }
+    ): void => {
       // Why: stale-derived idles (main's 3s timer, not observed bytes) clear session state but must not schedule a completion a paused agent didn't earn.
       if (meta?.staleWorkingTitleClear) {
         useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
@@ -155,6 +163,7 @@ export function startParkedTerminalByteWatcher(
         return
       }
       clearAgentTaskCompleteTimer()
+      const roomDeliveryId = meta?.roomDeliveryId
       agentTaskCompleteTimer = setTimeout(() => {
         agentTaskCompleteTimer = null
         if (disposed) {
@@ -166,7 +175,11 @@ export function startParkedTerminalByteWatcher(
         dispatchTerminalNotification(worktreeId, {
           source: 'agent-task-complete',
           terminalTitle: title,
-          paneKey
+          paneKey,
+          ...(roomDeliveryId ? { roomDeliveryId } : {}),
+          ...(isAgentTaskCompleteOsNotificationEnabled(useAppStore.getState())
+            ? {}
+            : { suppressOsNotification: true })
         })
       }, PARKED_NOTIFICATION_GRACE_MS)
     },

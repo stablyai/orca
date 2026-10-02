@@ -1,19 +1,26 @@
 // Why: locks the /statusline/claude loopback contract — form-encoded posts from the
 // managed statusline script must reach the listener, and junk must fail open (204).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { AgentHookServer } from './server'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 
 describe('AgentHookServer /statusline/claude', () => {
   let server: AgentHookServer
+  let configDir: string
 
   beforeEach(async () => {
+    configDir = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-'))
+    writeFileSync(join(configDir, 'settings.json'), JSON.stringify({ effortLevel: 'medium' }))
     server = new AgentHookServer()
     await server.start({ env: 'production' })
   })
 
   afterEach(() => {
     server.stop()
+    rmSync(configDir, { recursive: true, force: true })
   })
 
   function post(body: string, token?: string): Promise<Response> {
@@ -42,14 +49,16 @@ describe('AgentHookServer /statusline/claude', () => {
     })
     const body = new URLSearchParams({
       paneKey: 'pane-1',
-      configDir: '/home/dev/managed',
+      configDir,
       payload
     }).toString()
 
     await expect(post(body)).resolves.toMatchObject({ status: 204 })
     expect(events).toEqual([
       {
-        configDir: '/home/dev/managed',
+        configDir,
+        paneKey: 'pane-1',
+        effort: 'medium',
         fiveHour: { used_percentage: 12.5, resets_at: 1738425600 },
         sevenDay: { used_percentage: 40, resets_at: 1712059200 }
       }

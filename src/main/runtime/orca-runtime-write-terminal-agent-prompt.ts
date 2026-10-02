@@ -20,6 +20,7 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../shared/agent-tui-input-clear'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -48,7 +49,28 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const preSubmitBaseline = submitWithPaste
       ? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
       : undefined
+    let wrotePasteBytes = false
     try {
+      if (options.clearInput) {
+        await options.beforeWrite?.(ptyId)
+        if (!this.ptyController?.write(ptyId, AGENT_TUI_CLEAR_INPUT_MAX, options.inputKind)) {
+          throw new Error('terminal_not_writable')
+        }
+      }
+      for (const prefixPayload of options.prefixPastePayloads ?? []) {
+        assertAgentPromptRequestActive(options.signal)
+        this.assertAgentPromptGeneration(ptyId, generation)
+        await options.beforeWrite?.(ptyId)
+        this.assertAgentPromptPermissionSafe(
+          permissionBaseline,
+          this.getAgentPromptActivity(handle, ptyId)
+        )
+        if (!this.ptyController?.write(ptyId, prefixPayload, options.inputKind)) {
+          throw new Error('terminal_not_writable')
+        }
+        wrotePasteBytes = true
+        await waitForAgentPromptDelay(300, options.signal)
+      }
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       await options.beforeWrite?.(ptyId)
@@ -65,7 +87,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
+      wrotePasteBytes = true
     } catch (error) {
+      if (options.clearInput && wrotePasteBytes) {
+        this.ptyController?.write(ptyId, AGENT_TUI_CLEAR_INPUT_MAX, options.inputKind)
+      }
       renderGate?.dispose()
       throw error
     }

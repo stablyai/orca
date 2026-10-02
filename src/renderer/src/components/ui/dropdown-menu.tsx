@@ -127,9 +127,11 @@ function DropdownMenuRadioItem({
 function DropdownMenuLabel({
   className,
   inset,
+  variant = 'default',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Label> & {
   inset?: boolean
+  variant?: 'default' | 'description'
 }) {
   return (
     <DropdownMenuPrimitive.Label
@@ -137,6 +139,7 @@ function DropdownMenuLabel({
       data-inset={inset}
       className={cn(
         'px-2 py-[4px] text-[11px] font-semibold text-muted-foreground data-[inset]:pl-7',
+        variant === 'description' && 'font-normal',
         className
       )}
       {...props}

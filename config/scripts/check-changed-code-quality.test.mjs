@@ -5,6 +5,7 @@ import {
   OXLINT_SCANS,
   diagnosticTouchesAddedLines,
   isAntiSlopDirectiveUnusedWarning,
+  isDesignSystemDirectiveUnusedWarning,
   isMovedCode,
   isRootCodeQualityPath,
   overlapsAddedLines,
@@ -153,7 +154,20 @@ describe('anti-slop directive unused warning', () => {
   it('still reports an unused directive for a rule the root scan does load', () => {
     withFixture(directive('unicorn/no-array-reduce'), (diagnostic) => {
       expect(isAntiSlopDirectiveUnusedWarning(diagnostic, root)).toBe(false)
+      expect(isDesignSystemDirectiveUnusedWarning(diagnostic, root)).toBe(false)
     })
+  })
+
+  it('recognizes shadcn directives only for the scan without its plugin', () => {
+    withFixture(directive('shadcn/require-static-classes'), (diagnostic) => {
+      expect(isDesignSystemDirectiveUnusedWarning(diagnostic, root)).toBe(true)
+      expect(
+        isDesignSystemDirectiveUnusedWarning({ ...diagnostic, message: 'Dynamic classes' }, root)
+      ).toBe(false)
+    })
+    expect(OXLINT_SCANS.find((scan) => scan.label === 'design system').args).toContain(
+      '--report-unused-disable-directives-severity'
+    )
   })
 
   it('ignores diagnostics that are not unused-directive warnings', () => {

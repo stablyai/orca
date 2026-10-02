@@ -11,6 +11,7 @@ export type NativeChatPtySendQueueHandle = {
   settleAfterMs: number
   settled: Promise<void>
   bodyStarted: () => boolean
+  submitted: () => boolean
   finished: () => boolean
 }
 
@@ -183,6 +184,7 @@ export function enqueueNativeChatPtySend(
     settleAfterMs,
     settled,
     bodyStarted: () => bodyStarted,
+    submitted: () => submitted,
     finished: () => finished
   }
   state.handles.add(handle)

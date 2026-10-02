@@ -41,13 +41,15 @@ import {
   readCodexNonUserOrigin,
   type CodexNonUserOrigin
 } from './session-scanner-codex-non-user-origin'
+import { acceptCodexRolloutRecord, type CodexRolloutScope } from '../../shared/codex-rollout-scope'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
   codexHome: string | null = null,
   executionHostId?: ExecutionHostId,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  allowWorker = false
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
@@ -61,6 +63,7 @@ export async function parseCodexSessionFile(
     codexHome,
     executionHostId,
     messages,
+    allowWorker,
     titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
   })
 }
@@ -87,6 +90,7 @@ export async function parseCodexSessionContent(args: {
 }
 
 type CodexSessionParseState = {
+  scope: CodexRolloutScope
   accumulator: SessionAccumulator
   previousTotals: CodexUsageSnapshot | null
   // Codex's own classification of this thread as something other than the
@@ -107,6 +111,7 @@ function createCodexParseState(
   messages?: TranscriptMessageSink
 ): CodexSessionParseState {
   return {
+    scope: {},
     accumulator: createAccumulator({
       agent: 'codex',
       file,
@@ -123,18 +128,18 @@ function createCodexParseState(
 
 function cloneCodexParseState(state: CodexSessionParseState): CodexSessionParseState {
   return {
-    // previousTotals snapshots are replaced, never mutated, so sharing is safe.
     ...state,
+    scope: { ...state.scope },
     accumulator: cloneSessionAccumulator(state.accumulator)
   }
 }
 
-function consumeCodexRecordLine(state: CodexSessionParseState, line: string): void {
+function consumeCodexLine(state: CodexSessionParseState, line: string, allowWorker = false): void {
   if (state.nonUserOrigin) {
     return
   }
   const record = parseJsonObject(line)
-  if (!record) {
+  if (!record || !acceptCodexRolloutRecord(state.scope, record)) {
     return
   }
   const { accumulator } = state
@@ -143,7 +148,7 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
 
   const payload = asRecord(record.payload)
   if (record.type === 'session_meta' && payload) {
-    state.nonUserOrigin = readCodexNonUserOrigin(payload)
+    state.nonUserOrigin = allowWorker ? null : readCodexNonUserOrigin(payload)
     if (state.nonUserOrigin) {
       return
     }
@@ -246,7 +251,6 @@ async function finalizeCodexParseState(
   if (state.nonUserOrigin) {
     return null
   }
-  // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
   // Why: Codex names threads lazily in session_index.jsonl, so the lookup runs
   // per finalize (the index read is signature-cached) — a title that appears
@@ -282,16 +286,16 @@ function codexResumeStateFromParseState(
   titleReader: (sessionId: string) => Promise<string | null>
 ): ResumableSessionParseState {
   return {
-    consumeLine: (line) => consumeCodexRecordLine(state, line),
+    consumeLine: (line) => consumeCodexLine(state, line),
     consumeLineBytes: (line) => {
       const timelineOnlyRecord = readCodexTimelineOnlyRecord(
         line,
         state.accumulator.messages.active && state.historyMode !== 'paginated'
       )
-      if (timelineOnlyRecord) {
+      if (timelineOnlyRecord && state.scope.historyStartOrdinal === undefined) {
         updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
       } else {
-        consumeCodexRecordLine(state, line.toString('utf8'))
+        consumeCodexLine(state, line.toString('utf8'))
       }
     },
     shouldStop: () => state.nonUserOrigin !== null,
@@ -315,10 +319,11 @@ async function parseCodexSessionLines(args: {
   executionHostPlatform?: NodeJS.Platform | null
   titleReader?: (sessionId: string) => Promise<string | null>
   messages?: TranscriptMessageSink
+  allowWorker?: boolean
 }): Promise<AiVaultSession | null> {
   const state = createCodexParseState(args.file, args.messages)
   for await (const line of args.lines) {
-    consumeCodexRecordLine(state, line)
+    consumeCodexLine(state, line, args.allowWorker === true)
     if (state.nonUserOrigin) {
       // Worker transcripts are excluded outright; stop reading early.
       return null

@@ -1,3 +1,4 @@
+import { ClaudeConversationActivity } from '../harness-conversation/claude-activity'
 import type { AgentSessionAcquisition } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
@@ -42,6 +43,7 @@ export function createClaudeSessionPublication(input: {
       acquisitionGeneration: input.acquisitionGeneration
     },
     session: {
+      contextActivity: new ClaudeConversationActivity(),
       connection: input.connection,
       providerSessionId: input.providerSessionId,
       leafUuid: input.leafUuid,

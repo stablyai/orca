@@ -7,7 +7,11 @@
 // writes through stay owned by the translator.
 
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalItemIdentity,
+  AgentJournalTurn
+} from '../../shared/agent-session-journal-types'
 import {
   boundInlineText,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
@@ -55,6 +59,7 @@ export type ClaudeMessageJournalContext = {
   /** The session's open turn. Sole owner of turn identity and of the reopen
    *  latch; this module asks it rather than tracking a copy. */
   turn: ClaudeOpenTurn
+  lastAssistant: { identity: AgentJournalItemIdentity; groupKey: string | null } | null
 }
 
 export function journalClaudeMessage(
@@ -65,7 +70,8 @@ export function journalClaudeMessage(
   /** Host clock on the submission that produced this send, when known. */
   requestedAt?: number,
   /** The submission this send echo acknowledged. */
-  openedBy?: string
+  openedBy?: string,
+  replayTurn?: AgentJournalTurn
 ): boolean {
   const envelope = readClaudeMessageEnvelope(message)
   if (!envelope) {
@@ -114,10 +120,23 @@ export function journalClaudeMessage(
     // output; a reader that scans back to the turn record and stops would
     // otherwise look straight past the row that opened it.
     ctx.turn.ensureOpen(message, source, observedAt)
-    ctx.sink.appendItem(identity, body, stamp(identity, body))
+    if (envelope.role === 'assistant') {
+      body.assistantPhase = 'commentary'
+      if (envelope.parentToolUseId === null) {
+        ctx.lastAssistant = { identity, groupKey: ctx.turn.groupKey }
+      }
+    }
+    ctx.sink.appendItem(
+      replayTurn ? { ...identity, turn: replayTurn } : identity,
+      body,
+      stamp(identity, body)
+    )
     changed = true
   }
   for (const tool of claudeToolUses(outputEnvelope)) {
+    if (envelope.parentToolUseId === null) {
+      ctx.lastAssistant = null
+    }
     ctx.turn.ensureOpen(message, source, observedAt)
     ctx.tools.set(tool.id, tool)
     // Only a TOP-LEVEL call can be the parent of a top-level task row; a
@@ -157,7 +176,10 @@ export function journalClaudeMessage(
   }
   if (thinking) {
     ctx.turn.ensureOpen(message, source, observedAt)
-    const thinkingIdentity = claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
+    const thinkingIdentity =
+      ctx.streamedBlocks.reconcile(envelope, 'reasoning') ??
+      claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
+    ctx.streamedText.forget(agentJournalItemKey(thinkingIdentity))
     const thinkingBody: AgentJournalItemBody = {
       kind: 'message',
       role: 'reasoning',
