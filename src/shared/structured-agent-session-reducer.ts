@@ -12,6 +12,7 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from './agent-session-wire'
+import { agentSessionTurnActivityEqual } from './agent-session-turn-activity'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { admitAgentSessionBackgroundTaskState } from './agent-session-background-task-state-admission'
@@ -298,8 +299,7 @@ export function reduceStructuredAgentSession(
     (event.queuedMessages === undefined || event.queuedMessages === state.queuedMessages) &&
     (event.queuePause === undefined || event.queuePause === state.queuePause) &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
-    activity?.turnId === state.activity?.turnId &&
-    activity?.text === state.activity?.text &&
+    agentSessionTurnActivityEqual(activity, state.activity) &&
     state.status === 'ready' &&
     state.error === undefined
   ) {

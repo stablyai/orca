@@ -13,6 +13,8 @@ import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
+import { NATIVE_CHAT_NOTHING_REASONING_OPEN } from '../../../../shared/native-chat-reasoning-row'
+import { NativeChatReasoningOpenContext } from './native-chat-reasoning-open-context'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
@@ -49,7 +51,6 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
   nativeChatTurnDiffs,
@@ -83,6 +84,7 @@ export function NativeChatMessageList({
   deliveryNotices,
   awaitingInput = null,
   turnActivity,
+  isReasoningOpen = NATIVE_CHAT_NOTHING_REASONING_OPEN,
   runtimeContext
 }: {
   session: NativeChatLiveSession
@@ -109,6 +111,8 @@ export function NativeChatMessageList({
   /** Set while the turn waits on the reader; the live activity line yields to it. */
   awaitingInput?: NativeChatAwaitingInput | null
   turnActivity?: NativeChatTurnActivity | null
+  /** The host's live reasoning gate for the live turn; absent outside the structured lane. */
+  isReasoningOpen?: (agentId?: string) => boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
   const [navigationRequest, setNavigationRequest] = useState<NativeChatNavigationRequest | null>(
@@ -161,12 +165,8 @@ export function NativeChatMessageList({
     const merged = nativeChatRowsInTranscriptOrder(rows, turnKeys, subagentRowsInOrder)
     return nativeChatTurnDiffs(merged.messages, merged.turnKeys, subagentSections.pathOf)
   }, [journalItems, rows, subagentRowsInOrder, subagentSections.pathOf, turnKeys])
-  // "Thinking" is real reasoning content at the tail of the turn, not the absence
-  // of output — the latter reports thinking while the request is merely in flight.
-  const thinking = useMemo(
-    () => (journalItems ? isStructuredAgentSessionThinking(journalItems) : false),
-    [journalItems]
-  )
+  // "Thinking" is the host reporting a reasoning block open now, never read from rows.
+  const thinking = isReasoningOpen()
   const turnStatuses = useNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
@@ -197,9 +197,11 @@ export function NativeChatMessageList({
         isWorking,
         lifecycleWorking,
         subagentSections,
-        subagentChoices
+        subagentChoices,
+        isReasoningOpen
       }),
     [
+      isReasoningOpen,
       liveTurnKey,
       expandedTurnIds,
       isWorking,
@@ -360,86 +362,88 @@ export function NativeChatMessageList({
 
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div className="relative min-h-0 flex-1">
-          <div
-            ref={scrollRef}
-            onScroll={onScroll}
-            {...readerScrollInput}
-            // Named so measurement can find the scroll root without depending on
-            // which utility class happens to make it scroll.
-            data-native-chat-scroll
-            // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
-            className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]"
-            // Why: `zoom` scales the chat transcript's text and layout together,
-            // scoped to this pane so the rest of the app is untouched. It sits on
-            // the scroll container rather than the content inside it so that
-            // scroll offsets and row measurements share one coordinate space —
-            // measuring zoomed content against an unzoomed scroller misplaces the
-            // window by exactly `fontScale`. (Chromium/Electron only.)
-            style={{ zoom: fontScale }}
-          >
-            {showOlderHistory ? (
-              <NativeChatOlderHistoryRow
-                olderHistory={olderHistory}
-                loadingEarlier={loadingEarlier}
-              />
-            ) : null}
-            <div className="px-3 pt-10 pb-4 sm:px-4">
-              <div
-                ref={contentRef}
-                // Why: matches composer column (max-w-4xl) with 5px horizontal inset
-                // on each side so content is slightly narrower than the input box.
-                className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-[5px]"
-              >
-                <NativeChatTranscriptItems
-                  slots={slots}
-                  context={rowContext}
-                  window={transcriptWindow}
+      <NativeChatReasoningOpenContext.Provider value={isReasoningOpen}>
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="relative min-h-0 flex-1">
+            <div
+              ref={scrollRef}
+              onScroll={onScroll}
+              {...readerScrollInput}
+              // Named so measurement can find the scroll root without depending on
+              // which utility class happens to make it scroll.
+              data-native-chat-scroll
+              // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
+              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]"
+              // Why: `zoom` scales the chat transcript's text and layout together,
+              // scoped to this pane so the rest of the app is untouched. It sits on
+              // the scroll container rather than the content inside it so that
+              // scroll offsets and row measurements share one coordinate space —
+              // measuring zoomed content against an unzoomed scroller misplaces the
+              // window by exactly `fontScale`. (Chromium/Electron only.)
+              style={{ zoom: fontScale }}
+            >
+              {showOlderHistory ? (
+                <NativeChatOlderHistoryRow
+                  olderHistory={olderHistory}
+                  loadingEarlier={loadingEarlier}
                 />
-                {tailRow === 'activity' ? (
-                  <NativeChatTurnActivityLine
-                    activity={turnActivity}
-                    thinking={turnStatuses.active?.thinking === true}
+              ) : null}
+              <div className="px-3 pt-10 pb-4 sm:px-4">
+                <div
+                  ref={contentRef}
+                  // Why: matches composer column (max-w-4xl) with 5px horizontal inset
+                  // on each side so content is slightly narrower than the input box.
+                  className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-[5px]"
+                >
+                  <NativeChatTranscriptItems
+                    slots={slots}
+                    context={rowContext}
+                    window={transcriptWindow}
                   />
-                ) : tailRow === 'awaiting-input' ? (
-                  <NativeChatAwaitingInputRow subject={null} pending />
-                ) : null}
-                <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
+                  {tailRow === 'activity' ? (
+                    <NativeChatTurnActivityLine
+                      activity={turnActivity}
+                      thinking={turnStatuses.active?.thinking === true}
+                    />
+                  ) : tailRow === 'awaiting-input' ? (
+                    <NativeChatAwaitingInputRow subject={null} pending />
+                  ) : null}
+                  <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
+                </div>
               </div>
             </div>
+            <NativeChatMessageRail
+              rail={rail}
+              scrollRef={scrollRef}
+              onSelect={selectRailItem}
+              onReaderScroll={beginNavigation}
+              pendingId={railHistoryJump.pendingId}
+            />
+            {showJump ? (
+              <button
+                type="button"
+                onClick={jumpToLatest}
+                aria-label={translate('components.native-chat.jumpToLatest', 'Jump to latest')}
+                className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ArrowDown className="size-3.5" />
+                <span>{translate('components.native-chat.jumpToLatest', 'Jump to latest')}</span>
+              </button>
+            ) : null}
           </div>
-          <NativeChatMessageRail
-            rail={rail}
-            scrollRef={scrollRef}
-            onSelect={selectRailItem}
-            onReaderScroll={beginNavigation}
-            pendingId={railHistoryJump.pendingId}
-          />
-          {showJump ? (
-            <button
-              type="button"
-              onClick={jumpToLatest}
-              aria-label={translate('components.native-chat.jumpToLatest', 'Jump to latest')}
-              className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ArrowDown className="size-3.5" />
-              <span>{translate('components.native-chat.jumpToLatest', 'Jump to latest')}</span>
-            </button>
+          {taskListState.list && taskListState.list.tasks.length > 0 ? (
+            <div className="shrink-0 px-3 pb-2 sm:px-4">
+              <div className="mx-auto w-full max-w-4xl" style={{ zoom: fontScale }}>
+                <NativeChatTaskList
+                  key={session.sessionId}
+                  list={taskListState.list}
+                  presentation="composer"
+                />
+              </div>
+            </div>
           ) : null}
         </div>
-        {taskListState.list && taskListState.list.tasks.length > 0 ? (
-          <div className="shrink-0 px-3 pb-2 sm:px-4">
-            <div className="mx-auto w-full max-w-4xl" style={{ zoom: fontScale }}>
-              <NativeChatTaskList
-                key={session.sessionId}
-                list={taskListState.list}
-                presentation="composer"
-              />
-            </div>
-          </div>
-        ) : null}
-      </div>
+      </NativeChatReasoningOpenContext.Provider>
     </NativeChatDisclosureContext.Provider>
   )
 }

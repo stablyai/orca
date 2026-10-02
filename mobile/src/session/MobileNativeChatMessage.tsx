@@ -78,6 +78,7 @@ function MobileNativeChatMessageImpl({
   turnKey,
   onToggleTurn,
   activeTurnIsWorking,
+  reasoningOpen = false,
   structuredActivityUi = false
 }: {
   message: NativeChatMessage
@@ -97,6 +98,8 @@ function MobileNativeChatMessageImpl({
   onToggleTurn?: (turnKey: string) => void
   /** Session-level working state for this message's turn; gates the live tool row. */
   activeTurnIsWorking?: boolean
+  /** The host reports this row's agent reasoning right now, in its live turn. */
+  reasoningOpen?: boolean
   /** Structured lane only: live tool progress plus the turn-status disclosure. */
   structuredActivityUi?: boolean
 }): React.JSX.Element {
@@ -132,10 +135,10 @@ function MobileNativeChatMessageImpl({
   ) : null
   if (isReasoning) {
     const markdown = prose.flatMap((block) => (isTextBlock(block) ? [block.text] : [])).join('\n\n')
-    // Blank, or still being written in the live turn: nothing draws, not even an empty row.
+    // Blank, or still being written while the host reports it open: nothing draws, not even an
+    // empty row.
     const draws =
-      markdown.trim().length > 0 &&
-      !isNativeChatReasoningUnderway(message, activeTurnIsWorking === true)
+      markdown.trim().length > 0 && !isNativeChatReasoningUnderway(message, reasoningOpen)
     return (
       <>
         {turnStatusAbove ? statusRow : null}

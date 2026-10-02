@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { normalizeSubagentState } from '../../../../shared/native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from '../../../../shared/native-chat-types'
 import { StatusDot } from './NativeChatSubagentRun'
+import { NativeChatSubagentThinking } from './NativeChatSubagentThinking'
 
 /** Names the subagent whose rows follow, and opens or closes them, where no loaded
  *  roster row holds its entry: its roster is off the page, or another subagent spawned
@@ -36,6 +37,7 @@ export function NativeChatSubagentSectionHead({
       <code className="min-w-0 truncate font-mono text-[11px] text-foreground/80">
         {entry?.label ?? translate('components.native-chat.subagents.unnamed', 'Subagent')}
       </code>
+      <NativeChatSubagentThinking agentId={agentId} entry={entry} />
     </button>
   )
 }

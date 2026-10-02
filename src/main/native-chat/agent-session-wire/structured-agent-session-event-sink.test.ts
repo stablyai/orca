@@ -467,6 +467,48 @@ describe('deferred structured agent-session event sink', () => {
     ])
   })
 
+  it('admits live activity past a full queue, so neither an open nor a closing clear is lost', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink({
+      ...testEventSinkLogging(),
+      watermarks: {
+        maxQueuedBytes: 1_000_000,
+        lowQueuedBytes: 0,
+        maxQueuedOperations: 2,
+        lowQueuedOperations: 0
+      }
+    })
+    const fill = (from: number) => {
+      for (const ordinal of [from, from + 1]) {
+        deferred.sink.tryAppendItem?.(identity(ordinal), BODY, {
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      }
+      expect(
+        deferred.sink.tryAppendItem?.(identity(from + 2), BODY, {
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      ).toEqual({ accepted: false, reason: 'backpressure' })
+    }
+    const open = { turnId: 'turn-1', text: '', reasoning: { session: true, subagents: [] } }
+
+    fill(0)
+    deferred.sink.setActivity?.(open)
+    expect(deferred.state().queuedOperations).toBe(3)
+    deferred.bind(target(5, log))
+    await deferred.drained()
+    deferred.unbind()
+    fill(10)
+    deferred.sink.setActivity?.(null)
+    deferred.bind(target(5, log))
+    await deferred.drained()
+
+    expect(log.filter((entry) => entry.call === 'publish')).toEqual([
+      { call: 'publish', fence: 5, activity: open },
+      { call: 'publish', fence: 5, activity: null }
+    ])
+  })
+
   it('coalesces provider activity as a publication without a journal write', async () => {
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())

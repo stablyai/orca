@@ -21,7 +21,10 @@ import {
   type NativeChatTurnFoldRow
 } from '../../../../shared/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
-import { isNativeChatReasoningUnderway } from '../../../../shared/native-chat-reasoning-row'
+import {
+  isNativeChatReasoningUnderway,
+  NATIVE_CHAT_NOTHING_REASONING_OPEN
+} from '../../../../shared/native-chat-reasoning-row'
 import {
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics
@@ -99,6 +102,8 @@ export type NativeChatTranscriptSlotsInput = {
   lifecycleWorking: boolean
   subagentSections?: NativeChatSubagentSections
   subagentChoices?: NativeChatSubagentChoices
+  /** The host's live reasoning gate (`nativeChatReasoningGate`) for the live turn. */
+  isReasoningOpen?: (agentId?: string) => boolean
 }
 
 export function buildNativeChatTranscriptSlots(
@@ -115,7 +120,8 @@ export function buildNativeChatTranscriptSlots(
     isWorking,
     lifecycleWorking,
     subagentSections: sections = NO_NATIVE_CHAT_SUBAGENT_SECTIONS,
-    subagentChoices: choices = NO_NATIVE_CHAT_SUBAGENT_CHOICES
+    subagentChoices: choices = NO_NATIVE_CHAT_SUBAGENT_CHOICES,
+    isReasoningOpen = NATIVE_CHAT_NOTHING_REASONING_OPEN
   } = input
   // One pass to decide what each row draws, then the fold over those readings —
   // so "is this the answer" and "does this row render prose" cannot disagree.
@@ -160,7 +166,14 @@ export function buildNativeChatTranscriptSlots(
   })
   const slots: NativeChatTranscriptSlot[] = []
   const live = nativeChatSubagentLiveSections(messages, sections, isWorking || lifecycleWorking)
-  const sectionSlots = nativeChatSubagentSectionSlots({ sections, choices, live, receipts, slots })
+  const sectionSlots = nativeChatSubagentSectionSlots({
+    sections,
+    choices,
+    live,
+    receipts,
+    isReasoningOpen,
+    slots
+  })
   const pending = [...(sections.openAt.get(null) ?? [])]
   for (const [index, message] of messages.entries()) {
     sectionSlots.openBefore(pending, message, 0)
@@ -184,14 +197,13 @@ export function buildNativeChatTranscriptSlots(
     // opens a gap in the transcript.
     // Liveness is the owning turn's, not the newest prompt's: a running turn's
     // rows stay live while a newer message waits behind it.
-    const activeTurnIsWorking =
-      (liveTurnKey ? turnKey === liveTurnKey : turnKey === undefined) &&
-      (isWorking || lifecycleWorking)
+    const inLiveTurn = liveTurnKey ? turnKey === liveTurnKey : turnKey === undefined
+    const activeTurnIsWorking = inLiveTurn && (isWorking || lifecycleWorking)
     const drawsRow =
       receipt !== undefined ||
       (!folded &&
         nativeChatRowRendersContent(message.blocks) &&
-        !isNativeChatReasoningUnderway(message, activeTurnIsWorking))
+        !isNativeChatReasoningUnderway(message, inLiveTurn && isReasoningOpen()))
     const roster = sectionSlots.rosterAt(message.id)
     if (drawsRow || status !== undefined || turnDiff !== undefined) {
       slots.push({

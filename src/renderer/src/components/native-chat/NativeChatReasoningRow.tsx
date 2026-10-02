@@ -7,7 +7,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { translate } from '@/i18n/i18n'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
-  isNativeChatReasoningUnderway,
   nativeChatReasoningHeadline,
   type NativeChatReasoningHeadline
 } from '../../../../shared/native-chat-reasoning-row'
@@ -27,18 +26,16 @@ function translatedHeadline(headline: NativeChatReasoningHeadline): string {
 export function NativeChatReasoningRow({
   message,
   markdown,
-  turnIsWorking = false,
   onLinkClick,
   allowFileUriLinks
 }: {
-  message: Pick<NativeChatMessage, 'role' | 'state' | 'completedAt' | 'timestamp'>
+  message: Pick<NativeChatMessage, 'state' | 'completedAt' | 'timestamp'>
   markdown: string
-  /** The row's own turn is still running; a row is live only inside one. */
-  turnIsWorking?: boolean
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
 }): React.JSX.Element | null {
-  if (!markdown.trim() || isNativeChatReasoningUnderway(message, turnIsWorking)) {
+  // A row still underway never reaches here: the transcript skips it while the host reports it open.
+  if (!markdown.trim()) {
     return null
   }
   const label = translate('components.native-chat.reasoning', 'Reasoning')

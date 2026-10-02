@@ -502,6 +502,41 @@ describe('structured agent session reducer', () => {
     expect(cleared.items).toBe(active.items)
   })
 
+  it('takes an activity frame that changes only which reasoning is open', () => {
+    let state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('message', 1)])
+      }
+    })
+    // Caught up, the host sends each activity as an empty batch at the same cursor.
+    const reasoning = (session: boolean, subagents: string[]) => {
+      state = reduceStructuredAgentSession(state, {
+        type: 'event',
+        event: {
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: { cursor: state.cursor!, items: [], removedItemIds: [], submissions: [] },
+          activity: { turnId: 'turn-1', text: '', reasoning: { session, subagents } }
+        }
+      })
+      return state.activity?.reasoning
+    }
+    expect(reasoning(false, ['task-1'])).toEqual({ session: false, subagents: ['task-1'] })
+    expect(reasoning(false, ['task-1', 'task-2'])).toEqual({
+      session: false,
+      subagents: ['task-1', 'task-2']
+    })
+    expect(reasoning(true, ['task-2'])).toEqual({ session: true, subagents: ['task-2'] })
+    const settled = state
+    expect(reasoning(true, ['task-2'])).toEqual({ session: true, subagents: ['task-2'] })
+    // An identical frame is still the no-op it always was.
+    expect(state).toBe(settled)
+  })
+
   it('records the host clock from frames that carry it and keeps it otherwise', () => {
     const snapshot = reduceStructuredAgentSession(
       EMPTY_STRUCTURED_AGENT_SESSION,

@@ -47,7 +47,7 @@ function snapshot(
   }
 }
 
-/** What the one live indicator row reads, resolved off the session journal. */
+/** What the one live indicator row reads: the host's live activity, never the journal rows. */
 describe('useMobileStructuredAgentSession turn indicator', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
@@ -103,7 +103,59 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
     blocks: [{ type: 'text', text: 'Weighing two approaches' }]
   })
 
-  it('reads the live turn as reasoning while reasoning is its newest content', async () => {
+  it("reads the live turn as reasoning only while the host reports the session's own reasoning open", async () => {
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).not.toBeNull())
+
+    act(() => {
+      listener?.(
+        snapshot([runningTurn, reasoning], 3, {
+          turnId: 'turn-1',
+          text: '',
+          reasoning: { session: true, subagents: ['task-1'] }
+        })
+      )
+    })
+
+    expect(hook?.turnIndicator).toMatchObject({ thinking: true, activityText: null })
+    expect(hook?.turnIndicator.isReasoningOpen?.('task-1')).toBe(true)
+    expect(hook?.turnIndicator.isReasoningOpen?.('task-2')).toBe(false)
+  })
+
+  it('follows a caught-up activity frame that changes only which reasoning is open', async () => {
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).not.toBeNull())
+    const batch = (reasoning: { session: boolean; subagents: string[] }): void => {
+      listener?.({
+        type: 'batch',
+        sessionId: 'session-1',
+        fence: 3,
+        batch: {
+          cursor: { epoch: 'epoch-1', sequence: 2 },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        activity: { turnId: 'turn-1', text: '', reasoning }
+      })
+    }
+
+    act(() => {
+      listener?.(snapshot([runningTurn, reasoning], 3))
+    })
+    act(() => batch({ session: false, subagents: ['task-1'] }))
+    expect(hook?.turnIndicator).toMatchObject({ thinking: false })
+    expect(hook?.turnIndicator.isReasoningOpen?.('task-1')).toBe(true)
+    act(() => batch({ session: true, subagents: [] }))
+    expect(hook?.turnIndicator).toMatchObject({ thinking: true })
+    expect(hook?.turnIndicator.isReasoningOpen?.('task-1')).toBe(false)
+  })
+
+  it('never reads a reasoning row as the turn reasoning now', async () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -113,7 +165,7 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
       listener?.(snapshot([runningTurn, reasoning], 3))
     })
 
-    expect(hook?.turnIndicator).toEqual({ thinking: true, activityText: null })
+    expect(hook?.turnIndicator).toMatchObject({ thinking: false, activityText: null })
   })
 
   it('hands the row the provider copy once real content ends the reasoning', async () => {
@@ -142,7 +194,10 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
       )
     })
 
-    expect(hook?.turnIndicator).toEqual({ thinking: false, activityText: 'Updating the plan' })
+    expect(hook?.turnIndicator).toMatchObject({
+      thinking: false,
+      activityText: 'Updating the plan'
+    })
   })
 
   it('never reads a journal status row as the live activity', async () => {
@@ -167,6 +222,6 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
       )
     })
 
-    expect(hook?.turnIndicator).toEqual({ thinking: false, activityText: null })
+    expect(hook?.turnIndicator).toMatchObject({ thinking: false, activityText: null })
   })
 })

@@ -7,6 +7,7 @@ import {
 } from './claude-structured-item-translation'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
+import { createTurnActivityChannel } from '../native-chat/agent-session-wire/turn-activity-channel'
 import {
   claudeProviderFrameKind,
   createClaudeProviderFrameFallback,
@@ -73,6 +74,7 @@ export function createClaudeJournalTranslator(
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   const turn = new ClaudeOpenTurn({
     sink: deps.sink,
+    activity: createTurnActivityChannel(deps.sink),
     settleChildren: (groupKey) => subagents.settleTurn(groupKey),
     endOpenWork: (completedAt) => streamedThinking.finishOpen(completedAt),
     onOpen: () => context.markActivity()
@@ -144,16 +146,11 @@ export function createClaudeJournalTranslator(
     streamedThinking.flush()
   }
 
-  const publishActivity = (kind: string, payload: unknown): void => {
-    const turnId = turn.id
-    if (turnId === null) {
-      return
-    }
-    const text = claudeProviderFrameActivity(kind, payload)
-    if (text !== undefined) {
-      deps.sink.setActivity?.(text ? { turnId, text } : null)
-    }
-  }
+  const publishActivity = (kind: string, payload: unknown): void =>
+    turn.describe(claudeProviderFrameActivity(kind, payload))
+  // After every event, so the signal follows whatever the event opened or closed and lands after
+  // the rows it wrote.
+  const publishReasoning = (): void => turn.reportReasoning(streamedThinking.openReasoning())
 
   const handleStream = (message: Record<string, unknown>, observedAt: number): boolean => {
     const delta = streamedBlocks.observe(message, observedAt)
@@ -194,104 +191,109 @@ export function createClaudeJournalTranslator(
   ): boolean =>
     journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt, openedBy)
 
+  const handle: ClaudeJournalTranslator['handle'] = (event) => {
+    if (event.type === 'ended') {
+      prompts.retryPendingCancellations()
+      flush()
+      subagents.settleSession()
+      backgroundTasks.settleSession()
+      // The host saw the child end, so the turn's end is observed, not lost. Whether it was a
+      // person's Stop is the journal's Stop event to say (`turnEndAfterStop`), else it is news.
+      turn.settle({ state: 'interrupted', completedAt: event.observedAt ?? Date.now() })
+      // A frame that arrives after the child is gone must not open a turn no
+      // event can close.
+      turn.suppressReopen()
+      return
+    }
+    if (event.type === 'message') {
+      context.observe(event.message, event.observedAt ?? Date.now())
+      // A root init is the CLI starting a new request cycle (measured per turn,
+      // per queued turn, per background wake, per /compact); a send replayed
+      // after that cycle's first root work was folded into it. Task frames are
+      // not cycle work: they arrive between cycles too.
+      if (isRootClaudeFrame(event.message)) {
+        if (event.message.type === 'system' && event.message.subtype === 'init') {
+          turn.observeProviderCycleStart()
+        } else if (
+          event.startsTurn === true ||
+          event.message.type === 'assistant' ||
+          event.message.type === 'stream_event'
+        ) {
+          turn.observeProviderCycleWork()
+        }
+      }
+    }
+    if (event.type === 'message' && observeClaudeCommandFrame(turn.command, event.message)) {
+      return
+    }
+    if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
+      return
+    }
+    // Ahead of the flush: a forced checkpoint resolves attribution as it
+    // writes, so an announcement landing in this same pass has to be visible
+    // to it or the row is stamped provisionally one line too early.
+    const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
+    // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
+    if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
+      flush()
+    }
+    if (announced) {
+      corrections.retry()
+      streamedText.reattribute()
+      streamedThinking.reattribute()
+    }
+    if (event.type === 'prompt') {
+      prompts.handle(event)
+    } else if (event.type === 'prompt-cancelled') {
+      prompts.retryPendingCancellations()
+      prompts.cancel(event.promptKey)
+    } else if (event.type === 'message' && event.message.type === 'result') {
+      journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
+    } else if (event.type === 'message') {
+      const backgroundTaskCovered = backgroundTasks.observe(
+        event.message,
+        event.observedAt ?? Date.now()
+      )
+      const kind = claudeProviderFrameKind(event.message)
+      if (
+        !handleMessage(
+          event.message,
+          event.startsTurn === true,
+          event.observedAt ?? Date.now(),
+          event.requestedAt,
+          event.clientMessageId
+        )
+      ) {
+        providerFallback.append(
+          kind,
+          event.message,
+          taskFrameSentence(event.message),
+          undefined,
+          { coveredByTypedTranslator: backgroundTaskCovered },
+          corrections.stampFor(claudeFrameParentRef(event.message))
+        )
+      }
+      context.observeResponse(event.message, event.observedAt ?? Date.now())
+      publishActivity(kind, event.message)
+      // The CLI's own turn-over signal, and the only end a turn stopped by a
+      // fault with no result frame ever gets. Reopen stays allowed: output
+      // after an idle belongs to a turn, and suppressing it would read as
+      // idle while the agent works.
+      if (claudeSessionStateEndsTurn(event.message)) {
+        subagents.settleTurn(turn.groupKey)
+        // No verdict: the CLI said the turn is over, not how it ended.
+        turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
+      }
+    } else if (event.type === 'provider-frame') {
+      providerFallback.append(event.kind, event.payload)
+      publishActivity(event.kind, event.payload)
+    }
+  }
+
   return {
     handle: (event) => {
-      if (event.type === 'ended') {
-        prompts.retryPendingCancellations()
-        flush()
-        subagents.settleSession()
-        backgroundTasks.settleSession()
-        // The host saw the child end, so the turn's end is observed, not lost. Whether it was a
-        // person's Stop is the journal's Stop event to say (`turnEndAfterStop`), else it is news.
-        turn.settle({ state: 'interrupted', completedAt: event.observedAt ?? Date.now() })
-        // A frame that arrives after the child is gone must not open a turn no
-        // event can close.
-        turn.suppressReopen()
-        return
-      }
-      if (event.type === 'message') {
-        context.observe(event.message, event.observedAt ?? Date.now())
-        // A root init is the CLI starting a new request cycle (measured per turn,
-        // per queued turn, per background wake, per /compact); a send replayed
-        // after that cycle's first root work was folded into it. Task frames are
-        // not cycle work: they arrive between cycles too.
-        if (isRootClaudeFrame(event.message)) {
-          if (event.message.type === 'system' && event.message.subtype === 'init') {
-            turn.observeProviderCycleStart()
-          } else if (
-            event.startsTurn === true ||
-            event.message.type === 'assistant' ||
-            event.message.type === 'stream_event'
-          ) {
-            turn.observeProviderCycleWork()
-          }
-        }
-      }
-      if (event.type === 'message' && observeClaudeCommandFrame(turn.command, event.message)) {
-        return
-      }
-      if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
-        return
-      }
-      // Ahead of the flush: a forced checkpoint resolves attribution as it
-      // writes, so an announcement landing in this same pass has to be visible
-      // to it or the row is stamped provisionally one line too early.
-      const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
-      // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
-      if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
-        flush()
-      }
-      if (announced) {
-        corrections.retry()
-        streamedText.reattribute()
-        streamedThinking.reattribute()
-      }
-      if (event.type === 'prompt') {
-        prompts.handle(event)
-      } else if (event.type === 'prompt-cancelled') {
-        prompts.retryPendingCancellations()
-        prompts.cancel(event.promptKey)
-      } else if (event.type === 'message' && event.message.type === 'result') {
-        journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
-      } else if (event.type === 'message') {
-        const backgroundTaskCovered = backgroundTasks.observe(
-          event.message,
-          event.observedAt ?? Date.now()
-        )
-        const kind = claudeProviderFrameKind(event.message)
-        if (
-          !handleMessage(
-            event.message,
-            event.startsTurn === true,
-            event.observedAt ?? Date.now(),
-            event.requestedAt,
-            event.clientMessageId
-          )
-        ) {
-          providerFallback.append(
-            kind,
-            event.message,
-            taskFrameSentence(event.message),
-            undefined,
-            { coveredByTypedTranslator: backgroundTaskCovered },
-            corrections.stampFor(claudeFrameParentRef(event.message))
-          )
-        }
-        context.observeResponse(event.message, event.observedAt ?? Date.now())
-        publishActivity(kind, event.message)
-        // The CLI's own turn-over signal, and the only end a turn stopped by a
-        // fault with no result frame ever gets. Reopen stays allowed: output
-        // after an idle belongs to a turn, and suppressing it would read as
-        // idle while the agent works.
-        if (claudeSessionStateEndsTurn(event.message)) {
-          subagents.settleTurn(turn.groupKey)
-          // No verdict: the CLI said the turn is over, not how it ended.
-          turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
-        }
-      } else if (event.type === 'provider-frame') {
-        providerFallback.append(event.kind, event.payload)
-        publishActivity(event.kind, event.payload)
-      }
+      handle(event)
+      publishReasoning()
     },
     journalPrompts: prompts,
     get currentTurnId() {

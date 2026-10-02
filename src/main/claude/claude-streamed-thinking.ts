@@ -8,6 +8,7 @@ import {
   endedJournalReasoning,
   journalReasoningBody
 } from '../native-chat/agent-session-journal/journal-reasoning-row'
+import type { AgentSessionOpenReasoning } from '../../shared/agent-session-wire'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
@@ -43,8 +44,10 @@ export type ClaudeReasoningFinal = {
   startedAt?: number
 }
 
-/** Thinking blocks streamed under --include-partial-messages, written to the same row their
- *  final assistant frame later lands on, and open until that frame or the turn's end. */
+/** The reasoning tracker for Claude: every thinking block streamed under --include-partial-messages
+ *  is open from its `content_block_start` (blank blocks too) until its final assistant frame, its
+ *  `content_block_stop`, a new message in its stream, or the turn's end. The row a block's text
+ *  writes and the live "reasoning open" signal both read that one set. */
 export function createClaudeStreamedThinking(deps: {
   sink: StructuredAgentSessionEventSink
   producer: ClaudeSubagentLinkageSource
@@ -53,8 +56,13 @@ export function createClaudeStreamedThinking(deps: {
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
 }) {
   const blocks = createClaudeStreamedBlockRegistry('thinking')
-  /** Each open block's stream, and when it began. */
-  const open = new Map<string, { scope: string; startedAt: number }>()
+  /** Each open block's stream and producer, and when it began. */
+  const open = new Map<
+    string,
+    { scope: string; parentToolUseId: string | null; startedAt: number }
+  >()
+  /** Blocks a stop ended before their final frame, which keeps that end. */
+  const stopped = new Map<string, { scope: string; at: number }>()
   const checkpoints = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
@@ -88,6 +96,11 @@ export function createClaudeStreamedThinking(deps: {
         open.delete(key)
       }
     }
+    for (const [key, block] of stopped) {
+      if (scope === undefined || block.scope === scope) {
+        stopped.delete(key)
+      }
+    }
   }
 
   return {
@@ -98,22 +111,37 @@ export function createClaudeStreamedThinking(deps: {
       if (restarted !== null) {
         finish({ completedAt: observedAt }, restarted)
       }
-      const delta = blocks.observe(frame, observedAt)
-      if (!delta) {
+      const event = blocks.observeBlock(frame, observedAt)
+      if (!event) {
         return false
       }
-      const identity = delta.identity
-      if (identity.provider === 'claude') {
-        open.set(agentJournalItemKey(identity), {
-          scope: `${identity.sessionId}/${delta.parentToolUseId ?? ''}`,
-          startedAt: delta.startedAt
+      const key = agentJournalItemKey(event.identity)
+      const scope = `${sessionScopeOf(event.identity)}/${event.parentToolUseId ?? ''}`
+      if (event.kind === 'stop') {
+        // Normally the final frame closed it already; this is the end an interrupted block gets.
+        if (open.has(key)) {
+          checkpoints.finish({ completedAt: observedAt }, (candidate) => candidate === key)
+          open.delete(key)
+          stopped.set(key, { scope, at: observedAt })
+        }
+        return false
+      }
+      if (!open.has(key)) {
+        open.set(key, {
+          scope,
+          parentToolUseId: event.parentToolUseId,
+          startedAt: event.startedAt
         })
       }
-      checkpoints.append(identity, delta.text, delta.parentToolUseId)
+      if (!event.text) {
+        return false
+      }
+      checkpoints.append(event.identity, event.text, event.parentToolUseId)
       return true
     },
     /** The row a final frame's thinking lands on — its streamed block's, else its own — closed.
-     *  Only a block seen streaming has an observed end. */
+     *  Only a block seen streaming has an observed end. A blank final writes no row but still
+     *  closes its block. */
     finalize: (
       envelope: ClaudeMessageEnvelope,
       observedAt: number
@@ -127,15 +155,33 @@ export function createClaudeStreamedThinking(deps: {
       const key = agentJournalItemKey(identity)
       // A final frame with no text of its own still ends the row its stream wrote.
       const text = claudeThinkingText(envelope) ?? checkpoints.latest(key) ?? ''
+      const endedAt = stopped.get(key)?.at ?? observedAt
       checkpoints.forget(key)
       open.delete(key)
-      const body = journalReasoningBody(
-        text,
-        endedJournalReasoning(streamed ? observedAt : undefined)
-      )
+      stopped.delete(key)
+      const body = journalReasoningBody(text, endedJournalReasoning(streamed ? endedAt : undefined))
       return body
         ? { identity, body, ...(streamed ? { startedAt: streamed.startedAt } : {}) }
         : null
+    },
+    /** Who has a thinking block open right now: the session's own agent, and each subagent by the
+     *  producer id its rows carry. */
+    openReasoning: (): AgentSessionOpenReasoning => {
+      let session = false
+      const subagents: string[] = []
+      for (const block of open.values()) {
+        if (block.parentToolUseId === null) {
+          session = true
+          continue
+        }
+        // Generic over scope, but the CLI (2.1.280) sends subagent thinking only as finished frames,
+        // so on the real CLI this list stays empty.
+        const agentId = deps.producer.settledLinkageFor(block.parentToolUseId).linkage.agentId
+        if (agentId) {
+          subagents.push(agentId)
+        }
+      }
+      return { session, subagents }
     },
     /** End every block still open, for a turn that is ending. */
     finishOpen: (completedAt: number): void => {
@@ -147,10 +193,15 @@ export function createClaudeStreamedThinking(deps: {
     dispose: (): void => {
       blocks.clear()
       open.clear()
+      stopped.clear()
       checkpoints.dispose()
     },
     get pending() {
       return checkpoints.pending
     }
   }
+}
+
+function sessionScopeOf(identity: AgentJournalItemIdentity): string {
+  return identity.provider === 'claude' ? identity.sessionId : ''
 }

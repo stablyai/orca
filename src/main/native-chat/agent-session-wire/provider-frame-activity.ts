@@ -128,11 +128,39 @@ export function claudeProviderFrameActivity(kind: string, payload: unknown): Act
   return undefined
 }
 
-/** Retain only the current summary headline, never materialize the growing transcript. */
+/** The item a frame's activity copy speaks for. */
+function activityItemId(method: string, payload: unknown): unknown {
+  const source = record(payload)
+  return method === 'item/started' ? record(source?.item)?.id : source?.itemId
+}
+
+/** Retain only the current summary headline, never materialize the growing transcript. A reasoning
+ *  item's completion clears the words it set: reasoning that ended is not going on. Other items keep
+ *  theirs, since a completion can come while their work goes on (a subagent spawn). */
 export function createCodexProviderActivityReader(): (
   method: string,
   payload: unknown
 ) => ActivityText {
+  const readHeadline = createCodexHeadlineReader()
+  let owner: unknown
+  return (method, payload) => {
+    if (method === 'item/completed') {
+      const item = record(record(payload)?.item)
+      if (owner === undefined || item?.type !== 'reasoning' || item.id !== owner) {
+        return undefined
+      }
+      owner = undefined
+      return null
+    }
+    const text = readHeadline(method, payload)
+    if (text !== undefined) {
+      owner = text ? activityItemId(method, payload) : undefined
+    }
+    return text
+  }
+}
+
+function createCodexHeadlineReader(): (method: string, payload: unknown) => ActivityText {
   let itemId: unknown
   let summaryIndex: unknown
   let headline = ''

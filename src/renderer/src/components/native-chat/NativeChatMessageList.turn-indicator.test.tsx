@@ -361,6 +361,7 @@ describe('NativeChatMessageList turn indicator', () => {
           ]
         }}
         journalItems={[journalItem(1, turnItem), journalItem(2, reasoningRow)]}
+        isReasoningOpen={(agentId) => agentId === undefined}
         isWorking
         expandSignal={false}
         fontScale={1}
@@ -378,6 +379,23 @@ describe('NativeChatMessageList turn indicator', () => {
       'animate-spin'
     )
     expect(container.querySelector('.animate-bounce')).toBeNull()
+  })
+
+  it("never reads Thinking from a reasoning row, only from the host's signal", () => {
+    render(
+      <NativeChatMessageList
+        session={{ ...session, status: 'working' }}
+        journalItems={[journalItem(1, turnItem), journalItem(2, reasoningRow)]}
+        // A subagent reasoning is not the session's own agent thinking.
+        isReasoningOpen={(agentId) => agentId === 'task-1'}
+        isWorking
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(screen.queryByText('Thinking')).toBeNull()
+    expect(screen.getByText('Working…')).toBeInTheDocument()
   })
 
   it('does not reuse completed-turn reasoning while the next dispatch is pending', () => {
@@ -428,6 +446,7 @@ describe('NativeChatMessageList turn indicator', () => {
         }}
         journalItems={[journalItem(1, legacyTurnRow), journalItem(2, reasoningRow)]}
         turnActivity={{ kind: 'description', text: 'Exploring the repo layout' }}
+        isReasoningOpen={() => true}
         isWorking
         expandSignal={false}
         fontScale={1}

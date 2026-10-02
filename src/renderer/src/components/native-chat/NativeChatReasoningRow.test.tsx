@@ -21,7 +21,7 @@ describe('reasoning disclosure', () => {
   it('starts collapsed without mounting markdown', () => {
     render(
       <NativeChatReasoningRow
-        message={{ role: 'reasoning', timestamp: STARTED, state: 'completed' }}
+        message={{ timestamp: STARTED, state: 'completed' }}
         markdown={'\n\nInspecting the request\nFull reasoning'}
       />
     )
@@ -33,7 +33,7 @@ describe('reasoning disclosure', () => {
   })
 
   it('expands through a native button and keeps disclosure state through revisions', () => {
-    const message = { role: 'reasoning' as const, timestamp: STARTED, state: 'completed' as const }
+    const message = { timestamp: STARTED, state: 'completed' as const }
     const { rerender } = render(<NativeChatReasoningRow message={message} markdown="Inspecting" />)
     const trigger = screen.getByRole('button')
     expect(trigger.tagName).toBe('BUTTON')
@@ -54,7 +54,7 @@ describe('reasoning disclosure', () => {
   it.each(['', ' \n\t'])('draws nothing for blank reasoning %j', (markdown) => {
     const { container } = render(
       <NativeChatReasoningRow
-        message={{ role: 'reasoning', timestamp: STARTED, state: 'running' }}
+        message={{ timestamp: STARTED, state: 'running' }}
         markdown={markdown}
       />
     )
@@ -63,27 +63,14 @@ describe('reasoning disclosure', () => {
 })
 
 describe('the reasoning headline', () => {
-  const headline = (
-    message: Pick<NativeChatMessage, 'state' | 'completedAt' | 'timestamp'>,
-    turnIsWorking = false
-  ) => {
-    render(
-      <NativeChatReasoningRow
-        message={{ role: 'reasoning', ...message }}
-        markdown="Reasoned"
-        turnIsWorking={turnIsWorking}
-      />
-    )
+  const headline = (message: Pick<NativeChatMessage, 'state' | 'completedAt' | 'timestamp'>) => {
+    render(<NativeChatReasoningRow message={message} markdown="Reasoned" />)
     return screen.queryByRole('button')?.textContent ?? null
   }
 
-  it('draws nothing while the row is open and its turn is running: the activity line says Thinking', () => {
-    expect(headline({ timestamp: STARTED, state: 'running' }, true)).toBeNull()
-  })
-
-  it('reads Thought for N s once it closes, while the turn goes on working', () => {
+  it('reads Thought for N s once it closes', () => {
     expect(
-      headline({ timestamp: STARTED, state: 'completed', completedAt: STARTED + 12_000 }, true)
+      headline({ timestamp: STARTED, state: 'completed', completedAt: STARTED + 12_000 })
     ).toContain('Thought for 12s')
   })
 
@@ -97,17 +84,19 @@ describe('the reasoning headline', () => {
     ).toContain('Thought for 1s')
   })
 
-  it('claims no duration it never saw, and draws an open row in a settled turn as Thought', () => {
+  it('claims no duration it never saw', () => {
     expect(headline({ timestamp: STARTED, state: 'completed' })).toBe('Reasoning: Thought')
-    cleanup()
-    expect(headline({ timestamp: STARTED, state: 'running' })).toBe('Reasoning: Thought')
+  })
+
+  it('reads neutral, never past tense, while the row has not ended', () => {
+    expect(headline({ timestamp: STARTED, state: 'running' })).toBe('Reasoning')
   })
 
   it('stays neutral for a row from a host that kept no lifecycle', () => {
-    expect(headline({ timestamp: STARTED }, true)).toBe('Reasoning')
+    expect(headline({ timestamp: STARTED })).toBe('Reasoning')
   })
 
-  it('appears through the message row only once it closes', () => {
+  it('draws through the message row, neutral until it closes', () => {
     const message: NativeChatMessage = {
       id: 'reasoning-1',
       role: 'reasoning',
@@ -124,7 +113,8 @@ describe('the reasoning headline', () => {
         onScrollMessageToTop={vi.fn()}
       />
     )
-    expect(screen.queryByRole('button')).toBeNull()
+    // Hiding a row the host reports open is the transcript's call, not the row's.
+    expect(screen.getByRole('button')).toHaveTextContent(/^Reasoning$/)
     rerender(
       <MessageRow
         message={{ ...message, state: 'completed', completedAt: STARTED + 3_000 }}

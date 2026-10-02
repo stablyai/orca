@@ -16,6 +16,7 @@ import {
   userFrame
 } from './claude-context-usage-test-support'
 import { ClaudeOpenTurn } from './claude-open-turn'
+import { createTurnActivityChannel } from '../native-chat/agent-session-wire/turn-activity-channel'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { childExited, sessionFor, userMessage } from './claude-structured-dispatch-test-support'
 
@@ -341,6 +342,7 @@ describe('context usage on journal rows', () => {
       sink: journal().sink,
       settleChildren: () => {},
       endOpenWork: () => {},
+      activity: createTurnActivityChannel({}),
       onOpen
     })
     turn.open(

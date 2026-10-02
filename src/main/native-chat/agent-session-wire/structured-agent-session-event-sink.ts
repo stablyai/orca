@@ -10,6 +10,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
+import { turnActivityOperation } from './structured-agent-session-turn-activity-operation'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -329,11 +330,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
         publish(options)
       },
       setActivity: (activity) => {
-        queue.submit({
-          bytes: Buffer.byteLength(JSON.stringify(activity), 'utf8') + 64,
-          coalescingKey: 'turn-activity',
-          run: (bound) => bound.publish(activity)
-        })
+        queue.submit(turnActivityOperation(activity))
       },
       tryPublish: publish
     },

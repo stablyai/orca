@@ -293,6 +293,7 @@ export function NativeChatStructuredSession(
             settledTurns={controller.settledTurns}
             awaitingInput={prompt === null ? null : 'shown'}
             turnActivity={controller.turnActivity}
+            isReasoningOpen={controller.isReasoningOpen}
             onLinkClick={onLinkClick}
             allowFileUriLinks={onLinkClick !== undefined}
             runtimeContext={imageRuntimeContext}

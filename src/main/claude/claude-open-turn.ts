@@ -12,6 +12,8 @@ import {
   type AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { TurnActivityChannel } from '../native-chat/agent-session-wire/turn-activity-channel'
+import type { AgentSessionOpenReasoning } from '../../shared/agent-session-wire'
 import {
   claudeCurrentTurnIdentity,
   claudeTurnLifecycleItem,
@@ -28,6 +30,8 @@ export type ClaudeOpenTurnDeps = {
   settleChildren: (groupKey: string | null) => void
   /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
   endOpenWork: (completedAt: number) => void
+  /** The open turn's live activity line, which ends with it. */
+  activity: TurnActivityChannel
   /** A turn opening moves the conversation on. */
   onOpen?: () => void
 }
@@ -59,6 +63,18 @@ export class ClaudeOpenTurn {
 
   get id(): string | null {
     return this.current?.turnId ?? null
+  }
+
+  /** The provider's words for the open turn; undefined leaves the line as it is. */
+  describe(text: string | null | undefined): void {
+    if (this.current) {
+      this.deps.activity.setText(this.current.turnId, text)
+    }
+  }
+
+  /** Who has reasoning open in the open turn right now. */
+  reportReasoning(open: AgentSessionOpenReasoning): void {
+    this.deps.activity.setReasoning(this.id, open)
   }
 
   /** The open turn's row, where a fact about the running turn lands. */
@@ -127,7 +143,7 @@ export class ClaudeOpenTurn {
     }
     this.current = turn
     this.publish(turn)
-    this.deps.sink.setActivity?.(null)
+    this.deps.activity.clear()
   }
 
   /** A conversation command the host opened a turn for. Its row is the host's, already written,
@@ -144,7 +160,7 @@ export class ClaudeOpenTurn {
       })
     }
     this.current = turn
-    this.deps.sink.setActivity?.(null)
+    this.deps.activity.clear()
   }
 
   /** Orca asked the provider to stop the command `turnId` names. */
@@ -183,7 +199,7 @@ export class ClaudeOpenTurn {
       this.publish(this.current, end, contextUsage)
       this.current = null
     }
-    this.deps.sink.setActivity?.(null)
+    this.deps.activity.clear()
   }
 
   /** An accepted send is the only thing that lifts the latch. */

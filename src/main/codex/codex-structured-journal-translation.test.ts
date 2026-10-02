@@ -894,7 +894,8 @@ describe('codex journal translation', () => {
     })
 
     expect(translator.handle(TURN_STARTED)).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 2, backpressured: true })
+    // The live activity op is admitted past the watermark: it coalesces to a single queued op.
+    expect(deferred.state()).toMatchObject({ queuedOperations: 3, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -902,6 +903,7 @@ describe('codex journal translation', () => {
     expect(bodies).toEqual([
       expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' })
     ])
-    expect(publishes).toHaveLength(1)
+    // The live activity publish rides past the watermark too.
+    expect(publishes).toHaveLength(2)
   })
 })

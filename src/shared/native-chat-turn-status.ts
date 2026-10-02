@@ -70,11 +70,14 @@ function settledTurnStatusKey(
   }
 }
 
-/** The two readings that label a live turn's tail line, carried together so a
+/** The readings that label a live turn's tail line, carried together so a
  *  surface cannot pick up one without the other. */
 export type NativeChatLiveTurnIndicator = {
+  /** The session's own agent has reasoning open now: `isReasoningOpen()`. */
   thinking: boolean
   activityText: string | null
+  /** The host's live reasoning gate for the live turn (`nativeChatReasoningGate`), per row scope. */
+  isReasoningOpen?: (agentId?: string) => boolean
 }
 
 export type NativeChatActiveTurnLabel =

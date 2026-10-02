@@ -75,7 +75,12 @@ describe('provider turn activity routing', () => {
         summaryIndex: 0
       })
     )
-    expect(state.activities.at(-1)).toBeNull()
+    // The words clear; the item they spoke for is still open.
+    expect(state.activities.at(-1)).toEqual({
+      turnId: TURN_ID,
+      text: '',
+      reasoning: { session: true, subagents: [] }
+    })
     translator.handle(
       codexNotification('item/reasoning/summaryTextDelta', {
         turnId: TURN_ID,

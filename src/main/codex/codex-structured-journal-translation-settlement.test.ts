@@ -214,7 +214,8 @@ describe('codex journal translation', () => {
     expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
       accepted: true
     })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
+    // The live activity op is admitted past the watermark: it coalesces to a single queued op.
+    expect(deferred.state()).toMatchObject({ queuedOperations: 6, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -225,7 +226,8 @@ describe('codex journal translation', () => {
       expect.objectContaining({ kind: 'tool-call', state: 'failed' }),
       expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'completed' })
     ])
-    expect(publishes).toHaveLength(2)
+    // The live activity publish rides past the watermark too.
+    expect(publishes).toHaveLength(3)
   })
 
   it('admits terminal session settlement publication across the hard watermark', async () => {
@@ -257,7 +259,8 @@ describe('codex journal translation', () => {
         acquisitionGeneration: 'generation-1'
       })
     ).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
+    // The live activity op is admitted past the watermark: it coalesces to a single queued op.
+    expect(deferred.state()).toMatchObject({ queuedOperations: 6, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -274,7 +277,8 @@ describe('codex journal translation', () => {
       }),
       expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
-    expect(publishes).toHaveLength(2)
+    // The live activity publish rides past the watermark too.
+    expect(publishes).toHaveLength(3)
   })
 
   it('retries a rejected terminal admission without losing tool, prompt, turn, or session truth', () => {

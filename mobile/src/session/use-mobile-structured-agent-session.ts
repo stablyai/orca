@@ -3,11 +3,12 @@ import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-c
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
-import {
-  activeStructuredAgentSessionTurnId,
-  isStructuredAgentSessionThinking
-} from '../../../src/shared/structured-agent-session-live-turn'
+import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
 import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat-turn-activity'
+import {
+  nativeChatReasoningGate,
+  nativeChatReasoningGateKey
+} from '../../../src/shared/native-chat-reasoning-row'
 import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
@@ -165,8 +166,13 @@ export function useMobileStructuredAgentSession(args: {
   const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
   const activityText =
     selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
-  const thinking = isStructuredAgentSessionThinking(state.items)
-  const turnIndicator = useMemo(() => ({ thinking, activityText }), [thinking, activityText])
+  // Keyed on what it answers, not on the frame: activity text changes must not rebuild every row.
+  const reasoningKey = nativeChatReasoningGateKey(state.activity, turnId)
+  const isReasoningOpen = useMemo(() => nativeChatReasoningGate(reasoningKey), [reasoningKey])
+  const turnIndicator = useMemo(
+    () => ({ thinking: isReasoningOpen(), activityText, isReasoningOpen }),
+    [isReasoningOpen, activityText]
+  )
   const status = state.status === 'idle' ? 'idle' : state.status
   const approvalPrompt = useMemo(
     () => state.items.find(pendingStructuredApproval) ?? null,

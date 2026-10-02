@@ -274,6 +274,7 @@ export function MobileNativeChatView({
     settledTurns,
     turnJournal,
     thinking: turnIndicator?.thinking === true,
+    ...(turnIndicator?.isReasoningOpen ? { isReasoningOpen: turnIndicator.isReasoningOpen } : {}),
     activityText: turnIndicator?.activityText ?? null,
     scopeKey: sendSurfaceId
   })

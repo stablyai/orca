@@ -143,11 +143,13 @@ function slotsOf(
   choices: Record<string, boolean> = {},
   isWorking = false,
   rosters: Record<string, boolean> = {},
-  journal?: NativeChatTurnJournal
+  journal?: NativeChatTurnJournal,
+  isReasoningOpen?: (agentId?: string) => boolean
 ): NativeChatTranscriptSlot[] {
   const { conversation, sections } = sectionsOf(rows, journal)
   return buildNativeChatTranscriptSlots({
     ...turnRowsOf(conversation, journal),
+    ...(isReasoningOpen ? { isReasoningOpen } : {}),
     receipts: new Map(),
     turnStatuses: { active: null, completedByTurn: {} },
     turnDiffs: new Map(),
@@ -332,6 +334,29 @@ describe("a subagent's rows live in its own section", () => {
       ['child-verdict', true],
       ['answer', false]
     ])
+  })
+
+  it("hides a subagent's unfinished reasoning exactly while that subagent shows Thinking", () => {
+    const thinking = (id: string, agentId: string) =>
+      row(id, say('Weighing the diff'), { ...by(agentId), role: 'reasoning', state: 'running' })
+    const transcript = (state: NativeChatSubagentState, later = false) => [
+      row('ask', say('review the PR'), { role: 'user' }),
+      roster('spawn', [['task-1', 'explore the lane', state]]),
+      thinking('child-think', 'task-1'),
+      ...(later ? [row('ask-2', say('and the tests?'), { role: 'user' })] : [])
+    ]
+    const ids = (slots: readonly NativeChatTranscriptSlot[]) =>
+      slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message.id] : []))
+    const open = (agentId?: string) => agentId === 'task-1'
+    const drawn = (rows: NativeChatMessage[], gate: (agentId?: string) => boolean) =>
+      ids(slotsOf(rows, { 'task-1': true }, true, {}, undefined, gate)).includes('child-think')
+    expect(drawn(transcript('working'), open)).toBe(false)
+    // A section shown in an earlier turn hides it too: the subagent is thinking now.
+    expect(drawn(transcript('working', true), open)).toBe(false)
+    // Another agent reasoning, or none, leaves the row drawn.
+    expect(drawn(transcript('working'), () => false)).toBe(true)
+    // A helper the roster says is done shows no Thinking, so its row draws, whatever the signal says.
+    expect(drawn(transcript('completed'), open)).toBe(true)
   })
 
   it('places each section in the turn it sits in, for the outline rail', () => {

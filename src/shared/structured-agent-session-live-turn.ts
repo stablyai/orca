@@ -110,45 +110,6 @@ export function newestStructuredAgentSessionTurn(
   return null
 }
 
-/**
- * Whether the newest thing the active turn produced is the model's own reasoning.
- *
- * This is what "thinking" has to mean for the indicator to be honest: the turn is reasoning
- * *right now*. The older rule — "the turn has produced no renderable output yet" — reports
- * thinking while the request is merely in flight, and stops reporting it the moment a tool call
- * lands, which is usually when reasoning actually starts.
- */
-export function isStructuredAgentSessionThinking(
-  items: readonly AgentJournalRenderItem[]
-): boolean {
-  let newestContentIsReasoning: boolean | null = null
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index]
-    const body = item?.body
-    const turn = readAgentJournalTurn(body)
-    if (turn) {
-      return turn.state === 'running' && newestContentIsReasoning === true
-    }
-    if (newestContentIsReasoning !== null || !isRootAgentJournalItem(item)) {
-      continue
-    }
-    if (body?.kind === 'message') {
-      // A row that says it ended is not reasoning now; a host that keeps no state says nothing.
-      newestContentIsReasoning =
-        body.role === 'reasoning' && (body.state === undefined || body.state === 'running')
-    } else if (
-      body?.kind === 'tool-call' ||
-      body?.kind === 'diff' ||
-      body?.kind === 'approval' ||
-      body?.kind === 'question'
-    ) {
-      newestContentIsReasoning = false
-    }
-    // A status row is a notice, not newer transcript content.
-  }
-  return false
-}
-
 /** The tool the status row names for the SESSION'S OWN agent, as the chat draws it: the running
  *  turn's newest running call, else its newest tool action whatever it settled to, so the line
  *  never blanks mid-turn. Nothing is named unless the scan reaches a RUNNING turn record, so an

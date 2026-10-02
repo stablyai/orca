@@ -9,7 +9,10 @@ import {
   subagentGroupBlocks
 } from '../../../../shared/native-chat-subagent-summary'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
-import { isNativeChatReasoningUnderway } from '../../../../shared/native-chat-reasoning-row'
+import {
+  isNativeChatReasoningUnderway,
+  isNativeChatSubagentThinking
+} from '../../../../shared/native-chat-reasoning-row'
 import {
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics,
@@ -62,12 +65,14 @@ export function nativeChatSubagentSectionSlots({
   choices,
   live,
   receipts,
+  isReasoningOpen,
   slots
 }: {
   sections: NativeChatSubagentSections
   choices: NativeChatSubagentChoices
   live: ReadonlySet<string>
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
+  isReasoningOpen: (agentId?: string) => boolean
   slots: NativeChatTranscriptSlot[]
 }) {
   const isOpen = (agentId: string): boolean => choices.sections.get(agentId) ?? live.has(agentId)
@@ -99,7 +104,10 @@ export function nativeChatSubagentSectionSlots({
       if (
         receipt === undefined &&
         (!nativeChatRowRendersContent(message.blocks) ||
-          isNativeChatReasoningUnderway(message, working))
+          isNativeChatReasoningUnderway(
+            message,
+            isNativeChatSubagentThinking(isReasoningOpen, agentId, entry)
+          ))
       ) {
         continue
       }

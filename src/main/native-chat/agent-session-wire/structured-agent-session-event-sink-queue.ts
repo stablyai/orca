@@ -18,6 +18,9 @@ export type StructuredAgentSessionSinkOperation = {
   coalescingKey?: string
   /** The queued operation with this key wins, as the journal keeps a settlement's first batch. */
   keepsFirst?: boolean
+  /** Never refused for space: coalesced, so at most one is queued, and small. Still counted, so it
+   *  pauses reading like any write. */
+  overWatermark?: boolean
   run: (target: StructuredAgentSessionEventTarget) => Promise<unknown> | void
 }
 
@@ -145,6 +148,7 @@ export class StructuredAgentSessionSinkQueue {
       this.lifecycleQueuedOperations - (replaced?.lifecycle ? 1 : 0) + (lifecycle ? 1 : 0)
     const exceedsOrdinary =
       !lifecycle &&
+      operation.overWatermark !== true &&
       (nextBytes > this.deps.watermarks.maxQueuedBytes ||
         nextOperations > this.deps.watermarks.maxQueuedOperations)
     const exceedsLifecycle =

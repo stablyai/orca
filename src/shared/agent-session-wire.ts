@@ -31,6 +31,7 @@ import type {
   AgentJournalTurnOutcome
 } from './agent-session-journal-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
+import type { AgentSessionTurnActivity } from './agent-session-turn-activity'
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
@@ -59,10 +60,10 @@ export type {
 } from './agent-session-background-task-wire'
 export { agentSessionBackgroundTasksEqual } from './agent-session-background-task-wire'
 
-export type AgentSessionTurnActivity = {
-  turnId: string
-  text: string
-}
+export type {
+  AgentSessionOpenReasoning,
+  AgentSessionTurnActivity
+} from './agent-session-turn-activity'
 
 export const AGENT_SESSION_ID_MAX_LENGTH = 512
 

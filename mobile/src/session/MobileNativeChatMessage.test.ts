@@ -63,6 +63,7 @@ describe('MobileNativeChatMessage', () => {
       toolsExpanded?: boolean
       structuredActivityUi?: boolean
       activeTurnIsWorking?: boolean
+      reasoningOpen?: boolean
       turnExpanded?: boolean
       turnStatus?: {
         startedAt: number | null
@@ -322,15 +323,20 @@ describe('MobileNativeChatMessage', () => {
       ])
     })
 
-    it('draws nothing while still being written in the live turn, or when blank', () => {
+    it('draws nothing while the host reports it still open, or when blank', () => {
+      expect(render(reasoning({ state: 'running' }), { reasoningOpen: true }).toJSON()).toBeNull()
+      // A working turn alone is not the host saying this row's reasoning is open.
       expect(
         render(reasoning({ state: 'running' }), { activeTurnIsWorking: true }).toJSON()
-      ).toBeNull()
+      ).not.toBeNull()
       expect(render(reasoning({ blocks: [{ type: 'text', text: ' \n ' }] })).toJSON()).toBeNull()
     })
 
     it('says only what the host saw', () => {
-      expect(textIn(render(reasoning({ state: 'running' })).root)).toContain('Thought')
+      // Not ended yet: neutral, never past tense.
+      const open = textIn(render(reasoning({ state: 'running' })).root)
+      expect(open).toContain('Reasoning')
+      expect(open).not.toContain('Thought')
       const unknown = render(reasoning({ state: undefined, completedAt: undefined }))
       expect(textIn(unknown.root)).toContain('Reasoning')
       // No "Reasoning: Reasoning".

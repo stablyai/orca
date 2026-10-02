@@ -543,23 +543,42 @@ describe('turn-owned grouping', () => {
     ])
   })
 
-  it('reserves nothing for reasoning still underway in the live turn, and draws it once it ends', () => {
+  it('reserves nothing for reasoning the host reports open in the live turn, and draws it once it ends', () => {
     const reasoning = (state: 'running' | 'completed'): NativeChatMessage => ({
       ...text('r', 'Weighing two approaches', 'reasoning'),
       state
     })
-    const live = { turnKeys: ['A', 'A'], liveTurnKey: 'A', isWorking: true }
+    const ids = (messages: NativeChatMessage[], overrides: Parameters<typeof build>[1]) =>
+      build(messages, overrides).map((slot) => slot.message.id)
+    const open = {
+      turnKeys: ['A', 'A'],
+      liveTurnKey: 'A',
+      isWorking: true,
+      isReasoningOpen: () => true
+    }
+    expect(ids([text('A', 'go', 'user'), reasoning('running')], open)).toEqual(['A'])
+    expect(ids([text('A', 'go', 'user'), reasoning('completed')], open)).toEqual(['A', 'r'])
+    // The row says running but the host reports nothing open: the row is not what decides.
     expect(
-      build([text('A', 'go', 'user'), reasoning('running')], live).map((slot) => slot.message.id)
-    ).toEqual(['A'])
-    expect(
-      build([text('A', 'go', 'user'), reasoning('completed')], live).map((slot) => slot.message.id)
+      ids([text('A', 'go', 'user'), reasoning('running')], {
+        ...open,
+        isReasoningOpen: () => false
+      })
     ).toEqual(['A', 'r'])
-    // A row still open in a turn that is no longer running ended unseen; it draws as before.
+    // Reasoning open now belongs to the live turn, never to a row an earlier turn left open.
     expect(
-      build([text('A', 'go', 'user'), reasoning('running')], { turnKeys: ['A', 'A'] }).map(
-        (slot) => slot.message.id
-      )
+      ids([text('A', 'go', 'user'), reasoning('running'), text('B', 'next', 'user')], {
+        ...open,
+        turnKeys: ['A', 'A', 'B'],
+        liveTurnKey: 'B'
+      })
+    ).toEqual(['A', 'r', 'B'])
+    // A subagent's open reasoning is its own, not the session's.
+    expect(
+      ids([text('A', 'go', 'user'), reasoning('running')], {
+        ...open,
+        isReasoningOpen: (agentId) => agentId === 'task-1'
+      })
     ).toEqual(['A', 'r'])
   })
 })

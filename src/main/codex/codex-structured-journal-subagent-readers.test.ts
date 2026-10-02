@@ -11,10 +11,12 @@ import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-
 import type { AgentSessionTurnActivity } from '../../shared/agent-session-wire'
 import { selectStructuredAgentTurnActivity } from '../../shared/native-chat-turn-activity'
 import { latestStructuredAgentSessionAssistantMessage } from '../../shared/structured-agent-session-latest-request'
+import { statusStructuredAgentSessionToolCall } from '../../shared/structured-agent-session-live-turn'
 import {
-  isStructuredAgentSessionThinking,
-  statusStructuredAgentSessionToolCall
-} from '../../shared/structured-agent-session-live-turn'
+  nativeChatReasoningGate,
+  nativeChatReasoningGateKey
+} from '../../shared/native-chat-reasoning-row'
+import type { AgentSessionTurnActivity as LiveActivity } from '../../shared/agent-session-turn-activity'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -22,6 +24,13 @@ import { createCodexJournalTranslator } from './codex-structured-journal-transla
 import type { CodexThreadItem } from './codex-thread-item-identity'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+/** The host's live reasoning gate, as a client reads it. */
+const reasoningOpen = (
+  activity: LiveActivity | null | undefined,
+  liveTurnId: string | null,
+  agentId?: string
+): boolean => nativeChatReasoningGate(nativeChatReasoningGateKey(activity, liveTurnId))(agentId)
 
 const SESSION = 'session-codex-children'
 const PARENT = 'thread-parent'
@@ -148,21 +157,22 @@ describe("a Codex subagent's rows on the parent's surfaces", () => {
     expect(JSON.stringify(rows)).toContain('pnpm test')
   })
 
-  it("does not read the child's reasoning as the parent thinking", async () => {
-    const { spawnChild, item, items } = await session()
+  it("reports the child's open reasoning as the child's, never as the parent thinking", async () => {
+    const { spawnChild, item, items, activities } = await session()
     spawnChild()
-    item(PARENT, 'item/completed', PARENT_TURN, {
-      type: 'agentMessage',
-      id: 'own-msg',
-      text: 'I asked a reviewer.'
-    })
-    item(CHILD, 'item/completed', CHILD_TURN, {
-      type: 'reasoning',
-      id: 'child-reasoning',
-      summary: ['Reading the diff']
-    })
+    const reasoning: CodexThreadItem = { type: 'reasoning', id: 'child-reasoning', summary: [] }
+    item(CHILD, 'item/started', CHILD_TURN, reasoning)
+    await items()
+    const open = activities.at(-1)
+    expect(open?.reasoning?.session).toBe(false)
+    expect(open?.reasoning?.subagents).toHaveLength(1)
+    expect(reasoningOpen(open, PARENT_TURN)).toBe(false)
+    expect(reasoningOpen(open, PARENT_TURN, open?.reasoning?.subagents[0])).toBe(true)
 
-    expect(isStructuredAgentSessionThinking(await items())).toBe(false)
+    item(CHILD, 'item/completed', CHILD_TURN, reasoning)
+    await items()
+    expect(reasoningOpen(activities.at(-1), PARENT_TURN, 'any')).toBe(false)
+    expect(activities.at(-1)?.reasoning).toBeUndefined()
   })
 
   it("does not show the child's compaction as the parent's activity line", async () => {
