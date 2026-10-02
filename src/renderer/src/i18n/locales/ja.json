@@ -18617,6 +18617,20 @@
       "findInFolder": "{{path}} 内を検索",
       "folderLoadError": "このフォルダーを読み込めませんでした：",
       "emptyFolder": "このフォルダーにはファイルがありません"
+    },
+    "host": {
+      "returnToProject": "ワークスペースのルートに戻る",
+      "refresh": "フォルダーを更新",
+      "browsing": "ホスト: {{host}}",
+      "parentDirectory": "親フォルダー",
+      "contentsUnavailable": "内容検索はワークスペースが対象です。使用するにはワークスペースのルートに戻ってください。",
+      "thisFolder": "このフォルダー",
+      "enter": "ホストのファイルシステムを参照",
+      "folderOpenFailed": "このフォルダーを開けませんでした: {{error}}",
+      "unsupportedEntry": "この項目は開けません。",
+      "entryMissing": "この項目はもう存在しません。",
+      "entryUnverifiable": "この項目にアクセスできませんでした: {{error}}",
+      "unavailable": "このワークスペースではホストの参照は使用できません"
     }
   },
   "sparsePreset": {

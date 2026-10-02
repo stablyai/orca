@@ -1,7 +1,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
-import type { DirEntry, FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
+import type { HostDirectoryListing } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { probeGitAvailability } from '../git/git-availability'
 import { gitExecFileAsync } from '../git/runner'
@@ -24,34 +24,34 @@ function resolveServerBrowsePath(pathValue: string): string {
   return resolve(homedir(), trimmed)
 }
 
+export async function browseServerDirectory(pathValue: string): Promise<HostDirectoryListing> {
+  if (isServerDriveListRequest(pathValue)) {
+    return listWindowsDrives()
+  }
+  const dirPath = resolveServerBrowsePath(pathValue)
+  const dirStat = await stat(dirPath)
+  if (!dirStat.isDirectory()) {
+    throw new Error(`${dirPath} is not a directory`)
+  }
+  const entries = await readdir(dirPath, { withFileTypes: true })
+  const mapped = entries
+    .filter((entry) => entry.name !== '.' && entry.name !== '..')
+    .map((entry) => ({
+      name: entry.name,
+      isDirectory: entry.isDirectory(),
+      isSymlink: entry.isSymbolicLink()
+    }))
+  sortDirEntries(mapped)
+  return {
+    resolvedPath: dirPath,
+    entries: mapped,
+    pathFlavor: process.platform === 'win32' ? 'win32' : 'posix'
+  }
+}
+
 export class RuntimeServerEnvironmentCommands {
-  async browseDirectory(pathValue: string): Promise<{
-    resolvedPath: string
-    entries: DirEntry[]
-    pathFlavor: FilesystemPathFlavor
-  }> {
-    if (isServerDriveListRequest(pathValue)) {
-      return listWindowsDrives()
-    }
-    const dirPath = resolveServerBrowsePath(pathValue)
-    const dirStat = await stat(dirPath)
-    if (!dirStat.isDirectory()) {
-      throw new Error(`${dirPath} is not a directory`)
-    }
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    const mapped = entries
-      .filter((entry) => entry.name !== '.' && entry.name !== '..')
-      .map((entry) => ({
-        name: entry.name,
-        isDirectory: entry.isDirectory(),
-        isSymlink: entry.isSymbolicLink()
-      }))
-    sortDirEntries(mapped)
-    return {
-      resolvedPath: dirPath,
-      entries: mapped,
-      pathFlavor: process.platform === 'win32' ? 'win32' : 'posix'
-    }
+  async browseDirectory(pathValue: string): Promise<HostDirectoryListing> {
+    return browseServerDirectory(pathValue)
   }
 
   async isGitAvailable(): Promise<boolean> {

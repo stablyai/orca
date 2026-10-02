@@ -3,6 +3,8 @@ import type { SearchOptions, SearchResult } from '../../shared/code-search-types
 import type {
   DirEntry,
   FsChangedPayload,
+  HostBrowseEntryResolution,
+  HostDirectoryListing,
   MarkdownDocument
 } from '../../shared/filesystem-entry-types'
 import type {
@@ -121,6 +123,14 @@ export type FilesystemApi = {
       } & SshMutationExpectation
     ) => Promise<void>
     authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
+    /** Desktop-only names listing for the Explorer's Host mode; never widens path grants. */
+    browseHostDir?: (args: { dirPath: string }) => Promise<HostDirectoryListing>
+    /** Desktop-only; grants a session read/write path grant only for a regular file outside the workspace. */
+    resolveHostBrowseEntry?: (args: {
+      targetPath: string
+      connectionId?: string
+      workspaceRoot?: string
+    }) => Promise<HostBrowseEntryResolution>
     stat: (args: {
       filePath: string
       connectionId?: string

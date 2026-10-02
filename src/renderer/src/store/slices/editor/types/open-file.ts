@@ -144,6 +144,8 @@ export type OpenFile = {
   readOnly?: boolean
   /** Why: explicit live tail, only meaningful for a read-only local log. */
   liveTail?: boolean
+  /** Why: opened read-only from Explorer Host mode outside the workspace; never persisted, so restore cannot replay its path grant. */
+  hostBrowse?: boolean
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 

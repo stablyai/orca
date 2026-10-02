@@ -15503,6 +15503,20 @@
       "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
+    },
+    "host": {
+      "returnToProject": "Volver a la raíz del espacio de trabajo",
+      "refresh": "Actualizar carpeta",
+      "browsing": "Host: {{host}}",
+      "parentDirectory": "Carpeta superior",
+      "contentsUnavailable": "La búsqueda de contenido abarca el espacio de trabajo. Vuelve a la raíz del espacio de trabajo para usarla.",
+      "thisFolder": "esta carpeta",
+      "enter": "Explorar el sistema de archivos del host",
+      "folderOpenFailed": "No se pudo abrir esta carpeta: {{error}}",
+      "unsupportedEntry": "Este elemento no se puede abrir.",
+      "entryMissing": "Este elemento ya no existe.",
+      "entryUnverifiable": "No se pudo acceder a este elemento: {{error}}",
+      "unavailable": "La exploración del host no está disponible para este espacio de trabajo"
     }
   },
   "sparsePreset": {

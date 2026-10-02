@@ -18617,6 +18617,20 @@
       "findInFolder": "{{path}}에서 찾기",
       "folderLoadError": "이 폴더를 불러오지 못했습니다:",
       "emptyFolder": "이 폴더에 파일이 없습니다"
+    },
+    "host": {
+      "returnToProject": "작업 공간 루트로 돌아가기",
+      "refresh": "폴더 새로 고침",
+      "browsing": "호스트: {{host}}",
+      "parentDirectory": "상위 폴더",
+      "contentsUnavailable": "내용 검색은 작업 공간을 대상으로 합니다. 사용하려면 작업 공간 루트로 돌아가세요.",
+      "thisFolder": "이 폴더",
+      "enter": "호스트 파일 시스템 탐색",
+      "folderOpenFailed": "이 폴더를 열 수 없습니다: {{error}}",
+      "unsupportedEntry": "이 항목은 열 수 없습니다.",
+      "entryMissing": "이 항목은 더 이상 존재하지 않습니다.",
+      "entryUnverifiable": "이 항목에 접근할 수 없습니다: {{error}}",
+      "unavailable": "이 작업 공간에서는 호스트 탐색을 사용할 수 없습니다"
     }
   },
   "sparsePreset": {

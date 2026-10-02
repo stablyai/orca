@@ -125,7 +125,8 @@ export function buildEditorSessionData(
   | 'activeTabTypeByWorktree'
   | 'markdownFrontmatterVisible'
 > {
-  const editFiles = openFiles.filter((f) => f.mode === 'edit')
+  // Why: Host-mode tabs hold a session-only grant; restoring them would read without the file-only check.
+  const editFiles = openFiles.filter((f) => f.mode === 'edit' && f.hostBrowse !== true)
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
