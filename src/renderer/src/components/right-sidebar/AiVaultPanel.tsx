@@ -201,7 +201,8 @@ export default function AiVaultPanel(): React.JSX.Element {
     activeWorktree: activeWorktree ?? null,
     activeWorktreeId: effectiveActiveWorktreeId,
     targetState: resumeTargetState,
-    agentCmdOverrides
+    agentCmdOverrides,
+    getSessionDisplayTitle: paneActions.getSessionDisplayTitle
   })
   const viewAdjustmentCount = countAiVaultViewAdjustments({
     agents,
@@ -364,6 +365,7 @@ export default function AiVaultPanel(): React.JSX.Element {
             getSessionResumeState={getSessionResumeState}
             getSessionResumeActions={getSessionResumeActions}
             getOriginalPaneTarget={paneActions.getOriginalPaneTarget}
+            getSessionDisplayTitle={paneActions.getSessionDisplayTitle}
             isStructuredSessionOpen={paneActions.isStructuredSessionOpen}
             getSessionLiveState={paneActions.getSessionLiveState}
             getWorktreeInfo={getSessionWorktreeInfo}

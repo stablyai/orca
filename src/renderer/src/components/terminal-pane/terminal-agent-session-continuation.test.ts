@@ -4,8 +4,8 @@ import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session-continu
 import { prepareAgentSessionContinuationFromPane } from './terminal-agent-session-continuation'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const store = {
-  agentStatusByPaneKey: {} as Record<
+type MockStore = {
+  agentStatusByPaneKey: Record<
     string,
     {
       agentType?: string
@@ -13,8 +13,16 @@ const store = {
       lastAssistantMessage?: string
       providerSession?: { transcriptPath?: string }
     }
-  >,
-  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string | null }[]>
+  >
+  tabsByWorktree: Record<
+    string,
+    { id: string; launchAgent?: string | null; customTitle?: string | null; title?: string }[]
+  >
+  settings?: { tabAutoGenerateTitle?: boolean }
+}
+const store: MockStore = {
+  agentStatusByPaneKey: {},
+  tabsByWorktree: {}
 }
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
@@ -122,5 +130,39 @@ describe('prepareAgentSessionContinuationFromPane', () => {
       capturedText: 'latest terminal context',
       transcriptPath: null
     })
+  })
+
+  it("uses the tab's Orca custom rename as the continuation source title", () => {
+    store.tabsByWorktree = {
+      'wt-1': [{ id: 'tab-1', launchAgent: 'claude', customTitle: 'Auth refactor' }]
+    }
+    const pane = makePane('unused scrollback')
+
+    const request = prepareAgentSessionContinuationFromPane({
+      pane,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: null,
+      workspacePath: '/repo/worktree',
+      initialCwd: '/repo/worktree'
+    })
+
+    expect(request?.source.sourceTitle).toBe('Auth refactor')
+  })
+
+  it('omits the source title when the tab has neither a rename nor a live title', () => {
+    store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', launchAgent: 'claude' }] }
+    const pane = makePane('unused scrollback')
+
+    const request = prepareAgentSessionContinuationFromPane({
+      pane,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: null,
+      workspacePath: '/repo/worktree',
+      initialCwd: '/repo/worktree'
+    })
+
+    expect(request?.source.sourceTitle).toBeNull()
   })
 })

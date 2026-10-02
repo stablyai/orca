@@ -30,12 +30,14 @@ export function useAiVaultSessionLaunchActions({
   activeWorktree,
   activeWorktreeId,
   targetState,
-  agentCmdOverrides
+  agentCmdOverrides,
+  getSessionDisplayTitle
 }: {
   activeWorktree: Worktree | null
   activeWorktreeId: string | null
   targetState: AiVaultSessionResumeTargetState
   agentCmdOverrides?: Partial<Record<AiVaultAgent, string | null>>
+  getSessionDisplayTitle: (session: AiVaultSession) => string
 }) {
   const [continuationRequest, setContinuationRequest] =
     useState<AgentSessionContinuationRequest | null>(null)
@@ -196,11 +198,12 @@ export function useAiVaultSessionLaunchActions({
         prepareAiVaultSessionContinuation({
           session,
           targetWorktreeId: targetId.worktreeId,
-          targetWorkspacePath
+          targetWorkspacePath,
+          displayTitle: getSessionDisplayTitle(session)
         })
       )
     },
-    [activeWorktree?.id, activeWorktreeId, targetState]
+    [activeWorktree?.id, activeWorktreeId, getSessionDisplayTitle, targetState]
   )
 
   const handleContinuationDialogOpenChange = useCallback((open: boolean): void => {

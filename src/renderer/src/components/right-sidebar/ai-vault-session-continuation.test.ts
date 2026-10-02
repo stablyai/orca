@@ -65,6 +65,17 @@ describe('AI Vault session continuation', () => {
     expect(request.source.capturedText).toContain('assistant: The component tests still need work.')
   })
 
+  it('prefers a resolved display title over the raw session title', () => {
+    const request = prepareAiVaultSessionContinuation({
+      session: session(),
+      targetWorktreeId: 'worktree-1',
+      targetWorkspacePath: '/Users/ada/Desktop/current-worktree',
+      displayTitle: 'Renamed by me'
+    })
+
+    expect(request.source.sourceTitle).toBe('Renamed by me')
+  })
+
   it('never treats a preview tool result as the user prompt', () => {
     const sourceSession = session()
     sourceSession.lastUserPrompt = null

@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { translate } from '@/i18n/i18n'
 
 type PrepareAgentSessionContinuationFromPaneArgs = {
@@ -55,11 +56,17 @@ export function prepareAgentSessionContinuationFromPane({
   const sourceAgent = resolveSourceAgent({ pane, tabId, worktreeId })
   const transcriptPath = status?.providerSession?.transcriptPath?.trim() || null
   const capturedText = transcriptPath ? '' : pane.serializeAddon.serialize({ scrollback: 800 })
+  const tab = state.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
   const source = {
     // Why: prefer the same-host transcript so opening the dialog does not serialize large scrollback.
     capturedText,
     sourceAgent,
     sourceLabel: paneKey,
+    // Why: same precedence the tab bar uses, so the dialog never shows a
+    // different name than the tab the user is continuing from.
+    sourceTitle: tab
+      ? resolveTerminalTabTitle(tab, state.settings?.tabAutoGenerateTitle === true) || null
+      : null,
     sourceWorkingDirectory: initialCwd || workspacePath,
     transcriptPath,
     lastPrompt: status?.prompt,
