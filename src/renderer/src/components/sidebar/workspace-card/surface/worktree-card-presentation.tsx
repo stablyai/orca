@@ -142,6 +142,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
           bot: metaBot
         }) ||
         workspacePorts.length > 0 ||
+        Boolean(worktree.workspaceUrl) ||
         hasHoverIdentity))
   // Why: the parent row owns metadata hover; don't stack the title's truncation tooltip on the details popover.
   const titleWrapper = hasHoverDetails
