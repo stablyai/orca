@@ -1,9 +1,11 @@
-import { screen } from 'electron'
 import type { WebContents } from 'electron'
 
 // Why not 0: hidden pages still paint so agent screenshots and the mobile screencast see fresh
 // content. Idle pages produce no frames at any rate; this only caps animating ones.
 const HIDDEN_FRAME_RATE = 10
+// Why not the display's rate: every frame is a full-page texture copied into the pane, so a page
+// animating at 120Hz costs twice what 60 does with no visible gain for web content.
+const SHOWN_FRAME_RATE = 60
 // Why boost on input: Chromium acks pointer input on the next frame, so an agent driving a hidden
 // page at the idle rate would wait up to 100ms per mouse event instead of one display frame.
 const INPUT_BOOST_MS = 3000
@@ -13,14 +15,14 @@ export type OffscreenPageFrameRate = {
   dispose(): void
 }
 
-/** Paces an offscreen page: the display's refresh rate while shown or driven, slow otherwise. */
+/** Paces an offscreen page: 60fps while shown or driven, slow otherwise. */
 export function createOffscreenPageFrameRate(contents: WebContents): OffscreenPageFrameRate {
   let visible = false
   let boostTimer: ReturnType<typeof setTimeout> | null = null
 
   const apply = (): void => {
     if (!contents.isDestroyed()) {
-      contents.setFrameRate(visible || boostTimer ? displayFrameRate() : HIDDEN_FRAME_RATE)
+      contents.setFrameRate(visible || boostTimer ? SHOWN_FRAME_RATE : HIDDEN_FRAME_RATE)
     }
   }
   const onInput = (): void => {
@@ -60,9 +62,4 @@ export function createOffscreenPageFrameRate(contents: WebContents): OffscreenPa
       }
     }
   }
-}
-
-function displayFrameRate(): number {
-  const fastest = Math.max(...screen.getAllDisplays().map((d) => d.displayFrequency || 0), 60)
-  return Math.min(Math.round(fastest), 240)
 }
