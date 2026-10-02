@@ -193,10 +193,10 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       )}
 
-      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
+      {/* Floating + button — phone only; embedded sidebars keep the toolbar +. */}
       {!embedded && (
         <NewWorkspaceFab
-          onPress={actions.openNewWorktreeModal}
+          onPress={actions.openPlusActionSheet}
           disabled={connState !== 'connected'}
         />
       )}

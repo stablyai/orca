@@ -204,9 +204,10 @@ describe('repos:create', () => {
     mockStore.getSettings.mockReturnValue({
       workspaceDir: 'c:\\users\\alice\\orca\\workspaces'
     })
-    await expect(callDefaultCreateProjectParent()).resolves.toBe(
-      join('C:\\Users\\alice', 'orca', 'projects')
-    )
+    // The shared resolver is platform-independent: a Windows-style home always
+    // joins with backslashes, unlike the old node:path join whose separators
+    // followed the machine running the code.
+    await expect(callDefaultCreateProjectParent()).resolves.toBe('C:\\Users\\alice\\orca\\projects')
   })
 
   it('unregisters any previously-registered repos:create handler', () => {
