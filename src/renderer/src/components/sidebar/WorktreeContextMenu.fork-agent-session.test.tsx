@@ -111,9 +111,19 @@ function openMenu(worktree: Worktree): void {
 }
 
 function findMenuItem(label: string): HTMLElement | undefined {
-  return Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
-    (element) => element.textContent === label
+  return Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((element) =>
+    element.textContent?.startsWith(label)
   )
+}
+
+const FORK_LABEL = 'Fork Agent Session...'
+
+/** The item's text after its label: the inline disabled reason, if any. */
+function inlineReason(item: HTMLElement | undefined): string | null {
+  const text = item?.textContent ?? ''
+  return text.startsWith(FORK_LABEL) && text.length > FORK_LABEL.length
+    ? text.slice(FORK_LABEL.length)
+    : null
 }
 
 function clickMenuItem(label: string): void {
@@ -124,19 +134,6 @@ function clickMenuItem(label: string): void {
     item?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     item?.click()
   })
-}
-
-async function hoverTooltipText(item: HTMLElement | undefined): Promise<string | null> {
-  const trigger = item?.closest<HTMLElement>('[data-slot="tooltip-trigger"]')
-  if (!trigger) {
-    return null
-  }
-  await act(async () => {
-    trigger.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
-  })
-  const content = document.querySelector('[data-slot="tooltip-content"]')
-  // Why: Radix repeats the text in a visually hidden role="tooltip" node; read the visible copy.
-  return content?.firstChild?.textContent ?? null
 }
 
 describe('WorktreeContextMenu Fork Agent Session', () => {
@@ -165,34 +162,41 @@ describe('WorktreeContextMenu Fork Agent Session', () => {
     [{ branch: '' }, 'Check out a branch first; this workspace is on a detached commit.'],
     [{ isArchived: true }, 'Unarchive this workspace to fork it.'],
     [{ isBare: true }, 'Bare repositories have no working tree to fork.']
-  ])('explains why it is disabled for %o in a tooltip', async (overrides, reason) => {
+  ])('explains why it is disabled for %o inside the item', (overrides, reason) => {
     openMenu(worktreeFixture(overrides))
 
-    const item = findMenuItem('Fork Agent Session...')
+    const item = findMenuItem(FORK_LABEL)
     expect(item?.hasAttribute('title')).toBe(false)
-    expect(await hoverTooltipText(item)).toBe(reason)
+    expect(inlineReason(item)).toBe(reason)
   })
 
-  it('is disabled with a reason when the project record is missing', async () => {
+  it('is disabled with a reason when the project record is missing', () => {
     state.repos = []
     openMenu(worktreeFixture())
 
-    const item = findMenuItem('Fork Agent Session...')
+    const item = findMenuItem(FORK_LABEL)
     expect(item?.getAttribute('aria-disabled')).toBe('true')
-    expect(await hoverTooltipText(item)).toBe("This workspace's project is not available.")
+    expect(inlineReason(item)).toBe("This workspace's project is not available.")
   })
 
-  it('gives no disabled reason when the worktree can be forked', async () => {
+  it('gives no disabled reason when the worktree can be forked', () => {
     openMenu(worktreeFixture())
 
-    const item = findMenuItem('Fork Agent Session...')
+    const item = findMenuItem(FORK_LABEL)
     expect(item?.getAttribute('aria-disabled')).toBeNull()
-    expect(await hoverTooltipText(item)).toBeNull()
+    expect(inlineReason(item)).toBeNull()
   })
 
   it('is hidden for folder workspaces', () => {
     openMenu(worktreeFixture({ id: 'folder::f-1', branch: '' }))
 
-    expect(findMenuItem('Fork Agent Session...')).toBeUndefined()
+    expect(findMenuItem(FORK_LABEL)).toBeUndefined()
+  })
+
+  it('is hidden when the host-aware project is a folder', () => {
+    state.repos = [{ id: 'repo', kind: 'folder' }]
+    openMenu(worktreeFixture())
+
+    expect(findMenuItem(FORK_LABEL)).toBeUndefined()
   })
 })

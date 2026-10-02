@@ -1,13 +1,11 @@
 import type { JSX } from 'react'
 import { GitFork } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { buildAgentSessionForkModalData } from '@/components/agent-session-fork/agent-session-fork-modal-data'
 import { findForkWorktreeRepo } from '@/lib/agent-session-fork-source-repo'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 function forkDisabledReason(worktree: Worktree, hasRepo: boolean): string | undefined {
@@ -40,21 +38,20 @@ function forkDisabledReason(worktree: Worktree, hasRepo: boolean): string | unde
 
 export function WorktreeForkAgentSessionMenuItem({
   worktree,
-  repo,
   isDeleting
 }: {
   worktree: Worktree
-  repo: Repo | null | undefined
   isDeleting: boolean
 }): JSX.Element | null {
   const openModal = useAppStore((s) => s.openModal)
   // Why: the same host-aware lookup the fork flow and terminal gate use.
-  const hasForkRepo = useAppStore((s) => findForkWorktreeRepo(s, worktree) !== null)
-  if (parseWorkspaceKey(worktree.id)?.type === 'folder' || repo?.kind === 'folder') {
+  const forkRepo = useAppStore((s) => findForkWorktreeRepo(s, worktree))
+  if (parseWorkspaceKey(worktree.id)?.type === 'folder' || forkRepo?.kind === 'folder') {
     return null
   }
-  const disabledReason = forkDisabledReason(worktree, hasForkRepo)
-  const item = (
+  const disabledReason = forkDisabledReason(worktree, forkRepo !== null)
+  const label = translate('components.agentSessionFork.menuItem', 'Fork Agent Session...')
+  return (
     <DropdownMenuItem
       disabled={isDeleting || disabledReason !== undefined}
       onSelect={() =>
@@ -70,21 +67,15 @@ export function WorktreeForkAgentSessionMenuItem({
       }
     >
       <GitFork className="size-3.5" />
-      {translate('components.agentSessionFork.menuItem', 'Fork Agent Session...')}
+      {disabledReason === undefined ? (
+        label
+      ) : (
+        // Why: disabled items are skipped by keyboard and pointer, so the reason must be in the item.
+        <span className="grid min-w-0 flex-1 text-left">
+          <span>{label}</span>
+          <span className="text-[11px] font-normal text-muted-foreground">{disabledReason}</span>
+        </span>
+      )}
     </DropdownMenuItem>
-  )
-  if (disabledReason === undefined) {
-    return item
-  }
-  // Why: a disabled item ignores the pointer, so the wrapper is what opens the tooltip.
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div>{item}</div>
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
-        {disabledReason}
-      </TooltipContent>
-    </Tooltip>
   )
 }

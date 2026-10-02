@@ -254,11 +254,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 </>
               ) : null}
               <DropdownMenuSeparator />
-              <WorktreeForkAgentSessionMenuItem
-                worktree={worktree}
-                repo={repo}
-                isDeleting={isDeleting}
-              />
+              <WorktreeForkAgentSessionMenuItem worktree={worktree} isDeleting={isDeleting} />
               <DropdownMenuItem
                 onSelect={handleOpenParentPicker}
                 disabled={isWorktreeParentPickerDisabled({ isDeleting, eligibleParentCount })}
