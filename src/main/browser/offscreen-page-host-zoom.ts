@@ -1,5 +1,8 @@
 import type { WebContents } from 'electron'
-import type { OffscreenPageGuestEvent } from '../../shared/offscreen-page-protocol'
+import type {
+  OffscreenPageGuestEvent,
+  OffscreenPageUserInput
+} from '../../shared/offscreen-page-protocol'
 import {
   OFFSCREEN_PAGE_EVENT_CHANNEL,
   readOffscreenPageGuestState
@@ -7,6 +10,23 @@ import {
 
 /** The showing renderer's own zoom; its CSS px are `factor` page DIPs. */
 export type OffscreenPageHostZoom = { level: number; factor: number }
+
+/** Page DIPs per host CSS px: every point crossing between the pane and the page scales by it. */
+export function hostZoomFactor(hostZoom: OffscreenPageHostZoom | null): number {
+  return hostZoom?.factor ?? 1
+}
+
+/** User input with its pointer position moved from host CSS px to page DIPs. */
+export function inputInPageDips(
+  input: OffscreenPageUserInput,
+  hostZoom: OffscreenPageHostZoom | null
+): OffscreenPageUserInput {
+  if (input.kind !== 'mouse' && input.kind !== 'wheel') {
+    return input
+  }
+  const factor = hostZoomFactor(hostZoom)
+  return { ...input, x: input.x * factor, y: input.y * factor }
+}
 
 /**
  * Mirrors a <webview>: when the host's UI zoom changes, the page adopts the same zoom level, so it

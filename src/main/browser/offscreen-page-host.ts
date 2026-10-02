@@ -21,11 +21,20 @@ import {
   createOffscreenPageFrameForwarder,
   type OffscreenPageFrameForwarder
 } from './offscreen-page-frame-forwarder'
-import { dispatchOffscreenPageUserInput } from './offscreen-page-user-input'
+import {
+  dispatchOffscreenPageUserInput,
+  electronKeyInput,
+  electronWheelEvent
+} from './offscreen-page-user-input'
 import { readOffscreenPageCaret } from './offscreen-page-caret'
 import { runOffscreenPageCommand } from './offscreen-page-commands'
 import { sendOffscreenPageFrame } from './offscreen-page-frame-delivery'
-import { syncOffscreenPageHostZoom, type OffscreenPageHostZoom } from './offscreen-page-host-zoom'
+import {
+  hostZoomFactor,
+  inputInPageDips,
+  syncOffscreenPageHostZoom,
+  type OffscreenPageHostZoom
+} from './offscreen-page-host-zoom'
 import { createOffscreenPageFeatures, type OffscreenPageFeatures } from './offscreen-page-features'
 import {
   mayOpenOffscreenPageSelect,
@@ -67,11 +76,6 @@ export type OffscreenPageCreateParams = {
  * A page here is its own top-level WebContents with no native view, so neither agent CDP input
  * nor Chromium's mouse-down focus handoff can reach the host window's focus or IME.
  */
-/** Page DIPs per host renderer CSS px: every point crossing between the pane and the page scales by it. */
-function hostZoomFactor(page: HostedPage): number {
-  return page.hostZoom?.factor ?? 1
-}
-
 export class OffscreenPageHost {
   private readonly pages = new Map<string, HostedPage>()
 
@@ -107,7 +111,7 @@ export class OffscreenPageHost {
         surface,
         send: (channel, payload) =>
           this.rendererFor(page)?.send(channel, params.browserPageId, payload),
-        hostZoomFactor: () => hostZoomFactor(page)
+        hostZoomFactor: () => hostZoomFactor(page.hostZoom)
       }),
       stopForwardingEvents: forwardOffscreenPageGuestEvents(contents, (event) => {
         this.rendererFor(page)?.send(OFFSCREEN_PAGE_EVENT_CHANNEL, params.browserPageId, event)
@@ -168,7 +172,7 @@ export class OffscreenPageHost {
       renderer: this.rendererFor(page),
       current: page.hostZoom
     })
-    const factor = hostZoomFactor(page)
+    const factor = hostZoomFactor(page.hostZoom)
     const width = Math.max(1, Math.round(viewport.width * factor))
     const height = Math.max(1, Math.round(viewport.height * factor))
     page.surface.setSize(width, height)
@@ -178,7 +182,7 @@ export class OffscreenPageHost {
   dropFiles(browserPageId: string, drop: OffscreenPageFileDrop): void {
     const page = this.livePage(browserPageId)
     if (page) {
-      const factor = hostZoomFactor(page)
+      const factor = hostZoomFactor(page.hostZoom)
       void page.features.drag.dropFiles({ ...drop, x: drop.x * factor, y: drop.y * factor })
     }
   }
@@ -186,12 +190,15 @@ export class OffscreenPageHost {
   async dispatchUserInput(browserPageId: string, input: OffscreenPageUserInput): Promise<void> {
     const page = this.livePage(browserPageId)
     if (page) {
-      const factor = hostZoomFactor(page)
-      const scaled =
-        input.kind === 'mouse' || input.kind === 'wheel'
-          ? { ...input, x: input.x * factor, y: input.y * factor }
-          : input
-      if (input.kind === 'key' && this.isGrabKey(browserPageId, page, input)) {
+      const scaled = inputInPageDips(input, page.hostZoom)
+      if (
+        input.kind === 'key' &&
+        browserManager.handleOffscreenPageGrabKey(
+          browserPageId,
+          page.surface.contents,
+          electronKeyInput(input)
+        )
+      ) {
         return
       }
       if (page.overlays.routeInput(scaled)) {
@@ -199,14 +206,11 @@ export class OffscreenPageHost {
       }
       if (
         scaled.kind === 'wheel' &&
-        browserManager.handleOffscreenPageViewportWheel(browserPageId, page.surface.contents, {
-          type: 'mouseWheel',
-          x: Math.round(scaled.x),
-          y: Math.round(scaled.y),
-          deltaX: scaled.deltaX,
-          deltaY: scaled.deltaY,
-          modifiers: scaled.modifiers
-        })
+        browserManager.handleOffscreenPageViewportWheel(
+          browserPageId,
+          page.surface.contents,
+          electronWheelEvent(scaled)
+        )
       ) {
         return
       }
@@ -218,29 +222,12 @@ export class OffscreenPageHost {
           const anchor = toHostSelectAnchor(
             page.openSelect,
             page.surface.contents,
-            hostZoomFactor(page)
+            hostZoomFactor(page.hostZoom)
           )
           renderer.send(OFFSCREEN_PAGE_SELECT_CHANNEL, browserPageId, anchor)
         }
       }
     }
-  }
-
-  private isGrabKey(
-    browserPageId: string,
-    page: HostedPage,
-    input: Extract<OffscreenPageUserInput, { kind: 'key' }>
-  ): boolean {
-    return browserManager.handleOffscreenPageGrabKey(browserPageId, page.surface.contents, {
-      type: input.type,
-      key: input.key,
-      code: input.code,
-      meta: input.modifiers.includes('meta'),
-      control: input.modifiers.includes('control'),
-      alt: input.modifiers.includes('alt'),
-      shift: input.modifiers.includes('shift'),
-      isAutoRepeat: input.repeat
-    })
   }
 
   /** Shows the menu for the select offered by offerOpenSelect; `point` is window-client CSS px. */
@@ -253,12 +240,12 @@ export class OffscreenPageHost {
       return
     }
     page.openSelect = null
-    const hostFactor = renderer.getZoomFactor()
+    const factor = hostZoomFactor(page.hostZoom)
     showOffscreenPageSelectMenu({
       contents: page.surface.contents,
       window,
       popup,
-      point: { x: point.x * hostFactor, y: point.y * hostFactor },
+      point: { x: point.x * factor, y: point.y * factor },
       pageZoomFactor: page.surface.contents.getZoomFactor()
     })
   }
@@ -272,7 +259,9 @@ export class OffscreenPageHost {
 
   async readCaret(browserPageId: string): Promise<OffscreenPageCaret | null> {
     const page = this.livePage(browserPageId)
-    return page ? readOffscreenPageCaret(page.surface.contents, hostZoomFactor(page)) : null
+    return page
+      ? readOffscreenPageCaret(page.surface.contents, hostZoomFactor(page.hostZoom))
+      : null
   }
 
   setKeyboardFocus(browserPageId: string, focused: boolean): void {

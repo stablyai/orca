@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OffscreenPageUserInput } from '../../shared/offscreen-page-protocol'
 import { createOffscreenPageFrames } from './offscreen-page-frames'
-import { dispatchOffscreenPageUserInput } from './offscreen-page-user-input'
+import {
+  dispatchOffscreenPageUserInput,
+  electronKeyInput,
+  electronWheelEvent
+} from './offscreen-page-user-input'
 
 function fakePage(attached = true) {
   const target = { isDestroyed: () => false, sendInputEvent: vi.fn(), getZoomFactor: () => 2 }
@@ -121,5 +125,26 @@ describe('dispatchOffscreenPageUserInput', () => {
       ['mouseLeave', []],
       ['mouseMove', ['leftbuttondown']]
     ])
+  })
+})
+
+describe('Electron input shapes', () => {
+  it('rounds a wheel to whole pixels and keeps its deltas', () => {
+    expect(
+      electronWheelEvent({ kind: 'wheel', x: 10.6, y: 4.2, deltaX: 1, deltaY: -2, modifiers: [] })
+    ).toEqual({ type: 'mouseWheel', x: 11, y: 4, deltaX: 1, deltaY: -2, modifiers: [] })
+  })
+
+  it('spells a key the way before-input-event does', () => {
+    expect(electronKeyInput(key({ modifiers: ['meta', 'shift'] }))).toEqual({
+      type: 'keyDown',
+      key: 'a',
+      code: 'KeyA',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: true,
+      isAutoRepeat: false
+    })
   })
 })

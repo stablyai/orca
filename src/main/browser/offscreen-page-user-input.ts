@@ -94,14 +94,7 @@ export async function dispatchOffscreenPageUserInput(
       return
     }
     case 'wheel':
-      target.sendInputEvent({
-        type: 'mouseWheel',
-        x: Math.round(input.x),
-        y: Math.round(input.y),
-        deltaX: input.deltaX,
-        deltaY: input.deltaY,
-        modifiers: input.modifiers
-      })
+      target.sendInputEvent(electronWheelEvent(input))
       return
     case 'key': {
       const keyDown = input.type === 'keyDown'
@@ -151,6 +144,39 @@ export async function dispatchOffscreenPageUserInput(
         selectionStart: 0,
         selectionEnd: 0
       })
+  }
+}
+
+/** The wheel as Electron's input event, which is how both the page and viewport panning take it. */
+export function electronWheelEvent(
+  input: Extract<OffscreenPageUserInput, { kind: 'wheel' }>
+): Electron.MouseWheelInputEvent {
+  return {
+    type: 'mouseWheel',
+    x: Math.round(input.x),
+    y: Math.round(input.y),
+    deltaX: input.deltaX,
+    deltaY: input.deltaY,
+    modifiers: input.modifiers
+  }
+}
+
+/** The key in the shape a <webview>'s before-input-event carries, for Orca's shortcut matching. */
+export function electronKeyInput(
+  input: Extract<OffscreenPageUserInput, { kind: 'key' }>
+): Pick<
+  Electron.Input,
+  'type' | 'key' | 'code' | 'meta' | 'control' | 'alt' | 'shift' | 'isAutoRepeat'
+> {
+  return {
+    type: input.type,
+    key: input.key,
+    code: input.code,
+    meta: input.modifiers.includes('meta'),
+    control: input.modifiers.includes('control'),
+    alt: input.modifiers.includes('alt'),
+    shift: input.modifiers.includes('shift'),
+    isAutoRepeat: input.repeat
   }
 }
 
