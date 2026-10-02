@@ -11065,7 +11065,6 @@
           "checks": {
             "panel": {
               "content": {
-                "3916814392": "por detrás (commit base:",
                 "755be805f6": "Sin comentarios",
                 "751f7c6e5c": "Mostrando los primeros 100 comentarios por fuente",
                 "94557d68e2": "Comentarios",
@@ -11116,9 +11115,6 @@
                 "b45db92d0e": "Arreglar",
                 "5d4ebf9391": "Inspecciona los detalles o inicia una pasada de corrección con IA.",
                 "b652f38caf": "check fallido",
-                "87cd07c69a": "Esta rama tiene conflictos que deben resolverse",
-                "0975eeaaef": "Archivos con conflictos",
-                "6fa7f8723f": "commit",
                 "2b2be92919": "Añadir comentario",
                 "7440d09d2c": "Iniciar conversación",
                 "b37ebdc51c": "Comentarios no disponibles.",
@@ -11129,13 +11125,6 @@
                 "ee07b33924": "desconocido",
                 "cdbfda4dec": "Anotación",
                 "066fedd446": "Trabajos fallidos",
-                "ae8a04ef17": "Los detalles del archivo en conflicto no están disponibles",
-                "73d0675356": "Actualizando detalles del conflicto…",
-                "f5bc5c4cf1": "El proveedor de hosting informa conflictos, pero Git local no los reprodujo. Actualiza la revisión o haz push de la rama para recalcular la capacidad de merge.",
-                "5bc9bda2af": "Ejecutar desde este worktree",
-                "e87fb3d929": "Copiar comandos para actualizar la capacidad de merge",
-                "1e53e45072": "Copiado",
-                "084c516efb": "Copiar comandos",
                 "5dc3af25c0": "Seleccionar comentario",
                 "d7a2f9c401": "Enviar {{value0}} comentarios sin resolver",
                 "d91f2a6c39": "Enviar {{value0}} comentarios en cola a la IA",
@@ -15537,5 +15526,15 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "checksPanel": {
+    "mergeConflict": {
+      "gitHubTitle": "GitHub informa de conflictos con {{baseRefName}}",
+      "gitHubBody": "Fusiona {{baseRefName}} en esta rama para ver y resolver los archivos en conflicto.",
+      "gitHubTitleNoBase": "GitHub informa de conflictos con la rama base",
+      "gitHubBodyNoBase": "Fusiona la rama base en esta rama para ver y resolver los archivos en conflicto.",
+      "gitLabTitle": "GitLab informa de conflictos con la rama de destino",
+      "gitLabBody": "Fusiona la rama de destino en esta rama para ver y resolver los archivos en conflicto."
+    }
   }
 }

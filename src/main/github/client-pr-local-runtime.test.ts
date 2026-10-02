@@ -89,10 +89,6 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: vi.fn()
 }))
 
-vi.mock('./conflict-summary', () => ({
-  getPRConflictSummary: vi.fn()
-}))
-
 vi.mock('./rate-limit', () => ({
   getRateLimit: getRateLimitMock,
   rateLimitGuard: rateLimitGuardMock,

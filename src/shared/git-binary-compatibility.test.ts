@@ -4,10 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import {
-  isUnsupportedMergeTreeMergeBaseError,
-  isUnsupportedMergeTreeWriteTreeError
-} from './git-merge-tree-capability'
+import { isUnsupportedMergeTreeWriteTreeError } from './git-merge-tree-capability'
 import { isBranchCheckedOutInWorktreeError } from './git-branch-delete-refusal'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
 import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
@@ -368,16 +365,6 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       supports(2, 38),
       isUnsupportedMergeTreeWriteTreeError
     )
-    if (supports(2, 38)) {
-      const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-      const legacyArgs = ['merge-tree', '--write-tree', '--name-only', '-z', '--no-messages']
-      await expectPreferredOrRecognizedFallback(
-        [...legacyArgs, '--merge-base', head, head, head],
-        supports(2, 40),
-        isUnsupportedMergeTreeMergeBaseError
-      )
-      await expect(runGit([...legacyArgs, head, head])).resolves.toBeDefined()
-    }
   })
 
   it('supports exact show-ref probes', async () => {

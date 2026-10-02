@@ -1,9 +1,5 @@
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
-import type {
-  PRConflictSummary,
-  PRMergeableState,
-  GitHubPRStack
-} from '../../../../shared/github/pull-request-types'
+import type { PRMergeableState, GitHubPRStack } from '../../../../shared/github/pull-request-types'
 import { deriveCheckStatus, mapPRState } from '../../mappers'
 import type { OwnerRepo } from '../../gh-utils'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
@@ -17,7 +13,6 @@ export function assemblePRRefreshFoundOutcome(args: {
   stackMergeQueueRequired: boolean | null | undefined
   confirmedContainedHeadOid: string | null
   headDivergedFromMergedPRAtOid: string | null
-  conflictSummary: PRConflictSummary | undefined
 }): PRRefreshOutcome {
   const {
     data,
@@ -27,8 +22,7 @@ export function assemblePRRefreshFoundOutcome(args: {
     mergeable,
     stackMergeQueueRequired,
     confirmedContainedHeadOid,
-    headDivergedFromMergedPRAtOid,
-    conflictSummary
+    headDivergedFromMergedPRAtOid
   } = args
   return {
     kind: 'found',
@@ -63,8 +57,7 @@ export function assemblePRRefreshFoundOutcome(args: {
       ...(data.baseRefName ? { baseRefName: data.baseRefName } : {}),
       ...(data.headRefName ? { headRefName: data.headRefName } : {}),
       prRepo: dataRepo ?? undefined,
-      headRepo: dataHeadRepo ?? undefined,
-      conflictSummary
+      headRepo: dataHeadRepo ?? undefined
     }
   }
 }

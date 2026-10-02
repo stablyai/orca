@@ -545,7 +545,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('returns conflicting file details instead of running gh merge when PR is dirty', async () => {
+  function mockConflictingPRLookup(baseRefName?: string): void {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
@@ -558,17 +558,15 @@ describe('GitHub GraphQL rate-limit guard', () => {
           updatedAt: '2026-04-01T00:00:00Z',
           isDraft: false,
           mergeable: 'CONFLICTING',
-          baseRefName: 'main',
+          ...(baseRefName ? { baseRefName } : {}),
           baseRefOid: 'base-oid',
           headRefOid: 'head-oid'
         })
       })
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: '' })
-      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
-      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
-      .mockResolvedValueOnce({ stdout: '3\n' })
-      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000src/conflict.ts\u0000' })
+  }
+
+  it('blocks a conflicting PR without running local git or gh merge', async () => {
+    mockConflictingPRLookup('main')
 
     await expect(
       mergePR('/repo-root', 7, 'squash', undefined, {
@@ -580,33 +578,15 @@ describe('GitHub GraphQL rate-limit guard', () => {
       ok: false,
       error:
         'This pull request has merge conflicts and cannot be merged yet.\n' +
-        '3 commits behind main (base commit: latest-).\n\n' +
-        'Conflicting files:\n' +
-        '- src/conflict.ts'
+        'Update the branch with main and resolve the conflicts before merging.'
     })
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('does not run merge conflict preflight for SSH-backed repos', async () => {
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 7,
-          title: 'PR',
-          state: 'OPEN',
-          url: 'https://github.com/stablyai/orca/pull/7',
-          statusCheckRollup: [],
-          updatedAt: '2026-04-01T00:00:00Z',
-          isDraft: false,
-          mergeable: 'CONFLICTING',
-          baseRefName: 'main',
-          baseRefOid: 'base-oid',
-          headRefOid: 'head-oid'
-        })
-      })
-      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+  it('blocks a conflicting PR on SSH-backed repos too', async () => {
+    mockConflictingPRLookup('main')
 
     await expect(
       mergePR('/remote/repo-root', 7, 'squash', 'ssh-1', {
@@ -614,18 +594,33 @@ describe('GitHub GraphQL rate-limit guard', () => {
         repo: 'orca',
         host: 'github.com'
       })
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toEqual({
+      ok: false,
+      error:
+        'This pull request has merge conflicts and cannot be merged yet.\n' +
+        'Update the branch with main and resolve the conflicts before merging.'
+    })
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['pr', 'merge', '7', '--squash', '--repo', 'stablyai/orca'],
-      expect.objectContaining({
-        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
-      })
-    )
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock.mock.calls[0]?.[1]).not.toHaveProperty('cwd')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks a conflicting PR whose base branch name is unknown', async () => {
+    mockConflictingPRLookup()
+
+    await expect(
+      mergePR('/repo-root', 7, 'squash', undefined, {
+        owner: 'stablyai',
+        repo: 'orca',
+        host: 'github.com'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error:
+        'This pull request has merge conflicts and cannot be merged yet.\n' +
+        'Update the branch with the base branch and resolve the conflicts before merging.'
+    })
   })
 
   it('blocks review-thread resolve mutations before spawning gh when GraphQL is low', async () => {

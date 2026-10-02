@@ -1,10 +1,6 @@
 /* GitLab-specific shared types, split from `./types` to avoid merge conflicts on upstream syncs; re-exported from `./types` for import stability. */
 import type { ClassifiedError } from './classified-error'
-import type {
-  CheckStatus,
-  PRConflictSummary,
-  ProviderCheckSummary
-} from './github/pull-request-types'
+import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
 import type { HostedReviewDecision } from './hosted-review'
 
 // Why: flat owner/repo is inadequate — projects nest (`group/subgroup/project`) and self-hosted hosts must travel with the path for URL/glab targeting.
@@ -53,7 +49,6 @@ export type MRInfo = {
   headSha?: string
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
-  conflictSummary?: PRConflictSummary
 }
 
 // Why: GitLab emoji awards are open-ended, so we carry the raw award name and let the renderer decide.

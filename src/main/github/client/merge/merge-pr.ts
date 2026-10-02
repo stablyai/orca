@@ -1,5 +1,3 @@
-import type { PRConflictSummary } from '../../../../shared/github/pull-request-types'
-import { getPRConflictSummary } from '../../conflict-summary'
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { mergeGitHubPRStack } from '../../github-pr-stack'
@@ -69,7 +67,6 @@ export async function mergePR(
       })
     }
     const mergeBlocker = await getPRMergeBlocker(
-      repoPath,
       prNumber,
       ownerRepo,
       ghOptions,
@@ -102,7 +99,6 @@ export async function mergePR(
 }
 
 export async function getPRMergeBlocker(
-  repoPath: string,
   prNumber: number,
   ownerRepo: GitHubApiRepository | null,
   ghOptions: GhExecOptions,
@@ -132,41 +128,16 @@ export async function getPRMergeBlocker(
     if (pr.mergeQueueRequired === true) {
       return 'This pull request must be merged through GitHub merge queue. Use Merge when ready instead.'
     }
-    // Why: conflict summaries shell out to local git; skip for SSH repos until that helper routes through the SSH provider.
-    if (
-      connectionId ||
-      pr.mergeable !== 'CONFLICTING' ||
-      !pr.baseRefName ||
-      !pr.baseRefOid ||
-      !pr.headRefOid
-    ) {
+    if (pr.mergeable !== 'CONFLICTING') {
       return null
     }
-
-    const summary = await getPRConflictSummary(
-      repoPath,
-      pr.baseRefName,
-      pr.baseRefOid,
-      pr.headRefOid,
-      localGitOptions
-    )
-    return formatMergeConflictBlocker(pr.baseRefName, summary)
+    return formatMergeConflictBlocker(pr.baseRefName)
   } catch {
     // Why: conflict preflight should improve stale UI diagnostics, not block merge on a transient lookup failure.
     return null
   }
 }
 
-export function formatMergeConflictBlocker(
-  baseRefName: string,
-  summary: PRConflictSummary | undefined
-): string {
-  const heading = 'This pull request has merge conflicts and cannot be merged yet.'
-  if (!summary || summary.files.length === 0) {
-    return `${heading}\nUpdate the branch with ${baseRefName} and resolve the conflicts before merging.`
-  }
-
-  const files = summary.files.map((file) => `- ${file}`).join('\n')
-  const behind = `${summary.commitsBehind} commit${summary.commitsBehind === 1 ? '' : 's'} behind ${baseRefName}`
-  return `${heading}\n${behind} (base commit: ${summary.baseCommit}).\n\nConflicting files:\n${files}`
+function formatMergeConflictBlocker(baseRefName: string | undefined): string {
+  return `This pull request has merge conflicts and cannot be merged yet.\nUpdate the branch with ${baseRefName || 'the base branch'} and resolve the conflicts before merging.`
 }

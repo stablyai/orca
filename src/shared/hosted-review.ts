@@ -1,7 +1,6 @@
 import type {
   CheckStatus,
   GitHubRepositoryIdentity,
-  PRConflictSummary,
   PRMergeableState,
   PRReviewDecision
 } from './github/pull-request-types'
@@ -49,7 +48,6 @@ export type HostedReviewInfo = {
   confirmedContainedHeadOid?: string
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
-  conflictSummary?: PRConflictSummary
 }
 
 export type HostedReviewForBranchArgs = {

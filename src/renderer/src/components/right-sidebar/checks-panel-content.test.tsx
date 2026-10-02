@@ -5,10 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
-import {
-  buildMergeabilityRecalculationCommands,
-  MergeConflictNotice
-} from './checks-panel/conflict-summary'
+import { MergeConflictNotice } from './checks-panel/merge-conflict-notice'
 import { ConflictTriageStrip, PRTriageStrip } from './checks-panel/triage-strip'
 import { getFailedChecksForDetails } from './checks-panel/check-details-model'
 import { ChecksList } from './checks-panel/checks-list'
@@ -33,79 +30,47 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
   }
 }
 
-function renderNotice(pr: PRInfo, isRefreshingConflictDetails = false): string {
-  return renderToStaticMarkup(
-    React.createElement(MergeConflictNotice, {
-      pr,
-      isRefreshingConflictDetails
-    })
-  )
+function renderNotice(provider: 'github' | 'gitlab', baseRefName?: string): string {
+  return renderToStaticMarkup(React.createElement(MergeConflictNotice, { provider, baseRefName }))
 }
 
 describe('MergeConflictNotice', () => {
-  it('builds safe mergeability recalculation commands', () => {
-    expect(buildMergeabilityRecalculationCommands()).toBe(
-      [
-        'git fetch origin',
-        'git commit --allow-empty --only -m "chore: refresh PR mergeability"',
-        'git push'
-      ].join('\n')
+  it('attributes a GitHub conflict to GitHub and names the base branch', () => {
+    const markup = renderNotice('github', 'main')
+
+    expect(markup).toContain('GitHub reports conflicts with main')
+    expect(markup).toContain(
+      'Merge main into this branch to see and resolve the conflicting files.'
     )
   })
 
-  it('does not claim conflict details are refreshing after the refresh has settled', () => {
-    const markup = renderNotice(makePR())
+  it('falls back to "the base branch" when the GitHub PR has no base name', () => {
+    const markup = renderNotice('github')
 
-    expect(markup).toContain('Conflict file details are unavailable')
-    expect(markup).not.toContain('Refreshing conflict details')
-  })
-
-  it('shows refreshing copy while conflict details are actively refreshing', () => {
-    const markup = renderNotice(makePR(), true)
-
-    expect(markup).toContain('Refreshing conflict details')
-  })
-
-  it('explains when the hosting provider reports conflicts but local git simulates a clean merge', () => {
-    const markup = renderNotice(
-      makePR({
-        conflictSummary: {
-          baseRef: 'main',
-          baseCommit: 'abc1234',
-          commitsBehind: 1,
-          files: [],
-          localMergeState: 'clean'
-        }
-      })
+    expect(markup).toContain('GitHub reports conflicts with the base branch')
+    expect(markup).toContain(
+      'Merge the base branch into this branch to see and resolve the conflicting files.'
     )
-
-    expect(markup).toContain('local Git did not reproduce them')
-    expect(markup).toContain('Run from this worktree')
-    expect(markup).toContain('hosting provider reports conflicts')
-    expect(markup).toContain('git fetch origin')
-    expect(markup).toContain('git commit --allow-empty --only')
-    expect(markup).toContain('git push')
-    expect(markup).toContain('Copy commands')
-    expect(markup).not.toContain('Conflict file details are unavailable')
   })
 
-  it('hides when the conflicting file list is available', () => {
-    const markup = renderNotice(
-      makePR({
-        conflictSummary: {
-          baseRef: 'main',
-          baseCommit: 'abc1234',
-          commitsBehind: 2,
-          files: ['src/conflict.ts']
-        }
-      })
-    )
+  it('attributes a GitLab conflict to GitLab and its target branch', () => {
+    const markup = renderNotice('gitlab', 'main')
 
-    expect(markup).toBe('')
+    expect(markup).toContain('GitLab reports conflicts with the target branch')
+    expect(markup).toContain(
+      'Merge the target branch into this branch to see and resolve the conflicting files.'
+    )
+    expect(markup).not.toContain('GitHub')
+  })
+
+  it('shows no file list, refresh spinner, or mergeability commands', () => {
+    const markup = renderNotice('github', 'main')
+
+    expect(markup).not.toMatch(/Conflicting files|unavailable|Refreshing|git commit --allow-empty/)
   })
 
   it('keeps the conflict details informational without a duplicate AI action', () => {
-    const markup = renderNotice(makePR())
+    const markup = renderNotice('github', 'main')
 
     expect(markup).not.toContain('Resolve with AI')
     expect(markup).not.toContain('lucide-sparkles')

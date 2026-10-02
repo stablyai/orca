@@ -5,12 +5,7 @@ import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 
 type ChecksPanelConflictRefreshInput = Pick<
   ChecksPanelControllerState,
-  | 'activeWorktreeId'
-  | 'branch'
-  | 'conflictSummaryRefreshKeyRef'
-  | 'fetchPRForBranch'
-  | 'repo'
-  | 'setConflictDetailsRefreshing'
+  'activeWorktreeId' | 'branch' | 'conflictRefreshKeyRef' | 'fetchPRForBranch' | 'repo'
 > &
   Pick<
     ChecksPanelContextState,
@@ -21,15 +16,14 @@ export function useChecksPanelConflictRefresh(model: ChecksPanelConflictRefreshI
   const {
     activeWorktreeId,
     branch,
-    conflictSummaryRefreshKeyRef,
+    conflictRefreshKeyRef,
     fallbackGitHubPRNumber,
     fetchPRForBranch,
     isFolder,
     linkedPR,
     pr,
     prCacheKey,
-    repo,
-    setConflictDetailsRefreshing
+    repo
   } = model
   useEffect(() => {
     if (
@@ -40,19 +34,17 @@ export function useChecksPanelConflictRefresh(model: ChecksPanelConflictRefreshI
       pr.mergeable !== 'CONFLICTING' ||
       !activeWorktreeId
     ) {
-      conflictSummaryRefreshKeyRef.current = null
-      setConflictDetailsRefreshing(false)
+      conflictRefreshKeyRef.current = null
       return
     }
 
     const refreshKey = `${prCacheKey}::${branch}::${pr.number}`
-    if (conflictSummaryRefreshKeyRef.current === refreshKey) {
+    if (conflictRefreshKeyRef.current === refreshKey) {
       return
     }
 
-    // Why: stale conflict metadata is visibly wrong here; force-refresh conflicting PRs once to avoid stale cached summaries.
-    conflictSummaryRefreshKeyRef.current = refreshKey
-    setConflictDetailsRefreshing(true)
+    // Why: refresh mergeable once when a conflicting PR opens; the cached PR can be 5 min old and a stale conflict sends the user to an agent.
+    conflictRefreshKeyRef.current = refreshKey
     void fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
@@ -60,11 +52,6 @@ export function useChecksPanelConflictRefresh(model: ChecksPanelConflictRefreshI
       linkedPRNumber: linkedPR,
       fallbackPRNumber: fallbackGitHubPRNumber ?? pr.number,
       reason: 'active'
-    }).finally(() => {
-      // Why: fetchPRForBranch can rerun this effect; only the current key clears the spinner so stale requests don't race newer branches.
-      if (conflictSummaryRefreshKeyRef.current === refreshKey) {
-        setConflictDetailsRefreshing(false)
-      }
     })
   }, [
     repo,
@@ -76,7 +63,6 @@ export function useChecksPanelConflictRefresh(model: ChecksPanelConflictRefreshI
     linkedPR,
     fallbackGitHubPRNumber,
     fetchPRForBranch,
-    conflictSummaryRefreshKeyRef,
-    setConflictDetailsRefreshing
+    conflictRefreshKeyRef
   ])
 }

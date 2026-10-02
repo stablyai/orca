@@ -13,7 +13,7 @@ import { resolveSourceControlActionRecipe } from '../../../../../shared/source-c
 import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
 import { getBrokenChecks } from '../../pr-checks-fix-prompt'
 import { PRTriageStrip } from './triage-strip'
-import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary'
+import { MergeConflictNotice } from './merge-conflict-notice'
 import { ChecksList } from './checks-list'
 import { PRCommentsList } from './comments-list'
 import { translate } from '@/i18n/i18n'
@@ -57,7 +57,6 @@ export function ChecksPanelActiveContent({
     commentsDisabledReason,
     commentsLoading,
     commentsSelectionClearRequest,
-    conflictDetailsRefreshing,
     consumeClaimedCommentResolutionAfterDeliveryRef,
     detachedHeadDisplay,
     editingTitle,
@@ -227,15 +226,12 @@ export function ChecksPanelActiveContent({
           fixChecksDisabledReason={aiActionDisabledReason}
         />
       )}
+      {/* Why: the triage strip owns the single Resolve action; this notice is informational. GitHub's base name lives on the PR, not the shared review. */}
       {activeConflictReview && (
-        <>
-          {/* Why: the triage strip owns the single Resolve action; the file list and fallback notice are informational. */}
-          <ConflictingFilesSection pr={activeConflictReview} />
-          <MergeConflictNotice
-            pr={activeConflictReview}
-            isRefreshingConflictDetails={isRefreshing || conflictDetailsRefreshing}
-          />
-        </>
+        <MergeConflictNotice
+          provider={activeConflictReview.provider}
+          baseRefName={activeConflictReview.provider === 'github' ? pr?.baseRefName : undefined}
+        />
       )}
       {/* Why: with merge conflicts and no checks fetched, "No checks configured" is misleading — checks can't run until conflicts resolve. */}
       {!(activeConflictReview && checks.length === 0 && !checksLoading) && (

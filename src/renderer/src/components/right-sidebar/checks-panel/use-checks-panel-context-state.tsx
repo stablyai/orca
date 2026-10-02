@@ -25,7 +25,7 @@ type ChecksPanelContextStateInput = Pick<
   | 'branch'
   | 'claimedCommentResolutionRef'
   | 'commentResolutionLaunchAcceptedRef'
-  | 'conflictSummaryRefreshKeyRef'
+  | 'conflictRefreshKeyRef'
   | 'createPrInFlightRef'
   | 'isPanelVisible'
   | 'panelContextKey'
@@ -45,7 +45,6 @@ type ChecksPanelContextStateInput = Pick<
   | 'setCommentResolutionAckBusyNow'
   | 'setComments'
   | 'setCommentsLoading'
-  | 'setConflictDetailsRefreshing'
   | 'setCreatePrError'
   | 'setEditingTitle'
   | 'setEmptyRefreshing'
@@ -70,7 +69,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     branch,
     claimedCommentResolutionRef,
     commentResolutionLaunchAcceptedRef,
-    conflictSummaryRefreshKeyRef,
+    conflictRefreshKeyRef,
     createPrInFlightRef,
     isPanelVisible,
     panelContextKey,
@@ -90,7 +89,6 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     setCommentResolutionAckBusyNow,
     setComments,
     setCommentsLoading,
-    setConflictDetailsRefreshing,
     setCreatePrError,
     setEditingTitle,
     setEmptyRefreshing,
@@ -142,7 +140,6 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     setCommentsLoading(false)
     setIsRefreshing(false)
     setEmptyRefreshing(false)
-    setConflictDetailsRefreshing(false)
     createPrInFlightRef.current = null
     setIsCreatingPr(false)
     setCreatePrError(null)
@@ -161,7 +158,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     setGitStatusRefreshNonce((value) => value + 1)
     pollIntervalRef.current = 30_000
     prevChecksRef.current = ''
-    conflictSummaryRefreshKeyRef.current = null
+    conflictRefreshKeyRef.current = null
     refreshInFlightRef.current = false
     refreshRequestKeyRef.current = null
     if (gitStatusSnapshotRetryTimerRef.current) {

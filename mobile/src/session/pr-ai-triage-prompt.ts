@@ -4,6 +4,7 @@ import {
 } from '../../../src/shared/pr-checks-fix-prompt'
 import { buildResolvePullRequestConflictsPrompt } from '../../../src/shared/source-control-conflict-prompts'
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
+import type { GitHubRepositoryIdentity } from '../../../src/shared/github/pull-request-types'
 
 // Pure prompt builders for the mobile PR sidebar's "Fix checks with AI" /
 // "Resolve conflicts with AI" triage actions. Kept free of React/native imports
@@ -30,14 +31,13 @@ export function buildFixChecksPrompt(input: {
 }
 
 export function buildResolveConflictsPrompt(input: {
-  prNumber: number
   baseRef?: string | null
-  files: string[]
+  baseRepository?: GitHubRepositoryIdentity | null
 }): string {
   return buildResolvePullRequestConflictsPrompt({
     reviewKind: 'PR',
     baseRef: input.baseRef ?? undefined,
-    entries: input.files.map((path) => ({ path })),
+    baseRepository: input.baseRepository ?? undefined,
     worktreePath: null
   })
 }

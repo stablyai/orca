@@ -25,7 +25,6 @@ export type ChecksPanelActiveContentModel = Pick<
   | 'comments'
   | 'commentsLoading'
   | 'commentsSelectionClearRequest'
-  | 'conflictDetailsRefreshing'
   | 'detachedHeadDisplay'
   | 'editingTitle'
   | 'isFixingChecksWithAI'

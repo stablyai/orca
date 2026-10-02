@@ -102,7 +102,6 @@ export function useChecksPanelControllerState() {
   const [emptyRefreshing, setEmptyRefreshing] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const refreshInFlightRef = useRef(false)
-  const [conflictDetailsRefreshing, setConflictDetailsRefreshing] = useState(false)
   const createPrInFlightRef = useRef<string | null>(null)
   const [isCreatingPr, setIsCreatingPr] = useState(false)
   const [createPrError, setCreatePrError] = useState<string | null>(null)
@@ -160,7 +159,7 @@ export function useChecksPanelControllerState() {
   // Why: a fork MR's pipeline lives in the source project, so job traces must be
   // fetched against the MR's own project rather than this repo's default remote.
   const gitLabProjectRefRef = useRef<GitLabProjectRef | null>(null)
-  const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
+  const conflictRefreshKeyRef = useRef<string | null>(null)
   const panelVisibleSinceRef = useRef<number | null>(null)
   const foregroundedUnrenderedReviewKeyRef = useRef<string | null>(null)
   commentsRef.current = comments
@@ -314,8 +313,6 @@ export function useChecksPanelControllerState() {
     isRefreshing,
     setIsRefreshing,
     refreshInFlightRef,
-    conflictDetailsRefreshing,
-    setConflictDetailsRefreshing,
     createPrInFlightRef,
     isCreatingPr,
     setIsCreatingPr,
@@ -361,7 +358,7 @@ export function useChecksPanelControllerState() {
     confirm,
     prevChecksRef,
     gitLabProjectRefRef,
-    conflictSummaryRefreshKeyRef,
+    conflictRefreshKeyRef,
     panelVisibleSinceRef,
     foregroundedUnrenderedReviewKeyRef,
     prGenerationRecords,

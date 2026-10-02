@@ -111,8 +111,9 @@ export const hostedReviewForBranchSchema = z
  *
  * `number` and `state` are the identity: main answered null without either, and the sidebar has
  * nothing to render for a PR with no number. `prRepo` and `mergeMethodSettings` are what the
- * checks panel and the merge picker are keyed on, so both survive parsing rather than being
- * dropped with the rest.
+ * checks panel and the merge picker are keyed on, and `baseRefName` with `prRepo` is what the
+ * conflict notice and its resolve prompt name, so they survive parsing rather than being dropped
+ * with the rest.
  */
 const pullRequestSchema = z
   .looseObject({
@@ -129,6 +130,7 @@ const pullRequestSchema = z
     mergeQueueRequired: prNullableFlag('mergeQueueRequired'),
     mergeStateStatus: prNullableText('mergeStateStatus'),
     headSha: prText('headSha'),
+    baseRefName: prText('baseRefName'),
     prRepo: prRepoIdentity('prRepo'),
     mergeMethodSettings: prMergeMethodSettings('mergeMethodSettings')
   })
@@ -149,6 +151,7 @@ const pullRequestSchema = z
           mergeQueueRequired: pr.mergeQueueRequired,
           mergeStateStatus: pr.mergeStateStatus,
           headSha: pr.headSha,
+          baseRefName: pr.baseRefName,
           prRepo: pr.prRepo,
           mergeMethodSettings: pr.mergeMethodSettings
         }

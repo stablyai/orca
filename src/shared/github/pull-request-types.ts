@@ -5,14 +5,6 @@ export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 export type PRReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
 
-export type PRConflictSummary = {
-  baseRef: string
-  baseCommit: string
-  commitsBehind: number
-  files: string[]
-  localMergeState?: 'clean'
-}
-
 // Why: host must survive renderer/RPC boundaries so Enterprise review actions
 // cannot silently fall back to a same-named repository on github.com.
 export type GitHubRepositoryIdentity = { owner: string; repo: string; host?: string }
@@ -86,7 +78,6 @@ export type PRInfo = {
   headRefName?: string
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
-  conflictSummary?: PRConflictSummary
 }
 
 export type IssueInfo = {

@@ -64,35 +64,34 @@ describe('buildFixChecksPrompt', () => {
 })
 
 describe('buildResolveConflictsPrompt', () => {
-  it('includes the base branch and conflicted files for a simple ref', () => {
+  it('names the base branch and repository, and leaves listing the files to Git', () => {
     const prompt = buildResolveConflictsPrompt({
-      prNumber: 7,
       baseRef: 'main',
-      files: ['src/a.ts', 'src/b.ts']
+      baseRepository: { owner: 'acme', repo: 'widgets', host: 'github.com' }
     })
     expect(prompt).toContain('Resolve the merge conflicts reported for this pull request')
-    expect(prompt).toContain('"main"')
-    expect(prompt).toContain('git fetch origin main')
-    expect(prompt).toContain('origin/main')
-    expect(prompt).toContain('"src/a.ts" (Conflict)')
-    expect(prompt).toContain('Conflicted files reported by the pull request (2)')
+    expect(prompt).toContain('- PR base: branch "main" of repository "acme/widgets"')
+    expect(prompt).toContain('Find the remote whose URL points at "acme/widgets"')
+    expect(prompt).toContain('git fetch <remote> main')
+    expect(prompt).toContain('Git lists them once the merge below stops')
+    expect(prompt).toContain(
+      'the conflicts may already be resolved in local commits that have not been pushed, or the host'
+    )
+    expect(prompt).toContain('may be stale. Do not push.')
+    expect(prompt).not.toContain('git fetch origin')
     expect(prompt).toContain('git reset --hard') // safety rule mentions it as forbidden
   })
 
-  it('handles a missing base ref and empty file list', () => {
-    const prompt = buildResolveConflictsPrompt({ prNumber: 7, baseRef: null, files: [] })
-    expect(prompt).toContain('unavailable from cached conflict details')
+  it('handles a missing base ref and repository', () => {
+    const prompt = buildResolveConflictsPrompt({ baseRef: null, baseRepository: null })
+    expect(prompt).toContain('- PR base branch: unavailable')
     expect(prompt).toContain('Identify the pull request base branch')
-    expect(prompt).toContain('No conflicting files were reported')
+    expect(prompt).toContain('Use the remote that hosts this pull request.')
   })
 
   it('quotes a non-simple ref without an unquoted git command', () => {
-    const prompt = buildResolveConflictsPrompt({
-      prNumber: 7,
-      baseRef: 'feature branch with spaces',
-      files: ['x']
-    })
+    const prompt = buildResolveConflictsPrompt({ baseRef: 'feature branch with spaces' })
     expect(prompt).toContain('quoting the ref exactly for the current shell')
-    expect(prompt).not.toContain('git fetch origin feature branch with spaces')
+    expect(prompt).not.toContain('git fetch <remote> feature branch with spaces')
   })
 })

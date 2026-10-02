@@ -1,4 +1,3 @@
-import { getPRConflictSummary } from '../../conflict-summary'
 import type { ghRepoExecOptions, OwnerRepo } from '../../gh-utils'
 import { hydrateGitHubPRStack } from '../../github-pr-stack'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
@@ -8,9 +7,6 @@ import { getCachedGitHubPRStackSummary } from './pr-stack-summary-cache'
 export async function derivePRRefreshData(args: {
   data: PullRequestLookupData
   dataRepo: OwnerRepo | null
-  repoPath: string
-  connectionId?: string | null
-  localGitOptions: { wslDistro?: string }
   ghOptions: ReturnType<typeof ghRepoExecOptions>
   executionScope: string
   usedExactNumberLookup: boolean
@@ -18,10 +14,8 @@ export async function derivePRRefreshData(args: {
   mergeable: ReturnType<typeof derivePullRequestMergeable>
   stack: PullRequestLookupData['stack']
   stackMergeQueueRequired: boolean | null | undefined
-  conflictSummary: Awaited<ReturnType<typeof getPRConflictSummary>>
 }> {
-  const { data, dataRepo, repoPath, connectionId, localGitOptions, ghOptions, executionScope } =
-    args
+  const { data, dataRepo, ghOptions, executionScope } = args
   if (!data.stackMetadataChecked && dataRepo && args.usedExactNumberLookup) {
     try {
       data.stack = await getCachedGitHubPRStackSummary(
@@ -58,19 +52,5 @@ export async function derivePRRefreshData(args: {
           )
         ).mergeQueueRequired
       : undefined
-  const conflictSummary =
-    !connectionId &&
-    mergeable === 'CONFLICTING' &&
-    data.baseRefName &&
-    data.baseRefOid &&
-    data.headRefOid
-      ? await getPRConflictSummary(
-          repoPath,
-          data.baseRefName,
-          data.baseRefOid,
-          data.headRefOid,
-          localGitOptions
-        )
-      : undefined
-  return { mergeable, stack, stackMergeQueueRequired, conflictSummary }
+  return { mergeable, stack, stackMergeQueueRequired }
 }

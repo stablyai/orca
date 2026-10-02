@@ -2,8 +2,10 @@
 
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
+import type { ChecksPanelReview } from '../checks-panel-review'
 import { ChecksPanelReviewHeader } from '../ChecksPanel'
 
 vi.mock('../HostedReviewActions', () => ({ default: () => null }))
@@ -13,6 +15,83 @@ import { ChecksPanelActiveContent } from './active-content'
 import { ChecksPanelEmptyContent } from './empty-content'
 
 afterEach(cleanup)
+
+function makeActiveContentModel(): ChecksPanelActiveContentModel {
+  return {
+    activeConnectionId: null,
+    activeConflictReview: null,
+    activeGitLabReview: null,
+    activeReview: {
+      provider: 'github',
+      number: 42,
+      state: 'open',
+      title: 'Preserve mounted panel behavior',
+      url: 'https://github.com/orca/app/pull/42',
+      status: 'success',
+      updatedAt: '2026-08-23T00:00:00.000Z',
+      mergeable: 'MERGEABLE'
+    },
+    activeSourceControlLaunchPlatform: 'darwin',
+    activeWorktree: null,
+    activeWorktreeId: 'worktree-1',
+    agentComposerState: null,
+    aiActionDisabledReason: undefined,
+    canTargetPRComments: false,
+    checks: [],
+    checksLoading: false,
+    claimedCommentResolutionRef: { current: null },
+    commentResolutionLaunchAcceptedRef: { current: false },
+    comments: [],
+    commentsDisabledReason: undefined,
+    commentsLoading: false,
+    commentsSelectionClearRequest: null,
+    consumeClaimedCommentResolutionAfterDeliveryRef: { current: vi.fn() },
+    detachedHeadDisplay: null,
+    editingTitle: false,
+    getGitLabProjectRef: vi.fn(() => null),
+    handleAddPRComment: vi.fn(),
+    handleCancelEdit: vi.fn(),
+    handleDeleteComment: vi.fn(),
+    handleEditComment: vi.fn(),
+    handleFixChecksWithAI: vi.fn(),
+    handleLaunchAborted: vi.fn(),
+    handleLaunchAccepted: vi.fn(),
+    handleLinkAnotherReview: vi.fn(),
+    handleLoadCheckDetails: vi.fn(),
+    handleOpenPR: vi.fn(),
+    handleRefresh: vi.fn(),
+    handleOpenStackPR: vi.fn(),
+    handleReplyToComment: vi.fn(),
+    handleResolve: vi.fn(),
+    handleResolveCommentsWithAI: vi.fn(),
+    handleResolveConflictsWithAI: vi.fn(),
+    handleSaveTitle: vi.fn(),
+    handleSetReaction: vi.fn(),
+    handleStartEdit: vi.fn(),
+    handleTitleKeyDown: vi.fn(),
+    handleUnlinkReview: vi.fn(),
+    isFixingChecksWithAI: false,
+    isRefreshing: false,
+    isResolvingConflictsWithAI: false,
+    linkedGitLabMR: null,
+    pendingCommentResolutionRef: { current: null },
+    pr: null,
+    prRefreshState: undefined,
+    repo: null,
+    refreshHostedReviewAfterMutation: vi.fn(),
+    resolveCommentsWithAIDisabledReason: undefined,
+    saveLaunchActionDefault: vi.fn(),
+    setAgentComposerState: vi.fn(),
+    setChecksPanelContentRef: vi.fn(),
+    settings: null,
+    sourceControlAiActionsVisible: false,
+    stateRequestKey: 'review-42',
+    titleDraft: '',
+    setTitleDraft: vi.fn(),
+    titleInputRef: { current: null },
+    titleSaving: false
+  }
+}
 
 describe('checks panel concrete content', () => {
   it('renders the no-workspace empty state with its guidance', () => {
@@ -97,81 +176,7 @@ describe('checks panel concrete content', () => {
   })
 
   it('renders the active review header and empty check/comment sections with accessible actions', () => {
-    const model = {
-      activeConnectionId: null,
-      activeConflictReview: null,
-      activeGitLabReview: null,
-      activeReview: {
-        provider: 'github',
-        number: 42,
-        state: 'open',
-        title: 'Preserve mounted panel behavior',
-        url: 'https://github.com/orca/app/pull/42',
-        status: 'success',
-        updatedAt: '2026-08-23T00:00:00.000Z',
-        mergeable: 'MERGEABLE'
-      },
-      activeSourceControlLaunchPlatform: 'darwin',
-      activeWorktree: null,
-      activeWorktreeId: 'worktree-1',
-      agentComposerState: null,
-      aiActionDisabledReason: undefined,
-      canTargetPRComments: false,
-      checks: [],
-      checksLoading: false,
-      claimedCommentResolutionRef: { current: null },
-      commentResolutionLaunchAcceptedRef: { current: false },
-      comments: [],
-      commentsDisabledReason: undefined,
-      commentsLoading: false,
-      commentsSelectionClearRequest: null,
-      conflictDetailsRefreshing: false,
-      consumeClaimedCommentResolutionAfterDeliveryRef: { current: vi.fn() },
-      detachedHeadDisplay: null,
-      editingTitle: false,
-      getGitLabProjectRef: vi.fn(() => null),
-      handleAddPRComment: vi.fn(),
-      handleCancelEdit: vi.fn(),
-      handleDeleteComment: vi.fn(),
-      handleEditComment: vi.fn(),
-      handleFixChecksWithAI: vi.fn(),
-      handleLaunchAborted: vi.fn(),
-      handleLaunchAccepted: vi.fn(),
-      handleLinkAnotherReview: vi.fn(),
-      handleLoadCheckDetails: vi.fn(),
-      handleOpenPR: vi.fn(),
-      handleRefresh: vi.fn(),
-      handleOpenStackPR: vi.fn(),
-      handleReplyToComment: vi.fn(),
-      handleResolve: vi.fn(),
-      handleResolveCommentsWithAI: vi.fn(),
-      handleResolveConflictsWithAI: vi.fn(),
-      handleSaveTitle: vi.fn(),
-      handleSetReaction: vi.fn(),
-      handleStartEdit: vi.fn(),
-      handleTitleKeyDown: vi.fn(),
-      handleUnlinkReview: vi.fn(),
-      isFixingChecksWithAI: false,
-      isRefreshing: false,
-      isResolvingConflictsWithAI: false,
-      linkedGitLabMR: null,
-      pendingCommentResolutionRef: { current: null },
-      pr: null,
-      prRefreshState: undefined,
-      repo: null,
-      refreshHostedReviewAfterMutation: vi.fn(),
-      resolveCommentsWithAIDisabledReason: undefined,
-      saveLaunchActionDefault: vi.fn(),
-      setAgentComposerState: vi.fn(),
-      setChecksPanelContentRef: vi.fn(),
-      settings: null,
-      sourceControlAiActionsVisible: false,
-      stateRequestKey: 'review-42',
-      titleDraft: '',
-      setTitleDraft: vi.fn(),
-      titleInputRef: { current: null },
-      titleSaving: false
-    } satisfies ChecksPanelActiveContentModel
+    const model = makeActiveContentModel()
 
     render(
       <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
@@ -184,5 +189,47 @@ describe('checks panel concrete content', () => {
     expect(screen.getByRole('button', { name: '#42' }).getAttribute('title')).toContain(
       'Open on GitHub'
     )
+  })
+
+  it('attributes a conflicting GitHub PR to GitHub and names its base branch without a file list', () => {
+    const conflictingReview: ChecksPanelReview = {
+      provider: 'github',
+      number: 42,
+      state: 'open',
+      title: 'Preserve mounted panel behavior',
+      url: 'https://github.com/orca/app/pull/42',
+      status: 'success',
+      updatedAt: '2026-08-23T00:00:00.000Z',
+      mergeable: 'CONFLICTING'
+    }
+    const model: ChecksPanelActiveContentModel = {
+      ...makeActiveContentModel(),
+      activeReview: conflictingReview,
+      activeConflictReview: conflictingReview,
+      pr: {
+        number: 42,
+        title: 'Preserve mounted panel behavior',
+        state: 'open',
+        url: 'https://github.com/orca/app/pull/42',
+        checksStatus: 'success',
+        updatedAt: '2026-08-23T00:00:00.000Z',
+        mergeable: 'CONFLICTING',
+        baseRefName: 'release/2.0'
+      }
+    }
+
+    render(
+      <TooltipProvider>
+        <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
+      </TooltipProvider>
+    )
+
+    expect(screen.getByText('GitHub reports conflicts with release/2.0')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Merge release/2.0 into this branch to see and resolve the conflicting files.'
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/Conflicting files|unavailable|Refreshing/)).toBeNull()
   })
 })

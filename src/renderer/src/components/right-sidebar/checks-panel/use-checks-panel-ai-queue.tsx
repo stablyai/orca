@@ -56,7 +56,8 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
     if (!sourceControlAiActionsVisible || !activeWorktreeId || !activeConflictReview) {
       return
     }
-    const conflictFiles = activeConflictReview.conflictSummary?.files ?? []
+    // Why: GitHub's base branch and repository live on the PR; GitLab reviews carry neither.
+    const gitHubPR = activeConflictReview.provider === 'github' ? pr : null
     // Why: swapping the composer to another action never fires onOpenChange, so a queued
     // comment-resolution ack would survive and post fixing replies on this launch instead.
     pendingCommentResolutionRef.current = null
@@ -75,8 +76,8 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
       ),
       prompt: buildResolvePullRequestConflictsPrompt({
         reviewKind: activeConflictReview.provider === 'gitlab' ? 'MR' : 'PR',
-        baseRef: activeConflictReview.conflictSummary?.baseRef,
-        entries: conflictFiles.map((path) => ({ path })),
+        baseRef: gitHubPR?.baseRefName,
+        baseRepository: gitHubPR?.prRepo,
         worktreePath: activeWorktreePath ?? null
       }),
       launchSource: 'conflict_resolution'
@@ -85,6 +86,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
     activeConflictReview,
     activeWorktreeId,
     activeWorktreePath,
+    pr,
     sourceControlAiActionsVisible,
     commentResolutionLaunchAcceptedRef,
     pendingCommentResolutionRef,

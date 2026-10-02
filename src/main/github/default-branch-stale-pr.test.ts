@@ -129,7 +129,6 @@ import {
   _resetMergeQueueCacheForTests,
   __resetTrackedUpstreamBranchCacheForTests
 } from './client'
-import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
@@ -240,7 +239,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
     __resetTrackedUpstreamBranchCacheForTests()
-    __resetPRConflictSummaryCachesForTests()
     resetMergedPRCommitMembershipCacheForTest()
     __resetRepoDefaultBranchCacheForTests()
   })

@@ -12749,7 +12749,6 @@
           "checks": {
             "panel": {
               "content": {
-                "3916814392": "en retard (commit de base :",
                 "755be805f6": "Aucun commentaire",
                 "751f7c6e5c": "Affichage des 100 premiers commentaires par source",
                 "94557d68e2": "Commentaires",
@@ -12804,9 +12803,6 @@
                 "b45db92d0e": "Corriger",
                 "5d4ebf9391": "Inspectez les détails ou lancez une passe de correction IA.",
                 "b652f38caf": "vérification en échec",
-                "87cd07c69a": "Cette branche contient des conflits qui doivent être résolus",
-                "0975eeaaef": "Fichiers en conflit",
-                "6fa7f8723f": "commit",
                 "2b2be92919": "Ajouter un commentaire",
                 "7440d09d2c": "Démarrer une conversation",
                 "b37ebdc51c": "Commentaires indisponibles.",
@@ -12817,13 +12813,6 @@
                 "ee07b33924": "unknown",
                 "cdbfda4dec": "Annotation",
                 "066fedd446": "Jobs en échec",
-                "ae8a04ef17": "Les détails du fichier en conflit sont indisponibles",
-                "73d0675356": "Actualisation des détails de conflit…",
-                "f5bc5c4cf1": "Le fournisseur d'hébergement signale des conflits, mais Git en local ne les a pas reproduits. Actualisez la revue ou poussez la branche pour recalculer la possibilité de merge.",
-                "5bc9bda2af": "Exécuter depuis ce worktree",
-                "e87fb3d929": "Copier les commandes de recalcul du merge",
-                "1e53e45072": "Copied",
-                "084c516efb": "Copier les commandes",
                 "5dc3af25c0": "Sélectionner le commentaire",
                 "d7a2f9c401": "Envoyer les {{value0}} commentaires non résolus",
                 "d91f2a6c39": "Envoyer les {{value0}} commentaires en file à l'IA",
@@ -18465,6 +18454,14 @@
       "title": "Demande de tirage non liée",
       "description": "PR #{{number}} est masqué pour cet espace de travail. Liez-le à nouveau pour restaurer les vérifications et examiner les détails.",
       "relink": "Lien PR #{{number}}"
+    },
+    "mergeConflict": {
+      "gitHubTitle": "GitHub signale des conflits avec {{baseRefName}}",
+      "gitHubBody": "Fusionnez {{baseRefName}} dans cette branche pour voir et résoudre les fichiers en conflit.",
+      "gitHubTitleNoBase": "GitHub signale des conflits avec la branche de base",
+      "gitHubBodyNoBase": "Fusionnez la branche de base dans cette branche pour voir et résoudre les fichiers en conflit.",
+      "gitLabTitle": "GitLab signale des conflits avec la branche cible",
+      "gitLabBody": "Fusionnez la branche cible dans cette branche pour voir et résoudre les fichiers en conflit."
     }
   },
   "sourceControl": {

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { ConflictReview } from './conflict-summary'
+import type { ConflictReview } from './merge-conflict-notice'
 import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
 import { translate } from '@/i18n/i18n'
 

@@ -20,7 +20,6 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
     ...(pr.prRepo ? { githubRepository: pr.prRepo } : {}),
     ...(pr.confirmedContainedHeadOid
       ? { confirmedContainedHeadOid: pr.confirmedContainedHeadOid }
-      : {}),
-    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
+      : {})
   }
 }

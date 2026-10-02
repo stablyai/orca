@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
-import {
-  buildMergeabilityRefreshCommands,
-  hasMergeConflicts,
-  resolveConflictDisplay
-} from './pr-conflict-presentation'
+import { hasMergeConflicts, resolveConflictDisplay } from './pr-conflict-presentation'
 
 function pr(over: Partial<PRInfo>): PRInfo {
   return {
@@ -28,80 +24,22 @@ describe('hasMergeConflicts', () => {
 })
 
 describe('resolveConflictDisplay', () => {
-  it('builds safe mergeability refresh commands', () => {
-    expect(buildMergeabilityRefreshCommands()).toBe(
-      [
-        'git fetch origin',
-        'git commit --allow-empty --only -m "chore: refresh PR mergeability"',
-        'git push'
-      ].join('\n')
-    )
-  })
-
   it('returns null when there are no conflicts', () => {
     expect(resolveConflictDisplay(pr({ mergeable: 'MERGEABLE' }))).toBeNull()
     expect(resolveConflictDisplay(pr({ mergeable: 'UNKNOWN' }))).toBeNull()
   })
 
-  it('lists conflicting files with commit metadata', () => {
-    const display = resolveConflictDisplay(
-      pr({
-        mergeable: 'CONFLICTING',
-        conflictSummary: {
-          baseRef: 'main',
-          baseCommit: 'abc1234',
-          commitsBehind: 3,
-          files: ['src/a.ts', 'src/b.ts']
-        }
-      })
-    )
-    expect(display).toEqual({
-      files: ['src/a.ts', 'src/b.ts'],
-      commitsBehind: 3,
-      baseCommit: 'abc1234',
-      fileDetailsUnavailable: false,
-      localMergeClean: false,
-      mergeabilityRefreshCommands: null
+  it('attributes the conflict to GitHub and names the base branch', () => {
+    expect(resolveConflictDisplay(pr({ mergeable: 'CONFLICTING', baseRefName: 'main' }))).toEqual({
+      title: 'GitHub reports conflicts with main',
+      body: 'Merge main into this branch to see and resolve the conflicting files.'
     })
   })
 
-  it('flags file-details-unavailable when conflicting but no file list', () => {
-    const display = resolveConflictDisplay(pr({ mergeable: 'CONFLICTING' }))
-    expect(display).toEqual({
-      files: [],
-      commitsBehind: null,
-      baseCommit: null,
-      fileDetailsUnavailable: true,
-      localMergeClean: false,
-      mergeabilityRefreshCommands: null
+  it('falls back to "the base branch" when the PR carries no base name', () => {
+    expect(resolveConflictDisplay(pr({ mergeable: 'CONFLICTING' }))).toEqual({
+      title: 'GitHub reports conflicts with the base branch',
+      body: 'Merge the base branch into this branch to see and resolve the conflicting files.'
     })
-  })
-
-  it('flags unavailable when conflictSummary has an empty file list', () => {
-    const display = resolveConflictDisplay(
-      pr({
-        mergeable: 'CONFLICTING',
-        conflictSummary: { baseRef: 'main', baseCommit: 'x', commitsBehind: 0, files: [] }
-      })
-    )
-    expect(display?.fileDetailsUnavailable).toBe(true)
-  })
-
-  it('flags locally clean when GitHub reports a conflict that local git does not reproduce', () => {
-    const display = resolveConflictDisplay(
-      pr({
-        mergeable: 'CONFLICTING',
-        conflictSummary: {
-          baseRef: 'main',
-          baseCommit: 'x',
-          commitsBehind: 1,
-          files: [],
-          localMergeState: 'clean'
-        }
-      })
-    )
-    expect(display?.localMergeClean).toBe(true)
-    expect(display?.mergeabilityRefreshCommands).toContain('git fetch origin')
-    expect(display?.mergeabilityRefreshCommands).toContain('git commit --allow-empty --only')
   })
 })

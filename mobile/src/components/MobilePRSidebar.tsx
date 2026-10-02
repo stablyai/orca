@@ -21,7 +21,7 @@ import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
-import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
+import { PRMergeConflictsSection } from './pr-sidebar/PRMergeConflictsSection'
 import { PRActionsSection } from './pr-sidebar/PRActionsSection'
 import { PRReviewersSection } from './pr-sidebar/PRReviewersSection'
 import { PRChecksSection } from './pr-sidebar/PRChecksSection'
@@ -296,9 +296,8 @@ function PrSidebarSections({
     resolveConflicts: () =>
       void triage.launch('resolve-conflicts', () =>
         buildResolveConflictsPrompt({
-          prNumber: pr.number,
-          baseRef: pr.conflictSummary?.baseRef ?? pr.baseRefName ?? null,
-          files: pr.conflictSummary?.files ?? []
+          baseRef: pr.baseRefName ?? null,
+          baseRepository: pr.prRepo ?? null
         })
       ),
     isBusy: triage.isBusy('resolve-conflicts'),
@@ -328,7 +327,7 @@ function PrSidebarSections({
         </View>
       </View>
       {/* Own titled section when present; null otherwise (no empty chrome). */}
-      <PRConflictingFilesSection pr={data.pr} triage={conflictsTriage} />
+      <PRMergeConflictsSection pr={data.pr} triage={conflictsTriage} />
       <PRReviewersSection
         details={data.details}
         actions={actions}

@@ -5,7 +5,6 @@ import {
   _resetPRStackSummaryCacheForTests,
   __resetTrackedUpstreamBranchCacheForTests
 } from './client'
-import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
@@ -54,7 +53,6 @@ export function resetPRForBranchMocks(mocks: GitHubClientMocks): void {
   _resetPRStackSummaryCacheForTests()
   _resetGitHubPRStackCacheForTests()
   __resetTrackedUpstreamBranchCacheForTests()
-  __resetPRConflictSummaryCachesForTests()
   resetMergedPRCommitMembershipCacheForTest()
   // Why: the #9171 guard caches default-branch resolutions per repoPath;
   // reset so non-open implicit lookups stay order-independent across tests.
@@ -88,5 +86,4 @@ export function resetGraphQLRateLimitGuardMocks(mocks: GitHubClientMocks): void 
   mocks.acquireMock.mockResolvedValue(undefined)
   _resetOwnerRepoCache()
   _resetMergeQueueCacheForTests()
-  __resetPRConflictSummaryCachesForTests()
 }

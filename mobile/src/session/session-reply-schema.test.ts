@@ -409,6 +409,20 @@ describe('tri-state flags keep an explicit null', () => {
     expect(bad?.mergeQueueRequired).toBeUndefined()
     expect(readsPr(pr)?.mergeQueueRequired).toBeUndefined()
   })
+
+  it('keeps the base branch the conflict notice names, and reads an old host that still sends a conflict summary', () => {
+    const found = reads(githubPrForBranchSchema, {
+      kind: 'found',
+      pr: {
+        ...pr,
+        mergeable: 'CONFLICTING',
+        baseRefName: 'main',
+        conflictSummary: { baseRef: 'main', baseCommit: 'abc1234', commitsBehind: 2, files: ['a'] }
+      }
+    })
+    expect(found?.kind === 'found' && found.pr.baseRefName).toBe('main')
+    expect(found?.kind === 'found' && found.pr.mergeable).toBe('CONFLICTING')
+  })
 })
 
 describe('declared variants', () => {

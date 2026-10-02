@@ -12842,7 +12842,6 @@
           "checks": {
             "panel": {
               "content": {
-                "3916814392": "behind (base commit:",
                 "755be805f6": "No comments",
                 "751f7c6e5c": "Showing first 100 comments per source",
                 "94557d68e2": "Comments",
@@ -12897,9 +12896,6 @@
                 "b45db92d0e": "Fix",
                 "5d4ebf9391": "Inspect details or start an AI fix pass.",
                 "b652f38caf": "failing check",
-                "87cd07c69a": "This branch has conflicts that must be resolved",
-                "0975eeaaef": "Conflicting files",
-                "6fa7f8723f": "commit",
                 "2b2be92919": "Add comment",
                 "7440d09d2c": "Start conversation",
                 "b37ebdc51c": "Commenting unavailable.",
@@ -12910,13 +12906,6 @@
                 "ee07b33924": "unknown",
                 "cdbfda4dec": "Annotation",
                 "066fedd446": "Failed jobs",
-                "ae8a04ef17": "Conflict file details are unavailable",
-                "73d0675356": "Refreshing conflict details…",
-                "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
-                "5bc9bda2af": "Run from this worktree",
-                "e87fb3d929": "Copy mergeability refresh commands",
-                "1e53e45072": "Copied",
-                "084c516efb": "Copy commands",
                 "5dc3af25c0": "Select comment",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
                 "d91f2a6c39": "Send {{value0}} queued comments to AI",
@@ -18496,6 +18485,14 @@
       "title": "Pull request unlinked",
       "description": "PR #{{number}} is hidden for this workspace. Link it again to restore checks and review details.",
       "relink": "Link PR #{{number}}"
+    },
+    "mergeConflict": {
+      "gitHubTitle": "GitHub reports conflicts with {{baseRefName}}",
+      "gitHubBody": "Merge {{baseRefName}} into this branch to see and resolve the conflicting files.",
+      "gitHubTitleNoBase": "GitHub reports conflicts with the base branch",
+      "gitHubBodyNoBase": "Merge the base branch into this branch to see and resolve the conflicting files.",
+      "gitLabTitle": "GitLab reports conflicts with the target branch",
+      "gitLabBody": "Merge the target branch into this branch to see and resolve the conflicting files."
     }
   },
   "sourceControl": {
