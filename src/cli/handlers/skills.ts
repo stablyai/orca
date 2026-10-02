@@ -22,6 +22,10 @@ import {
   buildAgentFeatureSkillInstallArgs,
   buildAgentFeatureSkillUpdateArgs
 } from '../../shared/agent-feature-install-commands'
+import {
+  describeSkillLinkedRootDeletion,
+  findSkillLinkedRootDeletions
+} from '../../shared/skill-linked-root-deletion'
 
 function resolveSelectedSkillNames(
   flags: Map<string, string | boolean>,
@@ -237,15 +241,38 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
     const global = flags.get('local') !== true
     // Why: install scopes its targets; update only refreshes what is already placed.
     const agents = verb === 'install' ? resolveInstallAgentKeys(flags) : []
-    const npxArgs = buildNpxSkillsArgs(verb, skillNames, global, agents)
-    const command = formatNpxCommand(npxArgs)
+    // Why update only: `skills add` replacing a real directory with its own link is the
+    // point of an install, and the user asked for it by name. `update` is the unattended
+    // one — #22897's reporter runs it from a daily LaunchAgent — and the directory it
+    // deletes inside a linked root is never replaced by anything that resolves.
+    const deletions =
+      verb === 'update'
+        ? await findSkillLinkedRootDeletions({
+            names: skillNames,
+            scope: global ? 'global' : 'project'
+          })
+        : []
+    const skipped = new Set(deletions.map((deletion) => deletion.name))
+    const targetNames = skillNames.filter((name) => !skipped.has(name))
+    // Why stderr: stdout is npx's own stream on a real run and this command's JSON
+    // channel otherwise, so a note has nowhere else to go on either.
+    for (const deletion of deletions) {
+      process.stderr.write(`${describeSkillLinkedRootDeletion(deletion)}\n`)
+    }
+    // Why not an error when nothing is left: one unsafe name must not withhold the rest,
+    // and when every name is unsafe nothing failed — the notes above said what happened.
+    const npxArgs =
+      targetNames.length > 0 ? buildNpxSkillsArgs(verb, targetNames, global, agents) : null
+    const command = npxArgs ? formatNpxCommand(npxArgs) : null
     const dryRun = flags.get('dry-run') === true
 
     if (dryRun) {
       writeStdoutLine(
         json
-          ? JSON.stringify({ command, skills: skillNames, global, executed: false }, null, 2)
-          : `${command}\n\nRerun without --dry-run to ${verb} now.`
+          ? JSON.stringify({ command, skills: targetNames, global, executed: false }, null, 2)
+          : command
+            ? `${command}\n\nRerun without --dry-run to ${verb} now.`
+            : `Nothing left to ${verb}: every skill named was skipped.`
       )
       return
     }
@@ -260,6 +287,9 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
       )
     }
 
+    if (!npxArgs || !command) {
+      return
+    }
     // Why: stdio is inherited for the child below, so this status line must go to
     // stderr — stdout is npx's own output, not this command's JSON channel.
     process.stderr.write(`Running: ${command}\n`)

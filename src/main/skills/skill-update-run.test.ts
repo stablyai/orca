@@ -5,6 +5,7 @@ import {
   getSpawnArgsForWindows,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
+import type { SkillLinkedRootDeletion } from '../../shared/skill-linked-root-deletion'
 import { CANCEL_RELEASE_TIMEOUT_MS, SkillUpdateRunner } from './skill-update-run'
 
 class FakeChild extends EventEmitter {
@@ -17,6 +18,7 @@ class FakeChild extends EventEmitter {
 function makeRunner(
   overrides: {
     rescanOutdatedNames?: (names: string[]) => Promise<string[]>
+    findLinkedRootDeletions?: (names: string[]) => Promise<SkillLinkedRootDeletion[]>
     resolveCommand?: (name: string) => string
     killTree?: (pid: number, killRoot: () => void) => Promise<void>
     buildSpawnArgs?: (command: string, args: string[]) => { spawnCmd: string; spawnArgs: string[] }
@@ -29,6 +31,9 @@ function makeRunner(
     now: () => 1000,
     resolveCommand: overrides.resolveCommand ?? (() => '/usr/local/bin/npx'),
     rescanOutdatedNames: overrides.rescanOutdatedNames,
+    // Why pinned: the real guard reads this machine's own agent skill roots, so every
+    // spawn assertion would otherwise depend on how the test runner's home is linked.
+    findLinkedRootDeletions: overrides.findLinkedRootDeletions ?? (async () => []),
     // Default to a no-op sweep so tests never signal a real PID.
     killTree: overrides.killTree ?? (async (_pid, killRoot) => killRoot()),
     buildSpawnArgs: overrides.buildSpawnArgs,
@@ -46,10 +51,10 @@ async function flush(): Promise<void> {
 }
 
 describe('SkillUpdateRunner', () => {
-  it('passes both non-interactive flags and the sorted skill names', () => {
+  it('passes both non-interactive flags and the sorted skill names', async () => {
     const { runner, spawnCalls } = makeRunner()
 
-    expect(runner.start(['orchestration', 'orca-cli'])).toEqual({ started: true })
+    expect(await runner.start(['orchestration', 'orca-cli'])).toEqual({ started: true })
     expect(spawnCalls[0].command).toBe('/usr/local/bin/npx')
     // `npx --yes` skips the install prompt; `skills -y` takes the CLI's own
     // non-interactive branch. Dropping either can wedge the run.
@@ -64,33 +69,36 @@ describe('SkillUpdateRunner', () => {
     ])
   })
 
-  it('ignores stdin so the CLI sees a non-TTY', () => {
+  it('ignores stdin so the CLI sees a non-TTY', async () => {
     const { runner, spawnCalls } = makeRunner()
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
 
     expect(spawnCalls[0].options.stdio).toEqual(['ignore', 'pipe', 'pipe'])
   })
 
-  it('rejects names that could carry shell syntax', () => {
+  it('rejects names that could carry shell syntax', async () => {
     const { runner, spawnCalls } = makeRunner()
 
-    expect(runner.start(['orca-cli; rm -rf /'])).toEqual({
+    expect(await runner.start(['orca-cli; rm -rf /'])).toEqual({
       started: false,
       reason: 'invalid-names'
     })
     expect(spawnCalls).toHaveLength(0)
   })
 
-  it('refuses a second concurrent run', () => {
+  it('refuses a second concurrent run', async () => {
     const { runner } = makeRunner()
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
 
-    expect(runner.start(['orchestration'])).toEqual({ started: false, reason: 'already-running' })
+    expect(await runner.start(['orchestration'])).toEqual({
+      started: false,
+      reason: 'already-running'
+    })
   })
 
   it('strips ANSI colour and carriage returns from captured output', async () => {
     const { runner, child } = makeRunner({ rescanOutdatedNames: async () => [] })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     child.stdout.emit('data', Buffer.from('\x1b[36mChecking\x1b[0m\rUpdating orca-cli…'))
     child.emit('close', 0)
     await flush()
@@ -103,7 +111,7 @@ describe('SkillUpdateRunner', () => {
   it('treats a clean re-scan as success even though the exit code is non-zero', async () => {
     // A peer skill outside our request can fail the process; what we asked for landed.
     const { runner, child } = makeRunner({ rescanOutdatedNames: async () => [] })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     child.emit('close', 1)
     await flush()
 
@@ -114,7 +122,7 @@ describe('SkillUpdateRunner', () => {
     const { runner, child } = makeRunner({
       rescanOutdatedNames: async () => ['orchestration']
     })
-    runner.start(['orca-cli', 'orchestration'])
+    await runner.start(['orca-cli', 'orchestration'])
     child.emit('close', 1)
     await flush()
 
@@ -129,7 +137,7 @@ describe('SkillUpdateRunner', () => {
         throw new Error('scan blew up')
       }
     })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     child.emit('error', new Error('spawn ENOENT'))
     await flush()
 
@@ -144,7 +152,7 @@ describe('SkillUpdateRunner', () => {
     // settle overwrites `spawn ENOENT` with a useless "exited with code null".
     const rescan = vi.fn(async () => ['orca-cli'])
     const { runner, child } = makeRunner({ rescanOutdatedNames: rescan })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     child.emit('error', new Error('spawn ENOENT'))
     child.emit('close', null)
     await flush()
@@ -168,17 +176,20 @@ describe('SkillUpdateRunner', () => {
           }
         })
     })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     runner.cancel()
     await flush()
 
     expect(runner.getState().state).toBe('running')
-    expect(runner.start(['orchestration'])).toEqual({ started: false, reason: 'already-running' })
+    expect(await runner.start(['orchestration'])).toEqual({
+      started: false,
+      reason: 'already-running'
+    })
 
     finishKill()
     await flush()
     expect(runner.getState()).toEqual({ state: 'idle' })
-    expect(runner.start(['orchestration'])).toEqual({ started: true })
+    expect(await runner.start(['orchestration'])).toEqual({ started: true })
   })
 
   it('releases the run even if the kill sweep never settles', async () => {
@@ -187,7 +198,7 @@ describe('SkillUpdateRunner', () => {
       // Stop is already spent by this point, so a sweep that hangs would leave
       // the run wedged in `running` with no way out.
       const { runner } = makeRunner({ killTree: () => new Promise<void>(() => {}) })
-      runner.start(['orca-cli'])
+      await runner.start(['orca-cli'])
       runner.cancel()
       const stopping = runner.getState()
       expect(stopping.state).toBe('running')
@@ -197,7 +208,7 @@ describe('SkillUpdateRunner', () => {
       await vi.advanceTimersByTimeAsync(CANCEL_RELEASE_TIMEOUT_MS)
 
       expect(runner.getState()).toEqual({ state: 'idle' })
-      expect(runner.start(['orchestration'])).toEqual({ started: true })
+      expect(await runner.start(['orchestration'])).toEqual({ started: true })
     } finally {
       vi.useRealTimers()
     }
@@ -219,10 +230,10 @@ describe('SkillUpdateRunner', () => {
         return child as never
       }) as never
     })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     runner.cancel()
     await flush()
-    runner.start(['orchestration'])
+    await runner.start(['orchestration'])
     // The killed child's exit lands after the replacement is already in flight.
     children[0].stdout.emit('data', Buffer.from('output from the dead run'))
     children[0].emit('close', 1)
@@ -237,7 +248,7 @@ describe('SkillUpdateRunner', () => {
 
   it('returns to idle on cancel and stops reporting output', async () => {
     const { runner, child, states } = makeRunner({ rescanOutdatedNames: async () => [] })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     runner.cancel()
     child.stdout.emit('data', Buffer.from('late output'))
     await flush()
@@ -255,7 +266,7 @@ describe('SkillUpdateRunner', () => {
           releaseRescan = () => resolve([])
         })
     })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     child.emit('close', 0)
     await flush()
     // The re-scan re-hashes every package, so a cancel lands well inside it.
@@ -272,7 +283,7 @@ describe('SkillUpdateRunner', () => {
     })
     const { runner, child } = makeRunner({ killTree })
     child.pid = 4242
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     runner.cancel()
     await flush()
 
@@ -290,7 +301,7 @@ describe('SkillUpdateRunner', () => {
       }
     })
 
-    const result = runner.start(['orca-cli'])
+    const result = await runner.start(['orca-cli'])
 
     expect(result.started).toBe(false)
     const run = runner.getState()
@@ -301,7 +312,7 @@ describe('SkillUpdateRunner', () => {
     expect(run.state === 'error' && run.message).toContain(WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL)
   })
 
-  it('spawns npx from a Program Files (x86) install instead of refusing it', () => {
+  it('spawns npx from a Program Files (x86) install instead of refusing it', async () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {
       const npx = 'C:\\Program Files (x86)\\nodejs\\npx.cmd'
@@ -310,7 +321,7 @@ describe('SkillUpdateRunner', () => {
         buildSpawnArgs: getSpawnArgsForWindows
       })
 
-      expect(runner.start(['orca-cli']).started).toBe(true)
+      expect((await runner.start(['orca-cli'])).started).toBe(true)
       expect(spawnCalls[0]?.args.slice(0, 3)).toEqual(['/d', '/c', npx])
     } finally {
       platform.mockRestore()
@@ -319,7 +330,7 @@ describe('SkillUpdateRunner', () => {
 
   it('coalesces progress frames into one push instead of one per chunk', async () => {
     const { runner, child, states } = makeRunner({ rescanOutdatedNames: async () => [] })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     const pushesAfterStart = states.length
     for (let frame = 0; frame < 25; frame += 1) {
       child.stdout.emit('data', Buffer.from(`\rfetching ${frame}%`))
@@ -337,7 +348,7 @@ describe('SkillUpdateRunner', () => {
 
   it('acknowledge clears a settled run but leaves a live one alone', async () => {
     const { runner, child } = makeRunner({ rescanOutdatedNames: async () => [] })
-    runner.start(['orca-cli'])
+    await runner.start(['orca-cli'])
     runner.acknowledge()
     expect(runner.getState().state).toBe('running')
 

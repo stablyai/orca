@@ -90,6 +90,13 @@ export type SkillFreshnessInstallation = {
    * added a file. Absent from hosts older than this field.
    */
   observedOfficialGitTreeSha?: string | null
+  /**
+   * A real directory sitting inside a linked agent skills root, which `npx skills update`
+   * deletes and replaces with a shortcut that does not resolve (orca#22897). Set only for
+   * that narrow conjunction, so a shortcut Orca placed in a linked root — its documented
+   * placement — never carries it. Absent from hosts older than this field.
+   */
+  skillsCliWouldDeleteDirectory?: boolean
   errorCategory: string | null
 }
 
@@ -241,4 +248,14 @@ export type SkillUpdateRun =
 
 export type SkillUpdateStartResult =
   | { started: true }
-  | { started: false; reason: 'already-running' | 'invalid-names' | 'unsafe-command-path' }
+  | {
+      started: false
+      reason:
+        | 'already-running'
+        | 'invalid-names'
+        | 'unsafe-command-path'
+        // Why: every requested name would have had a real directory deleted inside a
+        // linked agent skills root, so there is nothing left to spawn for. Reached only
+        // by a client asking for a name the inventory already reports as blocked.
+        | 'all-names-skipped'
+    }

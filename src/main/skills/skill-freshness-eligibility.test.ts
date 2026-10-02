@@ -39,6 +39,40 @@ function placement(
 }
 
 describe('skill freshness name-scoped update eligibility', () => {
+  it('withholds a name whose real directory sits in a linked skills root', () => {
+    // Why this one non-convergent placement withholds where the others do not: the
+    // command does not leave it alone, it deletes it and writes a link that dangles
+    // (orca#22897). See skill-linked-root-deletion.ts.
+    expect(
+      eligible([
+        placement('orca-cli'),
+        placement('orca-cli', {
+          rootId: 'home-claude',
+          topology: 'external-link',
+          status: 'current',
+          unresolvedPath: '/home/.claude/skills/orca-cli',
+          resolvedPath: '/home/dotfiles/skills/orca-cli',
+          skillsCliWouldDeleteDirectory: true
+        })
+      ])
+    ).toEqual([])
+  })
+
+  it('still offers a name whose linked-root placement is an ordinary link out of tree', () => {
+    expect(
+      eligible([
+        placement('orca-cli'),
+        placement('orca-cli', {
+          rootId: 'home-claude',
+          topology: 'external-link',
+          status: 'current',
+          unresolvedPath: '/home/.claude/skills/orca-cli',
+          resolvedPath: '/home/dotfiles/skills/orca-cli'
+        })
+      ])
+    ).toEqual(['orca-cli'])
+  })
+
   it('offers a name when at least one supported placement is outdated and all are official', () => {
     expect(
       eligible([

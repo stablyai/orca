@@ -83,7 +83,7 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
   handleMainWindowSkillIpc(
     'skills:startUpdateRun',
     async (_event, names: string[]): Promise<SkillUpdateStartResult> => {
-      return runner.start(Array.isArray(names) ? names : [])
+      return await runner.start(Array.isArray(names) ? names : [])
     }
   )
 

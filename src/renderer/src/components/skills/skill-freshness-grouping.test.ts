@@ -39,7 +39,8 @@ describe('groupSkillFreshness', () => {
         id: expect.any(String),
         path: '/home/.agents/skills/orca-cli',
         chip: null,
-        participatesInGlobalFreshness: true
+        participatesInGlobalFreshness: true,
+        blocksUpdateAsLinkedRootDirectory: false
       }
     ])
   })
@@ -84,7 +85,8 @@ describe('groupSkillFreshness', () => {
             id: expect.any(String),
             path: '/home/.agents/skills/dataviz',
             chip: 'unrecognized',
-            participatesInGlobalFreshness: true
+            participatesInGlobalFreshness: true,
+            blocksUpdateAsLinkedRootDirectory: false
           }
         ]
       },
@@ -96,7 +98,8 @@ describe('groupSkillFreshness', () => {
             id: expect.any(String),
             path: '/home/.agents/skills/linear-tickets',
             chip: 'inaccessible',
-            participatesInGlobalFreshness: true
+            participatesInGlobalFreshness: true,
+            blocksUpdateAsLinkedRootDirectory: false
           }
         ]
       }
@@ -139,13 +142,15 @@ describe('groupSkillFreshness', () => {
         id: expect.any(String),
         path: '/home/.agents/skills/orchestration',
         chip: null,
-        participatesInGlobalFreshness: true
+        participatesInGlobalFreshness: true,
+        blocksUpdateAsLinkedRootDirectory: false
       },
       {
         id: expect.any(String),
         path: '/home/.claude/skills/orchestration',
         chip: 'unrecognized',
-        participatesInGlobalFreshness: true
+        participatesInGlobalFreshness: true,
+        blocksUpdateAsLinkedRootDirectory: false
       }
     ])
   })
@@ -171,13 +176,15 @@ describe('groupSkillFreshness', () => {
         id: expect.any(String),
         path: '/home/.agents/skills/orchestration',
         chip: 'current',
-        participatesInGlobalFreshness: true
+        participatesInGlobalFreshness: true,
+        blocksUpdateAsLinkedRootDirectory: false
       },
       {
         id: expect.any(String),
         path: '/home/.factory/skills/orchestration',
         chip: 'duplicate',
-        participatesInGlobalFreshness: true
+        participatesInGlobalFreshness: true,
+        blocksUpdateAsLinkedRootDirectory: false
       }
     ])
   })

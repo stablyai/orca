@@ -7,6 +7,11 @@ import {
 import { resolveCliCommand } from '../codex-cli/command'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
+import {
+  describeSkillLinkedRootDeletion,
+  findSkillLinkedRootDeletions,
+  type SkillLinkedRootDeletion
+} from '../../shared/skill-linked-root-deletion'
 import { getSpawnArgsForWindows, WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL } from '../win32-utils'
 
 // Why: `skills update` prints ANSI colour and \r + erase-line progress. We show
@@ -32,6 +37,8 @@ export type SkillUpdateRunnerDeps = {
   resolveCommand?: (commandName: string) => string
   /** Returns the subset of `names` that did not land, re-read from disk. */
   rescanOutdatedNames?: (names: string[]) => Promise<string[]>
+  /** Names whose destination the upstream CLI would delete; they never reach the spawn. */
+  findLinkedRootDeletions?: (names: string[]) => Promise<SkillLinkedRootDeletion[]>
   killTree?: (pid: number, killRoot: () => void) => Promise<void>
   /** Injected so the Windows cmd.exe rail is reachable off Windows. */
   buildSpawnArgs?: typeof getSpawnArgsForWindows
@@ -41,6 +48,12 @@ export type SkillUpdateRunnerDeps = {
 
 function stripAnsi(value: string): string {
   return value.replace(ANSI_RE, '').replace(/\r(?!\n)/g, '\n')
+}
+
+function defaultLinkedRootDeletions(names: string[]): Promise<SkillLinkedRootDeletion[]> {
+  // `skills update` here is always `--global`, so the home provider roots are the ones
+  // it writes into.
+  return findSkillLinkedRootDeletions({ names, scope: 'global' })
 }
 
 function clampOutput(value: string): string {
@@ -55,6 +68,10 @@ function clampOutput(value: string): string {
  * non-interactive branch. `skills` gates its prompts on
  * `options.yes || !process.stdin.isTTY`, and stdin is ignored below, so the run
  * cannot block on input that no one can answer.
+ *
+ * `start` reads disk before it spawns: a name whose destination is a real directory
+ * inside a linked agent skills root never reaches the argv, because the CLI would
+ * delete that directory (orca#22897, see `skill-linked-root-deletion.ts`).
  */
 export class SkillUpdateRunner {
   private run: SkillUpdateRun = { state: 'idle' }
@@ -66,6 +83,11 @@ export class SkillUpdateRunner {
   private runToken = 0
   private settling = false
   private killing = false
+  // Why: the pre-flight guard awaits disk before the state machine turns `running`,
+  // and two rapid Update clicks arrive as two ipcMain invokes. Without a latch taken
+  // synchronously, both would clear the already-running check and spawn two npx
+  // processes writing the same bundles.
+  private preflighting = false
   private readonly deps: Required<Pick<SkillUpdateRunnerDeps, 'now'>> & SkillUpdateRunnerDeps
 
   constructor(deps: SkillUpdateRunnerDeps = {}) {
@@ -81,13 +103,42 @@ export class SkillUpdateRunner {
     this.deps.onState?.(next)
   }
 
-  start(names: readonly string[]): SkillUpdateStartResult {
-    if (this.run.state === 'running') {
+  async start(names: readonly string[]): Promise<SkillUpdateStartResult> {
+    if (this.run.state === 'running' || this.preflighting) {
       return { started: false, reason: 'already-running' }
     }
-    const canonicalNames = canonicalizeSkillUpdateNames(names)
-    if (!canonicalNames) {
+    const requestedNames = canonicalizeSkillUpdateNames(names)
+    if (!requestedNames) {
       return { started: false, reason: 'invalid-names' }
+    }
+
+    const preflightToken = this.runToken
+    this.preflighting = true
+    let deletions: SkillLinkedRootDeletion[]
+    try {
+      deletions = await (this.deps.findLinkedRootDeletions ?? defaultLinkedRootDeletions)(
+        requestedNames
+      )
+    } catch {
+      // Why open rather than closed: every per-path probe swallows its own error, so
+      // reaching here means enumerating the roots failed outright. Treating that as
+      // "every skill is unsafe" would let one unreadable home directory block updates
+      // entirely, which is a bigger regression than the status quo it restores.
+      deletions = []
+    } finally {
+      this.preflighting = false
+    }
+    // A cancel (or a run that replaced this one) landed while the guard read disk.
+    if (preflightToken !== this.runToken) {
+      return { started: false, reason: 'already-running' }
+    }
+    const skippedNames = new Set(deletions.map((deletion) => deletion.name))
+    const canonicalNames = requestedNames.filter((name) => !skippedNames.has(name))
+    // Why the log rather than a failure: one unsafe name must not withhold the others,
+    // and this log is what the dialog and the status segment already show verbatim.
+    const skipLog = deletions.map((deletion) => `${describeSkillLinkedRootDeletion(deletion)}\n`)
+    if (canonicalNames.length === 0) {
+      return { started: false, reason: 'all-names-skipped' }
     }
 
     const resolveCommand = this.deps.resolveCommand ?? ((name: string) => resolveCliCommand(name))
@@ -122,7 +173,12 @@ export class SkillUpdateRunner {
     const startedAt = this.deps.now()
     const token = ++this.runToken
     this.settling = false
-    this.publish({ state: 'running', names: canonicalNames, startedAt, output: '' })
+    this.publish({
+      state: 'running',
+      names: canonicalNames,
+      startedAt,
+      output: clampOutput(skipLog.join(''))
+    })
 
     const child = spawnProcess(spawnCmd, spawnArgs, {
       // Why: stdin ignored keeps `process.stdin.isTTY` falsy in the child, which

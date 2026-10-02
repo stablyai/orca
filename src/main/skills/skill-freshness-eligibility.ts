@@ -15,6 +15,11 @@ import {
  * command would write to and overwriting it is the real data-loss case.
  * `globallyUpdatableNames` comes from the updater's lock; an unregistered copied
  * bundle is installed but `skills update` cannot identify its source.
+ *
+ * One non-convergent placement is the exception to all of that: a real directory inside a
+ * linked agent skills root. The command does NOT leave that one alone — it deletes it and
+ * writes a shortcut that does not resolve (orca#22897) — so it withholds the name even
+ * though Orca would never write there itself.
  */
 export function eligibleSkillUpdateNames(
   installations: readonly SkillFreshnessInstallation[],
@@ -30,6 +35,9 @@ export function eligibleSkillUpdateNames(
   const eligible: string[] = []
   for (const [, entries] of byName) {
     if (!globallyUpdatableNames.has(entries[0].name)) {
+      continue
+    }
+    if (entries.some((entry) => entry.skillsCliWouldDeleteDirectory === true)) {
       continue
     }
     const convergent = entries.filter((entry) =>

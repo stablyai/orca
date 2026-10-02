@@ -4603,7 +4603,8 @@
           "skippedReasonNewer": "This copy is a later version than the one this build of Orca ships, so Orca left it alone rather than roll it back. Updating Orca will bring the two back in line.",
           "skippedReasonStaleRecord": "The skills updater has no usable record of this copy, so it reports the skill as already up to date and changes nothing. Reinstall it to bring the record back in line: {{value0}}",
           "chipNewer": "Newer",
-          "tipNewer": "This copy is a later version than the one this build of Orca ships."
+          "tipNewer": "This copy is a later version than the one this build of Orca ships.",
+          "skippedReasonLinkedRootDirectory": "The folder holding your skills here is itself a shortcut, and this copy is a real folder inside it. The skills updater deletes a real folder before putting its own shortcut there, and a shortcut written inside a shortcut folder leads nowhere — so the update would delete this copy for good. Orca left the skill out rather than run it. Replace this copy with a shortcut to your shared .agents/skills folder, or move it elsewhere, and Orca can update it again."
         },
         "SkillFreshnessUpdateDialog": {
           "title": "Update skills",

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { DiscoveredSkill, SkillDiscoverySource, SkillSourceKind } from '../../shared/skills'
 import type { SkillScanRoot } from './skill-discovery-sources'
 
@@ -9,9 +8,9 @@ import type { SkillScanRoot } from './skill-discovery-sources'
  * what a found file is and what order the results come back in.
  */
 
-export function stablePathId(pathValue: string): string {
-  return createHash('sha1').update(pathValue).digest('hex').slice(0, 16)
-}
+// Re-exported: the root table in `shared/agent-skill-scan-roots.ts` builds repo root ids
+// with the same hash, and two implementations of an id is one drift away from a cache miss.
+export { stableSkillPathId as stablePathId } from '../../shared/agent-skill-scan-roots'
 
 // Skill classification and ordering are identical for native and WSL discovery;
 // only the path arithmetic differs (node:path vs pathPosix), so both callers

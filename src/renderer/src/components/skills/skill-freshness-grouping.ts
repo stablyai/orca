@@ -26,6 +26,10 @@ export type SkillLocationRow = {
   /** False for a project-owned copy: listed for visibility, but never judged, so it
    * cannot be the reason a skill was skipped. */
   participatesInGlobalFreshness: boolean
+  /** Carried beside the chip, not as one: what this location IS (a directory in a linked
+   * root) has no shorthand the user could act on, but it is the whole reason the skill was
+   * skipped, so the per-skill sentence needs it. */
+  blocksUpdateAsLinkedRootDirectory: boolean
 }
 
 export type SkillFreshnessGroupModel = {
@@ -120,7 +124,8 @@ export function groupSkillFreshness(
         id: entry.id,
         path: entry.unresolvedPath,
         chip: locationChip(entry),
-        participatesInGlobalFreshness: skillPlacementParticipatesInGlobalFreshness(entry)
+        participatesInGlobalFreshness: skillPlacementParticipatesInGlobalFreshness(entry),
+        blocksUpdateAsLinkedRootDirectory: entry.skillsCliWouldDeleteDirectory === true
       }))
       .sort((left, right) => left.path.localeCompare(right.path, 'en'))
     groups.push({

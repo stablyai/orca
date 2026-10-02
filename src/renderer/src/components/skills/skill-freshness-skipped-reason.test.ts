@@ -6,7 +6,13 @@ function row(
   chip: SkillLocationRow['chip'],
   path = `/home/.agents/skills/${chip}`
 ): SkillLocationRow {
-  return { id: `row-${chip}-${path}`, path, chip, participatesInGlobalFreshness: true }
+  return {
+    id: `row-${chip}-${path}`,
+    path,
+    chip,
+    participatesInGlobalFreshness: true,
+    blocksUpdateAsLinkedRootDirectory: false
+  }
 }
 
 /** A project's own copy: listed, but never judged by the global update. */
@@ -18,6 +24,19 @@ function projectRow(chip: SkillLocationRow['chip'] = 'in-a-repo'): SkillLocation
 }
 
 describe('skippedReason', () => {
+  it('explains the directory the updater would delete ahead of any chip', () => {
+    // Why ahead: the location's own chip says it is a link out of Orca's folders, which
+    // would send the user looking at the wrong thing. What matters is the deletion.
+    const reason = skippedReason([
+      row('current'),
+      { ...row('external-link'), blocksUpdateAsLinkedRootDirectory: true }
+    ])
+
+    expect(reason).toContain('is itself a shortcut')
+    expect(reason).toContain('delete this copy for good')
+    expect(reason).not.toContain('left it out of the update.')
+  })
+
   it('names the stale duplicate the global command cannot reach', () => {
     const reason = skippedReason([row('current'), row('duplicate')])
     expect(reason).toContain('separate copy')

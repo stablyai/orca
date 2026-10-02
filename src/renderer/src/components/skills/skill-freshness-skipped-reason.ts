@@ -42,6 +42,15 @@ function blockingChip(locations: readonly SkillLocationRow[]): SkillLocationChip
  * all but the updater's own record of this skill, and the remedy has to name it.
  */
 export function skippedReason(locations: readonly SkillLocationRow[], skillName?: string): string {
+  // Why ahead of every chip: this location's chip describes what it looks like, but the
+  // skip is about what the updater would DO to it — delete it — which outranks any
+  // description of a sibling copy.
+  if (locations.some((location) => location.blocksUpdateAsLinkedRootDirectory)) {
+    return translate(
+      'auto.components.skills.SkillFreshnessRow.skippedReasonLinkedRootDirectory',
+      'The folder holding your skills here is itself a shortcut, and this copy is a real folder inside it. The skills updater deletes a real folder before putting its own shortcut there, and a shortcut written inside a shortcut folder leads nowhere — so the update would delete this copy for good. Orca left the skill out rather than run it. Replace this copy with a shortcut to your shared .agents/skills folder, or move it elsewhere, and Orca can update it again.'
+    )
+  }
   const chip = blockingChip(locations)
   switch (chip) {
     case 'newer':

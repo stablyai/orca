@@ -17,6 +17,7 @@ import {
   observeSkillFreshnessInstallation,
   type CandidateLstat
 } from './skill-freshness-placement-observation'
+import { findSkillLinkedRootDeletions } from '../../shared/skill-linked-root-deletion'
 import { scanKnownPluginSkillCandidates } from './skill-plugin-cache-scan'
 import { convergableSkillNames } from './skill-update-convergence'
 import { matchesUpdaterLock, readGloballyUpdatableSkillLocks } from './skill-update-registration'
@@ -99,8 +100,27 @@ export async function inventorySkillFreshness(args: {
   )
   // Why: each observation may retain the package byte ceiling while hashing;
   // launch/focus scans must not fan out across every known placement.
-  const homeInstallations = (await runSkillCandidateTasks(homeTasks)).filter(
+  const observedHomeInstallations = (await runSkillCandidateTasks(homeTasks)).filter(
     (installation): installation is SkillFreshnessInstallation => installation !== null
+  )
+  // Why here and not in the topology classifier: the update command's own pre-flight
+  // guard reads the same function over the same roots, so the badge, the dialog and the
+  // spawn cannot disagree about which placements `skills update` would destroy.
+  const linkedRootDeletionPaths = new Set(
+    (
+      await findSkillLinkedRootDeletions({
+        names: artifacts.manifest.skills.map((skill) => skill.name),
+        roots: homeRoots
+      })
+    ).map((deletion) => deletion.destinationPath)
+  )
+  // Both sides build this path as `join(root.path, name)` in this process, so the strings
+  // are identical — no path normalization, and none of the win32-only case folding that
+  // makes case-differing paths compare unequal on a case-insensitive filesystem.
+  const homeInstallations = observedHomeInstallations.map((installation) =>
+    linkedRootDeletionPaths.has(installation.unresolvedPath)
+      ? { ...installation, skillsCliWouldDeleteDirectory: true }
+      : installation
   )
 
   const candidateLstat = args.candidateLstat ?? ((path) => lstat(path))
