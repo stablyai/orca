@@ -364,7 +364,7 @@ describe('runAgentSessionFork', () => {
     warn.mockRestore()
   })
 
-  it('treats a rejected carry as a failed carry, not a failed fork', async () => {
+  it('treats a rejected carry as an uncertain carry, not a failed fork', async () => {
     mocks.carryRuntimeWorkingTreeChanges.mockRejectedValue(new Error('host unreachable'))
 
     const outcome = await runAgentSessionFork(request({ carryChanges: true }), onStage)
@@ -372,7 +372,7 @@ describe('runAgentSessionFork', () => {
     expect(outcome).toEqual({
       ok: true,
       worktreeId: 'repo::feedback-fork',
-      warnings: [{ kind: 'changes-not-carried', reason: 'apply_failed' }]
+      warnings: [{ kind: 'changes-not-carried', reason: 'partially_applied' }]
     })
     expect(mocks.launchNativeAgentSessionFork).toHaveBeenCalledTimes(1)
   })
