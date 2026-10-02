@@ -16,6 +16,7 @@ import {
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
 } from '../../shared/window-shortcut-policy'
+import { resolveEditMenuTarget } from '../menu/edit-menu-focus-target'
 import type { Store } from '../persistence'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
@@ -127,6 +128,10 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     if (isMacAppPasteInput(input)) {
+      // Why: DevTools and guest views own their own paste; only claim Cmd+V when focused here.
+      if (resolveEditMenuTarget(mainWindow)) {
+        return
+      }
       // Why: chat/terminal panes hold focus without native editable controls, so route Cmd+V through Orca's paste ownership.
       event.preventDefault()
       mainWindow.webContents.send('ui:appMenuPaste')
