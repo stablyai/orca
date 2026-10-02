@@ -3,6 +3,7 @@ import { RepoSelector } from './github-repo-target-schemas'
 import {
   IssuesList,
   RateLimit,
+  RepositoriesList,
   WorkItem,
   WorkItemByOwnerRepo,
   WorkItemDetails,
@@ -25,6 +26,11 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
     name: 'github.rateLimit',
     params: RateLimit,
     handler: async (params, { runtime }) => runtime.getGitHubRateLimit(params)
+  }),
+  defineMethod({
+    name: 'github.listRepositories',
+    params: RepositoriesList,
+    handler: async (_params, { runtime }) => runtime.listGitHubRepositories()
   }),
   defineMethod({
     name: 'github.listWorkItems',

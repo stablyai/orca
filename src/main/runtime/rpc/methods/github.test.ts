@@ -38,6 +38,21 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
+  it('lists repositories for the authenticated GitHub account', async () => {
+    const repositories = [{ nameWithOwner: 'acme/orca' }]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: github.listRepositories reaches only listGitHubRepositories plus dispatcher getRuntimeId.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listGitHubRepositories: vi.fn().mockResolvedValue(repositories)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('github.listRepositories'))
+
+    expect(runtime.listGitHubRepositories).toHaveBeenCalledOnce()
+    expect(response).toMatchObject({ ok: true, result: repositories })
+  })
+
   it('lists work items on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
