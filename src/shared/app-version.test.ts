@@ -36,7 +36,16 @@ describe('parseCliVersion', () => {
     expect(parseCliVersion(output)).toBe(expected)
   })
 
-  it.each(['', 'agy', 'version unknown', null, undefined])('returns null for %j', (output) => {
+  it.each([
+    '',
+    'agy',
+    'version unknown',
+    'agy version 1.1.11.0',
+    'agy version 1.1.11-',
+    'agy version 1.1.11+',
+    null,
+    undefined
+  ])('returns null for %j', (output) => {
     expect(parseCliVersion(output)).toBeNull()
   })
 })

@@ -26,7 +26,7 @@ const NOT_SIGNED_IN_MARKER = 'not logged into antigravity'
  * non-zero exit. Same user action as the marker above, so same verdict.
  */
 const NOT_SIGNED_IN_STDERR_RE =
-  /\b(?:not\s+(?:logged|signed)\s+in|(?:not|un)authenticated|unauthori[zs]ed|sign[ -]?in|run\s+(?:agy\s+)?login|login\s+required|(?:invalid|missing|expired|no)\s+(?:auth\b|credentials?|token|session)|auth(?:entication)?\s+(?:error|failure|failed|required))\b/i
+  /\b(?:not\s+(?:logged|signed)\s+in|(?:not[\s-]+|un)authenticated|unauthori[zs]ed|sign[ -]?in|run\s+(?:agy\s+)?login|login\s+required|(?:invalid|missing|expired|no)\s+(?:auth\b|credentials?|token|session)|auth(?:entication)?\s+(?:error|failure|failed|required))\b/i
 
 const UNSUPPORTED_USAGE_COMMAND_REASON =
   'Antigravity usage is not available. This version of the Antigravity CLI answers `/usage` as a prompt instead of a command, so Orca stopped asking rather than spend quota on it. Update `agy` and restart Orca.'

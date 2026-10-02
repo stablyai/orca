@@ -165,6 +165,16 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.error).toContain('Sign in with `agy`')
   })
 
+  it('reports a bare "Not authenticated." failure on stderr as sign-in guidance', async () => {
+    const result = await harness({
+      result: processResult({ code: 1, stderr: 'Not authenticated.\n' })
+    }).fetch()
+
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.error).toContain('Sign in with `agy`')
+  })
+
   it('does not classify non-auth stderr as signed-out on non-zero exit', async () => {
     // Why pinned: stderr containing unrelated words like "oauth" or "author" must not be misclassified
     // as missing-credentials.

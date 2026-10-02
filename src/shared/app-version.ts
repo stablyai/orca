@@ -24,7 +24,9 @@ export function isValidAppVersion(value: string): boolean {
 
 /** Extracts the first valid semver (with prerelease/build) from CLI `--version` output. */
 export function parseCliVersion(output: string | null | undefined): string | null {
-  const version = output?.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b/)?.[0]
+  const version = output?.match(
+    /(?<![\w.-])v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)(?![\w.+-])/
+  )?.[1]
   return version && isValidAppVersion(version) ? version : null
 }
 
