@@ -9,6 +9,7 @@ import { collectFolderWorkspaceDiffComments } from '../../folder-workspace-diff-
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot,
+  sshTargetHttpProxySecretSlot,
   type ProtectedSecretRetentionUpdate
 } from '../../protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
@@ -211,6 +212,19 @@ export class StateSerializationSecretHandlingOperations {
             record.ownerLease
           )
         })
+      ),
+      // Why: per-host proxy URLs can carry basic-auth credentials, so they seal through the
+      // same per-record safeStorage slots as the owner lease, never plaintext on disk.
+      sshTargets: (this.runtime.state.sshTargets ?? []).map((target) =>
+        target.httpProxyUrl
+          ? {
+              ...target,
+              httpProxyUrl: encryptToSentinel(
+                sshTargetHttpProxySecretSlot(target.id),
+                target.httpProxyUrl
+              )
+            }
+          : target
       ),
       settings: this.buildSettingsToSave(encryptToSentinel),
       ui: {
