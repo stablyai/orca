@@ -571,3 +571,24 @@ describe('producer linkage reaches the journal through every append path', () =>
     deferred.close()
   })
 })
+
+describe('provider frames noted on the deferred sink', () => {
+  it('passes a frame to the bound target, and notes the rows buffered before a bind once', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    const noteActivity = vi.fn()
+
+    // Frames before the bind reach no one, but the rows they leave are written at the bind.
+    deferred.sink.noteProviderFrame?.()
+    deferred.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    deferred.bind({ ...target(7, log), noteActivity })
+    expect(noteActivity).toHaveBeenCalledOnce()
+    await deferred.drained()
+
+    deferred.sink.noteProviderFrame?.()
+    expect(noteActivity).toHaveBeenCalledTimes(2)
+    // Nothing buffered: a rebind notes nothing.
+    deferred.bind({ ...target(8, log), noteActivity })
+    expect(noteActivity).toHaveBeenCalledTimes(2)
+  })
+})

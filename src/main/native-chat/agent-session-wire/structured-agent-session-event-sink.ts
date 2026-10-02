@@ -13,6 +13,10 @@ import { StructuredAgentSessionSinkQueue } from './structured-agent-session-even
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import {
+  DEFAULT_STRUCTURED_AGENT_SESSION_SINK_WATERMARKS,
+  type StructuredAgentSessionSinkWatermarks
+} from './structured-agent-session-event-sink-watermarks'
 
 export type StructuredAgentSessionSinkAdmission =
   | { accepted: true }
@@ -153,12 +157,17 @@ export type StructuredAgentSessionEventSink = {
   tryPublish?(options?: StructuredAgentSessionAppendOptions): StructuredAgentSessionSinkAdmission
   /** Couples durable-queue pressure to the exact provider stream producing it. */
   bindReadingControl?(control: StructuredAgentSessionReadingControl): () => void
+  /** A provider frame for this session reached the main thread, whether or not it writes a row
+   *  (streamed text is checkpointed, not written per delta): the host's chat activity. */
+  noteProviderFrame?(): void
 }
 
 export type StructuredAgentSessionEventTarget = {
   journal: AgentSessionJournal
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
+  /** Told of every provider frame the sink is told of. */
+  noteActivity?: () => void
 }
 
 export type DeferredStructuredAgentSessionEventSink = {
@@ -171,31 +180,9 @@ export type DeferredStructuredAgentSessionEventSink = {
   state(): StructuredAgentSessionSinkState
 }
 
-export type StructuredAgentSessionSinkWatermarks = {
-  pauseQueuedBytes: number
-  maxQueuedBytes: number
-  lowQueuedBytes: number
-  pauseQueuedOperations: number
-  maxQueuedOperations: number
-  lowQueuedOperations: number
-  maxLifecycleQueuedBytes: number
-  maxLifecycleQueuedOperations: number
-}
-
 export type StructuredAgentSessionReadingControl = {
   pauseReading(): void
   resumeReading(): void
-}
-
-const DEFAULT_WATERMARKS: StructuredAgentSessionSinkWatermarks = {
-  pauseQueuedBytes: 16 * 1024 * 1024,
-  maxQueuedBytes: 32 * 1024 * 1024,
-  lowQueuedBytes: 8 * 1024 * 1024,
-  pauseQueuedOperations: 512,
-  maxQueuedOperations: 1_024,
-  lowQueuedOperations: 256,
-  maxLifecycleQueuedBytes: 16 * 1024 * 1024,
-  maxLifecycleQueuedOperations: 1_024
 }
 
 export function createDeferredStructuredAgentSessionEventSink(deps: {
@@ -208,7 +195,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   readingControl?: StructuredAgentSessionReadingControl
   onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
 }): DeferredStructuredAgentSessionEventSink {
-  const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
+  const watermarks = { ...DEFAULT_STRUCTURED_AGENT_SESSION_SINK_WATERMARKS, ...deps.watermarks }
   const failed = (error: unknown): void => {
     deps.logger.error('writing provider events to the chat journal failed', {
       scope: 'journal-event-sink',
@@ -335,7 +322,8 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
           run: (bound) => bound.publish(activity)
         })
       },
-      tryPublish: publish
+      tryPublish: publish,
+      noteProviderFrame: queue.noteActivity
     },
     bind: (next) => queue.bind(next),
     unbind: () => queue.unbind(),

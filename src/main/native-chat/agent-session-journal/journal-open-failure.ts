@@ -25,6 +25,11 @@ export class JournalImportMismatchError extends Error {
   override readonly name = 'JournalImportMismatchError'
 }
 
+/** A per-chat file copy stopped by quit: nothing was published, and the file stays for a later try. */
+export class JournalImportAbortedError extends Error {
+  override readonly name = 'JournalImportAbortedError'
+}
+
 /** A database only an unreleased development build wrote: left as found, never migrated. */
 export class JournalUnreleasedSchemaError extends Error {
   override readonly name = 'JournalUnreleasedSchemaError'

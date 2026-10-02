@@ -12,6 +12,7 @@ import type {
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
+import type { JournalLoad } from '../agent-session-journal/journal-open'
 import { importLegacyTranscriptIntoJournal } from '../agent-session-journal/journal-legacy-import'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
@@ -48,12 +49,14 @@ export async function openAgentSessionJournalWithRecovery(input: {
   /** Resolve directly to a transcript instead of discovering it by session id. */
   historyFilePath?: string | null
   deferPerSessionImport?: boolean
+  loaded?: JournalLoad
   currentFence?: () => number | undefined
 }): Promise<AgentSessionJournalOpened> {
   const journal = await openAgentSessionJournal({
     identity: input.identity,
     database: input.database,
     deferPerSessionImport: input.deferPerSessionImport,
+    ...(input.loaded ? { loaded: input.loaded } : {}),
     currentFence: input.currentFence
   })
   if (!journal.needsRebuild) {

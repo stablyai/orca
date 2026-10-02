@@ -213,7 +213,7 @@ describe('importing a per-chat journal', () => {
 
   // T10: the copy's publish writes the chat's status for the rows it publishes, in the same
   // transaction, replacing whatever described the rows it replaced.
-  it('drops the status of the rows the copy replaced, and the open after it writes the status again', async () => {
+  it('replaces the status of the rows the copy replaced with the status of the rows it published', async () => {
     const { epoch, rows } = await historyRows()
     await writeLegacyJournal(epoch, rows)
     const { db } = openTestJournalHostDatabase(root)
@@ -228,10 +228,6 @@ describe('importing a per-chat journal', () => {
       identity: IDENTITY,
       legacyDirectory: legacyDir()
     })
-    expect(readTestJournalSessionStatus(root, IDENTITY.sessionId)).toBeNull()
-
-    // As the chat's open does after its replay.
-    ;(await openChat()).backfillSessionStatus()
 
     const loaded = loadTestJournal(root, IDENTITY.sessionId)!
     expect(readTestJournalSessionStatus(root, IDENTITY.sessionId)).toEqual(
@@ -298,7 +294,8 @@ describe('importing a per-chat journal', () => {
     const { epoch, rows } = await historyRows()
     await writeLegacyJournal(epoch, rows)
     const database = openTestJournalHostDatabase(root)
-    setImmediate(() => closeTestJournalHostDatabases())
+    // Closed once the first page is written: its read and its write are tasks of their own.
+    setImmediate(() => setImmediate(() => closeTestJournalHostDatabases()))
 
     await expect(
       importPerSessionJournal({
@@ -342,7 +339,7 @@ describe('importing a per-chat journal', () => {
       importPerSessionJournal(input)
     ])
 
-    expect(outcomes).toEqual(['imported', 'absent'])
+    expect(outcomes.map((outcome) => outcome.outcome)).toEqual(['imported', 'absent'])
     expect(readTestJournalRows(database.db, IDENTITY.sessionId, epoch)).toEqual(rows)
     expect(rowCount(database.db)).toBe(rows.length)
   })
@@ -526,18 +523,20 @@ describe('importing a per-chat journal', () => {
     expect(await readdir(legacyDir())).toEqual(['journal.db'])
   })
 
-  it('leaves a never-written file in place until the chat it belongs to is founded', async () => {
+  // A never-written file holds no history: deleted on the open that finds it, founded or not. The
+  // pre-SQLite transcript beside it still explains the empty chat.
+  it('deletes a never-written file, and keeps the pre-SQLite transcript beside it', async () => {
     await writeLegacyJournal('unused', [])
     await mkdir(legacyDir(), { recursive: true })
     await writeFile(join(legacyDir(), 'log.jsonl'), '{"kind":"epoch","v":1,"seq":1}\n', 'utf8')
 
     const journal = await openChat()
 
-    // The pre-SQLite transcript beside it is still there to explain the empty chat.
+    // The journal file goes on the open that finds it; the transcript is the user's, and stays.
+    expect(await readdir(legacyDir())).toEqual(['log.jsonl'])
     expect(JSON.stringify(journal.snapshot().items)).toContain('log.jsonl')
     await journals.closeAll()
     await openChat()
-    // The journal file goes; the transcript is the user's, and stays.
     expect(await readdir(legacyDir())).toEqual(['log.jsonl'])
   })
 
@@ -686,17 +685,17 @@ describe('importing a per-chat journal', () => {
         openSource: countingSource
       })
 
-    expect(await importAgain()).toBe('kept')
+    expect((await importAgain()).outcome).toBe('kept')
     expect(reads).toHaveLength(1)
     closeTestJournalHostDatabases()
-    expect(await importAgain()).toBe('kept')
+    expect((await importAgain()).outcome).toBe('kept')
     const row = { ...JSON.parse(older.rows.at(-1)!.rowJson), seq: older.rows.length + 1 }
     const legacy = new Database(legacyJournalDatabaseFile(legacyDir()))
     legacy
       .prepare('INSERT INTO journal_rows VALUES (?, ?, ?, ?, ?)')
       .run(IDENTITY.sessionId, older.epoch, row.seq, 1, JSON.stringify(row))
     legacy.close()
-    expect(await importAgain()).toBe('kept')
+    expect((await importAgain()).outcome).toBe('kept')
 
     expect(reads).toHaveLength(1)
     expect(texts(await openChat())).toContain('ORIGINAL HISTORY')

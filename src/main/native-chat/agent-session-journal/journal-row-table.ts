@@ -22,8 +22,9 @@ WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC`
 const SELECT_ROWS_AFTER_LIMITED = `${SELECT_ROWS_AFTER} LIMIT ?`
 const DELETE_SUFFIX = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq >= ?'
 const DELETE_EPOCH = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ?'
-const DELETE_UNPUBLISHED = `DELETE FROM journal_rows WHERE session_id = ?
-AND epoch IS NOT (SELECT epoch FROM journal_sessions WHERE session_id = ?)`
+const DELETE_UNPUBLISHED = `DELETE FROM journal_rows WHERE rowid IN (
+  SELECT rowid FROM journal_rows WHERE session_id = ?
+  AND epoch IS NOT (SELECT epoch FROM journal_sessions WHERE session_id = ?) LIMIT ?)`
 
 export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
   const epoch = db.prepare(SELECT_EPOCH).get(sessionId)?.epoch
@@ -105,9 +106,14 @@ export function deleteJournalEpochRows(
   db.prepare(DELETE_EPOCH).run(sessionId, epoch)
 }
 
-/** Rows of this chat under any epoch its pointer does not name: a copy that never published. */
-export function deleteUnpublishedJournalRows(db: Database.Database, sessionId: string): void {
-  db.prepare(DELETE_UNPUBLISHED).run(sessionId, sessionId)
+/** Up to `limit` rows of this chat under any epoch its pointer does not name (a copy that never
+ *  published); answers how many it deleted. */
+export function deleteUnpublishedJournalRows(
+  db: Database.Database,
+  sessionId: string,
+  limit: number
+): number {
+  return Number(db.prepare(DELETE_UNPUBLISHED).run(sessionId, sessionId, limit).changes ?? 0)
 }
 
 /** Drop the rejected suffix a repair found, from `fromSeq` to the tip. */

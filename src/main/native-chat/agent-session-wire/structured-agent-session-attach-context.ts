@@ -34,6 +34,8 @@ export type StructuredAgentSessionAttachContext = {
       journal: AgentSessionJournal,
       activity?: AgentSessionTurnActivity | null
     ) => void
+    /** A provider frame for the session reached the main thread. */
+    noteActivity?: (sessionId: string) => void
   }
   tasks: StructuredAgentSessionTaskQueue
   reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>

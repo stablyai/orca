@@ -16,6 +16,8 @@ import { deleteJournalRepairedSuffix } from './journal-repair-marker'
 import { writeJournalSessionStatusFromDisk } from './journal-session-state'
 import { importPerSessionJournal, previewPerSessionJournal } from './journal-per-session-import'
 import { AgentSessionJournalError } from './journal-write-guards'
+import { readJournalSessionEpoch, readJournalTip } from './journal-row-table'
+import { timedJournalImportPages } from './journal-import-page'
 
 export async function restoreJournalStore(
   host: JournalStoreHost,
@@ -32,9 +34,16 @@ export async function restoreJournalStore(
   // A restore reads a chat still in its per-chat file from there, and copies it before its first use.
   const preview = host.deferPerSessionImport ? await previewPerSessionJournal(source) : null
   if (preview) {
-    host.owe(async () => {
-      await importPerSessionJournal(source)
-      const imported = replayJournal(source.database.db, host.identity.sessionId)
+    host.owe(async (signal) => {
+      // The copy's own fold is what a replay would return; another copy first means a replay. Only
+      // the background copy pays it with a signal, and its work pages by time; a read pays it whole.
+      const imported =
+        (
+          await importPerSessionJournal({
+            ...source,
+            ...(signal ? { signal, pages: timedJournalImportPages } : {})
+          })
+        ).load ?? replayJournal(source.database.db, host.identity.sessionId)
       if (!imported) {
         throw new Error(`per-chat journal of ${host.identity.sessionId} was gone before its copy`)
       }
@@ -47,7 +56,10 @@ export async function restoreJournalStore(
   return openJournalStoreState({
     legacyDirectory: host.legacyDirectory,
     replay: () => {
-      const loaded = preview ?? replayJournal(host.database().db, host.identity.sessionId)
+      const loaded =
+        preview ??
+        suppliedLoadAtHead(host) ??
+        replayJournal(host.database().db, host.identity.sessionId)
       host.setLoadCorrupt(loaded?.corrupt ?? false)
       return loaded
     },
@@ -77,6 +89,22 @@ export async function restoreJournalStore(
     setMalformedRows: host.setMalformedRows,
     readOnly: host.readOnly
   })
+}
+
+/** The fold the opener already holds (a background copy's), in place of a replay while the chat is
+ *  still exactly where that fold left it; anything written since means a replay. */
+function suppliedLoadAtHead(host: JournalStoreHost): JournalLoad | null {
+  const loaded = host.suppliedLoad
+  if (!loaded) {
+    return null
+  }
+  const { db } = host.database()
+  const { sessionId } = host.identity
+  const epoch = readJournalSessionEpoch(db, sessionId)
+  return epoch === loaded.state.epoch &&
+    readJournalTip(db, sessionId, epoch) === loaded.state.lastSequence
+    ? loaded
+    : null
 }
 
 /**

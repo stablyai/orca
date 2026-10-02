@@ -55,8 +55,13 @@ async function withPhaseTimeout(run: () => Promise<void>, timeoutMs: number): Pr
   }
 }
 
+/** Bounds the wait for the background copy's run: one batch, unless a chat's serialize holds it. */
+export const PER_CHAT_FILE_COPY_STOP_TIMEOUT_MS = 2_000
+
 /** The quit-path phase order, which is load-bearing rather than incidental. */
 export function structuredAgentSessionHostTeardownPhases(collaborators: {
+  /** First: every import stops at its next batch, so no drain below waits on a whole copy. */
+  perChatFileCopy: { stop: () => Promise<void> }
   idleSweep: { dispose: () => Promise<void> | void }
   runtimeState: {
     stopLeaseRenewal: () => Promise<void> | void
@@ -70,6 +75,20 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
   logger: StructuredAgentSessionLogger
 }): StructuredAgentSessionTeardownPhase[] {
   return [
+    {
+      name: 'stop-per-chat-file-copy',
+      // Bookkeeping: a copy that will not stop never holds quit, and the next launch redoes it.
+      run: () =>
+        withPhaseTimeout(
+          collaborators.perChatFileCopy.stop,
+          PER_CHAT_FILE_COPY_STOP_TIMEOUT_MS
+        ).catch((error: unknown) => {
+          collaborators.logger.warn('stopping the old chat file copy failed', {
+            scope: 'stop-per-chat-file-copy',
+            error
+          })
+        })
+    },
     {
       name: 'begin-resume-markers',
       run: () => {
@@ -152,7 +171,10 @@ async function tearDownStructuredAgentSessionHost(input: {
 
 export async function flushStructuredAgentSessionHost(
   context: StructuredAgentSessionLifetimeContext &
-    Pick<Parameters<typeof structuredAgentSessionHostTeardownPhases>[0], 'idleSweep' | 'tasks'> & {
+    Pick<
+      Parameters<typeof structuredAgentSessionHostTeardownPhases>[0],
+      'idleSweep' | 'perChatFileCopy' | 'tasks'
+    > & {
       restartResume: StructuredAgentSessionRestartResume
       serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
       trigger: AgentSessionResumeTrigger

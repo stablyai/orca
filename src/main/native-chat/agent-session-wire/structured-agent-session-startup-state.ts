@@ -17,6 +17,7 @@ import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { StructuredAgentSessionStatusProjection } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { JournalLoad } from '../agent-session-journal/journal-open'
 import {
   deleteJournalSessionStatus,
   isUnsettledJournalSessionStatus,
@@ -70,14 +71,17 @@ export type StructuredAgentSessionStartupState = {
   seedStoredStatuses: (listedIds: readonly string[]) => string[]
   /** Settles every chat a gone process left with work, once per host. Never rejects. */
   settleOwedSessions: (listedIds: readonly string[]) => Promise<void>
+  /** The settle step has started and not finished. */
+  isSettling: () => boolean
   /**
    * The one settle of a chat nothing holds open. Call it inside the chat's serialize; it never
-   * waits on the startup gate. True when it opened and closed the chat, whether or not the chat
-   * had work (so a settled chat is opened again). False, opening nothing, when `canSettle` rejects
-   * the chat, the chat is already open, or after quit. Rejects when the open or the close throws,
-   * so callers must catch.
+   * waits on the startup gate. `loaded`, when the caller holds the chat's current fold, is used in
+   * place of a replay. True when it opened and closed the chat, whether or not the chat had work
+   * (so a settled chat is opened again). False, opening nothing, when `canSettle` rejects the chat,
+   * the chat is already open, or after quit. Rejects when the open or the close throws, so callers
+   * must catch.
    */
-  settleClosedChat: (record: AgentSessionRecord) => Promise<boolean>
+  settleClosedChat: (record: AgentSessionRecord, loaded?: JournalLoad) => Promise<boolean>
   /**
    * The background pass's first step: each listed chat with history here and no status row gets
    * its row from its rows alone, opening nothing, folded one chat at a time in the order given (the
@@ -93,13 +97,17 @@ export function createStructuredAgentSessionStartupState(
   deps: StructuredAgentSessionStartupStateDeps
 ): StructuredAgentSessionStartupState {
   let settling: Promise<void> | null = null
+  let settled = false
   return {
     seedStoredStatuses: (listedIds) => seedStoredStatuses(deps, listedIds),
     settleOwedSessions: (listedIds) => {
-      settling ??= settleOwedSessions(deps, listedIds)
+      settling ??= settleOwedSessions(deps, listedIds).finally(() => {
+        settled = true
+      })
       return settling
     },
-    settleClosedChat: (record) => settleClosed(deps, record),
+    isSettling: () => settling !== null && !settled,
+    settleClosedChat: (record, loaded) => settleClosed(deps, record, loaded),
     deriveMissingStatuses: (sessionIds) => deriveMissingStatuses(deps, sessionIds)
   }
 }
@@ -270,13 +278,15 @@ async function resolveRecoveringLeases(
 /** A chat nothing holds open: settled and closed, never indexed, so it gets no status row. */
 async function settleClosed(
   deps: StructuredAgentSessionStartupStateDeps,
-  record: AgentSessionRecord
+  record: AgentSessionRecord,
+  loaded?: JournalLoad
 ): Promise<boolean> {
   if (deps.isDisposed() || deps.hasSession(record.sessionId) || !deps.canSettle(record)) {
     return false
   }
   const opened = await openStructuredAgentSessionConversationJournal(deps.openDeps, record, {
-    deferPerSessionImport: true
+    deferPerSessionImport: true,
+    ...(loaded ? { loaded } : {})
   })
   await opened.session.journal.close()
   return true

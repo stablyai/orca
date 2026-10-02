@@ -11,6 +11,7 @@
 
 import type { AgentJournalResetReason } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
+import type { JournalLoad } from '../agent-session-journal/journal-open'
 import { openAgentSessionJournalWithRecovery } from './agent-session-journal-recovery'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -52,6 +53,8 @@ export type StructuredAgentSessionConversationOpenOptions = {
   acquisition?: boolean
   /** A restore's open, which copies no per-chat file: see `AgentSessionJournal.whenImported`. */
   deferPerSessionImport?: boolean
+  /** The chat as a background copy just folded it, in place of the open's replay. */
+  loaded?: JournalLoad
 }
 
 export type StructuredAgentSessionConversationOpenContext = {
@@ -104,6 +107,7 @@ export async function openStructuredAgentSessionConversationJournal(
     fence,
     historyFilePath: (await deps.adapter.historyFilePath?.({ identity })) ?? null,
     deferPerSessionImport: options.deferPerSessionImport,
+    ...(options.loaded ? { loaded: options.loaded } : {}),
     // The fence the status feed reads, which a child's end moves after this open.
     currentFence: () => deps.store?.getRecord(sessionId)?.lease.runtimeFence ?? fence
   })

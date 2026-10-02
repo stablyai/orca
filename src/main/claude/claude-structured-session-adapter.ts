@@ -110,6 +110,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       this.sessions.get(sessionId)?.connection === attempt.connection ||
       this.exits.get(sessionId)?.connection === attempt.connection
     ) {
+      // Every frame, deltas the journal has not written included: what background work gives way to.
+      this.sessions.get(sessionId)?.events?.noteProviderFrame?.()
       event()
     }
   }

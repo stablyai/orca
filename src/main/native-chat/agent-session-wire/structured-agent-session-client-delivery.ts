@@ -19,6 +19,7 @@ import {
   StructuredAgentSessionTurnCompletionFeed,
   type StructuredAgentSessionTurnCompletionSubscriber
 } from './structured-agent-session-turn-completion-feed'
+import { StructuredAgentSessionChatActivity } from './structured-agent-session-chat-activity'
 
 /** Owns every host-to-client publication edge, including compatibility waits. */
 export class StructuredAgentSessionClientDelivery {
@@ -58,7 +59,12 @@ export class StructuredAgentSessionClientDelivery {
       readCommands: (sessionId) => this.readCommands(sessionId),
       readQueuePublication: (sessionId) =>
         tryReadQueuePublication(sessions.get(sessionId)?.journal),
-      onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal)
+      onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
+      onActivity: () => this.chatWork.noteFrame()
+    })
+    this.chatWork = new StructuredAgentSessionChatActivity({
+      sessions,
+      fence: (sessionId) => deps().store.getRecord(sessionId)?.lease.runtimeFence
     })
   }
 
@@ -98,6 +104,9 @@ export class StructuredAgentSessionClientDelivery {
 
   publishRestored = (sessionId: string): void =>
     this.statusFeed.publish(sessionId, undefined, { replay: true })
+
+  /** Sends in flight and provider frames, for work that gives way to the chats. */
+  readonly chatWork: StructuredAgentSessionChatActivity
 
   /** A row from the state stored beside a journal nobody has opened. */
   seedStatus: StructuredAgentSessionStatusFeed['seed'] = (record, stored) =>

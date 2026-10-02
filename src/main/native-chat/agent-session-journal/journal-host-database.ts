@@ -36,6 +36,7 @@ export class JournalHostDatabase {
   readonly legacyRecordImportOwed: boolean
   /** A failed transaction's ROLLBACK failed too, so the transaction may still be open. */
   private stranded = false
+  private readonly importsAbort = new AbortController()
 
   private constructor(
     readonly stateDirectory: string,
@@ -111,6 +112,20 @@ export class JournalHostDatabase {
         db.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
       }
     }
+  }
+
+  /** Quit: every per-chat file copy, on any path, stops at its next batch and publishes nothing. */
+  abortImports(): void {
+    this.importsAbort.abort()
+  }
+
+  get importsAborted(): boolean {
+    return this.importsAbort.signal.aborted
+  }
+
+  /** Aborts at quit, with `abortImports`: for work that takes a signal. */
+  get importsSignal(): AbortSignal {
+    return this.importsAbort.signal
   }
 
   /** Where this chat's history lived before the journal was one database per host. */

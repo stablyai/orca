@@ -24,13 +24,13 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
+import { StructuredAgentSessionStartupChatWork } from './structured-agent-session-startup-chat-work'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
-  // The history restore a tab restore owes, until a caller that answered with its list starts it.
-  protected owedStructuredAgentSessionHistoryRestore: (() => void) | null = null
   // Listed chats startup could not answer from stored state; null until it has run.
   protected structuredAgentSessionBackgroundRestoreIds: string[] | null = null
+  protected structuredAgentSessionStartupChatWork = new StructuredAgentSessionStartupChatWork()
   protected structuredAgentSessionStartupStepPromise: Promise<void> | null = null
   private readonly structuredAgentSessionStartupLogger = createStructuredAgentSessionLogger()
 
@@ -243,8 +243,9 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   }
 
   restoreStructuredAgentSessionTabs(): Promise<void> {
-    this.structuredAgentSessionTabRestorePromise ??=
-      this.restoreStructuredAgentSessionTabsOnce().then(
+    this.structuredAgentSessionTabRestorePromise ??= this.structuredAgentSessionStartupChatWork
+      .trackListing(() => this.restoreStructuredAgentSessionTabsOnce())
+      .then(
         () => {
           // Only a host's answer is final: without one, the next caller restores again, so a journal
           // that opens later republishes the chats.
@@ -263,18 +264,15 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   /** Starts the history restore the tab restore owes, once. On the next macrotask, so a caller that
    *  starts it as it answers has sent that answer first. */
   startStructuredAgentSessionHistoryRestore(): void {
-    const owed = this.owedStructuredAgentSessionHistoryRestore
-    this.owedStructuredAgentSessionHistoryRestore = null
-    if (owed) {
-      setImmediate(owed)
-    }
+    this.structuredAgentSessionStartupChatWork.startOwedRestoreSoon()
   }
 
   /** The tab restore's preparation: the startup step, then the terminal records refresh, which
    *  lists the daemon's terminals against the records the host build brought in. */
   prepareStructuredAgentSessionStartupRestoration(): Promise<void> {
-    this.structuredAgentSessionStartupRestorePromise ??= this.startStructuredAgentSessionStartup()
-      .then(async () => {
+    this.structuredAgentSessionStartupRestorePromise ??= this.structuredAgentSessionStartupChatWork
+      .trackRestorationPrepare(async () => {
+        await this.startStructuredAgentSessionStartup()
         if (this.hasPersistedStructuredAgentSessionStore()) {
           await this.refreshMobileSessionPtyRecords()
         }
@@ -329,7 +327,8 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       gate: this.structuredAgentSessionStartupGate,
       hasChatsOnDisk: () => this.hasPersistedStructuredAgentSessionStore(),
       buildHost: () => this.ensureStructuredAgentSessionHost(),
-      savedSession: () => this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
+      savedSession: () => this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null,
+      isRuntimeChatWorkActive: this.structuredAgentSessionStartupChatWork.isActive
     })
     if (background) {
       this.structuredAgentSessionBackgroundRestoreIds = background

@@ -10,6 +10,7 @@ import { SNAPSHOT_DRAIN_TIMEOUT_MS } from './structured-agent-session-eviction'
 import {
   CHILD_EVICTION_TIMEOUT_MS,
   EVICTION_MARGIN_MS,
+  PER_CHAT_FILE_COPY_STOP_TIMEOUT_MS,
   RESUME_MARKER_RECORD_TIMEOUT_MS,
   structuredAgentSessionHostTeardownPhases
 } from './structured-agent-session-host-teardown'
@@ -21,6 +22,7 @@ const noop = async (): Promise<void> => undefined
 describe('structured agent-session host teardown', () => {
   it('names every phase, so the quit-path order is pinned rather than incidental', () => {
     const phases = structuredAgentSessionHostTeardownPhases({
+      perChatFileCopy: { stop: noop },
       logger: createStructuredAgentSessionLogger(),
       idleSweep: { dispose: noop },
       runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
@@ -30,6 +32,7 @@ describe('structured agent-session host teardown', () => {
       recordResumeMarkers: noop
     })
     expect(phases.map((phase) => phase.name)).toEqual([
+      'stop-per-chat-file-copy',
       'begin-resume-markers',
       'dispose-idle-sweep',
       'stop-lease-renewal',
@@ -56,15 +59,19 @@ describe('structured agent-session host teardown', () => {
         CHILD_EVICTION_TIMEOUT_MS
       )
     }
-    // The resume markers recorded after eviction still fit under quit's global deadline.
-    expect(CHILD_EVICTION_TIMEOUT_MS + RESUME_MARKER_RECORD_TIMEOUT_MS).toBeLessThan(
-      WILL_QUIT_TEARDOWN_DEADLINE_MS
-    )
+    // The copy's stop before it, and the resume markers recorded after it, still fit under quit's
+    // global deadline.
+    expect(
+      PER_CHAT_FILE_COPY_STOP_TIMEOUT_MS +
+        CHILD_EVICTION_TIMEOUT_MS +
+        RESUME_MARKER_RECORD_TIMEOUT_MS
+    ).toBeLessThan(WILL_QUIT_TEARDOWN_DEADLINE_MS)
   })
 
   it('ends child eviction as soon as every chat has closed, not at its bound', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const evict = structuredAgentSessionHostTeardownPhases({
+      perChatFileCopy: { stop: noop },
       logger: createStructuredAgentSessionLogger(),
       idleSweep: { dispose: noop },
       runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
@@ -95,6 +102,7 @@ describe('structured agent-session host teardown', () => {
     const cleaned = vi.fn(async () => {})
     const flush = vi.fn(async () => cleaned())
     const phases = structuredAgentSessionHostTeardownPhases({
+      perChatFileCopy: { stop: noop },
       logger: log.logger,
       idleSweep: { dispose: cleaned },
       runtimeState: { stopLeaseRenewal: () => {}, flushAllEventSinks: flush },

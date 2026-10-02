@@ -72,106 +72,114 @@ export function updateManagedOrcadEnvironment(
   userDataPath: string,
   args: LifecycleArgs & { force?: boolean }
 ): Promise<OrcadManagedDeployResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async ({ environment, deployment }) => {
-    const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
-    const census = await collectManagedTerminalCensus(
-      userDataPath,
-      environment,
-      context.activationRecord
-    )
-    const localOrcadDir = await materializeOrcadArtifact(context.serverTarget, {
-      signal: args.signal
-    })
-    const result = await deployOrcad({
-      ...managedOrcadSlot(context, deployment.remotePort, args.signal),
-      localOrcadDir,
-      target: context.serverTarget,
-      census,
-      force: args.force
-    })
-    if (result.outcome === 'installed-not-activated') {
-      const deferral = {
-        outcome: 'deferred' as const,
-        candidateVersion: result.fullVersion,
-        code: result.code,
-        reason: result.reason,
-        forceable: isForceableOrcadDeferral(result.code)
+  return withManagedOrcadLifecycle(
+    userDataPath,
+    args.selector,
+    async ({ environment, deployment }) => {
+      const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
+      const census = await collectManagedTerminalCensus(
+        userDataPath,
+        environment,
+        context.activationRecord
+      )
+      const localOrcadDir = await materializeOrcadArtifact(context.serverTarget, {
+        signal: args.signal
+      })
+      const result = await deployOrcad({
+        ...managedOrcadSlot(context, deployment.remotePort, args.signal),
+        localOrcadDir,
+        target: context.serverTarget,
+        census,
+        force: args.force
+      })
+      if (result.outcome === 'installed-not-activated') {
+        const deferral = {
+          outcome: 'deferred' as const,
+          candidateVersion: result.fullVersion,
+          code: result.code,
+          reason: result.reason,
+          forceable: isForceableOrcadDeferral(result.code)
+        }
+        recordManagedOrcadUpdateDeferral(environment.id, deferral)
+        return deferral
       }
-      recordManagedOrcadUpdateDeferral(environment.id, deferral)
-      return deferral
+      clearManagedOrcadUpdateDeferral(environment.id)
+      const readiness = await probeManagedOrcadReadiness(
+        context,
+        localOrcadDir,
+        result.fullVersion,
+        args.signal
+      )
+      const updated = refreshPairing(userDataPath, environment, readiness, deployment.localPort)
+      return {
+        outcome: result.outcome === 'already-active' ? 'already-current' : 'updated',
+        environment: redactRuntimeEnvironment(updated),
+        activeVersion: result.fullVersion
+      }
     }
-    clearManagedOrcadUpdateDeferral(environment.id)
-    const readiness = await probeManagedOrcadReadiness(
-      context,
-      localOrcadDir,
-      result.fullVersion,
-      args.signal
-    )
-    const updated = refreshPairing(userDataPath, environment, readiness, deployment.localPort)
-    return {
-      outcome: result.outcome === 'already-active' ? 'already-current' : 'updated',
-      environment: redactRuntimeEnvironment(updated),
-      activeVersion: result.fullVersion
-    }
-  })
+  )
 }
 
 export function rollbackManagedOrcadEnvironment(
   userDataPath: string,
   args: LifecycleArgs
 ): Promise<OrcadManagedRollbackResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async ({ environment, deployment }) => {
-    const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
-    const record = context.activationRecord
-    const target = record.previous
-    if (!target) {
+  return withManagedOrcadLifecycle(
+    userDataPath,
+    args.selector,
+    async ({ environment, deployment }) => {
+      const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
+      const record = context.activationRecord
+      const target = record.previous
+      if (!target) {
+        return {
+          outcome: 'refused',
+          code: 'orcad_rollback_no_target',
+          reason: 'This server has no previous version to roll back to.'
+        }
+      }
+      const census = await collectManagedTerminalCensus(userDataPath, environment, record)
+      // Why idle only: this client cannot read the older build's daemon protocol, so it cannot show
+      // that build would reach terminals that are still running.
+      if (census.liveSessions !== 0) {
+        return {
+          outcome: 'refused',
+          code:
+            census.liveSessions === null
+              ? 'orcad_rollback_census_unavailable'
+              : 'orcad_rollback_terminals_running',
+          reason:
+            census.liveSessions === null
+              ? 'The server did not answer how many terminals it runs. Retry when it answers.'
+              : 'Close the terminals running on this server before rolling it back.'
+        }
+      }
+      const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
+      const targetDir = managedOrcadInstallDir(context, target)
+      const targetBuildHash = await readRemoteOrcadBuildHash(slot, targetDir)
+      const result = await rollbackOrcad({
+        ...slot,
+        record,
+        census,
+        targetBuildHash,
+        targetDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL
+      })
+      if (result.outcome !== 'rolled-back') {
+        return result
+      }
+      const readiness = await probeActiveOrcadReadiness(
+        { ...slot, remoteInstallDir: targetDir },
+        { buildHash: targetBuildHash, fullVersion: result.target }
+      )
+      const updated = refreshPairing(userDataPath, environment, readiness, deployment.localPort)
       return {
-        outcome: 'refused',
-        code: 'orcad_rollback_no_target',
-        reason: 'This server has no previous version to roll back to.'
+        outcome: 'rolled-back',
+        environment: redactRuntimeEnvironment(updated),
+        activeVersion: result.target,
+        discarded: result.discarded
       }
     }
-    const census = await collectManagedTerminalCensus(userDataPath, environment, record)
-    // Why idle only: this client cannot read the older build's daemon protocol, so it cannot show
-    // that build would reach terminals that are still running.
-    if (census.liveSessions !== 0) {
-      return {
-        outcome: 'refused',
-        code:
-          census.liveSessions === null
-            ? 'orcad_rollback_census_unavailable'
-            : 'orcad_rollback_terminals_running',
-        reason:
-          census.liveSessions === null
-            ? 'The server did not answer how many terminals it runs. Retry when it answers.'
-            : 'Close the terminals running on this server before rolling it back.'
-      }
-    }
-    const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
-    const targetDir = managedOrcadInstallDir(context, target)
-    const targetBuildHash = await readRemoteOrcadBuildHash(slot, targetDir)
-    const result = await rollbackOrcad({
-      ...slot,
-      record,
-      census,
-      targetBuildHash,
-      targetDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL
-    })
-    if (result.outcome !== 'rolled-back') {
-      return result
-    }
-    const readiness = await probeActiveOrcadReadiness(
-      { ...slot, remoteInstallDir: targetDir },
-      { buildHash: targetBuildHash, fullVersion: result.target }
-    )
-    const updated = refreshPairing(userDataPath, environment, readiness, deployment.localPort)
-    return {
-      outcome: 'rolled-back',
-      environment: redactRuntimeEnvironment(updated),
-      activeVersion: result.target,
-      discarded: result.discarded
-    }
-  })
+  )
 }
 
 /** Finishes or undoes an interrupted activation, rollback or decommission on the host. */
@@ -179,25 +187,29 @@ export function recoverManagedOrcadEnvironment(
   userDataPath: string,
   args: LifecycleArgs
 ): Promise<OrcadManagedRecoveryResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async ({ environment, deployment }) => {
-    const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
-    const result = await recoverInterruptedOrcadActivation(
-      managedOrcadSlot(context, deployment.remotePort, args.signal)
-    )
-    if (result.outcome !== 'recovered') {
-      return result
+  return withManagedOrcadLifecycle(
+    userDataPath,
+    args.selector,
+    async ({ environment, deployment }) => {
+      const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
+      const result = await recoverInterruptedOrcadActivation(
+        managedOrcadSlot(context, deployment.remotePort, args.signal)
+      )
+      if (result.outcome !== 'recovered') {
+        return result
+      }
+      const updated = result.readiness
+        ? refreshPairing(userDataPath, environment, result.readiness, deployment.localPort)
+        : environment
+      if (result.activeVersion) {
+        await ensureOrcadManagedTunnel(userDataPath, environment.id)
+      }
+      return {
+        outcome: 'recovered',
+        resolution: result.resolution,
+        activeVersion: result.activeVersion,
+        environment: redactRuntimeEnvironment(updated)
+      }
     }
-    const updated = result.readiness
-      ? refreshPairing(userDataPath, environment, result.readiness, deployment.localPort)
-      : environment
-    if (result.activeVersion) {
-      await ensureOrcadManagedTunnel(userDataPath, environment.id)
-    }
-    return {
-      outcome: 'recovered',
-      resolution: result.resolution,
-      activeVersion: result.activeVersion,
-      environment: redactRuntimeEnvironment(updated)
-    }
-  })
+  )
 }

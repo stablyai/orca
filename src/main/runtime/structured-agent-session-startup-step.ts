@@ -1,6 +1,7 @@
 // The structured-chat step of host startup, before any client lists a tab: the restart lease check,
 // then each listed chat's status seeded from its stored status, and every chat a gone process left
-// with work settled. Chat commands wait for that settle; the tab list and paint do not.
+// with work settled. Chat commands wait for that settle; the tab list and paint do not. Last, the
+// background copy of old per-chat files is started; it runs after the settle and holds up nothing.
 
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
@@ -18,7 +19,8 @@ export type StructuredAgentSessionStartupHost = Pick<
   StructuredAgentSessionHost,
   'reconcileRestartLeases' | 'seedStoredStatuses' | 'settleOwedSessions'
 > &
-  StructuredAgentSessionListingHost
+  StructuredAgentSessionListingHost &
+  Partial<Pick<StructuredAgentSessionHost, 'startPerChatFileCopy'>>
 
 type StructuredAgentSessionListingHost = Partial<
   Pick<StructuredAgentSessionHost, 'getPersistedVisibleSessionTabIndex'>
@@ -33,13 +35,19 @@ export async function runStructuredAgentSessionStartupStep(
   host: StructuredAgentSessionStartupHost,
   savedSession: WorkspaceSessionState | null,
   /** The settle, which chat commands wait for; it never rejects. */
-  onSettling: (settled: Promise<void>) => void
+  onSettling: (settled: Promise<void>) => void,
+  /** The runtime's own startup chat work (startup restoration not yet settled, a tab listing, a
+   *  history restore owed or starting), which the background copy of old chat files waits for. */
+  isRuntimeChatWorkActive: () => boolean = () => false
 ): Promise<string[]> {
   await host.reconcileRestartLeases()
   const listedIds = listedStructuredAgentSessionIds(host, savedSession)
   const background = host.seedStoredStatuses(listedIds)
   // Not awaited here: the tab list and paint never wait on it; chat commands do.
   onSettling(host.settleOwedSessions(listedIds))
+  // After the settle, which it waits for; commands never wait on it. Latched on the host, so a
+  // second startup pass starts no second copy.
+  host.startPerChatFileCopy?.({ listedIds, isRuntimeChatWorkActive })
   // The rows the window shows at launch fill first.
   return orderOnScreenStructuredAgentSessionsFirst(background, savedSession)
 }
@@ -77,6 +85,8 @@ export async function runStructuredAgentSessionStartup(input: {
   hasChatsOnDisk: () => boolean
   buildHost: () => Promise<void>
   savedSession: () => WorkspaceSessionState | null
+  /** The runtime's own startup chat work, which the background copy of old chat files waits for. */
+  isRuntimeChatWorkActive?: () => boolean
 }): Promise<string[] | null> {
   const { gate } = input
   gate.stepStarted()
@@ -92,10 +102,15 @@ export async function runStructuredAgentSessionStartup(input: {
     if (!host) {
       return null
     }
-    return await runStructuredAgentSessionStartupStep(host, input.savedSession(), (settled) => {
-      ended = null
-      gate.openWhen(settled)
-    })
+    return await runStructuredAgentSessionStartupStep(
+      host,
+      input.savedSession(),
+      (settled) => {
+        ended = null
+        gate.openWhen(settled)
+      },
+      input.isRuntimeChatWorkActive
+    )
   } catch (error) {
     ended &&= 'step failed'
     throw error

@@ -119,6 +119,7 @@ export class AgentSessionJournal {
       mintEpoch: this.mintEpoch,
       serialize: (run) => this.queue.serialize(run),
       deferPerSessionImport: options.deferPerSessionImport === true,
+      suppliedLoad: options.loaded ?? null,
       owe: (work) => this.queue.owe(work),
       database: () => this.database,
       state: () => this.state,
@@ -215,10 +216,11 @@ export class AgentSessionJournal {
   /**
    * Resolves once the chat's rows are in the host's database. A restore's open serves a chat still
    * in its per-chat file from a read-only fold of it; the copy runs before the chat's first write,
-   * and a reader that needs rows (forward pages, catch-up) awaits it here.
+   * and a reader that needs rows (forward pages, catch-up) awaits it here. `signal`, from a caller
+   * that runs the copy itself, stops it at its next batch; the chat then still owes it.
    */
-  whenImported(): Promise<void> {
-    return this.queue.serialize(async () => undefined)
+  whenImported(options?: { signal?: AbortSignal }): Promise<void> {
+    return this.queue.serialize(async () => undefined, options?.signal)
   }
 
   get importPending(): boolean {

@@ -94,15 +94,17 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     // cannot read, a per-chat file not yet copied).
     // Whoever answers with this list starts it, once that answer is out.
     const background = this.structuredAgentSessionBackgroundRestoreIds ?? listedIds
-    this.owedStructuredAgentSessionHistoryRestore = host
-      ? () =>
-          void host.restoreReadableSessions(background).catch((error: unknown) => {
-            host.deps.logger.warn('restoring chat history after listing failed', {
-              scope: 'history-restore-after-listing',
-              error
+    this.structuredAgentSessionStartupChatWork.oweRestore(
+      host
+        ? () =>
+            void host.restoreReadableSessions(background).catch((error: unknown) => {
+              host.deps.logger.warn('restoring chat history after listing failed', {
+                scope: 'history-restore-after-listing',
+                error
+              })
             })
-          })
-      : null
+        : null
+    )
     const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
     // No host, or one still owed the records file's chats, means no one can say which chats exist;
     // with none on disk, empty is the answer.

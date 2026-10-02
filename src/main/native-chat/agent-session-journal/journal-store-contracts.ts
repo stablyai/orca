@@ -11,6 +11,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalLoad } from './journal-open'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
 
@@ -21,6 +22,9 @@ export type AgentSessionJournalOptions = {
   mintEpoch?: () => string
   /** A restore's open: see `AgentSessionJournal.whenImported`. */
   deferPerSessionImport?: boolean
+  /** The chat as the opener already folded it (a background copy's load), used in place of a replay
+   *  while the database still holds exactly that epoch and tip. */
+  loaded?: JournalLoad
   /** The conversation's fence, which the chat's stored status reads as the status feed does. */
   currentFence?: () => number | undefined
 }

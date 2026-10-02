@@ -49,6 +49,8 @@ export type AgentSessionSubscribersHooks = {
   readQueuePublication?: (sessionId: string) => QueuePublication | undefined
   /** Fires after publications that can change journal content. */
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
+  /** A provider frame for the session reached the main thread, written or not. */
+  onActivity?: (sessionId: string) => void
   now?: () => number
 }
 
@@ -57,6 +59,10 @@ export class AgentSessionSubscribers {
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
+
+  noteActivity(sessionId: string): void {
+    this.hooks.onActivity?.(sessionId)
+  }
 
   get retainedActivityCountForTests(): number {
     return this.activityBySession.size

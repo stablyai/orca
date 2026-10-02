@@ -5,9 +5,9 @@ import type {
   StructuredAgentSessionReadingControl,
   StructuredAgentSessionSinkAdmission,
   StructuredAgentSessionSinkBarrier,
-  StructuredAgentSessionSinkState,
-  StructuredAgentSessionSinkWatermarks
+  StructuredAgentSessionSinkState
 } from './structured-agent-session-event-sink'
+import type { StructuredAgentSessionSinkWatermarks } from './structured-agent-session-event-sink-watermarks'
 
 export type StructuredAgentSessionSinkOperation = {
   sequence: number
@@ -83,9 +83,18 @@ export class StructuredAgentSessionSinkQueue {
     }
   }
 
+  /** A provider frame arrived; not queued, so it reaches the bound target at once. */
+  noteActivity = (): void => {
+    this.target?.noteActivity?.()
+  }
+
   bind(target: StructuredAgentSessionEventTarget): void {
     if (!this.closed) {
       this.target = target
+      // Frames noted before the bind were dropped; the rows they left are written now.
+      if (this.queue.length > 0) {
+        target.noteActivity?.()
+      }
       this.pump()
     }
   }

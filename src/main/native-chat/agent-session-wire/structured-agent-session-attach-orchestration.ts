@@ -10,8 +10,7 @@ import { recoverStructuredRewind } from './structured-rewind-recovery'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentSessionAttachResult,
-  AgentSessionMutationResult,
-  AgentSessionTurnActivity
+  AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
@@ -33,8 +32,10 @@ import {
   indexProviderChild,
   structuredAgentSessionConversationFence
 } from './structured-agent-session-provider-child'
-import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type {
+  DeferredStructuredAgentSessionEventSink,
+  StructuredAgentSessionEventTarget
+} from './structured-agent-session-event-sink'
 import {
   addAgentSessionCreatePhaseAttributes,
   withAgentSessionCreatePhase,
@@ -191,9 +192,12 @@ async function runAttach(
             failureTextContext: structuredAgentSessionFailureWordsContext(priorRecord)
           })
         }
-        await bindAndDrain(eventSink, attached.journal, fence, (activity) =>
-          context.subscribers.publish(sessionId, attached.journal, activity)
-        )
+        await bindAndDrain(eventSink, {
+          journal: attached.journal,
+          fence,
+          publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity),
+          noteActivity: () => context.subscribers.noteActivity?.(sessionId)
+        })
         attempt.candidate = {
           sink: eventSink,
           child: {
@@ -273,11 +277,9 @@ function endReleasedChild(
  *  behind. It throws by design when a sink barrier fails. */
 async function bindAndDrain(
   eventSink: DeferredStructuredAgentSessionEventSink,
-  journal: AgentSessionJournal,
-  fence: number,
-  publish: (activity?: AgentSessionTurnActivity | null) => void
+  target: StructuredAgentSessionEventTarget
 ): Promise<void> {
-  eventSink.bind({ journal, fence, publish })
+  eventSink.bind(target)
   const barrier = await eventSink.drained()
   if (!barrier.ok) {
     throw barrier.error

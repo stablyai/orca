@@ -6,12 +6,15 @@
 
 import { AgentSessionJournalError } from './journal-write-guards'
 
+/** Work a chat owes before its next write; `signal`, from the write that pays it, stops it. */
+export type OwedJournalWork = (signal?: AbortSignal) => Promise<void>
+
 /** Admission is checked at ENQUEUE and is permanent. */
 export class JournalWriteQueue {
   private writes: Promise<unknown> = Promise.resolve()
   private closed = false
   /** Runs before the next write, and stays owed until it succeeds. */
-  private owed: (() => Promise<void>) | null = null
+  private owed: OwedJournalWork | null = null
 
   constructor(private readonly sessionId: string) {}
 
@@ -19,7 +22,8 @@ export class JournalWriteQueue {
     this.closed = true
   }
 
-  serialize<T>(run: () => Promise<T>): Promise<T> {
+  /** `owedSignal`, when this write pays the owed work, can stop it; it stays owed. */
+  serialize<T>(run: () => Promise<T>, owedSignal?: AbortSignal): Promise<T> {
     if (this.closed) {
       return Promise.reject(
         new AgentSessionJournalError(
@@ -28,10 +32,10 @@ export class JournalWriteQueue {
         )
       )
     }
-    return this.serializePastGate(run)
+    return this.serializePastGate(run, owedSignal)
   }
 
-  owe(work: () => Promise<void>): void {
+  owe(work: OwedJournalWork): void {
     this.owed = work
   }
 
@@ -39,10 +43,10 @@ export class JournalWriteQueue {
     return this.owed !== null
   }
 
-  private payOwed = async (): Promise<void> => {
+  private async payOwed(signal?: AbortSignal): Promise<void> {
     const owed = this.owed
     if (owed) {
-      await owed()
+      await owed(signal)
       this.owed = null
     }
   }
@@ -52,9 +56,11 @@ export class JournalWriteQueue {
     return this.writes.then(() => undefined)
   }
 
-  private serializePastGate<T>(run: () => Promise<T>): Promise<T> {
+  private serializePastGate<T>(run: () => Promise<T>, owedSignal?: AbortSignal): Promise<T> {
     // Only a write admitted while work is owed takes the extra step, so no other write's timing moves.
-    const started = this.owed ? this.writes.then(this.payOwed).then(run) : this.writes.then(run)
+    const started = this.owed
+      ? this.writes.then(() => this.payOwed(owedSignal)).then(run)
+      : this.writes.then(run)
     this.writes = started.catch(() => undefined)
     return started
   }

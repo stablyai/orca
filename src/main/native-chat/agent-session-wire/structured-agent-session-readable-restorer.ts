@@ -4,6 +4,7 @@ import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-sess
 
 export class StructuredAgentSessionReadableRestorer {
   private restorePromise: Promise<void> | null = null
+  private restoring = false
 
   constructor(
     private readonly input: StructuredAgentSessionReadRestoreDeps & {
@@ -12,11 +13,23 @@ export class StructuredAgentSessionReadableRestorer {
   ) {}
 
   restore(sessionIds?: readonly string[]): Promise<void> {
-    this.restorePromise ??= this.restoreReadableSessions(sessionIds).catch((error: unknown) => {
-      this.restorePromise = null
-      throw error
-    })
+    if (!this.restorePromise) {
+      this.restoring = true
+      this.restorePromise = this.restoreReadableSessions(sessionIds)
+        .catch((error: unknown) => {
+          this.restorePromise = null
+          throw error
+        })
+        .finally(() => {
+          this.restoring = false
+        })
+    }
     return this.restorePromise
+  }
+
+  /** A history restore has started and not finished. */
+  get isRestoring(): boolean {
+    return this.restoring
   }
 
   private async restoreReadableSessions(sessionIds?: readonly string[]): Promise<void> {

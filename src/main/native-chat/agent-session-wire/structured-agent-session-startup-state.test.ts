@@ -595,6 +595,68 @@ function conversationCommandParams(sessionId: string, command: 'clear') {
   }
 }
 
+describe('whether the settle step is running (R3M-2)', () => {
+  it('answers true from the settle’s start until it has finished, and never again', async () => {
+    const rig = await newRig()
+    const restoring = Promise.withResolvers<void>()
+    const state = createStructuredAgentSessionStartupState({
+      openDeps: {
+        store: rig.store,
+        adapter: { historyFilePath: async () => null },
+        journalDatabase: openTestJournalHostDatabase(rig.root),
+        logger: { warn: vi.fn(), error: vi.fn() }
+      },
+      canSettle: (record: AgentSessionRecord | null): record is AgentSessionRecord => !!record,
+      seedStatus: vi.fn(),
+      resolveRecovery: vi.fn(async () => true),
+      restoreListed: () => restoring.promise,
+      serialize: (_sessionId, task) => task(),
+      hasSession: () => false,
+      isListed: () => true,
+      isDisposed: () => false
+    })
+    expect(state.isSettling()).toBe(false)
+
+    const settled = state.settleOwedSessions([])
+    expect(state.isSettling()).toBe(true)
+    restoring.resolve()
+    await settled
+
+    expect(state.isSettling()).toBe(false)
+    await state.settleOwedSessions([])
+    expect(state.isSettling()).toBe(false)
+  })
+
+  it('clears when the settle goes on past a recovery that never answers', async () => {
+    const stuck = { ...agentSessionRecordFixture(), sessionId: 'session-stuck' }
+    stuck.lease = { ...stuck.lease, sessionId: 'session-stuck', handoffStage: 'recovering' }
+    const openDeps = {
+      store: { getRecord: () => stuck, listRecords: () => [stuck] },
+      journalDatabase: { readOnly: false, db: { prepare: () => ({ all: () => [] }) } },
+      logger: { warn: vi.fn(), error: vi.fn() }
+    }
+    const state = createStructuredAgentSessionStartupState({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the settle reads only the store's records and the unsettled-row query; nothing is selected, so nothing opens.
+      openDeps: openDeps as unknown as StructuredAgentSessionStartupStateDeps['openDeps'],
+      canSettle: (record): record is AgentSessionRecord => record !== null,
+      seedStatus: vi.fn(),
+      resolveRecovery: () => new Promise<boolean>(() => {}),
+      restoreListed: vi.fn(async () => undefined),
+      serialize: (_sessionId, task) => task(),
+      hasSession: () => false,
+      isListed: () => true,
+      isDisposed: () => false,
+      recoveryBudgetMs: 20
+    })
+
+    const settled = state.settleOwedSessions([])
+    expect(state.isSettling()).toBe(true)
+    await settled
+
+    expect(state.isSettling()).toBe(false)
+  })
+})
+
 describe('a recovery that never answers', () => {
   it('leaves that lease unverified and lets the settle go on', async () => {
     const logger = { warn: vi.fn(), error: vi.fn() }

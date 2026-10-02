@@ -130,6 +130,8 @@ export async function acquireCodexStructuredSession(input: {
       },
       {
         onNotification: (method, params) => {
+          // Every frame, streamed deltas included: what background work gives way to.
+          acquireInput.events?.noteProviderFrame?.()
           // Stamped at receipt, ahead of any pre-publication buffering or retry.
           const observedAt = TURN_BOUNDARIES.has(method) ? (deps.now?.() ?? Date.now()) : undefined
           const dispatchSequenceAtReceipt =
@@ -148,13 +150,15 @@ export async function acquireCodexStructuredSession(input: {
             Buffer.byteLength(JSON.stringify(params ?? null), 'utf8')
           )
         },
-        onServerRequest: (request) =>
+        onServerRequest: (request) => {
+          acquireInput.events?.noteProviderFrame?.()
           input.deliver(
             acquisition,
             sessionId,
             () => input.handleServerRequest(sessionId, request),
             Buffer.byteLength(JSON.stringify(request), 'utf8')
-          ),
+          )
+        },
         onUnhandledFrame: (kind, payload) =>
           input.deliver(
             acquisition,

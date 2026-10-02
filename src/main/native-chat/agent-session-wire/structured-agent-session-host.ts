@@ -6,7 +6,6 @@ import { StructuredConversationCommandController } from './structured-conversati
 // only through `conversation`, which opens it at rest; an agent is started only by work that needs
 // it, and the idle sweep is the one thing that puts it to rest.
 
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type * as SessionWire from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
@@ -54,6 +53,7 @@ import { createStructuredAgentSessionConversationDelivery } from './structured-a
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
+import type { PerChatFileCopyStart } from './structured-agent-session-per-chat-file-copy-control'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
@@ -140,12 +140,12 @@ export class StructuredAgentSessionHost {
       reconcileLeases: this.reconcileLeases,
       resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
-      hasSession: this.hasSession,
+      sessions: this.sessions,
       isDisposed: () => this.lifetime.isDisposed(),
       // Site 10: cannot overwrite a live entry — the restorer returns early on
       // `hasSession` inside the same serialized step as this `set`.
       onReadable: this.conversationDelivery.adoptOpened,
-      seedStatus: this.clientDelivery.seedStatus
+      chatStatus: this.clientDelivery
     })
     this.eventRecovery = new StructuredAgentSessionEventRecovery({
       deps,
@@ -240,6 +240,8 @@ export class StructuredAgentSessionHost {
   // Startup, from each chat's stored state: see `structured-agent-session-startup-state`.
   seedStoredStatuses = (ids: readonly string[]) => this.restore.seedStoredStatuses(ids)
   settleOwedSessions = (ids: readonly string[]) => this.restore.settleOwedSessions(ids)
+  /** Copies old per-chat files in the background; once per host. */
+  startPerChatFileCopy = (input: PerChatFileCopyStart) => this.restore.startPerChatFileCopy(input)
 
   /** Make one persisted session addressable again; see `structured-agent-session-reveal`. */
   revealSession = (sessionId: string): Promise<StructuredAgentSessionReveal> =>
@@ -254,8 +256,7 @@ export class StructuredAgentSessionHost {
     return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
   }
 
-  flushStreamedEvents = (sessionId: string): Promise<void> =>
-    this.runtimeState.flushEventSink(sessionId)
+  flushStreamedEvents = (sessionId: string) => this.runtimeState.flushEventSink(sessionId)
 
   // Trigger inlined rather than imported: `AgentSessionResumeTrigger` in shared is the canonical
   // type, and this file has no line budget left for the import.
@@ -264,6 +265,7 @@ export class StructuredAgentSessionHost {
     await flushStructuredAgentSessionHost({
       ...this.lifetimeContext(),
       idleSweep: this.lifetime,
+      perChatFileCopy: { stop: () => this.restore.stopPerChatFileCopy() },
       tasks: this.tasks,
       restartResume: this.restartResume,
       serialize: this.serialize,
@@ -328,11 +330,10 @@ export class StructuredAgentSessionHost {
 
   /** The fully reduced timeline, for readers that cannot tolerate a page's ambiguity — rows are
    *  revised or tombstoned in place, so an item's ABSENCE from a bounded page proves nothing. */
-  journalSnapshot = async (sessionId: string): Promise<AgentJournalSnapshot> =>
+  journalSnapshot = async (sessionId: string) =>
     (await this.lifetime.conversation(sessionId)).journal.snapshot()
 
-  subscribe = (input: AgentSessionSubscribeInput): Promise<() => void> =>
-    this.backgroundTasks.subscribe(input)
+  subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
 
   settleLateDispatch = (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
     settleStructuredAgentSessionLateDispatch(this.mutationContext(), input)

@@ -161,16 +161,20 @@ describe('journal row statements', () => {
     }
   })
 
-  it('deletes only the rows no pointer names', () => {
+  it('deletes only the rows no pointer names, at most `limit` at a time', () => {
     const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db
     try {
-      insertJournalRow(db, 'session-1', epochRow(1, 'epoch-copying'))
+      for (const seq of [1, 2, 3]) {
+        insertJournalRow(db, 'session-1', epochRow(seq, 'epoch-copying'))
+      }
       insertJournalRow(db, 'session-2', epochRow(1, 'epoch-live'))
       insertJournalRow(db, 'session-2', epochRow(1, 'epoch-stale'))
       publishJournalSessionEpoch(db, { sessionId: 'session-2', workspaceId: 'ws-1' }, 'epoch-live')
 
-      deleteUnpublishedJournalRows(db, 'session-1')
-      deleteUnpublishedJournalRows(db, 'session-2')
+      expect(deleteUnpublishedJournalRows(db, 'session-1', 2)).toBe(2)
+      expect(rowsOf(db, 'session-1', 'epoch-copying')).toHaveLength(1)
+      expect(deleteUnpublishedJournalRows(db, 'session-1', 2)).toBe(1)
+      expect(deleteUnpublishedJournalRows(db, 'session-2', 2)).toBe(1)
 
       expect(rowsOf(db, 'session-1', 'epoch-copying')).toEqual([])
       expect(rowsOf(db, 'session-2', 'epoch-live')).toEqual([1])

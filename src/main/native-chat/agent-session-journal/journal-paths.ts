@@ -16,14 +16,18 @@ export function journalPathSegment(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 32)
 }
 
+/** `<root>/agent-session-journal`, which holds every per-chat directory. */
+export function perChatJournalRoot(root: string): string {
+  return join(root, JOURNAL_DIR_NAME)
+}
+
 /** `<root>/agent-session-journal/<workspace>/<session>`. */
 export function journalDirectoryFor(
   root: string,
   identity: Pick<AgentSessionJournalIdentity, 'workspaceId' | 'sessionId'>
 ): string {
   return join(
-    root,
-    JOURNAL_DIR_NAME,
+    perChatJournalRoot(root),
     journalPathSegment(identity.workspaceId),
     journalPathSegment(identity.sessionId)
   )

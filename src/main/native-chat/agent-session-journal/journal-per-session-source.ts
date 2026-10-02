@@ -1,7 +1,7 @@
 // Reading a chat's per-chat journal file, the one each chat had before the host's one database.
 // The importer copies through this reader, and a restore folds through it without copying.
 
-import { rmdirSync, rmSync } from 'node:fs'
+import { rmdirSync, rmSync, statSync } from 'node:fs'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
@@ -9,11 +9,16 @@ import { startJournalRowFold, type JournalLoad } from './journal-open'
 import { legacyJournalDatabaseFile } from './journal-paths'
 import type { PerSessionJournalHead } from './journal-per-session-reimport'
 import { pendingJournalRepairSequence } from './journal-repair-marker'
+import { charBoundedBatches } from './journal-session-status-backfill'
 
 /** The newest per-chat file shape any build wrote. */
 const LEGACY_JOURNAL_SCHEMA_VERSION = 2
 /** Rows per batch: at most 31 ms per batch copying the largest real chat (68 MB, 3.3 KB rows). */
 export const IMPORT_BATCH_ROWS = 512
+/** Row JSON per copy commit. Far above a page of ordinary rows (the seed's largest is 1.2 Mi, at
+ *  most 25 ms of main thread), so only a page of huge rows splits: every commit also rewrites a
+ *  fixed set of pages, so splitting ordinary pages means more checkpoints for the same rows. */
+export const IMPORT_COMMIT_CHARS = 2 * 1024 * 1024
 
 const SELECT_LEGACY_EPOCH = 'SELECT epoch FROM journal_sessions WHERE session_id = ?'
 const SELECT_LEGACY_TIP =
@@ -26,6 +31,42 @@ const SELECT_LEGACY_REPAIR =
 
 type ImportedRow = { seq: number; ts: number; rowJson: string }
 export type ImportBatch = { rows: ImportedRow[]; last: boolean }
+
+/** A per-chat file as it stands on disk; a missing `-wal` is a value of its own. */
+export type PerChatFileState = {
+  dbSize: number
+  dbMtimeMs: number
+  walSize: number | null
+  walMtimeMs: number | null
+}
+
+/** Null when the chat's `journal.db` is gone. */
+export function statPerChatFile(legacyDirectory: string): PerChatFileState | null {
+  const file = legacyJournalDatabaseFile(legacyDirectory)
+  const database = statSync(file, { throwIfNoEntry: false })
+  if (!database) {
+    return null
+  }
+  const wal = statSync(`${file}-wal`, { throwIfNoEntry: false })
+  return {
+    dbSize: database.size,
+    dbMtimeMs: Math.trunc(database.mtimeMs),
+    walSize: wal ? wal.size : null,
+    walMtimeMs: wal ? Math.trunc(wal.mtimeMs) : null
+  }
+}
+
+export function samePerChatFileState(
+  left: PerChatFileState | null,
+  right: PerChatFileState | null
+): boolean {
+  return (
+    left?.dbSize === right?.dbSize &&
+    left?.dbMtimeMs === right?.dbMtimeMs &&
+    left?.walSize === right?.walSize &&
+    left?.walMtimeMs === right?.walMtimeMs
+  )
+}
 
 /** A plain read-only connection: it sees committed WAL frames without checkpointing them. */
 export function openLegacySource(path: string): Database.Database {
@@ -58,21 +99,34 @@ export function readLegacyHead(
   return { epoch, tip: typeof tip === 'number' ? tip : 0 }
 }
 
-/** The file's rows, one bounded page per batch, read as each batch is written. */
+/** Up to `limit` of the file's rows after `afterSeq`, in order. */
+export function readLegacyRowsAfter(
+  source: Database.Database,
+  sessionId: string,
+  epoch: string,
+  afterSeq: number,
+  limit: number
+): ImportedRow[] {
+  return source
+    .prepare(SELECT_LEGACY_ROWS)
+    .all(sessionId, epoch, afterSeq, limit)
+    .map((row) => ({ seq: Number(row.seq), ts: Number(row.ts), rowJson: String(row.row_json) }))
+}
+
+/** The file's rows, one bounded page per batch, read as each batch is written. `batchRows` may be
+ *  read again before every page (a copy's page follows its tasks' time). */
 export function* legacyRowBatches(
   source: Database.Database,
   sessionId: string,
   epoch: string,
-  batchRows: number
+  batchRows: number | (() => number)
 ): Generator<ImportBatch> {
-  const select = source.prepare(SELECT_LEGACY_ROWS)
   let afterSeq = Number.MIN_SAFE_INTEGER
   for (;;) {
-    const rows = select
-      .all(sessionId, epoch, afterSeq, batchRows)
-      .map((row) => ({ seq: Number(row.seq), ts: Number(row.ts), rowJson: String(row.row_json) }))
+    const want = typeof batchRows === 'number' ? batchRows : batchRows()
+    const rows = readLegacyRowsAfter(source, sessionId, epoch, afterSeq, want)
     const lastSeq = rows.at(-1)?.seq
-    const last = rows.length < batchRows || lastSeq === undefined
+    const last = rows.length < want || lastSeq === undefined
     yield { rows, last }
     if (last) {
       return
@@ -103,7 +157,8 @@ export async function foldLegacyJournal(
       : null
   })
   let first = true
-  for (const batch of legacyRowBatches(source, sessionId, legacy.epoch, IMPORT_BATCH_ROWS)) {
+  const batches = legacyRowBatches(source, sessionId, legacy.epoch, IMPORT_BATCH_ROWS)
+  for (const batch of charBoundedBatches(batches)) {
     // A batch per turn: a large chat's file read in one task holds up everything else at startup.
     if (!first) {
       await yieldToEventLoop()

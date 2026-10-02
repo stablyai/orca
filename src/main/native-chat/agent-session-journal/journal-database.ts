@@ -17,6 +17,7 @@ import {
 import { JournalUnreleasedSchemaError } from './journal-open-failure'
 import { ensureQueuedMessagesTable } from './queued-message-schema'
 import { createJournalSessionStatusTable } from './journal-session-state'
+import { ensureJournalBackgroundFailuresTable } from './journal-background-failures'
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 /** Bounds the WAL a checkpoint leaves behind; SQLite truncates it back to this after a reset. */
@@ -130,8 +131,10 @@ export function openJournalDatabase(
     const legacyRecordImportOwed = migrateJournalSchema(probe, stored, legacyRecords)
     // Outside `migrateJournalSchema` on purpose: its early return skips a db
     // already at the current version, and this table must exist at EVERY
-    // writable open with no `user_version` bump (see `ensureQueuedMessagesTable`).
+    // writable open with no `user_version` bump (see `ensureQueuedMessagesTable`). So must each
+    // give-up the background copy records, which only that copy reads.
     ensureQueuedMessagesTable(probe)
+    ensureJournalBackgroundFailuresTable(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false, legacyRecordImportOwed }
