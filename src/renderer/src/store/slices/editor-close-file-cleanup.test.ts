@@ -3,7 +3,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import {
   createEditorStore,
   createEditorTabsStore,
-  flushAsyncRemoteRefresh
+  flushAsyncRemoteRefresh,
+  ownedEditorFileId
 } from './editor-slice-test-harness'
 import type { AppState } from '../types'
 import {
@@ -572,6 +573,94 @@ describe('closeFile host mirroring', () => {
       fileId
     )
     expect(store.getState().openFiles).toHaveLength(0)
+  })
+
+  it('removes clean owner-mismatched editor siblings and every linked tab', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const localFile = store.getState().openFiles[0]!
+    const remoteFileId = ownedEditorFileId('/repo/a.ts', 'wt-1', 'remote-1')
+    store.setState({
+      openFiles: [localFile, { ...localFile, id: remoteFileId, runtimeEnvironmentId: 'remote-1' }],
+      activeFileId: localFile.id,
+      activeFileIdByWorktree: { 'wt-1': localFile.id },
+      tabBarOrderByWorktree: { 'wt-1': [localFile.id, remoteFileId] }
+    } as Partial<AppState>)
+    store.getState().createUnifiedTab('wt-1', 'editor', {
+      id: 'local-editor-tab',
+      entityId: localFile.id,
+      label: 'a.ts',
+      activate: false
+    })
+    store.getState().createUnifiedTab('wt-1', 'editor', {
+      id: 'remote-editor-tab',
+      entityId: remoteFileId,
+      label: 'a.ts',
+      activate: false
+    })
+
+    store.getState().closeFile(localFile.id)
+
+    expect(store.getState().openFiles).toEqual([])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([])
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toHaveLength(1)
+  })
+
+  it('keeps an owner-mismatched sibling with an unsaved draft', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const localFile = store.getState().openFiles[0]!
+    const remoteFileId = ownedEditorFileId('/repo/a.ts', 'wt-1', 'remote-1')
+    store.setState({
+      openFiles: [
+        localFile,
+        { ...localFile, id: remoteFileId, runtimeEnvironmentId: 'remote-1', isDirty: true }
+      ],
+      editorDrafts: { [remoteFileId]: 'unsaved remote draft' }
+    } as Partial<AppState>)
+
+    store.getState().closeFile(localFile.id)
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({ id: remoteFileId, isDirty: true })
+    ])
+    expect(store.getState().editorDrafts).toEqual({ [remoteFileId]: 'unsaved remote draft' })
+  })
+
+  it('does not collapse similarly named files owned by external SSH targets', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/tmp/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      externalSshTargetId: 'ssh-a',
+      mode: 'edit'
+    })
+    const sshAFile = store.getState().openFiles[0]!
+    const sshBFile = {
+      ...sshAFile,
+      id: 'ssh-b-file',
+      externalSshTargetId: 'ssh-b'
+    }
+    store.setState({ openFiles: [sshAFile, sshBFile] } as Partial<AppState>)
+
+    store.getState().closeFile(sshAFile.id)
+
+    expect(store.getState().openFiles).toEqual([sshBFile])
   })
 
   it('notifies the host for mirrored editors removed by close all in the active worktree', () => {
