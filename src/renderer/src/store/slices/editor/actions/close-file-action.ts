@@ -1,13 +1,21 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
+import {
+  getRecentlyClosedTabPosition,
+  pushRecentlyClosedTabKind,
+  takeClosedTabOrder
+} from '../../recently-closed-tabs'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import { type ClosedEditorTabSnapshot, MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
+import type { ClosedEditorTabSnapshot } from '../types/open-file'
 import { removeMarkdownVisibilityKeys } from '../tabs/workspace-editor-item'
 import {
   deleteUntouchedUntitledFile,
   shouldDeleteUntouchedUntitledFile
 } from '../tabs/untitled-file-cleanup'
+import {
+  placeClosedEditorSnapshot,
+  rememberKeptUntitledEditor
+} from './remember-kept-untitled-editor'
 
 export function createCloseFileAction(
   set: EditorSet,
@@ -20,6 +28,12 @@ export function createCloseFileAction(
       // Why: also check editorDrafts — isDirty is set by a debounced callback, so a draft can exist before isDirty flushes; a draft means the user typed something.
       const hasDraft = !!get().editorDrafts[fileId]
       const shouldDeleteFromDisk = shouldDeleteUntouchedUntitledFile(preClose, hasDraft)
+      const reopenPosition =
+        shouldDeleteFromDisk && preClose?.worktreeId
+          ? getRecentlyClosedTabPosition(get(), preClose.worktreeId, fileId)
+          : undefined
+      // Why: stamp before the file stat so a tab closed while that stat is in flight stays ahead.
+      const closeOrder = takeClosedTabOrder()
 
       // Why: mirrored tabs are host-owned, so the host must close its copy or its next snapshot re-mirrors the file and the tab reopens.
       notifyHostOfMirroredEditorClose(get(), preClose?.worktreeId, fileId)
@@ -149,19 +163,19 @@ export function createCloseFileAction(
           const position = getRecentlyClosedTabPosition(s, wtRecent, fileId)
           nextRecentlyClosed = {
             ...s.recentlyClosedEditorTabsByWorktree,
-            [wtRecent]: [
-              {
-                ...(snap as ClosedEditorTabSnapshot),
-                reopenId: fileId,
-                ...(position ? { position } : {})
-              },
-              ...stack
-            ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
+            [wtRecent]: placeClosedEditorSnapshot(stack, {
+              ...(snap as ClosedEditorTabSnapshot),
+              reopenId: fileId,
+              closeOrder,
+              ...(position ? { position } : {})
+            })
           }
           nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
             s.recentlyClosedTabKindsByWorktree,
             wtRecent,
-            'editor'
+            'editor',
+            1,
+            closeOrder
           )
         }
 
@@ -196,7 +210,12 @@ export function createCloseFileAction(
 
       // Why: untitled unedited files exist on disk only because createUntitledMarkdownFile() eagerly writes a bindable path; delete the clutter (fire-and-forget).
       if (shouldDeleteFromDisk && preClose && typeof window !== 'undefined') {
-        deleteUntouchedUntitledFile(get(), preClose)
+        void deleteUntouchedUntitledFile(get(), preClose).then((deleted) => {
+          // Why: the placeholder is only omitted from reopen when the delete actually removes it (#23771).
+          if (!deleted) {
+            rememberKeptUntitledEditor(set, preClose, reopenPosition, closeOrder)
+          }
+        })
       }
 
       // Why: route editor/diff closes through the unified close path (MRU + visual-neighbor fallback) so they match terminal/browser tab-close behavior.
