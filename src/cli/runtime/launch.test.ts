@@ -8,12 +8,15 @@ import {
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState
 } from '../../shared/serve-update-handoff'
+import { SERVE_SUPERVISOR_STOP_EXIT_CODE } from '../../shared/serve-supervision'
 import {
   readServeUpdateHandoff,
   SERVE_REPLACEMENT_READY_TIMEOUT_MS
 } from './serve-update-supervisor'
 
-const { spawnMock, spawnSyncMock } = vi.hoisted(() => ({
+const { healthProbeMock, singletonRecoveryMock, spawnMock, spawnSyncMock } = vi.hoisted(() => ({
+  healthProbeMock: vi.fn(),
+  singletonRecoveryMock: vi.fn(),
   spawnMock: vi.fn(),
   spawnSyncMock: vi.fn()
 }))
@@ -21,6 +24,12 @@ const { spawnMock, spawnSyncMock } = vi.hoisted(() => ({
 vi.mock('child_process', () => ({
   spawn: spawnMock,
   spawnSync: spawnSyncMock
+}))
+vi.mock('./serve-runtime-health', () => ({
+  probeServeRuntimeHealth: healthProbeMock
+}))
+vi.mock('./serve-singleton-recovery', () => ({
+  recoverStaleServeSingleton: singletonRecoveryMock
 }))
 
 import { launchOrcaApp, serveOrcaApp } from './launch'
@@ -88,6 +97,10 @@ describe('serveOrcaApp', () => {
 
   beforeEach(() => {
     spawnMock.mockReset()
+    healthProbeMock.mockReset()
+    healthProbeMock.mockResolvedValue({ healthy: true, runtimeId: 'runtime-new' })
+    singletonRecoveryMock.mockReset()
+    singletonRecoveryMock.mockResolvedValue({ state: 'not-recoverable', reason: 'missing_lock' })
     spawnSyncMock.mockReset()
     process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
   })
@@ -96,10 +109,22 @@ describe('serveOrcaApp', () => {
     vi.restoreAllMocks()
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
+    delete process.env.ORCA_APPIMAGE_NO_SANDBOX
+    delete process.env.ORCA_SERVE_TMPDIR
     delete process.env.ORCA_USER_DATA_PATH
     return Promise.all(
       temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true }))
     )
+  })
+
+  it('returns a non-retryable exit code when the configured temp path is invalid', async () => {
+    process.env.ORCA_SERVE_TMPDIR = 'relative/tmp'
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    await expect(serveOrcaApp({ json: true })).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
+
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('ORCA_SERVE_TMPDIR'))
   })
 
   it.runIf(process.platform === 'darwin')(
@@ -334,7 +359,7 @@ describe('serveOrcaApp', () => {
       once: vi.fn(
         (event: string, handler: (code: number | null, signal: string | null) => void) => {
           if (event === 'exit') {
-            queueMicrotask(() => handler(0, null))
+            queueMicrotask(() => handler(SERVE_SUPERVISOR_STOP_EXIT_CODE, null))
           }
           return child
         }
@@ -342,7 +367,7 @@ describe('serveOrcaApp', () => {
     }
     spawnMock.mockReturnValue(child)
 
-    await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
+    await expect(serveOrcaApp({ json: true })).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
 
     expect(spawnMock).toHaveBeenCalledWith(
       '/Applications/Orca.app/Contents/MacOS/Orca',
@@ -359,7 +384,7 @@ describe('serveOrcaApp', () => {
       once: vi.fn(
         (event: string, handler: (code: number | null, signal: string | null) => void) => {
           if (event === 'exit') {
-            queueMicrotask(() => handler(0, null))
+            queueMicrotask(() => handler(SERVE_SUPERVISOR_STOP_EXIT_CODE, null))
           }
           return child
         }
@@ -374,7 +399,7 @@ describe('serveOrcaApp', () => {
         pairingAddress: '100.64.1.20',
         mobilePairing: true
       })
-    ).resolves.toBe(0)
+    ).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
 
     expect(spawnMock).toHaveBeenCalledWith(
       '/Applications/Orca.app/Contents/MacOS/Orca',
@@ -401,7 +426,7 @@ describe('serveOrcaApp', () => {
       once: vi.fn(
         (event: string, handler: (code: number | null, signal: string | null) => void) => {
           if (event === 'exit') {
-            queueMicrotask(() => handler(0, null))
+            queueMicrotask(() => handler(SERVE_SUPERVISOR_STOP_EXIT_CODE, null))
           }
           return child
         }
@@ -409,7 +434,9 @@ describe('serveOrcaApp', () => {
     }
     spawnMock.mockReturnValue(child)
 
-    await expect(serveOrcaApp({ json: true, port: '6768' })).resolves.toBe(0)
+    await expect(serveOrcaApp({ json: true, port: '6768' })).resolves.toBe(
+      SERVE_SUPERVISOR_STOP_EXIT_CODE
+    )
 
     expect(spawnMock).toHaveBeenCalledWith(
       '/repo/node_modules/.bin/electron',
@@ -450,12 +477,14 @@ describe('serveOrcaApp', () => {
       Object.defineProperty(process, 'getuid', { configurable: true, value: () => 1000 })
       spawnSyncMock.mockReturnValue(userNamespaceResult)
       const child = new FakeChildProcess()
-      spawnMock.mockReturnValue(child)
+      spawnMock.mockImplementation(() => {
+        queueMicrotask(() => child.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null))
+        return child
+      })
 
       try {
         const result = serveOrcaApp({ json: true })
-        queueMicrotask(() => child.emit('exit', 0, null))
-        await expect(result).resolves.toBe(0)
+        await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
         expect(spawnSyncMock).toHaveBeenCalledWith(
           'unshare',
           ['-Ur', 'true'],
@@ -602,6 +631,7 @@ describe('serveOrcaApp', () => {
     const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })
     process.env.ORCA_APP_EXECUTABLE = 'C:\\repo\\node_modules\\.bin\\electron.cmd'
+    process.env.ORCA_USER_DATA_PATH = 'C:\\Users\\test\\AppData\\Roaming\\orca'
     const child = {
       kill: vi.fn(),
       once: vi.fn(

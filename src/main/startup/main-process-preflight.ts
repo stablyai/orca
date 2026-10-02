@@ -18,6 +18,7 @@ import {
   optOutOfHiddenPageWakeUpThrottling
 } from './configure-process'
 import { installServeSupervisorDisconnectQuit } from '../serve-update-handoff'
+import { validateServeTempDirectory } from './serve-temp-directory-preflight'
 import {
   installUncaughtPipeErrorGuard,
   installUnhandledRejectionLogging
@@ -209,6 +210,9 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why captured now: after the dev/E2E override above, and before app.setName('Orca') (whenReady)
   // changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
   initDataPath()
+  if (state.isServeMode && !validateServeTempDirectory()) {
+    return false
+  }
   // Why: Electron resolves the macOS safeStorage Keychain service name from the app name before
   // ready. Dev pins userData above, so applying its name here cannot shift the captured path.
   if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {

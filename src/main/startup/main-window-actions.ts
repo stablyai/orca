@@ -1,4 +1,5 @@
 import { app, clipboard, dialog, type BrowserWindow, type Tray } from 'electron'
+import { markServeUserQuit, cancelServeUserQuit } from '../serve-update-handoff'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
@@ -63,12 +64,19 @@ export function openSettingsFromSystemMenu(): void {
   state.pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
 }
 
-export function quitFromSystemTray(): void {
+export function requestUserQuit(): void {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     showMainWindowFromTray()
   }
+  markServeUserQuit()
   state.isQuitting = true
-  app.quit()
+  try {
+    app.quit()
+  } catch (error) {
+    cancelServeUserQuit()
+    state.isQuitting = false
+    throw error
+  }
 }
 
 export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
@@ -91,7 +99,7 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
       showMainWindowFromTray()
       runUserInitiatedUpdateCheck()
     },
-    onQuit: quitFromSystemTray
+    onQuit: requestUserQuit
   }
 }
 
@@ -184,9 +192,6 @@ export async function showRendererRecoveryPrompt(
       }
       loadMainWindow(state.mainWindow)
     },
-    quit: () => {
-      state.isQuitting = true
-      app.quit()
-    }
+    quit: requestUserQuit
   })
 }

@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { SERVE_SUPERVISOR_STOP_EXIT_CODE } from '../../shared/serve-supervision'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-lock'
 
 // Why: `app.quit()` is deferred before Electron `ready`, so fatal startup gates must use the
@@ -122,5 +123,12 @@ describe('pre-ready termination under real Electron', () => {
     // Why: pins the Electron semantic the fix rests on — pre-`ready` `quit()` schedules, it does not stop.
     expect(run.markers).toEqual([GATE_ENTERED, CONTINUED_INTO_STARTUP, REACHED_TAIL])
     expect(run.status).not.toBe(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
+  }, 90_000)
+
+  it('stops a disconnected foreground serve child before further startup runs', () => {
+    const run = runPreReadyGate(`app.exit(${SERVE_SUPERVISOR_STOP_EXIT_CODE})`)
+
+    expect(run.markers).toEqual([GATE_ENTERED])
+    expect(run.status).toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
   }, 90_000)
 })

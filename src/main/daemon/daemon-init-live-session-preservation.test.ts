@@ -14,6 +14,8 @@ const {
   killStaleDaemonMock,
   daemonClientMock,
   spawnerInstances,
+  adapterInstances,
+  listProcessesControl,
   trackDaemonReplacedMock,
   importFresh,
   mockConnectedAdoptionClientOnce,
@@ -47,7 +49,34 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   afterEach(() => {
+    listProcessesControl.current = null
     vi.clearAllMocks()
+  })
+
+  it('disconnects the app without shutting down the daemon or its live PTYs', async () => {
+    const mod = await importFresh()
+    const ids = Array.from({ length: 5 }, (_, index) => `live-${index}`)
+    const sessions = ids.map((id) => ({ id, sessionId: id }))
+    listProcessesControl.current = async () => sessions
+    await mod.initDaemonPtyProvider()
+    const provider = mod.getDaemonProvider()
+    const adapter = adapterInstances[0]
+    expect(provider).toBe(adapter)
+    expect(await mod.listLiveDaemonPtyIds()).toEqual(ids)
+    adapter.dispose.mockImplementation(() => {
+      sessions.length = 0
+    })
+    spawnerInstances[0].shutdown.mockImplementation(async () => {
+      sessions.length = 0
+    })
+
+    await mod.disconnectDaemon()
+
+    expect(adapter.disconnectOnly).toHaveBeenCalledOnce()
+    expect(adapter.dispose).not.toHaveBeenCalled()
+    expect(spawnerInstances[0].shutdown).not.toHaveBeenCalled()
+    expect((await provider?.listProcesses())?.map((process) => process.id)).toEqual(ids)
+    expect(adapter.listProcesses).toHaveBeenCalledTimes(2)
   })
 
   it('preserves a daemon launched from another app path when it owns live sessions', async () => {

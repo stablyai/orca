@@ -1,4 +1,5 @@
 import { app, type Event } from 'electron'
+import { notifyServeSupervisorUserQuit } from '../serve-update-handoff'
 import { closeAllWatchers } from '../ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
@@ -115,6 +116,10 @@ function installWillQuitHandler(): void {
     // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.
     stopTccPromptNotice()
     const updateQuitInProgress = isQuittingForUpdate()
+    const serveUserQuitNotification = notifyServeSupervisorUserQuit(
+      state.isServeMode,
+      updateQuitInProgress
+    )
     if (updateQuitInProgress) {
       recordUpdaterLifecycle(
         'will_quit_cleanup_started',
@@ -254,6 +259,7 @@ function installWillQuitHandler(): void {
     // Losing at most the last debounce interval beats a quit that never completes, and the
     // temp+rename swap means a write cut short by the deadline leaves the old file intact.
     settleTeardownWithinDeadline([
+      { name: 'serve-user-quit', promise: serveUserQuitNotification },
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
       { name: 'runtime-rpc', promise: rpcStopAndClear },

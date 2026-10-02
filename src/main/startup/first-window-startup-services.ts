@@ -1,3 +1,5 @@
+import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../../shared/startup-readiness-deadlines'
+
 type FirstWindowStartupServices = {
   startDaemonPtyProvider: (signal: AbortSignal) => Promise<void>
   startAgentHookServer: (signal: AbortSignal) => Promise<void>
@@ -22,7 +24,7 @@ export const FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS = 12_000
 // them lose their daemon sessions permanently (#5232). The PTY gate therefore
 // waits for the daemon attempt itself and only fail-opens at a hard cap that
 // exists solely as a deadlock backstop.
-export const LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS = 60_000
+export { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS }
 
 function startService(
   label: string,

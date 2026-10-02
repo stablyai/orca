@@ -92,5 +92,9 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
       ? { mode: 'recipe-json', projectRoot: options.projectRoot! }
       : { mode: options.json ? 'json' : 'human' }
   )
-  notifyServeSupervisorReady(runtime.getRuntimeId())
+  notifyServeSupervisorReady(runtime.getRuntimeId(), {
+    websocket: 'ready',
+    runtime: 'ready',
+    graph: runtime.getStatus().graphStatus
+  })
 }

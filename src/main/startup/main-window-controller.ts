@@ -1,3 +1,4 @@
+import { cancelServeUserQuit } from '../serve-update-handoff'
 import { app, type BrowserWindow } from 'electron'
 import { createMainWindow, loadMainWindow } from '../window/createMainWindow'
 import {
@@ -98,6 +99,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
+      cancelServeUserQuit()
       state.isQuitting = false
       clearExpectedRendererReload()
     },
