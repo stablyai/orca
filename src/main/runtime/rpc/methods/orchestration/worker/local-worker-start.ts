@@ -29,6 +29,7 @@ import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
+import { waitForWorkerStartComposer } from '../../../../launched-agent-composer-readiness'
 
 type WorkerStartMutation = {
   callerFingerprint: string
@@ -188,17 +189,18 @@ export async function startLocalWorker(args: {
           effects,
           timeoutMs: params.timeoutMs ?? 60_000
         })
-      : // ZCode emits SessionStart only after input; its first dispatch must wait for the composer.
-        agent === 'zcode' && !params.terminal
-        ? await runtime.waitForFreshWorkerComposer(
+      : // A caller-supplied terminal was not freshly launched, so its composer marker may be long gone.
+        params.terminal || !agent
+        ? await runtime.waitForTerminal(terminalHandle, {
+            condition: 'tui-idle',
+            timeoutMs: params.timeoutMs ?? 60_000
+          })
+        : await waitForWorkerStartComposer(
+            runtime,
             terminalHandle,
             agent,
             params.timeoutMs ?? 60_000
           )
-        : await runtime.waitForTerminal(terminalHandle, {
-            condition: 'tui-idle',
-            timeoutMs: params.timeoutMs ?? 60_000
-          })
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
       if (!wait.satisfied) {

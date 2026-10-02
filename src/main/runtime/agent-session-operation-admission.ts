@@ -193,6 +193,23 @@ export function claimAgentSessionOperationInto(
   return claimed.claim
 }
 
+/** Whether an admission left the right to run open, so the same transaction should claim it. */
+export type ClaimAfterAdmission = (decision: AgentSessionOperationDecision) => boolean
+
+/** Admission and, when `claimAfter` says so, the claim, in one transaction: the same swap as
+ *  `claimAgentSessionOperationInto`, with one durable write instead of two. */
+export function admitAndClaimAgentSessionOperationInto(
+  state: { operations: Map<string, AgentSessionOperationRow> },
+  args: AgentSessionOperationAdmission,
+  claimAfter: ClaimAfterAdmission
+): { decision: AgentSessionOperationDecision; claim: AgentSessionOperationClaim | null } {
+  const decision = admitAgentSessionOperationInto(state, args)
+  return {
+    decision,
+    claim: claimAfter(decision) ? claimAgentSessionOperationInto(state, args) : null
+  }
+}
+
 export function settleAgentSessionOperationInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
   args: { callerKey?: string; operationId: string; outcome: AgentSessionOperationOutcome }

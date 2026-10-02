@@ -25,6 +25,14 @@ const createStructuredSession = vi.hoisted(() => vi.fn())
 vi.mock('./structured-agent-session-create', () => ({
   createStructuredAgentSessionForWorktree: createStructuredSession
 }))
+const deliverTerminalPrompt = vi.hoisted(() => vi.fn(async () => true))
+vi.mock('./agent-launch-terminal-prompt', () => ({
+  deliverTerminalAgentLaunchPrompt: deliverTerminalPrompt
+}))
+const commitChatPrompt = vi.hoisted(() => vi.fn(async () => 'message-1'))
+vi.mock('./agent-launch-structured-prompt', () => ({
+  commitStructuredAgentSessionLaunchPrompt: commitChatPrompt
+}))
 
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
@@ -39,6 +47,8 @@ const CREATE_LAUNCH = {
   target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
 }
 const CALLER = 'device-1'
+const REVEAL_WARNING =
+  'Terminal term_1 is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_1` to reveal and focus it.'
 
 function selectionRuntime(options: Parameters<typeof runtimeStub>[0]) {
   return Object.assign(runtimeStub(options), {
@@ -59,6 +69,8 @@ function chatActivation(): unknown {
 }
 
 beforeEach(() => {
+  deliverTerminalPrompt.mockClear()
+  commitChatPrompt.mockClear()
   createStructuredSession
     .mockReset()
     .mockResolvedValue({ ok: true, value: { sessionId: 'sess-1' } })
@@ -91,6 +103,27 @@ describe('a paired client launching into an existing workspace', () => {
     )
   })
 
+  // Why: a pasted prompt waits up to a minute for the agent; the caller's view must not wait with it.
+  it.each([
+    ['terminal', {}, deliverTerminalPrompt],
+    ['chat', STRUCTURED_PREFERENCE, commitChatPrompt]
+  ] as const)(
+    'selects the new %s for the caller before its prompt is delivered',
+    async (_surface, settings, deliver) => {
+      const runtime = selectionRuntime({ settings, terminalPaneKey: PANE_KEY })
+
+      await launch(
+        { ...EXISTING_LAUNCH, prompt: { text: 'Fix it.\nLog:', delivery: 'submit' } },
+        runtime
+      )
+
+      const selectedAt = runtime.selectCreatedMobileSessionTabForClient.mock.invocationCallOrder[0]
+      const deliveredAt = deliver.mock.invocationCallOrder[0]
+      expect(deliveredAt).toBeDefined()
+      expect(selectedAt).toBeLessThan(deliveredAt!)
+    }
+  )
+
   it('still reports the launch when selecting its tab fails', async () => {
     const runtime = selectionRuntime({ settings: {}, terminalPaneKey: PANE_KEY })
     runtime.selectCreatedMobileSessionTabForClient.mockImplementationOnce(() => {
@@ -102,6 +135,20 @@ describe('a paired client launching into an existing workspace', () => {
 
     expect(result.outcome).toMatchObject({ kind: 'terminal', handle: 'term_1' })
     warn.mockRestore()
+  })
+
+  // Why: a headless `--serve` host has no window to reveal into; the caller mirrors the tab anyway.
+  it('does not pass on the host’s own reveal warning, since the caller shows the tab itself', async () => {
+    const runtime = selectionRuntime({
+      settings: {},
+      terminalPaneKey: PANE_KEY,
+      terminalWarning: REVEAL_WARNING
+    })
+
+    const result = await launch(EXISTING_LAUNCH, runtime)
+
+    expect(result.outcome).toMatchObject({ kind: 'terminal', handle: 'term_1' })
+    expect(result.warning).toBeUndefined()
   })
 
   it('selects nothing when the runtime reported no pane for the terminal', async () => {
@@ -121,6 +168,14 @@ describe('launches that keep the host-wide behaviour', () => {
 
     expect(chatActivation()).toBe(true)
     expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
+  })
+
+  it('an in-process caller still hears that the host could not reveal the tab', async () => {
+    const runtime = selectionRuntime({ settings: {}, terminalWarning: REVEAL_WARNING })
+
+    const result = await launch(EXISTING_LAUNCH, runtime, {})
+
+    expect(result.warning).toBe(REVEAL_WARNING)
   })
 
   it("the host's own desktop window, a runtime client with no paired device, still activates the chat", async () => {

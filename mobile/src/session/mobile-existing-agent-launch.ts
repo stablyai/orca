@@ -7,19 +7,17 @@
  */
 
 import type { AgentLaunchPrompt, AgentLaunchResult } from '../../../src/shared/agent-launch-intent'
-import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../src/shared/agent-launch-pane-already-live'
-import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../src/shared/agent-launch-session-already-exists'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import { agentLaunchReplayRun } from '../tasks/mobile-workspace-create-operations'
+import { agentLaunchExistingParams, readAgentLaunchSupport } from '../tasks/agent-launch-request'
 import {
-  agentLaunchExistingParams,
-  isAgentLaunchReplayUnsupportedRefusal,
-  readAgentLaunchSupport
-} from '../tasks/agent-launch-request'
+  classifyAgentLaunchReplayRefusal,
+  isAgentLaunchReservationTakenRefusal
+} from '../../../src/shared/agent-launch-replay-refusal'
 import { sendReplayingAmbiguousDelivery } from '../tasks/replay-on-ambiguous-delivery'
 import {
   structuredSessionOperationId,
@@ -152,29 +150,17 @@ function classifyLaunchRefusal(
   error: { code?: string; message?: string },
   replayed: boolean
 ): MobileExistingAgentLaunch {
-  if (isAgentLaunchReplayUnsupportedRefusal(error)) {
-    // Only a refusal of the first send proves nothing ran; after a replay it may be a replacement
-    // connection whose capability list hasn't landed, answering for an attempt that did start.
-    return replayed
-      ? { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
-      : { kind: 'unsupported' }
+  switch (classifyAgentLaunchReplayRefusal(error, replayed)) {
+    case 'unsupported':
+      return { kind: 'unsupported' }
+    case 'unknown':
+      return { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
+    case 'failed': {
+      if (isAgentLaunchReservationTakenRefusal(error)) {
+        return { kind: 'failed', message: AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE }
+      }
+      const message = error.message?.trim()
+      return { kind: 'failed', message: message || "Couldn't start the agent." }
+    }
   }
-  if (
-    error.code === 'agent_session_operation_unknown' ||
-    error.code === 'agent_session_operation_expired'
-  ) {
-    return { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
-  }
-  if (
-    error.code === AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE ||
-    error.code === AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
-  ) {
-    // A taken reservation proves nothing started only on the first send; after a replay the pane
-    // or chat holding it may be this launch's own.
-    return replayed
-      ? { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
-      : { kind: 'failed', message: AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE }
-  }
-  const message = error.message?.trim()
-  return { kind: 'failed', message: message || "Couldn't start the agent." }
 }

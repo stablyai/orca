@@ -8,7 +8,8 @@
  * what runs the new workspace's setup.
  */
 
-import type { AgentLaunchResult, AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchPublishedSurface } from '../../../agent-launch/agent-launch-executor'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
@@ -27,25 +28,25 @@ export function agentLaunchCallerNavigationId(
 /** Bookkeeping, never a gate: the agent already runs, so a failure here only leaves the view as it was. */
 export function selectAgentLaunchTabForCaller(
   runtime: Pick<OrcaRuntimeService, 'selectCreatedMobileSessionTabForClient'>,
-  result: AgentLaunchResult,
+  surface: AgentLaunchPublishedSurface,
   clientNavigationId: string
 ): void {
-  const { outcome } = result
+  const { outcome } = surface
   // Found by pane or session, never by a predicted tab id.
-  const surface =
+  const selector =
     outcome.kind === 'terminal'
       ? outcome.paneKey
         ? parsePaneKey(outcome.paneKey)
         : null
       : { sessionId: outcome.sessionId }
-  if (!surface) {
+  if (!selector) {
     return
   }
   try {
     if (
       !runtime.selectCreatedMobileSessionTabForClient(
-        result.worktreeId,
-        surface,
+        surface.worktreeId,
+        selector,
         clientNavigationId
       )
     ) {

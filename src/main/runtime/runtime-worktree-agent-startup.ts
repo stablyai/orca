@@ -9,6 +9,11 @@ import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
+import {
+  launchHostProvesAgentInFront,
+  nameLocalTypedLineShell
+} from './agent-launch-typed-line-shell'
 import {
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents
@@ -127,6 +132,9 @@ export function buildWorktreeStartupForAgent(
     toSessionOptions: (
       preferences?: AgentLaunchPreferences
     ) => Parameters<typeof buildAgentStartupPlan>[0]['sessionOptions'] | undefined
+    /** Set by a caller that delivers an uncarried prompt itself: the prompt then rides only a typed
+     *  line that can carry it, and this reports whether it did. Absent keeps the CLI's fold. */
+    onPromptCarry?: (carried: boolean) => void
   }
 ): {
   agent: TuiAgent
@@ -137,18 +145,36 @@ export function buildWorktreeStartupForAgent(
   if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
     throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
   }
-  const startupPlan = buildAgentStartupPlan({
-    ...resolveAgentStartupPlanInputs({
-      agent,
-      settings,
-      platform: environment.getLaunchPlatform(),
-      isRemote: repoIsRemote(repo),
-      ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
-      sessionOptions: environment.toSessionOptions(environment.launchPreferences)
-    }),
-    prompt: environment.prompt ?? '',
-    allowEmptyPromptLaunch: true
+  const planInputs = resolveAgentStartupPlanInputs({
+    agent,
+    settings,
+    platform: environment.getLaunchPlatform(),
+    isRemote: repoIsRemote(repo),
+    ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
+    sessionOptions: environment.toSessionOptions(environment.launchPreferences)
   })
+  const prompt = environment.prompt ?? ''
+  let startupPlan: ReturnType<typeof buildAgentStartupPlan>
+  if (environment.onPromptCarry) {
+    const offered = planStartupWithPromptCandidate(planInputs, prompt, {
+      shellName: nameLocalTypedLineShell({
+        isRemote: repoIsRemote(repo),
+        ...(settings.terminalDefaultShell
+          ? { defaultShellSetting: settings.terminalDefaultShell }
+          : {})
+      }),
+      provesAgentInFront: launchHostProvesAgentInFront({
+        isRemote: repoIsRemote(repo),
+        launchPlatform: environment.getLaunchPlatform()
+      })
+    })
+    startupPlan = offered.plan
+    if (startupPlan && prompt.trim()) {
+      environment.onPromptCarry(offered.promptCarried)
+    }
+  } else {
+    startupPlan = buildAgentStartupPlan({ ...planInputs, prompt, allowEmptyPromptLaunch: true })
+  }
   if (!startupPlan) {
     throw new Error(`Could not build launch command for ${agent}.`)
   }

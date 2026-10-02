@@ -28,9 +28,9 @@ describe('ZCode readiness from captured terminal bytes', () => {
       launchAgent: 'zcode',
       data: '\x1b[?1049h╭'
     })
-    await expect(
-      runtime.waitForFreshWorkerComposer(handle, 'zcode', 1_000)
-    ).resolves.toBeUndefined()
+    await expect(runtime.waitForFreshWorkerComposer(handle, 'zcode', 1_000)).resolves.toMatchObject(
+      { condition: 'tui-idle', satisfied: true }
+    )
   })
 
   it('never emits an OSC title, so no title lane can settle its wait', () => {

@@ -1,0 +1,7 @@
+{
+  "description": "non-agent recording at 80x24 replayed on the unknown pane, one entry per chunk",
+  "observations": {
+    "clocked": ["0-4: now=pending:open edge=pending:open quiet=pending:open wait=pending"],
+    "clockless": ["0-4: verdict=pending:open wait=pending"]
+  }
+}
