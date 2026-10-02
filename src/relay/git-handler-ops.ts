@@ -6,7 +6,9 @@
  * remain decoupled from the GitHandler class.
  */
 import * as path from 'node:path'
-import { bufferToBlob, parseBranchDiff } from './git-handler-utils'
+import { resolveGitLfsPreview } from '../shared/git-lfs-preview'
+import { probeGitBlobPresence } from '../shared/git-blob-presence'
+import { bufferToBlob, parseBranchDiff, PREVIEWABLE_MIME } from './git-handler-utils'
 import { buildDiffResult } from './git-diff-result'
 import { isGitBufferOverflowError } from './git-buffer-overflow'
 import { readWorkingDiffFile } from './git-working-file-read'
@@ -25,7 +27,7 @@ export type GitExec = (
   }
 ) => Promise<{ stdout: string; stderr: string }>
 
-export type GitBufferExec = (args: string[], cwd: string) => Promise<Buffer>
+export type GitBufferExec = (args: string[], cwd: string, stdin?: string) => Promise<Buffer>
 
 // ─── Blob reading ────────────────────────────────────────────────────
 
@@ -37,12 +39,23 @@ export async function readBlobAtOid(
 ): Promise<{ content: string; isBinary: boolean }> {
   // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
+  // Why: preview bytes must resolve LFS pointers using the host's smudge filter.
+  const command = PREVIEWABLE_MIME[path.extname(filePath).toLowerCase()]
+    ? ['cat-file', '--filters', '--']
+    : ['show', '--end-of-options']
   try {
-    const buf = await gitBuffer(['show', '--end-of-options', `${oid}:${gitPath}`], cwd)
-    return bufferToBlob(buf, filePath)
+    const buf = await gitBuffer([...command, `${oid}:${gitPath}`], cwd)
+    const content = PREVIEWABLE_MIME[path.extname(filePath).toLowerCase()]
+      ? await resolveGitLfsPreview(buf, gitPath, (args, stdin) => gitBuffer(args, cwd, stdin))
+      : buf
+    return bufferToBlob(content, filePath)
   } catch (error) {
     if (isGitBufferOverflowError(error)) {
       return { content: '', isBinary: true }
+    }
+    if (PREVIEWABLE_MIME[path.extname(filePath).toLowerCase()]) {
+      const present = await probeGitBlobPresence((args) => gitBuffer(args, cwd), gitPath, oid)
+      return { content: '', isBinary: present !== false }
     }
     return { content: '', isBinary: false }
   }
@@ -55,12 +68,23 @@ export async function readBlobAtIndex(
 ): Promise<{ content: string; isBinary: boolean; missing: boolean }> {
   // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
+  // Why: preview bytes must resolve LFS pointers using the host's smudge filter.
+  const command = PREVIEWABLE_MIME[path.extname(filePath).toLowerCase()]
+    ? ['cat-file', '--filters', '--']
+    : ['show', '--end-of-options']
   try {
-    const buf = await gitBuffer(['show', '--end-of-options', `:${gitPath}`], cwd)
-    return { ...bufferToBlob(buf, filePath), missing: false }
+    const buf = await gitBuffer([...command, `:${gitPath}`], cwd)
+    const content = PREVIEWABLE_MIME[path.extname(filePath).toLowerCase()]
+      ? await resolveGitLfsPreview(buf, gitPath, (args, stdin) => gitBuffer(args, cwd, stdin))
+      : buf
+    return { ...bufferToBlob(content, filePath), missing: false }
   } catch (error) {
     if (isGitBufferOverflowError(error)) {
       return { content: '', isBinary: true, missing: false }
+    }
+    if (PREVIEWABLE_MIME[path.extname(filePath).toLowerCase()]) {
+      const present = await probeGitBlobPresence((args) => gitBuffer(args, cwd), gitPath)
+      return { content: '', isBinary: present !== false, missing: present === false }
     }
     // Why: a non-overflow failure means the path is absent from the index (a
     // staged deletion), distinct from the size-capped case handled above.

@@ -29,7 +29,7 @@ export type GitHandlerOperationHost = {
     cwd: string,
     opts?: GitHandlerCommandOptions
   ): Promise<GitHandlerCommandResult>
-  gitBuffer(args: string[], cwd: string): Promise<Buffer>
+  gitBuffer(args: string[], cwd: string, stdin?: string): Promise<Buffer>
   spawnClone(
     args: string[],
     cwd: string,
@@ -72,8 +72,8 @@ export abstract class GitHandlerOperationContext {
     return this.host.git(args, cwd, opts)
   }
 
-  protected gitBuffer(args: string[], cwd: string): Promise<Buffer> {
-    return this.host.gitBuffer(args, cwd)
+  protected gitBuffer(args: string[], cwd: string, stdin?: string): Promise<Buffer> {
+    return this.host.gitBuffer(args, cwd, stdin)
   }
 
   protected spawnClone(
