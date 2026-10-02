@@ -59,6 +59,28 @@ function carryDescription(
   return translate('components.agentSessionFork.carryStagingNote', 'Staging is not preserved.')
 }
 
+function forkDescription(withAgent: boolean, fromParent: boolean, workspace: string): string {
+  if (!fromParent) {
+    return withAgent
+      ? translate(
+          'components.agentSessionFork.descriptionOtherBase',
+          'Start a new branch and continue the conversation there.'
+        )
+      : translate('components.agentSessionFork.descriptionNoAgentOtherBase', 'Start a new branch.')
+  }
+  return withAgent
+    ? translate(
+        'components.agentSessionFork.description',
+        'Start a new branch from {{workspace}} and continue the conversation there.',
+        { workspace }
+      )
+    : translate(
+        'components.agentSessionFork.descriptionNoAgent',
+        'Start a new branch from {{workspace}}.',
+        { workspace }
+      )
+}
+
 function AgentSessionForkDialogBody({
   data
 }: {
@@ -70,6 +92,11 @@ function AgentSessionForkDialogBody({
   const nameInputRef = useRef<HTMLInputElement>(null)
   const { source } = state
   const workspace = source.label
+  const asChildLabel = translate(
+    'components.agentSessionFork.asChild',
+    'Create as a child of {{workspace}}',
+    { workspace }
+  )
 
   useEffect(() => {
     // Why: the submit button that held focus is disabled while busy, so focus must return to the form.
@@ -100,17 +127,14 @@ function AgentSessionForkDialogBody({
             {translate('components.agentSessionFork.title', 'Fork Agent Session')}
           </DialogTitle>
           <DialogDescription>
-            {state.selectedOption.kind === 'none'
-              ? translate(
-                  'components.agentSessionFork.descriptionNoAgent',
-                  'Start a new branch from {{workspace}}.',
-                  { workspace }
-                )
-              : translate(
-                  'components.agentSessionFork.description',
-                  'Start a new branch from {{workspace}} and continue the conversation there.',
-                  { workspace }
-                )}
+            {/* Why: workspace names can be one long unbroken token. */}
+            <span className="break-words">
+              {forkDescription(
+                state.selectedOption.kind !== 'none',
+                state.base.kind === 'parent-commit',
+                workspace
+              )}
+            </span>
           </DialogDescription>
         </DialogHeader>
         <form
@@ -140,11 +164,8 @@ function AgentSessionForkDialogBody({
             />
           </div>
           <SettingsSwitchRow
-            label={translate(
-              'components.agentSessionFork.asChild',
-              'Create as a child of {{workspace}}',
-              { workspace }
-            )}
+            label={<span className="min-w-0 leading-snug break-words">{asChildLabel}</span>}
+            ariaLabel={asChildLabel}
             checked={state.asChild}
             onChange={() => state.setAsChild((value) => !value)}
             disabled={state.busy}
@@ -156,7 +177,11 @@ function AgentSessionForkDialogBody({
                 'Bring uncommitted changes ({{modified}} modified, {{added}} new)',
                 { modified: state.modifiedCount, added: state.newCount }
               )}
-              description={carryDescription(state.carryAvailability, workspace)}
+              description={
+                <span className="break-words">
+                  {carryDescription(state.carryAvailability, workspace)}
+                </span>
+              }
               descriptionId={carryDescriptionId}
               checked={state.carryChanges && state.carryAvailability === 'available'}
               onChange={() => state.setCarryChanges((value) => !value)}

@@ -18305,7 +18305,9 @@
         "archived": "Désarchivez cet espace de travail pour le forker.",
         "detached": "Passez d'abord sur une branche ; cet espace de travail est sur un commit détaché.",
         "repoMissing": "Le projet de cet espace de travail n'est pas disponible."
-      }
+      },
+      "descriptionOtherBase": "Démarrez une nouvelle branche et poursuivez-y la conversation.",
+      "descriptionNoAgentOtherBase": "Démarrez une nouvelle branche."
     }
   },
   "dashboardPopout": {

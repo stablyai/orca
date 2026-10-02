@@ -133,6 +133,7 @@ vi.mock('@/components/repo/CreateFromPicker', () => ({
 
 beforeEach(() => {
   sourceWorktree.branch = SOURCE_BRANCH
+  sourceWorktree.displayName = 'Fix auth'
   state.agentStatusByPaneKey = {}
   state.activeModal = 'agent-session-fork'
   state.modalData = {
@@ -263,6 +264,38 @@ describe('AgentSessionForkDialog', () => {
       expect.objectContaining({ source: { kind: 'native', session: paneSession } }),
       expect.any(Function)
     )
+  })
+
+  it('does not name the parent in the description when Advanced starts from another base', async () => {
+    await renderDialog()
+    act(() => buttonByText('Advanced').click())
+    act(() => buttonByText('pick main').click())
+    expect(bodyText()).toContain('Start a new branch and continue the conversation there.')
+    expect(bodyText()).not.toContain('Start a new branch from Fix auth')
+  })
+
+  it('describes a branch-only fork from another base without naming the parent', async () => {
+    mocks.listForkableAgentSessions.mockReturnValue([])
+    await renderDialog()
+    act(() => buttonByText('Advanced').click())
+    act(() => buttonByText('pick project default').click())
+    expect(bodyText()).toContain('Start a new branch.')
+    expect(bodyText()).not.toContain('Start a new branch from Fix auth')
+  })
+
+  it('lets a long unbroken workspace name wrap in the description and switch label', async () => {
+    const longName = 'x'.repeat(300)
+    sourceWorktree.displayName = longName
+    await renderDialog()
+    const holders = Array.from(document.querySelectorAll<HTMLElement>('span')).filter((element) =>
+      element.textContent?.includes(longName)
+    )
+    const wrapping = holders.filter((element) => element.classList.contains('break-words'))
+    expect(wrapping.map((element) => element.textContent)).toEqual([
+      `Start a new branch from ${longName} and continue the conversation there.`,
+      `Create as a child of ${longName}`
+    ])
+    expect(wrapping[1]?.classList.contains('min-w-0')).toBe(true)
   })
 
   it('describes a branch-only fork when no agent is selected', async () => {

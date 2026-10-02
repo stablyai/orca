@@ -18206,7 +18206,9 @@
         "archived": "请先取消归档此工作区，再进行派生。",
         "detached": "请先检出一个分支；此工作区当前处于分离的提交上。",
         "repoMissing": "此工作区所属的项目不可用。"
-      }
+      },
+      "descriptionOtherBase": "新建一个分支，并在其中继续对话。",
+      "descriptionNoAgentOtherBase": "新建一个分支。"
     }
   },
   "dashboardPopout": {

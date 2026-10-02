@@ -18367,7 +18367,9 @@
         "archived": "Unarchive this workspace to fork it.",
         "detached": "Check out a branch first; this workspace is on a detached commit.",
         "repoMissing": "This workspace's project is not available."
-      }
+      },
+      "descriptionOtherBase": "Start a new branch and continue the conversation there.",
+      "descriptionNoAgentOtherBase": "Start a new branch."
     }
   },
   "dashboardPopout": {

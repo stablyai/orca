@@ -18206,7 +18206,9 @@
         "archived": "포크하려면 이 워크스페이스의 보관을 해제하세요.",
         "detached": "먼저 브랜치를 체크아웃하세요. 이 워크스페이스는 분리된 커밋에 있습니다.",
         "repoMissing": "이 워크스페이스의 프로젝트를 사용할 수 없습니다."
-      }
+      },
+      "descriptionOtherBase": "새 브랜치를 시작하고 그곳에서 대화를 이어갑니다.",
+      "descriptionNoAgentOtherBase": "새 브랜치를 시작합니다."
     }
   },
   "dashboardPopout": {

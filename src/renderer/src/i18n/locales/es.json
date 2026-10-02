@@ -15326,7 +15326,9 @@
         "archived": "Desarchiva este espacio de trabajo para hacer un fork.",
         "detached": "Primero cambia a una rama; este espacio de trabajo está en un commit separado.",
         "repoMissing": "El proyecto de este espacio de trabajo no está disponible."
-      }
+      },
+      "descriptionOtherBase": "Crea una rama nueva y continúa la conversación ahí.",
+      "descriptionNoAgentOtherBase": "Crea una rama nueva."
     }
   },
   "dashboardPopout": {
