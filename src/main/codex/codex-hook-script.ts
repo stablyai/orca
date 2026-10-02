@@ -1,3 +1,7 @@
+import {
+  buildPosixClaudeBackgroundJobGuardLines,
+  buildWindowsClaudeBackgroundJobGuardLines
+} from '../agent-hooks/claude-background-job-guard'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
@@ -15,6 +19,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
+      ...buildWindowsClaudeBackgroundJobGuardLines(),
       buildWindowsAgentHookCurlPostCommand('codex'),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
@@ -26,6 +31,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('codex'),
+    ...buildPosixClaudeBackgroundJobGuardLines(),
     // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',

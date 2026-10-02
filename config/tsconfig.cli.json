@@ -5,6 +5,7 @@
     "../src/shared/**/*",
     "../src/main/agent-state-file-reader.ts",
     "../src/main/agent-hooks/grok-replay-guard.ts",
+    "../src/main/agent-hooks/claude-background-job-guard.ts",
     "../src/main/claude/hook-script.ts",
     "../src/main/claude/claude-hook-event-versions.ts",
     "../src/main/claude/claude-managed-hook-events.ts",
