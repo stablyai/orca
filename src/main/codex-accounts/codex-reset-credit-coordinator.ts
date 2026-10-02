@@ -157,7 +157,17 @@ export class CodexResetCreditCoordinator {
       if (this.ledger.hasPendingForTarget(target)) {
         throw new Error('A previous reset attempt for this target still has an unknown outcome.')
       }
-      const homeResolution = this.dependencies.runtimeHome.prepareForRateLimitFetch(target)
+      const homeResolution = await this.dependencies.runtimeHome.prepareForRateLimitFetch(target)
+      // Why: prepareForRateLimitFetch awaits listing running WSL distros, a gap
+      // long enough for the target or its selected account to change under us.
+      // Re-run the same checks the pre-await guard already made so a stale
+      // target's home is never spent against a new selection.
+      if (!sameTarget(this.dependencies.rateLimits.getState().codexTarget, target)) {
+        throw new Error('The active Codex rate-limit target changed before reset.')
+      }
+      if (getSelectedCodexAccountIdForTarget(this.dependencies.store.getSettings(), target)) {
+        throw new Error('The selected Codex account changed before reset.')
+      }
       // Why: reject before the provider mutation — a skip must never be spent
       // against the system-default home (#STA-4422).
       if (homeResolution.kind === 'skip') {

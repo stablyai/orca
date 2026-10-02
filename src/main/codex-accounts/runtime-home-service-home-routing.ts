@@ -1,7 +1,7 @@
 import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { getDefaultWslDistro, getWslHome, listRunningWslDistrosAsync } from '../wsl'
 import {
   getSystemCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
@@ -266,9 +266,18 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   // Why: `null` is a real value here — it means "use the system-default lane".
   // A skipped poll needs its own channel or the fetcher silently retargets the
   // user's real ~/.codex (#STA-4422).
-  prepareForRateLimitFetch(target?: CodexAccountSelectionTarget): CodexRateLimitHomeResolution {
+  async prepareForRateLimitFetch(
+    target?: CodexAccountSelectionTarget
+  ): Promise<CodexRateLimitHomeResolution> {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
+      // Why: a background quota poll must never boot a stopped WSL distro just
+      // to read its Codex home — reading/exec'ing against it wakes the distro
+      // the same way any wsl.exe call does (#20184). Skip the poll outright
+      // until the distro is already running for some other reason.
+      if (wslTarget.wslDistro && !(await this.isWslDistroRunningForRateLimitFetch(wslTarget))) {
+        return { kind: 'skip' }
+      }
       return {
         kind: 'ready',
         codexHomePath: this.getPreparedWslRateLimitHomePath(wslTarget)
@@ -304,5 +313,16 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
+  }
+
+  private async isWslDistroRunningForRateLimitFetch(
+    target: CodexAccountSelectionTarget
+  ): Promise<boolean> {
+    const distro = target.wslDistro?.trim().toLowerCase()
+    if (!distro) {
+      return false
+    }
+    const running = await listRunningWslDistrosAsync()
+    return running.some((candidate) => candidate.trim().toLowerCase() === distro)
   }
 }

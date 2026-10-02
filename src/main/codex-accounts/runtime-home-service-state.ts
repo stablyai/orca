@@ -111,7 +111,7 @@ export abstract class CodexRuntimeHomeState {
   ): void
   abstract prepareForRateLimitFetch(
     target?: CodexAccountSelectionTarget
-  ): CodexRateLimitHomeResolution
+  ): Promise<CodexRateLimitHomeResolution>
   abstract syncForCurrentSelection(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv
