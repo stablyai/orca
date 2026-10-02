@@ -49,7 +49,7 @@ export function resolvePiSourceAgentDir(
     return startupDir
   }
 
-  if (kind === 'prime-agent') {
+  if (kind === 'prime-agent' || kind === 'omo') {
     return firstNonEmpty(env[primaryKey])
   }
 

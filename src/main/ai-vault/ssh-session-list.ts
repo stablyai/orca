@@ -110,6 +110,7 @@ async function scanOneSshHost(
         executionHostId,
         remoteHome: hostInfo.remoteHome,
         hostPlatform: hostInfo.hostPlatform,
+        omoSessionsDir: hostInfo.omoSessionsDir,
         limit: args?.limit,
         unlimited: args?.unlimited,
         scopePaths,

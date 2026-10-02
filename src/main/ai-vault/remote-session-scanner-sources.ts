@@ -20,7 +20,9 @@ import {
   openClawParser,
   parseMuseRemoteContent,
   piParser,
+  omoParser,
   primeAgentParser,
+  remoteOmoSessionsSegments,
   remoteOmpSessionsSegments,
   remotePathSegments,
   remotePiSessionsSegments,
@@ -47,7 +49,8 @@ type RemoteContentParser<T = string> = (
 
 export function remoteSessionSources(
   remoteHome: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  options?: { omoSessionsDir?: string }
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
@@ -127,6 +130,7 @@ export function remoteSessionSources(
       remotePrimeAgentSessionsSegments(),
       primeAgentParser
     ),
+    omoRemoteSource(remoteHome, hostPlatform, options?.omoSessionsDir),
     jsonlSource(
       'muse',
       remoteHome,
@@ -208,6 +212,22 @@ function source(
         parseContent(file, content, context.hostPlatform.os, parserOptions(context), context.signal)
       )
   }
+}
+
+function omoRemoteSource(
+  remoteHome: string,
+  hostPlatform: RemoteHostPlatform,
+  omoSessionsDir: string | undefined
+): RemoteSessionSource {
+  const override = omoSessionsDir?.trim()
+  const source = jsonlSource(
+    'omo',
+    remoteHome,
+    hostPlatform,
+    remoteOmoSessionsSegments(),
+    omoParser
+  )
+  return override ? { ...source, rootDir: override } : source
 }
 
 function jsonlSource(

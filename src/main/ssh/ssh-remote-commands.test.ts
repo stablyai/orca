@@ -28,6 +28,7 @@ import {
   probeDirectoryExistsCommand,
   probeRelayInstalledCommand,
   readRemoteHomeCommand,
+  readRemoteOmoSessionsDirCommand,
   relayLivenessProbeCommand
 } from './ssh-remote-commands'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
@@ -126,6 +127,81 @@ describe('ssh remote command builders', () => {
     expect(probe).toContain('managed-hook-runtime.js')
     expect(probe).toContain('relay-ai-vault-service.js')
   })
+
+  // Mirrors local normalizeAgentSessionsDir(..., '.omo'): SESSION_DIR wins;
+  // DIR leaf sessions/agent/.omo gets the matching suffix (no double /sessions).
+  it('normalizes remote OmO sessions dir like the local agent scanner', () => {
+    const posixCmd = readRemoteOmoSessionsDirCommand(posix)
+    expect(posixCmd).toContain('OMO_CODING_AGENT_SESSION_DIR')
+    expect(posixCmd).toContain('OMO_CODING_AGENT_DIR')
+    expect(posixCmd).toContain('case "${d##*/}" in')
+    expect(posixCmd).toContain('sessions) printf')
+    expect(posixCmd).toContain('agent) printf')
+    expect(posixCmd).toContain('.omo) printf')
+    expect(posixCmd).toContain('%s/agent/sessions')
+    // Must not unconditionally append /sessions to DIR (double-sessions bug).
+    expect(posixCmd).not.toContain('printf \'%s/sessions\\n\' "$OMO_CODING_AGENT_DIR"')
+
+    const windowsScript = decodePowerShellCommand(readRemoteOmoSessionsDirCommand(windows))
+    expect(windowsScript).toContain('OMO_CODING_AGENT_SESSION_DIR')
+    expect(windowsScript).toContain('OMO_CODING_AGENT_DIR')
+    expect(windowsScript).toContain('Split-Path -Leaf $d')
+    expect(windowsScript).toContain("$leaf -eq 'sessions'")
+    expect(windowsScript).toContain("$leaf -eq 'agent'")
+    expect(windowsScript).toContain("$leaf -eq '.omo'")
+    expect(windowsScript).toContain("Join-Path (Join-Path $d 'agent') 'sessions'")
+  })
+
+  it.runIf(process.platform !== 'win32')(
+    'resolves OmO DIR leaf cases on a real POSIX shell',
+    async () => {
+      const cmd = readRemoteOmoSessionsDirCommand(posix)
+      const run = async (env: NodeJS.ProcessEnv): Promise<string> => {
+        const childEnv = { ...process.env, ...env }
+        delete childEnv.OMO_CODING_AGENT_SESSION_DIR
+        delete childEnv.OMO_CODING_AGENT_DIR
+        Object.assign(childEnv, env)
+        return new Promise((resolve, reject) => {
+          const child = spawn('/bin/sh', ['-c', cmd], {
+            env: childEnv,
+            stdio: ['ignore', 'pipe', 'pipe']
+          })
+          let stdout = ''
+          let stderr = ''
+          child.stdout.setEncoding('utf8')
+          child.stderr.setEncoding('utf8')
+          child.stdout.on('data', (chunk) => {
+            stdout += chunk
+          })
+          child.stderr.on('data', (chunk) => {
+            stderr += chunk
+          })
+          child.on('error', reject)
+          child.on('close', (code) => {
+            if (code === 0) {
+              resolve(stdout.trim())
+              return
+            }
+            reject(new Error(`shell exited ${code}: ${stderr}`))
+          })
+        })
+      }
+
+      expect(
+        await run({ OMO_CODING_AGENT_SESSION_DIR: '/custom/sessions///' })
+      ).toBe('/custom/sessions')
+      expect(await run({ OMO_CODING_AGENT_DIR: '/home/u/.omo' })).toBe(
+        '/home/u/.omo/agent/sessions'
+      )
+      expect(await run({ OMO_CODING_AGENT_DIR: '/home/u/.omo/agent' })).toBe(
+        '/home/u/.omo/agent/sessions'
+      )
+      expect(await run({ OMO_CODING_AGENT_DIR: '/home/u/.omo/agent/sessions' })).toBe(
+        '/home/u/.omo/agent/sessions'
+      )
+      expect(await run({ OMO_CODING_AGENT_DIR: '/data/omo-root/' })).toBe('/data/omo-root')
+    }
+  )
 
   it('requires every declared relay artifact before calling an install complete', () => {
     const posixProbe = probeRelayInstalledCommand(posix, '/home/me/relay')

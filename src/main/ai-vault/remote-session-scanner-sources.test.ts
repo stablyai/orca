@@ -10,6 +10,24 @@ function devinRootDirs(relayPlatform: RelayPlatform, remoteHome: string): string
     .map((source) => source.rootDir)
 }
 
+describe('remoteSessionSources OmO sessions root', () => {
+  it('uses a relocated host sessions dir when one is provided', () => {
+    const hostPlatform = getRemoteHostPlatform('linux-x64')
+    const root = remoteSessionSources('/home/dev', hostPlatform, {
+      omoSessionsDir: '/data/omo/sessions'
+    }).find((source) => source.agent === 'omo')?.rootDir
+    expect(root).toBe('/data/omo/sessions')
+  })
+
+  it('keeps the default OmO sessions root when no override is provided', () => {
+    const hostPlatform = getRemoteHostPlatform('linux-x64')
+    const root = remoteSessionSources('/home/dev', hostPlatform).find(
+      (source) => source.agent === 'omo'
+    )?.rootDir
+    expect(root).toBe('/home/dev/.omo/agent/sessions')
+  })
+})
+
 describe('remoteSessionSources devin transcripts root', () => {
   it.each([
     {

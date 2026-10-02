@@ -9,7 +9,8 @@ type PrefillAgentKind = Exclude<PiAgentKind, 'prime-agent'>
 
 const PREFILL_ENV_VAR_BY_KIND: Record<PrefillAgentKind, string> = {
   pi: 'ORCA_PI_PREFILL',
-  omp: 'ORCA_OMP_PREFILL'
+  omp: 'ORCA_OMP_PREFILL',
+  omo: 'ORCA_OMO_PREFILL'
 }
 
 export function getPiPrefillExtensionSource(kind: PrefillAgentKind): string {

@@ -38,7 +38,7 @@ type PiManagedExtensionEnv = {
   statusExtensionPath?: string
 }
 
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'omo'>
 
 // Why: old Orca versions used per-kind overlay roots. Keep the names so
 // upgrade-time cleanup can remove stale PTY-scoped Pi/OMP overlay dirs without
@@ -56,7 +56,8 @@ const OVERLAY_ROOT_DIR_NAME: Record<LegacyOverlayAgentKind, string> = {
 const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
-  'prime-agent': '.prime'
+  'prime-agent': '.prime',
+  omo: '.omo'
 }
 
 function getDefaultPiAgentDir(kind: PiAgentKind, configDirName: string | undefined): string {
@@ -192,7 +193,7 @@ export class PiTitlebarExtensionService {
     const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
     // The caller resolves the effective launch environment before this point.
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
-    if (kind !== 'prime-agent') {
+    if (kind !== 'prime-agent' && kind !== 'omo') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
         this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
@@ -231,6 +232,8 @@ export class PiTitlebarExtensionService {
       }
     } else if (kind === 'prime-agent') {
       env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = installed.sourceAgentDir
+    } else if (kind === 'omo') {
+      env.ORCA_OMO_SOURCE_AGENT_DIR = installed.sourceAgentDir
     } else {
       env.ORCA_PI_SOURCE_AGENT_DIR = installed.sourceAgentDir
     }

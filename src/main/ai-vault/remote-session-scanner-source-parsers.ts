@@ -42,6 +42,16 @@ export function ompParser(
   return parseMessageGraphSessionContent('omp', file, content, platform, options, signal)
 }
 
+export function omoParser(
+  file: FileWithMtime,
+  content: RemoteSessionContent,
+  platform: NodeJS.Platform,
+  options: RemoteParserOptions,
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  return parseMessageGraphSessionContent('omo', file, content, platform, options, signal)
+}
+
 export function primeAgentParser(
   file: FileWithMtime,
   content: RemoteSessionContent,
@@ -77,4 +87,8 @@ export function remoteOmpSessionsSegments(): string[] {
 // Remote roots are POSIX regardless of the client platform.
 export function remotePrimeAgentSessionsSegments(): string[] {
   return ['.prime', 'agent', 'sessions']
+}
+
+export function remoteOmoSessionsSegments(): string[] {
+  return normalizeAgentSessionsDir('/.omo/agent/sessions', '.omo').split('/').filter(Boolean)
 }

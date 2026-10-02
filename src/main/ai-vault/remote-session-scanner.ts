@@ -52,6 +52,7 @@ export async function scanRemoteAiVaultSessions(args: {
   executionHostId: ExecutionHostId
   remoteHome: string
   hostPlatform: RemoteHostPlatform
+  omoSessionsDir?: string
   limit?: number
   unlimited?: boolean
   scopePaths?: readonly string[]
@@ -87,7 +88,9 @@ export async function scanRemoteAiVaultSessions(args: {
     (
       await mapRemoteScanBatches(
         [
-          ...remoteSessionSources(args.remoteHome, args.hostPlatform),
+          ...remoteSessionSources(args.remoteHome, args.hostPlatform, {
+            omoSessionsDir: args.omoSessionsDir
+          }),
           ...remoteOpenCodeSources(
             provider.openCode,
             limit * REMOTE_PARSE_CANDIDATE_MULTIPLIER +

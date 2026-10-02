@@ -65,7 +65,7 @@ export class WslHookRelayManager {
   async ensureForDistro(
     distro: string | null,
     codexHomePath?: string | null,
-    launchKind?: 'pi' | 'omp'
+    launchKind?: 'pi' | 'omp' | 'omo'
   ): Promise<void> {
     if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
@@ -93,9 +93,12 @@ export class WslHookRelayManager {
       ? (state?.opencode2OverlayDir ?? null)
       : (state?.opencodeOverlayDir ?? null)
   }
-  getGuestAgentPath(distro: string | null, kind: 'pi' | 'omp'): string | null {
+  getGuestAgentPath(distro: string | null, kind: 'pi' | 'omp' | 'omo'): string | null {
     const state = this.stateFor(distro)
-    return kind === 'pi' ? (state?.piAgentDir ?? null) : (state?.ompStatusExtension ?? null)
+    if (kind === 'pi') {
+      return state?.piAgentDir ?? null
+    }
+    return (kind === 'omp' ? state?.ompStatusExtension : state?.omoAgentDir) ?? null
   }
   /** Kills every live relay. Non-permanent (hooks switched off mid-session) leaves the
    *  manager reusable, so re-enabling hooks can start relays again without an app restart. */
@@ -121,7 +124,7 @@ export class WslHookRelayManager {
   private async ensureInternal(
     requestedDistro: string | null,
     requestedCodexHomePath?: string,
-    launchKind?: 'pi' | 'omp'
+    launchKind?: 'pi' | 'omp' | 'omo'
   ): Promise<void> {
     const distro = requestedDistro ?? (await this.resolveDefaultDistro())
     if (!distro || this.disposed) {
@@ -179,6 +182,7 @@ export class WslHookRelayManager {
       opencode2OverlayDir: existing?.opencode2OverlayDir,
       piAgentDir: existing?.piAgentDir,
       ompStatusExtension: existing?.ompStatusExtension,
+      omoAgentDir: existing?.omoAgentDir,
       launchKinds: new Set(existing?.launchKinds ?? (launchKind ? [launchKind] : [])),
       codexHomePath: requestedCodexHomePath ?? existing?.codexHomePath,
       cooldownUntil: 0

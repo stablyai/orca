@@ -26,6 +26,7 @@ const ROUTES = {
   '/hook/pi': 'pi',
   '/hook/omp': 'omp',
   '/hook/prime-agent': 'prime-agent',
+  '/hook/omo': 'omo',
   '/hook/droid': 'droid',
   '/hook/command-code': 'command-code',
   '/hook/grok': 'grok',

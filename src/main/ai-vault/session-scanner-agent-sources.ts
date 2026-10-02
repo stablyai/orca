@@ -49,6 +49,14 @@ const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
 // dedicated sessions-root override, so resolution differs from Pi/OMP in shape
 // as well as in variable name.
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
+// Why: OmO's session-dir env is the transcripts root and outranks the agent dir.
+const OMO_SESSION_DIR_OVERRIDE = process.env.OMO_CODING_AGENT_SESSION_DIR?.trim()
+const OMO_SESSIONS_DIR = OMO_SESSION_DIR_OVERRIDE
+  ? OMO_SESSION_DIR_OVERRIDE.replace(/[\\/]+$/, '')
+  : normalizeAgentSessionsDir(
+      process.env.OMO_CODING_AGENT_DIR?.trim() || join(homedir(), '.omo', 'agent', 'sessions'),
+      '.omo'
+    )
 // Why: Devin ATIF transcripts live under <DEVIN_HOME>/transcripts; the cli
 // data dir is %APPDATA%\devin\cli on Windows, $XDG_DATA_HOME/devin/cli elsewhere.
 const DEVIN_TRANSCRIPTS_DIR = join(
@@ -239,6 +247,15 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     rootDirs: (options, wslHomeDirs) =>
       sessionRootDirs(options.primeAgentSessionsDir ?? PRIME_AGENT_SESSIONS_DIR, wslHomeDirs, [
         '.prime',
+        'agent',
+        'sessions'
+      ]),
+    extensions: ['.jsonl']
+  },
+  omo: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(options.omoSessionsDir ?? OMO_SESSIONS_DIR, wslHomeDirs, [
+        '.omo',
         'agent',
         'sessions'
       ]),

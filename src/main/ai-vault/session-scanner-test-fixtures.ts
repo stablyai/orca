@@ -74,6 +74,7 @@ export function isolatedScanRoots(root: string) {
     piSessionsDir: join(root, 'pi-sessions'),
     ompSessionsDir: join(root, 'omp-sessions'),
     primeAgentSessionsDir: join(root, 'prime-agent-sessions'),
+    omoSessionsDir: join(root, 'omo-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     clineSessionsDir: join(root, 'cline-sessions'),
