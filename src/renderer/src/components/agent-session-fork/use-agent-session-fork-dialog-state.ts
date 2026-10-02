@@ -19,15 +19,9 @@ import {
   initialAgentSessionForkOptionKey,
   resolveSelectedAgentSessionForkOption
 } from './agent-session-fork-options'
-import {
-  probeParentWorkingTree,
-  readForkSource,
-  readParentWorkingTreeChanges,
-  resolveCarryAvailability,
-  type ParentProbe,
-  type ParentWorkingTreeChanges
-} from './agent-session-fork-parent-probe'
+import { readForkSource, resolveCarryAvailability } from './agent-session-fork-parent-probe'
 import { showAgentSessionForkWarnings } from './agent-session-fork-warning-toasts'
+import { useAgentSessionForkParentStatus } from './use-agent-session-fork-parent-status'
 
 // Why: local forks finish before a spinner would read as progress; only slow (SSH) ones show stages.
 const STAGE_LABEL_DELAY_MS = 200
@@ -83,8 +77,7 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
   const [carryChanges, setCarryChanges] = useState(true)
   const [base, setBase] = useState<AgentSessionForkBase>(PARENT_COMMIT_BASE)
   const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [changes, setChanges] = useState<ParentWorkingTreeChanges | null>(null)
-  const [carrySupported, setCarrySupported] = useState<boolean | null>(null)
+  const { changes, carrySupported, readForSubmit } = useAgentSessionForkParentStatus(source)
   const [busy, setBusy] = useState(false)
   const [flowRunning, setFlowRunning] = useState(false)
   const [stage, setStage] = useState<AgentSessionForkDialogStage | null>(null)
@@ -94,26 +87,6 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
   const flowRunningRef = useRef(false)
   const closedRef = useRef(false)
   const mountedRef = useMountedRef()
-  const probeRef = useRef<ParentProbe | null>(null)
-  const probeSignalRef = useRef<AbortSignal | null>(null)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    const probe = probeParentWorkingTree(source, controller.signal)
-    probeRef.current = probe
-    probeSignalRef.current = controller.signal
-    void probe.changes.then((probed) => {
-      if (!controller.signal.aborted) {
-        setChanges(probed)
-      }
-    })
-    void probe.carrySupported.then((supported) => {
-      if (!controller.signal.aborted) {
-        setCarrySupported(supported)
-      }
-    })
-    return () => controller.abort()
-  }, [source])
 
   useEffect(() => {
     if (!busy) {
@@ -145,24 +118,20 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     setError(null)
     setStage('preparing')
     // Why: the parent may have committed since the dialog opened; fork from its HEAD as of submit.
-    const [probedChanges, probedCarrySupported] = await Promise.all([
-      readParentWorkingTreeChanges(source, probeSignalRef.current ?? new AbortController().signal),
-      probeRef.current?.carrySupported ?? false
-    ])
+    const parent = await readForSubmit()
     // Why: nothing exists yet, so a cancel (or another modal) during the wait must not create a fork.
     if (closedRef.current || !mountedRef.current || !isForkDialogActive()) {
       resetBusy()
       return
     }
-    setChanges(probedChanges)
-    const probedCarry = resolveCarryAvailability(probedChanges, probedCarrySupported, base)
+    const probedCarry = resolveCarryAvailability(parent.changes, parent.carrySupported, base)
     const request: AgentSessionForkRequest = {
       sourceWorktreeId: data.sourceWorktreeId,
       name: trimmedName,
       source: selectedOption,
       asChild,
       carryChanges: carryChanges && probedCarry === 'available',
-      sourceHeadOid: probedChanges?.headOid ?? null,
+      sourceHeadOid: parent.changes?.headOid ?? null,
       base,
       launchSource: data.launchSource
     }
@@ -196,9 +165,9 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     data.sourceWorktreeId,
     mountedRef,
     nameInvalid,
+    readForSubmit,
     resetBusy,
     selectedOption,
-    source,
     trimmedName
   ])
 
