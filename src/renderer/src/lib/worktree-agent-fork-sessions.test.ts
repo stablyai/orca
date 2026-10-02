@@ -276,4 +276,58 @@ describe('listForkableAgentSessions', () => {
 
     expect(session).toMatchObject({ paneKey: 'tab-1:leaf', launchConfig: registryConfig })
   })
+
+  it('ignores a registry entry whose launch token the session cannot prove', () => {
+    const state = emptyState()
+    state.agentStatusByPaneKey = { 'tab-1:leaf': liveEntry('tab-1:leaf') }
+    state.agentLaunchConfigByPaneKey = {
+      'tab-1:leaf': {
+        launchConfig: launchConfig('--other-launch'),
+        registeredAt: 1,
+        identity: { agentType: 'claude', launchToken: 'launch-old' }
+      }
+    }
+
+    const [session] = listForkableAgentSessions(state, 'wt-1')
+
+    expect(session).toMatchObject({ paneKey: 'tab-1:leaf', launchConfig: null })
+  })
+
+  it("requires the registry's terminal handle to be the session's own", () => {
+    const registryConfig = launchConfig('--registry')
+    const state = emptyState()
+    state.agentStatusByPaneKey = {
+      'tab-1:leaf': liveEntry('tab-1:leaf', { terminalHandle: 'term-new', updatedAt: 200 }),
+      'tab-2:leaf': liveEntry('tab-2:leaf', { terminalHandle: 'term-2', updatedAt: 100 })
+    }
+    state.sleepingAgentSessionsByPaneKey = {
+      'tab-3:leaf': sleepingRecord('tab-3:leaf', { updatedAt: 50 })
+    }
+    state.agentLaunchConfigByPaneKey = {
+      'tab-1:leaf': {
+        launchConfig: launchConfig('--old-terminal'),
+        registeredAt: 1,
+        identity: { agentType: 'claude', terminalHandle: 'term-old' }
+      },
+      'tab-2:leaf': {
+        launchConfig: registryConfig,
+        registeredAt: 1,
+        identity: { agentType: 'claude', terminalHandle: 'term-2' }
+      },
+      // Why: a sleeping record carries no terminal handle, so it cannot prove this one.
+      'tab-3:leaf': {
+        launchConfig: launchConfig('--unprovable'),
+        registeredAt: 1,
+        identity: { agentType: 'claude', terminalHandle: 'term-3' }
+      }
+    }
+
+    const sessions = listForkableAgentSessions(state, 'wt-1')
+
+    expect(sessions.map((session) => [session.paneKey, session.launchConfig])).toEqual([
+      ['tab-1:leaf', null],
+      ['tab-2:leaf', registryConfig],
+      ['tab-3:leaf', null]
+    ])
+  })
 })

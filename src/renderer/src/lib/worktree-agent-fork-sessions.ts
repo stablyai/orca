@@ -13,6 +13,8 @@ import type {
   AgentLaunchConfigRegistryEntry,
   RetainedAgentEntry
 } from '@/store/slices/agent-status-contract'
+import { registryEntryMatchesStatus } from '@/store/slices/agent-status-launch-config'
+import { getTabIdFromPaneKey } from '@/store/slices/agent-status-pane-key-tab-binding'
 
 export type ForkableAgentSession = {
   providerSessionId: string
@@ -32,7 +34,11 @@ export type ForkableAgentSessionsState = {
   agentLaunchConfigByPaneKey: Record<string, AgentLaunchConfigRegistryEntry | undefined>
 }
 
-type Candidate = Omit<ForkableAgentSession, 'launchConfig'>
+type Candidate = Omit<ForkableAgentSession, 'launchConfig'> & {
+  /** Launch identity the registry entry must match; absent when the source row cannot prove it. */
+  tabId: string | undefined
+  terminalHandle: string | undefined
+}
 
 function toCandidate(args: {
   paneKey: string
@@ -41,6 +47,8 @@ function toCandidate(args: {
   title: string | undefined
   lastActiveAt: number
   live: boolean
+  tabId: string | undefined
+  terminalHandle: string | undefined
 }): Candidate | null {
   const { agent, providerSession } = args
   const id = providerSession?.id.trim()
@@ -60,7 +68,9 @@ function toCandidate(args: {
     providerSession,
     title: args.title ?? null,
     lastActiveAt: args.lastActiveAt,
-    live: args.live
+    live: args.live,
+    tabId: args.tabId ?? getTabIdFromPaneKey(args.paneKey) ?? undefined,
+    terminalHandle: args.terminalHandle
   }
 }
 
@@ -78,7 +88,9 @@ function collectCandidates(state: ForkableAgentSessionsState, worktreeId: string
         providerSession: entry.providerSession,
         title: entry.terminalTitle,
         lastActiveAt: entry.updatedAt,
-        live: true
+        live: true,
+        tabId: entry.tabId,
+        terminalHandle: entry.terminalHandle
       })
     )
   }
@@ -93,7 +105,9 @@ function collectCandidates(state: ForkableAgentSessionsState, worktreeId: string
         providerSession: retained.entry.providerSession,
         title: retained.entry.terminalTitle,
         lastActiveAt: retained.entry.updatedAt,
-        live: false
+        live: false,
+        tabId: retained.entry.tabId ?? retained.tab.id,
+        terminalHandle: retained.entry.terminalHandle
       })
     )
   }
@@ -108,7 +122,9 @@ function collectCandidates(state: ForkableAgentSessionsState, worktreeId: string
         providerSession: record.providerSession,
         title: record.terminalTitle,
         lastActiveAt: record.updatedAt,
-        live: false
+        live: false,
+        tabId: record.tabId,
+        terminalHandle: undefined
       })
     )
   }
@@ -140,15 +156,22 @@ function launchConfigForCandidate(
     return record.launchConfig
   }
   const registry = state.agentLaunchConfigByPaneKey[candidate.paneKey]
+  // Why: same stale-proof rules as getLaunchConfigForEntry; an unprovable launch token or handle means
+  // another launch's account env, so the fork falls back to the user's defaults.
   if (
     registry &&
     registry.identity.agentType === candidate.agent &&
-    (!registry.identity.providerSession ||
-      agentProviderSessionsEqual(
-        candidate.agent,
-        registry.identity.providerSession,
-        candidate.providerSession
-      ))
+    registryEntryMatchesStatus({
+      entry: registry,
+      paneKey: candidate.paneKey,
+      agentType: candidate.agent,
+      tabId: candidate.tabId,
+      terminalHandle: candidate.terminalHandle,
+      launchToken: undefined,
+      providerSession: candidate.providerSession,
+      existingProviderSession: candidate.providerSession,
+      providerSessionChanged: false
+    })
   ) {
     return registry.launchConfig
   }
@@ -165,8 +188,8 @@ export function listForkableAgentSessions(
       byId.set(candidate.providerSessionId, candidate)
     }
   }
-  return Array.from(byId.values(), (candidate) => ({
-    ...candidate,
-    launchConfig: launchConfigForCandidate(state, candidate)
-  })).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  return Array.from(byId.values(), (candidate) => {
+    const { tabId: _tabId, terminalHandle: _terminalHandle, ...session } = candidate
+    return { ...session, launchConfig: launchConfigForCandidate(state, candidate) }
+  }).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
 }
