@@ -32,6 +32,24 @@ export const styles = StyleSheet.create({
   reasoning: {
     opacity: 0.7
   },
+  reasoningToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    // With the toggle's 6 pt hitSlop above and below, a 44 pt touch target.
+    minHeight: 32
+  },
+  reasoningPressed: {
+    opacity: 0.6
+  },
+  reasoningHeadline: {
+    color: colors.textMuted,
+    fontSize: typography.bodySize,
+    flexShrink: 1
+  },
+  reasoningCaretOpen: {
+    transform: [{ rotate: '90deg' }]
+  },
   toolRun: {
     marginTop: spacing.xs
   },

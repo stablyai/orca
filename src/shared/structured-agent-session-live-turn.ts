@@ -133,7 +133,9 @@ export function isStructuredAgentSessionThinking(
       continue
     }
     if (body?.kind === 'message') {
-      newestContentIsReasoning = body.role === 'reasoning'
+      // A row that says it ended is not reasoning now; a host that keeps no state says nothing.
+      newestContentIsReasoning =
+        body.role === 'reasoning' && (body.state === undefined || body.state === 'running')
     } else if (
       body?.kind === 'tool-call' ||
       body?.kind === 'diff' ||

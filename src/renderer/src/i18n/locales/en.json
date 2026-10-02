@@ -17509,6 +17509,7 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "reasoning": "Reasoning",
       "failureWords": {
         "theAgent": "The agent",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
@@ -18001,7 +18002,9 @@
         "queuePausedCleared": "Queue paused after you cleared the conversation",
         "queuePaused": "Queue paused",
         "resume": "Resume"
-      }
+      },
+      "thought": "Thought",
+      "thoughtForDuration": "Thought for {{duration}}"
     },
     "tab": {
       "bar": {

@@ -13,6 +13,7 @@ import type {
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
+  AgentJournalMessageState,
   AgentJournalPosition,
   AgentJournalProducerLinkage
 } from './agent-session-journal-types'
@@ -210,6 +211,10 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   turnId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** The journal row's own lifecycle; absent means unknown, never live. */
+  state?: AgentJournalMessageState
+  /** Host clock when the row's message was seen to end; absent when no end was seen live. */
+  completedAt?: number
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
   /** Shown as not sent, waiting for the user's Retry: in no turn, so a newer turn's bar and clock

@@ -21,6 +21,7 @@ import {
   type NativeChatTurnFoldRow
 } from '../../../../shared/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
+import { isNativeChatReasoningUnderway } from '../../../../shared/native-chat-reasoning-row'
 import {
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics
@@ -181,19 +182,23 @@ export function buildNativeChatTranscriptSlots(
     // Skipping a folded row entirely is what keeps windowing honest: a counted
     // index the row declines to draw reserves estimated height for nothing and
     // opens a gap in the transcript.
+    // Liveness is the owning turn's, not the newest prompt's: a running turn's
+    // rows stay live while a newer message waits behind it.
+    const activeTurnIsWorking =
+      (liveTurnKey ? turnKey === liveTurnKey : turnKey === undefined) &&
+      (isWorking || lifecycleWorking)
     const drawsRow =
-      receipt !== undefined || (!folded && nativeChatRowRendersContent(message.blocks))
+      receipt !== undefined ||
+      (!folded &&
+        nativeChatRowRendersContent(message.blocks) &&
+        !isNativeChatReasoningUnderway(message, activeTurnIsWorking))
     const roster = sectionSlots.rosterAt(message.id)
     if (drawsRow || status !== undefined || turnDiff !== undefined) {
       slots.push({
         kind: 'message',
         message,
         turnKey,
-        // Liveness is the owning turn's, not the newest prompt's: a running turn's
-        // rows stay live while a newer message waits behind it.
-        activeTurnIsWorking:
-          (liveTurnKey ? turnKey === liveTurnKey : turnKey === undefined) &&
-          (isWorking || lifecycleWorking),
+        activeTurnIsWorking,
         trailingRun: index === trailingRunIndex,
         receipt,
         status: status ?? undefined,

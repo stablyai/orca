@@ -15,6 +15,7 @@
 
 import { z } from 'zod'
 import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
+import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -179,27 +180,11 @@ const MessageBody = z.object({
   blocks: z.array(Block),
   // Open like roles: a send mode a newer build writes must not turn the row malformed.
   sentAs: z.string().min(1).optional(),
-  command: z.object({ name: z.string().min(1) }).optional()
+  command: z.object({ name: z.string().min(1) }).optional(),
+  // Open like `sentAs`: a state a newer host writes reads as completed, never malformed.
+  state: z.string().min(1).optional(),
+  completedAt: z.number().finite().optional()
 })
-
-const ThreadGoal = z.object({
-  objective: z.string(),
-  status: z.string().min(1),
-  tokenBudget: z.number().finite().nullable(),
-  tokensUsed: z.number().finite(),
-  timeUsedSeconds: z.number().finite(),
-  createdAt: z.number().finite(),
-  updatedAt: z.number().finite()
-})
-
-/** Like blocks: an unknown `state` stays admissible, a known one with a broken payload does not. */
-const ThreadGoalState = z.union([
-  z.discriminatedUnion('state', [
-    z.object({ state: z.literal('set'), goal: ThreadGoal }),
-    z.object({ state: z.literal('cleared') })
-  ]),
-  z.object({ state: z.string() }).refine((value) => !['set', 'cleared'].includes(value.state))
-])
 
 /** Open like `state`: a kind, audience or refusal detail a newer host writes must not turn the row
  *  malformed; the fact reader is where an unplaceable one is dropped. */
@@ -261,7 +246,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
       })
       .optional(),
     providerFrame: ProviderFrame.optional(),
-    threadGoal: ThreadGoalState.optional(),
+    threadGoal: AgentJournalThreadGoalStateSchema.optional(),
     failure: FailureFact.optional()
   }),
   z.object({

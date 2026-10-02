@@ -9,6 +9,7 @@ import {
   subagentGroupBlocks
 } from '../../../../shared/native-chat-subagent-summary'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
+import { isNativeChatReasoningUnderway } from '../../../../shared/native-chat-reasoning-row'
 import {
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics,
@@ -95,7 +96,11 @@ export function nativeChatSubagentSectionSlots({
     for (const [index, { message }] of rows.entries()) {
       openBefore(pending, message, depth, { turnKey })
       const receipt = receipts.get(message.id)
-      if (receipt === undefined && !nativeChatRowRendersContent(message.blocks)) {
+      if (
+        receipt === undefined &&
+        (!nativeChatRowRendersContent(message.blocks) ||
+          isNativeChatReasoningUnderway(message, working))
+      ) {
         continue
       }
       slots.push({

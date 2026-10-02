@@ -542,4 +542,24 @@ describe('turn-owned grouping', () => {
       ['C', false]
     ])
   })
+
+  it('reserves nothing for reasoning still underway in the live turn, and draws it once it ends', () => {
+    const reasoning = (state: 'running' | 'completed'): NativeChatMessage => ({
+      ...text('r', 'Weighing two approaches', 'reasoning'),
+      state
+    })
+    const live = { turnKeys: ['A', 'A'], liveTurnKey: 'A', isWorking: true }
+    expect(
+      build([text('A', 'go', 'user'), reasoning('running')], live).map((slot) => slot.message.id)
+    ).toEqual(['A'])
+    expect(
+      build([text('A', 'go', 'user'), reasoning('completed')], live).map((slot) => slot.message.id)
+    ).toEqual(['A', 'r'])
+    // A row still open in a turn that is no longer running ended unseen; it draws as before.
+    expect(
+      build([text('A', 'go', 'user'), reasoning('running')], { turnKeys: ['A', 'A'] }).map(
+        (slot) => slot.message.id
+      )
+    ).toEqual(['A', 'r'])
+  })
 })

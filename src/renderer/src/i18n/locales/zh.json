@@ -17302,6 +17302,7 @@
   },
   "components": {
     "native-chat": {
+      "reasoning": "推理",
       "contextMenu": {
         "copyOrcaSessionId": "复制 Orca 会话 ID",
         "orcaSessionIdCopied": "已复制 Orca 会话 ID",
@@ -17794,7 +17795,9 @@
         "queuePausedCleared": "清除对话后，队列已暂停",
         "queuePaused": "队列已暂停",
         "resume": "继续"
-      }
+      },
+      "thought": "已思考",
+      "thoughtForDuration": "思考了 {{duration}}"
     },
     "tab": {
       "bar": {

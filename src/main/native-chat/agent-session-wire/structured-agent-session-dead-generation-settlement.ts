@@ -14,6 +14,7 @@ import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
+import { endedUnseenMessageBody } from '../agent-session-journal/journal-terminal-settlement'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   agentSessionFailureWords,
@@ -175,7 +176,7 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     }
     for (const item of items) {
       const identity = parseAgentJournalItemKey(item.itemId)
-      const body = terminalDeadGenerationBody(item)
+      const body = deadGenerationEndBody(item)
       if (identity && body) {
         mutations.push({
           kind: 'item',
@@ -233,7 +234,7 @@ export async function settleStaleStructuredAgentSessionState(input: {
   const mutations: JournalLifecycleMutationInput[] = []
   for (const item of items) {
     const identity = parseAgentJournalItemKey(item.itemId)
-    const body = terminalDeadGenerationBody(item)
+    const body = deadGenerationEndBody(item)
     if (identity && body) {
       mutations.push({
         kind: 'item',
@@ -285,6 +286,11 @@ export async function settleStaleStructuredAgentSessionState(input: {
     })
   }
   return mutations.length
+}
+
+/** A reasoning row is ended too, but is not unfinished work: its running turn already says so. */
+function deadGenerationEndBody(item: AgentJournalRenderItem): AgentJournalItemBody | null {
+  return endedUnseenMessageBody(item.body) ?? terminalDeadGenerationBody(item)
 }
 
 function terminalDeadGenerationBody(item: AgentJournalRenderItem): AgentJournalItemBody | null {

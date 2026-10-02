@@ -284,4 +284,58 @@ describe('MobileNativeChatMessage', () => {
       expect(textIn(tree.root)).toEqual(['go'])
     })
   })
+
+  describe('a reasoning row', () => {
+    const reasoning = (fields: Partial<NativeChatMessage> = {}): NativeChatMessage => ({
+      id: 'r1',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'Weighing two approaches' }],
+      timestamp: 1_000,
+      source: 'transcript',
+      state: 'completed',
+      completedAt: 4_000,
+      ...fields
+    })
+    const toggleOf = (tree: ReactTestRenderer): ReactTestInstance =>
+      tree.root.find(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityRole === 'button'
+      )
+    const markdownIn = (tree: ReactTestRenderer): ReactTestInstance[] =>
+      tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')
+
+    it('starts collapsed to its headline, with its text unmounted', () => {
+      const tree = render(reasoning())
+      expect(textIn(tree.root)).toContain('Thought for 3s')
+      expect(toggleOf(tree).props.accessibilityState).toEqual({ expanded: false })
+      // Said with what it is, as desktop's screen-reader prefix does, on a 32 + 2 × 6 pt target.
+      expect(toggleOf(tree).props.accessibilityLabel).toBe('Reasoning: Thought for 3s')
+      expect(toggleOf(tree).props.hitSlop).toBe(6)
+      expect(markdownIn(tree)).toHaveLength(0)
+    })
+
+    it('mounts its text once opened', () => {
+      const tree = render(reasoning())
+      act(() => toggleOf(tree).props.onPress())
+      expect(toggleOf(tree).props.accessibilityState).toEqual({ expanded: true })
+      expect(markdownIn(tree).map((node) => node.props.content)).toEqual([
+        'Weighing two approaches'
+      ])
+    })
+
+    it('draws nothing while still being written in the live turn, or when blank', () => {
+      expect(
+        render(reasoning({ state: 'running' }), { activeTurnIsWorking: true }).toJSON()
+      ).toBeNull()
+      expect(render(reasoning({ blocks: [{ type: 'text', text: ' \n ' }] })).toJSON()).toBeNull()
+    })
+
+    it('says only what the host saw', () => {
+      expect(textIn(render(reasoning({ state: 'running' })).root)).toContain('Thought')
+      const unknown = render(reasoning({ state: undefined, completedAt: undefined }))
+      expect(textIn(unknown.root)).toContain('Reasoning')
+      // No "Reasoning: Reasoning".
+      expect(toggleOf(unknown).props.accessibilityLabel).toBe('Reasoning')
+      expect(textIn(render(reasoning({ completedAt: 1_300 })).root)).toContain('Thought for 1s')
+    })
+  })
 })

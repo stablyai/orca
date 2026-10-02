@@ -45,7 +45,14 @@ import type { CodexStructuredSessionTeardown } from './codex-structured-session-
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
 
-const TURN_BOUNDARIES: ReadonlySet<string> = new Set(['turn/started', 'turn/completed'])
+// Turn and item boundaries are timed by when the host received them, never by when a buffered or
+// retried delivery got round to them.
+const RECEIPT_TIMED_METHODS: ReadonlySet<string> = new Set([
+  'turn/started',
+  'turn/completed',
+  'item/started',
+  'item/completed'
+])
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -131,7 +138,9 @@ export async function acquireCodexStructuredSession(input: {
       {
         onNotification: (method, params) => {
           // Stamped at receipt, ahead of any pre-publication buffering or retry.
-          const observedAt = TURN_BOUNDARIES.has(method) ? (deps.now?.() ?? Date.now()) : undefined
+          const observedAt = RECEIPT_TIMED_METHODS.has(method)
+            ? (deps.now?.() ?? Date.now())
+            : undefined
           const dispatchSequenceAtReceipt =
             method === 'turn/started' ? dispatchEchoes.latestSequence() : undefined
           input.deliver(

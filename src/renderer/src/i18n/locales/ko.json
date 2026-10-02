@@ -17337,6 +17337,7 @@
       }
     },
     "native-chat": {
+      "reasoning": "추론",
       "contextMenu": {
         "copyOrcaSessionId": "Orca 세션 ID 복사",
         "orcaSessionIdCopied": "Orca 세션 ID를 복사했습니다",
@@ -17829,7 +17830,9 @@
         "queuePausedCleared": "대화를 지워서 대기열이 일시 중지되었습니다",
         "queuePaused": "대기열이 일시 중지되었습니다",
         "resume": "재개"
-      }
+      },
+      "thought": "생각함",
+      "thoughtForDuration": "{{duration}} 동안 생각함"
     },
     "tab": {
       "bar": {

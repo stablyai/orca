@@ -6,6 +6,8 @@ import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activ
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { isNativeChatReasoningUnderway } from '../../../src/shared/native-chat-reasoning-row'
+import { MobileNativeChatReasoningRow } from './MobileNativeChatReasoningRow'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
@@ -128,14 +130,35 @@ function MobileNativeChatMessageImpl({
       onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
     />
   ) : null
+  if (isReasoning) {
+    const markdown = prose.flatMap((block) => (isTextBlock(block) ? [block.text] : [])).join('\n\n')
+    // Blank, or still being written in the live turn: nothing draws, not even an empty row.
+    const draws =
+      markdown.trim().length > 0 &&
+      !isNativeChatReasoningUnderway(message, activeTurnIsWorking === true)
+    return (
+      <>
+        {turnStatusAbove ? statusRow : null}
+        {draws ? (
+          <View style={styles.row}>
+            <MobileNativeChatReasoningRow
+              message={message}
+              markdown={markdown}
+              fontScale={fontScale}
+              onOpenFile={onOpenFile}
+            />
+          </View>
+        ) : null}
+        {turnStatusAbove ? null : statusRow}
+      </>
+    )
+  }
   return (
     <>
       {/* A turn with no user bubble carries its bar above its first row. */}
       {turnStatusAbove ? statusRow : null}
       <View style={[styles.row, isUser && styles.rowUser]}>
-        <View
-          style={[styles.content, isUser && styles.userBubble, isReasoning && styles.reasoning]}
-        >
+        <View style={[styles.content, isUser && styles.userBubble]}>
           {prose.map((block, index) => (
             <Prose
               key={index}
