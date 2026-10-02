@@ -18,7 +18,8 @@ export const TERMINAL_QUERY_METHODS = [
       runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness,
-        includeVisualLayouts: params.includeVisualLayouts
+        includeVisualLayouts: params.includeVisualLayouts,
+        ptyId: params.ptyId
       })
   }),
   defineMethod({

@@ -45,6 +45,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   path: '--path <path>          Path argument for the command',
+  pty: '--pty <ptyId>           Runtime PTY id; accepted as pty:<ptyId> on --terminal',
   prompt: '--prompt <text>        Prompt text for agent-backed commands',
   query: '--query <text>        Search text for matching refs',
   ref: '--ref <ref>            Base ref to persist for the repo',
