@@ -29,7 +29,7 @@ import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isRuntimeWorktreePathMissing } from './runtime-worktree-filesystem'
 import { removeStaleLocalWorktreeRegistration } from '../local-worktree-removal-recovery'
-import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
+import { settleKeptBranch } from '../source-control/forge-merged-branch-cleanup'
 import { removeRuntimeRegisteredRemoteWorktree } from './runtime-registered-remote-worktree-removal'
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
 import { removeOrphanOrFolderWorktree } from './orca-runtime-remove-orphan-or-folder-worktree'
@@ -185,20 +185,20 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
                 localWorktreeGitOptions
               ))))
         ) {
-          const removalResult = await removeStaleLocalWorktreeRegistration({
-            canonicalWorktreePath,
-            repoPath: repo.path,
-            localWorktreeGitOptions,
-            registeredWorktree,
-            deleteBranch
-          })
-          await cleanupUnusedWorktreePushTargetRemote(
-            repo.path,
-            removalTarget.id,
-            removedPushTarget,
+          const removalResult = await settleKeptBranch({
+            result: await removeStaleLocalWorktreeRegistration({
+              canonicalWorktreePath,
+              repoPath: repo.path,
+              localWorktreeGitOptions,
+              registeredWorktree,
+              deleteBranch
+            }),
+            repo,
+            worktreeId: removalTarget.id,
+            pushTarget: removedPushTarget,
             store,
-            localWorktreeGitOptions
-          )
+            localGitOptions: localWorktreeGitOptions
+          })
           this.preservedBranchCleanup.remember(
             removalTarget.id,
             cleanupHostId,

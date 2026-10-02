@@ -70,8 +70,16 @@ export function getLocalProjectWorktreeGitOptions(
  * `getLocalProjectWorktreeGitOptions` instead silently runs as the ambient login.
  */
 export function getLocalProjectGhExecOptions(store: Store, repo: Repo): LocalProjectGhExecOptions {
+  return withRepoGhAccount(repo, getLocalProjectWorktreeGitOptions(store, repo))
+}
+
+/** The same options for a caller that already resolved the project's worktree Git options. */
+export function withRepoGhAccount(
+  repo: Pick<Repo, 'ghAccount'>,
+  worktreeGitOptions: LocalProjectWorktreeGitOptions
+): LocalProjectGhExecOptions {
   return {
-    ...getLocalProjectWorktreeGitOptions(store, repo),
+    ...worktreeGitOptions,
     ...(repo.ghAccount ? { ghAccount: repo.ghAccount } : {})
   }
 }

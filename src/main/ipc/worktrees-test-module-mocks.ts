@@ -52,6 +52,7 @@ export const addWorktreeMock: ModuleMock = vi.fn()
 export const addSparseWorktreeMock: ModuleMock = vi.fn()
 export const removeWorktreeMock: ModuleMock = vi.fn()
 export const forceDeleteLocalBranchMock: ModuleMock = vi.fn()
+export const deletePreservedBranchAtHeadMock: ModuleMock = vi.fn()
 export const resolveLocalGitUsernameMock: ModuleMock = vi.fn()
 export const getBaseRefDefaultMock: ModuleMock = vi.fn()
 export const resolveDefaultBaseRefWithLocalGitMock: ModuleMock = vi.fn()
@@ -117,7 +118,8 @@ export const gitWorktreeModuleMock = () => ({
   addWorktree: addWorktreeMock,
   addSparseWorktree: addSparseWorktreeMock,
   removeWorktree: removeWorktreeMock,
-  forceDeleteLocalBranch: forceDeleteLocalBranchMock
+  forceDeleteLocalBranch: forceDeleteLocalBranchMock,
+  deletePreservedBranchAtHead: deletePreservedBranchAtHeadMock
 })
 
 export const gitRunnerModuleMock = (): {

@@ -20,10 +20,8 @@ import { runHook } from '../../../hooks'
 import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
-import {
-  cleanupUnusedWorktreePushTargetRemote,
-  notifyWorktreesChanged
-} from '../../worktree-remote'
+import { notifyWorktreesChanged } from '../../worktree-remote'
+import { settleKeptBranch } from '../../../source-control/forge-merged-branch-cleanup'
 import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
 import { formatWorktreeRemovalError } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
@@ -152,20 +150,20 @@ export async function executeWorktreeRemoval(
         removedMeta &&
         (await isAlreadyRemovedWorktreePath(repo, canonicalWorktreePath, localWorktreeGitOptions))))
   ) {
-    const removalResult = await removeStaleLocalWorktreeRegistration({
-      canonicalWorktreePath,
-      repoPath: repo.path,
-      localWorktreeGitOptions,
-      registeredWorktree,
-      deleteBranch
-    })
-    await cleanupUnusedWorktreePushTargetRemote(
-      repo.path,
-      args.worktreeId,
-      removedPushTarget,
+    const removalResult = await settleKeptBranch({
+      result: await removeStaleLocalWorktreeRegistration({
+        canonicalWorktreePath,
+        repoPath: repo.path,
+        localWorktreeGitOptions,
+        registeredWorktree,
+        deleteBranch
+      }),
+      repo,
+      worktreeId: args.worktreeId,
+      pushTarget: removedPushTarget,
       store,
-      localWorktreeGitOptions
-    )
+      localGitOptions: localWorktreeGitOptions
+    })
     rememberPreservedBranchCleanupTarget(
       args.worktreeId,
       removalHostId,

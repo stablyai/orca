@@ -26,7 +26,7 @@ export type {
   RemoveWorktreeOptions
 } from './worktree-operation-options'
 export { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
-export { removeWorktree } from './worktree-removal'
+export { deletePreservedBranchAtHead, removeWorktree } from './worktree-removal'
 export {
   _getWorktreeScanCacheSizesForTests,
   _resetWorktreeScanCacheForTests,

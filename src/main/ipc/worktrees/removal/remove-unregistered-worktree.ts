@@ -23,11 +23,11 @@ import {
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePath
 } from '../../../local-worktree-filesystem'
+import { notifyWorktreesChanged } from '../../worktree-remote'
 import {
-  cleanupUnusedWorktreePushTargetRemote,
-  cleanupUnusedWorktreePushTargetRemoteSsh,
-  notifyWorktreesChanged
-} from '../../worktree-remote'
+  settleKeptBranch,
+  settleKeptSshBranch
+} from '../../../source-control/forge-merged-branch-cleanup'
 import { getSshPtyProvider } from '../../pty'
 import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
@@ -111,13 +111,14 @@ export async function removeUnregisteredWorktree(
       // able to skip history removal and leave the user's commands on
       // the remote host.
       await deleteRemoteWorktreeHistory(getSshPtyProvider(repo.connectionId), args.worktreeId)
-      await cleanupUnusedWorktreePushTargetRemoteSsh(
-        provider!,
-        repo.path,
-        args.worktreeId,
-        removedPushTarget,
-        store
-      )
+      await settleKeptSshBranch({
+        result: {},
+        repo,
+        worktreeId: args.worktreeId,
+        pushTarget: removedPushTarget,
+        store,
+        provider: provider!
+      })
     } else {
       const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
       let removalCompleted = false
@@ -130,13 +131,14 @@ export async function removeUnregisteredWorktree(
       } finally {
         await removalGate.finish(removalCompleted)
       }
-      await cleanupUnusedWorktreePushTargetRemote(
-        repo.path,
-        args.worktreeId,
-        removedPushTarget,
+      await settleKeptBranch({
+        result: {},
+        repo,
+        worktreeId: args.worktreeId,
+        pushTarget: removedPushTarget,
         store,
-        localWorktreeGitOptions
-      )
+        localGitOptions: localWorktreeGitOptions
+      })
       invalidateAuthorizedRootsCache()
     }
     runtime.clearOptimisticReconcileToken(args.worktreeId)
@@ -185,13 +187,14 @@ export async function removeUnregisteredWorktree(
       } finally {
         await removalGate.finish(removalCompleted)
       }
-      await cleanupUnusedWorktreePushTargetRemote(
-        repo.path,
-        args.worktreeId,
-        removedPushTarget,
+      await settleKeptBranch({
+        result: {},
+        repo,
+        worktreeId: args.worktreeId,
+        pushTarget: removedPushTarget,
         store,
-        localWorktreeGitOptions
-      )
+        localGitOptions: localWorktreeGitOptions
+      })
       runtime.clearOptimisticReconcileToken(args.worktreeId)
       removeWorktreeMetadataAndTransientState(
         store,
@@ -222,21 +225,23 @@ export async function removeUnregisteredWorktree(
       // able to skip history removal and leave the user's commands on
       // the remote host.
       await deleteRemoteWorktreeHistory(getSshPtyProvider(repo.connectionId), args.worktreeId)
-      await cleanupUnusedWorktreePushTargetRemoteSsh(
-        provider!,
-        repo.path,
-        args.worktreeId,
-        removedPushTarget,
-        store
-      )
-    } else {
-      await cleanupUnusedWorktreePushTargetRemote(
-        repo.path,
-        args.worktreeId,
-        removedPushTarget,
+      await settleKeptSshBranch({
+        result: {},
+        repo,
+        worktreeId: args.worktreeId,
+        pushTarget: removedPushTarget,
         store,
-        localWorktreeGitOptions
-      )
+        provider: provider!
+      })
+    } else {
+      await settleKeptBranch({
+        result: {},
+        repo,
+        worktreeId: args.worktreeId,
+        pushTarget: removedPushTarget,
+        store,
+        localGitOptions: localWorktreeGitOptions
+      })
       invalidateAuthorizedRootsCache()
     }
     runtime.clearOptimisticReconcileToken(args.worktreeId)

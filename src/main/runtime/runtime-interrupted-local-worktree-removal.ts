@@ -20,9 +20,10 @@ import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-option
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { WorktreeRemovalRecord } from '../worktree-removal-records'
+import { settleKeptBranch } from '../source-control/forge-merged-branch-cleanup'
 import {
-  cleanupRemovedWorktreePushTarget,
   finishRuntimeLocalWorktreeRemoval,
+  settlementOf,
   type RuntimeLocalWorktreeRemovalFinishArgs
 } from './runtime-registered-local-worktree-removal'
 
@@ -171,7 +172,8 @@ async function finishInterruptedLocalWorktreeRemoval(
   } finally {
     await gate.finish(removed)
   }
-  await cleanupRemovedWorktreePushTarget(finishArgs)
+  // Why: a quit during a removal's settle lands here once Git has dropped the checkout.
+  result = await settleKeptBranch(settlementOf(finishArgs, result))
   args.finishRemoval(result, true, record.head)
   return result
 }

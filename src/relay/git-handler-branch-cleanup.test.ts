@@ -160,225 +160,7 @@ describe('forceDeletePreservedRelayBranch', () => {
 })
 
 describe('removeWorktreeOp branch cleanup', () => {
-  it('deletes a squash-merged SSH branch when merging it into the base is a no-op', async () => {
-    let zListCount = 0
-    const git = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
-        return { stdout: '/repo/.git\n', stderr: '' }
-      }
-      if (args[0] === 'worktree' && args[1] === 'list' && args.includes('-z')) {
-        zListCount += 1
-        return {
-          stdout:
-            zListCount === 1
-              ? worktreeList(
-                  { path: '/repo', branch: 'main' },
-                  { path: '/repo-feature', branch: 'feature/test' }
-                )
-              : worktreeList({ path: '/repo', branch: 'main' }),
-          stderr: ''
-        }
-      }
-      if (args[0] === 'worktree' && args[1] === 'list') {
-        return { stdout: worktreeList({ path: '/repo', branch: 'main' }), stderr: '' }
-      }
-      if (args[0] === 'branch' && args[1] === '-d') {
-        throw new Error('error: the branch feature/test is not fully merged')
-      }
-      if (args[0] === 'config' && args[1] === '--get') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
-        return { stdout: 'base123\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('HEAD^{commit}')) {
-        return { stdout: 'base123\n', stderr: '' }
-      }
-      if (args[0] === 'merge-tree') {
-        return { stdout: 'tree123\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('base123^{tree}')) {
-        return { stdout: 'tree123\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await expect(
-      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
-    ).resolves.toEqual({})
-
-    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
-    expect(git).toHaveBeenCalledWith(
-      ['merge-tree', '--write-tree', 'base123', 'refs/heads/feature/test'],
-      expect.any(String)
-    )
-    expect(git).toHaveBeenCalledWith(
-      ['update-ref', '-d', 'refs/heads/feature/test', '1'],
-      expect.any(String)
-    )
-    expect(git).toHaveBeenCalledWith(
-      ['config', '--remove-section', 'branch.feature/test'],
-      expect.any(String)
-    )
-    expect(git).not.toHaveBeenCalledWith(['remote'], expect.any(String))
-  })
-
-  it('deletes a squash-merged SSH branch with branch-only merge commits via expected head', async () => {
-    let zListCount = 0
-    const git = vi.fn<GitExec>(async (args, _cwd, opts) => {
-      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
-        return { stdout: '/repo/.git\n', stderr: '' }
-      }
-      if (args[0] === 'worktree' && args[1] === 'list' && args.includes('-z')) {
-        zListCount += 1
-        return {
-          stdout:
-            zListCount === 1
-              ? worktreeList(
-                  { path: '/repo', branch: 'main' },
-                  { path: '/repo-feature', branch: 'feature/test' }
-                )
-              : worktreeList({ path: '/repo', branch: 'main' }),
-          stderr: ''
-        }
-      }
-      if (args[0] === 'worktree' && args[1] === 'list') {
-        return { stdout: worktreeList({ path: '/repo', branch: 'main' }), stderr: '' }
-      }
-      if (args[0] === 'branch' && args[1] === '-d') {
-        throw new Error('error: the branch feature/test is not fully merged')
-      }
-      if (args[0] === 'config' && args[1] === '--get') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
-        return { stdout: 'target123\n', stderr: '' }
-      }
-      if (args[0] === 'merge-tree') {
-        return {
-          stdout: args[2] === 'squash123' ? 'squash-tree\n' : 'merged-tree\n',
-          stderr: ''
-        }
-      }
-      if (args[0] === 'rev-parse' && args.includes('target123^{tree}')) {
-        return { stdout: 'target-tree\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('squash123^{tree}')) {
-        return { stdout: 'squash-tree\n', stderr: '' }
-      }
-      if (args[0] === 'rev-list' && args.includes('--right-only')) {
-        return { stdout: '1\n', stderr: '' }
-      }
-      if (args[0] === 'merge-base') {
-        return { stdout: 'base123\n', stderr: '' }
-      }
-      if (args[0] === 'diff') {
-        return { stdout: 'branch net diff\n', stderr: '' }
-      }
-      if (args[0] === 'rev-list' && args.includes('--ancestry-path')) {
-        return { stdout: 'squash123\n', stderr: '' }
-      }
-      if (args[0] === 'show') {
-        return { stdout: 'squash diff\n', stderr: '' }
-      }
-      if (args[0] === 'patch-id' && opts?.stdin === 'branch net diff\n') {
-        return {
-          stdout: 'patch123 0000000000000000000000000000000000000000\n',
-          stderr: ''
-        }
-      }
-      if (args[0] === 'patch-id' && opts?.stdin === 'squash diff\n') {
-        return { stdout: 'patch123 squash123\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await expect(
-      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
-    ).resolves.toEqual({})
-
-    expect(git).toHaveBeenCalledWith(
-      ['update-ref', '-d', 'refs/heads/feature/test', '1'],
-      expect.any(String)
-    )
-    expect(git).toHaveBeenCalledWith(['patch-id', '--stable'], expect.any(String), {
-      stdin: 'branch net diff\n'
-    })
-    expect(git).toHaveBeenCalledWith(['patch-id', '--stable'], expect.any(String), {
-      stdin: 'squash diff\n'
-    })
-  })
-
-  it('refreshes the saved remote base before deleting a safe-delete-rejected SSH branch', async () => {
-    const calls: { args: string[]; cwd: string }[] = []
-    let zListCount = 0
-    const git = vi.fn<GitExec>(async (args, cwd) => {
-      calls.push({ args, cwd })
-      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
-        return { stdout: '/repo/.git\n', stderr: '' }
-      }
-      if (args[0] === 'worktree' && args[1] === 'list' && args.includes('-z')) {
-        zListCount += 1
-        return {
-          stdout:
-            zListCount === 1
-              ? worktreeList(
-                  { path: '/repo', branch: 'main' },
-                  { path: '/repo-feature', branch: 'feature/test' }
-                )
-              : worktreeList({ path: '/repo', branch: 'main' }),
-          stderr: ''
-        }
-      }
-      if (args[0] === 'worktree' && args[1] === 'list') {
-        return { stdout: worktreeList({ path: '/repo', branch: 'main' }), stderr: '' }
-      }
-      if (args[0] === 'branch' && args[1] === '-d') {
-        throw new Error('error: the branch feature/test is not fully merged')
-      }
-      if (args[0] === 'config' && args[1] === '--get') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
-      }
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\n', stderr: '' }
-      }
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
-        return { stdout: 'base123\n', stderr: '' }
-      }
-      if (args[0] === 'merge-tree') {
-        return { stdout: 'tree123\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('base123^{tree}')) {
-        return { stdout: 'tree123\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await expect(
-      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
-    ).resolves.toEqual({})
-
-    const commandIndex = (expectedArgs: string[]) =>
-      calls.findIndex(({ args }) => JSON.stringify(args) === JSON.stringify(expectedArgs))
-    const fetchIndex = commandIndex(['fetch', '--prune', 'origin'])
-    const mergeTreeArgs = ['merge-tree', '--write-tree', 'base123', 'refs/heads/feature/test']
-    const mergeTreeIndexes = calls.flatMap(({ args }, index) =>
-      JSON.stringify(args) === JSON.stringify(mergeTreeArgs) ? [index] : []
-    )
-    const updateRefIndex = commandIndex(['update-ref', '-d', 'refs/heads/feature/test', '1'])
-
-    expect(fetchIndex).toBeGreaterThanOrEqual(0)
-    expect(calls[fetchIndex]?.cwd).toBe(resolvedRepoPath())
-    expect(mergeTreeIndexes).toHaveLength(1)
-    expect(fetchIndex).toBeLessThan(mergeTreeIndexes[0])
-    expect(mergeTreeIndexes[0]).toBeLessThan(updateRefIndex)
-    expect(fetchIndex).toBeLessThan(updateRefIndex)
-  })
-
-  it('preserves an already-merged SSH branch when cleanup races after worktree removal', async () => {
+  it('keeps a branch Git refuses to delete and runs no merge proof or fetch', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let zListCount = 0
     const git = vi.fn<GitExec>(async (args) => {
@@ -398,26 +180,8 @@ describe('removeWorktreeOp branch cleanup', () => {
           stderr: ''
         }
       }
-      if (args[0] === 'worktree' && args[1] === 'list') {
-        return { stdout: worktreeList({ path: '/repo', branch: 'main' }), stderr: '' }
-      }
       if (args[0] === 'branch' && args[1] === '-d') {
         throw new Error('error: the branch feature/test is not fully merged')
-      }
-      if (args[0] === 'config' && args[1] === '--get') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
-        return { stdout: 'base123\n', stderr: '' }
-      }
-      if (args[0] === 'rev-list') {
-        return { stdout: '0\n', stderr: '' }
-      }
-      if (args[0] === 'cherry') {
-        return { stdout: '- 1 fix: already squash-merged\n', stderr: '' }
-      }
-      if (args[0] === 'update-ref' && args[1] === '-d') {
-        throw new Error('cannot lock ref')
       }
       return { stdout: '', stderr: '' }
     })
@@ -428,14 +192,12 @@ describe('removeWorktreeOp branch cleanup', () => {
       preservedBranch: { branchName: 'feature/test', head: '1' }
     })
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      'relay removeWorktree: failed to delete already-merged local branch "feature/test" after removing worktree',
-      expect.objectContaining({ message: 'cannot lock ref' })
-    )
-    expect(warnSpy).toHaveBeenCalledWith(
-      'relay removeWorktree: preserved local branch "feature/test" after removing worktree (not fully merged)',
-      expect.any(Error)
-    )
+    const commands = git.mock.calls.map(([args]) => args[0])
+    expect(commands.at(-1)).toBe('branch')
+    for (const command of ['merge-tree', 'cherry', 'patch-id', 'fetch', 'update-ref']) {
+      expect(commands).not.toContain(command)
+    }
+    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], resolvedRepoPath())
     warnSpy.mockRestore()
   })
 })

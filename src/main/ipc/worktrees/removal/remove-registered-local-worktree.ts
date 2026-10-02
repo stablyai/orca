@@ -16,7 +16,7 @@ import { recoverLocalWindowsWorktreeRemoval } from '../../../local-worktree-remo
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../../../worktree-removal-home-guard'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../worktree-remote'
+import { settleKeptBranch } from '../../../source-control/forge-merged-branch-cleanup'
 import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
@@ -252,13 +252,14 @@ async function finishLocalWorktreeRemoval({
           cwd: repo.path,
           ...localWorktreeGitOptions
         }).catch(() => {})
-        await cleanupUnusedWorktreePushTargetRemote(
-          repo.path,
-          args.worktreeId,
-          removedPushTarget,
+        await settleKeptBranch({
+          result: {},
+          repo,
+          worktreeId: args.worktreeId,
+          pushTarget: removedPushTarget,
           store,
-          localWorktreeGitOptions
-        )
+          localGitOptions: localWorktreeGitOptions
+        })
         runtime.clearOptimisticReconcileToken(args.worktreeId)
         removeWorktreeMetadataAndTransientState(
           store,
@@ -287,13 +288,14 @@ async function finishLocalWorktreeRemoval({
   } finally {
     await removalGate.finish(removalCompleted)
   }
-  await cleanupUnusedWorktreePushTargetRemote(
-    repo.path,
-    args.worktreeId,
-    removedPushTarget,
+  removalResult = await settleKeptBranch({
+    result: removalResult ?? {},
+    repo,
+    worktreeId: args.worktreeId,
+    pushTarget: removedPushTarget,
     store,
-    localWorktreeGitOptions
-  )
+    localGitOptions: localWorktreeGitOptions
+  })
   rememberPreservedBranchCleanupTarget(
     args.worktreeId,
     removalHostId,

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   removeWorktreeMock,
   forceDeleteLocalBranchMock,
+  deletePreservedBranchAtHeadMock,
+  getHostedReviewForBranchMock,
   gitExecFileAsyncMock,
   getSshGitProviderMock,
   getActiveMultiplexerMock
@@ -203,6 +205,125 @@ describe('registerWorktreeHandlers', () => {
       'def456'
     )
     expect(forceDeleteLocalBranchMock).not.toHaveBeenCalled()
+  })
+
+  it('deletes a kept branch whose linked PR merged at that head, before the fork-remote cleanup', async () => {
+    deletePreservedBranchAtHeadMock.mockClear()
+    mockKnownFeatureWorktree()
+    removeWorktreeMock.mockResolvedValue({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
+    const pushTarget = {
+      remoteName: 'pr-contributor-orca',
+      branchName: 'feature/test',
+      remoteUrl: 'https://github.com/contributor/orca.git',
+      remoteCreated: true
+    }
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ linkedPR: 42, pushTarget }))
+    getHostedReviewForBranchMock.mockResolvedValue({
+      provider: 'github',
+      number: 42,
+      state: 'merged',
+      headSha: 'def456'
+    })
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: 'https://github.com/contributor/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'config') {
+        throw new Error('no branch config')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/workspace/repo',
+        branch: 'feature/test',
+        linkedGitHubPR: 42,
+        currentHeadOid: 'def456'
+      })
+    )
+    expect(deletePreservedBranchAtHeadMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'feature/test',
+      'def456',
+      {}
+    )
+    const remoteRemoveCall = gitExecFileAsyncMock.mock.calls.findIndex(
+      ([args]) => args[0] === 'remote' && args[1] === 'remove'
+    )
+    expect(remoteRemoveCall).toBeGreaterThanOrEqual(0)
+    expect(deletePreservedBranchAtHeadMock.mock.invocationCallOrder[0]).toBeLessThan(
+      gitExecFileAsyncMock.mock.invocationCallOrder[remoteRemoveCall]
+    )
+    await expect(
+      handlers['worktrees:forceDeletePreservedBranch'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        branchName: 'feature/test',
+        expectedHead: 'def456'
+      })
+    ).rejects.toThrow('No preserved branch cleanup is pending')
+  })
+
+  it('deletes a kept SSH branch through the relay when its review merged at that head', async () => {
+    deletePreservedBranchAtHeadMock.mockClear()
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      forceDeletePreservedBranch: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        { path: repo.path, head: 'main', branch: 'main', isBare: false, isMainWorktree: true },
+        {
+          path: '/remote/feature-wt',
+          head: 'def456',
+          branch: 'feature/test',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue({
+        preservedBranch: { branchName: 'feature/test', head: 'def456' }
+      }),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ hostId: 'ssh:conn-1' }))
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({ request: vi.fn(), notify: vi.fn() })
+    getHostedReviewForBranchMock.mockResolvedValue({
+      provider: 'gitlab',
+      number: 5,
+      state: 'merged',
+      headSha: 'def456'
+    })
+
+    const result = await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-ssh::/remote/feature-wt',
+      hostId: 'ssh:conn-1'
+    })
+
+    expect(result).not.toHaveProperty('preservedBranch')
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ executionHostId: 'ssh:conn-1', currentHeadOid: 'def456' })
+    )
+    expect(provider.forceDeletePreservedBranch).toHaveBeenCalledWith(
+      '/remote/repo',
+      'feature/test',
+      'def456'
+    )
+    expect(deletePreservedBranchAtHeadMock).not.toHaveBeenCalled()
   })
 
   it('rejects stale preserved-branch cleanup actions with an old head', async () => {

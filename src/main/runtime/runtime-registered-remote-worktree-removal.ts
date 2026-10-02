@@ -2,7 +2,7 @@ import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
-import { cleanupUnusedWorktreePushTargetRemoteSsh } from '../ipc/worktree-remote'
+import { settleKeptSshBranch } from '../source-control/forge-merged-branch-cleanup'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
@@ -61,14 +61,14 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   } finally {
     await gate.finish(completed)
   }
-  const result = args.preserveBranchHead(rawResult, registeredWorktree.head)
-  await cleanupUnusedWorktreePushTargetRemoteSsh(
-    provider,
-    repo.path,
-    target.id,
-    args.removedPushTarget,
-    args.store
-  )
+  const result = await settleKeptSshBranch({
+    result: args.preserveBranchHead(rawResult, registeredWorktree.head),
+    repo,
+    worktreeId: target.id,
+    pushTarget: args.removedPushTarget,
+    store: args.store,
+    provider
+  })
   await args.deleteHistory()
   args.finishRemoval(result)
   return {

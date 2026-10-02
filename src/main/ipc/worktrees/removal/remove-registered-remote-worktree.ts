@@ -6,10 +6,8 @@ import type { SshGitProvider } from '../../../providers/ssh-git-provider'
 import { deleteRemoteWorktreeHistory } from '../../../remote-worktree-history-cleanup'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import { getSshPtyProvider } from '../../pty'
-import {
-  cleanupUnusedWorktreePushTargetRemoteSsh,
-  notifyWorktreesChanged
-} from '../../worktree-remote'
+import { notifyWorktreesChanged } from '../../worktree-remote'
+import { settleKeptSshBranch } from '../../../source-control/forge-merged-branch-cleanup'
 import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -70,14 +68,14 @@ export async function removeRegisteredRemoteWorktree(
   } finally {
     await removalGate.finish(removalCompleted)
   }
-  const removalResult = preserveBranchHeadFallback(rawRemovalResult, registeredWorktree.head)
-  await cleanupUnusedWorktreePushTargetRemoteSsh(
-    provider!,
-    repo.path,
-    args.worktreeId,
-    removedPushTarget,
-    store
-  )
+  const removalResult = await settleKeptSshBranch({
+    result: preserveBranchHeadFallback(rawRemovalResult, registeredWorktree.head),
+    repo,
+    worktreeId: args.worktreeId,
+    pushTarget: removedPushTarget,
+    store,
+    provider
+  })
   await deleteRemoteWorktreeHistory(getSshPtyProvider(remoteConnectionId), args.worktreeId)
   rememberPreservedBranchCleanupTarget(
     args.worktreeId,

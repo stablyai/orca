@@ -1,9 +1,5 @@
-import {
-  branchHasNoUnmergedChangesWithLazyTargetRefresh,
-  getBranchCleanupTargetRefs
-} from '../../shared/git-branch-cleanup'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
-import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
+import { isBranchHeadInBaseHistory } from '../../shared/git-branch-base-containment'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
@@ -31,25 +27,12 @@ export async function deleteBranchAfterWorktreeRemoval(
     }
     return {}
   } catch (error) {
-    if (!options.forceBranchDelete && branchHead) {
-      try {
-        if (
-          await deleteAlreadyMergedBranchAfterSafeDeleteFailure(
-            repoPath,
-            branchName,
-            branchHead,
-            options
-          )
-        ) {
-          return {}
-        }
-      } catch (alreadyMergedDeleteError) {
-        // Why: worktree is already gone; a raced branch cleanup should degrade to preserved-branch recovery, not fail delete.
-        console.warn(
-          `[git] Failed to delete already-merged local branch "${branchName}" after removing worktree`,
-          alreadyMergedDeleteError
-        )
-      }
+    if (
+      !options.forceBranchDelete &&
+      branchHead &&
+      (await deleteBranchInBaseHistory(repoPath, branchName, branchHead, options))
+    ) {
+      return {}
     }
     // Keep an unmerged/unpublished branch: deleting a worktree must never silently discard commits.
     console.warn(
@@ -101,31 +84,26 @@ async function deleteLocalBranchAfterWorktreeRemoval(
   }
 }
 
-async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
+/** `branch -d` refused, but the head is in its base's history: delete it, still guarded on head. */
+async function deleteBranchInBaseHistory(
   repoPath: string,
   branchName: string,
   branchHead: string,
-  options: GitWorktreeExecOptions = {}
+  options: GitWorktreeExecOptions
 ): Promise<boolean> {
-  const runGit = (args: string[], execOptions?: { stdin?: string }) =>
-    gitExecFileAsync(args, {
-      ...gitExecOptions(repoPath, options),
-      ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
-    })
-  const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
-  // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
-  const hasNoUnmergedChanges = await withLocalGitCapabilityCacheForExecution(
-    { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
-    (capabilities) =>
-      branchHasNoUnmergedChangesWithLazyTargetRefresh(runGit, branchName, targetRefs, capabilities)
-  )
-  if (!hasNoUnmergedChanges) {
+  const runGit = (args: string[], cwd = repoPath) =>
+    gitExecFileAsync(args, gitExecOptions(cwd, options))
+  try {
+    if (!(await isBranchHeadInBaseHistory(runGit, branchName, branchHead))) {
+      return false
+    }
+    await forceDeleteLocalBranch(repoPath, branchName, branchHead, runGit)
+    return true
+  } catch (error) {
+    // Why: the checkout is already gone; a raced delete degrades to the kept-branch path.
+    console.warn(`[git] Kept branch "${branchName}": deleting it at its base failed`, error)
     return false
   }
-  await forceDeleteLocalBranch(repoPath, branchName, branchHead, (args, cwd) =>
-    gitExecFileAsync(args, gitExecOptions(cwd, options))
-  )
-  return true
 }
 
 export async function forceDeleteLocalBranch(

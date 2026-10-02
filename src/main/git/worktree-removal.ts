@@ -8,9 +8,9 @@ import { withSpan } from '../observability/tracer'
 import { parseWslPath } from '../wsl'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
-import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
+import { deleteBranchAfterWorktreeRemoval, forceDeleteLocalBranch } from './worktree-branch-removal'
 import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
-import type { RemoveWorktreeOptions } from './worktree-operation-options'
+import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from './worktree-operation-options'
 import { getErrorCode, gitExecOptions, normalizeLocalBranchRef } from './worktree-operation-options'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
@@ -114,13 +114,28 @@ function deleteBranchOfRemovedWorktree(
   branchHead: string,
   options: RemoveWorktreeOptions
 ): Promise<RemoveWorktreeResult> {
-  // Why its own span: branch cleanup can reach the network (`fetch --prune`), so a stall here reads as
-  // `git worktree remove` being slow unless it is timed separately.
-  // Why serialized per repo: concurrent removals in one repo race `packed-refs.lock` and the
-  // remote-tracking ref locks of `fetch --prune` (#2259); the checkout deletes above need not wait.
+  // Why serialized per repo: concurrent removals in one repo race `packed-refs.lock` (#2259); the
+  // checkout deletes above need not wait.
   return runKeyedSerializedOperation(branchCleanupQueueByRepo, repoPath, () =>
     withSpan('worktree.remove.branch_delete', () =>
       deleteBranchAfterWorktreeRemoval(repoPath, branchName, branchHead, options)
+    )
+  )
+}
+
+/**
+ * Deletes a branch `branch -d` kept, only while it still points at `head`. Shares the removal
+ * branch-delete queue so it never races another removal's ref write in this repo.
+ */
+export function deletePreservedBranchAtHead(
+  repoPath: string,
+  branchName: string,
+  head: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<void> {
+  return runKeyedSerializedOperation(branchCleanupQueueByRepo, repoPath, () =>
+    forceDeleteLocalBranch(repoPath, branchName, head, (args, cwd) =>
+      gitExecFileAsync(args, gitExecOptions(cwd, options))
     )
   )
 }

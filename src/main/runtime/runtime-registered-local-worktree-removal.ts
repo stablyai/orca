@@ -13,7 +13,7 @@ import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
 } from '../ipc/worktree-symlinks'
-import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
+import { settleKeptBranch } from '../source-control/forge-merged-branch-cleanup'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
@@ -246,7 +246,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
         await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path, ...localOptions }).catch(
           () => {}
         )
-        await cleanupRemovedWorktreePushTarget(args)
+        await settleKeptBranch(settlementOf(args, {}))
         args.finishRemoval(undefined, false, refreshed.head)
         completed = true
         return {}
@@ -260,19 +260,22 @@ export async function finishRuntimeLocalWorktreeRemoval(
   } finally {
     await gate.finish(completed)
   }
-  await cleanupRemovedWorktreePushTarget(args)
+  removalResult = await settleKeptBranch(settlementOf(args, removalResult ?? {}))
   args.finishRemoval(removalResult, true, refreshed.head)
   return removalResult ?? {}
 }
 
-export async function cleanupRemovedWorktreePushTarget(
-  args: RuntimeLocalWorktreeRemovalFinishArgs
-): Promise<void> {
-  await cleanupUnusedWorktreePushTargetRemote(
-    args.repo.path,
-    args.target.id,
-    args.removedPushTarget,
-    args.store,
-    args.localOptions
-  )
+/** settleKeptBranch's input for a runtime local removal whose Git step finished. */
+export function settlementOf(
+  args: RuntimeLocalWorktreeRemovalFinishArgs,
+  result: RemoveWorktreeResult
+): Parameters<typeof settleKeptBranch>[0] {
+  return {
+    result,
+    repo: args.repo,
+    worktreeId: args.target.id,
+    pushTarget: args.removedPushTarget,
+    store: args.store,
+    localGitOptions: args.localOptions
+  }
 }

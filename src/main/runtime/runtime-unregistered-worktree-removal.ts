@@ -13,9 +13,9 @@ import {
   toLocalWorktreeRuntimePath
 } from '../local-worktree-filesystem'
 import {
-  cleanupUnusedWorktreePushTargetRemote,
-  cleanupUnusedWorktreePushTargetRemoteSsh
-} from '../ipc/worktree-remote'
+  settleKeptBranch,
+  settleKeptSshBranch
+} from '../source-control/forge-merged-branch-cleanup'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaLeftoverDirectory,
@@ -156,19 +156,14 @@ async function deleteUnregisteredDirectory(
 async function cleanupPushTarget(
   args: Parameters<typeof removeRuntimeUnregisteredWorktree>[0]
 ): Promise<void> {
+  const removal = {
+    result: {},
+    repo: args.repo,
+    worktreeId: args.target.id,
+    pushTarget: args.removedPushTarget,
+    store: args.store
+  }
   await (args.route.kind === 'ssh'
-    ? cleanupUnusedWorktreePushTargetRemoteSsh(
-        args.route.provider,
-        args.repo.path,
-        args.target.id,
-        args.removedPushTarget,
-        args.store
-      )
-    : cleanupUnusedWorktreePushTargetRemote(
-        args.repo.path,
-        args.target.id,
-        args.removedPushTarget,
-        args.store,
-        args.localOptions
-      ))
+    ? settleKeptSshBranch({ ...removal, provider: args.route.provider })
+    : settleKeptBranch({ ...removal, localGitOptions: args.localOptions }))
 }

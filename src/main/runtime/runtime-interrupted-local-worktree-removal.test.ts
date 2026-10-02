@@ -36,8 +36,16 @@ import {
 } from '../worktree-removal-records'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
 
+const { getHostedReviewForBranchMock } = vi.hoisted(() => ({
+  getHostedReviewForBranchMock: vi.fn()
+}))
+
 vi.mock('../project-runtime-git-options', () => ({
-  getLocalProjectWorktreeGitOptions: () => ({})
+  getLocalProjectWorktreeGitOptions: () => ({}),
+  withRepoGhAccount: (_repo: unknown, options: unknown) => options
+}))
+vi.mock('../source-control/hosted-review', () => ({
+  getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 vi.mock('../host-tree-removal', async (importOriginal) => {
   const actual = await importOriginal<typeof HostTreeRemoval>()
@@ -87,6 +95,8 @@ beforeEach(async () => {
   await git(['commit', '-qm', 'seed'])
   await git(['worktree', 'add', '-q', worktreePath, '-b', 'feature'])
   repo = { id: 'repo-1', path: repoPath, displayName: 'repo', badgeColor: '', addedAt: 0 }
+  getHostedReviewForBranchMock.mockReset()
+  getHostedReviewForBranchMock.mockResolvedValue(null)
 })
 
 afterEach(async () => {
@@ -320,6 +330,29 @@ describe('finishing an interrupted worktree removal after a restart', () => {
       head,
       undefined
     )
+  })
+
+  it('asks the review host about a kept branch, as an uninterrupted removal does', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await writeFile(join(worktreePath, 'work.txt'), 'work\n')
+    await git(['add', '-A'], worktreePath)
+    await git(['commit', '-qm', 'work'], worktreePath)
+    const head = (await git(['rev-parse', 'feature'])).trim()
+    await git(['worktree', 'remove', worktreePath])
+    getHostedReviewForBranchMock.mockResolvedValue({
+      provider: 'github',
+      number: 7,
+      state: 'merged',
+      headSha: head
+    })
+
+    const { outcome } = await finishAfterRestart()
+
+    expect(outcome).toMatchObject({ status: 'removed' })
+    expect(
+      outcome && 'preservedBranch' in outcome ? outcome.preservedBranch : undefined
+    ).toBeUndefined()
+    expect(await git(['branch', '--list', 'feature'])).toBe('')
   })
 
   it('treats a removal that fully finished as done', async () => {

@@ -22,7 +22,9 @@ import {
   killAllProcessesForWorktreeMock,
   clearProviderPtyStateMock,
   getLocalPtyProviderMock,
-  getSshPtyProviderMock
+  getSshPtyProviderMock,
+  getHostedReviewForBranchMock,
+  deletePreservedBranchAtHeadMock
 } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta, mockKnownFeatureWorktree } from './worktrees-test-fixtures'
@@ -515,6 +517,37 @@ describe('registerWorktreeHandlers', () => {
       })
       expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
       expect((await lstat(markerPath)).isFile()).toBe(true)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('asks the review host about the branch a prunable row kept, as a normal removal does', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-prunable-ipc-'))
+    const markerPath = join(root, '.git')
+    await writeFile(markerPath, 'gitdir: /preserved/admin\n')
+    const rows = mockKnownFeatureWorktree(markerPath).map((row) =>
+      row.path === markerPath ? { ...row, branch: 'refs/heads/feature', prunable: true } : row
+    )
+    listWorktreesMock.mockResolvedValueOnce(rows).mockResolvedValue([])
+    getHostedReviewForBranchMock.mockResolvedValue({
+      provider: 'github',
+      number: 7,
+      state: 'merged',
+      headSha: 'feature'
+    })
+    deletePreservedBranchAtHeadMock.mockClear()
+    try {
+      const result = await handlers['worktrees:remove'](null, {
+        worktreeId: `repo-1::${markerPath}`
+      })
+      expect(result).toEqual({ catalogVersion: anyCatalogVersion })
+      expect(deletePreservedBranchAtHeadMock).toHaveBeenCalledWith(
+        '/workspace/repo',
+        'feature',
+        'feature',
+        {}
+      )
     } finally {
       await rm(root, { recursive: true, force: true })
     }
