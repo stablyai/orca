@@ -7384,6 +7384,12 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
+        },
+        "WorktreeWorkspaceUrlField": {
+          "label": "Link",
+          "placeholder": "https://app.test/admin",
+          "hint": "Opened from the card, the status bar, and the Open Workspace Link shortcut.",
+          "invalid": "Enter a full http:// or https:// link."
         }
       },
       "shared": {
