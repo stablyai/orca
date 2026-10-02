@@ -68,7 +68,7 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
 }
 
 function isPotentialStructuredResumeCommand(command: string): boolean {
-  return parseResumeInvocation(command) !== null
+  return parseResumeInvocations(command).length > 0
 }
 
 function findSessionOwnership(session: AiVaultSession): StructuredProviderSessionOwnership | null {
@@ -122,19 +122,60 @@ function isResumeCommandFor(
   command: string,
   ownership: StructuredProviderSessionOwnership
 ): boolean {
-  const invocation = parseResumeInvocation(command)
-  if (!invocation || invocation.provider !== ownership.provider) {
-    return false
-  }
   // A target-less resume (--last, --continue, or a bare --resume/-r) may pick
   // any provider session, so it cannot be admitted while one is structured.
   // Only an explicit target that differs from this owned session is safe.
-  return invocation.target === null || invocation.target === ownership.providerSessionId
+  return parseResumeInvocations(command).some(
+    (invocation) =>
+      invocation.provider === ownership.provider &&
+      (invocation.target === null || invocation.target === ownership.providerSessionId)
+  )
 }
 
 type ResumeInvocation = {
   provider: 'codex' | 'claude'
   target: string | null
+}
+
+// Why: a flag only describes its own invocation, so `fork && plain resume` must not share one exemption.
+function splitShellInvocations(command: string): string[] {
+  const segments: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+  for (let index = 0; index < command.length; index++) {
+    const char = command[index]!
+    if (quote) {
+      if (char === '\\' && quote === '"' && index + 1 < command.length) {
+        current += char + command[++index]
+        continue
+      }
+      if (char === quote) {
+        quote = null
+      }
+      current += char
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      current += char
+      continue
+    }
+    if (char === ';' || char === '&' || char === '|' || char === '\n' || char === '\r') {
+      segments.push(current)
+      current = ''
+      continue
+    }
+    current += char
+  }
+  segments.push(current)
+  return segments
+}
+
+function parseResumeInvocations(command: string): ResumeInvocation[] {
+  return splitShellInvocations(command).flatMap((segment) => {
+    const invocation = parseResumeInvocation(segment)
+    return invocation ? [invocation] : []
+  })
 }
 
 function parseResumeInvocation(command: string): ResumeInvocation | null {

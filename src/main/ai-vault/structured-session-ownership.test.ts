@@ -103,6 +103,51 @@ describe('structured AI Vault ownership', () => {
     ).resolves.toBeUndefined()
   })
 
+  it('allows --fork-session before --resume in the same claude invocation', async () => {
+    installOwnership({ provider: 'claude' })
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude --fork-session --resume ${PROVIDER_SESSION}`,
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  it.each([
+    `claude --resume ${PROVIDER_SESSION} --fork-session && claude --resume ${PROVIDER_SESSION}`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session; claude --resume ${PROVIDER_SESSION}`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session||claude --resume ${PROVIDER_SESSION}`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session | claude --resume ${PROVIDER_SESSION}`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session & claude --resume ${PROVIDER_SESSION}`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session\nclaude --resume ${PROVIDER_SESSION}`,
+    `claude --resume ${PROVIDER_SESSION} && claude --fork-session`
+  ])('refuses a plain resume chained with a fork: %s', async (command) => {
+    installOwnership({ provider: 'claude' })
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
+  it('refuses an owned resume that follows an unrelated command in a chain', async () => {
+    installOwnership()
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `codex fork ${PROVIDER_SESSION} && codex resume ${PROVIDER_SESSION}`,
+        async () => undefined
+      )
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
+  it('keeps a quoted separator inside one invocation', async () => {
+    installOwnership({ provider: 'claude' })
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude --resume ${PROVIDER_SESSION} --fork-session "a && b"`,
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
+  })
+
   it('still refuses a plain claude resume of an owned session', async () => {
     installOwnership({ provider: 'claude' })
     await expect(
