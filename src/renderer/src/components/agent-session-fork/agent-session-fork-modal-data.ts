@@ -6,7 +6,8 @@ export type AgentSessionForkModalData = {
   sourceWorktreeId: string
   launchSource: AgentForkLaunchSource
   preselectedPaneKey: string | null
-  transcript: { agent: TuiAgent; prompt: string } | null
+  /** `agent` is null when the pane's agent is unknown: the context can be copied, not launched. */
+  transcript: { agent: TuiAgent | null; prompt: string } | null
 }
 
 export function buildAgentSessionForkModalData(
@@ -29,7 +30,13 @@ function parseTranscript(value: unknown): AgentSessionForkModalData['transcript'
     return null
   }
   const { agent, prompt } = value
-  return isTuiAgent(agent) && typeof prompt === 'string' ? { agent, prompt } : null
+  if (typeof prompt !== 'string') {
+    return null
+  }
+  if (agent === null) {
+    return { agent: null, prompt }
+  }
+  return isTuiAgent(agent) ? { agent, prompt } : null
 }
 
 export function parseAgentSessionForkModalData(

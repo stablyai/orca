@@ -205,14 +205,18 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     trimmedName
   ])
 
+  // Why: an unrecognised pane agent has no transcript launch, but its context can still be copied.
+  const copyablePrompt =
+    selectedOption.kind === 'transcript'
+      ? selectedOption.prompt
+      : data.transcript?.agent === null
+        ? data.transcript.prompt
+        : null
   const copyContext = useCallback(async (): Promise<void> => {
-    if (
-      selectedOption.kind === 'transcript' &&
-      (await copyTranscriptPrompt(selectedOption.prompt))
-    ) {
+    if (copyablePrompt !== null && (await copyTranscriptPrompt(copyablePrompt))) {
       closeModal()
     }
-  }, [closeModal, selectedOption])
+  }, [closeModal, copyablePrompt])
 
   const close = useCallback((): void => {
     // Why: once the flow runs, closing would hide a fork that is still being created.
@@ -249,6 +253,7 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     visibleStage: busy && stageVisible ? stage : null,
     error,
     submit,
+    canCopyContext: copyablePrompt !== null,
     copyContext,
     close
   }

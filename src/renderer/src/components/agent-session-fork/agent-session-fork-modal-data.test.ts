@@ -43,6 +43,16 @@ describe('parseAgentSessionForkModalData', () => {
     expect(parseAgentSessionForkModalData(buildAgentSessionForkModalData(data))).toEqual(data)
   })
 
+  it('round-trips terminal context whose pane agent is unknown', () => {
+    const data = {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu' as const,
+      preselectedPaneKey: 'tab-1:pane-1',
+      transcript: { agent: null, prompt: 'x' }
+    }
+    expect(parseAgentSessionForkModalData(buildAgentSessionForkModalData(data))).toEqual(data)
+  })
+
   it('rejects missing ids, unknown launch sources and unknown agents', () => {
     expect(parseAgentSessionForkModalData({})).toBeNull()
     expect(

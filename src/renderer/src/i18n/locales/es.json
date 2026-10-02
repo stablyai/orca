@@ -2871,7 +2871,6 @@
                   "2317900211": "No se pudo copiar el contexto del fork.",
                   "38e41edc6e": "Este espacio de trabajo no puede hacer fork hacia un worktree de git.",
                   "f867385bb5": "No se pudo encontrar el espacio de trabajo de origen para este fork.",
-                  "046e8d853c": "No hay contexto de terminal para hacer fork",
                   "c00421d320": "Se copió el contexto del fork. Inicia un agente y pégalo para iniciar el fork.",
                   "f62b40e2c7": "No hay contexto de terminal para copiar",
                   "373a3103e7": "Contexto copiado",

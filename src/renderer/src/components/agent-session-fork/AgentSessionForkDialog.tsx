@@ -190,7 +190,7 @@ function AgentSessionForkDialogBody({
             </p>
           ) : null}
           <DialogFooter className="sm:justify-between">
-            {state.selectedOption.kind === 'transcript' ? (
+            {state.canCopyContext ? (
               <Button
                 type="button"
                 variant="ghost"

@@ -2,15 +2,28 @@
  * @vitest-environment happy-dom
  */
 import { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ForkableAgentSession } from '@/lib/worktree-agent-fork-sessions'
-import type { GitStatusEntry, GitStatusResult } from '../../../../shared/git-status-types'
-import AgentSessionForkDialog from './AgentSessionForkDialog'
+import type { GitStatusResult } from '../../../../shared/git-status-types'
+import {
+  DIRTY_ENTRIES,
+  HEAD_OID,
+  bodyText,
+  buttonByText,
+  carrySwitch,
+  closeSessionSelect,
+  mountedDialogs,
+  nameInput,
+  openSessionSelect,
+  pickerValue,
+  renderDialog,
+  session,
+  sessionTrigger,
+  statusWith,
+  submitWithEnter,
+  unmountDialogs
+} from './AgentSessionForkDialog.test-fixture'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
-
-const HEAD_OID = 'a'.repeat(40)
 
 const mocks = vi.hoisted(() => ({
   runAgentSessionFork: vi.fn(),
@@ -117,37 +130,6 @@ vi.mock('@/components/repo/CreateFromPicker', () => ({
   )
 }))
 
-function session(id: string, overrides: Partial<ForkableAgentSession> = {}): ForkableAgentSession {
-  return {
-    providerSessionId: id,
-    paneKey: `tab-${id}:pane-1`,
-    agent: 'claude',
-    providerSession: { key: 'session_id', id },
-    launchConfig: null,
-    title: `Session ${id}`,
-    lastActiveAt: Date.now() - 5 * 60_000,
-    live: true,
-    ...overrides
-  }
-}
-
-function entry(path: string, area: GitStatusEntry['area']): GitStatusEntry {
-  return { path, area, status: area === 'untracked' ? 'untracked' : 'modified' }
-}
-
-function statusWith(entries: GitStatusEntry[]): GitStatusResult {
-  return { entries, conflictOperation: 'unknown', head: HEAD_OID }
-}
-
-const DIRTY_ENTRIES = [
-  entry('a.ts', 'unstaged'),
-  entry('a.ts', 'staged'),
-  entry('b.ts', 'unstaged'),
-  entry('c.ts', 'untracked')
-]
-
-const mounted: { container: HTMLDivElement; root: Root }[] = []
-
 beforeEach(() => {
   sourceWorktree.branch = SOURCE_BRANCH
   state.activeModal = 'agent-session-fork'
@@ -173,85 +155,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  for (const { root, container } of mounted) {
-    act(() => root.unmount())
-    container.remove()
-  }
-  mounted.length = 0
-  document.body.innerHTML = ''
+  unmountDialogs()
 })
-
-async function renderDialog(): Promise<void> {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  mounted.push({ container, root })
-  act(() => {
-    root.render(<AgentSessionForkDialog />)
-  })
-  // Why: lets the git status and capability probes resolve.
-  await act(async () => {})
-}
-
-function bodyText(): string {
-  return document.body.textContent ?? ''
-}
-
-function sessionTrigger(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[data-slot="select-trigger"]')
-}
-
-function nameInput(): HTMLInputElement {
-  const label = Array.from(document.querySelectorAll('label')).find(
-    (element) => element.textContent === 'Name'
-  )
-  const input = label ? document.getElementById(label.htmlFor) : null
-  if (!(input instanceof HTMLInputElement)) {
-    throw new Error('name input not rendered')
-  }
-  return input
-}
-
-function carrySwitch(): HTMLButtonElement | null {
-  return document.querySelector<HTMLButtonElement>(
-    'button[role="switch"][aria-label^="Bring uncommitted changes"]'
-  )
-}
-
-function buttonByText(text: string): HTMLButtonElement {
-  const button = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
-    (element) => element.textContent?.trim() === text
-  )
-  if (!button) {
-    throw new Error(`button "${text}" not rendered`)
-  }
-  return button
-}
-
-async function openSessionSelect(): Promise<string[]> {
-  const trigger = sessionTrigger()
-  expect(trigger, 'session select').toBeTruthy()
-  await act(async () => {
-    trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-  })
-  return Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).map(
-    (option) => option.textContent ?? ''
-  )
-}
-
-function pickerValue(): string | null {
-  return (
-    document.querySelector('[data-testid="create-from-picker"]')?.getAttribute('data-value') ?? null
-  )
-}
-
-async function submitWithEnter(): Promise<void> {
-  const input = nameInput()
-  // Why: happy-dom lacks implicit submission; requestSubmit is what Enter in a form field runs.
-  await act(async () => {
-    input.form?.requestSubmit()
-  })
-}
 
 describe('AgentSessionForkDialog', () => {
   it('renders nothing for other modals', async () => {
@@ -359,8 +264,8 @@ describe('AgentSessionForkDialog', () => {
     await renderDialog()
     expect(carrySwitch()).toBeNull()
     expect(bodyText()).not.toContain('Bring uncommitted changes')
-    act(() => mounted[0]?.root.unmount())
-    mounted.length = 0
+    act(() => mountedDialogs[0]?.root.unmount())
+    mountedDialogs.length = 0
 
     mocks.getRuntimeGitStatus.mockResolvedValue(statusWith(DIRTY_ENTRIES))
     await renderDialog()
@@ -536,6 +441,26 @@ describe('AgentSessionForkDialog', () => {
     mocks.copyTranscriptPrompt.mockResolvedValue(true)
     await act(async () => buttonByText('Copy context').click())
     expect(mocks.copyTranscriptPrompt).toHaveBeenCalledWith('transcript prompt')
+    expect(state.closeModal).toHaveBeenCalled()
+  })
+
+  it('offers to copy the context of a pane whose agent is unknown, without a transcript launch', async () => {
+    mocks.listForkableAgentSessions.mockReturnValue([session('s1'), session('s2')])
+    state.modalData = {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: 'tab-9:pane-1',
+      transcript: { agent: null, prompt: 'pane context' }
+    }
+    await renderDialog()
+    const options = await openSessionSelect()
+    expect(options).toHaveLength(3)
+    expect(options.some((option) => option.includes('(transcript)'))).toBe(false)
+    await closeSessionSelect()
+    expect(bodyText()).not.toContain('get the transcript as a draft')
+    mocks.copyTranscriptPrompt.mockResolvedValue(true)
+    await act(async () => buttonByText('Copy context').click())
+    expect(mocks.copyTranscriptPrompt).toHaveBeenCalledWith('pane context')
     expect(state.closeModal).toHaveBeenCalled()
   })
 

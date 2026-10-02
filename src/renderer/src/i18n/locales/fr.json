@@ -3278,7 +3278,6 @@
                   "2317900211": "Échec de la copie du contexte du fork.",
                   "38e41edc6e": "Cet espace de travail ne peut pas être forké en worktree Git.",
                   "f867385bb5": "Impossible de trouver l'espace de travail source de ce fork.",
-                  "046e8d853c": "Aucun contexte de terminal à forker",
                   "c00421d320": "Contexte du fork copié. Lancez un agent et collez-le pour démarrer le fork.",
                   "f62b40e2c7": "Aucun contexte de terminal à copier",
                   "373a3103e7": "Contexte copié",

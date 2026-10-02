@@ -15,8 +15,9 @@ export function buildAgentSessionForkOptions(
     session
   }))
   const paneHasNativeFork = sessions.some((session) => session.paneKey === data.preselectedPaneKey)
-  if (data.transcript && !paneHasNativeFork) {
-    options.unshift({ kind: 'transcript', ...data.transcript })
+  const transcriptAgent = data.transcript?.agent
+  if (data.transcript && transcriptAgent && !paneHasNativeFork) {
+    options.unshift({ kind: 'transcript', agent: transcriptAgent, prompt: data.transcript.prompt })
   }
   options.push({ kind: 'none' })
   return options

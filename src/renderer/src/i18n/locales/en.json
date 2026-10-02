@@ -3350,7 +3350,6 @@
                   "2317900211": "Failed to copy fork context.",
                   "38e41edc6e": "This workspace cannot be forked into a git worktree.",
                   "f867385bb5": "Could not find the source workspace for this fork.",
-                  "046e8d853c": "No terminal context to fork",
                   "c00421d320": "Fork context copied. Launch an agent and paste it to start the fork.",
                   "f62b40e2c7": "No terminal context to copy",
                   "373a3103e7": "Context copied",

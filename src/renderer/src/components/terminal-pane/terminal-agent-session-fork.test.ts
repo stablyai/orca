@@ -128,14 +128,17 @@ describe('forkAgentSessionFromMenuPane', () => {
     )
   })
 
-  it('opens the dialog without a transcript when the pane agent is unknown', async () => {
+  it('keeps the context without an agent when the pane agent is unknown', async () => {
     await forkFromMenu('repo::wt', makePane('Assistant: here is the current plan'))
 
     expect(mockOpenModal).toHaveBeenCalledWith('agent-session-fork', {
       sourceWorktreeId: 'repo::wt',
       launchSource: 'terminal_context_menu',
       preselectedPaneKey: `tab-1:${LEAF_ID}`,
-      transcript: null
+      transcript: {
+        agent: null,
+        prompt: expect.stringContaining('Assistant: here is the current plan')
+      }
     })
   })
 
@@ -160,7 +163,7 @@ describe('forkAgentSessionFromMenuPane', () => {
     })
   })
 
-  it('reports an empty terminal when the pane agent cannot fork natively', async () => {
+  it('still opens a branch-only dialog when the pane agent cannot fork natively', async () => {
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: {
         agentType: 'pi',
@@ -172,8 +175,11 @@ describe('forkAgentSessionFromMenuPane', () => {
 
     await forkFromMenu('repo::wt', makePane('\x1b[0m\r\n\x1bc\x07'))
 
-    expect(mockOpenModal).not.toHaveBeenCalled()
-    expect(mockToast.error).toHaveBeenCalledWith('No terminal context to fork')
+    expect(mockToast.error).not.toHaveBeenCalled()
+    expect(mockOpenModal).toHaveBeenCalledWith(
+      'agent-session-fork',
+      expect.objectContaining({ transcript: null })
+    )
   })
 
   it('does nothing without a pane', async () => {
@@ -183,14 +189,18 @@ describe('forkAgentSessionFromMenuPane', () => {
     expect(mockToast.error).not.toHaveBeenCalled()
   })
 
-  it('reports an empty terminal instead of opening the dialog', async () => {
+  it('opens a branch-only dialog for an empty terminal', async () => {
     const pane = makePane('\x1b[0m\r\n\x1bc\x07')
 
     await forkFromMenu('repo::wt', pane)
 
-    expect(mockOpenModal).not.toHaveBeenCalled()
-    expect(mockToast.error).toHaveBeenCalledWith('No terminal context to fork')
-    expect(pane.terminal.focus).toHaveBeenCalled()
+    expect(mockToast.error).not.toHaveBeenCalled()
+    expect(mockOpenModal).toHaveBeenCalledWith('agent-session-fork', {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: `tab-1:${LEAF_ID}`,
+      transcript: null
+    })
   })
 
   it.each([

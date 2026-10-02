@@ -82,19 +82,7 @@ function prepareAgentSessionForkFromPane({
     sourceLabel: paneKey,
     agentLabel: agent
   })
-
-  if (!prompt) {
-    toast.error(
-      translate(
-        'auto.components.terminal.pane.terminal.agent.session.fork.046e8d853c',
-        'No terminal context to fork'
-      )
-    )
-    pane.terminal.focus()
-    return null
-  }
-
-  return { prompt, agent }
+  return prompt ? { prompt, agent } : null
 }
 
 // Why: the standalone "Copy Context" action copies the bounded transcript on its
@@ -149,17 +137,15 @@ export function openAgentSessionForkDialogFromPane(args: ForkAgentSessionFromPan
   const hasNativeFork = listForkableAgentSessions(useAppStore.getState(), worktreeId).some(
     (session) => session.paneKey === paneKey
   )
+  // Why: an empty scrollback still allows a branch-only fork through "No agent".
   const fork = hasNativeFork ? null : prepareAgentSessionForkFromPane(args)
-  if (!hasNativeFork && !fork) {
-    return
-  }
   useAppStore.getState().openModal(
     'agent-session-fork',
     buildAgentSessionForkModalData({
       sourceWorktreeId: worktreeId,
       launchSource: 'terminal_context_menu',
       preselectedPaneKey: paneKey,
-      transcript: fork?.agent ? { agent: fork.agent, prompt: fork.prompt } : null
+      transcript: fork
     })
   )
 }
