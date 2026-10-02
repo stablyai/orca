@@ -12,7 +12,7 @@ import { LargeDiffLoadPrompt } from './LargeDiffLoadPrompt'
 import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
-import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
+import { installDiffEditorHorizontalWheelScroll } from './diff-editor-horizontal-wheel-scroll'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -59,8 +59,8 @@ export function DiffSectionBody({
 }: DiffSectionBodyProps): React.JSX.Element {
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
   const handleEditorMount: DiffOnMount = (editor, monaco) => {
-    const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(editor)
-    editor.onDidDispose(cleanupShiftWheelScroll)
+    const cleanupHorizontalWheelScroll = installDiffEditorHorizontalWheelScroll(editor)
+    editor.onDidDispose(cleanupHorizontalWheelScroll)
     onMount(editor, monaco)
   }
 
