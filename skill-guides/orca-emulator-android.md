@@ -57,7 +57,7 @@ device.
 | List devices + AVDs  | `ORCA emulator devices --json`                                                  | Every backend's devices with a platform column, booted and shutdown.                                                      |
 | Attach / make active | `ORCA emulator attach <avd-name-or-serial> --json`                              | Given an AVD name, boots it first. Makes the device active for the worktree.                                              |
 | Single tap           | `ORCA emulator tap <x> <y> --json`                                              | Normalized 0..1 coordinates.                                                                                              |
-| Swipe / gesture      | `ORCA emulator gesture '<json>' --json`                                         | adb approximates the path by its endpoints, first point to last.                                                          |
+| Swipe / gesture      | `ORCA emulator gesture '<json>' --json`                                         | POSIX/PowerShell. On cmd.exe: `ORCA emulator gesture "[{\"type\":\"begin\",...}]"`. adb approximates the path by its endpoints, first point to last. |
 | Type text            | `ORCA emulator type "user@example.com" --json`                                  | US-ASCII, spaces handled, no newlines.                                                                                    |
 | Hardware button      | `ORCA emulator button back --json`                                              | `home`, `back`, `recents`, `power`, `volume_up`, `volume_down`.                                                           |
 | Rotate               | `ORCA emulator rotate landscape_left --json`                                    | Sets `user_rotation` and disables auto-rotate.                                                                            |
@@ -96,6 +96,10 @@ commands target it. Pass a selector only to override that or reach a second devi
   app UI directly for unicode-heavy input.
 - `gesture` is a straight swipe between the first and last point, so it fits scrolling and
   swiping but not a true multi-touch path.
+- **cmd.exe and gesture JSON:** single quotes are not quoting in cmd.exe, so
+  `gesture '{"…"}'` arrives with the quotes and fails JSON parse. Use
+  `gesture "[{\"type\":\"begin\",…}]"` (double quotes, backslash-escape inner ones)
+  on cmd.exe.
 - Run `kill` when you are done. A helper left running holds the device until Orca quits.
 
 ## Examples
