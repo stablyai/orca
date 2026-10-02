@@ -34,6 +34,7 @@ function makeWorktree(path: string): ResolvedRuntimeGitWorktree {
       head: 'a'.repeat(40)
     }
   } satisfies Partial<ResolvedRuntimeGitWorktree>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the blame commands read only worktree.path; the satisfies clause above checks every seeded field.
   return worktree as unknown as ResolvedRuntimeGitWorktree
 }
 

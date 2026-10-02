@@ -63,9 +63,7 @@ describe('getRuntimeGitLineBlame capability gate', () => {
 
   it('never gates the local path on the remote capability', async () => {
     const lineBlame = vi.fn().mockResolvedValue(null)
-    ;(
-      globalThis as unknown as { window: { api: { git: { lineBlame: typeof lineBlame } } } }
-    ).window = { api: { git: { lineBlame } } }
+    vi.stubGlobal('window', { api: { git: { lineBlame } } })
 
     await expect(
       getRuntimeGitLineBlame(

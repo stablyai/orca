@@ -7,6 +7,7 @@ const FOLDER_WORKSPACE_ID = 'fw-1'
 const FOLDER_KEY = `folder:${FOLDER_WORKSPACE_ID}`
 
 function makeState(repoPaths: { path: string; connectionId?: string | null }[]): State {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveBlameTarget reads only the folder, project-group, repo, and worktree fields seeded here.
   return {
     folderWorkspaces: [
       {

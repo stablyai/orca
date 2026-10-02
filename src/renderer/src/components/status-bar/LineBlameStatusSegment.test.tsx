@@ -57,6 +57,7 @@ function blame(author: string): GitLineBlameResult {
 function openFile(
   overrides: { isDirty?: boolean; runtimeEnvironmentId?: string | null } = {}
 ): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     activeFileId: 'file-1',
     openFiles: [
@@ -77,19 +78,17 @@ function openFile(
 }
 
 function setDirty(isDirty: boolean): void {
-  const openFiles = (useAppStore.getState() as unknown as { openFiles: { id: string }[] }).openFiles
+  const { openFiles } = useAppStore.getState()
   act(() => {
     useAppStore.setState({
       openFiles: openFiles.map((file) => (file.id === 'file-1' ? { ...file, isDirty } : file))
-    } as unknown as Parameters<typeof useAppStore.setState>[0])
+    })
   })
 }
 
 function setCursorLine(line: number): void {
   act(() => {
-    useAppStore.setState({ editorCursorLine: { 'file-1': line } } as unknown as Parameters<
-      typeof useAppStore.setState
-    >[0])
+    useAppStore.setState({ editorCursorLine: { 'file-1': line } })
   })
 }
 

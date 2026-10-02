@@ -11,6 +11,7 @@ import {
 } from './monaco-inline-blame-decoration'
 
 function makeModel(lineCount: number, maxColumn = 40): editor.ITextModel {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test reads only line count and max column from the model.
   return {
     getLineCount: () => lineCount,
     getLineMaxColumn: () => maxColumn
@@ -33,6 +34,7 @@ function makeHost(
   const removeContentWidget = vi.fn()
   const layoutContentWidget = vi.fn()
   return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the widget calls only the content-widget methods and getOption stubbed here.
     host: {
       addContentWidget,
       removeContentWidget,

@@ -229,6 +229,7 @@ describe('git RPC methods', () => {
       summary: 'docs: update readme',
       isUncommitted: false
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: git.lineBlame dispatch calls only getRuntimeId and getRuntimeGitLineBlame.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getRuntimeGitLineBlame: vi.fn().mockResolvedValue(blame)
