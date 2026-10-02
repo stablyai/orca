@@ -173,6 +173,8 @@ describe('formatWorktreeList', () => {
     expect(output).toContain('childWorktreeIds: repo::/tmp/repo/child')
     expect(output).toContain('parentWorktreeId: repo::/tmp/repo/parent')
     expect(output).toContain('childWorktreeIds: []')
+    expect(output).toContain('linkedIssue: null')
+    expect(output).toContain('linkedPR: null')
   })
 })
 
