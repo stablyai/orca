@@ -23,12 +23,14 @@ import {
 } from './config-toml-hook-trust-edit'
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
 import {
+  findProjectTrustRemovedBytes,
   hasProjectTrustEntry,
   removeProjectTrustContent,
   upsertProjectTrustContent
 } from './config-toml-project-trust'
 import {
   forgetOrcaCreatedProjectTrust,
+  getOrcaCreatedProjectTrustTable,
   listOrcaCreatedProjectTrustConfigFiles,
   recordOrcaCreatedProjectTrust
 } from './codex-project-trust-ownership'
@@ -246,13 +248,21 @@ export function upsertOrcaCreatedProjectTrustLevel(
   projectPath: string,
   trustLevel: CodexProjectTrustLevel
 ): void {
-  const created = !hasProjectTrustEntry(readTomlForMutation(configPath), projectPath)
-  upsertProjectTrustLevel(configPath, projectPath, trustLevel)
+  const existing = readTomlForMutation(configPath)
+  const created = !hasProjectTrustEntry(existing, projectPath)
+  const updated = upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
+  if (updated !== existing) {
+    writeConfigAtomically(configPath, updated)
+  }
   if (!created) {
     return
   }
   try {
-    recordOrcaCreatedProjectTrust(configPath, projectPath)
+    recordOrcaCreatedProjectTrust(
+      configPath,
+      projectPath,
+      findProjectTrustRemovedBytes(updated, projectPath) ?? ''
+    )
   } catch (error) {
     // Why: the grant already landed; an unrecorded entry only loses cleanup, never safety.
     console.warn('[codex-config] Failed to record the created project trust entry:', error)
@@ -277,6 +287,11 @@ export async function removeOrcaCreatedProjectTrustEntries(projectPath: string):
   }
 }
 
+// Why: the separator below a table belongs to what follows it, not to the table Orca wrote.
+function withoutTrailingSeparator(bytes: string): string {
+  return bytes.replace(/[\r\n]+$/, '')
+}
+
 function removeOrcaCreatedProjectTrustEntry(configPath: string, projectPath: string): void {
   // Why: same lane as the grant writers (#16441), so a queued writer cannot rewrite the entry back.
   const observation = observe(() => readTomlFile(configPath))
@@ -284,6 +299,18 @@ function removeOrcaCreatedProjectTrustEntry(configPath: string, projectPath: str
     return
   }
   if (observation.kind === 'absent') {
+    forgetOrcaCreatedProjectTrust(configPath, projectPath)
+    return
+  }
+  const ownedTable = getOrcaCreatedProjectTrustTable(configPath, projectPath)
+  const currentTable = findProjectTrustRemovedBytes(observation.value, projectPath)
+  if (
+    ownedTable === null ||
+    currentTable === null ||
+    withoutTrailingSeparator(currentTable) !== withoutTrailingSeparator(ownedTable)
+  ) {
+    // Why: the bytes at the path are no longer what Orca wrote, so the record no longer vouches
+    // for the table — dropping it keeps a later pass from deleting someone else's replacement.
     forgetOrcaCreatedProjectTrust(configPath, projectPath)
     return
   }

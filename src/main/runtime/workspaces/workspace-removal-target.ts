@@ -8,7 +8,7 @@ import type {
 import { resolveRuntimeWorktreeRemovalTarget } from '../runtime-worktree-removal-target'
 import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import type { RuntimeStore } from '../runtime-store-contract'
-import { splitWorktreeId, splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../../shared/worktree/id'
+import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
 import {
   dropRemovedWorktreeProcessState,
@@ -34,7 +34,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/registered-worktree-roots-scoped-invalidation'
-import { removeOrcaCreatedProjectTrustEntries } from '../../codex/config-toml-trust'
+import { dropOrcaCreatedCodexPretrustForRemovedWorktree } from '../worktree-removal-codex-pretrust-cleanup'
 import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
@@ -160,13 +160,6 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     hostId?: ExecutionHostId
   ): void {
     // Purge history/caches before path-derived ids can name a recreated workspace.
-    // The Codex pretrust entry Orca wrote for the path is the same hazard: drop
-    // it so a recreated worktree is not born pre-trusted (#24697). The grant
-    // keyed the bare path, so a folder session's ::workspace:<uuid> suffix must not hide it.
-    const worktreePath = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
-    if (worktreePath) {
-      void removeOrcaCreatedProjectTrustEntries(worktreePath)
-    }
     const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
     const repoId = splitWorktreeId(worktreeId)?.repoId
     const preservesSameIdOwner = Boolean(
@@ -180,6 +173,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     // Retire only this host's panes even when a same-id owner survives.
     this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, hostId ?? persistedHostId)
     if (!preservesSameIdOwner) {
+      // Why: worktree IDs are path-derived and can be recreated; a stale Codex
+      // pretrust entry must not pre-trust the next occupant of the path.
+      dropOrcaCreatedCodexPretrustForRemovedWorktree(worktreeId)
       // Do not rescue surviving paired PTYs into a recreated occupant of the same path-derived id.
       for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
         const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId

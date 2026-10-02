@@ -96,4 +96,53 @@ describe('Orca-created project trust lifecycle', () => {
     const ledger = readFileSync(join(userDataDir, 'codex-project-trust-created.json'), 'utf-8')
     expect(ledger).not.toContain(PROJECT)
   })
+
+  it('treats a malformed ledger as empty and never deletes on its say-so', async () => {
+    upsertOrcaCreatedProjectTrustLevel(managedConfigPath, PROJECT, 'trusted')
+    const ledgerPath = join(userDataDir, 'codex-project-trust-created.json')
+    const malformedLedgers = [
+      '{"created": null}',
+      '{"created": []}',
+      '{"created": {"cfg.toml": "not-an-array"}}',
+      '{"created": {"cfg.toml": [42]}}',
+      `{"created": {"cfg.toml": [{"path": "${PROJECT}"}]}}`,
+      'not json'
+    ]
+
+    for (const malformed of malformedLedgers) {
+      writeFileSync(ledgerPath, malformed)
+      await expect(removeOrcaCreatedProjectTrustEntries(PROJECT)).resolves.toBeUndefined()
+      expect(readFileSync(managedConfigPath, 'utf-8')).toContain(`[projects."${PROJECT}"]`)
+    }
+  })
+
+  it('does not delete a table the user replaced after Orca created the original', async () => {
+    upsertOrcaCreatedProjectTrustLevel(managedConfigPath, PROJECT, 'trusted')
+    const replacement = [
+      `[projects."${PROJECT}"]`,
+      'trust_level = "trusted"',
+      'followup = "user-added"',
+      ''
+    ].join('\n')
+    writeFileSync(managedConfigPath, replacement)
+
+    await removeOrcaCreatedProjectTrustEntries(PROJECT)
+
+    expect(readFileSync(managedConfigPath, 'utf-8')).toBe(replacement)
+    // The spent record is dropped, so a later pass cannot delete the user's table either.
+    await removeOrcaCreatedProjectTrustEntries(PROJECT)
+    expect(readFileSync(managedConfigPath, 'utf-8')).toBe(replacement)
+    const ledger = readFileSync(join(userDataDir, 'codex-project-trust-created.json'), 'utf-8')
+    expect(ledger).not.toContain(PROJECT)
+  })
+
+  it('treats a trust line rewritten after the grant as a table Orca no longer owns', async () => {
+    upsertOrcaCreatedProjectTrustLevel(managedConfigPath, PROJECT, 'trusted')
+    const rewritten = [`[projects."${PROJECT}"]`, 'trust_level = "untrusted"', ''].join('\n')
+    writeFileSync(managedConfigPath, rewritten)
+
+    await removeOrcaCreatedProjectTrustEntries(PROJECT)
+
+    expect(readFileSync(managedConfigPath, 'utf-8')).toBe(rewritten)
+  })
 })
