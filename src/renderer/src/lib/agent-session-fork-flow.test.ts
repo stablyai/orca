@@ -481,6 +481,41 @@ describe('runAgentSessionFork', () => {
     ])
   })
 
+  it('keeps the fork and reseeds the child when the native launch throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const failure = new Error('preflight failed')
+    mocks.launchNativeAgentSessionFork.mockRejectedValue(failure)
+
+    const outcome = await runAgentSessionFork(request(), onStage)
+
+    expect(outcome).toEqual({
+      ok: true,
+      worktreeId: 'repo::feedback-fork',
+      warnings: [{ kind: 'agent-not-started' }]
+    })
+    expect(createWorktree).toHaveBeenCalledTimes(1)
+    expect(mocks.activateAndRevealWorktree.mock.calls).toEqual([
+      ['repo::feedback-fork', { sidebarRevealBehavior: 'auto', providesInitialSurface: true }],
+      ['repo::feedback-fork', { sidebarRevealBehavior: 'auto' }]
+    ])
+    expect(warn).toHaveBeenCalledWith('[agent-session-fork] agent launch failed', failure)
+    warn.mockRestore()
+  })
+
+  it('copies the transcript prompt when the transcript launch throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    mocks.launchTranscriptAgentSessionFork.mockRejectedValue(new Error('boom'))
+
+    const outcome = await runAgentSessionFork(
+      request({ source: { kind: 'transcript', agent: 'gemini', prompt: 'fork context' } }),
+      onStage
+    )
+
+    expect(outcome).toMatchObject({ ok: true, warnings: [{ kind: 'agent-not-started' }] })
+    expect(mocks.writeTerminalClipboardText).toHaveBeenCalledWith('fork context')
+    warn.mockRestore()
+  })
+
   it('launches the transcript fork with its agent and prompt', async () => {
     const outcome = await runAgentSessionFork(
       request({ source: { kind: 'transcript', agent: 'gemini', prompt: 'fork context' } }),

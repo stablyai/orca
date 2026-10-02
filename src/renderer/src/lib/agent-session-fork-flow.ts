@@ -117,8 +117,8 @@ export async function copyTranscriptPrompt(prompt: string): Promise<boolean> {
   }
 }
 
-async function launchForkAgent(
-  source: AgentSessionForkSource,
+async function launchForkAgentSurface(
+  source: Exclude<AgentSessionForkSource, { kind: 'none' }>,
   child: ForkTarget,
   connectionId: string | null,
   launchSource: AgentForkLaunchSource
@@ -132,17 +132,33 @@ async function launchForkAgent(
       launchSource
     })
   }
-  if (source.kind === 'none') {
-    return true
-  }
-  const launched = await launchTranscriptAgentSessionFork({
+  return launchTranscriptAgentSessionFork({
     agent: source.agent,
     prompt: source.prompt,
     worktreeId: child.id,
     worktreePath: child.path,
     launchSource
   })
-  if (!launched) {
+}
+
+async function launchForkAgent(
+  source: AgentSessionForkSource,
+  child: ForkTarget,
+  connectionId: string | null,
+  launchSource: AgentForkLaunchSource
+): Promise<boolean> {
+  if (source.kind === 'none') {
+    return true
+  }
+  let launched: boolean
+  try {
+    launched = await launchForkAgentSurface(source, child, connectionId, launchSource)
+  } catch (error) {
+    // Why: the child already exists; reporting a failed fork would invite a retry that makes a second one.
+    console.warn('[agent-session-fork] agent launch failed', error)
+    launched = false
+  }
+  if (!launched && source.kind === 'transcript') {
     // Why: keeps the old fallback — the transcript is lost otherwise, so hand it to the user to paste.
     await copyTranscriptPrompt(source.prompt)
   }
