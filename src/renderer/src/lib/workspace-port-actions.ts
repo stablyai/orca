@@ -12,16 +12,15 @@ import type {
 } from '../../../shared/workspace-ports'
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
 import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
-import {
-  openUrlInWorkspaceBrowser,
-  WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON
-} from './workspace-url-open'
+import { openUrlInWorkspaceBrowser } from './workspace-url-open'
 import { browserUrlForPort } from './workspace-port-urls'
 
 export { addressForPort } from './workspace-port-urls'
 export { openUrlInWorkspaceBrowser } from './workspace-url-open'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500
+const WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON =
+  'Workspace ports are unavailable for this execution host.'
 
 /** Projection key for the merged multi-host view; never a per-host scan key. */
 export const WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY = 'all-hosts:all'

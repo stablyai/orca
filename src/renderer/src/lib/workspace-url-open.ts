@@ -1,5 +1,9 @@
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import type { useAppStore } from '@/store'
+import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeTargetForExecutionHostId } from '@/runtime/runtime-client-target'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
@@ -14,9 +18,6 @@ type RemoteBrowserPageHandleSetter = ReturnType<
   typeof useAppStore.getState
 >['setRemoteBrowserPageHandle']
 
-export const WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON =
-  'Workspace ports are unavailable for this execution host.'
-
 /** Opens a URL in the system browser or the workspace's Orca browser (remote hosts included). */
 export async function openUrlInWorkspaceBrowser(args: {
   url: string
@@ -26,11 +27,10 @@ export async function openUrlInWorkspaceBrowser(args: {
   setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
   openInOrcaBrowser?: boolean
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (!args.runtimeTarget) {
-    return { ok: false, reason: WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON }
-  }
+  // Why: direct-SSH owners have no runtime target; a saved link still opens in the local browser.
+  const runtimeTarget = args.runtimeTarget ?? { kind: 'local' as const }
   const { url, worktreeId } = args
-  if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
+  if (args.openInOrcaBrowser === false && runtimeTarget.kind === 'local') {
     try {
       await window.api.shell.openUrl(url)
       return { ok: true }
@@ -46,28 +46,28 @@ export async function openUrlInWorkspaceBrowser(args: {
   // Why: the browser tab opened below is this jump's surface; seeding a shell would add a
   // PTY the user never asked for in a workspace whose last terminal they closed.
   activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
-  if (args.runtimeTarget.kind === 'environment') {
+  if (runtimeTarget.kind === 'environment') {
     try {
       await assertRuntimeEnvironmentCapability(
-        args.runtimeTarget.environmentId,
+        runtimeTarget.environmentId,
         BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
         RUNTIME_BROWSER_UNAVAILABLE_MESSAGE
       )
       const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
-        args.runtimeTarget,
+        runtimeTarget,
         'browser.tabCreate',
         { worktree: toRuntimeWorktreeSelector(worktreeId), url },
         { timeoutMs: 30_000 }
       )
       const tab = args.createBrowserTab(worktreeId, url, {
         activate: true,
-        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId
+        browserRuntimeEnvironmentId: runtimeTarget.environmentId
       })
       if (!tab.activePageId) {
         return { ok: false, reason: 'Failed to create a browser page.' }
       }
       args.setRemoteBrowserPageHandle(tab.activePageId, {
-        environmentId: args.runtimeTarget.environmentId,
+        environmentId: runtimeTarget.environmentId,
         remotePageId: remotePage.browserPageId
       })
       return { ok: true }
@@ -83,4 +83,36 @@ export async function openUrlInWorkspaceBrowser(args: {
     const message = error instanceof Error ? error.message : String(error)
     return { ok: false, reason: message || 'Failed to open browser.' }
   }
+}
+
+/** Shortcut path: opens a workspace's saved link in Orca's own browser. */
+export function openWorkspaceUrlInOrcaBrowser(worktreeId: string, url: string): void {
+  const store = useAppStore.getState()
+  void openUrlInWorkspaceBrowser({
+    url,
+    worktreeId,
+    runtimeTarget: runtimeTargetForExecutionHostId(
+      getExecutionHostIdForWorktree(store, worktreeId)
+    ),
+    createBrowserTab: store.createBrowserTab,
+    setRemoteBrowserPageHandle: store.setRemoteBrowserPageHandle,
+    openInOrcaBrowser: true
+  }).then((result) => {
+    if (!result.ok) {
+      toast.error(
+        translate('auto.components.sidebar.WorktreeCardPorts.d1113f4660', 'Failed to open browser'),
+        { description: result.reason }
+      )
+    }
+  })
+}
+
+export function getActiveWorkspaceUrl(): { worktreeId: string; url: string } | null {
+  const store = useAppStore.getState()
+  const worktreeId = store.activeWorktreeId
+  const url = worktreeId
+    ? store.getKnownWorktreeById(worktreeId, store.activeWorkspaceExecutionHostId ?? undefined)
+        ?.workspaceUrl
+    : undefined
+  return worktreeId && url ? { worktreeId, url } : null
 }
