@@ -187,7 +187,9 @@ export function projectRuntimeMobileSessionTabs(
     const sticky = readStickyMobileTerminalTitle(tab, liveLeafPty ?? pty)
     const liveTitle = trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title
     const agentTitle = normalizeCompatibleAgentTitleForOwner(
-      sticky.kind === 'cleared' ? (leafTitle ?? ptyTitle ?? 'Terminal') : liveTitle,
+      sticky.kind === 'cleared'
+        ? (trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? 'Terminal')
+        : liveTitle,
       ownerAgent,
       ownerOptions
     )

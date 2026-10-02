@@ -142,8 +142,9 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       snapshot = merged
     }
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
-    // Why: `manualTitle` only bridges the gap until the renderer snapshot echoes
-    // the same custom title. Releasing it earlier lets a stale frame win.
+    // Why: `manualTitle` only bridges the gap until the snapshot echoes the
+    // rename, or a later desktop custom title replaces the recorded one.
+    // Releasing it on the same custom title lets a stale frame win.
     if (this.ptysById && this.leaves) {
       releaseEchoedManualTerminalTitles(snapshot, this.ptysById, this.leaves.values())
     }

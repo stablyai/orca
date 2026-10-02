@@ -3,9 +3,12 @@ import {
   readStickyMobileTerminalTitle,
   releaseEchoedManualTerminalTitles
 } from './mobile-session-custom-title'
+import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+import type { TerminalTab } from '../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
 function projectTitle(args: {
@@ -114,39 +117,178 @@ it('hides a stale snapshot custom title after an explicit clear', () => {
   ).toBe('Codex working')
 })
 
+it('shows a tracked title while an explicit clear waits for the snapshot', () => {
+  expect(
+    projectTitle({
+      customTitle: 'Ship notes',
+      manualTitle: null,
+      oscTitle: 'Codex working',
+      trackedTitle: 'Codex spinning',
+      snapshotTitle: 'Ship notes'
+    })
+  ).toBe('Codex spinning')
+})
+
+function releaseFixture(customTitle?: string): {
+  pty: { manualTitle?: string | null; manualTitleBaseline?: string }
+  tabs: { type: string; ptyId: string; customTitle?: string | null }[]
+  snapshot: RuntimeMobileSessionTabsSnapshot
+} {
+  const pty: { manualTitle?: string | null; manualTitleBaseline?: string } = {}
+  const tabs: { type: string; ptyId: string; customTitle?: string | null }[] = [
+    { type: 'terminal', ptyId: 'pty-1', ...(customTitle ? { customTitle } : {}) }
+  ]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: release reads only tab type, pty id, and custom title.
+  const snapshot = { tabs } as unknown as RuntimeMobileSessionTabsSnapshot
+  return { pty, tabs, snapshot }
+}
+
 it('releases a pending rename only when the snapshot echoes that name', () => {
-  const pty = { manualTitle: 'Ship notes' as string | null | undefined }
-  const snapshot = {
-    tabs: [{ type: 'terminal', ptyId: 'pty-1', customTitle: 'Old mac name' }]
-  } as RuntimeMobileSessionTabsSnapshot
+  const { pty, tabs, snapshot } = releaseFixture('Old mac name')
+  pty.manualTitle = 'Ship notes'
   const ptys = new Map([['pty-1', pty]])
 
   releaseEchoedManualTerminalTitles(snapshot, ptys, [])
   expect(pty.manualTitle).toBe('Ship notes')
-  expect(readStickyMobileTerminalTitle({ customTitle: 'Old mac name' }, pty)).toEqual({
+  expect(readStickyMobileTerminalTitle(tabs[0], pty)).toEqual({
     kind: 'sticky',
     title: 'Ship notes'
   })
 
-  snapshot.tabs[0] = { type: 'terminal', ptyId: 'pty-1', customTitle: 'Ship notes' }
+  tabs[0] = { type: 'terminal', ptyId: 'pty-1', customTitle: 'Ship notes' }
   releaseEchoedManualTerminalTitles(snapshot, ptys, [])
   expect(pty.manualTitle).toBeUndefined()
-  expect(readStickyMobileTerminalTitle(snapshot.tabs[0], pty)).toEqual({
+  expect(readStickyMobileTerminalTitle(tabs[0], pty)).toEqual({
     kind: 'sticky',
     title: 'Ship notes'
   })
 })
 
 it('drops an explicit clear once the snapshot no longer carries a custom title', () => {
-  const pty = { manualTitle: null as string | null | undefined }
-  const snapshot = {
-    tabs: [{ type: 'terminal', ptyId: 'pty-1', customTitle: 'Ship notes' }]
-  } as RuntimeMobileSessionTabsSnapshot
+  const { pty, tabs, snapshot } = releaseFixture('Ship notes')
+  pty.manualTitle = null
 
   releaseEchoedManualTerminalTitles(snapshot, new Map([['pty-1', pty]]), [])
   expect(pty.manualTitle).toBeNull()
 
-  snapshot.tabs[0] = { type: 'terminal', ptyId: 'pty-1' }
+  tabs[0] = { type: 'terminal', ptyId: 'pty-1' }
   releaseEchoedManualTerminalTitles(snapshot, new Map([['pty-1', pty]]), [])
   expect(pty.manualTitle).toBeUndefined()
+})
+
+it('keeps a split rename until a later desktop custom title arrives', () => {
+  const { pty, tabs, snapshot } = releaseFixture()
+  pty.manualTitle = 'Phone name'
+  pty.manualTitleBaseline = ''
+  const ptys = new Map([['pty-1', pty]])
+
+  releaseEchoedManualTerminalTitles(snapshot, ptys, [])
+  expect(pty.manualTitle).toBe('Phone name')
+
+  tabs[0] = { type: 'terminal', ptyId: 'pty-1', customTitle: 'Desktop name' }
+  releaseEchoedManualTerminalTitles(snapshot, ptys, [])
+  expect(pty.manualTitle).toBeUndefined()
+  expect(readStickyMobileTerminalTitle(tabs[0], pty)).toEqual({
+    kind: 'sticky',
+    title: 'Desktop name'
+  })
+})
+
+it('does not let the custom title from rename time erase the phone name', () => {
+  const { pty, tabs, snapshot } = releaseFixture('Old mac name')
+  pty.manualTitle = 'Phone name'
+  pty.manualTitleBaseline = 'Old mac name'
+  const ptys = new Map([['pty-1', pty]])
+
+  releaseEchoedManualTerminalTitles(snapshot, ptys, [])
+  expect(pty.manualTitle).toBe('Phone name')
+
+  tabs[0] = { type: 'terminal', ptyId: 'pty-1', customTitle: 'Desktop name' }
+  releaseEchoedManualTerminalTitles(snapshot, ptys, [])
+  expect(pty.manualTitle).toBeUndefined()
+})
+
+it('drops an explicit clear when the desktop publishes a different custom title', () => {
+  const { pty, tabs, snapshot } = releaseFixture('Old mac name')
+  pty.manualTitle = null
+  pty.manualTitleBaseline = 'Old mac name'
+
+  releaseEchoedManualTerminalTitles(snapshot, new Map([['pty-1', pty]]), [])
+  expect(pty.manualTitle).toBeNull()
+
+  tabs[0] = { type: 'terminal', ptyId: 'pty-1', customTitle: 'Desktop name' }
+  releaseEchoedManualTerminalTitles(snapshot, new Map([['pty-1', pty]]), [])
+  expect(pty.manualTitle).toBeUndefined()
+  expect(readStickyMobileTerminalTitle(tabs[0], pty)).toEqual({
+    kind: 'sticky',
+    title: 'Desktop name'
+  })
+})
+
+const LEFT_LEAF = '11111111-1111-4111-8111-111111111111'
+const RIGHT_LEAF = '22222222-2222-4222-8222-222222222222'
+
+function persistedTab(customTitle: string): TerminalTab {
+  return {
+    id: 'host-tab',
+    ptyId: 'pty-parent',
+    worktreeId: 'workspace',
+    title: 'Parent title',
+    customTitle,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  }
+}
+
+it('does not copy a parent custom title onto headless split leaves', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads the layout and the active tab id.
+  const session = {
+    activeTabId: 'host-tab',
+    activeTabIdByWorktree: { workspace: 'host-tab' },
+    terminalLayoutsByTabId: {
+      'host-tab': {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: LEFT_LEAF },
+          second: { type: 'leaf', leafId: RIGHT_LEAF }
+        },
+        activeLeafId: LEFT_LEAF,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEFT_LEAF]: 'pty-left', [RIGHT_LEAF]: 'pty-right' },
+        titlesByLeafId: { [LEFT_LEAF]: 'left pane', [RIGHT_LEAF]: 'right pane' }
+      }
+    }
+  } as unknown as WorkspaceSessionState
+  const tabs = buildHeadlessMobileSessionTerminalTabs(
+    'workspace',
+    [persistedTab('Pinned name')],
+    session
+  )
+  expect(tabs.map((tab) => tab.title)).toEqual(['left pane', 'right pane'])
+  expect(tabs.map((tab) => tab.customTitle)).toEqual([undefined, undefined])
+})
+
+it('keeps a parent custom title on a single headless leaf', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads the layout and the active tab id.
+  const session = {
+    activeTabId: 'host-tab',
+    activeTabIdByWorktree: { workspace: 'host-tab' },
+    terminalLayoutsByTabId: {
+      'host-tab': {
+        root: { type: 'leaf', leafId: LEFT_LEAF },
+        activeLeafId: LEFT_LEAF,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEFT_LEAF]: 'pty-left' }
+      }
+    }
+  } as unknown as WorkspaceSessionState
+  const tabs = buildHeadlessMobileSessionTerminalTabs(
+    'workspace',
+    [persistedTab('Pinned name')],
+    session
+  )
+  expect(tabs.map((tab) => tab.title)).toEqual(['Pinned name'])
+  expect(tabs.map((tab) => tab.customTitle)).toEqual(['Pinned name'])
 })
