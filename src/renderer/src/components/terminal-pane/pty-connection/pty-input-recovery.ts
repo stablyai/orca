@@ -25,6 +25,7 @@ import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 import { buffersInputOnlyForSshReattach } from './ssh-reattach-input-buffering'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { paneStartupCommandOptions } from './pane-startup-command-options'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal-inline-images-settings'
 
 /** Transport creation, terminal capability replies, viewport claims, and undeliverable-input recovery. */
@@ -62,9 +63,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       : {}),
     env: session.paneEnv,
     ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
-    command: session.shouldDeliverStartupViaTerminalPaste
-      ? undefined
-      : session.paneStartup?.command,
+    ...paneStartupCommandOptions(session),
     ...(session.shouldUseProviderSshStartupDelivery
       ? { commandDelivery: 'provider' as const }
       : {}),

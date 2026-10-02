@@ -21,6 +21,7 @@ export function buildSshPtySpawnRequest(args: {
     ...(options.envToDelete?.length ? { envToDelete: options.envToDelete } : {}),
     // Why: the relay needs launch identity for plugin env overlays and provider-side delivery.
     ...(options.command ? { command: options.command } : {}),
+    ...(options.launchFile ? { launchFile: options.launchFile } : {}),
     ...(options.launchAgent ? { launchAgent: options.launchAgent } : {}),
     ...(options.worktreeId ? { worktreeId: options.worktreeId } : {}),
     ...(options.historyIsolationEnabled !== undefined

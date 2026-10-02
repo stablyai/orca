@@ -28,6 +28,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       env?: Record<string, string>
       envToDelete?: string[]
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+      launchFile?: WorktreeStartupLaunch['launchFile']
       identity?: { tabId: string; leafId: string; sessionId?: string }
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
@@ -53,6 +54,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
       startupCommandDelivery: opts.startupCommandDelivery,
+      ...(opts.launchFile ? { launchFile: opts.launchFile } : {}),
       ...(opts.identity
         ? {
             tabId: opts.identity.tabId,

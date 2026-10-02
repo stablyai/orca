@@ -115,7 +115,8 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
             ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
             ...(data.startupCommandDelivery
               ? { startupCommandDelivery: data.startupCommandDelivery }
-              : {})
+              : {}),
+            ...(data.launchFile ? { launchFile: data.launchFile } : {})
           })
         }
         window.api.ui.replyTerminalCreate({

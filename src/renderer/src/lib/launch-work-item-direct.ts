@@ -1,8 +1,10 @@
+import { showAgentLaunchPromptNotDeliveredNotice } from '@/lib/agent-launch-prompt-not-delivered-notice'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   deliverLaunchPromptToAgentTab,
-  seedNativeChatLaunchDraftForAgentTab
+  seedNativeChatLaunchDraftForAgentTab,
+  seedNativeChatLaunchPromptForAgentTab
 } from '@/lib/agent-launch-prompt-delivery'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -163,7 +165,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let primaryTabId: string | null
   let startupPlan = null as ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
   let effectiveAgent: TuiAgent | null = null
-  let draftLaunchedNatively = false
+  let promptOnLaunchCommand = false,
+    promptInLaunchFile = false
   let plan: AgentSessionLaunchPlan | null = null
   let structuredLaunchCompleted = false
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
@@ -226,7 +229,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     }
     effectiveAgent = launchPreparation.effectiveAgent
     startupPlan = launchPreparation.startupPlan
-    draftLaunchedNatively = launchPreparation.draftLaunchedNatively
+    promptOnLaunchCommand = launchPreparation.promptOnLaunchCommand
+    promptInLaunchFile = Boolean(launchPreparation.launchFile)
     startupPlanFailed = launchPreparation.startupPlanFailed
     plan = launchPreparation.plan
 
@@ -244,7 +248,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
               effectiveAgent,
               startupPlan,
               launchSource,
-              promptDelivery === 'draft' ? draftContent : undefined
+              promptDelivery === 'draft' ? draftContent : undefined,
+              launchPreparation
             ))
       })
       return activationHolder.value !== false
@@ -296,8 +301,23 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   }
   if (
     primaryTabId &&
+    effectiveAgent &&
+    promptDelivery === 'submit-after-ready' &&
+    promptOnLaunchCommand &&
+    // Why: the transcript then shows the pointer sentence, which would never prune this copy.
+    !promptInLaunchFile
+  ) {
+    // Why: the launch line submits it, so no paste seeds the chat's copy of the prompt.
+    seedNativeChatLaunchPromptForAgentTab({
+      tabId: primaryTabId,
+      agent: effectiveAgent,
+      text: draftContent
+    })
+  }
+  if (
+    primaryTabId &&
     startupPlan &&
-    !draftLaunchedNatively &&
+    !promptOnLaunchCommand &&
     !(promptDelivery === 'draft' && startupPlan.draftPrompt)
   ) {
     const submit = promptDelivery === 'submit-after-ready'
@@ -308,7 +328,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       content: draftContent,
       submit,
       forcePaste: submit,
-      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
+      onTimeout: () =>
+        submit
+          ? showAgentLaunchPromptNotDeliveredNotice({ agent, prompt: draftContent })
+          : notifyDirectWorkItemAgentStartTimeout(agent, submit)
     })
   }
   return true

@@ -6,6 +6,7 @@ import {
   startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../shared/startup-command-staging'
+import { removeLaunchFile, type WrittenLaunchFile } from '../../shared/launch-file-writing'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { resolveProcessExitCause } from '../../shared/terminal-exit-cause'
@@ -51,6 +52,7 @@ export function activateLocalPtySession(args: {
   proc: pty.IPty
   reportsChildExitStatus: boolean
   spawnedWslDistro: string | null | undefined
+  launchFile?: WrittenLaunchFile
 }): PtySpawnResult {
   const { id, incarnationId, spawn, getOptions, plan, env, proc, spawnedWslDistro } = args
   createPtyPhysicalExit(id)
@@ -135,6 +137,7 @@ export function activateLocalPtySession(args: {
   const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
     exitedBeforeSpawnReply = true
     discardStagedStartupCommand(staging)
+    removeLaunchFile(args.launchFile)
     // Why: node-pty reports a signalled death as {exitCode: 0, signal: N}; the
     // cause is built here, where the signal and the spawn's trustworthiness
     // are both still in hand.
@@ -189,7 +192,9 @@ export function activateLocalPtySession(args: {
     staging = stageStartupCommand({
       command: spawn.command,
       shellPath: plan.shellPath,
-      orcaBuiltLine: spawn.launchAgent !== undefined
+      orcaBuiltLine: spawn.launchAgent !== undefined,
+      wslDirectory:
+        spawn.wslLaunchDirectory?.distro === spawnedWslDistro ? spawn.wslLaunchDirectory : undefined
     })
     const notice = startupStagingFailureNotice(staging)
     if (notice) {

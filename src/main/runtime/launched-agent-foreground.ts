@@ -7,7 +7,11 @@ import { isShellProcess } from '../../shared/shell-process-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import { judgeTerminalForeground, readTerminalProcessRows } from './terminal-foreground-group'
+import {
+  judgeTerminalForeground,
+  readTerminalProcessRows,
+  type TerminalForegroundVerdict
+} from './terminal-foreground-group'
 
 /**
  * What holds a launched agent's terminal: the agent (anything but the pane's shell), the shell
@@ -44,6 +48,21 @@ function isLaunchedAgent(processName: string, agent: TuiAgent): boolean {
  * there proves the agent. A Windows host can still prove its shell alone (`confirmShellForeground`).
  */
 export async function readLaunchedAgentForeground(
+  ...args: Parameters<typeof readTerminalForegroundVerdict>
+): Promise<LaunchedAgentForeground> {
+  return asLaunchedAgentForeground(await readTerminalForegroundVerdict(...args))
+}
+
+/** The paste guard's answer: any process but the shell counts as the agent. */
+export function asLaunchedAgentForeground(
+  verdict: TerminalForegroundVerdict
+): LaunchedAgentForeground {
+  return verdict === 'launched-agent' || verdict === 'other' ? 'agent' : verdict
+}
+
+/** The same read, telling the launched agent named on its command line from any other process
+ *  that is not the shell: only the first proves the agent itself ran. */
+export async function readTerminalForegroundVerdict(
   controller: Pick<
     RuntimePtyController,
     'getForegroundProcess' | 'confirmShellForeground' | 'inspectProcess' | 'listProcesses'
@@ -51,7 +70,7 @@ export async function readLaunchedAgentForeground(
   host: { remote: boolean; windows: boolean },
   ptyId: string,
   agent: TuiAgent
-): Promise<LaunchedAgentForeground> {
+): Promise<TerminalForegroundVerdict> {
   if (!controller) {
     return 'unknown'
   }
@@ -76,16 +95,19 @@ export async function readLaunchedAgentForeground(
       evidence.processName &&
       isLaunchedAgent(evidence.processName, agent)
     ) {
-      return 'agent'
+      return 'launched-agent'
     }
     const foreground = await controller.getForegroundProcess(ptyId)
     if (!foreground) {
       return 'unknown'
     }
-    return isLaunchShell(foreground) &&
+    if (
+      isLaunchShell(foreground) &&
       !isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess)
-      ? 'shell'
-      : 'agent'
+    ) {
+      return 'shell'
+    }
+    return isLaunchedAgent(foreground, agent) ? 'launched-agent' : 'other'
   } catch {
     return 'unknown'
   }

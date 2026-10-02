@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan } from './tui-agent-startup'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
 import {
   unwrapPosixShellScript,
   unwrapPowerShellScript
@@ -11,7 +11,7 @@ import {
 
 describe('hermes startup plans', () => {
   it('moves Hermes command override flags after the chat subcommand', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run privately',
       cmdOverrides: { hermes: 'hermes --tui --provider anthropic' },
@@ -36,7 +36,7 @@ describe('hermes startup plans', () => {
       expected: "& 'C:\\Tools\\hermes.exe' 'chat'"
     }
   ])('preserves Windows paths in Hermes command overrides on $shell', (testCase) => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: testCase.override },
@@ -48,7 +48,7 @@ describe('hermes startup plans', () => {
   })
 
   it('removes a configured duplicate chat subcommand', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'hermes --provider copilot chat --tui' },
@@ -62,7 +62,7 @@ describe('hermes startup plans', () => {
   })
 
   it('preserves an option value named chat', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'hermes --profile chat --tui' },
@@ -73,7 +73,7 @@ describe('hermes startup plans', () => {
   })
 
   it('keeps Orca ownership of the Hermes startup query and TUI mode', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'automation prompt',
       cmdOverrides: { hermes: 'hermes --query override --cli' },
@@ -90,7 +90,7 @@ describe('hermes startup plans', () => {
   })
 
   it('preserves wrapper tokens before the Hermes executable', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'uv run hermes --tui' },
@@ -101,7 +101,7 @@ describe('hermes startup plans', () => {
   })
 
   it('selects the final Hermes executable token in a wrapper', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'sudo -u hermes hermes --tui' },
@@ -114,7 +114,7 @@ describe('hermes startup plans', () => {
   })
 
   it('selects the wrapped executable when the wrapper and command both name Hermes', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'sudo -u hermes hermes chat --tui' },
@@ -127,7 +127,7 @@ describe('hermes startup plans', () => {
   })
 
   it('does not mistake a Hermes option value for a wrapped executable', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'hermes chat --resume hermes --tui' },
@@ -140,7 +140,7 @@ describe('hermes startup plans', () => {
   })
 
   it('preserves POSIX environment-assignment command prefixes', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'HERMES_HOME=/tmp/test uv run hermes --tui' },
@@ -154,7 +154,7 @@ describe('hermes startup plans', () => {
 
   it('rejects a Hermes command override with no identifiable executable', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'hermes',
         prompt: 'run it',
         cmdOverrides: { hermes: 'custom-agent --tui' },
@@ -163,21 +163,22 @@ describe('hermes startup plans', () => {
     ).toBeNull()
   })
 
-  it('rejects Hermes queries that exceed the safe Windows environment limit', () => {
-    const plan = buildAgentStartupPlan({
+  it('leaves a Hermes query past the safe Windows environment limit for the paste', () => {
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'x'.repeat(24_000),
       cmdOverrides: {},
       platform: 'win32'
     })
 
-    expect(plan).toBeNull()
+    expect(plan?.launchFile).toBeUndefined()
+    expect(plan?.pasteAfterReady).toBe('x'.repeat(24_000))
   })
 
   it.each(['quote "this"', 'print %PATH%', 'toggle !feature!', 'inspect C:\\repo\\'])(
     'keeps a complex cmd Hermes query out of command text: %s',
     (prompt) => {
-      const plan = buildAgentStartupPlan({
+      const plan = planLaunchForTest({
         agent: 'hermes',
         prompt,
         cmdOverrides: {},
@@ -191,7 +192,7 @@ describe('hermes startup plans', () => {
   )
 
   it('uses the Windows remote default shell for SSH Hermes queries', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: 'run remotely',
       cmdOverrides: {},
@@ -204,19 +205,20 @@ describe('hermes startup plans', () => {
     )
   })
 
-  it('measures POSIX Hermes query limits in UTF-8 bytes', () => {
-    const plan = buildAgentStartupPlan({
+  it('measures POSIX Hermes query limits in UTF-8 bytes, pasting past them', () => {
+    const plan = planLaunchForTest({
       agent: 'hermes',
-      prompt: '界'.repeat(50_000),
+      prompt: '界'.repeat(9_000),
       cmdOverrides: {},
       platform: 'linux'
     })
 
-    expect(plan).toBeNull()
+    expect(plan?.launchFile).toBeUndefined()
+    expect(plan?.pasteAfterReady).toBe('界'.repeat(9_000))
   })
 
   it('keeps empty Hermes launches on the interactive TUI command', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'hermes',
       prompt: '',
       cmdOverrides: {},
@@ -225,6 +227,6 @@ describe('hermes startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe('hermes --tui')
-    expect(plan?.followupPrompt).toBeNull()
+    expect(plan?.pasteAfterReady).toBeNull()
   })
 })

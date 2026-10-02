@@ -7,7 +7,10 @@ import {
   type SnapshotCheckpointResult
 } from './daemon-pty-runtime-state'
 import { isDaemonGoneError } from './daemon-endpoint-errors'
-import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
+  LAUNCH_FILE_DAEMON_PROTOCOL_VERSION
+} from './daemon-protocol-version'
 import type { ColdRestoreInfo } from './history-reader'
 import { NdjsonLineTooLongError } from './ndjson'
 import {
@@ -106,6 +109,11 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       if (opts.signal?.aborted) {
         throw new Error('client_disconnected')
       }
+      // Why no command: only a session an older daemon still runs routes here, so this attaches and
+      // types nothing; were it gone, a line naming a file that daemon never writes must not run.
+      const launches =
+        !context.attachOnly &&
+        !(opts.launchFile && this.protocolVersion < LAUNCH_FILE_DAEMON_PROTOCOL_VERSION)
       const payload = {
         sessionId: context.sessionId,
         cols: context.effectiveCols,
@@ -113,8 +121,14 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         cwd: context.attachOnly ? undefined : context.effectiveCwd,
         env: context.attachOnly ? undefined : opts.env,
         envToDelete: context.attachOnly ? undefined : opts.envToDelete,
-        command: context.attachOnly ? undefined : opts.command,
-        startupCommandDelivery: context.attachOnly ? undefined : opts.startupCommandDelivery,
+        command: launches ? opts.command : undefined,
+        startupCommandDelivery: launches ? opts.startupCommandDelivery : undefined,
+        ...(launches && opts.launchFile ? { launchFile: opts.launchFile } : {}),
+        // Optional: a daemon that predates it ignores it and types the line, as before.
+        ...(launches && opts.unstageableLine ? { unstageableLine: opts.unstageableLine } : {}),
+        ...(!context.attachOnly && opts.wslLaunchDirectory
+          ? { wslLaunchDirectory: opts.wslLaunchDirectory }
+          : {}),
         launchAgent: context.attachOnly ? undefined : opts.launchAgent,
         ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),
         shellOverride: context.attachOnly ? undefined : opts.shellOverride,

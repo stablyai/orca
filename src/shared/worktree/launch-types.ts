@@ -4,6 +4,7 @@ import type { SleepingAgentLaunchConfig } from '../agent-session-resume'
 import type { SetupRunnerShell } from '../setup-runner-command'
 import type { OrcaDefaultTabTemplate } from '../orca-yaml-hook-types'
 import type { TuiAgent } from '../tui-agent'
+import type { LaunchFile } from '../launch-prompt-file'
 
 export type WorktreeSetupLaunch = {
   runnerScriptPath: string
@@ -21,6 +22,8 @@ export type WorktreeStartupLaunch = {
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery
+  /** Written by the execution host before it types `command`, which names it by placeholder. */
+  launchFile?: LaunchFile
   telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }
 

@@ -626,7 +626,6 @@ describe('staged background worktree creation', () => {
           agent: 'claude',
           launchCommand: 'claude --prefill x',
           expectedProcess: 'claude',
-          followupPrompt: null,
           launchConfig: { agentArgs: '', agentEnv: {} }
         },
         launchDraftPrompt: 'https://github.com/o/r/issues/12'
@@ -664,7 +663,6 @@ describe('staged background worktree creation', () => {
           agent: 'claude',
           launchCommand: 'claude --prefill x',
           expectedProcess: 'claude',
-          followupPrompt: null,
           launchConfig: { agentArgs: '', agentEnv: {} }
         },
         launchDraftPrompt: 'https://github.com/o/r/issues/12'
@@ -697,7 +695,6 @@ describe('staged background worktree creation', () => {
           agent,
           launchCommand: `${agent} --prefill x`,
           expectedProcess: agent,
-          followupPrompt: null,
           launchConfig: { agentArgs: '', agentEnv: {} }
         },
         launchDraftPrompt: draft
@@ -732,7 +729,6 @@ describe('staged background worktree creation', () => {
           agent: 'claude',
           launchCommand: "claude --prefill 'https://github.com/o/r/issues/12'",
           expectedProcess: 'claude',
-          followupPrompt: null,
           launchConfig: { agentArgs: '', agentEnv: {} }
         },
         launchDraftPrompt: 'https://github.com/o/r/issues/12'
@@ -761,7 +757,6 @@ describe('staged background worktree creation', () => {
           agent: 'claude',
           launchCommand: 'claude',
           expectedProcess: 'claude',
-          followupPrompt: null,
           launchConfig: { agentArgs: '', agentEnv: {} }
         }
       })
@@ -789,7 +784,6 @@ describe('staged background worktree creation', () => {
           agent: 'codex',
           launchCommand: 'codex',
           expectedProcess: 'codex',
-          followupPrompt: null,
           launchConfig: { agent: 'codex', command: 'codex' },
           draftPrompt: 'ship it'
         } as never

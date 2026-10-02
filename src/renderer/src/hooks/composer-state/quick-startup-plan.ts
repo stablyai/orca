@@ -1,10 +1,14 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import type { LaunchHost } from '../../../../shared/launch-host'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentDraftLaunchPlan, planLaunchPrompt } from '@/lib/tui-agent-startup'
+import {
+  composerAgentStartupPlan,
+  type ComposerAgentStartupPlan
+} from '@/lib/composer-agent-startup-plan'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -22,11 +26,13 @@ export type QuickComposerStartupInput = {
   platform: NodeJS.Platform
   shell: AgentStartupShell | null | undefined
   isRemote: boolean
+  /** The host the launch runs on (`clientLaunchHost`). */
+  host: LaunchHost
   telemetrySource: WorktreeCreationRequest['telemetrySource']
 }
 
 export type QuickComposerStartup = {
-  startupPlan: AgentStartupPlan | null
+  startupPlan: ComposerAgentStartupPlan | null
   backendStartup: WorktreeCreationRequest['startup']
   telemetry: AgentStartedTelemetry | null
 }
@@ -66,13 +72,12 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           shell: input.shell ?? undefined,
           isRemote: input.isRemote
         })
-  let startupPlan: AgentStartupPlan | null = null
+  let startupPlan: ComposerAgentStartupPlan | null = null
   if (draftLaunchPlan) {
     startupPlan = {
       agent: draftLaunchPlan.agent,
       launchCommand: draftLaunchPlan.launchCommand,
       expectedProcess: draftLaunchPlan.expectedProcess,
-      followupPrompt: null,
       launchConfig: draftLaunchPlan.launchConfig,
       ...(draftLaunchPlan.sessionOptions ? { sessionOptions: draftLaunchPlan.sessionOptions } : {}),
       ...(draftLaunchPlan.startupCommandDelivery
@@ -81,18 +86,22 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
       ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
     }
   } else if (agent !== null) {
-    startupPlan = buildAgentStartupPlan({
-      agent,
-      prompt,
-      cmdOverrides: settings?.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
-      sessionOptions,
-      platform: input.platform,
-      shell: input.shell ?? undefined,
-      isRemote: input.isRemote,
-      allowEmptyPromptLaunch: true
-    })
+    startupPlan = composerAgentStartupPlan(
+      planLaunchPrompt({
+        agent,
+        prompt,
+        cmdOverrides: settings?.agentCmdOverrides ?? {},
+        agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
+        agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
+        sessionOptions,
+        platform: input.platform,
+        shell: input.shell ?? undefined,
+        isRemote: input.isRemote,
+        host: input.host,
+        paste: 'when-host-proves-agent'
+      }),
+      prompt
+    )
     if (startupPlan && draftPrompt) {
       startupPlan.draftPrompt = draftPrompt
     }
@@ -107,7 +116,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           request_kind: 'new'
         }
   const backendStartup =
-    startupPlan && !startupPlan.draftPrompt && !startupPlan.followupPrompt
+    startupPlan && !startupPlan.draftPrompt && !startupPlan.pastePromptAfterReady
       ? {
           command: startupPlan.launchCommand,
           ...(startupPlan.env ? { env: startupPlan.env } : {}),
@@ -116,6 +125,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
             : {}),
+          ...(startupPlan.launchFile ? { launchFile: startupPlan.launchFile } : {}),
           ...(telemetry ? { telemetry } : {})
         }
       : undefined

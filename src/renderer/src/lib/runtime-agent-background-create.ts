@@ -29,13 +29,18 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
     launchConfig: SleepingAgentLaunchConfig
     launchToken: string
     title?: string
+    /** The command launches clean; the caller pastes the prompt once this legacy path ran. */
+    promptLeftForPaste?: true
   }
-}): Promise<{ terminal: RuntimeTerminalCreate }> {
+}): Promise<{ terminal: RuntimeTerminalCreate; promptLeftForPaste?: true }> {
   const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
   const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
   const operation = createAgentSessionCreateOperation()
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
-  return await runRemoteAgentSessionLaunch({
+  return await runRemoteAgentSessionLaunch<{
+    terminal: RuntimeTerminalCreate
+    promptLeftForPaste?: true
+  }>({
     environmentId: args.environmentId,
     hostAuthority: () =>
       operation.run(async (clientOperationId) =>
@@ -60,8 +65,8 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
           { timeoutMs: 15_000 }
         )
       ),
-    legacy: ({ skipCompatibilityCheck }) =>
-      callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
+    legacy: async ({ skipCompatibilityCheck }) => ({
+      ...(await callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
         { kind: 'environment', environmentId: args.environmentId },
         'terminal.create',
         {
@@ -81,6 +86,8 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
           presentation: 'background'
         },
         { timeoutMs: 15_000, skipCompatibilityCheck }
-      )
+      )),
+      ...(args.legacy.promptLeftForPaste ? { promptLeftForPaste: true as const } : {})
+    })
   })
 }

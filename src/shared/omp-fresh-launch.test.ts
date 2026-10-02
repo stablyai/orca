@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
 import { withFreshOmpLaunch } from './omp-fresh-launch'
-import { buildAgentStartupPlan } from './tui-agent-startup'
 
 describe('OMP fresh launch intent', () => {
   it.each(['omp', 'omp launch', 'omp --model provider/model', 'omp --config user.yml'])(
@@ -45,7 +45,7 @@ describe('OMP fresh launch intent', () => {
     expect(withFreshOmpLaunch('omp', 'cmd')).toContain('omp --config "%ORCA_OMP_FRESH_CONFIG%"')
   })
   it('keeps fresh intent out of saved resume command and environment', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'omp',
       prompt: 'new task',
       cmdOverrides: {},
@@ -56,7 +56,7 @@ describe('OMP fresh launch intent', () => {
     expect(plan?.env).toBeUndefined()
   })
   it('requires host-owned configuration for fresh SSH launches', () => {
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'omp',
       prompt: 'new task',
       cmdOverrides: {},

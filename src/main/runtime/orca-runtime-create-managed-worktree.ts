@@ -55,7 +55,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     }
     const agentStartup =
       !args.startup && args.startupAgent
-        ? this.buildStartupForAgent(
+        ? await this.buildStartupForAgent(
             repo,
             args.startupAgent,
             args.startupPrompt,

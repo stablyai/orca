@@ -22,9 +22,9 @@ const LISTED: ReadonlyMap<string, { calls: number; decision: string }> = new Map
     })
 )
 
-// planStartupWithPromptCandidate wraps buildAgentStartupPlan in shared/, which this scan does not reach.
+// planLaunchPrompt plans every prompted launch; buildAgentStartupPlan only a prompt-less one.
 const BUILDER_CALL =
-  /\b(?:buildAgentStartupPlan|buildAgentDraftLaunchPlan|buildAgentResumeStartupPlan|planStartupWithPromptCandidate)\s*\(/g
+  /\b(?:buildAgentStartupPlan|buildAgentDraftLaunchPlan|buildAgentResumeStartupPlan|planLaunchPrompt)\s*\(/g
 
 const DECIDE =
   'Decide attribution: a fresh agent the host builds must carry ' +

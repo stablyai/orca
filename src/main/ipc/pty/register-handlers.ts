@@ -21,6 +21,7 @@ import {
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
 import { installPtyRuntimeController } from './runtime/controller'
+import { installLaunchedAgentForegroundIpcHandler } from './ipc/launched-agent-foreground'
 import { installPtySnapshotIpcHandlers } from './ipc/snapshot'
 import {
   assertFolderWorkspacePtyPathUsable as assertFolderWorkspacePtyPathUsableImpl,
@@ -119,6 +120,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:inspectProcess')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
+  ipcMain.removeHandler('pty:readLaunchedAgentForeground')
   ipcMain.removeHandler('pty:isCodexOnSharedServer')
   ipcMain.removeHandler('pty:disableCodexSharedServerAutoStart')
   ipcMain.removeHandler('pty:stopCodexSharedServer')
@@ -282,6 +284,7 @@ export function registerPtyHandlers(
   installPtyWriteIpcHandlers({ mainWindow, runtime })
   installPtyResizeVisibilityIpc(session)
   installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
+  installLaunchedAgentForegroundIpcHandler(runtime)
   installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyKillIpcHandler(killDeps)
 }

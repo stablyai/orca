@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildAgentDraftLaunchPlan,
-  buildAgentStartupPlan,
-  isShellProcess
-} from './tui-agent-startup'
+import { planLaunchForTest } from '../../../shared/launch-prompt-plan.test-fixture'
+import { buildAgentDraftLaunchPlan, isShellProcess } from './tui-agent-startup'
 import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 
 const emptyLaunchConfig = (agentCommand: string) => ({
@@ -15,7 +12,7 @@ const emptyLaunchConfig = (agentCommand: string) => ({
 describe('buildAgentStartupPlan', () => {
   it('passes Claude prompts as a positional interactive argument', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'claude',
         prompt: 'Fix the bug',
         cmdOverrides: {},
@@ -25,14 +22,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'claude',
       launchCommand: "claude 'Fix the bug'",
       expectedProcess: 'claude',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('claude')
     })
   })
 
   it('uses Gemini interactive prompt mode instead of dropping the prompt', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'gemini',
         prompt: 'Investigate this regression',
         cmdOverrides: {},
@@ -42,14 +40,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'gemini',
       launchCommand: "gemini --prompt-interactive 'Investigate this regression'",
       expectedProcess: 'gemini',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('gemini')
     })
   })
 
   it('uses Antigravity interactive prompt mode with the agy binary', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'antigravity',
         prompt: 'Investigate this regression',
         cmdOverrides: {},
@@ -59,14 +58,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'antigravity',
       launchCommand: "agy --prompt-interactive 'Investigate this regression'",
       expectedProcess: 'agy',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('agy')
     })
   })
 
   it('launches aider first and injects the draft prompt after startup', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'aider',
         prompt: 'Refactor the parser',
         cmdOverrides: {},
@@ -76,14 +76,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'aider',
       launchCommand: 'aider',
       expectedProcess: 'aider',
-      followupPrompt: 'Refactor the parser',
+      carry: 'paste-after-ready',
+      pasteAfterReady: 'Refactor the parser',
       launchConfig: emptyLaunchConfig('aider')
     })
   })
 
   it('launches Autohand Code first and injects the draft prompt after startup', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'autohand',
         prompt: 'Add tests for the parser',
         cmdOverrides: {},
@@ -93,14 +94,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'autohand',
       launchCommand: 'autohand',
       expectedProcess: 'autohand',
-      followupPrompt: 'Add tests for the parser',
+      carry: 'paste-after-ready',
+      pasteAfterReady: 'Add tests for the parser',
       launchConfig: emptyLaunchConfig('autohand')
     })
   })
 
   it('launches Ante first and injects the draft prompt after startup', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'ante',
         prompt: 'Summarize the failing tests',
         cmdOverrides: {},
@@ -110,14 +112,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'ante',
       launchCommand: 'ante',
       expectedProcess: 'ante',
-      followupPrompt: 'Summarize the failing tests',
+      carry: 'paste-after-ready',
+      pasteAfterReady: 'Summarize the failing tests',
       launchConfig: emptyLaunchConfig('ante')
     })
   })
 
   it('passes the prompt to Trae as a positional argv behind a `--` separator', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'trae',
         prompt: 'Summarize the failing tests',
         cmdOverrides: {},
@@ -127,7 +130,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'trae',
       launchCommand: "traecli -- 'Summarize the failing tests'",
       expectedProcess: 'traecli',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('traecli')
     })
   })
@@ -135,7 +139,7 @@ describe('buildAgentStartupPlan', () => {
   // Why: without the separator these dispatch to Trae's `help`/`config` subcommands instead.
   it('keeps subcommand-shaped Trae prompts as the positional prompt', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'trae',
         prompt: 'help me name this config',
         cmdOverrides: {},
@@ -146,7 +150,7 @@ describe('buildAgentStartupPlan', () => {
 
   it('delivers the Muse prompt after its composer is ready', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'muse',
         prompt: 'Summarize the failing tests',
         cmdOverrides: {},
@@ -156,7 +160,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'muse',
       launchCommand: 'muse --trust-workspace',
       expectedProcess: 'muse',
-      followupPrompt: 'Summarize the failing tests',
+      carry: 'paste-after-ready',
+      pasteAfterReady: 'Summarize the failing tests',
       launchConfig: {
         ...emptyLaunchConfig('muse'),
         agentCommand: 'muse --trust-workspace'
@@ -166,7 +171,7 @@ describe('buildAgentStartupPlan', () => {
 
   it('passes the prompt to Prime Agent as a positional argv behind a `--` separator', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'prime-agent',
         prompt: 'Summarize the failing tests',
         cmdOverrides: {},
@@ -176,7 +181,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'prime-agent',
       launchCommand: "prime-agent -- 'Summarize the failing tests'",
       expectedProcess: 'prime-agent',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('prime-agent')
     })
   })
@@ -184,7 +190,7 @@ describe('buildAgentStartupPlan', () => {
   // Why: without the separator these dispatch to Prime Agent's `help`/`agents` subcommands instead.
   it('keeps subcommand-shaped Prime Agent prompts as the positional prompt', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'prime-agent',
         prompt: 'help me name this config',
         cmdOverrides: {},
@@ -195,7 +201,7 @@ describe('buildAgentStartupPlan', () => {
 
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'cursor',
         prompt: 'Review this file',
         cmdOverrides: {},
@@ -205,14 +211,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'cursor',
       launchCommand: "cursor-agent 'Review this file'",
       expectedProcess: 'cursor-agent',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('cursor-agent')
     })
   })
 
   it('applies command overrides without changing the prompt syntax contract', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'droid',
         prompt: 'Ship the fix',
         cmdOverrides: { droid: '/opt/factory/bin/droid' },
@@ -222,14 +229,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'droid',
       launchCommand: "/opt/factory/bin/droid 'Ship the fix'",
       expectedProcess: 'droid',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('/opt/factory/bin/droid')
     })
   })
 
   it('passes Copilot prompts with the -i flag for an interactive session', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'copilot',
         prompt: 'Fix the bug',
         cmdOverrides: {},
@@ -239,14 +247,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'copilot',
       launchCommand: "copilot -i 'Fix the bug'",
       expectedProcess: 'copilot',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('copilot')
     })
   })
 
   it('launches Grok with the prompt as a positional argv', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'grok',
         prompt: 'Trace the failing test',
         cmdOverrides: {},
@@ -256,14 +265,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'grok',
       launchCommand: "grok -- 'Trace the failing test'",
       expectedProcess: 'grok',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('grok')
     })
   })
 
   it('launches Devin first and injects the prompt after startup', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'devin',
         prompt: 'Trace the failing test',
         cmdOverrides: {},
@@ -274,7 +284,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'devin',
       launchCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
       expectedProcess: 'devin',
-      followupPrompt: 'Trace the failing test',
+      carry: 'paste-after-ready',
+      pasteAfterReady: 'Trace the failing test',
       launchConfig: {
         agentCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
         agentArgs: '--permission-mode bypass --respect-workspace-trust false',
@@ -285,7 +296,7 @@ describe('buildAgentStartupPlan', () => {
 
   it('launches Command Code by its unambiguous binary with a positional prompt', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'command-code',
         prompt: 'Fix the issue',
         cmdOverrides: {},
@@ -295,14 +306,15 @@ describe('buildAgentStartupPlan', () => {
       agent: 'command-code',
       launchCommand: "command-code --trust 'Fix the issue'",
       expectedProcess: 'command-code',
-      followupPrompt: null,
+      carry: 'on-line',
+      pasteAfterReady: null,
       launchConfig: emptyLaunchConfig('command-code --trust')
     })
   })
 
   it('returns null when there is no prompt to inject', () => {
     expect(
-      buildAgentStartupPlan({
+      planLaunchForTest({
         agent: 'codex',
         prompt: '   ',
         cmdOverrides: {},

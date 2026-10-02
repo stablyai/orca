@@ -147,7 +147,6 @@ export type {
   RuntimeTerminalAgentStatusState,
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
-  RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalFocus,
   RuntimeTerminalInteractiveWait,
   RuntimeTerminalInteractiveWaitSource,
@@ -159,7 +158,6 @@ export type {
   RuntimeTerminalOrphanTopology,
   RuntimeTerminalOrphanTopologyGroup,
   RuntimeTerminalOrphanTopologyTab,
-  RuntimeTerminalPresentation,
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalPromptStage,
   RuntimeTerminalRead,
@@ -182,6 +180,10 @@ export type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
 } from './runtime-terminal-contracts'
+export type {
+  RuntimeTerminalCreateRequestPayload,
+  RuntimeTerminalPresentation
+} from './runtime-terminal-create-request'
 export type {
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches,

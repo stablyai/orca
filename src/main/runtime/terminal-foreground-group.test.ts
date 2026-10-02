@@ -27,7 +27,7 @@ describe('who holds a pane’s terminal, by its foreground process group', () =>
     [
       'the agent the launch line ran',
       pane(200, [{ pid: 200, ppid: 101, pgid: 200, stat: 'S+', command: '/opt/bin/claude' }]),
-      'agent'
+      'launched-agent'
     ],
     // A tcsh or nu launch line, or a wrapper script that does not `exec` its agent.
     [
@@ -36,7 +36,7 @@ describe('who holds a pane’s terminal, by its foreground process group', () =>
         { pid: 200, ppid: 101, pgid: 200, stat: 'S+', command: '/bin/sh /tmp/orca-launch/run.sh' },
         { pid: 201, ppid: 200, pgid: 200, stat: 'S+', command: '/opt/bin/claude' }
       ]),
-      'agent'
+      'launched-agent'
     ],
     [
       'an agent it cannot recognize behind a bash wrapper',
@@ -44,7 +44,9 @@ describe('who holds a pane’s terminal, by its foreground process group', () =>
         { pid: 200, ppid: 101, pgid: 200, stat: 'S+', command: 'bash ./start-agent.sh' },
         { pid: 201, ppid: 200, pgid: 200, stat: 'S+', command: 'node /opt/agent/cli.js' }
       ]),
-      'agent'
+      // Not named as the launched agent: the paste guard still counts it, the receipt's exit
+      // verdict does not.
+      'other'
     ],
     // Between its commands a wrapper is only shells, and typing into it could run the text.
     [

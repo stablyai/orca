@@ -3,8 +3,8 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
+import { planLaunchForTest } from './launch-prompt-plan.test-fixture'
 import { runProcess } from './child-process/run-process'
-import { buildAgentStartupPlan } from './tui-agent-startup'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -27,7 +27,7 @@ it.each(shells)(
     const config = join(root, 'fresh settings.yml')
     const capture = join(root, 'argv')
     await writeFile(config, 'autoResume: false\n')
-    const plan = buildAgentStartupPlan({
+    const plan = planLaunchForTest({
       agent: 'omp',
       prompt: 'task with spaces',
       cmdOverrides: {},

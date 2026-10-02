@@ -20,6 +20,32 @@ afterEach(async () => {
 })
 
 describe('claude agent teams shim env', () => {
+  // Why: a launch-file pointer puts backticks on every such line, which the typed-line check refuses.
+  it('turns agent teams on for a Claude launch Orca built, whatever its prompt holds', async () => {
+    const pointer =
+      "claude '--add-dir=/tmp/d' 'The full task is in the file `/tmp/d/task-context.md`.'"
+    const plan = await buildClaudeAgentTeamsLaunchPlan({
+      command: pointer,
+      launchAgent: 'claude',
+      mode: 'in-process',
+      baseEnv: {},
+      createTeamEnv: () => ({})
+    })
+    expect(plan?.command).toBe(
+      "claude --teammate-mode in-process '--add-dir=/tmp/d' 'The full task is in the file `/tmp/d/task-context.md`.'"
+    )
+    expect(plan?.env).toEqual({ CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' })
+    await expect(
+      buildClaudeAgentTeamsLaunchPlan({
+        command: pointer,
+        launchAgent: 'codex',
+        mode: 'in-process',
+        baseEnv: {},
+        createTeamEnv: () => ({})
+      })
+    ).resolves.toBeNull()
+  })
+
   it('writes a private tmux shim that calls the Orca shim command', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-shim-'))
     roots.push(root)

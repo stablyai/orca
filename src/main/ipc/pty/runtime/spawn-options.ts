@@ -121,6 +121,9 @@ export async function buildRuntimePtySpawnOptions(
   if (args.startupCommandDelivery !== undefined) {
     ctx.spawnOptions.startupCommandDelivery = args.startupCommandDelivery
   }
+  if (args.launchFile) {
+    ctx.spawnOptions.launchFile = args.launchFile
+  }
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent
   }

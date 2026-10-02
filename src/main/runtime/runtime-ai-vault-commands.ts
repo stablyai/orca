@@ -9,6 +9,7 @@ import type {
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { listAiVaultSessions } from '../ai-vault/cached-session-list'
 import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
+import { showLaunchPromptsInSessionTitles } from '../ai-vault/session-title-launch-prompt'
 
 export class RuntimeAiVaultCommands {
   constructor(
@@ -21,11 +22,14 @@ export class RuntimeAiVaultCommands {
     return listAiVaultSessions(args)
   }
 
-  resolveTitles(
+  async resolveTitles(
     requests: AiVaultSessionTitleRequest[],
     signal?: AbortSignal
   ): Promise<AiVaultSessionTitlesResult> {
-    return resolveLocalAiVaultSessionTitles(requests, signal)
+    return showLaunchPromptsInSessionTitles(
+      requests,
+      await resolveLocalAiVaultSessionTitles(requests, signal)
+    )
   }
 
   prepare(args: AiVaultPrepareSessionResumeArgs): Promise<AiVaultPrepareSessionResumeResult> {

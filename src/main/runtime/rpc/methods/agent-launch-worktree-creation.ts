@@ -66,8 +66,8 @@ export function agentLaunchWorkspaceFactory(
               ...params,
               ...(startupAgent ? { startupAgent } : {}),
               // Only ever set alongside `startupAgent`, which is what the create requires; the
-              // executor offers it only to an agent that takes its prompt on argv, and it rides only
-              // when the typed line can carry it.
+              // executor offers it only to an agent that takes its prompt on argv, and it rides
+              // unless `carryLaunchPrompt` leaves it for the paste.
               ...(startupPrompt ? { startupPrompt } : {})
             },
             {

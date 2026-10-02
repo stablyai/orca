@@ -7,11 +7,13 @@
  * Mobile, the CLI and orchestration got an agent and no prompt. The host owns the PTY, so it can
  * write into one whether or not any window is open on it.
  *
- * This is the half the launch command cannot serve. An argv agent's prompt rides that command when
- * its typed line can carry it (`startup-line-prompt-carry`), and then no readiness race exists. What
- * reaches here is a `stdin-after-start` agent, whose CLI accepts no such argument; a prompt too long
- * or multi-line for the typed line; and a reused terminal, whose process was already running before
- * this launch existed. Readiness is `waitForLaunchedAgentComposer`, the one the worker start uses.
+ * This is the half the launch command cannot serve. An argv agent's prompt rides that command, on
+ * the line or in a launch file (`carryLaunchPrompt`), so no readiness race exists for it. What
+ * reaches here is a `stdin-after-start` agent, whose CLI accepts no such argument; a prompt the rule
+ * leaves for the paste (an agent not known to read a launch file, or a host that cannot write its
+ * staging folder); and a reused terminal, whose process was
+ * already running before this launch existed. Readiness is `waitForLaunchedAgentComposer`, the one
+ * the worker start uses.
  *
  * Nothing here writes to a PTY itself. `sendTerminalAgentPrompt` is the runtime's one agent-prompt
  * writer: it frames the text as a bracketed paste so multi-line and special-character content is

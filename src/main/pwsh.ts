@@ -120,6 +120,15 @@ export function isPwshAvailableAsync(): Promise<boolean> {
   return pwshProbeInFlight
 }
 
+/** The probe's answer when it has one, without blocking; null starts a probe for a later caller. */
+export function cachedPwshAvailability(): boolean | null {
+  if (pwshAvailableCache && isCacheFresh(pwshAvailableCache)) {
+    return pwshAvailableCache.available
+  }
+  void isPwshAvailableAsync()
+  return null
+}
+
 export function warmPwshAvailabilityCache(): Promise<boolean> {
   if (pwshAvailableCache?.available) {
     return Promise.resolve(true)

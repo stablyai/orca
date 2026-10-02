@@ -1,3 +1,4 @@
+import { launchPromptShownForPane } from './launch-file-prompt-by-pane'
 import { existsSync } from 'node:fs'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
@@ -21,6 +22,7 @@ export function firstWorkRenameDeps(
   >
 ): FirstWorkBranchRenameDeps {
   return {
+    showLaunchPrompt: launchPromptShownForPane,
     getSettings: () => store.getSettings(),
     getRepo: (repoId) => store.getRepo(repoId),
     getAgentEnvResolvers: () => runtime.getCommitMessageAgentEnvironmentResolvers(),

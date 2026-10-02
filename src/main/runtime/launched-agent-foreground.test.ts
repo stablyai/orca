@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteForegroundEvidence } from '../../shared/foreground-process-evidence'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import type * as TerminalForegroundGroup from './terminal-foreground-group'
-import { readLaunchedAgentForeground } from './launched-agent-foreground'
+import {
+  readLaunchedAgentForeground,
+  readTerminalForegroundVerdict
+} from './launched-agent-foreground'
 
 const paneTerminal = vi.hoisted(() => {
   const state: { rows: ProcessTableRow[] | null } = { rows: null }
@@ -65,6 +68,23 @@ describe('the relay’s foreground group as proof of a launched agent', () => {
       return claudeInGroup(1_800)
     })
 
+    await expect(
+      readLaunchedAgentForeground(controller, POSIX_SSH, 'pty-1', 'claude')
+    ).resolves.toBe('agent')
+  })
+
+  // Why: the receipt counts only the agent named as having run; the paste guard keeps any process.
+  it.each<[string, 'launched-agent' | 'other']>([
+    ['claude', 'launched-agent'],
+    ['node', 'other']
+  ])('tells the launched agent from another process (%s) by name', async (name, verdict) => {
+    const controller = {
+      ...controllerAnswering(async () => claudeInGroup(1_500)),
+      getForegroundProcess: async () => name
+    }
+    await expect(
+      readTerminalForegroundVerdict(controller, POSIX_SSH, 'pty-1', 'claude')
+    ).resolves.toBe(verdict)
     await expect(
       readLaunchedAgentForeground(controller, POSIX_SSH, 'pty-1', 'claude')
     ).resolves.toBe('agent')

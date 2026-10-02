@@ -81,6 +81,7 @@ export function useComposerSubmitOrchestration(
     selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     selectedRepoIsRemote: target.runtimeTargetSelection.selectedRepoIsRemote,
+    selectedRepoSettings: target.runtimeTargetSelection.selectedRepoSettings,
     selectedRepoStartupShell: target.runtimeTargetSelection.selectedRepoStartupShell,
     settings: target.composerTargetStore.settings,
     smartNameMode: target.workspaceIdentityState.smartNameMode,

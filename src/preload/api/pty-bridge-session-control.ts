@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { LaunchFile } from '../../shared/launch-prompt-file'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
   AgentProviderSessionMetadata,
@@ -32,6 +33,7 @@ export const ptySessionControlApi = {
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
+    launchFile?: LaunchFile
     connectionId?: string | null
     worktreeId?: string
     sessionId?: string

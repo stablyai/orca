@@ -1,7 +1,7 @@
 import { ensureAgentStartupInTerminal, type LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { planLaunchPrompt } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/worktree-activation'
 import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
@@ -21,6 +21,11 @@ import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store'
+import { clientLaunchHost } from '@/lib/launch-file-host'
+import {
+  composerAgentStartupPlan,
+  type ComposerAgentStartupPlan
+} from '@/lib/composer-agent-startup-plan'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchPlatform,
@@ -98,7 +103,7 @@ export async function submitFolderWorkspaceCreate({
     isRemote: launchIsRemote,
     terminalWindowsShell
   })
-  const startupPlan =
+  const startupPlan: ComposerAgentStartupPlan | null =
     quickAgent && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
@@ -113,18 +118,26 @@ export async function submitFolderWorkspaceCreate({
           isRemote: launchIsRemote
         })
       : quickAgent
-        ? buildAgentStartupPlan({
-            agent: quickAgent,
-            prompt: note,
-            cmdOverrides: agentCmdOverrides ?? {},
-            agentArgs,
-            agentEnv,
-            sessionOptions,
-            platform: launchPlatform,
-            shell: launchShell,
-            isRemote: launchIsRemote,
-            allowEmptyPromptLaunch: true
-          })
+        ? composerAgentStartupPlan(
+            planLaunchPrompt({
+              agent: quickAgent,
+              prompt: note,
+              cmdOverrides: agentCmdOverrides ?? {},
+              agentArgs,
+              agentEnv,
+              sessionOptions,
+              platform: launchPlatform,
+              shell: launchShell,
+              isRemote: launchIsRemote,
+              host: clientLaunchHost({
+                runtimeEnvironmentId,
+                launchPlatform,
+                isRemote: launchIsRemote
+              }),
+              paste: 'when-host-proves-agent'
+            }),
+            note
+          )
         : null
   // Why: the argv-prefill plan carries the draft inside `launchCommand`, so
   // `startupPlan.draftPrompt` alone can't tell whether this launch has one.
@@ -189,6 +202,8 @@ export async function submitFolderWorkspaceCreate({
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
             : {}),
+          ...(startupPlan.launchFile ? { launchFile: startupPlan.launchFile } : {}),
+          ...(startupPlan.launchPrompt ? { launchPrompt: startupPlan.launchPrompt } : {}),
           telemetry: {
             agent_kind: tuiAgentToAgentKind(quickAgent),
             launch_source: launchSource,
@@ -241,7 +256,7 @@ export async function submitFolderWorkspaceCreate({
     if (
       !structuredLaunchAccepted &&
       startupPlan &&
-      (startupPlan.followupPrompt || startupPlan.draftPrompt) &&
+      (startupPlan.pastePromptAfterReady || startupPlan.draftPrompt) &&
       activation !== false
     ) {
       void ensureAgentStartupInTerminal({

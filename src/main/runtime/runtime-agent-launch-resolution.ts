@@ -5,6 +5,7 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resum
 import type { ClaudeAgentTeamsMode } from '../../shared/claude-agent-teams-tmux-compat'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 
@@ -110,7 +111,12 @@ export function getAgentLaunchPlatformForRepo(
     if (projectRuntime?.status === 'repair-required') {
       return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : process.platform
     }
-    if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+    // Why a WSL path: the pane spawns in the distro's POSIX shell, whatever the Windows shell
+    // setting, so its line is judged and quoted for that shell.
+    if (
+      (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') ||
+      isWslUncPath(repo.path)
+    ) {
       return 'linux'
     }
     return process.platform

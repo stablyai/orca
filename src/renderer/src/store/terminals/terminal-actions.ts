@@ -11,6 +11,7 @@ import type {
 } from '../../../../shared/agent-session-resume'
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { LaunchFile, UnstageableLine } from '../../../../shared/launch-prompt-file'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
@@ -205,6 +206,9 @@ export type TerminalActions = {
       command: string
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
+      launchFile?: LaunchFile
+      launchPrompt?: string
+      unstageableLine?: UnstageableLine
       env?: Record<string, string>
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
@@ -231,6 +235,9 @@ export type TerminalActions = {
     command: string
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
+    launchFile?: LaunchFile
+    launchPrompt?: string
+    unstageableLine?: UnstageableLine
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig

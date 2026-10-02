@@ -23,8 +23,7 @@ describe('Freebuff startup', () => {
 
     expect(freebuff).toMatchObject({
       launchCommand: 'freebuff --debug',
-      expectedProcess: 'freebuff',
-      followupPrompt: null
+      expectedProcess: 'freebuff'
     })
     expect(codebuff).toMatchObject({ launchCommand: 'codebuff', expectedProcess: 'codebuff' })
   })

@@ -104,16 +104,17 @@ describe('a paired client launching into an existing workspace', () => {
   })
 
   // Why: a pasted prompt waits up to a minute for the agent; the caller's view must not wait with it.
+  // Only an agent that takes its text after start is pasted into; the rest carry it at launch.
   it.each([
-    ['terminal', {}, deliverTerminalPrompt],
-    ['chat', STRUCTURED_PREFERENCE, commitChatPrompt]
+    ['terminal', {}, deliverTerminalPrompt, 'aider'],
+    ['chat', STRUCTURED_PREFERENCE, commitChatPrompt, EXISTING_LAUNCH.agent]
   ] as const)(
     'selects the new %s for the caller before its prompt is delivered',
-    async (_surface, settings, deliver) => {
+    async (_surface, settings, deliver, agent) => {
       const runtime = selectionRuntime({ settings, terminalPaneKey: PANE_KEY })
 
       await launch(
-        { ...EXISTING_LAUNCH, prompt: { text: 'Fix it.\nLog:', delivery: 'submit' } },
+        { ...EXISTING_LAUNCH, agent, prompt: { text: 'Fix it.\nLog:', delivery: 'submit' } },
         runtime
       )
 

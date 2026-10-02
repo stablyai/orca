@@ -27,6 +27,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
+    // Why: default permission mode asks before reading outside the working directories.
+    launchFileDirectoryFlag: '--add-dir',
+    readsLaunchFile: true,
     pasteNeedsTypedRequest: true,
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill',
@@ -63,6 +66,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   codex: {
     detectCmd: 'codex',
     promptInjectionMode: 'argv',
+    // Why no grant: every sandbox policy reads the whole disk.
+    readsLaunchFile: true,
     windowsInputRecordPasteNewline: 'alt-enter',
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt',

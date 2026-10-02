@@ -17,7 +17,16 @@ import {
 } from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import {
+  agentPromptRidesLaunchCommand,
+  buildAgentDraftLaunchPlan,
+  planLaunchPrompt
+} from '../../shared/tui-agent-startup'
+import {
+  launchPromptNeedsPasteRefusal,
+  windowsDraftRefusal
+} from '../../shared/launch-prompt-carry'
+import { probedThisOrcaLaunchHost } from './this-orca-launch-host'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
   AgentSessionCreateOperation,
@@ -159,16 +168,48 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
         ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
       })
-      const startup =
-        request.promptDelivery === 'draft'
-          ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
-          : buildAgentStartupPlan({
-              ...startupArgs,
-              prompt: request.prompt ?? '',
-              allowEmptyPromptLaunch: true
-            })
-      if (!startup) {
-        throw new Error('agent_session_identity_required')
+      let startup
+      let launchFile
+      if (request.promptDelivery === 'draft') {
+        startup = buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
+        if (!startup) {
+          const refusal = windowsDraftRefusal(request.agent, startupArgs.platform)
+          throw new Error(refusal ?? 'agent_session_identity_required')
+        }
+      } else {
+        const planned = planLaunchPrompt({
+          ...startupArgs,
+          prompt: request.prompt ?? '',
+          host: await probedThisOrcaLaunchHost({
+            launchPlatform: startupArgs.platform,
+            isRemote: Boolean(workspace.connectionId),
+            settings,
+            workspacePath: workspace.path,
+            prompt: request.prompt
+          }),
+          // Why: this create returns before the agent is ready, so nothing pastes after it.
+          paste: 'never'
+        })
+        if (!planned) {
+          throw new Error('agent_session_identity_required')
+        }
+        switch (planned.carry) {
+          case 'none':
+          case 'on-line':
+            startup = planned.plan
+            break
+          case 'launch-file':
+            startup = planned.plan
+            launchFile = planned.launchFile
+            break
+          case 'paste-after-ready':
+            // Why: a stdin agent's prompt is the session's to submit; an argv agent's would be dropped.
+            if (agentPromptRidesLaunchCommand(request.agent)) {
+              throw new Error(launchPromptNeedsPasteRefusal(request.agent, 'session'))
+            }
+            startup = planned.cleanPlan
+            break
+        }
       }
       if (caller.signal?.aborted) {
         throw new Error('client_disconnected')
@@ -201,6 +242,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           launchAgent: request.agent,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           startupCommandDelivery: startup.startupCommandDelivery,
+          ...(launchFile ? { launchFile } : {}),
           // A fresh agent this host built; the request has no surface field, so it counts as `unknown`.
           telemetry: agentStartedTelemetry(request.agent, undefined),
           cwd: startupCwd,

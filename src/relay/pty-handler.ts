@@ -39,6 +39,13 @@ import {
   startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../shared/startup-command-staging'
+import { parseLaunchFile } from '../shared/launch-prompt-file'
+import {
+  LaunchFileUnavailableError,
+  removeLaunchFile,
+  writeLaunchFile,
+  type WrittenLaunchFile
+} from '../shared/launch-file-writing'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   isPathInsideOrEqual,
@@ -260,6 +267,8 @@ type ManagedPty = {
   startupCommand?: ManagedStartupCommand
   /** Kept past delivery: the typed line may never run if the shell dies first. */
   stagedStartupCommand?: StartupCommandStaging
+  /** The agent may read its task file at any point in its life, so it goes with the PTY. */
+  launchFile?: WrittenLaunchFile
   /** Whether this host armed the shell-ready marker for a renderer-delivered startup command.
    *  Kept off `startupCommand`, which is dropped once delivered; the client reads it from the
    *  spawn reply to skip waiting for a marker that will never come (fish, sh, Windows). */
@@ -314,6 +323,23 @@ type ManagedStartupCommand = {
   timer: ReturnType<typeof setTimeout> | null
 }
 
+function writeRelayLaunchFile(
+  value: unknown,
+  command: string | undefined,
+  env: Record<string, string>,
+  shell: string
+): WrittenLaunchFile | undefined {
+  const launchFile = parseLaunchFile(value)
+  if (!launchFile) {
+    return undefined
+  }
+  if (isRelayWslShell(shell)) {
+    // Why: an agent inside the distro cannot read a path in the Windows temp directory.
+    throw new LaunchFileUnavailableError('not supported for WSL sessions')
+  }
+  return writeLaunchFile({ launchFile, command, env })
+}
+
 // Why: Windows ConPTY rejects signals; forward them only on POSIX.
 function killPtyProcess(pty: IPty, signal: string): void {
   if (process.platform === 'win32') {
@@ -340,6 +366,7 @@ function disposeManagedPty(managed: ManagedPty): void {
   }
   managed.disposed = true
   discardStagedStartupCommand(managed.stagedStartupCommand)
+  removeLaunchFile(managed.launchFile)
   // Why: clear the SIGKILL fallback timer so it can't fire pty.kill on an already-disposed instance.
   if (managed.killTimer) {
     clearTimeout(managed.killTimer)
@@ -1980,7 +2007,7 @@ export class PtyHandler {
     // Why: kept so a restarted runtime can re-adopt this PTY under its original handle (survives revive).
     const terminalHandle =
       typeof env?.ORCA_TERMINAL_HANDLE === 'string' ? env.ORCA_TERMINAL_HANDLE : undefined
-    const command = typeof params.command === 'string' ? params.command : undefined
+    let command = typeof params.command === 'string' ? params.command : undefined
     const launchAgent = isTuiAgent(params.launchAgent) ? params.launchAgent : undefined
     const terminalWindowsWslDistro =
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
@@ -1991,6 +2018,11 @@ export class PtyHandler {
       { id, paneKey, shell, command, launchAgent },
       envToDelete
     )
+    const launchFile = writeRelayLaunchFile(params.launchFile, command, spawnEnv, shell)
+    if (launchFile) {
+      command = launchFile.command
+      Object.assign(spawnEnv, launchFile.env)
+    }
     await applyRelayAgentWorkspaceTrust(params.agentWorkspaceTrust, launchAgent, spawnEnv, {
       wslShell: isRelayWslShell(shell)
     })
@@ -2042,6 +2074,7 @@ export class PtyHandler {
       !shouldProviderDeliverCommand && shellLaunch.supportsReadyMarker
 
     if (context?.signal?.aborted || context?.isStale()) {
+      removeLaunchFile(launchFile)
       // Why: cancellation remains side-effect-free until the exact native spawn seam.
       throw new Error('client_disconnected')
     }
@@ -2069,6 +2102,7 @@ export class PtyHandler {
         ...this.conptyDllSpawnOptions()
       })
     } catch (error) {
+      removeLaunchFile(launchFile)
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
       if (isMissingNodePtyNativeBinding(error)) {
         this.invalidatePtyModuleAfterBindingFailure()
@@ -2113,6 +2147,7 @@ export class PtyHandler {
       gitCredentialPromptGuarded,
       ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
       shellPath: shell,
+      ...(launchFile ? { launchFile } : {}),
       // Why the resolved one gates it: on a POSIX relay an override is rejected
       // outright, and storing one revive would only reject again is noise.
       ...(resolvedShellOverride ? { shellOverride } : {}),

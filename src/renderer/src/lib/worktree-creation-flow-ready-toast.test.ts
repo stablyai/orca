@@ -206,7 +206,6 @@ describe('a creation that finishes after the user moved on (#9944)', () => {
           agent: 'claude',
           launchCommand: 'claude',
           expectedProcess: 'claude',
-          followupPrompt: null,
           launchConfig: { agentArgs: '', agentEnv: {} }
         }
       })

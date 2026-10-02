@@ -14,6 +14,8 @@ export type AiVaultTitleRequest = {
   providerSession: AgentProviderSessionMetadata
   refresh: boolean
   tabId: string
+  /** The pane the session runs in, so its host can title a launch file's session by its prompt. */
+  paneKey: string
   worktreeId: string
 }
 
@@ -62,6 +64,7 @@ function registerCandidate(
     providerSession: args.providerSession,
     refresh: args.refresh,
     tabId,
+    paneKey: args.paneKey,
     worktreeId,
     priority
   })

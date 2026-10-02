@@ -14,6 +14,7 @@ import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from '../../../../shared/agent-session-host-authority'
+import type { LaunchFile } from '../../../../shared/launch-prompt-file'
 import { localProvider } from '../provider/registry'
 
 export type RuntimePtySpawnState = {
@@ -89,6 +90,7 @@ export type RuntimePtySpawnArgs = {
   launchAgent?: TuiAgent
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
+  launchFile?: LaunchFile
   telemetry?: {
     agent_kind?: unknown
     launch_source?: unknown

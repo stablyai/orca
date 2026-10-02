@@ -12,6 +12,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PtyProviderBufferSnapshot, PtyProcessInfo, PtySpawnResult } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { LaunchFile } from '../../shared/launch-prompt-file'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 export type RuntimePtyController = {
@@ -49,6 +50,8 @@ export type RuntimePtyController = {
     launchAgent?: TuiAgent
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+    /** Written by the execution host before it types `command`; see PtySpawnOptions. */
+    launchFile?: LaunchFile
     env?: Record<string, string>
     envToDelete?: string[]
     resumeProviderSession?: AgentProviderSessionMetadata

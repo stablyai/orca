@@ -16,6 +16,11 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),
   confirmForegroundProcess: (id: string): Promise<string | null> =>
     ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
+  readLaunchedAgentForeground: (
+    id: string,
+    agent: string
+  ): Promise<'launched-agent' | 'other' | 'shell' | 'unknown'> =>
+    ipcRenderer.invoke('pty:readLaunchedAgentForeground', { id, agent }),
   isCodexOnSharedServer: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('pty:isCodexOnSharedServer', { id }),
   disableCodexSharedServerAutoStart: (id: string): Promise<boolean> =>

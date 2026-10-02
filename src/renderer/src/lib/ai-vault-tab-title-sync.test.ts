@@ -192,6 +192,8 @@ describe('AI Vault tab title sync', () => {
           {
             agent,
             sessionId: `${agent}-session`,
+            // Why: the host titles a launch file's session by the prompt it kept for this pane.
+            paneKey: 'tab-1:leaf-1',
             transcriptPath: `/sessions/${agent}.jsonl`
           }
         ]
@@ -373,6 +375,7 @@ describe('AI Vault tab title sync', () => {
       providerSession: { key: 'session_id', id: `session-${index}` },
       refresh: true,
       tabId: `tab-${index}`,
+      paneKey: `tab-${index}:leaf-${index}`,
       worktreeId: `worktree-${index}`
     })
     const groups = batchAiVaultTitleRequests(
@@ -391,6 +394,7 @@ describe('AI Vault tab title sync', () => {
       providerSession: { key: 'session_id' as const, id: `session-${index}` },
       refresh: true,
       tabId: `tab-${index}`,
+      paneKey: `tab-${index}:leaf-${index}`,
       worktreeId: `worktree-${index}`
     })
     const requests = [

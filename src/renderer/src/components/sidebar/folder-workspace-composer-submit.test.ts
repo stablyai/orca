@@ -311,7 +311,6 @@ describe('submitFolderWorkspaceCreate', () => {
       startup: expect.objectContaining({
         agent: 'codex',
         launchCommand: 'codex',
-        followupPrompt: null,
         draftPrompt: `Review this before starting\n\n${linkedWorkItem.url}`
       })
     })
@@ -387,7 +386,7 @@ describe('submitFolderWorkspaceCreate', () => {
       startup: expect.objectContaining({
         agent: 'aider',
         launchCommand: 'aider',
-        followupPrompt: 'Fix the failing folder prompt flow'
+        pastePromptAfterReady: 'Fix the failing folder prompt flow'
       })
     })
   })

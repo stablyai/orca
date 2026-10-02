@@ -39,6 +39,9 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: vi.fn()
 }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn(async () => true) }))
+vi.mock('@/lib/agent-launch-prompt-receipt', () => ({
+  waitForLaunchPromptReceipt: vi.fn(async () => 'delivered')
+}))
 vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))
@@ -79,9 +82,10 @@ describe('agent launch caller arguments and permission bypass', () => {
     // A call site that names arguments replaces the shipped default outright; one that names none
     // inherits it. Both shapes must stay visible on the queued command.
     const args = profile.args.agentArgs === undefined ? `'${CODEX_BYPASS}'` : "'--model' 'gpt-5.5'"
-    // Why: quick-command is the ONE call site that carries a prompt and names no delivery mode, so
-    // it takes the default auto-submit path and folds the prompt into argv for an argv agent.
-    const argvPrompt = profile.id === 'quick-command' ? ` '${profile.args.prompt}'` : ''
+    // Why: Codex takes its prompt on argv, so every call site that submits one carries it there;
+    // only a draft, which Codex cannot prefill, is left for the paste.
+    const ridesArgv = profile.args.prompt !== undefined && profile.args.promptDelivery !== 'draft'
+    const argvPrompt = ridesArgv ? ` '${profile.args.prompt}'` : ''
     expect(command).toBe(`codex ${args}${argvPrompt}`)
   })
 

@@ -1,5 +1,6 @@
 import { tokenizeCustomCommandTemplate, type CommandTokenSpan } from './commit-message-prompt'
 import { quotePowerShellLiteral } from './powershell-native-argument'
+import { quoteWindowsCmdArgument } from './child-process/windows-command-line'
 
 /**
  * `'posix'` covers every Unix shell Orca can type into, fish included — not
@@ -221,7 +222,9 @@ export function quoteStartupArg(value: string, shell: AgentStartupShell): string
     return quotePowerShellLiteral(value)
   }
   if (shell === 'cmd') {
-    return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
+    // Why: cmd keeps `^` literal inside double quotes, so caret-escaping a quoted run reached the
+    // agent as stray carets; this encoding keeps cmd's quote count even and breaks only `%` out.
+    return quoteWindowsCmdArgument(value)
   }
   return quotePortableUnixArg(value)
 }

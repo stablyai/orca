@@ -19,6 +19,7 @@ import {
   notifyDirectWorkItemAgentStartTimeout
 } from './launch-work-item-direct-agent'
 import type { AgentStartupPlan } from './tui-agent-startup'
+import { MAX_LINE_PROMPT_BYTES } from '../../../shared/launch-prompt-file'
 
 describe('buildDirectWorkItemStartupOpts', () => {
   it('preserves Codex startup command delivery for linked work-item launches', () => {
@@ -26,7 +27,6 @@ describe('buildDirectWorkItemStartupOpts', () => {
       agent: 'codex',
       launchCommand: "codex 'review linked issue'",
       expectedProcess: 'codex',
-      followupPrompt: null,
       launchConfig: { agentArgs: '', agentEnv: {} },
       startupCommandDelivery: 'shell-ready'
     }
@@ -53,7 +53,6 @@ describe('buildDirectWorkItemStartupOpts', () => {
       agent: 'claude',
       launchCommand: "claude --prefill 'https://github.com/o/r/issues/12'",
       expectedProcess: 'claude',
-      followupPrompt: null,
       launchConfig: { agentArgs: '', agentEnv: {} }
     }
 
@@ -85,6 +84,12 @@ const settings = {
 describe('buildDirectWorkItemAgentStartupPlan', () => {
   it('omits native-chat preferences when the new workspace opens in terminal mode', () => {
     const result = buildDirectWorkItemAgentStartupPlan({
+      host: {
+        paired: false,
+        provesAgentInFront: true,
+        takesLaunchFile: true,
+        windowsPaneShell: null
+      },
       agent: 'codex',
       draftContent: 'Review issue 42',
       promptDelivery: 'draft',
@@ -99,6 +104,12 @@ describe('buildDirectWorkItemAgentStartupPlan', () => {
 
   it('applies native-chat preferences when the new workspace opens in chat', () => {
     const result = buildDirectWorkItemAgentStartupPlan({
+      host: {
+        paired: false,
+        provesAgentInFront: true,
+        takesLaunchFile: true,
+        windowsPaneShell: null
+      },
       agent: 'codex',
       draftContent: 'Review issue 42',
       promptDelivery: 'draft',
@@ -112,6 +123,35 @@ describe('buildDirectWorkItemAgentStartupPlan', () => {
       model: 'gpt-5.2-codex',
       effort: 'medium'
     })
+  })
+})
+
+// Why (final review P2-2): main pasted a work item's submitted prompt, so like an AI button its
+// line asks the host to refuse, not type raw, when the host cannot stage it.
+describe('a work item whose prompt rides the launch line', () => {
+  it('asks the host to refuse a line it cannot stage, through to the queued startup', () => {
+    const preparation = buildDirectWorkItemAgentStartupPlan({
+      host: {
+        paired: false,
+        provesAgentInFront: true,
+        takesLaunchFile: true,
+        windowsPaneShell: null
+      },
+      agent: 'codex',
+      draftContent: `Review issue 42\n${'x'.repeat(2_000)}`,
+      promptDelivery: 'submit-after-ready',
+      settings,
+      launchPlatform: 'darwin'
+    })
+    expect(preparation.unstageableLine).toBe('refuse')
+    const opts = buildDirectWorkItemStartupOpts(
+      'codex',
+      preparation.startupPlan,
+      'task_page',
+      undefined,
+      preparation
+    )
+    expect(opts.startup?.unstageableLine).toBe('refuse')
   })
 })
 
@@ -147,6 +187,12 @@ describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => 
 
   it('resolves the global Agents arguments when the launch names none', () => {
     const result = buildDirectWorkItemAgentStartupPlan({
+      host: {
+        paired: false,
+        provesAgentInFront: true,
+        takesLaunchFile: true,
+        windowsPaneShell: null
+      },
       agent: 'codex',
       draftContent: 'Fix the broken checks',
       promptDelivery: 'draft',
@@ -160,6 +206,12 @@ describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => 
 
   it('lets an explicit per-action value win over the global one', () => {
     const result = buildDirectWorkItemAgentStartupPlan({
+      host: {
+        paired: false,
+        provesAgentInFront: true,
+        takesLaunchFile: true,
+        windowsPaneShell: null
+      },
       agent: 'codex',
       agentArgs: '--model gpt-5',
       draftContent: 'Fix the broken checks',
@@ -171,5 +223,43 @@ describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => 
 
     expect(result.startupPlan?.launchCommand).toContain("'--model' 'gpt-5'")
     expect(result.startupPlan?.launchCommand).not.toContain('danger-full-access')
+  })
+})
+
+describe('buildDirectWorkItemAgentStartupPlan submitted prompts', () => {
+  const submit = (agent: 'claude' | 'gemini', draftContent: string, paired = false) =>
+    buildDirectWorkItemAgentStartupPlan({
+      host: { paired, provesAgentInFront: true, takesLaunchFile: !paired, windowsPaneShell: null },
+      agent,
+      draftContent,
+      promptDelivery: 'submit-after-ready',
+      settings: { ...settings, openAgentTabsInChatByDefault: false },
+      launchPlatform: 'darwin',
+      nativeChatTranscriptIsLocalReadable: true
+    })
+
+  // The bug class the explicit carry outcome removes: a plan that exists but does not carry the
+  // prompt was reported as on the launch command, so no paste ran and the prompt was dropped.
+  it('leaves a file-sized prompt for the paste for an agent not measured reading the file', () => {
+    const result = submit('gemini', 'g'.repeat(MAX_LINE_PROMPT_BYTES + 1))
+    expect(result.promptOnLaunchCommand).toBe(false)
+    expect(result.startupPlan?.launchCommand).not.toContain('gggg')
+    expect(result.launchFile).toBeUndefined()
+  })
+
+  // Why: main pastes a work item's prompt, so past the argv ceiling Claude gets the user's text.
+  it('stages a long prompt on Claude’s line and pastes one past the argv ceiling', () => {
+    const long = submit('claude', 'c'.repeat(20_000))
+    expect(long.promptOnLaunchCommand).toBe(true)
+    expect(long.launchFile).toBeUndefined()
+    const huge = submit('claude', 'c'.repeat(MAX_LINE_PROMPT_BYTES + 1))
+    expect(huge.promptOnLaunchCommand).toBe(false)
+    expect(huge.launchFile).toBeUndefined()
+    expect(huge.startupPlan?.launchCommand).not.toContain('cccc')
+  })
+
+  it('pastes on a paired host what its line cannot carry typed', () => {
+    expect(submit('claude', 'fix it', true).promptOnLaunchCommand).toBe(true)
+    expect(submit('claude', 'fix it\nthen run the tests', true).promptOnLaunchCommand).toBe(false)
   })
 })

@@ -25,6 +25,24 @@ export function seedNativeChatLaunchDraftForAgentTab(args: {
   })
 }
 
+/** Seed the chat's copy of a submitted launch prompt; no-op for agents without a native-chat renderer. */
+export function seedNativeChatLaunchPromptForAgentTab(args: {
+  tabId: string
+  agent: TuiAgent
+  text: string
+}): boolean {
+  if (args.text.trim().length === 0 || !isNativeChatSupportedAgent(args.agent)) {
+    return false
+  }
+  useAppStore.getState().seedNativeChatLaunchPrompt({
+    tabId: args.tabId,
+    agent: args.agent,
+    text: args.text,
+    createdAt: Date.now()
+  })
+  return true
+}
+
 export function deliverLaunchPromptToAgentTab(args: {
   tabId: string
   agent: TuiAgent
@@ -39,16 +57,9 @@ export function deliverLaunchPromptToAgentTab(args: {
   const { tabId, agent, content, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
     args
   const shouldSeed =
-    submit === true && content.trim().length > 0 && isNativeChatSupportedAgent(agent)
+    submit === true && seedNativeChatLaunchPromptForAgentTab({ tabId, agent, text: content })
 
-  if (shouldSeed) {
-    useAppStore.getState().seedNativeChatLaunchPrompt({
-      tabId,
-      agent,
-      text: content,
-      createdAt: Date.now()
-    })
-  } else if (submit !== true) {
+  if (submit !== true) {
     // Why: an unsubmitted draft lives only in the TUI input buffer; seed the
     // chat-composer copy so the context isn't invisible in the GUI view.
     seedNativeChatLaunchDraftForAgentTab({ tabId, agent, text: content })

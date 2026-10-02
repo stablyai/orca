@@ -21,8 +21,8 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v2' as const
 // Optional identity support on agent.launch; mobile replay across replacement hosts requires the new method.
 export const AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY = 'agent.launch.replay.v1' as const
 
-// A host that sends a launch prompt its typed startup line cannot carry to a paste after
-// readiness; an older host folds any prompt into that line, so clients gate prompted launches on it.
+// A host that delivers a launch prompt its typed startup line cannot carry as typed (staged, a launch
+// file, or pasted); an older host types any prompt into that line, so clients gate prompted launches on it.
 export const AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY = 'agent.launch.prompt-carry.v1' as const
 
 // agent.launchReplay requires the ledger; older replacement hosts must reject the method.

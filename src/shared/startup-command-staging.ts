@@ -8,11 +8,20 @@
  * by the host that owns the PTY, at the moment it accepts the spawn.
  */
 import { randomBytes } from 'node:crypto'
-import { readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  accessSync,
+  constants,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { hasControlByte, TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from './startup-line-prompt-carry'
+import { join, posix } from 'node:path'
 import { quoteStartupArg } from './tui-agent-startup-shell'
+import { typedStartupLineFits } from './typed-startup-line'
+import type { WslLaunchDirectory } from './wsl-launch-directory'
 
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
 
@@ -30,6 +39,12 @@ export type StartupCommandStaging = {
   scriptPath?: string
   /** Why staging failed, for the host's log. */
   failure?: string
+  /** The failed write's folder fails its writable check now (this host's temp folder), so the host
+   *  types the line as main typed it; a plan made in main checked the same folder and planned for
+   *  that. Otherwise the folder looked usable (a WSL distro's found by its probe, or a temp folder
+   *  that passes the check, as when the disk is full) and the write still failed: a race, refused.
+   *  A temp folder that turns unwritable between the plan and the spawn reads as unusable here. */
+  folderUnusable?: true
 }
 
 // Why only these type any short line as is: Orca's portable quoting is verified literal in these. Any
@@ -40,8 +55,6 @@ const STAGING_SHELLS = new Set(['bash', 'zsh', 'sh', 'dash', 'fish', 'ksh', 'mks
 // Why not ksh: it runs a sourced file's commands in the shell's own process group, so Ctrl-Z could
 // not stop the agent (mksh untested, kept with it); their long Orca-built lines use `/bin/sh`.
 const SOURCING_SHELLS = new Set(['bash', 'zsh', 'sh', 'dash', 'fish'])
-
-const encoder = new TextEncoder()
 
 export function stagingShellName(shellPath: string | undefined): string | null {
   const name = shellPath?.split('/').pop()?.replace(/^-/, '').toLowerCase()
@@ -63,15 +76,21 @@ export function shouldStageStartupCommand(args: {
     return false
   }
   const shellName = stagingShellName(args.shellPath)
-  const body = stripSubmitTerminator(args.command)
-  const needsStaging =
-    hasControlByte(body) || encoder.encode(body).byteLength > TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
+  const needsStaging = startupLineNeedsStaging(args.command)
   if (shellName === null) {
     // Why these characters: tcsh doubles a quoted backslash and expands `!!`, and nu cannot read
     // `'\''`. A plain line is typed so the agent is the shell's own job, where the paste guard finds it.
-    return args.orcaBuiltLine === true && (needsStaging || /[!\\"`$]/.test(body))
+    return (
+      args.orcaBuiltLine === true &&
+      (needsStaging || /[!\\"`$]/.test(stripSubmitTerminator(args.command)))
+    )
   }
   return needsStaging && (SOURCING_SHELLS.has(shellName) || args.orcaBuiltLine === true)
+}
+
+/** Whether a line is too long or multi-line to type as it is, in a shell that can source a script. */
+export function startupLineNeedsStaging(command: string): boolean {
+  return !typedStartupLineFits(stripSubmitTerminator(command))
 }
 
 function stagedScriptLine(shellName: string | null, quotedPath: string): string {
@@ -84,7 +103,7 @@ function stagedScriptLine(shellName: string | null, quotedPath: string): string 
     : `/bin/sh ${quotedPath}`
 }
 
-let staleSweepStarted = false
+const sweptDirectories = new Set<string>()
 
 export function stageStartupCommand(args: {
   command: string
@@ -92,24 +111,35 @@ export function stageStartupCommand(args: {
   orcaBuiltLine?: boolean
   platform?: NodeJS.Platform
   directory?: string
+  /** A WSL session stages like a POSIX host in its login shell: written over UNC, sourced by its
+   *  Linux path. */
+  wslDirectory?: WslLaunchDirectory
 }): StartupCommandStaging {
-  const platform = args.platform ?? process.platform
-  if (!shouldStageStartupCommand({ ...args, platform })) {
+  const wsl = args.wslDirectory
+  const platform = wsl ? 'linux' : (args.platform ?? process.platform)
+  // Why the distro's shell: the host sees only wsl.exe, and /bin/sh would skip the pane's own
+  // functions (Orca's codex wrapper, the user's aliases).
+  const shellPath = wsl ? wsl.shell : args.shellPath
+  if (!shouldStageStartupCommand({ ...args, shellPath, platform })) {
     return { command: args.command, delivery: 'typed' }
   }
-  const directory = args.directory ?? tmpdir()
-  if (!staleSweepStarted) {
-    staleSweepStarted = true
+  const directory = wsl?.windowsPath ?? args.directory ?? tmpdir()
+  if (!sweptDirectories.has(directory)) {
+    sweptDirectories.add(directory)
     // Why deferred: the sweep is crash recovery and must never delay this launch.
     setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
-  const shellName = stagingShellName(args.shellPath)
-  const scriptPath = join(
-    directory,
-    `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
+  const shellName = stagingShellName(shellPath)
+  const scriptName = `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
+  const scriptPath = join(directory, scriptName)
+  const quotedPath = quoteStartupArg(
+    wsl ? posix.join(wsl.linuxPath, scriptName) : scriptPath,
+    'posix'
   )
-  const quotedPath = quoteStartupArg(scriptPath, 'posix')
   try {
+    if (wsl) {
+      mkdirSync(directory, { recursive: true })
+    }
     // Why rm first: the shell keeps reading the open file, so the prompt-bearing script is gone
     // before the agent starts, however long it runs.
     writeFileSync(
@@ -121,13 +151,23 @@ export function stageStartupCommand(args: {
     return {
       command: args.command,
       delivery: 'typed-after-stage-failed',
-      failure: error instanceof Error ? error.message : String(error)
+      failure: error instanceof Error ? error.message : String(error),
+      ...(!wsl && !folderWritable(directory) ? { folderUnusable: true } : {})
     }
   }
   return {
     command: stagedScriptLine(shellName, quotedPath),
     delivery: 'staged',
     scriptPath
+  }
+}
+
+function folderWritable(directory: string): boolean {
+  try {
+    accessSync(directory, constants.W_OK)
+    return true
+  } catch {
+    return false
   }
 }
 
