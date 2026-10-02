@@ -187,13 +187,17 @@ async function sample(
       })
     )
     await sleep(300)
-    record.restored = await state()
-    expect(
-      record.restored.width === initialSurface.width &&
-        record.restored.height === initialSurface.height &&
-        record.restored.dpr === initialSurface.dpr,
-      `${label}: restore original surface after unsubscribe`
-    )
+    try {
+      record.restored = await state()
+      expect(
+        record.restored.width === initialSurface.width &&
+          record.restored.height === initialSurface.height &&
+          record.restored.dpr === initialSurface.dpr,
+        `${label}: restore original surface after unsubscribe`
+      )
+    } catch (error) {
+      failures.push(`${label}: restore original surface: ${error.message}`)
+    }
   }
 }
 ;(async () => {

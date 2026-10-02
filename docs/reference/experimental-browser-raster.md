@@ -12,10 +12,11 @@ Use a disposable HOME, user-data directory, project folder and port. Set `ORCA_B
 
 ## Regression runner
 
-The input/target guards can be checked without a running app:
+The input/target guards and failure reporting can be checked without a running app:
 
 ```sh
-node --test tests/tools/browser-mobile-raster/raster-run-guards.test.cjs
+node --test tests/tools/browser-mobile-raster/raster-run-guards.test.cjs \
+  tests/tools/browser-mobile-raster/raster-run-restoration.test.cjs
 ```
 
 After building the main and CLI bundles, launch an isolated background serve runtime and save its JSON readiness privately. Run:
