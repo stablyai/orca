@@ -14,7 +14,7 @@ const state = {
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),
   workspaceStatuses: [],
-  repos: [{ id: 'repo', kind: 'git' }] as { id: string; kind: string }[],
+  repos: [{ id: 'repo', kind: 'git' }],
   openModal: vi.fn(),
   projectGroups: [],
   createProjectGroup: vi.fn(),
