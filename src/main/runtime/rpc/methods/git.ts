@@ -2,6 +2,7 @@ import { defineMethod } from '../core'
 import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-generation-methods'
 import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
+  GitBlame,
   GitBranchCompare,
   GitBulkPaths,
   GitCheckIgnored,
@@ -116,6 +117,17 @@ export const GIT_METHODS = [
     params: GitCommitCompare,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitCommitCompare(params.worktree, params.commitId)
+  }),
+  defineMethod({
+    name: 'git.blame',
+    params: GitBlame,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitBlame(
+        params.worktree,
+        params.filePath,
+        params.revision,
+        params.contentsSource
+      )
   }),
   defineMethod({
     name: 'git.upstreamStatus',

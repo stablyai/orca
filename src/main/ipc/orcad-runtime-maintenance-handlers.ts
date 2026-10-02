@@ -23,7 +23,10 @@ export function registerOrcadRuntimeMaintenanceHandlers(options: {
 }): void {
   ipcMain.handle(
     'runtimeEnvironments:updateOrcad',
-    async (_event, args: { selector: string; force?: boolean }): Promise<OrcadManagedDeployResult> => {
+    async (
+      _event,
+      args: { selector: string; force?: boolean }
+    ): Promise<OrcadManagedDeployResult> => {
       const result = await updateManagedOrcadEnvironment(options.getUserDataPath(), {
         selector: requiredString(args?.selector, 'Server'),
         force: args?.force === true

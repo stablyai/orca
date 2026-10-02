@@ -96,6 +96,11 @@ export const GitCommitDiff = GitFilePath.extend({
   oldPath: z.string().optional()
 })
 
+export const GitBlame = GitFilePath.extend({
+  revision: z.union([z.literal('HEAD'), FullGitObjectId]).optional(),
+  contentsSource: z.literal('index').optional()
+})
+
 export const GitCommit = WorktreeSelector.extend({
   message: z
     .unknown()

@@ -1,4 +1,5 @@
 export {
+  GitBlame,
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,

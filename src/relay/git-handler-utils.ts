@@ -10,6 +10,14 @@ import { isBinaryBuffer } from '../shared/binary-buffer'
 import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
 export { isUnsupportedWorktreeListZError } from '../shared/git-worktree-command-capabilities'
 
+export function assertGitPathInsideWorktree(worktreePath: string, filePath: string): void {
+  const resolved = path.resolve(worktreePath, filePath)
+  const rel = path.relative(path.resolve(worktreePath), resolved)
+  if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+    throw new Error(`Path "${filePath}" resolves outside the worktree`)
+  }
+}
+
 export function parseBranchStatusChar(char: string): string {
   switch (char) {
     case 'M':

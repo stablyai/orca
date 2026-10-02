@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isUnsupportedWorktreeListZError } from './git-handler-utils'
+import { assertGitPathInsideWorktree, isUnsupportedWorktreeListZError } from './git-handler-utils'
 
 describe('isUnsupportedWorktreeListZError', () => {
   it('detects an unknown-switch usage error from stderr when the exit code is absent', () => {
@@ -27,5 +27,17 @@ describe('isUnsupportedWorktreeListZError', () => {
       stderr: 'fatal: unable to read tree\n'
     })
     expect(isUnsupportedWorktreeListZError(error)).toBe(false)
+  })
+})
+
+describe('assertGitPathInsideWorktree', () => {
+  it('allows a relative file inside the worktree', () => {
+    expect(() => assertGitPathInsideWorktree('/repo', 'src/a.ts')).not.toThrow()
+  })
+
+  it('rejects a path that escapes the worktree', () => {
+    expect(() => assertGitPathInsideWorktree('/repo', '../outside.txt')).toThrow(
+      'outside the worktree'
+    )
   })
 })

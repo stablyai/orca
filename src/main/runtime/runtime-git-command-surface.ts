@@ -13,6 +13,7 @@ type RuntimeGitCommandName =
   | 'getRuntimeGitDiff'
   | 'getRuntimeGitBranchCompare'
   | 'getRuntimeGitCommitCompare'
+  | 'getRuntimeGitBlame'
   | 'getRuntimeGitUpstreamStatus'
   | 'fetchRuntimeGit'
   | 'syncRuntimeGitForkDefaultBranch'
@@ -56,6 +57,7 @@ export function installRuntimeGitCommandSurface(
     getRuntimeGitDiff: commands.getRuntimeGitDiff.bind(commands),
     getRuntimeGitBranchCompare: commands.getRuntimeGitBranchCompare.bind(commands),
     getRuntimeGitCommitCompare: commands.getRuntimeGitCommitCompare.bind(commands),
+    getRuntimeGitBlame: commands.getRuntimeGitBlame.bind(commands),
     getRuntimeGitUpstreamStatus: commands.getRuntimeGitUpstreamStatus.bind(commands),
     fetchRuntimeGit: commands.fetchRuntimeGit.bind(commands),
     syncRuntimeGitForkDefaultBranch: commands.syncRuntimeGitForkDefaultBranch.bind(commands),

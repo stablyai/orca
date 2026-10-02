@@ -1,9 +1,11 @@
-import * as path from 'node:path'
 import type { RequestContext } from './dispatcher'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
 import { getStatusOp } from './git-handler-status-ops'
 import { streamRelayGitStdout } from './git-stdout-stream'
+import { GIT_BLAME_INDEX_CONTENTS, parseGitBlameRevision } from '../shared/git-blame'
+import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../shared/git-status-limit'
+import { stableInFlightKey } from '../shared/in-flight-promise-dedupe'
 import {
   buildSubmoduleInnerCommitRangeDiff,
   computeSubmodulePointerDiff,
@@ -15,8 +17,8 @@ import {
 } from './git-handler-submodule-ops'
 import { computeDiff, type GitExec } from './git-handler-ops'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
-import { loadGitHistoryFromExecutor } from '../shared/git-history'
-import { stableInFlightKey } from '../shared/in-flight-promise-dedupe'
+import { blameFile } from './git-handler-blame-ops'
+import { assertGitPathInsideWorktree } from './git-handler-utils'
 
 function resolveSubmoduleStatusArea(
   params: Record<string, unknown>
@@ -98,15 +100,28 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
     })
   }
 
+  async blame(params: Record<string, unknown>, context?: RequestContext) {
+    const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
+    const revision = parseGitBlameRevision(params.revision)
+    const contentsSource =
+      params.contentsSource === GIT_BLAME_INDEX_CONTENTS ? GIT_BLAME_INDEX_CONTENTS : undefined
+    const result = await blameFile(
+      this.git.bind(this),
+      worktreePath,
+      filePath,
+      revision,
+      contentsSource
+    )
+    // Why: whole-file blame can exceed one control-lane frame, so stream it like git.diff.
+    return this.maybeStreamResponse(result, params, context)
+  }
+
   async getDiff(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
     // Why: validate relative paths to prevent traversal outside the worktree.
-    const resolved = path.resolve(worktreePath, filePath)
-    const rel = path.relative(path.resolve(worktreePath), resolved)
-    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
-      throw new Error(`Path "${filePath}" resolves outside the worktree`)
-    }
+    assertGitPathInsideWorktree(worktreePath, filePath)
     const staged = params.staged as boolean
     const compareAgainstHead = params.compareAgainstHead as boolean | undefined
     // Why: register dedupe before awaiting so identical reads coalesce.

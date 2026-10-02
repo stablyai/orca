@@ -28,6 +28,7 @@ vi.mock('@/store', () => ({
         terminalFontFamily: 'monospace'
       },
       editorFontZoomLevel: 0,
+      openFiles: [],
       setPendingEditorReveal: vi.fn(),
       setEditorCursorLine: vi.fn(),
       addDiffComment: vi.fn(),

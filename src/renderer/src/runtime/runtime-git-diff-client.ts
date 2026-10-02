@@ -3,6 +3,7 @@ import type {
   GitCommitCompareResult,
   GitDiffResult
 } from '../../../shared/git-diff-compare-types'
+import type { GitBlameContentsSource, GitBlameResult } from '../../../shared/git-blame'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -121,6 +122,35 @@ export async function getRuntimeGitCommitDiff(
     target,
     'git.commitDiff',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitBlame(
+  context: RuntimeGitContext,
+  filePath: string,
+  revision?: string,
+  contentsSource?: GitBlameContentsSource
+): Promise<GitBlameResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.blame({
+      worktreePath: resolveLocalWorktreePath(context),
+      filePath,
+      revision,
+      contentsSource,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitBlameResult>(
+    target,
+    'git.blame',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      filePath,
+      ...(revision ? { revision } : {}),
+      ...(contentsSource ? { contentsSource } : {})
+    },
     { timeoutMs: 15_000 }
   )
 }

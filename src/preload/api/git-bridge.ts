@@ -3,6 +3,7 @@ import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../share
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitBlameContentsSource } from '../../shared/git-blame'
 import type { PreloadApi } from '../api-types'
 
 export const gitApi = {
@@ -60,6 +61,13 @@ export const gitApi = {
     ipcRenderer.invoke('git:branchCompare', args),
   commitCompare: (args: { worktreePath: string; commitId: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:commitCompare', args),
+  blame: (args: {
+    worktreePath: string
+    filePath: string
+    revision?: string
+    contentsSource?: GitBlameContentsSource
+    connectionId?: string
+  }) => ipcRenderer.invoke('git:blame', args),
   upstreamStatus: (args: {
     worktreePath: string
     connectionId?: string
