@@ -22,7 +22,7 @@ import {
 
 describe('daemon protocol version', () => {
   it('ships bounded history transfer after the 2031-unsubscribe fact', () => {
-    expect(PROTOCOL_VERSION).toBe(39)
+    expect(PROTOCOL_VERSION).toBe(40)
     expect(COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION).toBe(38)
     expect(CODEX_NO_DAEMON_SHELL_LAUNCH_DAEMON_PROTOCOL_VERSION).toBe(37)
     expect(CONTENT_ADDRESSED_SHELL_WRAPPER_DAEMON_PROTOCOL_VERSION).toBe(36)
@@ -38,7 +38,7 @@ describe('daemon protocol version', () => {
     expect(AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toEqual(
-      Array.from({ length: 38 }, (_, index) => index + 1)
+      Array.from({ length: 39 }, (_, index) => index + 1)
     )
   })
 

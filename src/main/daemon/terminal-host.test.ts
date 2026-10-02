@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync, rmSync } from 'node:fs'
 import { Session } from './session'
 import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -247,7 +248,7 @@ describe('TerminalHost', () => {
       )
     })
 
-    it('does not bracketed-paste-wrap multiline commands for a fallback shell without paste mode', async () => {
+    it('stages multiline commands for a fallback shell without paste mode', async () => {
       spawnFn = vi.fn(() => {
         const sub = createMockSubprocess({ shellPath: '/bin/sh' }) as ReturnType<
           typeof createMockSubprocess
@@ -271,8 +272,10 @@ describe('TerminalHost', () => {
       })
 
       const written = (lastSubprocess.write as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
-      expect(written).not.toContain('\x1b[200~')
-      expect(written).toContain('line one\nline two')
+      const scriptPath = /^\. '(.*orca-launch-[0-9a-f]+\.sh)'\n$/.exec(written)?.[1]
+      expect(scriptPath).toBeDefined()
+      expect(readFileSync(scriptPath!, 'utf8')).toContain('claude "line one\nline two"\n')
+      rmSync(scriptPath!, { force: true })
     })
 
     it('keeps the shell-ready barrier when the spawned shell supports the marker', async () => {
