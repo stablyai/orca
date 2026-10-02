@@ -1,15 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import type { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
-import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
-import { browserUrlForPort } from './workspace-port-urls'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
-import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../workspace/creation/surface-policy/client-creation-action-policy'
-import type { useAppStore } from '@/store/index'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   WorkspacePort,
@@ -17,10 +10,16 @@ import type {
   WorkspacePortScanResult
 } from '../../../../shared/workspace-ports'
 import type { LocalhostWorktreeLabelRoute } from '../../../../shared/localhost-worktree-labels'
+import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
+import {
+  openUrlInWorkspaceBrowser,
+  WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON
+} from './workspace-url-open'
+import { browserUrlForPort } from './workspace-port-urls'
+
+export { openUrlInWorkspaceBrowser } from './workspace-url-open'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500
-const WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON =
-  'Workspace ports are unavailable for this execution host.'
 
 /** Projection key for the merged multi-host view; never a per-host scan key. */
 export const WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY = 'all-hosts:all'
@@ -94,59 +93,15 @@ export async function openWorkspacePortInBrowser(args: {
     runtimeTarget: args.runtimeTarget,
     localhostLabelRoute: args.localhostLabelRoute
   })
-  if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
-    try {
-      await window.api.shell.openUrl(url)
-      return { ok: true }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, reason: message || 'Failed to open system browser.' }
-    }
-  }
-
-  const worktreeId =
-    args.port.kind === 'workspace' ? args.port.owner.worktreeId : args.activeWorktreeId
-  if (!worktreeId) {
-    return { ok: false, reason: 'No workspace selected for the browser.' }
-  }
-  // The browser is this navigation’s surface; never add an unrequested shell after the last terminal was closed.
-  activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
-  if (args.runtimeTarget.kind === 'environment') {
-    try {
-      await assertRuntimeEnvironmentCapability(
-        args.runtimeTarget.environmentId,
-        BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
-        RUNTIME_BROWSER_UNAVAILABLE_MESSAGE
-      )
-      const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
-        args.runtimeTarget,
-        'browser.tabCreate',
-        { worktree: toRuntimeWorktreeSelector(worktreeId), url },
-        { timeoutMs: 30_000 }
-      )
-      const browserPageId = createBrowserUuid()
-      args.createBrowserTab(worktreeId, url, {
-        activate: true,
-        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId,
-        browserPageId
-      })
-      args.setRemoteBrowserPageHandle(browserPageId, {
-        environmentId: args.runtimeTarget.environmentId,
-        remotePageId: remotePage.browserPageId
-      })
-      return { ok: true }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, reason: message || 'Failed to open remote browser.' }
-    }
-  }
-  try {
-    args.createBrowserTab(worktreeId, url, { activate: true })
-    return { ok: true }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return { ok: false, reason: message || 'Failed to open browser.' }
-  }
+  return openUrlInWorkspaceBrowser({
+    url,
+    worktreeId:
+      args.port.kind === 'workspace' ? args.port.owner.worktreeId : (args.activeWorktreeId ?? null),
+    runtimeTarget: args.runtimeTarget,
+    createBrowserTab: args.createBrowserTab,
+    setRemoteBrowserPageHandle: args.setRemoteBrowserPageHandle,
+    openInOrcaBrowser: args.openInOrcaBrowser
+  })
 }
 
 /** Atomically publish host scan plus aggregate so hosts cannot overwrite each other or notify twice. Keep synthetic aggregate keys out of the per-host map or later merges duplicate rows. */
