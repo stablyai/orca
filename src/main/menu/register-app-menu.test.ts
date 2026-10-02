@@ -566,4 +566,22 @@ describe('registerAppMenu', () => {
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
+
+  // Why: the role is what routes this submenu to -[NSApp setWindowsMenu:],
+  // which is what makes macOS insert the open-window list and the
+  // multi-display "Move to <display>" entries. Every platform runs here
+  // because unit CI is Linux-only, where reading the host process.platform
+  // would leave the darwin branch unasserted.
+  it.each([
+    ['darwin', 'window'],
+    ['win32', undefined],
+    ['linux', undefined]
+  ] as const)('claims the Window menu as the system Window menu on %s', (platform, role) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+    registerAppMenu(buildMenuOptions())
+
+    const windowItem = getTemplate().find((entry) => entry.label === 'Window')
+    expect(windowItem?.role).toBe(role)
+    expect(windowItem?.submenu).toEqual([{ role: 'minimize' }, { role: 'zoom' }])
+  })
 })
