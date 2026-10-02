@@ -10,6 +10,8 @@ export type WindowsTerminalCapabilities = {
   wslDistros: string[]
   pwshAvailable: boolean
   gitBashAvailable: boolean
+  /** Absent from hosts/relays that predate Cmder support. */
+  cmderAvailable?: boolean
   hostPlatform: NodeJS.Platform | null
   /** Host-owned PID-reuse proof; absent means the host did not advertise it. */
   windowsProcessStartTimeAvailable?: boolean
@@ -218,7 +220,10 @@ export function useWindowsTerminalCapabilities(
 
   useEffect(() => {
     if (!enabled) {
-      setState({ ownerKey: resolvedOwnerKey, capabilities: UNAVAILABLE_CAPABILITIES })
+      setState({
+        ownerKey: resolvedOwnerKey,
+        capabilities: UNAVAILABLE_CAPABILITIES
+      })
       return
     }
     let cancelled = false

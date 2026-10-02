@@ -2,6 +2,7 @@ import { defineMethod } from '../core'
 import { isPwshAvailableAsync } from '../../../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../../../wsl'
 import { isGitBashAvailable } from '../../../git-bash'
+import { isCmderAvailable } from '../../../cmder'
 
 export const HOST_CAPABILITY_METHODS = [
   defineMethod({
@@ -30,5 +31,10 @@ export const HOST_CAPABILITY_METHODS = [
     name: 'host.gitBash.isAvailable',
     params: null,
     handler: async () => isGitBashAvailable()
+  }),
+  defineMethod({
+    name: 'host.cmder.isAvailable',
+    params: null,
+    handler: async () => isCmderAvailable()
   })
 ]

@@ -141,6 +141,7 @@ describe('windows terminal capabilities', () => {
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
       gitBashAvailable: true,
+      cmderAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
     }
@@ -173,6 +174,7 @@ describe('windows terminal capabilities', () => {
       wslDistros: [],
       pwshAvailable: false,
       gitBashAvailable: false,
+      cmderAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
     })
@@ -850,8 +852,29 @@ describe('windows terminal capabilities', () => {
       wslDistros: [],
       pwshAvailable: false,
       gitBashAvailable: false,
+      cmderAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
+    })
+  })
+
+  it('reports Cmder availability from the local bridge', async () => {
+    vi.stubGlobal('window', {
+      api: {
+        wsl: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          listDistros: vi.fn().mockResolvedValue([])
+        },
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
+        cmder: { isAvailable: vi.fn().mockResolvedValue(true) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
+      }
+    })
+
+    await expect(loadWindowsTerminalCapabilities()).resolves.toMatchObject({
+      cmderAvailable: true,
+      hostPlatform: 'win32'
     })
   })
 })

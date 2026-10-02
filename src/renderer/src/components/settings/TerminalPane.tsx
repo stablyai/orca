@@ -46,6 +46,7 @@ type TerminalPaneProps = {
   pwshAvailable?: boolean
   /** Whether Git for Windows bash.exe is installed on this machine. */
   gitBashAvailable?: boolean
+  cmderAvailable?: boolean
   /** Whether the active terminal host is Windows, even if the client is not. */
   isWindowsTerminalHost?: boolean
 }
@@ -57,6 +58,7 @@ export function TerminalPane({
   setScrollbackMode,
   pwshAvailable,
   gitBashAvailable = false,
+  cmderAvailable = false,
   isWindowsTerminalHost
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
@@ -126,7 +128,10 @@ export function TerminalPane({
               }
               updateSettings(
                 value === 'system'
-                  ? { terminalDefaultShell: '', terminalDefaultShellArgs: undefined }
+                  ? {
+                      terminalDefaultShell: '',
+                      terminalDefaultShellArgs: undefined
+                    }
                   : { terminalDefaultShell: configuredShell || systemShell }
               )
             }}
@@ -142,7 +147,9 @@ export function TerminalPane({
                 placeholder="fish, nu, or /bin/zsh"
                 onChange={(event) => {
                   setShellValidationError(null)
-                  updateSettings({ terminalDefaultShell: event.target.value.trimStart() })
+                  updateSettings({
+                    terminalDefaultShell: event.target.value.trimStart()
+                  })
                 }}
                 onBlur={() => void validateShell()}
                 className="w-full"
@@ -208,7 +215,9 @@ export function TerminalPane({
                             .split('\n')
                             .filter((argument) => argument.length > 0)
                           setCustomShellArgs(nextArgs)
-                          updateSettings({ terminalDefaultShellArgs: nextArgs })
+                          updateSettings({
+                            terminalDefaultShellArgs: nextArgs
+                          })
                         }}
                         placeholder={'--rcfile\n/path/to/rcfile'}
                         className="min-h-20"
@@ -234,6 +243,7 @@ export function TerminalPane({
         updateSettings={updateSettings}
         windowsShell={windowsShell}
         gitBashAvailable={gitBashAvailable}
+        cmderAvailable={cmderAvailable}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalRenderingSearchEntries()) ? (

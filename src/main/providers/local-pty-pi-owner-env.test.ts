@@ -34,7 +34,8 @@ const plan: LocalPtyLaunchPlan = {
   getFallbackShellReadyConfig: undefined,
   primaryPreLaunchEnv: {},
   isWslShell: false,
-  launchWslDistro: null
+  launchWslDistro: null,
+  cmderRoot: null
 }
 
 afterEach(() => vi.unstubAllEnvs())

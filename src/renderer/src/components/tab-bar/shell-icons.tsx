@@ -1,5 +1,8 @@
 import React from 'react'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import {
+  WINDOWS_CMDER_SHELL,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../../../shared/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'
 import gitForWindowsLogoUrl from '../../../../../resources/gwindows_logo.svg?url'
 
@@ -136,7 +139,8 @@ export function ShellIcon({
   if (normalized === 'powershell.exe' || normalized === 'pwsh.exe') {
     return <PowerShellIcon size={size} />
   }
-  if (normalized === 'cmd.exe') {
+  // Why: Cmder is cmd.exe plus init.bat; the label, not the glyph, tells them apart.
+  if (normalized === 'cmd.exe' || normalized === WINDOWS_CMDER_SHELL) {
     return <CmdIcon size={size} />
   }
   if (normalized === 'wsl.exe' || normalized.startsWith('wsl')) {

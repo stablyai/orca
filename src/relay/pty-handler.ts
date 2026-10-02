@@ -21,7 +21,12 @@ import {
   listShellProfiles
 } from './pty-shell-utils'
 import { inspectPtyChildProcesses, processHasChildren } from './pty-child-process-inspection'
-import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
+import {
+  getRelayShellLaunchConfig,
+  isRelayWslShell,
+  resolveRelaySpawnExecutable
+} from './pty-shell-launch'
+import { stripInheritedCmderState } from '../main/cmder'
 import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { applyScrubSafeAgentEnvAliases } from '../shared/agent-hook-scrub-safe-env'
 import { addWslEnvKeys } from '../shared/wsl-env'
@@ -244,6 +249,8 @@ type ManagedPty = {
   shellPath?: string
   /** The raw client-requested shell override, kept so revive can re-resolve it on this host. */
   shellOverride?: string
+  /** Cmder root this pane launched with, so revive keeps init.bat when CMDER_ROOT came only with the spawn. */
+  cmderRoot?: string
   /** Requested WSL distro; only meaningful when the override launched wsl.exe. */
   wslDistro?: string
   shellCwd?: string
@@ -468,6 +475,7 @@ type SerializedPtyEntry = {
    * default shell, which is what those relays did anyway.
    */
   shellOverride?: string
+  cmderRoot?: string
   terminalWindowsWslDistro?: string
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
@@ -2021,6 +2029,9 @@ export class PtyHandler {
       })
     const managedStartupCommand = shouldProviderDeliverCommand ? command : launchCommandHint
     // Why: both renderer- and provider-delivered startup commands use this marker; the delivering side strips it from output.
+    if (resolveRelaySpawnExecutable(shell) !== shell) {
+      stripInheritedCmderState(spawnEnv)
+    }
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro,
       emitReadyMarker: shouldEmitShellReadyMarker,
@@ -2041,7 +2052,7 @@ export class PtyHandler {
     // user startup files re-export their defaults.
     let term: IPty
     try {
-      term = pty.spawn(shell, shellLaunch.args, {
+      term = pty.spawn(resolveRelaySpawnExecutable(shell), shellLaunch.args, {
         // Why: node-pty overwrites env.TERM with `name`; pass caller-selected TERM so it isn't lost.
         name: spawnEnv.TERM ?? 'xterm-256color',
         cols,
@@ -2104,6 +2115,7 @@ export class PtyHandler {
       // Why the resolved one gates it: on a POSIX relay an override is rejected
       // outright, and storing one revive would only reject again is noise.
       ...(resolvedShellOverride ? { shellOverride } : {}),
+      ...(shellLaunch.env.CMDER_ROOT ? { cmderRoot: shellLaunch.env.CMDER_ROOT } : {}),
       ...(terminalWindowsWslDistro ? { wslDistro: terminalWindowsWslDistro } : {}),
       shellCwd: cwd,
       shellPathEnv: spawnEnv.PATH,
@@ -3051,6 +3063,7 @@ export class PtyHandler {
         // Why serialized: revive re-spawns the shell, and without these a WSL
         // pane came back as the host default shell in another distro's history.
         ...(managed.shellOverride ? { shellOverride: managed.shellOverride } : {}),
+        ...(managed.cmderRoot ? { cmderRoot: managed.cmderRoot } : {}),
         ...(managed.wslDistro ? { terminalWindowsWslDistro: managed.wslDistro } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
@@ -3112,6 +3125,10 @@ export class PtyHandler {
     if (explicitTerm !== undefined) {
       revivedEnv.TERM = explicitTerm
     }
+    // Why: only honoured when that root still has vendor\init.bat; otherwise the pane is plain cmd.
+    if (typeof entry.cmderRoot === 'string' && entry.cmderRoot.trim()) {
+      revivedEnv.CMDER_ROOT = entry.cmderRoot.trim()
+    }
     // Why: serialized state may come from an older/untrusted client; reapply fresh-spawn bounds.
     const envToDelete = sanitizeEnvToDelete(entry.envToDelete)
     const shellOverride = typeof entry.shellOverride === 'string' ? entry.shellOverride.trim() : ''
@@ -3163,12 +3180,15 @@ export class PtyHandler {
     if (gitCredentialPromptGuarded) {
       Object.assign(spawnEnv, gitCredentialPromptGuardEnv(spawnEnv, process.platform))
     }
+    if (resolveRelaySpawnExecutable(shell) !== shell) {
+      stripInheritedCmderState(spawnEnv)
+    }
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro
     })
     let term: IPty
     try {
-      term = ptyMod.spawn(shell, shellLaunch.args, {
+      term = ptyMod.spawn(resolveRelaySpawnExecutable(shell), shellLaunch.args, {
         name: spawnEnv.TERM ?? 'xterm-256color',
         cols: entry.cols,
         rows: entry.rows,
@@ -3220,6 +3240,7 @@ export class PtyHandler {
       // Why re-stored: a revived pane can be serialized again, and losing the
       // override on the second round trip is the same bug one restart later.
       ...(resolvedShellOverride ? { shellOverride } : {}),
+      ...(shellLaunch.env.CMDER_ROOT ? { cmderRoot: shellLaunch.env.CMDER_ROOT } : {}),
       ...(terminalWindowsWslDistro ? { wslDistro: terminalWindowsWslDistro } : {}),
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,

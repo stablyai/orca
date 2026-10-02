@@ -47,6 +47,7 @@ describe('isSupportedWindowsShellOverride', () => {
       'bash.exe',
       'cmd',
       'cmd.exe',
+      'cmder',
       'git-bash',
       'powershell',
       'powershell.exe',

@@ -898,6 +898,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
   'gitlab.workItemDetails': WorkItemDetails,
+  'host.cmder.isAvailable': null,
   'host.gitBash.isAvailable': null,
   'host.platform': null,
   'host.pwsh.isAvailable': null,

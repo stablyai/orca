@@ -7,6 +7,8 @@ import {
   type ShellStartupFeature
 } from '../main/shell-startup-features'
 import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../main/zsh-wrapper-dir-ownership'
+import { applyCmderSpawnEnvironment, resolveCmderRoot } from '../main/cmder'
+import { WINDOWS_CMDER_SHELL } from '../shared/windows-terminal-shell'
 import { ensureOverlayRestoreWrappers } from './pty-shell-overlay-wrappers'
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
@@ -54,6 +56,27 @@ function windowsShellArgs(
   return null
 }
 
+/** Cmder is cmd.exe plus init.bat; without an install on this host it is plain cmd. */
+export function resolveRelaySpawnExecutable(shellPath: string): string {
+  return shellBasename(shellPath) === WINDOWS_CMDER_SHELL ? 'cmd.exe' : shellPath
+}
+
+function getRelayCmderLaunchConfig(spawnEnv: Record<string, string>): RelayShellLaunchConfig {
+  // Why merge: the pane's spawn env may carry a CMDER_ROOT the relay process itself lacks.
+  const root = resolveCmderRoot({ env: { ...process.env, ...spawnEnv } })
+  if (!root) {
+    return { args: [], env: {}, supportsReadyMarker: false }
+  }
+  const env: Record<string, string> = {}
+  applyCmderSpawnEnvironment(env, root)
+  // Why: node-pty backslash-escapes literal argv quotes, so the spaced path is quoted via env.
+  return {
+    args: ['/K', 'call %ORCA_CMDER_INIT_QUOTE%%ORCA_CMDER_INIT%%ORCA_CMDER_INIT_QUOTE%'],
+    env,
+    supportsReadyMarker: false
+  }
+}
+
 function getWrapperRoot(env: Record<string, string>): string {
   return join(env.HOME || process.env.HOME || homedir(), RELAY_SHELL_READY_DIR)
 }
@@ -75,6 +98,9 @@ export function getRelayShellLaunchConfig(
     supportsReadyMarker: false
   }
   if (platform === 'win32') {
+    if (shellName === WINDOWS_CMDER_SHELL) {
+      return getRelayCmderLaunchConfig(env)
+    }
     // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
     // only apply when the relay itself is running on native Windows.
     return {
