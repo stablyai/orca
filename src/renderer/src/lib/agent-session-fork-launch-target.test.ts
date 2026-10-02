@@ -85,6 +85,60 @@ describe('getForkAgentLaunchTarget', () => {
       repo({})
     ])
 
-    expect(target(state)).toMatchObject({ platform: 'win32', shell: 'powershell' })
+    expect(target(state)).toEqual({
+      platform: 'win32',
+      shell: 'powershell',
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it("quotes for a runtime host's own platform, not the client's", () => {
+    mocks.runtimeEnvironmentId = 'env-1'
+    mocks.executionHostId = 'runtime:env-1'
+    const state = makeState(
+      childWorktree({ hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' }),
+      [repo({}), repo({ executionHostId: 'runtime:env-1' })]
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the target reads only hostPlatform from a verified status.
+    const status = { status: { hostPlatform: 'linux' } } as never
+    state.runtimeStatusByEnvironmentId.set('env-1', status)
+
+    expect(target(state)).toEqual({
+      platform: 'linux',
+      shell: undefined,
+      runtimeEnvironmentId: 'env-1'
+    })
+  })
+
+  it('uses the remote PowerShell default for a Windows runtime host', () => {
+    mocks.runtimeEnvironmentId = 'env-1'
+    mocks.executionHostId = 'runtime:env-1'
+    const state = makeState(
+      childWorktree({ hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' }),
+      [repo({ executionHostId: 'runtime:env-1' })]
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the target reads only hostPlatform from a verified status.
+    const status = { status: { hostPlatform: 'win32' } } as never
+    state.runtimeStatusByEnvironmentId.set('env-1', status)
+
+    expect(target(state)).toEqual({
+      platform: 'win32',
+      shell: 'powershell',
+      runtimeEnvironmentId: 'env-1'
+    })
+  })
+
+  it('falls back to POSIX for a runtime host whose platform is not yet verified', () => {
+    mocks.runtimeEnvironmentId = 'env-1'
+    const state = makeState(
+      childWorktree({ hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' }),
+      [repo({ executionHostId: 'runtime:env-1' })]
+    )
+
+    expect(target(state)).toEqual({
+      platform: 'linux',
+      shell: undefined,
+      runtimeEnvironmentId: 'env-1'
+    })
   })
 })

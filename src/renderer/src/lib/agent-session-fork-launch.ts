@@ -7,6 +7,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { appendTabToWorktreeOrder } from '@/lib/sleeping-agent-session-launch'
+import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import { getForkAgentLaunchPlatform } from './agent-fork-launch-platform'
 import {
   resolveTuiAgentLaunchArgs,
@@ -18,6 +19,39 @@ import { getForkAgentLaunchTarget } from './agent-session-fork-launch-target'
 import type { ForkableAgentSession } from './worktree-agent-fork-sessions'
 
 export type AgentForkLaunchSource = 'sidebar' | 'terminal_context_menu'
+
+type NativeForkStartupPlan = NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>
+
+// Why: a runtime-owned workspace's tabs are host-owned, so a local tab would never reach that host.
+async function launchNativeForkOnRuntimeHost(args: {
+  session: ForkableAgentSession
+  worktreeId: string
+  environmentId: string
+  startupPlan: NativeForkStartupPlan
+}): Promise<boolean> {
+  const { session, startupPlan } = args
+  // Why: 'resume' without a providerSession takes the host's command path and makes no resume claim.
+  const outcome = await createWebRuntimeSessionTerminal({
+    worktreeId: args.worktreeId,
+    environmentId: args.environmentId,
+    agentSessionKind: 'resume',
+    launchAgent: session.agent,
+    command: startupPlan.launchCommand,
+    ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    ...(session.launchConfig ? { agentArgs: session.launchConfig.agentArgs } : {}),
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
+    activate: true
+  })
+  if (outcome.status !== 'created') {
+    console.warn('[agent-session-fork] runtime host did not open the fork', outcome.message)
+    return false
+  }
+  useAppStore.getState().setActiveTabType('terminal', args.worktreeId)
+  return true
+}
 
 export async function launchNativeAgentSessionFork(args: {
   session: ForkableAgentSession
@@ -48,6 +82,15 @@ export async function launchNativeAgentSessionFork(args: {
   })
   if (!startupPlan) {
     return false
+  }
+  if (target.runtimeEnvironmentId) {
+    // Why: no local trust preflight — it writes the client's agent config, which the host never reads.
+    return launchNativeForkOnRuntimeHost({
+      session,
+      worktreeId: args.worktreeId,
+      environmentId: target.runtimeEnvironmentId,
+      startupPlan
+    })
   }
   // Why: a brand-new worktree path is untrusted until the agent's trust preflight runs there.
   await preflightAgentTrust({

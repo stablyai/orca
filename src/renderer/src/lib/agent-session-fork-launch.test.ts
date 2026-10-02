@@ -53,10 +53,21 @@ const state: MockState = {
 
 const mocks = vi.hoisted(() => ({
   preflightAgentTrust: vi.fn(async (_args: unknown) => undefined),
-  getForkAgentLaunchTarget: vi.fn((_state: unknown, _worktreeId: string) => ({
-    platform: 'linux',
-    shell: undefined
-  })),
+  getForkAgentLaunchTarget: vi.fn(
+    (
+      _state: unknown,
+      _worktreeId: string
+    ): { platform: string; shell: undefined; runtimeEnvironmentId: string | null } => ({
+      platform: 'linux',
+      shell: undefined,
+      runtimeEnvironmentId: null
+    })
+  ),
+  createWebRuntimeSessionTerminal: vi.fn(
+    async (_args: Record<string, unknown>): Promise<{ status: string; message?: string }> => ({
+      status: 'created'
+    })
+  ),
   appendTabToWorktreeOrder: vi.fn(),
   launchAgentInNewTab: vi.fn(),
   planAgentSessionLaunch: vi.fn((_store: unknown, _request: unknown) => ({ route: 'terminal' })),
@@ -69,6 +80,9 @@ vi.mock('@/lib/sleeping-agent-session-launch', () => ({
 }))
 vi.mock('./agent-session-fork-launch-target', () => ({
   getForkAgentLaunchTarget: mocks.getForkAgentLaunchTarget
+}))
+vi.mock('@/runtime/web-runtime-session', () => ({
+  createWebRuntimeSessionTerminal: mocks.createWebRuntimeSessionTerminal
 }))
 vi.mock('@/lib/agent-trust-preflight', () => ({ preflightAgentTrust: mocks.preflightAgentTrust }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
@@ -120,6 +134,7 @@ describe('launchNativeAgentSessionFork', () => {
     })
 
     expect(ok).toBe(true)
+    expect(mocks.createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
     expect(createTab.mock.calls[0]?.[0]).toBe('repo::child')
     const options = lastCreateTabOptions()
     expect(options?.pendingStartup?.command).toBe(
@@ -185,6 +200,72 @@ describe('launchNativeAgentSessionFork', () => {
     expect(options?.pendingStartup?.command).toContain("'--verbose'")
     expect(options?.pendingStartup?.env).toEqual({ CLAUDE_CONFIG_DIR: '/default' })
     expect(options?.pendingStartup?.agentArgsOverride).toBeUndefined()
+  })
+
+  it('creates the fork tab on the runtime host for a runtime-owned workspace', async () => {
+    mocks.getForkAgentLaunchTarget.mockReturnValueOnce({
+      platform: 'linux',
+      shell: undefined,
+      runtimeEnvironmentId: 'env-1'
+    })
+
+    const ok = await launchNativeAgentSessionFork({
+      session: makeSession(),
+      worktreeId: 'repo::child',
+      worktreePath: '/r/child',
+      connectionId: null,
+      launchSource: 'sidebar'
+    })
+
+    expect(ok).toBe(true)
+    expect(createTab).not.toHaveBeenCalled()
+    expect(mocks.appendTabToWorktreeOrder).not.toHaveBeenCalled()
+    // Why: a local trust write would describe the client's disk, not the host running the agent.
+    expect(mocks.preflightAgentTrust).not.toHaveBeenCalled()
+    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: 'repo::child',
+      environmentId: 'env-1',
+      agentSessionKind: 'resume',
+      launchAgent: 'claude',
+      command: "claude '--model' 'sonnet' '--resume' 'sess-1' '--fork-session'",
+      env: { CLAUDE_CONFIG_DIR: '/acct' },
+      launchConfig: expect.objectContaining({ agentArgs: '--model sonnet' }),
+      agentArgs: '--model sonnet',
+      activate: true
+    })
+    const runtimeArgs = mocks.createWebRuntimeSessionTerminal.mock.calls[0]?.[0]
+    expect(runtimeArgs).not.toHaveProperty('providerSession')
+    expect(state.setActiveTabType).toHaveBeenCalledWith('terminal', 'repo::child')
+  })
+
+  it('reports a runtime host that could not create the fork tab', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    mocks.getForkAgentLaunchTarget.mockReturnValueOnce({
+      platform: 'linux',
+      shell: undefined,
+      runtimeEnvironmentId: 'env-1'
+    })
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValueOnce({
+      status: 'failed',
+      message: 'host disconnected'
+    })
+
+    const ok = await launchNativeAgentSessionFork({
+      session: makeSession(),
+      worktreeId: 'repo::child',
+      worktreePath: '/r/child',
+      connectionId: null,
+      launchSource: 'sidebar'
+    })
+
+    expect(ok).toBe(false)
+    expect(createTab).not.toHaveBeenCalled()
+    expect(state.setActiveTabType).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(
+      '[agent-session-fork] runtime host did not open the fork',
+      'host disconnected'
+    )
+    warn.mockRestore()
   })
 
   it('returns false and opens nothing when no fork command can be built', async () => {
