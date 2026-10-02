@@ -311,6 +311,24 @@ describe('ssh target httpProxyUrl secret recovery', () => {
     expect(recovered.getSshTarget('ssh-1')?.httpProxyUrl).toBe('http://user:secret@proxy.lan:3128')
   })
 
+  it('releases a sealed per-host proxy when the user explicitly clears it', async () => {
+    await seedTargetProxy()
+
+    cipherState.encryptionAvailable = false
+    const sealed = await createStore()
+    expect(sealed.getSshTarget('ssh-1')?.httpProxyUrl).toBe('')
+
+    // Why: the clear must carry the key with an empty value, which is what the save
+    // payload sends — an unrelated edit omits it and must keep the sealed proxy.
+    cipherState.encryptionAvailable = true
+    sealed.updateSshTarget('ssh-1', { httpProxyUrl: '' })
+    vi.advanceTimersByTime(2000)
+    await sealed.waitForPendingWrite()
+
+    const recovered = await createStore()
+    expect(recovered.getSshTarget('ssh-1')?.httpProxyUrl).toBe('')
+  })
+
   it('persists an empty per-host proxy for targets that never had one', async () => {
     const store = await createStore()
     const target = sshTargetFixture()
