@@ -1,19 +1,21 @@
 import type { StoreApi } from 'zustand/vanilla'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createEditorStore,
   createEditorTabsStore,
   ownedEditorFileId
 } from './editor-slice-test-harness'
+import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import type { AppState } from '../types'
 import type { Tab } from '../../../../shared/tab-types'
 
-const { toastErrorMock } = vi.hoisted(() => ({
-  toastErrorMock: vi.fn()
+const { toastErrorMock, toastInfoMock } = vi.hoisted(() => ({
+  toastErrorMock: vi.fn(),
+  toastInfoMock: vi.fn()
 }))
 
 vi.mock('sonner', () => ({
-  toast: { error: toastErrorMock }
+  toast: { error: toastErrorMock, info: toastInfoMock }
 }))
 
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
@@ -40,7 +42,24 @@ function withCountedEntityIdReads(tabs: readonly Tab[], onRead: () => void): Tab
   })
 }
 
+/** The cross-type Cmd+Shift+T dispatcher owns the kind stack the editor reopen pops from, so a
+ *  test of that handoff needs the real dispatcher rather than a stub. */
+function withCrossTypeReopen(store: StoreApi<AppState>): StoreApi<AppState> {
+  const { reopenClosedTerminalTab, reopenClosedTab } = createRecentlyClosedTabsSlice(
+    store.setState,
+    store.getState,
+    store
+  )
+  // Why actions only: spreading the slice's initial state would blank the kind stack a test seeded.
+  store.setState({ reopenClosedTerminalTab, reopenClosedTab })
+  return store
+}
+
 describe('createEditorSlice recently closed editor tabs', () => {
+  beforeEach(() => {
+    toastInfoMock.mockClear()
+  })
+
   function openMirroredEditor(store: StoreApi<AppState>, filePath: string, preview = false): void {
     store.getState().openFile(
       {
@@ -56,6 +75,44 @@ describe('createEditorSlice recently closed editor tabs', () => {
     )
   }
 
+  function openLocalEditor(store: StoreApi<AppState>, filePath = '/repo/notes.md'): string {
+    return store.getState().openFile({
+      filePath,
+      relativePath: filePath.replace('/repo/', ''),
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+  }
+
+  /** A draft the restore heal could not give a tab of its own, waiting on the reopen stack. */
+  function parkRecoveredDraft(
+    store: StoreApi<AppState>,
+    dirtyDraftContent: string,
+    options: { filePath?: string; lastKnownDiskSignature?: string } = {}
+  ): void {
+    const filePath = options.filePath ?? '/repo/notes.md'
+    store.setState({
+      recentlyClosedEditorTabsByWorktree: {
+        'wt-1': [
+          {
+            filePath,
+            relativePath: filePath.replace('/repo/', ''),
+            worktreeId: 'wt-1',
+            language: 'markdown',
+            mode: 'edit',
+            dirtyDraftContent,
+            ...(options.lastKnownDiskSignature
+              ? { lastKnownDiskSignature: options.lastKnownDiskSignature }
+              : {})
+          }
+        ]
+      },
+      // Why: hydration pairs every parked snapshot with a kind entry, so the fixture must too.
+      recentlyClosedTabKindsByWorktree: { 'wt-1': ['editor'] }
+    })
+  }
+
   it('reopens a closed mirrored editor tab as a local tab', () => {
     const store = createEditorStore()
     openMirroredEditor(store, '/repo/notes.md')
@@ -69,6 +126,417 @@ describe('createEditorSlice recently closed editor tabs', () => {
     expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
     expect(store.getState().openFiles[0]).toMatchObject({ filePath: '/repo/notes.md' })
     expect(store.getState().openFiles[0]).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+
+  it('restores a parked unsaved buffer when its snapshot carries one', () => {
+    const store = createEditorStore()
+    store.setState({
+      recentlyClosedEditorTabsByWorktree: {
+        'wt-1': [
+          {
+            filePath: '/repo/notes.md',
+            relativePath: 'notes.md',
+            worktreeId: 'wt-1',
+            language: 'markdown',
+            mode: 'edit',
+            dirtyDraftContent: 'rescued draft'
+          }
+        ]
+      }
+    })
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    const restored = store.getState().openFiles[0]
+    expect(restored).toMatchObject({ filePath: '/repo/notes.md', isDirty: true })
+    expect(store.getState().editorDrafts[restored.id]).toBe('rescued draft')
+    expect(restored).not.toHaveProperty('dirtyDraftContent')
+  })
+
+  it('applies a recovered draft to a record that is already open and clean', () => {
+    const store = createEditorStore()
+    const openId = openLocalEditor(store)
+    parkRecoveredDraft(store, 'rescued draft')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().editorDrafts[openId]).toBe('rescued draft')
+    expect(store.getState().openFiles[0].isDirty).toBe(true)
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toEqual([])
+  })
+
+  it('never overwrites the unsaved buffer of a record that is already open', () => {
+    const store = createEditorStore()
+    const openId = openLocalEditor(store)
+    store.getState().setEditorDraft(openId, 'live buffer')
+    store.getState().markFileDirty(openId, true)
+    parkRecoveredDraft(store, 'rescued draft')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().editorDrafts[openId]).toBe('live buffer')
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({ dirtyDraftContent: 'rescued draft' })
+    ])
+    expect(toastInfoMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-verifies the disk baseline a recovered draft derives from', () => {
+    const store = createEditorStore()
+    parkRecoveredDraft(store, 'rescued draft', { lastKnownDiskSignature: 'sig-1' })
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().openFiles[0]).toMatchObject({
+      lastKnownDiskSignature: 'sig-1',
+      pendingDiskBaselineVerification: true
+    })
+  })
+
+  it('leaves a recovered draft with no baseline out of the conflict scan', () => {
+    const store = createEditorStore()
+    parkRecoveredDraft(store, 'rescued draft')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    const restored = store.getState().openFiles[0]
+    expect(restored.lastKnownDiskSignature).toBeUndefined()
+    expect(restored.pendingDiskBaselineVerification).toBeUndefined()
+  })
+
+  it("replaces a reused clean record's baseline with the one the recovered draft derives from", () => {
+    const store = createEditorStore()
+    const openId = openLocalEditor(store)
+    store.getState().setLastKnownDiskSignature(openId, 'sig-clean-load')
+    parkRecoveredDraft(store, 'rescued draft', { lastKnownDiskSignature: 'sig-draft' })
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]).toMatchObject({
+      id: openId,
+      lastKnownDiskSignature: 'sig-draft',
+      pendingDiskBaselineVerification: true
+    })
+  })
+
+  it('sends a draft that cannot land to the back of both reopen stacks', () => {
+    const store = withCrossTypeReopen(createEditorTabsStore())
+    const openId = openLocalEditor(store)
+    store.getState().setEditorDraft(openId, 'live buffer')
+    store.getState().markFileDirty(openId, true)
+    parkRecoveredDraft(store, 'rescued draft')
+    const parked = store.getState().recentlyClosedEditorTabsByWorktree['wt-1'] ?? []
+    store.setState({
+      recentlyClosedEditorTabsByWorktree: {
+        'wt-1': [...parked, { ...parked[0], filePath: '/repo/other.md', relativePath: 'other.md' }]
+      },
+      recentlyClosedTerminalTabsByWorktree: { 'wt-1': [{ startupCwd: '/repo' }] },
+      recentlyClosedTabKindsByWorktree: { 'wt-1': ['editor', 'editor', 'terminal'] }
+    })
+
+    expect(store.getState().reopenClosedTab('wt-1')).toBe(true)
+
+    // The colliding snapshot moved behind the untouched one, and its kind behind the terminal's.
+    expect(
+      store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.map((s) => s.filePath)
+    ).toEqual(['/repo/other.md', '/repo/notes.md'])
+    expect(store.getState().recentlyClosedTabKindsByWorktree['wt-1']).toEqual([
+      'editor',
+      'terminal',
+      'editor'
+    ])
+    expect(store.getState().editorDrafts[openId]).toBe('live buffer')
+  })
+
+  it('lets a later cross-type reopen pass a deferred draft instead of queuing behind it', () => {
+    const store = withCrossTypeReopen(createEditorTabsStore())
+    const openId = openLocalEditor(store)
+    store.getState().setEditorDraft(openId, 'live buffer')
+    store.getState().markFileDirty(openId, true)
+    parkRecoveredDraft(store, 'rescued draft')
+    // The terminal slice is out of this harness, so stand in for the reopen the dispatcher calls.
+    const terminalReopenMock = vi.fn(() => true)
+    store.setState({
+      reopenClosedTerminalTab: terminalReopenMock,
+      recentlyClosedTabKindsByWorktree: { 'wt-1': ['editor', 'terminal'] }
+    })
+
+    expect(store.getState().reopenClosedTab('wt-1')).toBe(true)
+    expect(store.getState().reopenClosedTab('wt-1')).toBe(true)
+
+    expect(terminalReopenMock).toHaveBeenCalledTimes(1)
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({ dirtyDraftContent: 'rescued draft' })
+    ])
+  })
+
+  it('leaves the live record untouched when a recovered draft collides with its unsaved work', () => {
+    const store = createEditorTabsStore()
+    const openId = openLocalEditor(store)
+    store.getState().setEditorDraft(openId, 'live buffer')
+    store.getState().markFileDirty(openId, true)
+    store.getState().setLastKnownDiskSignature(openId, 'sig-live')
+    const tabCountBefore = (store.getState().unifiedTabsByWorktree['wt-1'] ?? []).length
+    const orderBefore = store.getState().tabBarOrderByWorktree['wt-1']
+    parkRecoveredDraft(store, 'rescued draft', { lastKnownDiskSignature: 'sig-draft' })
+    // The toast names a document the user must act on, so the editor has to come back to the front.
+    store.setState({ activeTabType: 'terminal', activeTabTypeByWorktree: { 'wt-1': 'terminal' } })
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().activeTabType).toBe('editor')
+    expect(store.getState().activeTabTypeByWorktree['wt-1']).toBe('editor')
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toHaveLength(tabCountBefore)
+    expect(store.getState().editorDrafts[openId]).toBe('live buffer')
+    expect(store.getState().openFiles[0]).toMatchObject({ lastKnownDiskSignature: 'sig-live' })
+    expect(store.getState().openFiles[0].pendingDiskBaselineVerification).toBeUndefined()
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual(orderBefore)
+    expect(store.getState().activeFileId).toBe(openId)
+    expect(toastInfoMock).toHaveBeenCalledTimes(1)
+    expect(toastInfoMock).toHaveBeenCalledWith(
+      'notes.md is open with unsaved changes. Save or close it, then reopen to recover the parked draft.'
+    )
+  })
+
+  it('opens no second tab when the colliding snapshot names another group', () => {
+    const store = createEditorTabsStore()
+    const openId = openLocalEditor(store)
+    const firstGroupId = store.getState().groupsByWorktree['wt-1']?.[0]?.id ?? ''
+    const secondGroupId = store
+      .getState()
+      .createEmptySplitGroup('wt-1', firstGroupId, 'right', { activate: false })
+    expect(secondGroupId).toBeTruthy()
+    expect(secondGroupId).not.toBe(firstGroupId)
+    store.getState().setEditorDraft(openId, 'live buffer')
+    store.getState().markFileDirty(openId, true)
+    parkRecoveredDraft(store, 'rescued draft')
+    const parked = (store.getState().recentlyClosedEditorTabsByWorktree['wt-1'] ?? [])[0]
+    store.setState({
+      recentlyClosedEditorTabsByWorktree: {
+        'wt-1': [{ ...parked, position: { groupId: secondGroupId ?? undefined } }]
+      }
+    })
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(
+      (store.getState().unifiedTabsByWorktree['wt-1'] ?? []).filter(
+        (tab) => tab.entityId === openId
+      )
+    ).toHaveLength(1)
+  })
+
+  it('leaves the live tab where it is when a recovered draft parks', () => {
+    const store = createEditorTabsStore()
+    const firstId = openLocalEditor(store, '/repo/first.md')
+    const notesId = openLocalEditor(store)
+    store.getState().setEditorDraft(notesId, 'live buffer')
+    store.getState().markFileDirty(notesId, true)
+    store.getState().setTabBarOrder('wt-1', [firstId, notesId])
+    parkRecoveredDraft(store, 'rescued draft')
+    // The snapshot's position is stale: honouring it would drag the live tab to the front.
+    store.setState({
+      recentlyClosedEditorTabsByWorktree: {
+        'wt-1': [
+          {
+            ...(store.getState().recentlyClosedEditorTabsByWorktree['wt-1'] ?? [])[0],
+            position: { tabBarIndex: 0 }
+          }
+        ]
+      }
+    })
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([firstId, notesId])
+  })
+
+  it('drops a recovered draft the live record already holds without rewriting its baseline', () => {
+    const store = createEditorTabsStore()
+    const openId = openLocalEditor(store)
+    store.getState().setEditorDraft(openId, 'same draft')
+    store.getState().markFileDirty(openId, true)
+    store.getState().setLastKnownDiskSignature(openId, 'sig-live')
+    parkRecoveredDraft(store, 'same draft', { lastKnownDiskSignature: 'sig-draft' })
+    store.setState({ activeTabType: 'terminal', activeTabTypeByWorktree: { 'wt-1': 'terminal' } })
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().activeTabType).toBe('editor')
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toEqual([])
+    expect(store.getState().recentlyClosedTabKindsByWorktree['wt-1']).toEqual(['editor'])
+    expect(store.getState().editorDrafts[openId]).toBe('same draft')
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]).toMatchObject({ lastKnownDiskSignature: 'sig-live' })
+    expect(store.getState().openFiles[0].pendingDiskBaselineVerification).toBeUndefined()
+    expect(store.getState().activeFileId).toBe(openId)
+  })
+
+  it('gives a baseline-less live record the equal draft snapshot baseline to verify', () => {
+    const store = createEditorTabsStore()
+    const openId = openLocalEditor(store)
+    store.getState().setEditorDraft(openId, 'same draft')
+    store.getState().markFileDirty(openId, true)
+    parkRecoveredDraft(store, 'same draft', { lastKnownDiskSignature: 'sig-draft' })
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    // Without the baseline the restored draft has nothing the conflict scan can verify it against.
+    expect(store.getState().openFiles[0]).toMatchObject({
+      lastKnownDiskSignature: 'sig-draft',
+      pendingDiskBaselineVerification: true
+    })
+    expect(store.getState().editorDrafts[openId]).toBe('same draft')
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toEqual([])
+  })
+
+  it('gives a baseline-less reused alias record the equal draft snapshot baseline', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    try {
+      const store = createEditorStore()
+      const liveId = store.getState().openFile({
+        filePath: '//wsl.localhost/Ubuntu/home/Alice/repo/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      })
+      store.getState().setEditorDraft(liveId, 'same draft')
+      store.getState().markFileDirty(liveId, true)
+      parkRecoveredDraft(store, 'same draft', {
+        filePath: '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\notes.md',
+        lastKnownDiskSignature: 'sig-draft'
+      })
+
+      expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+      expect(store.getState().openFiles).toHaveLength(1)
+      expect(store.getState().openFiles[0]).toMatchObject({
+        lastKnownDiskSignature: 'sig-draft',
+        pendingDiskBaselineVerification: true
+      })
+      expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toEqual([])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('parks a recovered draft rather than feeding it to a read-only record', () => {
+    const store = withCrossTypeReopen(createEditorTabsStore())
+    const logId = store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit',
+      readOnly: true
+    })
+    parkRecoveredDraft(store, 'rescued draft')
+
+    expect(store.getState().reopenClosedTab('wt-1')).toBe(true)
+
+    // openFile reuses the read-only record, and its draft/dirty writes hard no-op — the snapshot
+    // is the only copy of that text, so it goes back on the stack instead of being consumed.
+    expect(store.getState().openFiles.map((f) => [f.id, f.readOnly === true, f.isDirty])).toEqual([
+      [logId, true, false]
+    ])
+    expect(store.getState().editorDrafts).toEqual({})
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({ dirtyDraftContent: 'rescued draft' })
+    ])
+    expect(store.getState().recentlyClosedTabKindsByWorktree['wt-1']?.at(-1)).toBe('editor')
+    expect(toastInfoMock).toHaveBeenCalledTimes(1)
+    expect(toastInfoMock).toHaveBeenCalledWith(
+      'notes.md is open read-only. Close it, then reopen to recover the parked draft.'
+    )
+  })
+
+  it('parks a recovered draft beside a read-only log without opening a second tab', () => {
+    const store = createEditorTabsStore()
+    const logId = store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit',
+      readOnly: true
+    })
+    const firstGroupId = store.getState().groupsByWorktree['wt-1']?.[0]?.id ?? ''
+    const secondGroupId = store
+      .getState()
+      .createEmptySplitGroup('wt-1', firstGroupId, 'right', { activate: false })
+    expect(secondGroupId).toBeTruthy()
+    parkRecoveredDraft(store, 'rescued draft')
+    const parked = (store.getState().recentlyClosedEditorTabsByWorktree['wt-1'] ?? [])[0]
+    store.setState({
+      recentlyClosedEditorTabsByWorktree: {
+        'wt-1': [{ ...parked, position: { groupId: secondGroupId ?? undefined } }]
+      },
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { 'wt-1': 'terminal' }
+    })
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    // The read-only record is reused by openFile whatever its identity key says, so the open must
+    // not happen at all: a second tab in the snapshot's group would render the same log twice.
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toHaveLength(1)
+    expect(store.getState().openFiles.map((f) => f.id)).toEqual([logId])
+    expect(store.getState().activeFileId).toBe(logId)
+    expect(store.getState().activeTabType).toBe('editor')
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({ dirtyDraftContent: 'rescued draft' })
+    ])
+    expect(toastInfoMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('consumes a recovered draft the reused alias record already holds', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    try {
+      const store = createEditorStore()
+      // Why the alias pair: only openFile's WSL-alias reuse lands a snapshot on a live record the
+      // identity-keyed pre-open collision check cannot see.
+      const liveId = store.getState().openFile({
+        filePath: '//wsl.localhost/Ubuntu/home/Alice/repo/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      })
+      store.getState().setEditorDraft(liveId, 'same draft')
+      store.getState().markFileDirty(liveId, true)
+      store.getState().setLastKnownDiskSignature(liveId, 'sig-live')
+      parkRecoveredDraft(store, 'same draft', {
+        filePath: '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\notes.md',
+        lastKnownDiskSignature: 'sig-draft'
+      })
+
+      expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+      expect(store.getState().openFiles).toHaveLength(1)
+      expect(store.getState().editorDrafts[liveId]).toBe('same draft')
+      expect(store.getState().openFiles[0]).toMatchObject({ lastKnownDiskSignature: 'sig-live' })
+      expect(store.getState().openFiles[0].pendingDiskBaselineVerification).toBeUndefined()
+      expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toEqual([])
+      expect(toastInfoMock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('applies the same recovered draft when the reused record is writable', () => {
+    const store = withCrossTypeReopen(createEditorTabsStore())
+    const liveId = openLocalEditor(store)
+    parkRecoveredDraft(store, 'rescued draft')
+
+    expect(store.getState().reopenClosedTab('wt-1')).toBe(true)
+
+    expect(store.getState().editorDrafts[liveId]).toBe('rescued draft')
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1'] ?? []).toEqual([])
+    expect(toastInfoMock).not.toHaveBeenCalled()
   })
 
   it('reopens close-all mirrored editor tabs as local tabs', () => {

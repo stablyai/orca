@@ -4,7 +4,9 @@ import type { PersistedOpenFile } from '../../../../../../shared/workspace-sessi
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
-import { buildOwnedEditorFileId, runtimeOwnerKey } from './editor-file-ids'
+import { dedupeEditorTabsWithinGroups } from '../../tab-group-state'
+import { buildOwnedEditorFileId } from './editor-file-ids'
+import { runtimeOwnerKey } from './editor-document-identity'
 
 export function shouldHydrateWithOwnedEditorFileId(
   worktreeId: string,
@@ -125,6 +127,46 @@ export function areStringArraysEqual(
   return a.every((value, index) => value === b[index])
 }
 
+/**
+ * Move a dropped twin's pin and labelling onto the tab the dedupe keeps. The dedupe survivor is
+ * simply the first tab in array order, so a pinned runtime-owned twin merged into an unpinned local
+ * one would come back unpinned — undoing the protection that keeps a pinned sibling open.
+ */
+function carryEditorTwinDecorationOntoSurvivor(tabs: Tab[]): Tab[] {
+  const survivorIndexByGroupAndEntity = new Map<string, number>()
+  let merged: Tab[] | null = null
+  tabs.forEach((tab, index) => {
+    if (tab.contentType !== 'editor') {
+      return
+    }
+    const key = `${tab.groupId}\u0000${tab.entityId}`
+    const survivorIndex = survivorIndexByGroupAndEntity.get(key)
+    if (survivorIndex === undefined) {
+      survivorIndexByGroupAndEntity.set(key, index)
+      return
+    }
+    const survivor = merged?.[survivorIndex] ?? tabs[survivorIndex]
+    const decorated: Tab = {
+      ...survivor,
+      ...(tab.isPinned === true && survivor.isPinned !== true ? { isPinned: true } : {}),
+      ...(survivor.customLabel == null && tab.customLabel != null
+        ? { customLabel: tab.customLabel }
+        : {}),
+      ...(survivor.color == null && tab.color != null ? { color: tab.color } : {})
+    }
+    if (
+      decorated.isPinned === survivor.isPinned &&
+      decorated.customLabel === survivor.customLabel &&
+      decorated.color === survivor.color
+    ) {
+      return
+    }
+    merged ??= [...tabs]
+    merged[survivorIndex] = decorated
+  })
+  return merged ?? tabs
+}
+
 export function migrateHydratedEditorTabsAndGroups(
   state: Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>,
   migrationsByWorktree: Record<string, Map<string, string>>
@@ -133,6 +175,7 @@ export function migrateHydratedEditorTabsAndGroups(
   let groupsChanged = false
   const nextUnifiedTabsByWorktree: Record<string, Tab[]> = { ...state.unifiedTabsByWorktree }
   const tabIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
+  const dedupeAliasesByWorktree: Record<string, Map<string, Map<string, string>>> = {}
 
   for (const [worktreeId, idMigrations] of Object.entries(migrationsByWorktree)) {
     const tabs = state.unifiedTabsByWorktree[worktreeId]
@@ -159,30 +202,42 @@ export function migrateHydratedEditorTabsAndGroups(
     if (tabIdMigrations.size > 0) {
       tabIdMigrationsByWorktree[worktreeId] = tabIdMigrations
     }
-    nextUnifiedTabsByWorktree[worktreeId] = nextTabs
+    // Why here and not in tabs hydration: that dedupe ran before this rewrite, so a local tab and a
+    // runtime-owned tab for one path were still two entities. Redirecting both onto the survivor's
+    // id makes them one document in one group, and a repeated React key leaves a ghost row mounted.
+    const deduped = dedupeEditorTabsWithinGroups(carryEditorTwinDecorationOntoSurvivor(nextTabs))
+    if (deduped.tabs.length !== nextTabs.length) {
+      tabsChanged = true
+      dedupeAliasesByWorktree[worktreeId] = deduped.tabIdAliasesByGroup
+    }
+    nextUnifiedTabsByWorktree[worktreeId] = deduped.tabs
   }
 
   const nextGroupsByWorktree: Record<string, TabGroup[]> = { ...state.groupsByWorktree }
-  for (const [worktreeId, tabIdMigrations] of Object.entries(tabIdMigrationsByWorktree)) {
+  const repointedWorktreeIds = new Set([
+    ...Object.keys(tabIdMigrationsByWorktree),
+    ...Object.keys(dedupeAliasesByWorktree)
+  ])
+  for (const worktreeId of repointedWorktreeIds) {
     const groups = state.groupsByWorktree[worktreeId]
     if (!groups) {
       continue
     }
+    const tabIdMigrations = tabIdMigrationsByWorktree[worktreeId]
+    const dedupeAliasesByGroup = dedupeAliasesByWorktree[worktreeId]
     const validTabIds = new Set((nextUnifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
     nextGroupsByWorktree[worktreeId] = groups.map((group) => {
-      const tabOrder = dedupeEditorTabOrder(
-        group.tabOrder.map((tabId) => tabIdMigrations.get(tabId) ?? tabId),
-        validTabIds
-      )
-      const activeTabId = group.activeTabId
-        ? (tabIdMigrations.get(group.activeTabId) ?? group.activeTabId)
-        : null
+      const dedupeAliases = dedupeAliasesByGroup?.get(group.id)
+      // Why this order: the dedupe ran on already-migrated tabs, so its aliases key on migrated ids.
+      const canonicalTabId = (tabId: string): string => {
+        const migrated = tabIdMigrations?.get(tabId) ?? tabId
+        return dedupeAliases?.get(migrated) ?? migrated
+      }
+      const tabOrder = dedupeEditorTabOrder(group.tabOrder.map(canonicalTabId), validTabIds)
+      const activeTabId = group.activeTabId ? canonicalTabId(group.activeTabId) : null
       const validActiveTabId = activeTabId && validTabIds.has(activeTabId) ? activeTabId : null
       const recentTabIds = group.recentTabIds
-        ? dedupeEditorTabOrder(
-            group.recentTabIds.map((tabId) => tabIdMigrations.get(tabId) ?? tabId),
-            validTabIds
-          )
+        ? dedupeEditorTabOrder(group.recentTabIds.map(canonicalTabId), validTabIds)
         : group.recentTabIds
       if (
         validActiveTabId === group.activeTabId &&
