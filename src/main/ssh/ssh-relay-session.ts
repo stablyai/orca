@@ -89,6 +89,7 @@ import {
   sshRemotePtyLeaseAllowsReattach
 } from '../../shared/ssh-types'
 import { normalizeRemoteArtifactInput } from '../../shared/artifact-cli-bridge'
+import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
@@ -1186,7 +1187,10 @@ export class SshRelaySession {
       this.targetId,
       mux,
       this.remoteCliBridgeEnv ?? undefined,
-      providerGeneration
+      providerGeneration,
+      // Why a resolver, not a snapshot: proxy edits should reach the next terminal
+      // without forcing a reconnect.
+      () => buildConfiguredProxyEnv(this.store.getSshTarget(this.targetId) ?? null)
     )
     // Why optional-call: session tests register partial provider stubs, same as the pause adapter below.
     ptyProvider.setTerminalUnavailableRecovery?.((cause) =>

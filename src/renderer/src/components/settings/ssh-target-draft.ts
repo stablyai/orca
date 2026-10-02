@@ -21,6 +21,8 @@ export type EditingTarget = {
   gssapiAuthentication: boolean
   proxyCommand: string
   jumpHost: string
+  httpProxyUrl: string
+  httpProxyBypassRules: string
   systemSshConnectionReuse: boolean
   relayGracePeriodSeconds: string
   relayKeepAliveUntilReset: boolean
@@ -37,6 +39,8 @@ export const EMPTY_FORM: EditingTarget = {
   gssapiAuthentication: false,
   proxyCommand: '',
   jumpHost: '',
+  httpProxyUrl: '',
+  httpProxyBypassRules: '',
   systemSshConnectionReuse: true,
   relayGracePeriodSeconds: String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS),
   relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0,
@@ -57,6 +61,8 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     gssapiAuthentication: target.gssapiAuthentication === true,
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
+    httpProxyUrl: target.httpProxyUrl ?? '',
+    httpProxyBypassRules: target.httpProxyBypassRules ?? '',
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
     relayGracePeriodSeconds: String(
       target.relayGracePeriodSeconds === 0
@@ -172,6 +178,8 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
   return (
     form.proxyCommand.trim().length > 0 ||
     form.jumpHost.trim().length > 0 ||
+    form.httpProxyUrl.trim().length > 0 ||
+    form.httpProxyBypassRules.trim().length > 0 ||
     !form.systemSshConnectionReuse ||
     form.remoteRuntime !== 'auto'
   )
@@ -188,6 +196,8 @@ export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTa
     current.gssapiAuthentication !== baseline.gssapiAuthentication ||
     current.proxyCommand !== baseline.proxyCommand ||
     current.jumpHost !== baseline.jumpHost ||
+    current.httpProxyUrl !== baseline.httpProxyUrl ||
+    current.httpProxyBypassRules !== baseline.httpProxyBypassRules ||
     current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
     current.relayGracePeriodSeconds !== baseline.relayGracePeriodSeconds ||
     current.relayKeepAliveUntilReset !== baseline.relayKeepAliveUntilReset ||

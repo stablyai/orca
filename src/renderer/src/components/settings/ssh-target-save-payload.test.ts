@@ -105,4 +105,47 @@ describe('buildSshTargetSavePayload', () => {
       expect(result.error).toContain('Terminal timeout')
     }
   })
+
+  it('persists a per-host HTTP proxy with normalized URL and bypass rules', () => {
+    const result = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'appliance.example.com',
+      httpProxyUrl: ' http://proxy.lan:3128 ',
+      httpProxyBypassRules: 'localhost;*.internal\n10.0.0.1'
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.payload.target.httpProxyUrl).toBe('http://proxy.lan:3128')
+    expect(result.payload.target.httpProxyBypassRules).toBe('localhost;*.internal;10.0.0.1')
+    expect(result.payload.updates.httpProxyBypassRules).toBe('localhost;*.internal;10.0.0.1')
+  })
+
+  it('rejects a malformed per-host proxy URL instead of persisting it', () => {
+    const result = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'appliance.example.com',
+      httpProxyUrl: 'not a url'
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toContain('valid proxy')
+    }
+  })
+
+  it('clears a removed per-host proxy via explicit undefined in updates', () => {
+    const result = buildSshTargetSavePayload({ ...EMPTY_FORM, host: 'appliance.example.com' })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.payload.target).not.toHaveProperty('httpProxyUrl')
+    // Why explicit undefined: updateTarget merges, so clearing must be explicit.
+    expect(result.payload.updates).toHaveProperty('httpProxyUrl', undefined)
+    expect(result.payload.updates).toHaveProperty('httpProxyBypassRules', undefined)
+  })
 })

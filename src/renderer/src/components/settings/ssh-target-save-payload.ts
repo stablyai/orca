@@ -3,6 +3,7 @@ import {
   type SshTargetCreateInput,
   type SshTargetUpdateInput
 } from '../../../../shared/ssh-types'
+import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../../../shared/network-proxy'
 import {
   getSshTargetDraftConnectionFields,
   isRelayGracePeriodValid,
@@ -57,6 +58,14 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   const identityFile = form.identityFile.trim() || undefined
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
+  // Why: validate here so a malformed URL never persists as a per-host proxy that
+  // would then be injected verbatim into every terminal on that host.
+  const httpProxy = normalizeProxyUrl(form.httpProxyUrl)
+  if (form.httpProxyUrl.trim() && !httpProxy.ok) {
+    return { ok: false, error: httpProxy.message }
+  }
+  const httpProxyUrl = httpProxy.value || undefined
+  const httpProxyBypassRules = normalizeProxyBypassRules(form.httpProxyBypassRules) || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
   const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
 
@@ -71,6 +80,8 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
+    ...(httpProxyUrl ? { httpProxyUrl } : {}),
+    ...(httpProxyBypassRules ? { httpProxyBypassRules } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
     ...(remoteRuntime ? { remoteRuntime } : {})
   }
@@ -87,6 +98,8 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         gssapiAuthentication: form.gssapiAuthentication || undefined,
         proxyCommand,
         jumpHost,
+        httpProxyUrl,
+        httpProxyBypassRules,
         systemSshConnectionReuse,
         remoteRuntime,
         source: 'manual'

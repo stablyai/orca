@@ -82,7 +82,9 @@ export class SshPtyProvider implements IPtyProvider {
     connectionId: string,
     mux: SshChannelMultiplexer,
     private readonly remoteCliBridgeEnv?: RemoteCliBridgeEnv,
-    readonly providerGeneration = 1
+    readonly providerGeneration = 1,
+    /** Resolved per spawn so a proxy settings edit applies to the next terminal without a reconnect. */
+    private readonly getTargetProxyEnv: () => Record<string, string> = () => ({})
   ) {
     this.connectionId = connectionId
     this.mux = mux
@@ -177,6 +179,7 @@ export class SshPtyProvider implements IPtyProvider {
       params: buildSshPtySpawnRequest({
         options: opts,
         remoteCliBridgeEnv: this.remoteCliBridgeEnv,
+        targetProxyEnv: this.getTargetProxyEnv(),
         supportsCreateOperation
       }),
       exitRaceTracker: this.spawnExitRaces,
