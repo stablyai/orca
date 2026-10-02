@@ -518,6 +518,23 @@
               "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "Agent は起動しましたが、プロンプトは送信されませんでした。Agent の準備ができたらコピーして貼り付けてください。",
+                  "copy": "プロンプトをコピー"
+                }
+              }
+            }
+          },
+          "started": {
+            "elsewhere": {
+              "title": "{{agent}} が {{name}} で起動しました"
+            }
+          }
         }
       },
       "remotePairingCopy": {
@@ -685,6 +702,10 @@
                 "b96e091fc9": "選択した Agent は設定で無効になっています。",
                 "a7ac8717c7": "開始する前に、Agent を選択してください。"
               }
+            },
+            "launch": {
+              "failed": "Agent を起動できませんでした。",
+              "unconfirmed": "Agent が起動したか確認できませんでした。もう一度試す前にワークスペースを確認してください。"
             }
           },
           "generation": {

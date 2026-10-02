@@ -5,6 +5,7 @@ import type {
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session-chat-label'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
+import { claimAgentLaunchTabReservation } from '@/lib/agent-launch-tab-reservations'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
@@ -117,8 +118,13 @@ export function buildMirroredAgentTabs(
         id: localId,
         entityId: tab.sessionId,
         // Keep the local group while a provisional tab is promoted; host placement can lag the
-        // user's split choice and must not move the mounted pane during adoption.
-        groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
+        // user's split choice and must not move the mounted pane during adoption. A chat a launch
+        // asked the host for has no local tab yet, so it joins the group that launch reserved.
+        groupId:
+          existing?.groupId ??
+          claimAgentLaunchTabReservation(tab.id, snapshot.worktree)?.reservation.groupId ??
+          hostGroupIdByTabId.get(tab.id) ??
+          fallbackGroupId,
         worktreeId: snapshot.worktree,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,

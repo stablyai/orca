@@ -9,7 +9,8 @@ export type AgentSessionCreateOperation = {
   run<TResult>(invoke: (clientOperationId: string) => Promise<TResult>): Promise<TResult>
 }
 
-function isAmbiguousCreateFailure(error: unknown): boolean {
+/** Shared by every renderer launch that replays under one operation id. */
+export function isAmbiguousCreateFailure(error: unknown): boolean {
   // Why: an RPC failure proves the host answered; only transport loss leaves
   // creation unknown and is safe to replay under the same operation ID.
   return (

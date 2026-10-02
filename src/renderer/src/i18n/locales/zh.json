@@ -518,6 +518,23 @@
               "refreshCliRegistration": "请刷新 CLI 注册状态后重试。"
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "代理已启动，但你的提示词未发送。请复制提示词，并在代理就绪后粘贴。",
+                  "copy": "复制提示词"
+                }
+              }
+            }
+          },
+          "started": {
+            "elsewhere": {
+              "title": "{{agent}} 已在 {{name}} 中启动"
+            }
+          }
         }
       },
       "remotePairingCopy": {
@@ -685,6 +702,10 @@
                 "b96e091fc9": "选定的智能体在“设置”中被禁用。",
                 "a7ac8717c7": "在开始之前选择一个智能体。"
               }
+            },
+            "launch": {
+              "failed": "无法启动代理。",
+              "unconfirmed": "无法确认代理是否已启动。请先检查工作区，然后再重试。"
             }
           },
           "generation": {

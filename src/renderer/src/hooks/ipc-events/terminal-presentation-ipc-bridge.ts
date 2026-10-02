@@ -10,6 +10,9 @@ import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mod
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { tryMakePaneKey } from './agent-status-routing'
+import { claimAgentLaunchTabReservation } from '@/lib/agent-launch-tab-reservations'
+import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
+import { isWorkspaceInTerminalView } from '@/lib/workspace-terminal-view'
 import { useAppStore } from '../../store'
 import {
   activateExistingLeafInLayout,
@@ -47,11 +50,24 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
       }) => {
         try {
           const store = useAppStore.getState()
-          const terminalPresentation = resolveTerminalPresentation({
-            presentation,
-            activate,
-            focus
-          })
+          // Why: a caller that minted this tab id recorded where the tab goes; the host cannot know.
+          const claim =
+            ptyId && tabId !== undefined && !splitFromLeafId
+              ? claimAgentLaunchTabReservation(tabId, worktreeId)
+              : null
+          const reservation = claim?.reservation ?? null
+          // Why: a user who left the launching workspace keeps their place (#9944); the launcher
+          // offers a way back instead.
+          const reservationInView = reservation !== null && isWorkspaceInTerminalView(worktreeId)
+          const terminalPresentation = reservation
+            ? reservationInView
+              ? 'focused'
+              : 'background'
+            : resolveTerminalPresentation({
+                presentation,
+                activate,
+                focus
+              })
           const shouldActivate = terminalPresentation === 'focused'
           const shouldSurfaceOwner = terminalPresentation !== 'background' && surfaceOwner !== false
           if (shouldActivate) {
@@ -83,9 +99,11 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           const tab =
             reusedTab ??
             (ptyId
-              ? store.createTab(worktreeId, undefined, undefined, {
+              ? store.createTab(worktreeId, reservation?.groupId, undefined, {
                   initialPtyId: ptyId,
-                  activate: shouldActivate,
+                  // A reserved tab leads its group even unseen; outside the active workspace this
+                  // activates it only within that group.
+                  activate: shouldActivate || reservation !== null,
                   ...(launchAgent
                     ? {
                         launchAgent,
@@ -213,6 +231,22 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           }
           if (ptyId && terminalPresentation === 'background') {
             requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
+          }
+          // The tab now holds its group, so the reservation no longer needs to.
+          claim?.consume()
+          if (reservation && !reusedTab) {
+            // Why: a launched tab joins the end of the tab bar, as a renderer-created one does.
+            persistAgentLaunchTabOrder(worktreeId, tab.id)
+            try {
+              reservation.onRevealed?.({
+                tabId: tab.id,
+                leafId: leafId ?? null,
+                inView: reservationInView
+              })
+            } catch (error) {
+              // Bookkeeping: the tab exists either way, and the host's reveal must not fail over it.
+              console.error('agent launch reveal callback failed', error)
+            }
           }
           if (requestId) {
             // Why: attest the actual binding; recovery callers compare it with their expected identity.

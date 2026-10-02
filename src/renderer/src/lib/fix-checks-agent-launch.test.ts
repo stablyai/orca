@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as SourceControlAgentLaunchModule from '@/lib/source-control-agent-launch'
 
 const mocks = vi.hoisted(() => {
   const store = {
@@ -56,7 +57,9 @@ const mocks = vi.hoisted(() => {
     resolveSourceControlActionRecipe: vi.fn(),
     resolveSourceControlLaunchPlatform: vi.fn(),
     toastError: vi.fn(),
-    toastMessage: vi.fn()
+    toastMessage: vi.fn(),
+    launchSourceControlAgent: vi.fn(),
+    showNotDelivered: vi.fn()
   }
 })
 
@@ -69,8 +72,18 @@ vi.mock('@/store', () => ({
 vi.mock('sonner', () => ({
   toast: {
     error: mocks.toastError,
-    message: mocks.toastMessage
+    message: mocks.toastMessage,
+    warning: vi.fn()
   }
+}))
+
+vi.mock('@/lib/source-control-agent-launch', async (importOriginal) => ({
+  ...(await importOriginal<typeof SourceControlAgentLaunchModule>()),
+  launchSourceControlAgent: mocks.launchSourceControlAgent
+}))
+
+vi.mock('@/lib/agent-launch-prompt-not-delivered-notice', () => ({
+  showAgentLaunchPromptNotDeliveredNotice: mocks.showNotDelivered
 }))
 
 vi.mock('@/lib/connection-context', () => ({
@@ -159,6 +172,79 @@ describe('startFixChecksAgent', () => {
       commandInputTemplate: '{basePrompt}'
     })
     mocks.resolveSourceControlLaunchPlatform.mockReturnValue('darwin')
+    // The tab paste unless a test puts the launch on the host.
+    mocks.launchSourceControlAgent.mockResolvedValue({ kind: 'unsupported' })
+  })
+
+  describe('on a host that takes the launch', () => {
+    beforeEach(() => {
+      mocks.launchSourceControlAgent.mockImplementation(async (args) => {
+        return args.beforeLaunch?.() === false
+          ? { kind: 'aborted' }
+          : { kind: 'launched', promptDelivered: true }
+      })
+    })
+
+    it('reveals the attached workspace first, then hands the host the checks prompt', async () => {
+      const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+
+      await expect(
+        startFixChecksAgent({
+          repoId: 'repo-1',
+          worktreeId: 'wt-1',
+          groupId: 'group-1',
+          basePrompt: 'Fix checks\nlog tail',
+          launchSource: 'task_page'
+        })
+      ).resolves.toBe(true)
+
+      expect(mocks.launchSourceControlAgent).toHaveBeenCalledWith({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: 'Fix checks\nlog tail',
+        agentArgs: undefined,
+        launchSource: 'task_page',
+        beforeLaunch: expect.any(Function)
+      })
+      expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+        providesInitialSurface: true
+      })
+      expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    })
+
+    it('says the workspace could not open, and launches nothing, when the reveal fails', async () => {
+      mocks.activateAndRevealWorktree.mockReturnValue(false)
+      const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+
+      await expect(
+        startFixChecksAgent({
+          repoId: 'repo-1',
+          worktreeId: 'wt-1',
+          basePrompt: 'Fix checks',
+          launchSource: 'task_page'
+        })
+      ).resolves.toBe(false)
+
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        'Unable to open the workspace attached to these checks.'
+      )
+    })
+
+    it('claims no success when the host kept the prompt, and hands the prompt over', async () => {
+      mocks.launchSourceControlAgent.mockResolvedValue({ kind: 'launched', promptDelivered: false })
+      const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+
+      await expect(
+        startFixChecksAgent({
+          repoId: 'repo-1',
+          worktreeId: 'wt-1',
+          basePrompt: 'Fix checks',
+          launchSource: 'task_page'
+        })
+      ).resolves.toBe(false)
+
+      expect(mocks.showNotDelivered).toHaveBeenCalledWith({ agent: 'codex', prompt: 'Fix checks' })
+    })
   })
 
   it('activates the attached workspace as a surface-providing caller', async () => {

@@ -1,4 +1,5 @@
 import type { AppState } from '../../types'
+import { agentLaunchReservedGroupIds } from '@/lib/agent-launch-tab-reservations'
 import type { Tab } from '../../../../../shared/tab-types'
 import { dedupeTabOrder, ensureGroup, sanitizeRecentTabIds, updateGroup } from '../tab-group-state'
 import { pruneTabGroupLayoutForGroups } from '../tabs-hydration'
@@ -151,9 +152,12 @@ export function projectWorktreeTabModelReconciliation(
       ? group
       : { ...group, tabOrder, activeTabId, recentTabIds }
   })
+  const launchTargetGroupIds = agentLaunchReservedGroupIds(worktreeId)
   const prunedGroups =
     validTabs.length > 0
-      ? nextGroupsWithEmpty.filter((group) => group.tabOrder.length > 0)
+      ? nextGroupsWithEmpty.filter(
+          (group) => group.tabOrder.length > 0 || launchTargetGroupIds.has(group.id)
+        )
       : nextGroupsWithEmpty
   const groupsChanged =
     prunedGroups.length !== groups.length ||

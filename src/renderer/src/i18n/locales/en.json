@@ -653,6 +653,23 @@
               "refreshCliRegistration": "Refresh CLI registration status and try again."
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "The agent started, but your prompt wasn't sent. Copy it and paste it once the agent is ready.",
+                  "copy": "Copy prompt"
+                }
+              }
+            }
+          },
+          "started": {
+            "elsewhere": {
+              "title": "{{agent}} started in {{name}}"
+            }
+          }
         }
       },
       "remotePairingCopy": {
@@ -820,6 +837,10 @@
                 "b96e091fc9": "The selected agent is disabled in Settings.",
                 "a7ac8717c7": "Choose an agent before starting."
               }
+            },
+            "launch": {
+              "failed": "Couldn't start the agent.",
+              "unconfirmed": "Couldn't confirm the agent started. Check the workspace before trying again."
             }
           },
           "generation": {

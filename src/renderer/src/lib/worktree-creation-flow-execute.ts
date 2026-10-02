@@ -24,6 +24,7 @@ import {
 } from '@/lib/worktree-creation-structured-session'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-toast'
+import { isWorkspaceInTerminalView } from '@/lib/workspace-terminal-view'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
@@ -36,13 +37,7 @@ function isPendingCreationSurfaceVisible(creationId: string): boolean {
 
 // Why: the created row is listed before completion, so a user may already have opened it.
 function isCreatedWorkspaceInView(creationId: string, worktreeId: string): boolean {
-  const state = useAppStore.getState()
-  return (
-    isPendingCreationSurfaceVisible(creationId) ||
-    (state.activeView === 'terminal' &&
-      state.activePendingCreationId === null &&
-      state.activeWorktreeId === worktreeId)
-  )
+  return isPendingCreationSurfaceVisible(creationId) || isWorkspaceInTerminalView(worktreeId)
 }
 
 export async function executeWorktreeCreation(

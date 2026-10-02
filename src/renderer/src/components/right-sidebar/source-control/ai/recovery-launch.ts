@@ -2,6 +2,10 @@ import { toast } from 'sonner'
 import type { AppState } from '@/store'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import {
+  launchSourceControlAgent,
+  settleSourceControlAgentLaunch
+} from '@/lib/source-control-agent-launch'
 import { getConnectionId } from '@/lib/connection-context'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import {
@@ -154,6 +158,20 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   if (!agent) {
     toast.error(copy.noEnabledAgent)
     return false
+  }
+  const hosted = await launchSourceControlAgent({
+    agent,
+    worktreeId: activeWorktreeId,
+    prompt,
+    agentArgs: savedRecipe.agentArgs,
+    launchSource: 'source_control_recovery'
+  })
+  if (hosted.kind !== 'unsupported') {
+    const settled = settleSourceControlAgentLaunch(hosted, { agent, prompt })
+    if (settled.promptDelivered) {
+      toast.success(copy.success)
+    }
+    return settled.started
   }
   const result = launchAgentInNewTab({
     agent,

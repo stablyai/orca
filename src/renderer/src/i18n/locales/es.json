@@ -407,6 +407,23 @@
               "refreshCliRegistration": "Actualiza el estado de registro de la CLI e inténtalo de nuevo."
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "El agente se inició, pero tu prompt no se envió. Cópialo y pégalo cuando el agente esté listo.",
+                  "copy": "Copiar prompt"
+                }
+              }
+            }
+          },
+          "started": {
+            "elsewhere": {
+              "title": "{{agent}} se inició en {{name}}"
+            }
+          }
         }
       },
       "remotePairingCopy": {
@@ -569,6 +586,10 @@
                 "b96e091fc9": "El agente seleccionado está deshabilitado en Ajustes.",
                 "a7ac8717c7": "Elige un agente antes de comenzar."
               }
+            },
+            "launch": {
+              "failed": "No se pudo iniciar el agente.",
+              "unconfirmed": "No se pudo confirmar que el agente se haya iniciado. Revisa el espacio de trabajo antes de volver a intentarlo."
             }
           },
           "generation": {

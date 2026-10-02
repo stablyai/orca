@@ -90,7 +90,8 @@ export const AGENT_LAUNCH_CALLER_PROFILES: readonly AgentLaunchCallerProfile[] =
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: PROMPT,
-      promptDelivery: 'submit-after-ready'
+      promptDelivery: 'submit-after-ready',
+      launchSource: 'explain_commit'
     }
   },
   {

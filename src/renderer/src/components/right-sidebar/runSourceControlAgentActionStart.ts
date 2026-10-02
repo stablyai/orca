@@ -1,5 +1,9 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import {
+  launchSourceControlAgent,
+  settleSourceControlAgentLaunch
+} from '@/lib/source-control-agent-launch'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -101,34 +105,56 @@ export async function runSourceControlAgentActionStart({
       notifyLaunchAccepted()
     }
   } else if (worktreeId) {
-    const result = launchAgentInNewTab({
-      agent: selectedAgent,
-      worktreeId,
-      groupId: groupId ?? worktreeId,
-      prompt: trimmedCommandInput,
-      agentArgs: launchAgentArgs,
-      promptDelivery,
-      launchPlatform,
-      launchSource
-    })
-    launched = Boolean(result)
-    if (result?.surface.kind === 'local-terminal') {
-      focusTerminalTabSurface(result.surface.tabId)
-    }
-    // Why: lets callers park launch-scoped state before submit-after-ready finishes
-    // (can take tens of seconds); host mutations still wait for delivery below.
-    if (launched) {
-      notifyLaunchAccepted()
-    }
-    if (result?.promptDeliveryResult) {
-      try {
-        const deliveryResult = await result.promptDeliveryResult
-        launched = deliveryResult.delivered
-        launchFailureNotified = deliveryResult.failureNotified
-      } catch (error) {
-        console.error('promptDeliveryResult rejected', error)
-        launched = false
+    // Why: the host delivers a generated prompt after readiness; other deliveries keep the tab paste.
+    const hosted =
+      promptDelivery === 'submit-after-ready'
+        ? await launchSourceControlAgent({
+            agent: selectedAgent,
+            worktreeId,
+            prompt: trimmedCommandInput,
+            ...(launchAgentArgs !== undefined ? { agentArgs: launchAgentArgs } : {}),
+            launchSource,
+            onLaunchAccepted: notifyLaunchAccepted
+          })
+        : ({ kind: 'unsupported' } as const)
+    if (hosted.kind === 'unsupported') {
+      const result = launchAgentInNewTab({
+        agent: selectedAgent,
+        worktreeId,
+        groupId: groupId ?? worktreeId,
+        prompt: trimmedCommandInput,
+        agentArgs: launchAgentArgs,
+        promptDelivery,
+        launchPlatform,
+        launchSource
+      })
+      launched = Boolean(result)
+      if (result?.surface.kind === 'local-terminal') {
+        focusTerminalTabSurface(result.surface.tabId)
       }
+      // Why: lets callers park launch-scoped state before submit-after-ready finishes
+      // (can take tens of seconds); host mutations still wait for delivery below.
+      if (launched) {
+        notifyLaunchAccepted()
+      }
+      if (result?.promptDeliveryResult) {
+        try {
+          const deliveryResult = await result.promptDeliveryResult
+          launched = deliveryResult.delivered
+          launchFailureNotified = deliveryResult.failureNotified
+        } catch (error) {
+          console.error('promptDeliveryResult rejected', error)
+          launched = false
+        }
+      }
+    } else {
+      const settled = settleSourceControlAgentLaunch(hosted, {
+        agent: selectedAgent,
+        prompt: trimmedCommandInput
+      })
+      // Irreversible follow-ups (posting replies, resolving threads) wait for the prompt itself.
+      launched = settled.promptDelivered
+      launchFailureNotified = settled.failureNotified
     }
   }
   if (!launched) {

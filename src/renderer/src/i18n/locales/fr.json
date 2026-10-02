@@ -617,6 +617,23 @@
               "refreshCliRegistration": "Actualisez le statut d'enregistrement du CLI et réessayez."
             }
           }
+        },
+        "launch": {
+          "prompt": {
+            "not": {
+              "delivered": {
+                "notice": {
+                  "message": "L’agent a démarré, mais votre prompt n’a pas été envoyé. Copiez-le et collez-le quand l’agent est prêt.",
+                  "copy": "Copier le prompt"
+                }
+              }
+            }
+          },
+          "started": {
+            "elsewhere": {
+              "title": "{{agent}} a démarré dans {{name}}"
+            }
+          }
         }
       },
       "remotePairingCopy": {
@@ -784,6 +801,10 @@
                 "b96e091fc9": "L'agent sélectionné est désactivé dans les Paramètres.",
                 "a7ac8717c7": "Choisissez un agent avant de démarrer."
               }
+            },
+            "launch": {
+              "failed": "Impossible de démarrer l'agent.",
+              "unconfirmed": "Impossible de confirmer que l'agent a démarré. Vérifiez l'espace de travail avant de réessayer."
             }
           },
           "generation": {
