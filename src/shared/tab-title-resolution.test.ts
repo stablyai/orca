@@ -154,6 +154,48 @@ describe('tab title resolution', () => {
     ).toBe('Fix flaky tests')
   })
 
+  it('lets generated titles replace orchestration worker management titles', () => {
+    const workerTitle = 'worker-task_0123abcdef45'
+
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: workerTitle,
+          generatedTitle: 'Trace local worker terminal naming',
+          title: workerTitle
+        },
+        true
+      )
+    ).toBe('Trace local worker terminal naming')
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: workerTitle,
+          generatedLabel: 'Trace local worker terminal naming',
+          label: workerTitle
+        },
+        true
+      )
+    ).toBe('Trace local worker terminal naming')
+  })
+
+  it('keeps the worker management title when generated titles are unavailable', () => {
+    const workerTitle = 'worker-task_0123abcdef45'
+
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: workerTitle, generatedTitle: 'Hidden task name', title: workerTitle },
+        false
+      )
+    ).toBe(workerTitle)
+    expect(
+      resolveUnifiedTabLabel(
+        { customLabel: workerTitle, generatedLabel: 'Hidden task name', label: workerTitle },
+        false
+      )
+    ).toBe(workerTitle)
+  })
+
   it('uses quick command labels before generated unified labels', () => {
     expect(
       resolveUnifiedTabLabel(

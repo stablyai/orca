@@ -10,6 +10,7 @@ import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mod
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { tryMakePaneKey } from './agent-status-routing'
+import { isOrchestrationWorkerTerminalTitle } from '../../../../shared/orchestration-worker-terminal-title'
 import { useAppStore } from '../../store'
 import {
   activateExistingLeafInLayout,
@@ -134,7 +135,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             focusTerminalInitiatedTab(tab.id, leafId, worktreeId)
           }
           // Why: only stamp the runtime title on fresh tabs; reused tabs may have a user customTitle it would overwrite on focus.
-          if (title && !reusedTab) {
+          if (title && !reusedTab && !isOrchestrationWorkerTerminalTitle(title)) {
             store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
           }
           if (leafId && ptyId) {
