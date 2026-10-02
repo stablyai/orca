@@ -18,7 +18,10 @@ vi.mock('./web-runtime-worktree-catalog', () => ({
   resolveRuntimeWorktreeByPath: mocks.resolveRuntimeWorktreeByPath
 }))
 
-const { carryWorkingTreeChangesOverRuntime } = await import('./web-git-carry-api')
+const {
+  carryWorkingTreeChangesOverRuntime,
+  GIT_CARRY_WORKING_TREE_CHANGES_HOST_UNREACHABLE_MESSAGE
+} = await import('./web-git-carry-api')
 
 const WORKTREES: Record<string, { id: string }> = {
   '/workspace/repo': { id: 'wt-1' },
@@ -65,12 +68,19 @@ describe('carryWorkingTreeChangesOverRuntime', () => {
     expect(mocks.callRuntimeResult).not.toHaveBeenCalled()
   })
 
-  it('refuses honestly when the host status cannot be read', async () => {
+  it('says the paired host was unreachable, not outdated, when its status cannot be read', async () => {
     mocks.getRemoteRuntimeStatus.mockRejectedValue(new Error('offline'))
 
     await expect(
       carryWorkingTreeChangesOverRuntime('/workspace/repo', '/workspace/repo-child')
-    ).resolves.toMatchObject({ ok: false, reason: 'apply_failed' })
+    ).resolves.toEqual({
+      ok: false,
+      reason: 'apply_failed',
+      detail: GIT_CARRY_WORKING_TREE_CHANGES_HOST_UNREACHABLE_MESSAGE
+    })
+    expect(GIT_CARRY_WORKING_TREE_CHANGES_HOST_UNREACHABLE_MESSAGE).not.toBe(
+      GIT_CARRY_WORKING_TREE_CHANGES_UPDATE_REQUIRED_MESSAGE
+    )
     expect(mocks.callRuntimeResult).not.toHaveBeenCalled()
   })
 

@@ -10,13 +10,23 @@ import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-select
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { resolveRuntimeWorktreeByPath } from './web-runtime-worktree-catalog'
 
+export const GIT_CARRY_WORKING_TREE_CHANGES_HOST_UNREACHABLE_MESSAGE =
+  'Could not reach the paired Orca server to carry uncommitted changes. Check the connection and try again.'
+
 export async function carryWorkingTreeChangesOverRuntime(
   sourceWorktreePath: string,
   targetWorktreePath: string
 ): Promise<WorkingTreeCarryResult> {
   // Why: an older paired host answers method_not_found; refuse honestly before touching either worktree.
   const status = await getRemoteRuntimeStatus().catch(() => null)
-  if (!status?.capabilities?.includes(GIT_CARRY_WORKING_TREE_CHANGES_RUNTIME_CAPABILITY)) {
+  if (!status) {
+    return {
+      ok: false,
+      reason: 'apply_failed',
+      detail: GIT_CARRY_WORKING_TREE_CHANGES_HOST_UNREACHABLE_MESSAGE
+    }
+  }
+  if (!status.capabilities?.includes(GIT_CARRY_WORKING_TREE_CHANGES_RUNTIME_CAPABILITY)) {
     return {
       ok: false,
       reason: 'apply_failed',
