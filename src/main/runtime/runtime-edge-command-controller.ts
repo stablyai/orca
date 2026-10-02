@@ -112,6 +112,32 @@ const BROWSER_COMMAND_NAMES = [
   'browserTabClose'
 ] as const satisfies readonly (keyof RuntimeBrowserCommands)[]
 
+const EMULATOR_COMMAND_NAMES = [
+  'emulatorTap',
+  'emulatorGesture',
+  'emulatorType',
+  'emulatorButton',
+  'emulatorRotate',
+  'emulatorExec',
+  'emulatorAttach',
+  'emulatorList',
+  'emulatorUnregisterActive',
+  'emulatorListSimulators',
+  'emulatorAvailability',
+  'emulatorListDevices',
+  'emulatorAdbConnect',
+  'emulatorAdbDisconnect',
+  'emulatorAdbConnectionStatus',
+  'emulatorInstall',
+  'emulatorLaunch',
+  'emulatorPermissions',
+  'emulatorAx',
+  'emulatorLogcat',
+  'emulatorKill',
+  'emulatorShutdown',
+  'emulatorExecRaw'
+] as const satisfies readonly (keyof RuntimeEmulatorCommands)[]
+
 function bindPrefixedMethods<T extends object>(
   instance: T,
   prefix: string
@@ -153,10 +179,11 @@ export class RuntimeEdgeCommandController {
       getCommands: () => args.getBrowserCommands?.() ?? this.browser
     })
     this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bind helpers return Partial maps; the name lists above are the complete public command surface.
     this.surface = {
       ...bindPrefixedMethods(this.jira, 'jira'),
       ...bindNamedMethods(this.browser, BROWSER_COMMAND_NAMES),
-      ...bindPrefixedMethods(this.emulator, 'emulator'),
+      ...bindNamedMethods(this.emulator, EMULATOR_COMMAND_NAMES),
       browserScreencast: (params, options) => this.screencasts.start(params, options)
     } as RuntimeEdgeCommandSurface
   }

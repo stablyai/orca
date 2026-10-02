@@ -12,8 +12,7 @@ import {
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
   adb: '/sdk/adb',
-  emulator: '/sdk/emulator',
-  avdmanager: '/sdk/avdmanager'
+  avdTools: { emulator: '/sdk/emulator', avdmanager: '/sdk/avdmanager' }
 }
 
 const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code: 0 })

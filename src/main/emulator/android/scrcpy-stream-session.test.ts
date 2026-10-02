@@ -43,7 +43,11 @@ async function startSession() {
   const started = ScrcpyStreamSession.start(
     {
       runner,
-      sdk: { sdkRoot: 'sdk', adb: 'adb', emulator: 'emulator', avdmanager: 'avdmanager' },
+      sdk: {
+        sdkRoot: 'sdk',
+        adb: 'adb',
+        avdTools: { emulator: 'emulator', avdmanager: 'avdmanager' }
+      },
       serial: 'test-device',
       localJarPath: 'server.jar',
       localPort: 12345
