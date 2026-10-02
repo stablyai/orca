@@ -24,6 +24,7 @@ const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_ACTIVITY_PORTALS: ActivityTerminalPortalTarget[] = []
+const EMPTY_PARKED_TAB_IDS: ReadonlySet<string> = new Set()
 
 const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId,
@@ -31,6 +32,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   isWorktreeActive,
   coldParkTerminalPanes = false,
   isForceParked = false,
+  retentionParkedTerminalTabIds = EMPTY_PARKED_TAB_IDS,
   shouldMeasureHiddenWorktree = false,
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
   backgroundMountTabIds = null,
@@ -42,6 +44,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   coldParkTerminalPanes?: boolean
   /** Retention-budget force-park keeps eviction-exempt tabs mounted. */
   isForceParked?: boolean
+  retentionParkedTerminalTabIds?: ReadonlySet<string>
   shouldMeasureHiddenWorktree?: boolean
   activityTerminalPortals?: ActivityTerminalPortalTarget[]
   /** Targeted mounts connect only these terminal tabs. */
@@ -123,6 +126,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     activeTerminalTabId,
     coldParkTerminalPanes,
     isForceParked,
+    retentionParkedTerminalTabIds,
     shouldMeasureHiddenWorktree,
     activityTerminalPortals,
     activationDeferredMountTabIds

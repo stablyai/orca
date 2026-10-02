@@ -85,6 +85,7 @@ export type PaneManagerOptions = {
   initialRenderingSuspended?: boolean
   retainHiddenWebgl?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
+  ownerTabId?: string
   // Why: diagnostic label for log correlation. safeFit and other internal
   // helpers log warnings that are hard to correlate without knowing which
   // tab/worktree the PaneManager belongs to.

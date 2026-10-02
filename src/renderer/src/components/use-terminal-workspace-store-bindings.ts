@@ -53,6 +53,7 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
   const groupsByWorktree = useAppStore((state) => state.groupsByWorktree)
+  const unifiedTabsByWorktree = useAppStore((state) => state.unifiedTabsByWorktree)
   const layoutByWorktree = useAppStore((state) => state.layoutByWorktree)
   const activeGroupIdByWorktree = useAppStore((state) => state.activeGroupIdByWorktree)
   const ensureWorktreeRootGroup = useAppStore((state) => state.ensureWorktreeRootGroup)
@@ -101,6 +102,7 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
     closeBrowserTab,
     setActiveBrowserTab,
     groupsByWorktree,
+    unifiedTabsByWorktree,
     layoutByWorktree,
     activeGroupIdByWorktree,
     ensureWorktreeRootGroup,

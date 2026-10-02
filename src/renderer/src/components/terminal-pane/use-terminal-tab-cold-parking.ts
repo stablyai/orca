@@ -68,6 +68,7 @@ export function useTerminalTabColdParking(args: {
    *  worktree may hold eviction-exempt tabs, whose panes must stay mounted —
    *  a remount would orphan their live pty (same carve-out as portals). */
   isForceParked?: boolean
+  retentionParkedTerminalTabIds?: ReadonlySet<string>
   /** Hidden-measuring startup probe from Terminal.tsx — the panes must stay
    *  mounted for their first xterm fit, mirroring the worktree-level guard. */
   shouldMeasureHiddenWorktree: boolean
@@ -84,6 +85,7 @@ export function useTerminalTabColdParking(args: {
     activeTerminalTabId,
     coldParkTerminalPanes,
     isForceParked = false,
+    retentionParkedTerminalTabIds = EMPTY_TAB_IDS,
     shouldMeasureHiddenWorktree,
     activityTerminalPortals,
     activationDeferredMountTabIds
@@ -311,7 +313,8 @@ export function useTerminalTabColdParking(args: {
       if (
         (coldParkTerminalPanes ||
           (!isVisible &&
-            coldParkedTerminalTabIds.has(terminalTab.id) &&
+            (coldParkedTerminalTabIds.has(terminalTab.id) ||
+              retentionParkedTerminalTabIds.has(terminalTab.id)) &&
             // Why: a pane owning a sleeping-session record must stay mountable
             // on an active worktree — parked it can never cold-restore, so the
             // agent's resume strands until the user reveals the tab. Scoped to
@@ -348,6 +351,7 @@ export function useTerminalTabColdParking(args: {
     assignments,
     coldParkTerminalPanes,
     coldParkedTerminalTabIds,
+    retentionParkedTerminalTabIds,
     activationDeferredMountTabIds,
     evictionExemptTerminalTabIds,
     isWorktreeActive,

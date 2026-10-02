@@ -16,17 +16,22 @@ type RegisteredPaneManager = {
 
 const liveManagers = new Set<RegisteredPaneManager>()
 const managerIds = new WeakMap<RegisteredPaneManager, number>()
+const managerTabIds = new WeakMap<RegisteredPaneManager, string>()
 let nextManagerId = 1
 
-export function registerLivePaneManager(manager: RegisteredPaneManager): void {
+export function registerLivePaneManager(manager: RegisteredPaneManager, ownerTabId?: string): void {
   if (!managerIds.has(manager)) {
     managerIds.set(manager, nextManagerId++)
+  }
+  if (ownerTabId) {
+    managerTabIds.set(manager, ownerTabId)
   }
   liveManagers.add(manager)
 }
 
 export function unregisterLivePaneManager(manager: RegisteredPaneManager): void {
   liveManagers.delete(manager)
+  managerTabIds.delete(manager)
 }
 
 export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
@@ -163,7 +168,65 @@ const PANE_SAMPLE_LIMIT = 256
 
 type BufferedTerminal = {
   cols?: number
-  buffer?: { active?: { length?: number } }
+  buffer?: {
+    active?: { length?: number }
+    normal?: { length?: number }
+    alternate?: { length?: number }
+  }
+}
+
+export function getMountedTerminalTabBufferEstimates(
+  tabIds: ReadonlySet<string>
+): ReadonlyMap<string, number> {
+  const estimates = new Map<string, number>()
+  for (const manager of liveManagers) {
+    const tabId = managerTabIds.get(manager)
+    if (!tabId || !tabIds.has(tabId)) {
+      continue
+    }
+    let panes: { id: number; terminal: unknown }[]
+    try {
+      panes = manager.getPanes?.() ?? []
+    } catch {
+      continue
+    }
+    let paneCount: number | undefined
+    try {
+      paneCount = manager.getPaneCount?.()
+    } catch {
+      continue
+    }
+    if (paneCount !== undefined && panes.length !== paneCount) {
+      continue
+    }
+    let bytes = 0
+    let complete = panes.length > 0
+    for (const pane of panes) {
+      const terminal = pane.terminal as BufferedTerminal | null | undefined
+      const cols = terminal?.cols
+      const normalRows = terminal?.buffer?.normal?.length
+      const alternateRows = terminal?.buffer?.alternate?.length
+      if (
+        typeof cols !== 'number' ||
+        !Number.isFinite(cols) ||
+        cols <= 0 ||
+        typeof normalRows !== 'number' ||
+        !Number.isFinite(normalRows) ||
+        normalRows < 0 ||
+        typeof alternateRows !== 'number' ||
+        !Number.isFinite(alternateRows) ||
+        alternateRows < 0
+      ) {
+        complete = false
+        break
+      }
+      bytes += (normalRows + alternateRows) * cols * BYTES_PER_TERMINAL_CELL
+    }
+    if (complete) {
+      estimates.set(tabId, bytes)
+    }
+  }
+  return estimates
 }
 
 /**

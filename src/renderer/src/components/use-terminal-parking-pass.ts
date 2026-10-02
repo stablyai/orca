@@ -9,6 +9,7 @@ import {
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
 } from './terminal-pane/terminal-hidden-worktree-retention'
+import { runHiddenTabRetentionPass } from './terminal-hidden-tab-retention-pass'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { selectEvictionExemptTerminalTabIds } from './terminal-pane/terminal-eviction-exempt-tabs'
 import { captureParkedTerminalBuffers } from './terminal-pane/parked-terminal-buffer-capture'
@@ -24,13 +25,16 @@ import type { TerminalParkingFoundation } from './use-terminal-parking-foundatio
 
 export function useTerminalParkingPass(controller: TerminalParkingFoundation): void {
   const {
+    activeTabId,
     activeView,
     activityTerminalPortals,
     backgroundMountRevision,
+    groupsByWorktree,
     parkedCaptureDoneRef,
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
+    retentionParkedTerminalTabIds,
     setEvictionExemptTerminalTabIds,
     setForceParkedTerminalWorktreeIds,
     setParkedTerminalWorktreeIds,
@@ -41,6 +45,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
+    unifiedTabsByWorktree,
     workspaceSurfaceIds
   } = controller
 
@@ -154,6 +159,8 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     setEvictionExemptTerminalTabIds((current) =>
       haveSameIdSet(current, nextEvictionExemptTabIds) ? current : nextEvictionExemptTabIds
     )
+
+    runHiddenTabRetentionPass(controller, pass)
     const retentionTtlEligibleIds = new Set(
       retentionBudgetCandidates
         .filter((candidate) => !candidate.ordinaryParkingCovers && !candidate.hasPendingSpawnWork)
@@ -193,18 +200,22 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
   }, [
+    activeTabId,
     activeView,
     activityTerminalPortals,
     backgroundMountRevision,
+    groupsByWorktree,
     pendingStartupByTabId,
     pairedRuntimeParkingEnvironmentIds,
     renderedActiveWorktreeId,
+    retentionParkedTerminalTabIds,
     tabsByWorktree,
     terminalParkingEnabled,
     terminalParkingRevision,
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
+    unifiedTabsByWorktree,
     workspaceSurfaceIds
   ])
 }

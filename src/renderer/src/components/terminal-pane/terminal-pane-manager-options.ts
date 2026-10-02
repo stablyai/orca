@@ -183,6 +183,7 @@ export function createTerminalPaneManagerOptions(
     // Reopening the floating panel must rebuild silently corrupted glyph atlases.
     retainHiddenWebgl: worktreeId !== FLOATING_TERMINAL_WORKTREE_ID,
     terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
+    ownerTabId: tabId,
     debugLabel: `tab:${tabId}/wt:${worktreeId}`
   }
 }

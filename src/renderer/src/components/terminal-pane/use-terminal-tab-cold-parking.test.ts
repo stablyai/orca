@@ -160,6 +160,31 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     expect(result.current).toEqual(new Set(['tab-1']))
   })
 
+  it('parks an eligible hidden tab selected by the global retention pass', () => {
+    const { result } = renderHook(() =>
+      useTerminalTabColdParking({
+        ...hookArgs(false),
+        retentionParkedTerminalTabIds: new Set(['tab-1'])
+      })
+    )
+
+    expect(result.current).toContain('tab-1')
+  })
+
+  it('does not park a visible tab from a stale global retention result', () => {
+    const { result } = renderHook(() =>
+      useTerminalTabColdParking({
+        ...hookArgs(false),
+        assignments: new Map([['tab-1', { groupId: 'group-1', isActiveInGroup: true }]]),
+        isWorktreeActive: true,
+        activeTerminalTabId: 'tab-1',
+        retentionParkedTerminalTabIds: new Set(['tab-1'])
+      })
+    )
+
+    expect(result.current).not.toContain('tab-1')
+  })
+
   it('records focused split changes when the visible tab set does not change', () => {
     const assignments = new Map([
       ['tab-1', { groupId: 'group-1', isActiveInGroup: true }],

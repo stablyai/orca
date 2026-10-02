@@ -30,6 +30,61 @@ import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-pro
 // eviction, not demotion.
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 15 * 60_000
+export const TERMINAL_HIDDEN_TAB_RETENTION_LIMIT = 4
+export const TERMINAL_HIDDEN_TAB_RETENTION_BYTES = 384 * 1024 * 1024
+export const TERMINAL_HIDDEN_TAB_RETENTION_RECHECK_MS = 30_000
+
+export type HiddenTerminalTabRetentionCandidate = {
+  tabId: string
+  hiddenSinceMs: number
+  estimatedBufferBytes: number
+}
+
+export function selectHiddenTerminalTabsBeyondRetentionBudget(args: {
+  candidates: readonly HiddenTerminalTabRetentionCandidate[]
+  nowMs: number
+  enabled: boolean
+  coldParkDelayMs?: number
+  retentionTtlMs?: number
+  retentionLimit?: number
+  retentionBytes?: number
+}): Set<string> {
+  if (!args.enabled) {
+    return new Set()
+  }
+  const coldParkDelayMs = args.coldParkDelayMs ?? TERMINAL_WORKTREE_COLD_PARK_DELAY_MS
+  const retentionTtlMs = args.retentionTtlMs ?? TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS
+  const retentionLimit = args.retentionLimit ?? TERMINAL_HIDDEN_TAB_RETENTION_LIMIT
+  const retentionBytes = args.retentionBytes ?? TERMINAL_HIDDEN_TAB_RETENTION_BYTES
+  const eligible: HiddenTerminalTabRetentionCandidate[] = []
+  const parked = new Set<string>()
+  for (const candidate of args.candidates) {
+    const hiddenForMs = args.nowMs - candidate.hiddenSinceMs
+    if (hiddenForMs < coldParkDelayMs) {
+      continue
+    }
+    if (hiddenForMs >= retentionTtlMs) {
+      parked.add(candidate.tabId)
+      continue
+    }
+    eligible.push(candidate)
+  }
+  eligible.sort((a, b) => b.hiddenSinceMs - a.hiddenSinceMs || a.tabId.localeCompare(b.tabId))
+  let retainedTabs = 0
+  let retainedBytes = 0
+  for (const candidate of eligible) {
+    if (
+      retainedTabs >= retentionLimit ||
+      retainedBytes + candidate.estimatedBufferBytes > retentionBytes
+    ) {
+      parked.add(candidate.tabId)
+      continue
+    }
+    retainedTabs += 1
+    retainedBytes += candidate.estimatedBufferBytes
+  }
+  return parked
+}
 
 export function createTerminalWorktreeTopologyProjection(
   onInspectBucket?: (worktreeId: string) => void

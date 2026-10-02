@@ -22,6 +22,7 @@ export function TerminalSplitWorkspaceSurfaces({
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
+    retentionParkedTerminalTabIds,
     startupTerminalTabHold,
     workspaceSurfaces
   } = controller
@@ -67,6 +68,7 @@ export function TerminalSplitWorkspaceSurfaces({
               shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
               shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
               isForceParked={forceParkedTerminalWorktreeIds.has(workspace.id)}
+              retentionParkedTerminalTabIds={retentionParkedTerminalTabIds}
               activityTerminalPortals={activityTerminalPortals}
               backgroundMountTabIds={
                 backgroundMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null

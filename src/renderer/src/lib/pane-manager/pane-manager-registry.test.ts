@@ -4,6 +4,7 @@ import {
   forEachLivePaneForDesyncSentinel,
   getLivePaneCensus,
   getLivePaneMemoryProfileCounts,
+  getMountedTerminalTabBufferEstimates,
   refitAndRefreshAllTerminalPanes,
   registerLivePaneManager,
   resetAndRefreshAllTerminalWebglAtlases,
@@ -295,6 +296,29 @@ describe('pane manager registry', () => {
       estPanes: 2,
       estBufferKB: 15_625
     })
+  })
+
+  it('returns exact normal plus alternate buffer bytes for an owned mounted tab', () => {
+    const manager = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPaneCount: () => 2,
+      getPanes: () => [
+        {
+          id: 1,
+          terminal: { cols: 100, buffer: { normal: { length: 1001 }, alternate: { length: 24 } } }
+        },
+        {
+          id: 2,
+          terminal: { cols: 80, buffer: { normal: { length: 50 }, alternate: { length: 0 } } }
+        }
+      ]
+    }
+    registerLivePaneManager(manager, 'tab-1')
+    registeredManagers.push(manager)
+
+    expect(getMountedTerminalTabBufferEstimates(new Set(['tab-1', 'missing']))).toEqual(
+      new Map([['tab-1', (1025 * 100 + 50 * 80) * 16]])
+    )
   })
 
   it('bounds manager and pane sampling while extrapolating totals', () => {

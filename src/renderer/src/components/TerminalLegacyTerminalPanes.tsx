@@ -23,6 +23,7 @@ export function TerminalLegacyTerminalPanes({
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
+    retentionParkedTerminalTabIds,
     tabsByWorktree,
     worktreeBrowserTabs,
     worktreeFiles,
@@ -79,7 +80,8 @@ export function TerminalLegacyTerminalPanes({
                 })
                 const isActivityPortalTab = activityTerminalPortal !== null
                 if (
-                  shouldColdParkTerminalPanes &&
+                  (shouldColdParkTerminalPanes ||
+                    (retentionParkedTerminalTabIds.has(tab.id) && !isActiveTerminalTab)) &&
                   !isActivityPortalTab &&
                   !evictionExemptTerminalTabIds.has(tab.id)
                 ) {

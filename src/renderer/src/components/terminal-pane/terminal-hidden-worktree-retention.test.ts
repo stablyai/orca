@@ -7,6 +7,7 @@ import {
 } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  selectHiddenTerminalTabsBeyondRetentionBudget,
   createTerminalWorktreeTopologyProjection,
   hasPendingRetentionSpawnWork,
   isEvictionExemptTerminalPty,
@@ -323,5 +324,75 @@ describe('selectForceParkEvictableTabIds', () => {
   // the degenerate case a fleet-wide daemon fail-open produces, which the host logs.
   it('yields nothing when every tab is exempt', () => {
     expect(selectForceParkEvictableTabIds(tabs, () => true)).toEqual([])
+  })
+})
+
+describe('selectHiddenTerminalTabsBeyondRetentionBudget', () => {
+  const nowMs = 1_000_000
+  const candidate = (tabId: string, ageMs: number, estimatedBufferBytes: number) => ({
+    tabId,
+    hiddenSinceMs: nowMs - ageMs,
+    estimatedBufferBytes
+  })
+
+  it('parks the oldest tab once the byte budget is exceeded', () => {
+    expect(
+      selectHiddenTerminalTabsBeyondRetentionBudget({
+        candidates: [candidate('old', 4_000, 200), candidate('new', 2_000, 200)],
+        nowMs,
+        enabled: true,
+        coldParkDelayMs: 1,
+        retentionTtlMs: 60_000,
+        retentionLimit: 4,
+        retentionBytes: 300
+      })
+    ).toEqual(new Set(['old']))
+  })
+
+  it('parks the oldest tabs once the count cap is exceeded', () => {
+    expect(
+      selectHiddenTerminalTabsBeyondRetentionBudget({
+        candidates: [
+          candidate('oldest', 5_000, 1),
+          candidate('older', 4_000, 1),
+          candidate('newer', 3_000, 1),
+          candidate('newest', 2_000, 1)
+        ],
+        nowMs,
+        enabled: true,
+        coldParkDelayMs: 1,
+        retentionTtlMs: 60_000,
+        retentionLimit: 2,
+        retentionBytes: 1_000
+      })
+    ).toEqual(new Set(['oldest', 'older']))
+  })
+
+  it('parks nothing while the budget is disabled', () => {
+    expect(
+      selectHiddenTerminalTabsBeyondRetentionBudget({
+        candidates: [candidate('expired', 60_000, 1_000)],
+        nowMs,
+        enabled: false,
+        coldParkDelayMs: 1,
+        retentionTtlMs: 60_000,
+        retentionLimit: 0,
+        retentionBytes: 1
+      })
+    ).toEqual(new Set())
+  })
+
+  it('parks every eligible tab past the absolute TTL', () => {
+    expect(
+      selectHiddenTerminalTabsBeyondRetentionBudget({
+        candidates: [candidate('expired', 60_000, 1), candidate('fresh', 2_000, 1)],
+        nowMs,
+        enabled: true,
+        coldParkDelayMs: 1,
+        retentionTtlMs: 60_000,
+        retentionLimit: 4,
+        retentionBytes: 100
+      })
+    ).toEqual(new Set(['expired']))
   })
 })

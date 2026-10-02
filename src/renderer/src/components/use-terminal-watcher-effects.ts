@@ -53,7 +53,7 @@ type TerminalWatcherController = Pick<
   | 'terminalTitleSnapshotAuthorityEnabled'
   | 'workspaceSessionReady'
   | 'workspaceSurfaceIds'
->
+> & { retentionParkedTerminalTabIds?: ReadonlySet<string> }
 
 export function useTerminalWatcherEffects(controller: TerminalWatcherController): void {
   const {
@@ -77,6 +77,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     pendingStartupByTabId,
     reconcileWorktreeTabModel,
     renderedActiveWorktreeId,
+    retentionParkedTerminalTabIds = NO_PARKED_TAB_IDS,
     startupTerminalTabHold,
     tabsByWorktree,
     terminalParkingEnabled,
@@ -121,6 +122,11 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
             if (!activityTerminalPortal && !evictionExemptTerminalTabIds.has(tab.id)) {
               mountedParkedTabIds.add(tab.id)
             }
+          }
+        }
+        for (const tab of tabs) {
+          if (retentionParkedTerminalTabIds.has(tab.id)) {
+            mountedParkedTabIds.add(tab.id)
           }
         }
         deferredTabIds = selectParkedEquivalentMountTabIds(
@@ -181,6 +187,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
+    retentionParkedTerminalTabIds,
     startupTerminalTabHold,
     tabsByWorktree,
     terminalParkingEnabled,

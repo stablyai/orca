@@ -120,7 +120,7 @@ export class PaneManager {
     }
     // Why: atlas recovery must reach every live manager — see
     // resetAndRefreshAllTerminalWebglAtlases for the shared-atlas rationale.
-    registerLivePaneManager(this)
+    registerLivePaneManager(this, options.ownerTabId)
   }
 
   createInitialPane(opts?: { focus?: boolean; leafId?: string }): ManagedPane {
