@@ -11,6 +11,7 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import { gitSpawnAfterWindowsEnvironmentReady, nonInteractiveGitEnv } from '../git/runner'
+import { gitCloneEnvWithProxy } from '../git/git-clone-proxy-env'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -106,7 +107,8 @@ export class RuntimeRepositoryCloneController {
         {
           cwd: trimmedDestination,
           admissionTier: 'interactive',
-          env: nonInteractiveGitEnv(),
+          // Why: honor the app's configured proxy so clones route through it like other Orca network children.
+          env: gitCloneEnvWithProxy(nonInteractiveGitEnv(), store.getSettings()),
           stdio: ['ignore', 'ignore', 'pipe']
         }
       )

@@ -61,6 +61,12 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
     return result as { stdout: string; stderr: string }
   }
 
+  /**
+   * Clone a repo over the relay. `options.proxyUrl` / `options.proxyBypassRules`
+   * are forwarded to the remote `git.clone` so the clone routes through the
+   * desktop's configured proxy (the relay rebuilds env from the remote host and
+   * cannot otherwise see it). Omitted when no proxy is configured.
+   */
   async clone(
     args: string[],
     cwd: string,
@@ -68,6 +74,8 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
       signal?: AbortSignal
       timeoutMs?: number
       onProgress?: (progress: { phase: string; percent: number }) => void
+      proxyUrl?: string
+      proxyBypassRules?: string
     }
   ): Promise<{ stdout: string; stderr: string }> {
     return this.runWithGitReadInvalidation(async () => {
@@ -87,7 +95,15 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
       try {
         const result = await this.mux.request(
           'git.clone',
-          { args, cwd, progressId },
+          {
+            args,
+            cwd,
+            progressId,
+            // Why: the relay rebuilds git env from the remote host, so a locally
+            // configured proxy only reaches the clone when forwarded explicitly.
+            ...(options?.proxyUrl ? { proxyUrl: options.proxyUrl } : {}),
+            ...(options?.proxyBypassRules ? { proxyBypassRules: options.proxyBypassRules } : {})
+          },
           { signal: options?.signal, timeoutMs: options?.timeoutMs }
         )
         return result as { stdout: string; stderr: string }
