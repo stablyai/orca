@@ -6500,6 +6500,7 @@
           "folderPathIdentity": "Branch / folder path",
           "cli": "Orca CLI",
           "workspaceOptions": "Workspace options",
+          "thenBy": "Then by",
           "optionsActiveFilters_one": "Workspace options ({{count}} filter active)",
           "optionsActiveFilters_other": "Workspace options ({{count}} filters active)",
           "optionsFilterCount_one": "Workspace options ({{count}} filter)",

@@ -19,12 +19,14 @@ export function resolveProjectGroupHeaderColor(args: {
   headerKey: string
   badgeColor: string | null | undefined
 }): string | undefined {
-  // Pinned and folder headers must not inherit project colors just because grouping is by repo.
-  if (
-    args.groupBy !== 'repo' ||
-    (!args.headerKey.startsWith(PROJECT_GROUP_HEADER_KEY_PREFIX) &&
-      !args.headerKey.startsWith(PROVIDER_PROJECT_HEADER_KEY_PREFIX))
-  ) {
+  // Provider project IDs can contain slashes, so find an explicit project segment.
+  const directProjectHeader =
+    args.headerKey.startsWith(PROJECT_GROUP_HEADER_KEY_PREFIX) ||
+    args.headerKey.startsWith(PROVIDER_PROJECT_HEADER_KEY_PREFIX)
+  const nestedRepoIndex = args.headerKey.indexOf(`/${PROJECT_GROUP_HEADER_KEY_PREFIX}`)
+  const nestedProjectIndex = args.headerKey.indexOf(`/${PROVIDER_PROJECT_HEADER_KEY_PREFIX}`)
+  const projectHeader = directProjectHeader || nestedRepoIndex !== -1 || nestedProjectIndex !== -1
+  if (args.groupBy !== 'repo' || !projectHeader) {
     return undefined
   }
   return resolveRepoHeaderColor(args.badgeColor)

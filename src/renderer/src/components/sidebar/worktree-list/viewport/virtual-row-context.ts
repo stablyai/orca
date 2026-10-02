@@ -80,6 +80,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       projectGroups: args.projectGroups,
       highlightedRevealRowKey: reveal.highlightedRevealRowKey,
       dragOverStatus: runtime.dragOverStatus,
+      dragOverStatusGroupKey: runtime.dragOverStatusGroupKey,
       pinDragOver: runtime.pinDragOver,
       headerDrag,
       projectHeaderHostContexts: args.projectHeaderHostContexts,

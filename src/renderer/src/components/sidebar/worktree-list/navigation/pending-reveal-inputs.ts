@@ -14,7 +14,8 @@ import type { RenderRow } from '../listing/render-row'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import type {
   PinnedWorktreeDisplayPolicy,
-  WorktreeGroupBy
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
 } from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceRevealGroupKeys, sidebarWorkspaceStillExists } from './folder-reveal'
 import {
@@ -44,6 +45,7 @@ export type PendingSidebarRevealArgs = {
   collapsedGroups: Set<string>
   toggleGroup: (key: string) => void
   groupBy: WorktreeGroupBy
+  groupBySecondary?: WorktreeGroupBySecondary
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
   prCache: AppState['prCache'] | null
@@ -71,6 +73,7 @@ export function expandGroupsForWorktreeReveal(
     args.projectGroups,
     {
       groupBy: args.groupBy,
+      groupBySecondary: args.groupBySecondary ?? 'none',
       workspaceStatuses: args.workspaceStatuses,
       defaultHostId: args.defaultHostId,
       hostScopedGroups,

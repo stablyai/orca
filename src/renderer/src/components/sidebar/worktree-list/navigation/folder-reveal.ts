@@ -13,13 +13,19 @@ import {
   composeWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
-import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
+import {
+  getNestedGroupKey,
+  getProjectGroupHeaderKey
+} from '../../../../../../shared/sidebar-list/group-keys'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
-import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import type {
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
+} from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/sidebar-list/folder-workspace-host-id'
 import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/host-section-collapse'
 
@@ -88,6 +94,7 @@ export function getFolderWorkspaceRevealGroupKeys(
   projectGroups: readonly ProjectGroup[],
   options?: {
     groupBy?: WorktreeGroupBy
+    groupBySecondary?: WorktreeGroupBySecondary
     workspaceStatuses?: readonly WorkspaceStatusDefinition[]
     defaultHostId?: ExecutionHostId
     hostScopedGroups?: boolean
@@ -128,27 +135,66 @@ export function getFolderWorkspaceRevealGroupKeys(
     groupId = group.parentGroupId
   }
 
-  // Non-repo modes hide folders behind lane/host headers; derive their reveal keys from the grouping function.
   const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
+  const ownerHostId =
+    owningGroup && options?.defaultHostId
+      ? getFolderWorkspaceHostId(folderWorkspace, owningGroup, options.defaultHostId)
+      : null
+  const sectionKey = (key: string): string =>
+    options?.hostScopedGroups && ownerHostId ? getHostSectionCollapseKey(key, ownerHostId) : key
+  const secondaryGroupBy =
+    options?.groupBySecondary !== options?.groupBy ? options?.groupBySecondary : 'none'
+  if (
+    options?.groupBy === 'repo' &&
+    secondaryGroupBy &&
+    secondaryGroupBy !== 'none' &&
+    secondaryGroupBy !== 'repo' &&
+    owningGroup
+  ) {
+    const secondaryLaneKey = getFolderWorkspaceLaneKey(
+      { folderWorkspace, projectGroup: owningGroup },
+      secondaryGroupBy,
+      options.workspaceStatuses ?? []
+    )
+    keys.push(
+      sectionKey(getNestedGroupKey(getProjectGroupHeaderKey(owningGroup.id), secondaryLaneKey))
+    )
+  }
+
+  // Under non-Project grouping the unqualified Project Group headers above do
+  // not exist. A Project secondary restores that hierarchy, with every key
+  // qualified by its primary lane so collapse state stays independent.
   if (options?.groupBy && options.groupBy !== 'repo' && owningGroup) {
     const laneKey = getFolderWorkspaceLaneKey(
       { folderWorkspace, projectGroup: owningGroup },
       options.groupBy,
       options.workspaceStatuses ?? []
     )
-    keys.push(
-      options.hostScopedGroups && options.defaultHostId
-        ? getHostSectionCollapseKey(
-            laneKey,
-            getFolderWorkspaceHostId(folderWorkspace, owningGroup, options.defaultHostId)
-          )
-        : laneKey
-    )
+    if (secondaryGroupBy === 'repo') {
+      keys.splice(
+        0,
+        keys.length,
+        sectionKey(laneKey),
+        ...keys.map((key) => sectionKey(getNestedGroupKey(laneKey, key)))
+      )
+    } else if (secondaryGroupBy && secondaryGroupBy !== 'none') {
+      const secondaryLaneKey = getFolderWorkspaceLaneKey(
+        { folderWorkspace, projectGroup: owningGroup },
+        secondaryGroupBy,
+        options.workspaceStatuses ?? []
+      )
+      keys.splice(
+        0,
+        keys.length,
+        sectionKey(laneKey),
+        sectionKey(getNestedGroupKey(laneKey, secondaryLaneKey))
+      )
+    } else {
+      keys.splice(0, keys.length, sectionKey(laneKey))
+    }
   }
-  if (owningGroup && options?.defaultHostId) {
-    keys.push(
-      `host:${getFolderWorkspaceHostId(folderWorkspace, owningGroup, options.defaultHostId)}`
-    )
+  if (ownerHostId) {
+    keys.push(`host:${ownerHostId}`)
   }
   return keys
 }

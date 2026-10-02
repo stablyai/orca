@@ -54,6 +54,7 @@ function sections(
   return renderHook(() =>
     useSidebarSectionRows({
       groupBy,
+      groupBySecondary: 'none',
       projectOrderBy: 'manual',
       pinnedDisplayPolicy: 'single-location',
       defaultHostId: 'local',
@@ -74,7 +75,8 @@ function sections(
       newExternalWorktreesInboxByRepo: new Map(),
       filterRepoIds: [],
       visibleWorkspaceHostIds: ['local', hostId],
-      workspaceHostScope: 'all'
+      workspaceHostScope: 'all',
+      emptySecondaryStatusSourceGroupKey: null
     })
   ).result.current.sectionRows
 }
@@ -90,6 +92,7 @@ for (const hostId of ['ssh:builder', 'runtime:builder'] as const) {
         collapsedGroups,
         agentSendTargetWorktreeId: remote.id,
         groupBy: 'none',
+        groupBySecondary: 'none',
         pinnedDisplayPolicy: 'single-location',
         worktrees,
         visibleWorktrees: worktrees,
@@ -144,6 +147,7 @@ for (const hostId of ['local', 'ssh:builder', 'runtime:builder'] as const) {
         collapsedGroups,
         agentSendTargetWorktreeId: child.id,
         groupBy: 'none',
+        groupBySecondary: 'none',
         pinnedDisplayPolicy: 'single-location',
         worktrees,
         visibleWorktrees: worktrees,
@@ -202,6 +206,7 @@ it.each([true, false])('reveals the target with pinned ancestors visible=%s', (v
         collapsedGroups,
         agentSendTargetWorktreeId: targetId,
         groupBy: 'none',
+        groupBySecondary: 'none',
         pinnedDisplayPolicy: 'single-location',
         worktrees,
         visibleWorktrees,

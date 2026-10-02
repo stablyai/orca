@@ -33,6 +33,7 @@ import { useWindowSidebarListModel } from './worktree-list/listing/use-window-li
 import { useMainSidebarListModel } from './worktree-list/listing/use-main-list-model'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { useSecondaryStatusDragSource } from './worktree-list/drag/use-secondary-status-drag-source'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
@@ -82,6 +83,7 @@ const WorktreeList = React.memo(function WorktreeList({
     [activeWorkspaceKey, activeWorktreeId]
   )
   const groupBy = useAppStore((s) => s.groupBy)
+  const groupBySecondary = useAppStore((s) => s.groupBySecondary)
   const boardStatuses = useWorkspaceBoardStatuses()
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
@@ -101,7 +103,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const settings = useAppStore((s) => s.settings)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const { prCache, hostedReviewCache } = useAppStore(
-    useShallow((s) => selectWorktreeListReviewCacheInputs(s, groupBy, cardProps))
+    useShallow((s) => selectWorktreeListReviewCacheInputs(s, groupBy, cardProps, groupBySecondary))
   )
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
   const defaultHostId = getSettingsFocusedExecutionHostId(settings)
@@ -113,6 +115,20 @@ const WorktreeList = React.memo(function WorktreeList({
     }),
     [projectHostSetupProjection]
   )
+  const {
+    emptySecondaryStatusSourceGroupKey,
+    onWorktreeDragSourceChange: handleWorktreeDragSourceChange
+  } = useSecondaryStatusDragSource({
+    groupBy,
+    groupBySecondary,
+    worktreeMap,
+    repoMap,
+    prCache,
+    workspaceStatuses: boardStatuses,
+    settings,
+    projectGroups,
+    projectGrouping
+  })
 
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
@@ -125,6 +141,7 @@ const WorktreeList = React.memo(function WorktreeList({
     filterState,
     sortBy,
     groupBy,
+    groupBySecondary,
     projectOrderBy,
     pinnedDisplayPolicy,
     defaultHostId,
@@ -141,7 +158,8 @@ const WorktreeList = React.memo(function WorktreeList({
     projectGrouping,
     detectedWorktreesByRepo,
     prCache,
-    agentSendTargetWorktreeId
+    agentSendTargetWorktreeId,
+    emptySecondaryStatusSourceGroupKey
   })
   const visibleProjectRepoIdsBySection = useMemo(
     () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
@@ -248,7 +266,7 @@ const WorktreeList = React.memo(function WorktreeList({
       />
       <VirtualizedWorktreeViewport
         // Wake moves status headers; preserve viewport identity across those changes.
-        key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
+        key={`group:${groupBy}:${groupBySecondary}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
         rows={rowModel.sectionRows}
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
@@ -260,6 +278,7 @@ const WorktreeList = React.memo(function WorktreeList({
         activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
         currentWorktreeId={currentSidebarWorktreeId}
         groupBy={groupBy}
+        groupBySecondary={groupBySecondary}
         pinnedDisplayPolicy={pinnedDisplayPolicy}
         projectOrderBy={projectOrderBy}
         toggleGroup={toggleGroup}
@@ -304,6 +323,7 @@ const WorktreeList = React.memo(function WorktreeList({
         allRepoIds={rowModel.allRepoIds}
         onReorderHostSections={rowModel.handleReorderHostSections}
         onHostDragActiveChange={rowModel.setHostDragActive}
+        onWorktreeDragSourceChange={handleWorktreeDragSourceChange}
         prCache={prCache}
         hostedReviewCache={hostedReviewCache}
         workspaceStatuses={boardStatuses}

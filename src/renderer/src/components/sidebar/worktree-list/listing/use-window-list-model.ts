@@ -37,6 +37,7 @@ export function useWindowSidebarListModel(args: SidebarListModelArgs): SidebarLi
   })
   const rowModel = useSidebarSectionRows({
     groupBy: args.groupBy,
+    groupBySecondary: args.groupBySecondary,
     projectOrderBy: args.projectOrderBy,
     pinnedDisplayPolicy: args.pinnedDisplayPolicy,
     defaultHostId,
@@ -58,7 +59,8 @@ export function useWindowSidebarListModel(args: SidebarListModelArgs): SidebarLi
     newExternalWorktreesInboxByRepo: externalWorktreeCards.newExternalWorktreesInboxByRepo,
     filterRepoIds: filterState.filterRepoIds,
     visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
-    workspaceHostScope: filterState.workspaceHostScope
+    workspaceHostScope: filterState.workspaceHostScope,
+    emptySecondaryStatusSourceGroupKey: args.emptySecondaryStatusSourceGroupKey
   })
   return { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel }
 }

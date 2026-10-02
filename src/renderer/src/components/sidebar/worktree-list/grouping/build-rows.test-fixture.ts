@@ -18,11 +18,17 @@ import type {
   PendingCreationRef,
   PinnedWorktreeDisplayPolicy,
   Row,
-  WorktreeGroupBy
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
 } from '../../../../../../shared/sidebar-list/row-types'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import type { PRCacheView } from '../../../../../../shared/sidebar-list/workspace-review-facts'
 import { createSidebarPRGroupReader } from './pr-group-key'
+
+export type BuildRowsNestedGroupingOptions = {
+  secondary?: WorktreeGroupBySecondary
+  emptySecondaryStatusSourceGroupKey?: string | null
+}
 
 /** Test-only positional entry to the shared row builder, with the window's defaults. */
 export function buildSidebarRowPlan(
@@ -51,7 +57,8 @@ export function buildSidebarRowPlan(
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
-  filterRepoIds: readonly string[] = []
+  filterRepoIds: readonly string[] = [],
+  nestedGrouping: BuildRowsNestedGroupingOptions = {}
 ) {
   return planSidebarRows({
     groupBy,
@@ -74,7 +81,9 @@ export function buildSidebarRowPlan(
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds
+    filterRepoIds,
+    groupBySecondary: nestedGrouping.secondary,
+    emptySecondaryStatusSourceGroupKey: nestedGrouping.emptySecondaryStatusSourceGroupKey
   })
 }
 

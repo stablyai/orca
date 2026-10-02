@@ -57,6 +57,7 @@ export type SectionHeaderRowContext = {
   projectGroups: readonly ProjectGroup[]
   highlightedRevealRowKey: string | null
   dragOverStatus: WorkspaceStatus | null
+  dragOverStatusGroupKey: string | null
   pinDragOver: boolean
   headerDrag: WorktreeSidebarHeaderDrag
   getCachedFolderWorkspacePathStatus: (request: {
@@ -94,8 +95,13 @@ export function renderWorktreeSectionHeaderRow(args: {
 }): React.JSX.Element {
   const { ctx, row, vItem, isActiveStickyHeader } = args
   const { headerDrag } = ctx
-  const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
-  const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
+  const isRepoHeader =
+    (row.groupKind === 'repo' || (!row.groupKind && ctx.groupBy === 'repo')) &&
+    row.repo !== undefined
+  const isProjectGroupHeader =
+    (row.groupKind === 'project-group' || (!row.groupKind && ctx.groupBy === 'repo')) &&
+    row.projectGroup !== undefined
+  const repoForHeader = isRepoHeader ? row.repo : undefined
   // Drag keys on the project's anchor and skips copies an earlier host section already drew.
   const headerRepo = isRepoHeader ? getHeaderDragRepo(row) : undefined
   const projectIdForHeader = headerRepo?.id
@@ -111,11 +117,11 @@ export function renderWorktreeSectionHeaderRow(args: {
       : undefined
   const repoHeaderIndex =
     projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderIndexByRepoId.get(projectIdForHeader)
+      ? headerDrag.repoHeaderIndexByHeaderKey.get(row.key)
       : undefined
   const repoHeaderBucketKey =
     projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderBucketByRepoId.get(projectIdForHeader)
+      ? headerDrag.repoHeaderBucketByHeaderKey.get(row.key)
       : undefined
   const projectGroupHeaderIndex =
     projectGroupDragIdForHeader !== undefined
@@ -148,16 +154,17 @@ export function renderWorktreeSectionHeaderRow(args: {
     headerDrag.projectGroupDrag.state.draggingGroupId !== null &&
     headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
   const headerWorkspaceStatus =
-    ctx.groupBy === 'workspace-status'
+    row.workspaceStatus ??
+    (row.groupKind === 'workspace-status' || (!row.groupKind && ctx.groupBy === 'workspace-status')
       ? getWorkspaceStatusFromGroupKey(row.key, ctx.workspaceStatuses)
-      : null
+      : null)
   const isPinnedHeader = row.key === PINNED_GROUP_KEY
   const headerVisual = getSidebarHeaderVisual(row.icon, ctx.workspaceStatuses)
   const label = row.label ?? headerVisual.label ?? ''
   const hostContext =
-    ctx.groupBy === 'repo' ? ctx.projectHeaderHostContexts?.get(row.key) : undefined
+    isRepoHeader || isProjectGroupHeader ? ctx.projectHeaderHostContexts?.get(row.key) : undefined
   const repoHeaderColor = resolveProjectGroupHeaderColor({
-    groupBy: ctx.groupBy,
+    groupBy: isRepoHeader || isProjectGroupHeader ? 'repo' : ctx.groupBy,
     headerKey: row.key,
     badgeColor: row.repo?.badgeColor
   })
@@ -217,9 +224,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           data-repo-header-index={repoHeaderIndex}
           data-repo-header-bucket={repoHeaderBucketKey}
           data-repo-header-section-end={
-            projectIdForHeader
-              ? headerDrag.repoHeaderSectionEndByRepoId.get(projectIdForHeader)
-              : undefined
+            projectIdForHeader ? headerDrag.repoHeaderSectionEndByHeaderKey.get(row.key) : undefined
           }
           // Padding remains a drag handle; only the title shows grab so action buttons never inherit it.
           data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
@@ -234,6 +239,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           data-project-group-header-drag-handle={isDraggableProjectGroupHeader ? '' : undefined}
           data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}
           data-workspace-status={headerWorkspaceStatus ?? undefined}
+          data-workspace-status-group-key={headerWorkspaceStatus ? row.key : undefined}
           data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
           className={cn(
             // Keep grab on the title; action buttons use pointer cursors.
@@ -245,6 +251,7 @@ export function renderWorktreeSectionHeaderRow(args: {
               'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
             headerWorkspaceStatus &&
               ctx.dragOverStatus === headerWorkspaceStatus &&
+              (ctx.dragOverStatusGroupKey === null || ctx.dragOverStatusGroupKey === row.key) &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
             isPinnedHeader &&
               ctx.pinDragOver &&
@@ -254,7 +261,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           style={{
             // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
             paddingLeft:
-              isRepoHeader || isProjectGroupHeader
+              isRepoHeader || isProjectGroupHeader || (row.projectGroupDepth ?? 0) > 0
                 ? getProjectGroupHeaderPaddingLeft(row.projectGroupDepth ?? 0)
                 : WORKTREE_SECTION_HEADER_PADDING_LEFT
           }}
@@ -279,7 +286,8 @@ export function renderWorktreeSectionHeaderRow(args: {
           }
           onPointerDown={
             isDraggableRepoHeader && headerRepo
-              ? (event) => headerDrag.repoDrag.onHandlePointerDown(event, headerRepo)
+              ? (event) =>
+                  headerDrag.repoDrag.onHandlePointerDown(event, headerRepo, repoHeaderBucketKey)
               : isDraggableProjectGroupHeader && projectGroupDragIdForHeader
                 ? (event) =>
                     headerDrag.projectGroupDrag.onHandlePointerDown(
@@ -339,7 +347,7 @@ export function renderWorktreeSectionHeaderRow(args: {
                 {hostContext ? <ProjectHeaderHostLabel context={hostContext} /> : null}
                 <RepoForkIndicator upstream={row.repo?.upstream} />
                 <FolderPathStatusIndicator status={projectGroupPathStatus} />
-                {isRepoHeader ? <RepoScanUnavailableIndicator repo={row.repo!} /> : null}
+                {repoForHeader ? <RepoScanUnavailableIndicator repo={repoForHeader} /> : null}
               </div>
             </div>
           </div>
@@ -383,19 +391,19 @@ export function renderWorktreeSectionHeaderRow(args: {
               />
             ) : null}
 
-            {row.repo && ctx.groupBy === 'repo' ? (
+            {repoForHeader ? (
               <RepoHeaderProjectActionsMenu
-                repo={row.repo}
+                repo={repoForHeader}
                 label={label}
                 projectGroups={ctx.projectGroups}
                 actions={ctx.projectActions}
               />
             ) : null}
 
-            {row.repo && ctx.groupBy === 'repo' ? (
+            {repoForHeader ? (
               <RepoHeaderCreateWorkspaceButton
-                key={`${row.repo.executionHostId ?? 'local'}:${row.repo.connectionId ?? ''}`}
-                repo={row.repo}
+                key={`${repoForHeader.executionHostId ?? 'local'}:${repoForHeader.connectionId ?? ''}`}
+                repo={repoForHeader}
                 label={label}
                 pinHost={isSingleHostProjectHeader(row)}
                 onCreateForRepo={ctx.projectActions.onCreateForRepo}
