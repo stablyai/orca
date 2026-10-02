@@ -44,7 +44,7 @@ export type AgentSessionForkRequest = {
 }
 
 export type AgentSessionForkWarning =
-  | { kind: 'changes-not-carried'; reason: WorkingTreeCarryFailureReason }
+  | { kind: 'changes-not-carried'; reason: WorkingTreeCarryFailureReason; detail?: string }
   | { kind: 'agent-not-started' }
 
 export type AgentSessionForkOutcome =
@@ -239,14 +239,17 @@ export async function runAgentSessionFork(
     })
     if (!carried.ok) {
       if (carried.detail) {
-        // Why: the toast names only the reason; the host's detail is what diagnoses it.
         console.warn(
           '[agent-session-fork] changes were not carried',
           carried.reason,
           carried.detail
         )
       }
-      warnings.push({ kind: 'changes-not-carried', reason: carried.reason })
+      warnings.push({
+        kind: 'changes-not-carried',
+        reason: carried.reason,
+        ...(carried.detail ? { detail: carried.detail } : {})
+      })
     }
   }
 

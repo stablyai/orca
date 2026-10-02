@@ -346,7 +346,7 @@ describe('runAgentSessionFork', () => {
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
   })
 
-  it("logs the host's detail when the carry fails", async () => {
+  it("logs the host's detail when the carry fails and hands it to the warning", async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.carryRuntimeWorkingTreeChanges.mockResolvedValue({
       ok: false,
@@ -354,7 +354,17 @@ describe('runAgentSessionFork', () => {
       detail: 'error: could not write index'
     })
 
-    await runAgentSessionFork(request({ carryChanges: true }), onStage)
+    const outcome = await runAgentSessionFork(request({ carryChanges: true }), onStage)
+
+    expect(outcome).toMatchObject({
+      warnings: [
+        {
+          kind: 'changes-not-carried',
+          reason: 'apply_failed',
+          detail: 'error: could not write index'
+        }
+      ]
+    })
 
     expect(warn).toHaveBeenCalledWith(
       '[agent-session-fork] changes were not carried',
