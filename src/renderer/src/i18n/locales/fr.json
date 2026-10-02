@@ -18307,7 +18307,8 @@
         "repoMissing": "Le projet de cet espace de travail n'est pas disponible."
       },
       "descriptionOtherBase": "Démarrez une nouvelle branche et poursuivez-y la conversation.",
-      "descriptionNoAgentOtherBase": "Démarrez une nouvelle branche."
+      "descriptionNoAgentOtherBase": "Démarrez une nouvelle branche.",
+      "alreadyRunning": "Un fork de {{workspace}} est déjà en cours de création."
     }
   },
   "dashboardPopout": {

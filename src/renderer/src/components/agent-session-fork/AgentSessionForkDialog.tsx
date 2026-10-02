@@ -18,26 +18,11 @@ import {
   parseAgentSessionForkModalData,
   type AgentSessionForkModalData
 } from './agent-session-fork-modal-data'
-import {
-  useAgentSessionForkDialogState,
-  type AgentSessionForkDialogStage
-} from './use-agent-session-fork-dialog-state'
+import { useAgentSessionForkDialogState } from './use-agent-session-fork-dialog-state'
+import { agentSessionForkStageLabel } from './agent-session-fork-progress-toast'
 import type { AgentSessionForkCarryAvailability } from './agent-session-fork-parent-probe'
 import { AgentSessionForkSessionField } from './AgentSessionForkSessionField'
 import { AgentSessionForkAdvancedFields } from './AgentSessionForkAdvancedFields'
-
-function stageLabel(stage: AgentSessionForkDialogStage): string {
-  switch (stage) {
-    case 'preparing':
-      return translate('components.agentSessionFork.stage.preparing', 'Preparing…')
-    case 'creating':
-      return translate('components.agentSessionFork.stage.creating', 'Creating workspace…')
-    case 'carrying':
-      return translate('components.agentSessionFork.stage.carrying', 'Copying changes…')
-    case 'launching':
-      return translate('components.agentSessionFork.stage.launching', 'Starting agent…')
-  }
-}
 
 function carryDescription(
   availability: AgentSessionForkCarryAvailability,
@@ -248,7 +233,7 @@ function AgentSessionForkDialogBody({
                 {state.visibleStage ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    {stageLabel(state.visibleStage)}
+                    {agentSessionForkStageLabel(state.visibleStage)}
                   </>
                 ) : (
                   translate('components.agentSessionFork.submit', 'Create fork')

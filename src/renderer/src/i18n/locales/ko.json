@@ -18208,7 +18208,8 @@
         "repoMissing": "이 워크스페이스의 프로젝트를 사용할 수 없습니다."
       },
       "descriptionOtherBase": "새 브랜치를 시작하고 그곳에서 대화를 이어갑니다.",
-      "descriptionNoAgentOtherBase": "새 브랜치를 시작합니다."
+      "descriptionNoAgentOtherBase": "새 브랜치를 시작합니다.",
+      "alreadyRunning": "{{workspace}}의 포크를 이미 만드는 중입니다."
     }
   },
   "dashboardPopout": {

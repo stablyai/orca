@@ -10,6 +10,7 @@ import {
   bodyText,
   carrySwitch,
   renderDialog,
+  rerenderDialog,
   session,
   statusWith,
   submitWithEnter,
@@ -103,6 +104,31 @@ vi.mock('@/lib/worktree-agent-fork-sessions', () => ({
 
 vi.mock('@/components/repo/CreateFromPicker', () => ({ CreateFromPicker: () => null }))
 
+type ForkStageListener = (stage: string) => void
+type PendingFork = { stage: ForkStageListener; finish: (outcome: unknown) => void }
+
+/** A fork that stays running until `finish`, exposing its stage callback. */
+function pendingFork(): PendingFork {
+  const handle: PendingFork = { stage: () => {}, finish: () => {} }
+  mocks.runAgentSessionFork.mockImplementationOnce(
+    (_request: unknown, onStage: ForkStageListener) =>
+      new Promise((resolve) => {
+        handle.stage = onStage
+        handle.finish = resolve
+      })
+  )
+  return handle
+}
+
+async function replaceDialogWith(modal: string): Promise<void> {
+  state.activeModal = modal
+  await rerenderDialog()
+}
+
+function alertText(): string | null {
+  return document.querySelector('[role="alert"]')?.textContent ?? null
+}
+
 beforeEach(() => {
   state.activeModal = 'agent-session-fork'
   state.modalData = {
@@ -168,5 +194,75 @@ describe('AgentSessionForkDialog parent reads', () => {
 
     await act(async () => resolveMountRead(statusWith([])))
     expect(bodyText()).toContain('Bring uncommitted changes (2 modified, 1 new)')
+  })
+})
+
+describe('AgentSessionForkDialog after another modal replaces it', () => {
+  it('mirrors the fork stages in a loading toast and dismisses it on success', async () => {
+    const fork = pendingFork()
+    await renderDialog()
+    await submitWithEnter()
+    await replaceDialogWith('confirm-orca-yaml-hooks')
+
+    act(() => fork.stage('creating'))
+    expect(mocks.toastLoading).toHaveBeenLastCalledWith('Creating workspace…')
+    act(() => fork.stage('launching'))
+    expect(mocks.toastLoading).toHaveBeenLastCalledWith('Starting agent…', {
+      id: 'fork-progress'
+    })
+
+    await act(async () => fork.finish({ ok: true, worktreeId: 'repo::child', warnings: [] }))
+    expect(mocks.toastDismiss).toHaveBeenCalledWith('fork-progress')
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('turns the loading toast into the error when the fork fails', async () => {
+    const fork = pendingFork()
+    await renderDialog()
+    await submitWithEnter()
+    await replaceDialogWith('confirm-orca-yaml-hooks')
+
+    act(() => fork.stage('creating'))
+    await act(async () => fork.finish({ ok: false, error: 'boom' }))
+    expect(mocks.toastError).toHaveBeenCalledWith('boom', { id: 'fork-progress' })
+  })
+
+  it('shows no loading toast while the dialog itself shows the stages', async () => {
+    const fork = pendingFork()
+    await renderDialog()
+    await submitWithEnter()
+    act(() => fork.stage('creating'))
+    await act(async () => fork.finish({ ok: true, worktreeId: 'repo::child', warnings: [] }))
+    expect(mocks.toastLoading).not.toHaveBeenCalled()
+    expect(mocks.toastDismiss).not.toHaveBeenCalled()
+  })
+
+  it('refuses a second fork of the same workspace while the first is still running', async () => {
+    const fork = pendingFork()
+    await renderDialog()
+    await submitWithEnter()
+    await replaceDialogWith('confirm-orca-yaml-hooks')
+    await replaceDialogWith('agent-session-fork')
+
+    const alreadyRunning = 'A fork of Fix auth is already being created.'
+    expect(alertText()).toBe(alreadyRunning)
+    await submitWithEnter()
+    expect(mocks.runAgentSessionFork).toHaveBeenCalledTimes(1)
+    expect(alertText()).toBe(alreadyRunning)
+
+    await act(async () => fork.finish({ ok: true, worktreeId: 'repo::child', warnings: [] }))
+    await submitWithEnter()
+    expect(mocks.runAgentSessionFork).toHaveBeenCalledTimes(2)
+  })
+
+  it('frees the workspace when the dialog closes before the fork starts', async () => {
+    mocks.getRuntimeGitStatus.mockResolvedValueOnce(statusWith([]))
+    mocks.getRuntimeGitStatus.mockReturnValueOnce(new Promise<GitStatusResult>(() => {}))
+    await renderDialog()
+    await submitWithEnter()
+    await replaceDialogWith('edit-meta')
+    await replaceDialogWith('agent-session-fork')
+
+    expect(alertText()).toBeNull()
   })
 })

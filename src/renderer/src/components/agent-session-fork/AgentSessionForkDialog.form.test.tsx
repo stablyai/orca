@@ -623,7 +623,12 @@ describe('AgentSessionForkDialog', () => {
   })
 
   it('blocks Esc and Cancel once the fork has started', async () => {
-    mocks.runAgentSessionFork.mockReturnValue(new Promise(() => {}))
+    let finish: (value: unknown) => void = () => {}
+    mocks.runAgentSessionFork.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
     await renderDialog()
     await submitWithEnter()
     expect(mocks.runAgentSessionFork).toHaveBeenCalled()
@@ -632,6 +637,8 @@ describe('AgentSessionForkDialog', () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
     expect(state.closeModal).not.toHaveBeenCalled()
+    // Why: ends the fork so its in-flight claim on the workspace does not leak into later tests.
+    await act(async () => finish({ ok: false, error: 'done' }))
   })
 
   it('does not close a modal that replaced the dialog mid-fork', async () => {

@@ -15328,7 +15328,8 @@
         "repoMissing": "El proyecto de este espacio de trabajo no está disponible."
       },
       "descriptionOtherBase": "Crea una rama nueva y continúa la conversación ahí.",
-      "descriptionNoAgentOtherBase": "Crea una rama nueva."
+      "descriptionNoAgentOtherBase": "Crea una rama nueva.",
+      "alreadyRunning": "Ya se está creando un fork de {{workspace}}."
     }
   },
   "dashboardPopout": {

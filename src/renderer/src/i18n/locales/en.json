@@ -18369,7 +18369,8 @@
         "repoMissing": "This workspace's project is not available."
       },
       "descriptionOtherBase": "Start a new branch and continue the conversation there.",
-      "descriptionNoAgentOtherBase": "Start a new branch."
+      "descriptionNoAgentOtherBase": "Start a new branch.",
+      "alreadyRunning": "A fork of {{workspace}} is already being created."
     }
   },
   "dashboardPopout": {

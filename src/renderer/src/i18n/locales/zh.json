@@ -18208,7 +18208,8 @@
         "repoMissing": "此工作区所属的项目不可用。"
       },
       "descriptionOtherBase": "新建一个分支，并在其中继续对话。",
-      "descriptionNoAgentOtherBase": "新建一个分支。"
+      "descriptionNoAgentOtherBase": "新建一个分支。",
+      "alreadyRunning": "已在创建 {{workspace}} 的派生。"
     }
   },
   "dashboardPopout": {
