@@ -2,7 +2,7 @@
   "name": "orca-cloud",
   "private": true,
   "version": "0.0.0",
-  "packageManager": "pnpm@10.24.0",
+  "packageManager": "pnpm@10.34.6",
   "engines": {
     "node": ">=24 <27",
     "pnpm": ">=10"
@@ -26,7 +26,7 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@types/node": "^24.10.0",
+    "@types/node": "^24.19.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"

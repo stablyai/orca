@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs'
 import { resolveOpenCodeDataDirectory } from './opencode-data-directory'
 import {
   bindOpenCodeSession,
@@ -225,6 +226,8 @@ export function listOpenCodeDbSessions(
   cursor: OpenCodeSessionCursor
 ): BinderSessionRow[] {
   try {
+    // Check absence without hiding permission failures as an unused store.
+    statSync(dbPath)
     return readOpenCodeDatabase({
       dbPath,
       read: (db) => {
@@ -269,6 +272,13 @@ export function listOpenCodeDbSessions(
       }
     })
   } catch (err) {
+    if (
+      err instanceof Error &&
+      'code' in err &&
+      (err.code === 'ENOENT' || err.code === 'ENOTDIR')
+    ) {
+      return []
+    }
     console.warn('[opencode-binder] session store read failed; skipping round', err)
     return []
   }

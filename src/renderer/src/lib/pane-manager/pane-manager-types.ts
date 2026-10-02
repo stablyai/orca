@@ -200,6 +200,7 @@ export type ManagedPaneInternal = {
   compositionHandler: (() => void) | null
   // Stored so disposePane() can remove DOM-renderer focus synchronization.
   focusClassSyncCleanup?: (() => void) | null
+  domBlockFillCleanup?: (() => void) | null
   // Stored so disposePane() can remove user-scroll intent listeners.
   terminalScrollIntentDisposable?: IDisposable | null
   // Stored so disposePane() can drop the mouse-encoding parser handlers.

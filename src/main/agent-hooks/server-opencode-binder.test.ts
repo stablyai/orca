@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -317,4 +317,47 @@ describe('listOpenCodeDbSessions', () => {
   it('returns [] for a missing database instead of throwing', () => {
     expect(listOpenCodeDbSessions(join(dir, 'absent.db'), { ms: 0, id: '' })).toEqual([])
   })
+
+  it('stays quiet for a missing database and detects it once it appears', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const absent = join(dir, 'later.db')
+      expect(listOpenCodeDbSessions(absent, { ms: 0, id: '' })).toEqual([])
+      expect(listOpenCodeDbSessions(absent, { ms: 0, id: '' })).toEqual([])
+      expect(warn).not.toHaveBeenCalled()
+      writeDb(absent, 'session')
+      expect(listOpenCodeDbSessions(absent, { ms: 0, id: '' })).toHaveLength(1)
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('still warns when the database exists but cannot be read', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      writeFileSync(dbPath, 'this is not a sqlite database'.repeat(100))
+      expect(listOpenCodeDbSessions(dbPath, { ms: 0, id: '' })).toEqual([])
+      expect(warn).toHaveBeenCalledTimes(1)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'warns when an existing database is behind an inaccessible directory',
+    () => {
+      writeDb(dbPath, 'session')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        chmodSync(dir, 0o000)
+        expect(listOpenCodeDbSessions(dbPath, { ms: 0, id: '' })).toEqual([])
+        expect(warn).toHaveBeenCalledTimes(1)
+        expect(warn.mock.calls[0]?.[1]).toMatchObject({ code: 'EACCES' })
+      } finally {
+        chmodSync(dir, 0o700)
+        warn.mockRestore()
+      }
+    }
+  )
 })

@@ -118,6 +118,7 @@
 /* ── Pane drag handle ─────────────────────────────────── */
 
 .pane-drag-handle {
+  pointer-events: none;
   position: absolute;
   top: 0;
   left: 0;

@@ -218,7 +218,7 @@ describe('PR E2E gate contract', () => {
       const installStep = e2eWorkflow.jobs[jobName].steps.find((step) =>
         step.name.startsWith('Install native build')
       )
-      expect(installStep.run, jobName).toMatch(/\bzsh\b/)
+      expect(installStep.env.ORCA_E2E_APT_PACKAGES.split(/\s+/), jobName).toContain('zsh')
     }
   })
 
@@ -308,7 +308,7 @@ describe('PR E2E gate contract', () => {
     const changedInstall = e2eWorkflow.jobs['changed-e2e'].steps.find((step) =>
       step.name.startsWith('Install native build')
     )
-    expect(changedInstall.run).toContain('openssh-client')
+    expect(changedInstall.env.ORCA_E2E_APT_PACKAGES.split(/\s+/)).toContain('openssh-client')
   })
 
   it('routes direct-SSH workspace and tab restore from its unnamed source seams', () => {

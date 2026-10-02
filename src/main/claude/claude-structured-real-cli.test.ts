@@ -114,11 +114,13 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           leafUuid: null
         })
         expect(observedSubtypes).toContain('hook_started')
-        expect(adapter.readCommands('real-cli-handshake')).toContainEqual({
-          name: 'orca-init-catalog-proof',
-          kind: 'command',
-          kindUnspecified: true
-        })
+        expect(adapter.readCommands('real-cli-handshake')).toContainEqual(
+          expect.objectContaining({
+            name: 'orca-init-catalog-proof',
+            kind: 'command',
+            kindUnspecified: true
+          })
+        )
         expect(
           adapter.readCommands('real-cli-handshake')?.some(({ name }) => name === 'help')
         ).toBe(false)

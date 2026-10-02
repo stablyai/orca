@@ -26,6 +26,7 @@ jobs:
   test:
     name: tests node ${{ matrix.node }} ${{ matrix.shard.index }}/${{ matrix.shard.count }}
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -82,6 +83,7 @@ jobs:
       matrix:
         node: ${{ fromJSON(inputs.node_versions) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -103,8 +105,8 @@ jobs:
       - name: Install relay integration dependencies
         working-directory: cloud
         run: |
-          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
-          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay^...' build
+          npx --yes pnpm@10.34.6 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
+          npx --yes pnpm@10.34.6 --filter '@orca-cloud/relay^...' build
 
       - name: Test relay integration contracts
         env:

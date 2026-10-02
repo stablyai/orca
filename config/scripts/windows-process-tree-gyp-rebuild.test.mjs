@@ -46,6 +46,14 @@ describe('windows-process-tree node-gyp rebuild', () => {
     expect(args).toContain('--arch=arm64')
   })
 
+  it('preserves an external node-gyp entry and the physical addon cwd', () => {
+    const entry = join(tmpdir(), 'external-node-gyp', 'bin', 'node-gyp.js')
+    expect(nodeGypRebuildInvocation('arm64', import.meta.dirname, entry)).toEqual({
+      args: [entry, 'rebuild', '--arch=arm64'],
+      cwd: realpathSync(import.meta.dirname)
+    })
+  })
+
   it('copies node-addon-api headers into the patched include dir', () => {
     const packageDir = mkdtempSync(join(tmpdir(), 'orca-windows-process-tree-headers-'))
     try {

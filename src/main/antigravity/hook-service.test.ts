@@ -16,8 +16,9 @@ vi.mock('os', async () => {
   }
 })
 
+import { tokenizeCommandLine } from '../../shared/agent-command-line-entrypoint'
 import { AntigravityHookService } from './hook-service'
-import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
+import { POSIX_HOOK_JSON_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 
 const ANTIGRAVITY_SCRIPT_FILE_NAME =
@@ -86,10 +87,12 @@ describe('AntigravityHookService', () => {
     if (process.platform === 'win32') {
       expect(config['orca-status'].PreInvocation[0].command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
     } else {
-      expect(config['orca-status'].PreInvocation[0].command).toContain(
-        "ORCA_ANTIGRAVITY_EVENT='PreInvocation'"
+      expect(
+        tokenizeCommandLine(config['orca-status'].PreInvocation[0].command ?? '')[2]
+      ).toContain("ORCA_ANTIGRAVITY_EVENT='PreInvocation'")
+      expect(tokenizeCommandLine(config['orca-status'].Stop[0].command ?? '')[2]).toContain(
+        "ORCA_ANTIGRAVITY_EVENT='Stop'"
       )
-      expect(config['orca-status'].Stop[0].command).toContain("ORCA_ANTIGRAVITY_EVENT='Stop'")
     }
 
     const script = readFileSync(
@@ -106,7 +109,7 @@ describe('AntigravityHookService', () => {
       expect(script).toContain('setlocal DisableDelayedExpansion')
     } else {
       expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
-      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
+      expect(script).toContain(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
       expect(script).toContain("payload='{}'")
       expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands

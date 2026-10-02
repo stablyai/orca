@@ -285,7 +285,7 @@ describe('PR workflow parallelism', () => {
     expect(pnpmIndex).toBeLessThan(nodeIndex)
     expect(pnpmIndex).toBeLessThan(requestedNodeIndex)
     const packageManagerVersion = /^pnpm@([^+]+)/.exec(packageJson.packageManager)?.[1]
-    expect(packageManagerVersion).toBe('12.0.0')
+    expect(packageManagerVersion).toBe('12.8.1')
     expect(steps[pnpmIndex].uses).toBe('pnpm/setup@v2')
     expect(steps[pnpmIndex].with.version).toBeUndefined()
     expect(steps[pnpmIndex].with.install).toBe(false)

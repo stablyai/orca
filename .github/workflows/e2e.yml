@@ -119,7 +119,22 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+        env:
+          ORCA_E2E_APT_PACKAGES: build-essential python3
+        run: &install_e2e_tools |
+          read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$source" ]; then
+              sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
+          sudo tee /etc/apt/apt.conf.d/99-orca-e2e >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
+          timeout 120 sudo apt-get update
+          timeout 300 sudo apt-get install -y "${packages[@]}"
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -178,19 +193,9 @@ jobs:
       - name: Install native build and headless UI tools
         # The Azure archive took 16 minutes for one font package; bound setup
         # separately so a slow mirror cannot consume the shard's test budget.
-        run: &install_e2e_tools |
-          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            if [ -f "$source" ]; then
-              sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
-            fi
-          done
-          sudo tee /etc/apt/apt.conf.d/99-orca-e2e >/dev/null <<'APTCONF'
-          Acquire::http::Timeout "15";
-          Acquire::https::Timeout "15";
-          Acquire::Retries "1";
-          APTCONF
-          timeout 120 sudo apt-get update
-          timeout 300 sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
+        env: &e2e_tool_packages
+          ORCA_E2E_APT_PACKAGES: build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
+        run: *install_e2e_tools
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -281,6 +286,7 @@ jobs:
         # unbounded inventory fallback; the paired fixture exercises that real boundary.
         # Why openssh-client: the Docker-SSH fixture shells out to ssh/ssh-keygen, and this
         # lane now receives those specs from pr.yml's SSH source mapping.
+        env: *e2e_tool_packages
         run: *install_e2e_tools
 
       - uses: ./.github/actions/install-node-dependencies
@@ -417,6 +423,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
+        env: *e2e_tool_packages
         run: *install_e2e_tools
 
       - uses: ./.github/actions/install-node-dependencies

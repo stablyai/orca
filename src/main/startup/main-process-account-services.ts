@@ -130,6 +130,10 @@ export function initializeMainProcessAccountServices(): void {
     }
   })
   state.rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
+  // Reuse the meter switch so hidden Antigravity usage does not spawn agy.
+  state.rateLimits.setAntigravityUsageEnabledResolver(() =>
+    store.getUI().statusBarItems.includes('antigravity')
+  )
   state.rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   state.keybindings = new KeybindingService({
     homePath: app.getPath('home'),
