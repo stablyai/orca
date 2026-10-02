@@ -465,6 +465,81 @@ describe('removeWorktreeOp', () => {
     expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
   })
 
+  it('rejects SSH worktree removal when listing fails and does not call remove', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        throw Object.assign(new Error('fatal: not a git repository'), { code: 128, stderr: '' })
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).rejects.toThrow('not a git repository')
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '/repo-feature'],
+      expect.any(String)
+    )
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '--force', '/repo-feature'],
+      expect.any(String)
+    )
+  })
+
+  it('rejects SSH worktree removal when the listing omits the target path and does not call remove', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList({ path: '/repo', branch: 'main' }),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).rejects.toThrow('Worktree is not registered in the Git catalog')
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '/repo-feature'],
+      expect.any(String)
+    )
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '--force', '/repo-feature'],
+      expect.any(String)
+    )
+  })
+
+  it('rejects SSH worktree removal when the listing is empty instead of treating it as unregistered', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return { stdout: '', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).rejects.toThrow('Worktree catalog unavailable')
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '/repo-feature'],
+      expect.any(String)
+    )
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '--force', '/repo-feature'],
+      expect.any(String)
+    )
+  })
+
   it('does not let force override a locked SSH worktree', async () => {
     const git = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'rev-parse') {
