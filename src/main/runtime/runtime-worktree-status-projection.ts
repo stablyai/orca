@@ -48,7 +48,8 @@ type PtyAgentPresenceRecord = {
 
 export function getLeafWorktreeStatus(
   leaf: LeafStatusRecord,
-  tabTitle: string | null
+  tabTitle: string | null,
+  titleIsRestored = false
 ): RuntimeWorktreeStatus {
   // Why: recompute from the live title each call (no sticky state) so worktree.ps mirrors the desktop sidebar's getWorktreeStatus.
   const titleCandidates = [
@@ -58,7 +59,10 @@ export function getLeafWorktreeStatus(
   ]
   const latestTitle = getLatestAgentCandidateTitle(...titleCandidates)
   const detected = latestTitle ? detectAgentStatusFromTitle(latestTitle) : leaf.lastAgentStatus
-  return getDetectedWorktreeStatus(detected, leaf.ptyId !== null)
+  return getDetectedWorktreeStatus(
+    titleIsRestored && detected === 'permission' ? null : detected,
+    leaf.ptyId !== null
+  )
 }
 
 export function classifyLatestAgentTitle(
@@ -115,6 +119,24 @@ export function ptyTitleProvesAgentPresence(
   )
 }
 
+/** The title came from a restore snapshot, and no title has been observed live since.
+ *  Why: only live observations stamp lastOscTitleEpochMs; a restored title can outlive its agent.
+ *  Why replaced titles too: a pane keeps echoing one after its incarnation is gone. */
+export function ptyTitleIsRestored(
+  pty: {
+    lastOscTitle: string | null
+    lastOscTitleEpochMs: number | null
+    replacedRestoredTitles?: string[]
+  },
+  title: string | null
+): boolean {
+  return (
+    title !== null &&
+    pty.lastOscTitleEpochMs === null &&
+    (title === pty.lastOscTitle?.trim() || pty.replacedRestoredTitles?.includes(title) === true)
+  )
+}
+
 export function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neutral' {
   if (!title) {
     return 'neutral'
@@ -155,8 +177,17 @@ export function getLatestAgentCandidateTitleInfo(
   return latest
 }
 
-export function getSavedTabWorktreeStatus(title: string, hasPty: boolean): RuntimeWorktreeStatus {
-  return getDetectedWorktreeStatus(detectAgentStatusFromTitle(title), hasPty)
+export function getSavedTabWorktreeStatus(
+  title: string,
+  hasPty: boolean,
+  titleIsRestored = false
+): RuntimeWorktreeStatus {
+  const detected = detectAgentStatusFromTitle(title)
+  // Historical permission is not a live block; canonical hook rows still merge separately.
+  return getDetectedWorktreeStatus(
+    titleIsRestored && detected === 'permission' ? null : detected,
+    hasPty
+  )
 }
 
 export function getDetectedWorktreeStatus(

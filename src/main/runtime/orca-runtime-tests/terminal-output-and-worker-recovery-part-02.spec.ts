@@ -610,7 +610,7 @@ describe('OrcaRuntimeService', () => {
       timeoutMs: 50
     })
     // The probe's read starts a microtask late; a 50 ms poll would race the wait's 50 ms timeout.
-    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledTimes(4), {
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledTimes(5), {
       interval: 1
     })
     runtime.onPtyData('pty-legacy', '\x1b[H', Date.now())
@@ -643,10 +643,15 @@ describe('OrcaRuntimeService', () => {
     await expect(
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 50 })
     ).rejects.toThrow('timeout')
-    expect(serializeProviderBuffer).toHaveBeenCalledTimes(6)
+    expect(serializeProviderBuffer).toHaveBeenCalledTimes(7)
     // Why args, not counts: the one-shot responses above ignore their options,
     // so only this asserts every idle probe asked for the visible grid alone.
-    expect(serializeProviderBuffer.mock.calls.slice(1)).toEqual([
+    // Calls 0 and 1 are the adoption title seed and the scrollback read.
+    expect(serializeProviderBuffer.mock.calls.slice(0, 2)).toEqual([
+      ['pty-legacy', { scrollbackRows: 0 }],
+      ['pty-legacy', { scrollbackRows: 120 }]
+    ])
+    expect(serializeProviderBuffer.mock.calls.slice(2)).toEqual([
       ['pty-legacy', { scrollbackRows: 0 }],
       ['pty-legacy', { scrollbackRows: 0 }],
       ['pty-legacy', { scrollbackRows: 0 }],
@@ -654,7 +659,7 @@ describe('OrcaRuntimeService', () => {
       ['pty-legacy', { scrollbackRows: 0 }]
     ])
     await expect(runtime.readTerminal(terminal.handle)).resolves.toBeDefined()
-    expect(serializeProviderBuffer).toHaveBeenCalledTimes(6)
+    expect(serializeProviderBuffer).toHaveBeenCalledTimes(7)
     expect(
       runtime.verifyOrchestrationCompatibilityCaller({
         terminalHandle: 'term_legacy',

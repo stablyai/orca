@@ -7,10 +7,12 @@ import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import {
+  getLatestLeafTitle,
   getLatestPtyTitle,
   getLeafWorktreeStatus,
   getSavedTabWorktreeStatus,
   maxTimestamp,
+  ptyTitleIsRestored,
   mergeWorktreeSummaryStatus
 } from './runtime-worktree-status-projection'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
@@ -87,7 +89,13 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     summary.liveTerminalCount += 1
     summary.hasAttachedPty = true
     summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, leaf.lastOutputAt)
-    const leafStatus = getLeafWorktreeStatus(leaf, args.tabs.get(leaf.tabId)?.title ?? null)
+    const tabTitle = args.tabs.get(leaf.tabId)?.title ?? null
+    const leafTitle = getLatestLeafTitle(leaf, tabTitle)
+    const leafStatus = getLeafWorktreeStatus(
+      leaf,
+      tabTitle,
+      freshOwner ? ptyTitleIsRestored(freshOwner, leafTitle) : false
+    )
     if (leafStatus === 'working') {
       addWorkingTerminalEvidence(workingEvidence, summary.worktreeId, {
         paneKey: args.getPaneKey(leaf),
@@ -148,7 +156,11 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     summary.hasAttachedPty = true
     summary.hasHostSidebarActivity = true
     summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, pty.lastOutputAt)
-    const ptyStatus = getSavedTabWorktreeStatus(owner.title, true)
+    const ptyStatus = getSavedTabWorktreeStatus(
+      owner.title,
+      true,
+      ptyTitleIsRestored(pty, owner.title)
+    )
     if (ptyStatus === 'working') {
       addWorkingTerminalEvidence(workingEvidence, summary.worktreeId, {
         paneKey: pty.paneKey,

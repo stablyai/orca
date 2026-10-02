@@ -41,7 +41,24 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
       }
     }
     if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
-      return { source: 'title' }
+      if (!terminal.titleIsRestored) {
+        return { source: 'title' }
+      }
+      // Why: a restored title can outlive its agent; the status probe verifies the foreground.
+      const restored = await withTimeout(
+        this.probeAgentStatusOncePerPty(handle, ptyId),
+        TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
+        undefined
+      )
+      if (!restored) {
+        return undefined
+      }
+      if (!restored.isRunningAgent || restored.status !== 'permission') {
+        return null
+      }
+      return explicitStatus?.status === 'permission'
+        ? { source: 'hook', since: explicitStatus.updatedAt }
+        : { source: 'title' }
     }
     if (explicitStatus?.status !== 'permission') {
       return null
