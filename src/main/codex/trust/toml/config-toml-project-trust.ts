@@ -54,15 +54,32 @@ export function hasProjectTrustEntry(content: string, projectPath: string): bool
  * bytes untouched: only whole tables go, never a sibling key or table.
  */
 export function removeProjectTrustContent(content: string, projectPath: string): string {
+  return spliceProjectTrustTables(content, projectPath).updated
+}
+
+/**
+ * The exact bytes removeProjectTrustContent would delete for the path, or null
+ * when no table exists — the ownership check compares this to what Orca wrote.
+ */
+export function findProjectTrustRemovedBytes(content: string, projectPath: string): string | null {
+  return spliceProjectTrustTables(content, projectPath).removed
+}
+
+function spliceProjectTrustTables(
+  content: string,
+  projectPath: string
+): { updated: string; removed: string | null } {
   let updated = content
+  let removed: string | null = null
   for (;;) {
     const headerLineEnd = findProjectHeaderLineEnd(updated, projectPath)
     if (headerLineEnd === null) {
-      return updated
+      return { updated, removed }
     }
     const headerLineStart = updated.lastIndexOf('\n', Math.max(0, headerLineEnd - 1)) + 1
     const nextHeaderOffset = findNextTomlTableHeader(updated.slice(headerLineEnd))
     const blockEnd = nextHeaderOffset === -1 ? updated.length : headerLineEnd + nextHeaderOffset
+    removed = (removed ?? '') + updated.slice(headerLineStart, blockEnd)
     updated = updated.slice(0, headerLineStart) + updated.slice(blockEnd)
   }
 }
