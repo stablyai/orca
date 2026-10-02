@@ -232,12 +232,14 @@ export class CliInstaller extends CliPathRegistration {
     if (!this.syncWindowsPowerShellProfile || this.platform !== 'win32') {
       return
     }
-    await enqueueWindowsPowerShellProfileWork(() => this.syncWindowsPowerShellCliShimQueued(options))
+    await enqueueWindowsPowerShellProfileWork(() =>
+      this.syncWindowsPowerShellCliShimQueued(options)
+    )
   }
 
-  private async syncWindowsPowerShellCliShimQueued(
-    options: { requireInstalled?: boolean }
-  ): Promise<void> {
+  private async syncWindowsPowerShellCliShimQueued(options: {
+    requireInstalled?: boolean
+  }): Promise<void> {
     // Why: the bundled exe survives CLI removal, so startup must not put the
     // function back into a profile the user already cleared (#24428).
     if (options.requireInstalled && (await this.getStatus()).state !== 'installed') {

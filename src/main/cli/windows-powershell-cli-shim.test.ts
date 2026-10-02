@@ -28,11 +28,11 @@ describe('windows powershell cli shim', () => {
   it('keeps a user orca function and still replaces only the managed block', () => {
     const profile = "function orca { 'user' }\n"
     expect(profileHasUserOrcaFunction(profile)).toBe(true)
-    expect(profileHasUserOrcaFunction("function orca-tools { }\n")).toBe(false)
+    expect(profileHasUserOrcaFunction('function orca-tools { }\n')).toBe(false)
     expect(profileHasUserOrcaFunction("# function orca { 'nope' }\n")).toBe(false)
     expect(upsertManagedProfileBlock(profile, 'block')).toBe('skipped-user-function')
-    expect(upsertManagedProfileBlock("function orca-tools { }\n", 'NEXT')).toBe(
-      "function orca-tools { }\n\nNEXT\n"
+    expect(upsertManagedProfileBlock('function orca-tools { }\n', 'NEXT')).toBe(
+      'function orca-tools { }\n\nNEXT\n'
     )
     const managed = `${ORCA_POWERSHELL_SHIM_BEGIN}\n. 'shim.ps1'\n# <<< orca cli utf-8 shim <<<\n`
     expect(upsertManagedProfileBlock(`Write-Host 'keep'\n\n${managed}`, 'NEXT')).toBe(
@@ -55,8 +55,11 @@ describe('windows powershell cli shim', () => {
     const managed = `${ORCA_POWERSHELL_SHIM_BEGIN}\n. 'shim.ps1'\n${ORCA_POWERSHELL_SHIM_END}\n`
     expect(upsertManagedProfileBlock(`${user}${managed}`, 'NEXT')).toBe(`${user}NEXT\n`)
     const dollarBlock = renderOrcaPowerShellProfileBlock('C:\\Users\\a$&b$$\\shim.ps1')
-    const refreshed = upsertManagedProfileBlock(upsertManagedProfileBlock(user, dollarBlock), dollarBlock)
-    expect(refreshed).toContain("a$&b$$")
+    const refreshed = upsertManagedProfileBlock(
+      upsertManagedProfileBlock(user, dollarBlock),
+      dollarBlock
+    )
+    expect(refreshed).toContain('a$&b$$')
     expect(refreshed).toContain("Write-Host 'keep'")
   })
 
@@ -112,9 +115,7 @@ describe('windows powershell cli shim', () => {
     const profilePath = windowsPowerShell51ProfilePath(documentsPath)
     await rm(profilePath)
     await mkdir(profilePath)
-    await expect(
-      removeWindowsPowerShellCliShim({ documentsPath, shimPath })
-    ).rejects.toThrow()
+    await expect(removeWindowsPowerShellCliShim({ documentsPath, shimPath })).rejects.toThrow()
     expect(await readFile(shimPath, 'utf8')).toContain('function global:orca')
   })
 
@@ -251,7 +252,10 @@ function psQuote(value: string): string {
 }
 
 function writeUtf8Bom(path: string, text: string): Promise<void> {
-  return writeFile(path, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text, 'utf8')]))
+  return writeFile(
+    path,
+    Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text, 'utf8')])
+  )
 }
 
 function runPowerShellFile(scriptPath: string): Promise<number> {

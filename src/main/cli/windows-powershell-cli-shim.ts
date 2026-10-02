@@ -119,7 +119,10 @@ export async function installWindowsPowerShellCliShim(input: {
   if (existing === 'undecodable') {
     return 'skipped-undecodable-profile'
   }
-  const next = upsertManagedProfileBlock(existing?.text ?? '', renderOrcaPowerShellProfileBlock(input.shimPath))
+  const next = upsertManagedProfileBlock(
+    existing?.text ?? '',
+    renderOrcaPowerShellProfileBlock(input.shimPath)
+  )
   if (next === 'skipped-user-function') {
     return 'skipped-user-function'
   }
@@ -160,14 +163,12 @@ export async function removeWindowsPowerShellCliShim(input: {
   if (existing) {
     const next = removeManagedProfileBlock(existing.text)
     if (next !== existing.text) {
-      if (next.trim().length === 0) {
-        await unlinkIfExists(profilePath)
-      } else {
-        await writeBytesAtomically(
-          profilePath,
-          encodeProfile(next.endsWith('\n') ? next : `${next}\n`, existing.encoding)
-        )
-      }
+      await (next.trim().length === 0
+        ? unlinkIfExists(profilePath)
+        : writeBytesAtomically(
+            profilePath,
+            encodeProfile(next.endsWith('\n') ? next : `${next}\n`, existing.encoding)
+          ))
     }
   }
   await unlinkIfExists(input.shimPath)
@@ -319,10 +320,5 @@ async function unlinkIfExists(path: string): Promise<void> {
 }
 
 function isMissingFile(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === 'ENOENT'
-  )
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }
