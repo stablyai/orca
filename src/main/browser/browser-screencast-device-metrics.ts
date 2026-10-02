@@ -19,10 +19,11 @@ export function createBrowserScreencastDeviceMetrics(
   options: BrowserScreencastOptions
 ): BrowserScreencastDeviceMetrics {
   let deviceMetricsOverridden = false
+  let metricsGeneration = 0
   let originalSurfaceSize: { width: number; height: number } | null = null
 
   const resizeOffscreenSurface = (width: number, height: number): void => {
-    if (!webContents.isOffscreen?.()) {
+    if (webContents.isDestroyed() || webContents.isCrashed() || !webContents.isOffscreen?.()) {
       return
     }
     const owner = BrowserWindow.fromWebContents(webContents)
@@ -46,7 +47,7 @@ export function createBrowserScreencastDeviceMetrics(
   const restoreOffscreenSurface = (): void => {
     const original = originalSurfaceSize
     originalSurfaceSize = null
-    if (!original || webContents.isDestroyed()) {
+    if (!original || webContents.isDestroyed() || webContents.isCrashed()) {
       return
     }
     const owner = BrowserWindow.fromWebContents(webContents)
@@ -58,13 +59,13 @@ export function createBrowserScreencastDeviceMetrics(
     runDebuggerCommandWithTimeout(method, () => sendGuestCdpCommand(webContents, method, params))
 
   const clearDeviceMetricsOverride = async (): Promise<void> => {
+    metricsGeneration += 1
     restoreOffscreenSurface()
-    if (webContents.isDestroyed() || !dbg.isAttached()) {
-      deviceMetricsOverridden = false
+    deviceMetricsOverridden = false
+    if (webContents.isDestroyed() || webContents.isCrashed() || !dbg.isAttached()) {
       return
     }
     await sendDebuggerCommand(dbg, 'Emulation.clearDeviceMetricsOverride')
-    deviceMetricsOverridden = false
   }
 
   const applyDeviceMetricsOverride = async (): Promise<void> => {
@@ -77,6 +78,7 @@ export function createBrowserScreencastDeviceMetrics(
       return
     }
     const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
+    const generation = metricsGeneration
     resizeOffscreenSurface(viewportWidth, viewportHeight)
     // Why: Back/Forward and cross-process navigations can drop emulation while
     // the screencast remains attached. Reapply before fallback captures so the
@@ -87,16 +89,20 @@ export function createBrowserScreencastDeviceMetrics(
       deviceScaleFactor,
       mobile: options.mobile === true
     })
+    // A late CDP reply must not reclaim a surface released during debugger detach.
+    if (generation !== metricsGeneration || !dbg.isAttached()) {
+      return
+    }
+    deviceMetricsOverridden = true
     await sendViewportCommand('Emulation.setVisibleSize', {
       width: viewportWidth,
       height: viewportHeight
     }).catch(() => {})
-    deviceMetricsOverridden = true
   }
 
   return {
     apply: applyDeviceMetricsOverride,
     clear: clearDeviceMetricsOverride,
-    isOverridden: () => deviceMetricsOverridden
+    isOverridden: () => deviceMetricsOverridden || originalSurfaceSize !== null
   }
 }

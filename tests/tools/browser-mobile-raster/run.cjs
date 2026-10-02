@@ -3,41 +3,28 @@ const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { pathToFileURL } = require('node:url')
-const args = process.argv.slice(2)
-const value = (flag) => args[args.indexOf(flag) + 1]
+const { parseRasterRunOptions } = require('./raster-run-input.cjs')
+const { parseRasterReadyJson, verifyRasterRuntimeTarget } = require('./raster-runtime-target.cjs')
+const { jpegSize } = require('./jpeg-dimensions.cjs')
+const { userData, readyFile, output, projectRoot } = parseRasterRunOptions(process.argv.slice(2))
 const source = path.resolve(__dirname, '../../..')
-const userData = value('--user-data')
-const readyFile = value('--ready')
-const output = value('--output')
-const projectRoot = value('--project-root')
-if (![userData, readyFile, output, projectRoot].every(Boolean)) {
-  throw new Error('Missing isolated runtime paths')
-}
-fs.mkdirSync(output, { recursive: true, mode: 0o700 })
-const fixture = fs.readFileSync(path.join(__dirname, 'raster-check.html'))
-fs.mkdirSync(projectRoot, { recursive: true, mode: 0o700 })
 const fixturePath = path.join(projectRoot, 'raster-check.html')
-if (fs.existsSync(fixturePath)) {
-  if (!fs.readFileSync(fixturePath).equals(fixture)) {
-    throw new Error('Refusing to overwrite a different fixture')
-  }
-} else {
-  fs.writeFileSync(fixturePath, fixture, { flag: 'wx', mode: 0o600 })
-}
 
 const { RuntimeClient } = require(path.join(source, 'out/cli/runtime-client.js'))
+const { getCliStatus } = require(path.join(source, 'out/cli/runtime/status.js'))
 const { decodePairingOffer } = require(path.join(source, 'out/shared/pairing.js'))
-const { subscribeRemoteRuntimeRequest } = require(
+const { subscribeRemoteRuntimeRequest, sendRemoteRuntimeRequest } = require(
   path.join(source, 'out/shared/remote-runtime-client.js')
 )
 const { decodeBrowserScreencastFrame } = require(
   path.join(source, 'out/shared/browser-screencast-protocol.js')
 )
-const pairing = decodePairingOffer(JSON.parse(fs.readFileSync(readyFile, 'utf8')).pairing.url)
-const client = new RuntimeClient(userData, 10000)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const observations = []
 const failures = []
+let client
+let pairing
+let outputPrepared = false
 let page
 let worktree
 let profile
@@ -54,35 +41,6 @@ async function call(method, params) {
     throw new Error(`${method}:${reply.error?.code}`)
   }
   return reply.result
-}
-function jpegSize(bytes) {
-  const b = Buffer.from(bytes)
-  if (b[0] !== 255 || b[1] !== 216) {
-    throw new Error('Not JPEG')
-  }
-  let p = 2
-  while (p < b.length) {
-    if (b[p] !== 255) {
-      p++
-      continue
-    }
-    while (b[p] === 255) {
-      p++
-    }
-    const marker = b[p++]
-    if (marker === 217 || marker === 218) {
-      break
-    }
-    if (marker === 1 || (marker >= 208 && marker <= 215)) {
-      continue
-    }
-    const length = b.readUInt16BE(p)
-    if ([192, 193, 194, 195, 197, 198, 199, 201, 202, 203, 205, 206, 207].includes(marker)) {
-      return { width: b.readUInt16BE(p + 5), height: b.readUInt16BE(p + 3) }
-    }
-    p += length
-  }
-  throw new Error('JPEG has no dimensions')
 }
 async function state() {
   const result = await call('browser.eval', { page, expression: 'window.__rasterProbe()' })
@@ -199,7 +157,9 @@ async function sample(
       ),
       `${label}: CSS coordinate metadata`
     )
-    if (subscriptionId) {
+    const hasSubscriptionId = typeof subscriptionId === 'string' && subscriptionId.length > 0
+    expect(hasSubscriptionId, `${label}: ready subscription id required`)
+    if (hasSubscriptionId) {
       const stopping = Date.now()
       const reply = await receiver.sendRequest(
         'browser.screencast.unsubscribe',
@@ -237,6 +197,27 @@ async function sample(
   }
 }
 ;(async () => {
+  const target = await verifyRasterRuntimeTarget({
+    ready: parseRasterReadyJson(fs.readFileSync(readyFile, 'utf8')),
+    userData,
+    RuntimeClient,
+    getCliStatus,
+    decodePairingOffer,
+    sendRemoteRuntimeRequest
+  })
+  client = target.client
+  pairing = target.pairing
+  fs.mkdirSync(output, { recursive: true, mode: 0o700 })
+  outputPrepared = true
+  const fixture = fs.readFileSync(path.join(__dirname, 'raster-check.html'))
+  fs.mkdirSync(projectRoot, { recursive: true, mode: 0o700 })
+  if (fs.existsSync(fixturePath)) {
+    if (!fs.readFileSync(fixturePath).equals(fixture)) {
+      throw new Error('Refusing to overwrite a different fixture')
+    }
+  } else {
+    fs.writeFileSync(fixturePath, fixture, { flag: 'wx', mode: 0o600 })
+  }
   const repo = await call('repo.add', {
     path: projectRoot,
     kind: 'folder',
@@ -268,26 +249,35 @@ async function sample(
     failures.push(error.message)
   })
   .finally(async () => {
-    receiver?.close()
     try {
-      if (page) {
-        await call('browser.tabClose', { page })
-      }
-      if (profile) {
-        await call('browser.profileDelete', { profileId: profile })
-      }
+      receiver?.close()
     } catch (error) {
-      failures.push(`cleanup:${error.message}`)
+      failures.push(`cleanup:stream:${error.message}`)
     }
-    fs.writeFileSync(
-      path.join(output, 'results.json'),
-      JSON.stringify(
-        { observations, failures, verdict: failures.length ? 'FAIL' : 'PASS' },
-        null,
-        2
-      ),
-      { mode: 0o600 }
-    )
+    for (const [method, params] of [
+      ['browser.tabClose', page ? { page } : null],
+      ['browser.profileDelete', profile ? { profileId: profile } : null]
+    ]) {
+      if (!params) {
+        continue
+      }
+      try {
+        await call(method, params)
+      } catch (error) {
+        failures.push(`cleanup:${method}:${error.message}`)
+      }
+    }
+    if (outputPrepared) {
+      fs.writeFileSync(
+        path.join(output, 'results.json'),
+        JSON.stringify(
+          { observations, failures, verdict: failures.length ? 'FAIL' : 'PASS' },
+          null,
+          2
+        ),
+        { mode: 0o600 }
+      )
+    }
     console.log(JSON.stringify({ verdict: failures.length ? 'FAIL' : 'PASS', failures }))
     process.exitCode = failures.length ? 1 : 0
   })

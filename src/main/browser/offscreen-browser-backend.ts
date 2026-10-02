@@ -49,7 +49,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       : browserSessionRegistry.getDefaultProfile()
     const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
 
-    // Gate the backend change until phone and display-sleep validation passes.
+    // Keep the output-scale change opt-in until broader host/client coverage is verified.
     const rasterScaleFactor = Number(process.env.ORCA_EXPERIMENTAL_BROWSER_RASTER_SCALE)
     const useOffscreenRaster =
       Number.isFinite(rasterScaleFactor) && rasterScaleFactor >= 1 && rasterScaleFactor <= 3
