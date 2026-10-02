@@ -14,7 +14,13 @@ describe('getAgentForkArgv', () => {
   })
 
   it('forks Codex with its fork subcommand', () => {
-    expect(getAgentForkArgv('codex', session)).toEqual(['codex', 'fork', 'abc-123'])
+    expect(getAgentForkArgv('codex', session)).toEqual([
+      'codex',
+      'fork',
+      '-c',
+      'tui.resume_cwd=current',
+      'abc-123'
+    ])
   })
 
   it('returns null for agents without native fork', () => {

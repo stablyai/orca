@@ -602,7 +602,7 @@ describe('buildAgentResumeStartupPlan fork mode', () => {
       platform: 'linux',
       mode: 'fork'
     })
-    expect(plan?.launchCommand).toBe(`codex 'fork' 'codex-session-1'`)
+    expect(plan?.launchCommand).toBe(`codex 'fork' '-c' 'tui.resume_cwd=current' 'codex-session-1'`)
     expect(plan?.startupCommandDelivery).toBe('shell-ready')
   })
 

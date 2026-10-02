@@ -172,7 +172,9 @@ describe('launchNativeAgentSessionFork', () => {
 
     expect(ok).toBe(true)
     const options = lastCreateTabOptions()
-    expect(options?.pendingStartup?.command).toMatch(/^codex .*'fork' 'thread-9'$/)
+    expect(options?.pendingStartup?.command).toMatch(
+      /^codex .*'fork' '-c' 'tui\.resume_cwd=current' 'thread-9'$/
+    )
     expect(options?.pendingStartup?.env).toEqual({ CODEX_HOME: '/acct/codex' })
     expect(options?.pendingStartup?.telemetry).toMatchObject({
       launch_source: 'terminal_context_menu'
