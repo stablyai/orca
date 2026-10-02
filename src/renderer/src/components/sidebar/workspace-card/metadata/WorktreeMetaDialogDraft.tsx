@@ -34,6 +34,7 @@ import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 import { WorktreeLinkedItemsField } from './WorktreeLinkedItemsField'
 import { buildWorkspaceAttachmentEdits } from './worktree-attachment-editing'
 import { resizeCommentTextarea } from './worktree-comment-textarea-sizing'
+import { useWorkspaceUrlDraft, WorktreeWorkspaceUrlField } from './WorktreeWorkspaceUrlField'
 import {
   isImeOwnedKeyboardEvent,
   useImeEnterGestureOwnership
@@ -88,13 +89,15 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
       typeof modalData.currentComment === 'string'
         ? modalData.currentComment
         : (worktree?.comment ?? ''),
-    items: getWorkspaceAttachments(worktree ?? {})
+    items: getWorkspaceAttachments(worktree ?? {}),
+    workspaceUrl: worktree?.workspaceUrl ?? ''
   }))
   const [displayNameInput, setDisplayNameInput] = useState(initial.displayName)
   // Why: retyping the automatic branch name is still an explicit name, so editing pins it.
   const [displayNameEdited, setDisplayNameEdited] = useState(false)
   const [commentInput, setCommentInput] = useState(initial.comment)
   const [items, setItems] = useState<WorkspaceAttachment[]>(initial.items)
+  const workspaceUrl = useWorkspaceUrlDraft(initial.workspaceUrl)
   const [notesOpen, setNotesOpen] = useState(
     Boolean(initial.comment.trim()) || focusField === 'comment'
   )
@@ -109,13 +112,13 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
   const commentIme = useImeEnterGestureOwnership()
 
   const handleSave = async (): Promise<void> => {
-    if (!worktreeId || !worktree || saving) {
+    if (!worktreeId || !worktree || saving || !workspaceUrl.valid) {
       return
     }
     setSaving(true)
     setSaveError(null)
     try {
-      const updates = {
+      const updates = workspaceUrl.withUpdate({
         ...(displayNameEdited || displayNameInput.trim() !== initial.displayName
           ? { displayName: displayNameInput.trim() }
           : {}),
@@ -124,7 +127,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
           initial: initial.items,
           draft: items
         })
-      }
+      })
       const result =
         executionHostId || suppressHostedReviewRefresh
           ? await updateWorktreeMeta(worktreeId, updates, {
@@ -258,6 +261,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
             }
             disabled={saving}
           />
+          <WorktreeWorkspaceUrlField draft={workspaceUrl} onEnter={handleSave} />
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               {notesOpen ? (
@@ -356,7 +360,11 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
             <Button variant="ghost" size="sm" disabled={saving} onClick={closeModal}>
               {t('auto.components.sidebar.WorktreeMetaDialog.3db0a2a593', 'Cancel')}
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={!worktreeId || !worktree || saving}>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={!worktreeId || !worktree || saving || !workspaceUrl.valid}
+            >
               {saving
                 ? t('auto.components.sidebar.WorktreeMetaDialog.61d6f612cf', 'Saving...')
                 : t('auto.components.sidebar.WorktreeMetaDialog.2174f17011', 'Save')}
