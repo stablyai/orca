@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -416,4 +416,56 @@ describe('CliInstaller', () => {
     await expect(readFile(shimPath)).rejects.toThrow()
     await expect(readFile(profilePath)).rejects.toThrow()
   })
+
+  it('rejects install when the PowerShell profile cannot be updated', async () => {
+    const { installer, profilePath, shimPath } = await windowsShimFixture()
+    await mkdir(profilePath, { recursive: true })
+    await expect(installer.install()).rejects.toThrow()
+    await expect(readFile(shimPath)).rejects.toThrow()
+  })
+
+  it('rejects removal when the PowerShell profile block cannot be cleared', async () => {
+    const { installer, profilePath, shimPath } = await windowsShimFixture()
+    await installer.install()
+    const shim = await readFile(shimPath)
+    await rm(profilePath)
+    await mkdir(profilePath)
+    await expect(installer.remove()).rejects.toThrow()
+    expect(await readFile(shimPath)).toEqual(shim)
+  })
 })
+
+async function windowsShimFixture(): Promise<{
+  installer: CliInstaller
+  profilePath: string
+  shimPath: string
+}> {
+  const fixture = await makeFixture()
+  const documentsPath = join(fixture.root, 'Documents')
+  const shimPath = join(fixture.root, 'shim', 'orca-powershell-shim.ps1')
+  const resourcesPath = join(fixture.root, 'resources')
+  const bundledLauncher = join(resourcesPath, 'bin', 'orca.exe')
+  await mkdir(dirname(bundledLauncher), { recursive: true })
+  await writeFile(bundledLauncher, 'native launcher', 'utf8')
+  let userPath = 'C:\\Windows\\System32'
+  const installer = new CliInstaller({
+    platform: 'win32',
+    isPackaged: true,
+    resourcesPath,
+    userDataPath: fixture.userDataPath,
+    execPath: join(fixture.root, 'Orca.exe'),
+    appPath: fixture.appPath,
+    syncWindowsPowerShellProfile: true,
+    windowsDocumentsPath: documentsPath,
+    windowsPowerShellShimPath: shimPath,
+    userPathReader: async () => userPathRead(userPath),
+    userPathWriter: async (value) => {
+      userPath = value
+    }
+  })
+  return {
+    installer,
+    profilePath: join(documentsPath, 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1'),
+    shimPath
+  }
+}

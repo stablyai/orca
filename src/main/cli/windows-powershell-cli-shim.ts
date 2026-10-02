@@ -127,6 +127,15 @@ export async function installWindowsPowerShellCliShim(input: {
   if (unsafePath) {
     throw new Error('Refusing to write a PowerShell shim for a path that contains a newline')
   }
+  // Why BOM: Windows PowerShell 5.1 reads a no-BOM profile as the ANSI code page,
+  // so a non-ASCII shim path in that file never loads. UTF-16 already has a BOM.
+  // Why before the shim file: copying ACLs can fail, and a shim without the
+  // profile function leaves PowerShell 5.1 pipes on US-ASCII (#24428).
+  const profileEncoding: ProfileEncoding = existing?.encoding === 'utf16le' ? 'utf16le' : 'utf8-bom'
+  if (!(existing?.text === next && existing.encoding === profileEncoding)) {
+    await mkdir(dirname(profilePath), { recursive: true })
+    await writeBytesAtomically(profilePath, encodeProfile(next, profileEncoding))
+  }
   // Why BOM: Windows PowerShell 5.1 reads a no-BOM .ps1 as the ANSI code page.
   // Why skip a matching file: rewriting it copies ACLs through PowerShell on every launch.
   const shimBytes = encodeProfile(renderOrcaPowerShellCliShim(input.launcherPath), 'utf8-bom')
@@ -134,14 +143,6 @@ export async function installWindowsPowerShellCliShim(input: {
     await mkdir(dirname(input.shimPath), { recursive: true })
     await writeBytesAtomically(input.shimPath, shimBytes)
   }
-  // Why BOM: Windows PowerShell 5.1 reads a no-BOM profile as the ANSI code page,
-  // so a non-ASCII shim path in that file never loads. UTF-16 already has a BOM.
-  const profileEncoding: ProfileEncoding = existing?.encoding === 'utf16le' ? 'utf16le' : 'utf8-bom'
-  if (existing?.text === next && existing.encoding === profileEncoding) {
-    return 'installed'
-  }
-  await mkdir(dirname(profilePath), { recursive: true })
-  await writeBytesAtomically(profilePath, encodeProfile(next, profileEncoding))
   return 'installed'
 }
 
@@ -149,24 +150,27 @@ export async function removeWindowsPowerShellCliShim(input: {
   documentsPath: string
   shimPath: string
 }): Promise<void> {
-  await unlinkIfExists(input.shimPath)
   const profilePath = windowsPowerShell51ProfilePath(input.documentsPath)
   const existing = await readProfileFile(profilePath)
-  if (!existing || existing === 'undecodable') {
+  // Why: deleting the shim first leaves the profile block pointing at a missing
+  // file when the rewrite fails. An undecodable profile may still dot-source it (#24428).
+  if (existing === 'undecodable') {
     return
   }
-  const next = removeManagedProfileBlock(existing.text)
-  if (next.trim().length === 0) {
-    await unlinkIfExists(profilePath)
-    return
+  if (existing) {
+    const next = removeManagedProfileBlock(existing.text)
+    if (next !== existing.text) {
+      if (next.trim().length === 0) {
+        await unlinkIfExists(profilePath)
+      } else {
+        await writeBytesAtomically(
+          profilePath,
+          encodeProfile(next.endsWith('\n') ? next : `${next}\n`, existing.encoding)
+        )
+      }
+    }
   }
-  if (next === existing.text) {
-    return
-  }
-  await writeBytesAtomically(
-    profilePath,
-    encodeProfile(next.endsWith('\n') ? next : `${next}\n`, existing.encoding)
-  )
+  await unlinkIfExists(input.shimPath)
 }
 
 /**

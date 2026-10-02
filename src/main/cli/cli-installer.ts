@@ -238,34 +238,27 @@ export class CliInstaller extends CliPathRegistration {
   private async syncWindowsPowerShellCliShimQueued(
     options: { requireInstalled?: boolean }
   ): Promise<void> {
-    try {
-      // Why: the bundled exe survives CLI removal, so startup must not put the
-      // function back into a profile the user already cleared (#24428).
-      if (options.requireInstalled && (await this.getStatus()).state !== 'installed') {
-        return
-      }
-      const launcherPath = await this.resolveLauncherPath()
-      // Why .exe only: a .cmd launcher is itself a native pipe target, so it
-      // would recode the UTF-8 stdin this function just produced (#24428).
-      if (!launcherPath || !launcherPath.toLowerCase().endsWith('.exe')) {
-        return
-      }
-      const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())
-      const shimPath =
-        this.windowsPowerShellShimPath ?? defaultWindowsPowerShellShimPath(this.localAppDataPath)
-      const status = await installWindowsPowerShellCliShim({
-        launcherPath,
-        documentsPath,
-        shimPath
-      })
-      if (status !== 'installed') {
-        console.warn(`[cli] left the Windows PowerShell profile unchanged (${status})`)
-      }
-    } catch (error) {
-      console.warn(
-        '[cli] failed to refresh the Windows PowerShell UTF-8 shim:',
-        error instanceof Error ? error.message : String(error)
-      )
+    // Why: the bundled exe survives CLI removal, so startup must not put the
+    // function back into a profile the user already cleared (#24428).
+    if (options.requireInstalled && (await this.getStatus()).state !== 'installed') {
+      return
+    }
+    const launcherPath = await this.resolveLauncherPath()
+    // Why .exe only: a .cmd launcher is itself a native pipe target, so it
+    // would recode the UTF-8 stdin this function just produced (#24428).
+    if (!launcherPath || !launcherPath.toLowerCase().endsWith('.exe')) {
+      return
+    }
+    const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())
+    const shimPath =
+      this.windowsPowerShellShimPath ?? defaultWindowsPowerShellShimPath(this.localAppDataPath)
+    const status = await installWindowsPowerShellCliShim({
+      launcherPath,
+      documentsPath,
+      shimPath
+    })
+    if (status !== 'installed') {
+      console.warn(`[cli] left the Windows PowerShell profile unchanged (${status})`)
     }
   }
 
@@ -277,17 +270,10 @@ export class CliInstaller extends CliPathRegistration {
   }
 
   private async removeWindowsPowerShellCliProfileQueued(): Promise<void> {
-    try {
-      const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())
-      const shimPath =
-        this.windowsPowerShellShimPath ?? defaultWindowsPowerShellShimPath(this.localAppDataPath)
-      await removeWindowsPowerShellCliShim({ documentsPath, shimPath })
-    } catch (error) {
-      console.warn(
-        '[cli] failed to remove the Windows PowerShell UTF-8 shim:',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
+    const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())
+    const shimPath =
+      this.windowsPowerShellShimPath ?? defaultWindowsPowerShellShimPath(this.localAppDataPath)
+    await removeWindowsPowerShellCliShim({ documentsPath, shimPath })
   }
 
   private async removeLinuxAppImagePayloads(): Promise<void> {

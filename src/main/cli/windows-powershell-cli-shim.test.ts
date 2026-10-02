@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, stat, utimes, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -99,6 +99,50 @@ describe('windows powershell cli shim', () => {
     await installWindowsPowerShellCliShim(input)
     expect((await stat(shimPath)).mtimeMs).toBe(stamped.getTime())
   })
+
+  it('keeps the shim when the profile cannot be rewritten', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ps-profile-fail-'))
+    const documentsPath = join(root, 'docs')
+    const shimPath = join(root, 'shim.ps1')
+    await installWindowsPowerShellCliShim({
+      launcherPath: 'C:\\Orca\\orca.exe',
+      documentsPath,
+      shimPath
+    })
+    const profilePath = windowsPowerShell51ProfilePath(documentsPath)
+    await rm(profilePath)
+    await mkdir(profilePath)
+    await expect(
+      removeWindowsPowerShellCliShim({ documentsPath, shimPath })
+    ).rejects.toThrow()
+    expect(await readFile(shimPath, 'utf8')).toContain('function global:orca')
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'does not write the shim when an existing profile cannot be replaced',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ps-profile-readonly-'))
+      const profilePath = windowsPowerShell51ProfilePath(root)
+      await mkdir(join(root, 'WindowsPowerShell'), { recursive: true })
+      const user = "Write-Host 'keep'\n"
+      await writeFile(profilePath, user, 'utf8')
+      await chmod(profilePath, 0o444)
+      const shimPath = join(root, 'shim.ps1')
+      try {
+        await expect(
+          installWindowsPowerShellCliShim({
+            launcherPath: 'C:\\Orca\\orca.exe',
+            documentsPath: root,
+            shimPath
+          })
+        ).rejects.toThrow()
+        await expect(readFile(shimPath)).rejects.toThrow()
+        expect(await readFile(profilePath, 'utf8')).toBe(user)
+      } finally {
+        await chmod(profilePath, 0o644)
+      }
+    }
+  )
 
   it('adds a UTF-8 BOM when a no-BOM profile gains a non-ASCII shim path', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ps-bom-'))
