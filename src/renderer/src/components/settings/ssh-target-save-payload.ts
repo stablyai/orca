@@ -1,5 +1,6 @@
 import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshTarget,
   type SshTargetCreateInput,
   type SshTargetUpdateInput
 } from '../../../../shared/ssh-types'
@@ -21,7 +22,13 @@ type SshTargetSavePayloadResult =
   | { ok: true; payload: SshTargetSavePayload }
   | { ok: false; error: string }
 
-export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePayloadResult {
+/** The saved values a proxy edit is compared against, so an unchanged field is left out. */
+type SshTargetProxyBaseline = Pick<SshTarget, 'httpProxyUrl' | 'httpProxyBypassRules'>
+
+export function buildSshTargetSavePayload(
+  form: EditingTarget,
+  baseline?: SshTargetProxyBaseline
+): SshTargetSavePayloadResult {
   const { host, configHost, username, port } = getSshTargetDraftConnectionFields(form)
   if (!host) {
     return {
@@ -66,6 +73,15 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   }
   const httpProxyUrl = httpProxy.value || undefined
   const httpProxyBypassRules = normalizeProxyBypassRules(form.httpProxyBypassRules) || undefined
+  // Why omit unchanged proxy fields: this form submits a full snapshot, and persistence
+  // treats a present-but-empty httpProxyUrl as the user clearing the proxy (releasing any
+  // sealed ciphertext). Sending it on every save would drop a keychain-sealed proxy the
+  // user never touched — so, like the local settings proxy, only a real edit is sent.
+  const proxyChanged =
+    !baseline ||
+    (baseline.httpProxyUrl ?? undefined) !== httpProxyUrl ||
+    (baseline.httpProxyBypassRules ?? undefined) !== httpProxyBypassRules
+  const proxyUpdates = proxyChanged ? { httpProxyUrl, httpProxyBypassRules } : {}
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
   const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
 
@@ -98,8 +114,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         gssapiAuthentication: form.gssapiAuthentication || undefined,
         proxyCommand,
         jumpHost,
-        httpProxyUrl,
-        httpProxyBypassRules,
+        ...proxyUpdates,
         systemSshConnectionReuse,
         remoteRuntime,
         source: 'manual'
