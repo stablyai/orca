@@ -33,7 +33,7 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
-import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_ICON_ONLY_ROOT_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
@@ -73,6 +73,7 @@ export default function BrowserTab({
   tab,
   isActive,
   isPinned,
+  pinnedIconOnly,
   hasTabsToRight,
   hasTabsToLeft,
   tabCount,
@@ -90,6 +91,7 @@ export default function BrowserTab({
   tab: BrowserTabState
   isActive: boolean
   isPinned: boolean
+  pinnedIconOnly: boolean
   hasTabsToRight: boolean
   hasTabsToLeft: boolean
   tabCount: number
@@ -149,7 +151,8 @@ export default function BrowserTab({
   // Why: defer activation to pointer-up so dragging the tab (reorder / move into
   // another pane / split) does not switch the active tab mid-gesture.
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
-  const slotProps = useTabStripSlotProps(tab.id, isActive)
+  const iconOnly = isPinned && pinnedIconOnly
+  const slotProps = useTabStripSlotProps(tab.id, isActive, iconOnly)
 
   const tabRoot = (
     <div
@@ -159,7 +162,9 @@ export default function BrowserTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      // Why: collapsed to an icon there is no text to name the tab, and dnd-kit's role="button" needs one.
+      aria-label={iconOnly ? tabLabel : undefined}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)} ${iconOnly ? TAB_ICON_ONLY_ROOT_CLASSES : ''}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
@@ -197,8 +202,10 @@ export default function BrowserTab({
         className="size-3 mr-1"
         fallbackClassName="text-blue-500"
       />
-      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
+      {isPinned && !iconOnly && (
+        <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
+      )}
+      {iconOnly ? null : <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>}
       {!isPinned && (
         <button
           className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${

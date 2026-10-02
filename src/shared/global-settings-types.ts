@@ -440,6 +440,8 @@ export type GlobalSettings = {
   confirmClosePinnedTab: boolean
   /** Why: preview tabs reuse one slot per group, so browsing replaces the open file; off makes every open its own tab. Defaults on. */
   editorPreviewTabsEnabled: boolean
+  /** Why: a pinned tab's icon already identifies it; dropping its label reclaims strip width when many tabs are open. */
+  pinnedTabsIconOnly: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */

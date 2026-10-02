@@ -229,6 +229,17 @@
         "title": "Warn when a Codex tab shares a server",
         "description": "Shows a notice on a Codex you started yourself when it shares a server with other tabs, because its agent status may be wrong."
       }
+    },
+    "general": {
+      "pinnedTabsIconOnly": {
+        "title": "Show pinned tabs as icons only",
+        "description": "Hide the title on pinned tabs so they shrink to their icon and leave more room in the tab strip.",
+        "keyword": {
+          "icon": "icon",
+          "compact": "compact",
+          "space": "space"
+        }
+      }
     }
   },
   "menu": {
