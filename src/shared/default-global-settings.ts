@@ -181,6 +181,9 @@ export function buildDefaultSettings(args: {
     activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
+    antigravityManagedAccounts: [],
+    activeAntigravityManagedAccountId: null,
+    activeAntigravityManagedAccountIdsByRuntime: { host: null, wsl: {} },
     terminalScopeHistoryByWorktree: true,
     terminalHiddenViewParking: true,
     // C1 kill switches — runtime reads stay `!== false` so older persisted

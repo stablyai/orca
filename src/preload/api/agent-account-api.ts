@@ -3,6 +3,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
+import type { AntigravityRateLimitAccountsState } from '../../shared/antigravity-managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { CursorAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
 
@@ -57,6 +58,21 @@ export type ClaudeAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
+}
+
+export type AntigravityAccountsApi = {
+  list: () => Promise<AntigravityRateLimitAccountsState>
+  add: (args?: {
+    runtime?: 'host' | 'wsl'
+    wslDistro?: string | null
+  }) => Promise<AntigravityRateLimitAccountsState>
+  reauthenticate: (args: { accountId: string }) => Promise<AntigravityRateLimitAccountsState>
+  remove: (args: { accountId: string }) => Promise<AntigravityRateLimitAccountsState>
+  select: (args: {
+    accountId: string | null
+    runtime?: 'host' | 'wsl'
+    wslDistro?: string | null
+  }) => Promise<AntigravityRateLimitAccountsState>
 }
 
 export type GrokAccountsApi = {
