@@ -6,10 +6,7 @@ import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import {
-  appendTabToWorktreeOrder,
-  getResumeLaunchTarget
-} from '@/lib/sleeping-agent-session-launch'
+import { appendTabToWorktreeOrder } from '@/lib/sleeping-agent-session-launch'
 import { getForkAgentLaunchPlatform } from './agent-fork-launch-platform'
 import {
   resolveTuiAgentLaunchArgs,
@@ -17,6 +14,7 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { findForkWorktreeRepo } from './agent-session-fork-source-repo'
+import { getForkAgentLaunchTarget } from './agent-session-fork-launch-target'
 import type { ForkableAgentSession } from './worktree-agent-fork-sessions'
 
 export type AgentForkLaunchSource = 'sidebar' | 'terminal_context_menu'
@@ -32,7 +30,7 @@ export async function launchNativeAgentSessionFork(args: {
   const { session } = args
   const launchConfig = session.launchConfig
   // Why: the child worktree's host decides quoting (SSH/WSL → POSIX), not the source pane's.
-  const target = getResumeLaunchTarget(args.worktreeId)
+  const target = getForkAgentLaunchTarget(state, args.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: session.agent,
     providerSession: session.providerSession,

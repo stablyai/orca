@@ -53,7 +53,10 @@ const state: MockState = {
 
 const mocks = vi.hoisted(() => ({
   preflightAgentTrust: vi.fn(async (_args: unknown) => undefined),
-  getResumeLaunchTarget: vi.fn((_worktreeId: string) => ({ platform: 'linux', shell: undefined })),
+  getForkAgentLaunchTarget: vi.fn((_state: unknown, _worktreeId: string) => ({
+    platform: 'linux',
+    shell: undefined
+  })),
   appendTabToWorktreeOrder: vi.fn(),
   launchAgentInNewTab: vi.fn(),
   planAgentSessionLaunch: vi.fn((_store: unknown, _request: unknown) => ({ route: 'terminal' })),
@@ -62,8 +65,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
 vi.mock('@/lib/sleeping-agent-session-launch', () => ({
-  getResumeLaunchTarget: mocks.getResumeLaunchTarget,
   appendTabToWorktreeOrder: mocks.appendTabToWorktreeOrder
+}))
+vi.mock('./agent-session-fork-launch-target', () => ({
+  getForkAgentLaunchTarget: mocks.getForkAgentLaunchTarget
 }))
 vi.mock('@/lib/agent-trust-preflight', () => ({ preflightAgentTrust: mocks.preflightAgentTrust }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
@@ -127,7 +132,7 @@ describe('launchNativeAgentSessionFork', () => {
       launch_source: 'sidebar',
       request_kind: 'resume'
     })
-    expect(mocks.getResumeLaunchTarget).toHaveBeenCalledWith('repo::child')
+    expect(mocks.getForkAgentLaunchTarget).toHaveBeenCalledWith(state, 'repo::child')
     expect(mocks.preflightAgentTrust).toHaveBeenCalledWith({
       agent: 'claude',
       workspacePath: '/r/child',
