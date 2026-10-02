@@ -9,6 +9,7 @@ import { splitPathSegments } from './path-tree'
 
 type UseFileExplorerTreeLoadEffectsParams = {
   visibleFilesWorktreePath: string | null
+  displayRootPath?: string | null
   expanded: Set<string>
   dirCache: Record<string, DirCache>
   loadingDirPaths: ReadonlySet<string>
@@ -23,6 +24,7 @@ type UseFileExplorerTreeLoadEffectsParams = {
 /** Reset/retry/stale-dir loads for the currently visible worktree tree. */
 export function useFileExplorerTreeLoadEffects({
   visibleFilesWorktreePath,
+  displayRootPath = visibleFilesWorktreePath,
   expanded,
   dirCache,
   loadingDirPaths,
@@ -73,6 +75,21 @@ export function useFileExplorerTreeLoadEffects({
   }, [sshConnectedGeneration, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (
+      !visibleFilesWorktreePath ||
+      !displayRootPath ||
+      displayRootPath === visibleFilesWorktreePath ||
+      dirCache[displayRootPath] ||
+      loadingDirPaths.has(displayRootPath)
+    ) {
+      return
+    }
+    const depth =
+      splitPathSegments(displayRootPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
+    void loadDir(displayRootPath, depth)
+  }, [visibleFilesWorktreePath, displayRootPath, dirCache, loadingDirPaths, loadDir])
+
+  useEffect(() => {
     if (!visibleFilesWorktreePath) {
       return
     }
@@ -84,6 +101,9 @@ export function useFileExplorerTreeLoadEffects({
       }
       // Why: a full refresh (watcher overflow) re-reads only root and the dirs expanded at the time,
       // so a listing cached while collapsed is unverified — re-read it here instead of trusting it.
+      if (dirCache[dirPath]?.error) {
+        continue
+      }
       const decision = decideExpandedDirLoad(dirCache[dirPath], isDirStale(dirPath))
       if (decision === 'skip') {
         continue

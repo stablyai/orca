@@ -137,6 +137,25 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.GeneralPane.editor_preview_tabs',
+      'Reuse a preview tab when browsing files'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.editor_preview_tabs_short',
+      'Browsing files reuses one preview tab instead of opening a new one.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.preview', 'preview'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
+      ...translateSearchKeyword('auto.components.settings.general.search.reuse', 'reuse'),
+      ...translateSearchKeyword('auto.components.settings.general.search.replace', 'replace'),
+      ...translateSearchKeyword('auto.components.settings.general.search.explorer', 'explorer'),
+      ...translateSearchKeyword('auto.components.settings.general.search.italic', 'italic'),
+      ...translateSearchKeyword('auto.components.settings.general.search.browsing', 'browsing')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.general.search.161a86a9da',
       'Confirm before closing pinned tabs'
     ),
@@ -150,6 +169,28 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
       ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
       ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.GeneralPane.confirm_running_terminal_close',
+      'Confirm before closing running terminals'
+    ),
+    description: translate(
+      'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
+      'Ask before stopping a running agent or command when closing a terminal.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.running_terminal',
+        'running'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.terminal', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.general.search.agent', 'agent'),
+      ...translateSearchKeyword('auto.components.settings.general.search.command', 'command'),
+      ...translateSearchKeyword('auto.components.settings.general.search.confirm', 'confirm'),
+      ...translateSearchKeyword('auto.components.settings.general.search.close', 'close'),
+      ...translateSearchKeyword('auto.components.settings.general.search.omp', 'OMP')
     ]
   }
 ])

@@ -6,6 +6,7 @@
 // key instead of appearing as a second copy of the user's own message.
 
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot,
@@ -13,7 +14,10 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
-import type { JournalRow } from '../agent-session-journal/journal-row-schema'
+import {
+  isJournalStopOrResumeRow,
+  type JournalRow
+} from '../agent-session-journal/journal-row-schema'
 
 export type JournalBatchProjection =
   | { ok: true; batch: AgentSessionJournalBatch }
@@ -49,6 +53,10 @@ export function projectJournalBatch(input: {
       }
       continue
     }
+    if (isJournalStopOrResumeRow(row)) {
+      // Host-only: no item; the queue pause it feeds is published beside the list.
+      continue
+    }
     if (row.kind === 'item' || row.kind === 'tombstone') {
       touchedItemIds.add(
         input.canonicalItemId?.(row.itemId) ?? aliases.get(row.itemId) ?? row.itemId
@@ -65,7 +73,7 @@ export function projectJournalBatch(input: {
   const items = [...touchedItemIds]
     .map((itemId) => live.get(itemId))
     .filter((item) => item !== undefined)
-    .sort((a, b) => a.sequence - b.sequence)
+    .sort(compareAgentJournalItems)
   return {
     ok: true,
     batch: {

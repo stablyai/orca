@@ -37,6 +37,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Fully qualified provider identity; never a credential or mailbox lookup key. */
   providerAlias?: AgentStatusProviderAlias
   paneKey: string
+  /** Live host acknowledgement of this renderer’s exact pane retirement. */
+  authorityRestartId?: string
   launchToken?: string
   terminalHandle?: string
   tabId?: string
@@ -53,6 +55,10 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   evidenceObservedAt?: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
+  /** When the main agent's current turn began, stamped by the hook server from the main agent's
+   *  own turn-opening event. Optional: old hosts and turns opened unseen omit it, and readers fall
+   *  back to `stateStartedAt`. */
+  turnStartedAt?: number
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
   /** Resume identity update only; the status-shaped fields are transport placeholders. */

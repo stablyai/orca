@@ -11,7 +11,6 @@ import {
   getInitialWorktreeCreationPhase,
   getWorktreeCreationIndeterminate
 } from '@/lib/worktree-creation-flow-startup'
-import { retryStructuredWorktreeLaunch } from '@/lib/worktree-creation-structured-recovery'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
@@ -149,13 +148,5 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
-  if (entry.structuredLaunchRecoveryWorktreeId) {
-    void retryStructuredWorktreeLaunch(
-      creationId,
-      entry.request,
-      entry.structuredLaunchRecoveryWorktreeId
-    )
-    return
-  }
   startWorktreeCreation(creationId, entry.request)
 }

@@ -6,6 +6,7 @@ import {
   query,
   type CanUseTool,
   type Options,
+  type PermissionMode,
   type SDKUserMessage,
   type SpawnedProcess as SdkSpawnedProcess,
   type SpawnOptions as SdkSpawnOptions
@@ -27,7 +28,7 @@ import { createClaudeStructuredLaunchResolver } from './claude-structured-launch
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
 const LEAF_UUID = 'ad0f7c9e-1b2c-4d3e-8f90-abc123def456'
-const PINNED_SDK_VERSION = '0.3.251'
+const PINNED_SDK_VERSION = '0.3.284'
 const SDK_PLATFORM_PACKAGE_BASENAMES = [
   'claude-agent-sdk-darwin-arm64',
   'claude-agent-sdk-darwin-x64',
@@ -143,7 +144,7 @@ function recordingSpawner(spawns: SpawnSeen[]) {
   }
 }
 
-function resolvedLaunch(launchArgs: string[]) {
+function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = []) {
   const record = {
     sessionId: 'contract-pin-session',
     provider: 'claude',
@@ -161,7 +162,8 @@ function resolvedLaunch(launchArgs: string[]) {
     store: { getRecord: () => record } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath: async () => '/repos/workspace-1',
     resolveCommand: () => FAKE_CLI,
-    resolveAuthPolicy: () => ({ stripAuthEnv: true })
+    resolveAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolvePermissionMode: () => permissionMode
   })({ identity: { sessionId: record.sessionId } as never })
 }
 
@@ -338,9 +340,9 @@ describe('Claude Agent SDK contract pins', () => {
   it('produces a matching CLI flag for every pre-SDK argv entry', async () => {
     const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
     const spawns: SpawnSeen[] = []
-    // Driven by the real resolver, so the argv walk covers the durable-launchArgs
-    // translation and its merge order, not a hand-written options literal.
-    const launch = await resolvedLaunch(['--model', 'claude-sonnet-4-5', '--effort', 'high'])
+    // Driven by the real resolver, so the argv walk covers its option set and merge order,
+    // not a hand-written options literal.
+    const launch = await resolvedLaunch('bypassPermissions', ['--model', 'claude-sonnet-4-5'])
     await drainQuery({
       ...launch.options,
       pathToClaudeCodeExecutable: FAKE_CLI,
@@ -352,15 +354,14 @@ describe('Claude Agent SDK contract pins', () => {
 
     expect(spawns).toHaveLength(1)
     const argv = normalizeArgv(spawns[0]!.args)
-    // Typed-first translation must not also spell the flag through extraArgs.
-    for (const flag of ['--model', '--effort']) {
-      expect(
-        argv.filter((arg) => arg === flag),
-        `${flag} occurrences`
-      ).toHaveLength(1)
-    }
-    expect(argv[argv.indexOf('--model') + 1]).toBe('claude-sonnet-4-5')
-    expect(argv[argv.indexOf('--effort') + 1]).toBe('high')
+    // The SDK's typed bypass option emits a newer allow flag that older user-installed Claude
+    // binaries reject. Keep the older owned flag until Orca establishes a minimum CLI version.
+    expect(argv.filter((arg) => arg === '--dangerously-skip-permissions')).toHaveLength(1)
+    expect(argv).not.toContain('--allow-dangerously-skip-permissions')
+    expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('default')
+    // Configured CLI arguments are a terminal concern; a record written before they stopped
+    // being read must not smuggle one back into the child's argv.
+    expect(argv).not.toContain('--model')
     // Headless print mode is the SDK's only mode; `query()` never passes `-p`,
     // and if the SDK ever started passing it this pin would notice.
     const impliedByHeadlessQuery = new Set(['-p'])

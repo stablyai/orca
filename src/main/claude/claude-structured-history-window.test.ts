@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-outbox'
 import { structuredAgentSessionPayloadFingerprint } from '../../shared/structured-agent-session-mutation'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { reconcileSubmissions } from '../native-chat/agent-session-journal/journal-submission-reconciler'
 import {
   claudeProviderHistoryWindowFromJsonl,
   resolveClaudeProviderHistoryWindow
@@ -230,9 +231,121 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
     expect(read(contents, 'anchor').boundaryConsistent).toBe(true)
   })
 
+  it('keeps the FIRST record for a repeated uuid, as the whole-file index did', () => {
+    // An append-only transcript can repeat a uuid. Preferring the later copy
+    // would silently swap one turn's evidence for another's.
+    const contents = jsonl(
+      [
+        ANCHOR,
+        prompt('u-1', 'anchor', 'first copy'),
+        prompt('u-1', 'anchor', 'second copy'),
+        prompt('u-2', 'u-1', 'next')
+      ],
+      'u-2'
+    )
+
+    expect(read(contents, 'anchor').items[0]?.payloadFingerprint).toBe(
+      sendFingerprint('first copy')
+    )
+  })
+
+  it('drops a repeated uuid whose first copy is not a prompt', () => {
+    // The de-dupe runs BEFORE the prompt filter, so a later prompt-shaped copy
+    // cannot promote a uuid the index had already resolved to a non-prompt.
+    const contents = jsonl(
+      [
+        ANCHOR,
+        prompt('u-1', 'anchor', 'injected', { isMeta: true }),
+        prompt('u-1', 'anchor', 'real prompt')
+      ],
+      'u-1'
+    )
+
+    expect(read(contents, 'anchor').items).toEqual([])
+    expect(read(contents, 'anchor').boundaryConsistent).toBe(true)
+  })
+
+  it('refuses a malformed line rather than skipping past it into the window', () => {
+    // The branch proof runs first and throws on any unparseable record; the
+    // replay that follows only tolerates them because that pass already ran.
+    const contents = jsonl([ANCHOR, prompt('u-1', 'anchor', 'ship it')], 'u-1').replace(
+      '{"type":"last-prompt"',
+      'not json\n{"type":"last-prompt"'
+    )
+
+    expect(read(contents, 'anchor').boundaryConsistent).toBe(false)
+  })
+
   it('carries the caller-proven turn-in-flight fact through to the window', () => {
     const contents = jsonl([ANCHOR, prompt('u-1', 'anchor', 'ship it')], 'u-1')
 
     expect(read(contents, 'anchor', true).turnInFlight).toBe(true)
+  })
+})
+
+describe('a crash between Claude saving a prompt and Orca recording its echo', () => {
+  const row = (type: string, uuid: string, parentUuid: string | null, extra: Row = {}): Row => ({
+    type,
+    uuid,
+    parentUuid,
+    isSidechain: false,
+    sessionId: PROVIDER_SESSION,
+    ...extra
+  })
+  const marker = (leafUuid: string): Row => ({
+    type: 'last-prompt',
+    sessionId: PROVIDER_SESSION,
+    leafUuid
+  })
+  const side = (type: string): Row => ({ type, sessionId: PROVIDER_SESSION })
+  // Shaped like a real 2.1.280 transcript: after a turn, Claude's marker names its stop-hook
+  // summary, and a crash mid-turn leaves the next prompt after the marker with no newer marker.
+  const CRASHED_MID_TURN = [
+    side('queue-operation'),
+    row('attachment', 'hook-start', null, { attachment: { type: 'hook_success' } }),
+    prompt('alpha', 'hook-start', [{ type: 'text', text: 'ALPHA' }]),
+    row('attachment', 'alpha-context', 'alpha', { attachment: { type: 'date' } }),
+    marker('alpha-context'),
+    side('ai-title'),
+    row('assistant', 'alpha-reply', 'alpha-context', {
+      message: { role: 'assistant', content: [{ type: 'text', text: 'ALPHA' }] }
+    }),
+    row('attachment', 'alpha-hook', 'alpha-reply', { attachment: { type: 'hook_success' } }),
+    row('system', 'alpha-stop-summary', 'alpha-hook', { subtype: 'stop_hook_summary' }),
+    marker('alpha-stop-summary'),
+    side('queue-operation'),
+    prompt('bravo', 'alpha-stop-summary', [{ type: 'text', text: 'BRAVO' }])
+  ]
+    .map((entry) => JSON.stringify(entry))
+    .join('\n')
+
+  it('reconciles the prompt Claude already holds as accepted, not undelivered', () => {
+    // The durable anchor is Orca's last completed turn: the reply it saw on the live stream.
+    const window = read(`${CRASHED_MID_TURN}\n`, 'alpha-reply')
+    expect(window).toMatchObject({ boundaryConsistent: true })
+    expect(window.items.map((item) => item.providerItemId)).toEqual(['bravo'])
+
+    const [verdict] = reconcileSubmissions({
+      history: window,
+      submissions: [
+        {
+          clientMessageId: 'bravo-send',
+          fence: 1,
+          payloadFingerprint: sendFingerprint('BRAVO'),
+          dispatchState: 'unknown',
+          providerItemId: null,
+          reason: null,
+          submittedAt: 0,
+          resolvedAt: null
+        }
+      ]
+    })
+    expect(verdict).toMatchObject({ clientMessageId: 'bravo-send', outcome: 'accepted' })
+  })
+
+  it('ends the conversation at the last main-chain row, never a trailing sidechain row', () => {
+    const subagent = row('assistant', 'subagent-reply', null, { isSidechain: true })
+    const window = read(`${CRASHED_MID_TURN}\n${JSON.stringify(subagent)}\n`, 'alpha-reply')
+    expect(window.items.map((item) => item.providerItemId)).toEqual(['bravo'])
   })
 })

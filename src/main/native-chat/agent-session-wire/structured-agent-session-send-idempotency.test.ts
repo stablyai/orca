@@ -5,11 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { DISPATCH_DOUBT_CODEX_TURN_UNNAMED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -26,7 +27,7 @@ beforeEach(async () => {
       agent: 'codex',
       providerHandle: { kind: 'codex', threadId: 'thread-1' }
     },
-    journalDir: root
+    stateDirectory: root
   })
 })
 
@@ -39,7 +40,10 @@ describe('structured send idempotency', () => {
   it.each([
     ['a refused write', 'provider_write_failed: broken pipe'],
     ['a dead host', 'host_restarted_before_acknowledgement'],
-    ['a codex turn it could not name', DISPATCH_DOUBT_CODEX_TURN_UNNAMED]
+    [
+      'a codex turn an older Orca could not name',
+      'codex app-server started a turn it did not name in time'
+    ]
   ])('never puts an unknown back on the wire after %s', async (_case, reason) => {
     const body: AgentJournalMessageItem = {
       kind: 'message',
@@ -54,6 +58,7 @@ describe('structured send idempotency', () => {
 
     const result = await performSend(
       {
+        logger: recordingStructuredAgentSessionLogger().logger,
         sessionId: 'session-1',
         journal,
         fence: 2,
@@ -61,6 +66,7 @@ describe('structured send idempotency', () => {
         persistOptions: async () => undefined,
         resolvedBy: 'caller',
         publish: vi.fn(),
+        flushStreamedEvents: async () => undefined,
         now: () => 1
       },
       input
@@ -94,6 +100,7 @@ describe('structured send idempotency', () => {
       }
     }))
     const context: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
@@ -101,6 +108,7 @@ describe('structured send idempotency', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'caller',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
     const input = {
@@ -116,11 +124,16 @@ describe('structured send idempotency', () => {
     await performSend(context, input)
     const replay = await performSend(context, input)
 
+    // Acceptance records the one submission; the reused id answers with it and writes nothing.
+    // Handing it over is the delivery loop's, never a second accept's.
     expect(replay).toMatchObject({
       ok: true,
-      value: { clientMessageId: 'shared-send-id', submission: { dispatchState: 'accepted' } }
+      value: {
+        clientMessageId: 'shared-send-id',
+        submission: { dispatchState: 'pending', handoverRecorded: true }
+      }
     })
-    expect(dispatch).toHaveBeenCalledOnce()
+    expect(dispatch).not.toHaveBeenCalled()
     expect(journal.submissions()).toHaveLength(1)
   })
 })

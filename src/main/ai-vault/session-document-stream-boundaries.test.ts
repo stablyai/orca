@@ -88,7 +88,7 @@ describe('independent JSON boundary review', () => {
     expect(await parseHermesSessionDocument(file, bytes(content, 1), 'linux', options)).toEqual(
       await parseHermesSessionContent(file, content, 'linux', options)
     )
-    expect(Reflect.get({}, 'polluted')).toBeUndefined()
+    expect('polluted' in {}).toBe(false)
   })
   for (const content of [
     '{"messages":[],}',

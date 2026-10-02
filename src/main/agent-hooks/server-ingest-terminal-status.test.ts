@@ -443,3 +443,48 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     expect(server.getStatusSnapshot()).toEqual([])
   })
 })
+
+describe('the main agent fact across an OSC repaint', () => {
+  it('carries the hook row main agent while OSC repaints the same state, and drops it on a state edge', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        hookEventName: 'Stop',
+        payload: {
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch the build',
+          agentType: 'claude',
+          mainAgent: { state: 'done', stateStartedAt: 10 }
+        }
+      },
+      'conn-1'
+    )
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: {
+        state: 'working',
+        prompt: 'watch the build',
+        agentType: 'claude',
+        toolName: 'Bash'
+      }
+    })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      toolName: 'Bash',
+      mainAgent: { state: 'done', stateStartedAt: 10 }
+    })
+
+    // OSC cannot date a turn edge: a different state is a main agent it has no fact about.
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'done', prompt: 'watch the build', agentType: 'claude' }
+    })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('mainAgent')
+  })
+})

@@ -8,18 +8,18 @@ import {
   type ListRenderItem
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
 import { ChevronLeft, X } from 'lucide-react-native'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   flattenDirectoryCache,
   getDirectoryCacheState,
   type DirectoryCache,
-  type FileExplorerRow,
-  type MobileDirEntry
+  type FileExplorerRow
 } from './file-tree'
-import type { RpcSuccess } from '../transport/types'
+import type { RpcFailure } from '../transport/types'
 import { colors } from '../theme/mobile-theme'
 import {
   beginDirectoryLoad,
@@ -28,11 +28,8 @@ import {
   resetDirectoryLoadRevisions,
   type DirectoryLoadRevisions
 } from './directory-load-revisions'
-import {
-  directoryCacheFromFileList,
-  isMobileMethodUnavailableError,
-  type LegacyFilesListResult
-} from './file-list-fallback'
+import { directoryCacheFromFileList, isMobileMethodUnavailableError } from './file-list-fallback'
+import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-operations'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
@@ -45,7 +42,7 @@ export function MobileFileExplorerPanel(props: {
   onRequestClose?: () => void
 }) {
   const { hostId, worktreeId, name, embedded, onRequestClose } = props
-  const router = useRouter()
+  const router = useRouteHandoff()
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()
   const scopeRef = useRef('')
@@ -107,22 +104,23 @@ export function MobileFileExplorerPanel(props: {
       }))
 
       try {
-        const response = await client.sendRequest('files.readDir', {
+        const response = await fileDirectoryRead.request(client, {
           worktree: `id:${worktreeId}`,
           relativePath
         })
-        if (!response.ok) {
+        const directory = fileDirectoryRead.interpret(response)
+        if (!directory.accepted) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
+          const refusal = (response as RpcFailure).error
           // Why: desktops that predate the files.readDir mobile allowlist
           // entry still serve the capped files.list; fall back so the Files
           // tab keeps working until the desktop updates.
-          if (
-            rootLoad &&
-            isMobileMethodUnavailableError(response.error?.code, response.error?.message)
-          ) {
-            const legacy = await client.sendRequest('files.list', {
+          if (rootLoad && isMobileMethodUnavailableError(refusal?.code, refusal?.message)) {
+            const legacyReply = await legacyFileListRead.request(client, {
               worktree: `id:${worktreeId}`
             })
-            if (legacy.ok) {
+            const legacy = legacyFileListRead.interpret(legacyReply)
+            if (legacy.accepted) {
               if (
                 !isCurrentDirectoryLoad(
                   directoryLoadRevisionsRef.current,
@@ -132,7 +130,7 @@ export function MobileFileExplorerPanel(props: {
               ) {
                 return
               }
-              const legacyResult = (legacy as RpcSuccess).result as LegacyFilesListResult
+              const legacyResult = legacy.value
               setDirectoryCache(directoryCacheFromFileList(legacyResult.files))
               // Why: the capped list silently omits files past the cap — keep
               // the legacy explorer's "Showing first 5000" note.
@@ -140,17 +138,20 @@ export function MobileFileExplorerPanel(props: {
               return
             }
             throw new Error(
-              legacy.error?.message || response.error?.message || 'Unable to load files'
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
+              (legacyReply as RpcFailure).error?.message ||
+                refusal?.message ||
+                'Unable to load files'
             )
           }
-          throw new Error(response.error?.message || 'Unable to load files')
+          throw new Error(refusal?.message || 'Unable to load files')
         }
         if (
           !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
         ) {
           return
         }
-        const entries = (response as RpcSuccess).result as MobileDirEntry[]
+        const entries = directory.value
         if (rootLoad) {
           setLegacyListTruncated(false)
         }
@@ -248,8 +249,10 @@ export function MobileFileExplorerPanel(props: {
   const retryDirectory = useCallback(
     (relativePath: string) => {
       if (connState !== 'connected' && hostId) {
+        // Still worth a tap on the page, where nothing re-dials: the queued read runs when the
+        // shell's client reconnects on its own.
         pendingDirectoryRetriesRef.current.add(relativePath)
-        void forceReconnect(hostId)
+        void forceReconnect?.(hostId)
         return
       }
       void loadDirectory(relativePath)
@@ -302,6 +305,7 @@ export function MobileFileExplorerPanel(props: {
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
           onPress={() => router.back()}
           hitSlop={8}
+          accessibilityRole="button"
           accessibilityLabel="Back to session"
         >
           <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
@@ -319,6 +323,14 @@ export function MobileFileExplorerPanel(props: {
     </View>
   )
 
+  // Why: while disconnected, re-sending the request is useless — revive the parked transport
+  // instead (issue #5049); loadDirectory re-runs via its effect once the new client connects.
+  const rootRetry = connectionRetryAction({
+    hostId,
+    needsReconnect: connState !== 'connected',
+    forceReconnect,
+    reload: () => void loadDirectory('')
+  })
   const body = loading ? (
     <View style={styles.state}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -326,17 +338,11 @@ export function MobileFileExplorerPanel(props: {
   ) : error ? (
     <View style={styles.state}>
       <Text style={styles.errorText}>{error}</Text>
-      {/* Why: while disconnected, re-sending the request is useless — revive
-          the parked transport instead (issue #5049); loadDirectory re-runs via
-          its effect once the new client connects. */}
-      <Pressable
-        style={styles.retryButton}
-        onPress={() =>
-          connState !== 'connected' && hostId ? void forceReconnect(hostId) : void loadDirectory('')
-        }
-      >
-        <Text style={styles.retryText}>Retry</Text>
-      </Pressable>
+      {rootRetry ? (
+        <Pressable style={styles.retryButton} onPress={rootRetry}>
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
+      ) : null}
     </View>
   ) : rows.length === 0 ? (
     <View style={styles.state}>

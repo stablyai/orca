@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { imeFallbackKeyEvent, parseCdpKeyEvent } from './cdp-keyboard-us-layout'
+import { imeFallbackKeyEvent, parseCdpKeyEvent, type CdpKeyEvent } from './cdp-keyboard-us-layout'
 
 describe('parseCdpKeyEvent', () => {
   it('maps every printable ASCII character to a key event that types that character', () => {
@@ -39,7 +39,7 @@ describe('parseCdpKeyEvent', () => {
     ['Ctrl+Shift+K', { keyCode: 75, key: 'K', modifiers: 10, text: null }],
     ['Meta+r', { keyCode: 82, key: 'r', modifiers: 4, text: null }],
     ['Control+Shift+r', { keyCode: 82, key: 'R', modifiers: 10, text: null }]
-  ])('parses the shortcut %s', (raw: string, expected: object) => {
+  ])('parses the shortcut %s', (raw: string, expected: Partial<CdpKeyEvent>) => {
     expect(parseCdpKeyEvent(raw)).toMatchObject(expected)
   })
 
@@ -66,7 +66,7 @@ describe('parseCdpKeyEvent', () => {
     ['ContextMenu', { keyCode: 93, text: null }],
     ['F5', { keyCode: 116, key: 'F5', code: 'F5', text: null }],
     ['F12', { keyCode: 123, text: null }]
-  ])('parses the named key %s', (raw: string, expected: object) => {
+  ])('parses the named key %s', (raw: string, expected: Partial<CdpKeyEvent>) => {
     expect(parseCdpKeyEvent(raw)).toMatchObject(expected)
   })
 
@@ -77,7 +77,7 @@ describe('parseCdpKeyEvent', () => {
     ['Meta', { keyCode: 91, key: 'Meta', code: 'MetaLeft', modifiers: 4, selfModifier: 4 }]
   ])(
     'reports the own modifier bit and left-side location for a bare %s press',
-    (raw: string, expected: object) => {
+    (raw: string, expected: Partial<CdpKeyEvent>) => {
       expect(parseCdpKeyEvent(raw)).toMatchObject({ ...expected, location: 1, text: null })
     }
   )

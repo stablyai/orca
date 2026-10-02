@@ -17,7 +17,7 @@ const MAX_TERMS = 64
 // A query that quotes something from a transcript: camelCase, SCREAMING_SNAKE,
 // a dotted or snake_case name, a path, a filename, a PR number, a ticket, code
 // punctuation, or an error word.
-const LITERAL_SHAPE =
+const LITERAL_PATTERN =
   /[A-Za-z0-9_]*[a-z][A-Z][A-Za-z0-9_]*|\b[A-Z][A-Z0-9]{2,}(_[A-Z0-9]+)+\b|\b\w{2,}[._]\w{2,}\b|\b[\w.-]+\/[\w/.-]+\b|\b\w+\.(ts|tsx|js|jsx|py|rs|go|json|md|sh|yml|yaml|toml|c|cc|h|java|sql)\b|#\d{3,}|\b[A-Z]{2,6}-\d{2,}\b|[(){};=]|::|->|--\w|\b(Error|Exception|Traceback|error:|warning:)\b/
 const QUOTED = /"[^"]{3,}"|'[^']{3,}'/
 
@@ -31,12 +31,19 @@ export type SessionSearchQueryPlan = {
   truncated: boolean
   /** Deduplicated index-faithful terms for the OR fallback, incl. identifier pieces. */
   terms: string[]
-  /** Query-order tokens minus stop words: the phrase / AND candidate. */
+  /** Query-order tokens minus stop words for prose, all of them for a literal. */
   body: string[]
+  /**
+   * Query-order tokens exactly as typed, stop words kept: the phrase / AND
+   * candidate. A sentence pasted out of a transcript is only adjacent in the
+   * index with its stop words in place, and `unicode61` indexes them, so the
+   * phrase rung has to search the words the user actually typed.
+   */
+  phrase: string[]
 }
 
 export function isLiteralQuery(query: string): boolean {
-  return QUOTED.test(query) || LITERAL_SHAPE.test(query)
+  return QUOTED.test(query) || LITERAL_PATTERN.test(query)
 }
 
 /**
@@ -95,7 +102,8 @@ export function planSessionSearchQuery(
     literal,
     truncated,
     terms: [...terms, ...extra].slice(0, MAX_TERMS),
-    body: body.slice(0, MAX_BODY_TERMS)
+    body: body.slice(0, MAX_BODY_TERMS),
+    phrase: raw
   }
 }
 

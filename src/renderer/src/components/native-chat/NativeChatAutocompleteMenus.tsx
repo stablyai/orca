@@ -276,7 +276,10 @@ export function NativeChatMentionHint({
         event.preventDefault()
         onAccept()
       }}
-      className="absolute bottom-full left-3 right-3 mb-1 flex w-auto items-center gap-2 rounded-md border border-border bg-popover px-3 py-1.5 text-left text-xs text-muted-foreground shadow-md sm:left-4 sm:right-4"
+      // Why z-20: matches the slash picker. The composer shell below is a paint
+      // containment boundary (#10481), so it now paints at z-index 0 in tree
+      // order and would otherwise cover this hint's drop shadow.
+      className="absolute bottom-full left-3 right-3 z-20 mb-1 flex w-auto items-center gap-2 rounded-md border border-border bg-popover px-3 py-1.5 text-left text-xs text-muted-foreground shadow-md sm:left-4 sm:right-4"
     >
       {translate('components.native-chat.composer.mentionHint', 'Referencing file:')}{' '}
       <span className="font-medium text-foreground">@{query || '…'}</span>

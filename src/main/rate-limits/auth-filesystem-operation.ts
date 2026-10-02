@@ -1,4 +1,5 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
 
 const MAX_CONCURRENT_WSL_AUTH_OPERATIONS = 2
 const activeWslOperationDistros = new Set<string>()
@@ -139,10 +140,9 @@ export function createAuthFilesystemOperation<T>(
   const waiters = new Set<symbol>()
   let settled = false
   const result = scheduleAuthFilesystemOperation(authPath, neededController.signal, operation)
-  const markSettled = (): void => {
+  const settlementWaiters = new PromiseSettlementWaiters(result, () => {
     settled = true
-  }
-  void result.then(markSettled, markSettled)
+  })
 
   return {
     result,
@@ -156,20 +156,18 @@ export function createAuthFilesystemOperation<T>(
 
       const waiter = Symbol('auth-filesystem-waiter')
       waiters.add(waiter)
-      let onAbort: (() => void) | null = null
-      const aborted = new Promise<never>((_resolve, reject) => {
-        onAbort = () => reject(getAbortReason(signal))
-        signal.addEventListener('abort', onAbort, { once: true })
-      })
-      return Promise.race([result, aborted]).finally(() => {
-        if (onAbort) {
-          signal.removeEventListener('abort', onAbort)
-        }
-        waiters.delete(waiter)
-        if (!settled && waiters.size === 0) {
-          neededController.abort(getAbortReason(signal))
-        }
-      })
+      return settlementWaiters
+        .wait({
+          signal,
+          abortInMicrotask: true,
+          createAbortError: () => getAbortReason(signal)
+        })
+        .finally(() => {
+          waiters.delete(waiter)
+          if (!settled && waiters.size === 0) {
+            neededController.abort(getAbortReason(signal))
+          }
+        })
     }
   }
 }

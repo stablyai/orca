@@ -42,7 +42,7 @@ describe('useIpcEvents updater integration', () => {
       activate: true
     })
     expect(createTab).toHaveBeenCalledWith('wt-1')
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
 
     // Exact regression sequence: Local default -> connect/navigate Windows 2 ->
     // reveal a local terminal -> restart. Connection and navigation are transient.
@@ -139,7 +139,7 @@ describe('useIpcEvents updater integration', () => {
     expect(markWorktreeVisited).toHaveBeenCalledWith('wt-2')
     expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-2')
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, undefined)
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-2')
     expect(setActiveTab).toHaveBeenCalledWith('tab-new')
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined, 'wt-2')

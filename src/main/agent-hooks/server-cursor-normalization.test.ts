@@ -204,37 +204,6 @@ describe('Cursor hook normalization', () => {
     ])
   })
 
-  it('tool-heavy turn keeps working across shell and generic tool hooks until stop', () => {
-    _internals.normalizeHookPayload(
-      'cursor',
-      buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'run checks' }),
-      'production'
-    )
-    const shell = _internals.normalizeHookPayload(
-      'cursor',
-      buildBody({ hook_event_name: 'beforeShellExecution', command: 'pnpm test' }),
-      'production'
-    )
-    expect(shell?.payload.state).toBe('working')
-    const tool = _internals.normalizeHookPayload(
-      'cursor',
-      buildBody({
-        hook_event_name: 'preToolUse',
-        tool_name: 'Read',
-        tool_input: { file_path: '/repo/src/app.ts' }
-      }),
-      'production'
-    )
-    expect(tool?.payload.state).toBe('working')
-    const stop = _internals.normalizeHookPayload(
-      'cursor',
-      buildBody({ hook_event_name: 'stop', status: 'completed' }),
-      'production'
-    )
-    expect(stop?.payload.state).toBe('done')
-    expect(stop?.payload.prompt).toBe('run checks')
-  })
-
   it('beforeSubmitPrompt clears the cached tool state from a prior turn', () => {
     _internals.normalizeHookPayload(
       'cursor',

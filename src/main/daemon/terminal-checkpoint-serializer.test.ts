@@ -140,6 +140,18 @@ describe('terminal checkpoint serializer', () => {
     expect(JSON.parse(serialized)).toMatchObject({ terminalOwner: 'shell' })
   })
 
+  it('keeps kitty keyboard flags when an oversized checkpoint is trimmed', async () => {
+    const input = snapshot({
+      scrollbackAnsi: 'row\r\n'.repeat(500),
+      modes: { ...snapshot().modes, kittyKeyboardFlags: 1 },
+      scrollbackLines: 500
+    })
+
+    const serialized = await serializeTerminalCheckpointWithinLimit(input, metadata, 2_048)
+
+    expect(JSON.parse(serialized).modes.kittyKeyboardFlags).toBe(1)
+  })
+
   it('rejects an oversized escaped candidate without materializing it', async () => {
     const oversized = String.fromCharCode(0).repeat(100_000)
     const stringify = vi.spyOn(JSON, 'stringify')

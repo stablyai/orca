@@ -50,7 +50,7 @@ export function createTabsLabelActions(
             }
           }
         }
-        return {}
+        return state
       })
       if (reordered && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
@@ -58,17 +58,24 @@ export function createTabsLabelActions(
     },
 
     setTabLabel: (tabId, label) => {
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
+      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? state)
     },
 
     setTabViewMode: (tabId, mode) => {
-      set((state) => ({
-        ...patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode }),
-        // Why the row too: viewMode is declared on both types and host-sync
-        // already writes it to the row. Only these local toggles skipped it, so
-        // readers had to OR the two indices to find out who owns the surface.
-        ...patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: mode })
-      }))
+      set((state) => {
+        const tabPatch = patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode })
+        const rowPatch = patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: mode })
+        if (!tabPatch && !rowPatch.tabsByWorktree) {
+          return state
+        }
+        return {
+          ...tabPatch,
+          // Why the row too: viewMode is declared on both types and host-sync
+          // already writes it to the row. Only these local toggles skipped it, so
+          // readers had to OR the two indices to find out who owns the surface.
+          ...rowPatch
+        }
+      })
       mirrorTabViewModeToHost(get(), tabId, mode)
     },
 
@@ -81,7 +88,7 @@ export function createTabsLabelActions(
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
-          return {}
+          return state
         }
         // Why: viewMode defaults to 'terminal' for legacy/missing, so the first toggle flips to 'chat'.
         const fromMode: 'terminal' | 'chat' = found.tab.viewMode === 'chat' ? 'chat' : 'terminal'
@@ -111,7 +118,7 @@ export function createTabsLabelActions(
 
     setTabCustomLabel: (tabId, label, opts) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? {})
+      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? state)
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -119,7 +126,7 @@ export function createTabsLabelActions(
 
     setUnifiedTabColor: (tabId, color) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? {})
+      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state)
       if (exists) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -130,7 +137,7 @@ export function createTabsLabelActions(
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
-          return {}
+          return state
         }
         const { tab, worktreeId } = found
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
@@ -168,7 +175,7 @@ export function createTabsLabelActions(
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
-          return {}
+          return state
         }
         const { tab, worktreeId } = found
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>

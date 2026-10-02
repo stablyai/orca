@@ -24,6 +24,7 @@ import {
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
+  clipboardFormatsIncludeImage,
   type ClipboardImageThumbnail
 } from '../../shared/clipboard-image'
 import {
@@ -38,6 +39,7 @@ import {
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
@@ -96,6 +98,8 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
+  ipcMain.removeHandler('clipboard:hasImage')
+  ipcMain.removeHandler('clipboard:readFilePaths')
 
   void cleanupExpiredRemoteClipboardFiles()
   scheduleLegacyRemoteClipboardFileCleanup()
@@ -116,6 +120,15 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
     assertTrustedClipboardSender(event)
     return buildClipboardImageThumbnail(clipboard.readImage())
+  })
+  ipcMain.handle('clipboard:hasImage', (event): boolean => {
+    assertTrustedClipboardSender(event)
+    return clipboardFormatsIncludeImage(clipboard.availableFormats())
+  })
+  // Why: a file-manager copy also carries the files' names as text, which a paste must not type.
+  ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
+    assertTrustedClipboardSender(event)
+    return readClipboardCopiedFilePaths(clipboard)
   })
   // Why: terminals need to detect clipboard images to support tools like Claude
   // Code that accept image input via paste. Writes the clipboard image to a
@@ -179,7 +192,15 @@ export function registerClipboardHandlers(store: Store): void {
   )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
-    return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
+    const safeText = await assertClipboardTextWriteWithinLimitWithYield(text)
+    try {
+      clipboard.writeText(safeText)
+    } catch (error) {
+      // Native failures can name paths or platform state, so they stay here; the renderer
+      // only renders a vetted reason (describeClipboardWriteFailure).
+      console.error('[clipboard] writeText failed', error)
+      throw error
+    }
   })
   ipcMain.handle('clipboard:writeTerminalText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)

@@ -234,9 +234,7 @@ describe('AgentBrowserBridge keypress input', () => {
     })
   })
 
-  // Why: one keypress looks the page up three times — the queued target, the
-  // automation-visibility refresh, then the dispatch guard. Serving the first N keeps the
-  // later ones on the guard; the trailing assertions fail loudly if that count ever moves.
+  // Why: one keypress looks the page up twice — the queued target, then the dispatch guard. Serving the first N keeps the later ones on the guard; the trailing assertions fail loudly if that count ever moves.
   function killPageAfterLookups(lookups: number): () => number {
     let remaining = lookups
     webContentsFromIdMock.mockImplementation((id: number) => {
@@ -250,7 +248,7 @@ describe('AgentBrowserBridge keypress input', () => {
   }
 
   it('rejects with tab not found when the page dies after its target is resolved', async () => {
-    const remaining = killPageAfterLookups(2)
+    const remaining = killPageAfterLookups(1)
 
     await expect(bridge.keypress('a', undefined, 'tab-1')).rejects.toMatchObject({
       code: 'browser_tab_not_found'
@@ -260,7 +258,7 @@ describe('AgentBrowserBridge keypress input', () => {
   })
 
   it('rejects with tab not found when the page dies mid-dispatch', async () => {
-    const remaining = killPageAfterLookups(3)
+    const remaining = killPageAfterLookups(2)
     wc.debugger.sendCommand.mockRejectedValue(new Error('Inspected target navigated or closed'))
 
     await expect(bridge.keypress('a', undefined, 'tab-1')).rejects.toMatchObject({

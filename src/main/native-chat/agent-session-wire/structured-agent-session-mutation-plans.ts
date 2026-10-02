@@ -6,6 +6,7 @@
 // journal. Send is fail-closed: admission alone cannot prove non-delivery.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
@@ -14,7 +15,13 @@ import type {
   AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session-conversation-command'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import {
+  STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+  structuredAgentSessionCompactBody
+} from './structured-agent-session-command-turn'
 import {
   performCancel,
   performPrompt,
@@ -23,13 +30,28 @@ import {
   type AgentSessionTurnContext,
   type TurnOutcome
 } from './structured-agent-session-turns'
+import type { AgentSessionPromptRequest } from './structured-agent-session-turns-prompt'
+import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
+
+/** The body-only hash: what the reducer recomputes to alias a provider echo
+ *  onto its submission, so the stored value must never include control fields. */
+function sendBodyFingerprint(sessionId: string, body: AgentJournalMessageItem): string {
+  return structuredAgentSessionPayloadFingerprint({
+    method: 'agentSession.send',
+    sessionId,
+    fields: { body }
+  })
+}
 
 export type MutationPlan<TValue> = {
   method: string
   fields: Record<string, unknown>
   operationIdScope?: 'global'
+  /** Admitted without the writer lease: see `admitAgentSessionMutation`. */
+  conversationWrite?: true
+  /** Still runs, decided from the committed ledger, when its ledger row cannot be written. */
+  runsWithoutLedgerRow?: true
   markUnknownBeforeRun?: boolean
-  beforeRun?: () => void
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
   replay: (ctx: AgentSessionTurnContext, outcome: AgentSessionOperationOutcome) => TValue | null
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
@@ -41,6 +63,8 @@ export function sendPlan(params: {
   envelope: AgentSessionMutationEnvelope
   body: AgentJournalMessageItem
   retryUnknown?: true
+  delivery?: 'queue-if-active'
+  userSend?: true
   beforeRun?: () => void
 }): MutationPlan<AgentSessionSendResult> {
   // The operation id IS the client message id: one send, one durable row, one
@@ -49,20 +73,31 @@ export function sendPlan(params: {
   return {
     method: 'agentSession.send',
     operationIdScope: 'global',
+    conversationWrite: true,
     markUnknownBeforeRun: true,
-    // A control signal is not payload; it cannot alter durable replay.
-    fields: { body: params.body },
-    ...(params.beforeRun ? { beforeRun: params.beforeRun } : {}),
+    // `delivery` joins the OPERATION fingerprint only; the submission row keeps
+    // the body-only fingerprint the reducer's echo-aliasing recomputes.
+    fields: { body: params.body, ...(params.delivery ? { delivery: params.delivery } : {}) },
     recoverUnknownFromDurableState: true,
     // `retryUnknown` is a compatibility-only client signal. A recorded send
     // always replays and never reaches the provider twice.
-    run: (ctx) =>
-      performSend(ctx, {
+    run: (ctx) => {
+      // Asked at acceptance: a send accepted after this one is queued behind it.
+      params.beforeRun?.()
+      return performSend(ctx, {
+        origin: params.userSend ? 'client' : 'host',
         clientMessageId,
-        payloadFingerprint: params.envelope.payloadFingerprint,
+        payloadFingerprint: sendBodyFingerprint(params.envelope.sessionId, params.body),
         body: params.body
-      }),
+      })
+    },
     replay: (ctx, outcome) => {
+      // A send this host queued answers from its draft, then its hand-off; a
+      // withdrawn draft replays as spent — never as missing-submission doubt.
+      const queued = queuedSendAnswer(ctx.journal, clientMessageId)
+      if (queued) {
+        return queued
+      }
       const submission = ctx.journal
         .submissions()
         .find((entry) => entry.clientMessageId === clientMessageId)
@@ -91,44 +126,97 @@ export function sendPlan(params: {
   }
 }
 
+export type ConversationCommandAcceptance =
+  | { clientMessageId: string }
+  /** What an older build's run of this operation recorded. */
+  | { recorded: AgentSessionConversationCommandResult }
+
+/** `/compact` accepted like a send: one submission, keyed by the operation id, that the delivery
+ *  loop carries out as the command's own turn. */
+export function conversationCommandPlan(params: {
+  envelope: AgentSessionMutationEnvelope
+  priorRecord: () => AgentSessionConversationCommandResult | null
+}): MutationPlan<ConversationCommandAcceptance> {
+  const clientMessageId = params.envelope.clientOperationId
+  return {
+    method: 'agentSession.conversationCommand',
+    conversationWrite: true,
+    markUnknownBeforeRun: true,
+    fields: { command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND },
+    recoverUnknownFromDurableState: true,
+    run: async (ctx) => {
+      const sent = await performSend(ctx, {
+        clientMessageId,
+        // Only a client asks through the command RPC: the person's own turn.
+        origin: 'client',
+        payloadFingerprint: params.envelope.payloadFingerprint,
+        body: structuredAgentSessionCompactBody()
+      })
+      return sent.ok ? { ok: true, value: { clientMessageId } } : sent
+    },
+    replay: (ctx, outcome) => {
+      if (outcome.status === 'succeeded' && outcome.conversationCommand) {
+        return { recorded: outcome.conversationCommand }
+      }
+      if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
+        return { clientMessageId }
+      }
+      const prior = params.priorRecord()
+      return prior ? { recorded: prior } : null
+    }
+  }
+}
+
 export function cancelPlan(params: {
   envelope: AgentSessionMutationEnvelope
-  turnId: string
+  turnId?: string
   scope?: 'background-tasks'
   taskId?: string
+  prompt?: { itemId: string; expectedRevision: number }
+  /** The session's child records, which name the tasks a background Stop reaches. */
+  childWork?: () => readonly AgentChildWorkView[] | undefined
 }): MutationPlan<AgentSessionCancelResult> {
   return {
     method: 'agentSession.cancel',
+    // Stop is a conversation write; a prompt or background-task cancel needs the live child.
+    ...(params.scope || params.prompt ? {} : { conversationWrite: true as const }),
+    // A Stop must reach the agent even when storage refuses the row recording it.
+    runsWithoutLedgerRow: true,
     fields: {
-      turnId: params.turnId,
+      ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
       ...(params.scope ? { scope: params.scope } : {}),
-      ...(params.taskId ? { taskId: params.taskId } : {})
+      ...(params.taskId ? { taskId: params.taskId } : {}),
+      ...(params.prompt ? { prompt: params.prompt } : {})
     },
     run: (ctx) =>
       performCancel(ctx, {
         clientOperationId: params.envelope.clientOperationId,
-        turnId: params.turnId,
+        ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
         ...(params.scope ? { scope: params.scope } : {}),
-        ...(params.taskId ? { taskId: params.taskId } : {})
+        ...(params.taskId ? { taskId: params.taskId } : {}),
+        ...(params.prompt ? { prompt: params.prompt } : {}),
+        ...(params.childWork ? { childWork: params.childWork } : {})
       }),
     // Interrupting twice would kill a turn the client never asked to stop, so a
-    // replay reports the turn as already handled instead.
-    replay: () => ({ turnId: params.turnId, cancelled: false })
+    // replay reports the turn as already handled.
+    replay: () => ({
+      ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
+      cancelled: false
+    })
   }
 }
 
-export function promptPlan(params: {
-  kind: 'approval' | 'question'
-  itemId: string
-  expectedRevision: number
-  optionId: string
-}): MutationPlan<AgentSessionPromptResult> {
+export function promptPlan(
+  params: AgentSessionPromptRequest
+): MutationPlan<AgentSessionPromptResult> {
   return {
     method: `agentSession.respondTo:${params.kind}`,
+    // The client hashes exactly what it sent; the absent one of these two drops out of the digest.
     fields: {
       itemId: params.itemId,
       expectedRevision: params.expectedRevision,
-      optionId: params.optionId
+      optionId: params.optionId,
+      answers: params.answers
     },
     run: (ctx) => performPrompt(ctx, params),
     replay: (ctx) => {

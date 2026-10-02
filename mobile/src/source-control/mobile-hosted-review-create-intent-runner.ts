@@ -10,7 +10,7 @@ import {
   prepareMobileHostedReviewCreateIntent,
   type MobileHostedReviewCreateIntentProgress
 } from './mobile-hosted-review-create-intent'
-import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 type RunInput = {
   branch: string
@@ -47,7 +47,7 @@ export function isMobileHostedReviewCommitFailure(
 }
 
 export async function runMobileHostedReviewCreateIntent(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   input: RunInput
 ): Promise<MobileHostedReviewCreateIntentRunOutcome> {

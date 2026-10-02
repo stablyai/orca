@@ -1,3 +1,4 @@
+import { matrixSites } from './reply-matrix'
 import type { RecordingScenario } from './recording-scenario'
 
 /**
@@ -33,7 +34,7 @@ export const REPLY_MATRIX_NORMAL_RESULT_INVENTORY: readonly ReplyMatrixNormalRes
   {
     family: 'project-explicit-false',
     request: 'github.project.updateIssueBySlug#1',
-    // The b2 seed's only recorded success is a null result — the shipped bug it exists to pin — and
+    // The b2 seed's only recorded success is a null result — the regression it exists to pin — and
     // `result-null` is already its own partition, so replaying it would leave the matrix no control.
     reason: 'the seed records a null result, which the result-null partition already drives',
     result: { ok: true }
@@ -68,9 +69,11 @@ export function replyMatrixNormalResult(
 ): unknown {
   let recorded: { found: boolean; result: unknown } = { found: false, result: undefined }
   for (const scenario of scenarios) {
-    for (const step of scenario.steps) {
-      if ('complete' in step && step.complete === request && !recorded.found) {
-        recorded = fulfilledResult(step.reply)
+    // Read through the same site list the matrix drives, so a frame's replayed success is found
+    // where a frame's site is: by payload name and occurrence, not by request name.
+    for (const site of matrixSites(scenario)) {
+      if (site.id === request && !recorded.found) {
+        recorded = fulfilledResult(site.reply)
       }
     }
   }

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  THREAD_ID,
   USER_MESSAGE,
   adapterFor,
+  answerWithOpenedTurn,
   fakeCodex,
   identityFor,
   type Route
@@ -19,9 +21,9 @@ describe('Codex structured Fast mode dispatch', () => {
           }
         ],
         nextCursor: null
-      }),
-      'turn/start': () => ({ turn: { id: 'turn-fast' } })
+      })
     })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-fast')
     const adapter = adapterFor(codex)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -43,7 +45,8 @@ describe('Codex structured Fast mode dispatch', () => {
   })
 
   it('uses Standard on the first turn after acquisition with Fast explicitly off', async () => {
-    const codex = fakeCodex({ 'turn/start': () => ({ turn: { id: 'turn-standard' } }) })
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-standard')
     const adapter = adapterFor(codex)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -91,10 +94,8 @@ describe('Codex structured Fast mode dispatch', () => {
         ],
         nextCursor: null
       }))
-      const codex = fakeCodex({
-        'model/list': listModels,
-        'turn/start': () => ({ turn: { id: 'turn-recovered' } })
-      })
+      const codex = fakeCodex({ 'model/list': listModels })
+      codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-recovered')
       const adapter = adapterFor(codex)
       await expect(
         adapter.acquire({
@@ -112,7 +113,9 @@ describe('Codex structured Fast mode dispatch', () => {
           body: USER_MESSAGE,
           fence: 7
         })
-      ).resolves.toMatchObject({ state: 'accepted' })
+        // `admitted`, not `accepted`: a Codex send now settles its identity on
+        // the provider echo. What this test pins is the tier the turn carries.
+      ).resolves.toMatchObject({ state: 'admitted' })
       expect(
         codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
       ).toMatchObject({ serviceTier: 'default' })
@@ -130,6 +133,11 @@ describe('Codex structured Fast mode dispatch', () => {
         models: [expect.objectContaining({ supportsFastMode: true })],
         fastModeSupport: { supported: true },
         current: { fastMode: true }
+      })
+      // Ended, so the next send starts a turn rather than steering into this one.
+      codex.connections[0].handlers.onNotification?.('turn/completed', {
+        threadId: THREAD_ID,
+        turn: { id: 'turn-recovered', status: 'completed' }
       })
       await adapter.dispatch({
         sessionId: 'session-1',

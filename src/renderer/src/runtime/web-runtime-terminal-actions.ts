@@ -197,6 +197,7 @@ export async function updateWebRuntimePaneLayout(args: {
   tabId: string
   root: TerminalPaneLayoutNode | null
   expandedLeafId: string | null
+  chatLeafId?: string | null
   titlesByLeafId?: Record<string, string>
 }): Promise<boolean> {
   const environmentId =
@@ -216,6 +217,7 @@ export async function updateWebRuntimePaneLayout(args: {
         tabId: hostTabId,
         root: args.root,
         expandedLeafId: args.expandedLeafId,
+        ...(args.chatLeafId !== undefined ? { chatLeafId: args.chatLeafId } : {}),
         ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
       },
       timeoutMs: 15_000
@@ -272,35 +274,6 @@ export function setWebRuntimeTabProps(args: {
     .catch((error) => {
       console.warn(
         '[web-runtime-session] failed to set tab props:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
-  return true
-}
-
-// Why: local pane.terminal.clear() is undone by the next host snapshot replay; clear the host buffer so it sticks.
-export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined): boolean {
-  if (!ptyId) {
-    return false
-  }
-  const remote = parseRemoteRuntimePtyId(ptyId)
-  const environmentId = remote?.environmentId?.trim()
-  if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
-    return false
-  }
-  void window.api.runtimeEnvironments
-    .call({
-      selector: environmentId,
-      method: 'terminal.clearBuffer',
-      params: { terminal: remote.handle },
-      timeoutMs: 15_000
-    })
-    .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ clear: unknown }>)
-    })
-    .catch((error) => {
-      console.warn(
-        '[web-runtime-session] failed to clear terminal buffer:',
         error instanceof Error ? error.message : String(error)
       )
     })

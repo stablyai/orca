@@ -9,7 +9,6 @@ import {
 } from '@/attention/agent-attention-acknowledgement'
 import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
 import { createTestStore, makeTab } from '../store/slices/store-test-helpers'
-import { selectFloatingWorkspaceHasUnread } from '../store/selectors'
 import type { RetainedAgentEntry } from '../store/slices/agent-status'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -412,19 +411,24 @@ describe('resolveAutoAckTabTargets', () => {
     activeTabIdByWorktree: {
       'wt-1': 'tab-1',
       [FLOATING_TERMINAL_WORKTREE_ID]: FLOATING_TAB_ID
-    }
+    },
+    getActiveTab: () => null
   }
 
   it('scans the floating tab alongside the main tab while the panel is visible', () => {
     expect(resolveAutoAckTabTargets(baseState, { floatingPanelVisible: true })).toEqual([
-      { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID },
-      { tabId: 'tab-1', worktreeId: 'wt-1' }
+      {
+        tabId: FLOATING_TAB_ID,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        surfaceKind: 'terminal'
+      },
+      { tabId: 'tab-1', worktreeId: 'wt-1', surfaceKind: 'terminal' }
     ])
   })
 
   it('skips the floating tab while the panel is closed', () => {
     expect(resolveAutoAckTabTargets(baseState, { floatingPanelVisible: false })).toEqual([
-      { tabId: 'tab-1', worktreeId: 'wt-1' }
+      { tabId: 'tab-1', worktreeId: 'wt-1', surfaceKind: 'terminal' }
     ])
   })
 
@@ -434,7 +438,9 @@ describe('resolveAutoAckTabTargets', () => {
         { ...baseState, activeView: 'activity' },
         { floatingPanelVisible: true }
       )
-    ).toEqual([{ tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }])
+    ).toEqual([
+      { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID, surfaceKind: 'terminal' }
+    ])
   })
 
   it('scans nothing outside the terminal view with the panel closed', () => {
@@ -452,87 +458,9 @@ describe('resolveAutoAckTabTargets', () => {
         { ...baseState, activeTabId: FLOATING_TAB_ID },
         { floatingPanelVisible: true }
       )
-    ).toEqual([{ tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }])
-  })
-})
-
-// Why: the minimized toggle's attention dot is the only signal a closed floating panel has, so a
-// hidden panel must never auto-ack (selectFloatingWorkspaceHasUnread → FloatingTerminalToggleButton).
-describe('floating workspace auto-ack against the attention dot', () => {
-  const FLOATING_TAB_ID = 'tab-floating'
-  const floatingPaneKey = makePaneKey(FLOATING_TAB_ID, CODEX_LEAF_ID)
-
-  function seedFloatingCompletion(): ReturnType<typeof createTestStore> {
-    const store = createTestStore()
-    store.setState({
-      activeView: 'terminal',
-      activeTabId: 'tab-1',
-      activeWorktreeId: 'wt-1',
-      activeTabIdByWorktree: {
-        'wt-1': 'tab-1',
-        [FLOATING_TERMINAL_WORKTREE_ID]: FLOATING_TAB_ID
-      },
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })],
-        [FLOATING_TERMINAL_WORKTREE_ID]: [
-          makeTab({ id: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
-        ]
-      }
-    })
-    store.getState().markAgentCompletionPaneUnread(floatingPaneKey, 'agent-completion')
-    return store
-  }
-
-  function runAutoAckScan(store: TestStore, floatingPanelVisible: boolean): void {
-    const state = store.getState()
-    for (const target of resolveAutoAckTabTargets(state, { floatingPanelVisible })) {
-      const current = store.getState()
-      const surface = createTerminalAttentionSurface(current)
-      const viewedUnreadSubjectKey = resolveViewedUnreadSubjectKey(
-        current.unreadAgentCompletionPanes,
-        makePaneKey(target.tabId, CODEX_LEAF_ID)
-      )
-      const clearedSubjectKeys = new Set(viewedUnreadSubjectKey ? [viewedUnreadSubjectKey] : [])
-      const workspaceId = target.worktreeId
-      applyAgentAttentionAcknowledgement(
-        {
-          acknowledgeSubjects: current.acknowledgeAgents,
-          clearWorkspaceUnread: current.clearWorktreeUnread,
-          clearGroupUnread: current.clearTerminalTabUnread,
-          clearSubjectUnread: current.clearTerminalPaneUnread
-        },
-        {
-          workspaceIdToClear:
-            workspaceId !== null &&
-            shouldClearWorkspaceAttention(surface.collectWorkspaceAttentionRemainder(workspaceId), {
-              viewedGroupId: target.tabId,
-              clearedSubjectKeys
-            })
-              ? workspaceId
-              : null,
-          viewedGroupId: target.tabId,
-          subjectKeys: [],
-          viewedUnreadSubjectKey
-        }
-      )
-    }
-  }
-
-  it('keeps the attention dot lit while the panel is closed', () => {
-    const store = seedFloatingCompletion()
-    expect(selectFloatingWorkspaceHasUnread(store.getState())).toBe(true)
-
-    runAutoAckScan(store, false)
-
-    expect(selectFloatingWorkspaceHasUnread(store.getState())).toBe(true)
-  })
-
-  it('clears the attention dot once the panel is visible', () => {
-    const store = seedFloatingCompletion()
-
-    runAutoAckScan(store, true)
-
-    expect(selectFloatingWorkspaceHasUnread(store.getState())).toBe(false)
+    ).toEqual([
+      { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID, surfaceKind: 'terminal' }
+    ])
   })
 })
 

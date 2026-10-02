@@ -31,8 +31,13 @@ import {
   indexWorkspaceRuntimeHostOwnership,
   type WorkspaceRuntimeOwnerProjection
 } from './workspace-runtime-host-ownership'
+import {
+  buildWorktreeIdByTabId,
+  extendWorktreeIdByTabId,
+  type WorkspaceTabOwnerCatalog
+} from '../../../shared/workspace-session-host-records'
 
-export type HostPersistenceState = {
+export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   projectGroups?: readonly { id: string; executionHostId?: string | null }[]
   folderWorkspaces?: readonly {
@@ -74,7 +79,7 @@ function getRestoredRuntimeHostId(
   return hostId && parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : null
 }
 
-function getFolderWorkspaceRuntimeHostId(
+function getFolderWorkspacePartitionHostId(
   state: HostPersistenceState,
   key: string
 ): ExecutionHostId {
@@ -88,17 +93,26 @@ function getFolderWorkspaceRuntimeHostId(
     : null
   const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
   if (parsed) {
-    return parsed.kind === 'runtime' ? parsed.id : LOCAL_EXECUTION_HOST_ID
+    // Every non-local kind owns its own partition — the same answer main's
+    // RuntimeWorkspaceSessionController.getPreferredHostId gives for this key. Answering 'local'
+    // for an ssh host left the renderer and the runtime writing one folder workspace into two
+    // stores, which is #12723 unfixed for folder workspaces; and once the renderer began writing
+    // `ssh:<targetId>` at all, a save's field-level patch erased the folder rows main had put
+    // there. Boot reads these partitions from persistence's own census, not the repo catalog, so
+    // a target whose only workspace is a folder is no longer unenumerated.
+    return parsed.id
   }
   if (workspace && group) {
     // Why: once the folder and group catalogs are both known, a missing runtime
     // owner is authoritative local/SSH persistence, not a startup gap.
     return LOCAL_EXECUTION_HOST_ID
   }
-  const restoredHostId = getRestoredRuntimeHostId(
-    state.restoredRuntimeHostIdByWorkspaceSessionKey,
-    key
-  )
+  // Why the read source outranks the runtime-only map here: a folder workspace's partition can be
+  // any kind now, and a boot that has not hydrated the folder catalog must not spill an ssh-owned
+  // row into 'local' on the first save.
+  const restoredHostId =
+    state.contestedPrimaryHostBySessionKey?.[key] ??
+    getRestoredRuntimeHostId(state.restoredRuntimeHostIdByWorkspaceSessionKey, key)
   return restoredHostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
@@ -123,12 +137,12 @@ function buildRepoHostById(
 
 /** Map a worktree to the host partition it persists under, plus the host claims behind it.
  *
- *  Why: only `runtime:*` worktrees are partitioned out. SSH-owned worktrees stay
- *  in the 'local' partition because the SSH flow already persists them there (in
- *  the unified blob) and separately mirrors them to each target's remote
- *  snapshot — partitioning them too would double-own that data. The one exception is an id two
- *  hosts both publish: it gets a deterministic primary so the co-claimant's rows can be parked in
- *  the shadow instead of sharing one bucket with it. */
+ *  Why every non-local host and not just `runtime:*`: an SSH worktree's session is already
+ *  read-modify-written into `ssh:<targetId>` by the main-process runtime, so answering 'local'
+ *  here double-owned the data and left whichever half the readers skipped round-tripping as
+ *  absence (#12721, #12723). The one exception is an id two hosts both publish: it gets a
+ *  deterministic primary so the co-claimant's rows can be parked in the shadow instead of sharing
+ *  one bucket with it. */
 /** True only when the catalog positively says `hostId` no longer holds the workspace. An id the
  *  catalog cannot speak for yet keeps its restored partition — the same rule the shadow uses. */
 function catalogReattributedAwayFrom(
@@ -154,7 +168,7 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
   const hostIdByWorktreeId = (worktreeId: string): ExecutionHostId => {
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
-      return getFolderWorkspaceRuntimeHostId(state, worktreeId)
+      return getFolderWorkspacePartitionHostId(state, worktreeId)
     }
     const rawWorktreeId =
       workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
@@ -188,9 +202,7 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
     if (!repoHostId) {
       return LOCAL_EXECUTION_HOST_ID
     }
-    // Why: SSH-owned worktrees stay in the 'local' partition here while the runtime writes them to
-    // `ssh:<targetId>`; the shared owner map records that divergence (#12723).
-    return workspaceSessionPartitionHostId(repoHostId, 'local-partition')
+    return workspaceSessionPartitionHostId(repoHostId)
   }
   return { hostIdByWorktreeId, claims }
 }
@@ -207,7 +219,14 @@ function splitWorkspaceSessionForWrite(
   mode: HostSessionWriteMode
 ): HostSessionSlices {
   const routing = buildHostSessionRouting(state)
-  const slices = splitWorkspaceSessionByHost(payload, routing.hostIdByWorktreeId)
+  // Why the live catalogs: a debounced patch carries only the fields that changed, so a park
+  // capture's layouts-only patch names no tab rows. Routed by the payload alone, every tab-keyed
+  // row fell into 'local', where main pruned the scrollback it could not attribute to a remote
+  // worktree — the runtime partition never received the capture (#21295).
+  const worktreeIdByTabId = extendWorktreeIdByTabId(buildWorktreeIdByTabId(payload), state)
+  const slices = splitWorkspaceSessionByHost(payload, routing.hostIdByWorktreeId, {
+    worktreeIdByTabId
+  })
   attachHostSessionShadow(slices, state.contestedHostWorkspaceSessions, routing.claims, mode)
   return slices
 }

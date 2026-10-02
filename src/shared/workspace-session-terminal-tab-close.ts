@@ -225,6 +225,9 @@ export function closeTerminalTabInWorkspaceSession(
       [worktreeId]: (session.tabsByWorktree[worktreeId] ?? []).filter((tab) => tab.id !== tabId)
     },
     terminalLayoutsByTabId: { ...session.terminalLayoutsByTabId },
+    ...(session.localOnlyScrollbackByTabId
+      ? { localOnlyScrollbackByTabId: { ...session.localOnlyScrollbackByTabId } }
+      : {}),
     unifiedTabs: { ...session.unifiedTabs, [worktreeId]: nextTabs },
     tabGroups: { ...session.tabGroups, [worktreeId]: nextGroups },
     tabGroupLayouts: { ...session.tabGroupLayouts },
@@ -233,6 +236,7 @@ export function closeTerminalTabInWorkspaceSession(
     sleepingAgentSessionsByPaneKey: { ...session.sleepingAgentSessionsByPaneKey }
   }
   delete next.terminalLayoutsByTabId[tabId]
+  delete next.localOnlyScrollbackByTabId?.[tabId]
   delete next.remoteSessionIdsByTabId![tabId]
   if (nextLayout) {
     next.tabGroupLayouts![worktreeId] = nextLayout

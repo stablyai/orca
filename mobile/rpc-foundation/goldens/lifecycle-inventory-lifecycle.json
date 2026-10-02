@@ -1,52 +1,12 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "workspace.file-inventory",
   "family": "legacy-inventory",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 3,
   "values": {
-    "2837f481a843": {
+    "2f1953cc0315": {
       "name": "files.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
-    },
-    "356af7179c37": {
-      "name": "files.searchPaths#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.searchPaths"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 16,
-            "query": "old",
-            "worktree": "id:A"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 120
-      }
-    },
-    "602e35a92eec": {
-      "files": []
-    },
-    "64847315695c": {
-      "name": "files.list#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -82,37 +42,9 @@
         }
       }
     },
-    "9dea95bddfe5": {
+    "32c9018052ba": {
       "name": "files.searchPaths#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
-    },
-    "b2434f1de9f6": {
-      "name": "files.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:A"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 120
-      }
-    },
-    "c0821dc354d7": {
-      "name": "files.searchPaths#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -147,12 +79,79 @@
         }
       }
     },
+    "602e35a92eec": {
+      "files": []
+    },
+    "8db0d1234c94": {
+      "name": "files.searchPaths#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+    },
+    "bf6281c52e28": {
+      "name": "files.searchPaths#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "old",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 120
+      }
+    },
+    "c9b9d7a9b388": {
+      "name": "files.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+    },
     "d2ad71e601c4": {
       "status": "fulfilled",
       "startedAt": 120,
       "settledAt": 120,
       "value": {
         "$rpc": "undefined"
+      }
+    },
+    "ea94d4508bba": {
+      "name": "files.list#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 120
       }
     },
     "eb79a9b3682a": {
@@ -173,8 +172,8 @@
       {
         "id": "inventory-lifecycle.reset-before-1:lifecycle-boundary",
         "observation": {
-          "sender": ["356af7179c37"],
-          "payloads": ["9dea95bddfe5"],
+          "sender": ["bf6281c52e28"],
+          "payloads": ["8db0d1234c94"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -187,8 +186,8 @@
       {
         "id": "inventory-lifecycle.reset-before-1:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -201,8 +200,8 @@
       {
         "id": "inventory-lifecycle.reset-after-1:lifecycle-boundary",
         "observation": {
-          "sender": ["c0821dc354d7", "b2434f1de9f6"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "ea94d4508bba"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -215,8 +214,8 @@
       {
         "id": "inventory-lifecycle.reset-after-1:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -229,8 +228,8 @@
       {
         "id": "inventory-lifecycle.reset-before-2:lifecycle-boundary",
         "observation": {
-          "sender": ["c0821dc354d7", "b2434f1de9f6"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "ea94d4508bba"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -243,8 +242,8 @@
       {
         "id": "inventory-lifecycle.reset-before-2:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -257,8 +256,8 @@
       {
         "id": "inventory-lifecycle.reset-after-2:lifecycle-boundary",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -271,8 +270,8 @@
       {
         "id": "inventory-lifecycle.reset-after-2:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -285,8 +284,8 @@
       {
         "id": "inventory-lifecycle.unmount-before-1:lifecycle-boundary",
         "observation": {
-          "sender": ["356af7179c37"],
-          "payloads": ["9dea95bddfe5"],
+          "sender": ["bf6281c52e28"],
+          "payloads": ["8db0d1234c94"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -299,8 +298,8 @@
       {
         "id": "inventory-lifecycle.unmount-before-1:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -313,8 +312,8 @@
       {
         "id": "inventory-lifecycle.unmount-before-1:remounted",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -328,8 +327,8 @@
       {
         "id": "inventory-lifecycle.unmount-after-1:lifecycle-boundary",
         "observation": {
-          "sender": ["c0821dc354d7", "b2434f1de9f6"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "ea94d4508bba"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -342,8 +341,8 @@
       {
         "id": "inventory-lifecycle.unmount-after-1:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -356,8 +355,8 @@
       {
         "id": "inventory-lifecycle.unmount-after-1:remounted",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -371,8 +370,8 @@
       {
         "id": "inventory-lifecycle.unmount-before-2:lifecycle-boundary",
         "observation": {
-          "sender": ["c0821dc354d7", "b2434f1de9f6"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "ea94d4508bba"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -385,8 +384,8 @@
       {
         "id": "inventory-lifecycle.unmount-before-2:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -399,8 +398,8 @@
       {
         "id": "inventory-lifecycle.unmount-before-2:remounted",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -414,8 +413,8 @@
       {
         "id": "inventory-lifecycle.unmount-after-2:lifecycle-boundary",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -428,8 +427,8 @@
       {
         "id": "inventory-lifecycle.unmount-after-2:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -442,8 +441,8 @@
       {
         "id": "inventory-lifecycle.unmount-after-2:remounted",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -457,8 +456,8 @@
       {
         "id": "inventory-lifecycle.blur-before-1:lifecycle-boundary",
         "observation": {
-          "sender": ["356af7179c37"],
-          "payloads": ["9dea95bddfe5"],
+          "sender": ["bf6281c52e28"],
+          "payloads": ["8db0d1234c94"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -471,8 +470,8 @@
       {
         "id": "inventory-lifecycle.blur-before-1:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -485,8 +484,8 @@
       {
         "id": "inventory-lifecycle.blur-after-1:lifecycle-boundary",
         "observation": {
-          "sender": ["c0821dc354d7", "b2434f1de9f6"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "ea94d4508bba"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -499,8 +498,8 @@
       {
         "id": "inventory-lifecycle.blur-after-1:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -513,8 +512,8 @@
       {
         "id": "inventory-lifecycle.blur-before-2:lifecycle-boundary",
         "observation": {
-          "sender": ["c0821dc354d7", "b2434f1de9f6"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "ea94d4508bba"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -527,8 +526,8 @@
       {
         "id": "inventory-lifecycle.blur-before-2:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -541,8 +540,8 @@
       {
         "id": "inventory-lifecycle.blur-after-2:lifecycle-boundary",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -555,8 +554,8 @@
       {
         "id": "inventory-lifecycle.blur-after-2:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "64847315695c"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "2f1953cc0315"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",

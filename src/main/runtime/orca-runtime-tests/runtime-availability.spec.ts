@@ -42,6 +42,7 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('workspace-ports.v1')
     expect(status.capabilities).toContain('mobile.tasks.v1')
     expect(status.capabilities).toContain('terminal.quick-commands.v1')
+    expect(status.capabilities).toContain('session-tabs.split-group-placement.v1')
     expect(status.capabilities).toContain('worktree.create-idempotency.v1')
     expect(status.worktreeCreateIdempotency).toEqual({ dedupeTtlMs: 60_000 })
     expect(status.capabilities).toContain('files.mutation-ownership.v1')
@@ -262,6 +263,14 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(TEST_WINDOW_ID)
 
     expect(runtime.getStatus().capabilities).toContain('browser.screencast.v1')
+  })
+
+  // Paired desktops open a chat on this host only when it says it admits them by the client's
+  // chosen launch mode; without it, every paired launch quietly becomes a terminal.
+  it('advertises that it admits structured sessions by the client-chosen launch mode', () => {
+    expect(createRuntime().getStatus().capabilities).toContain(
+      'agent-session.structured.client-launch-mode.v1'
+    )
   })
 
   it('advertises safe Codex reset-credit RPC support as a static capability', () => {

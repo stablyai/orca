@@ -5,7 +5,8 @@ import {
   clearAllListenerCaches,
   clearPaneCacheState,
   createHookListenerState,
-  movePaneCacheState
+  movePaneCacheState,
+  seedLegacyAgentStatusForTests
 } from './agent-hook-listener/listener-state'
 import { warnOnHookEnvOrVersionMismatch } from './agent-hook-listener/listener-limits'
 import { resolveHookSource } from './agent-hook-listener/source-routing'
@@ -122,7 +123,6 @@ describe('agent hook extraction boundaries', () => {
     const paneMaps = [
       state.lastPromptByPaneKey,
       state.lastToolByPaneKey,
-      state.lastStatusByPaneKey,
       state.antigravityCompletedTranscriptByPaneKey,
       state.claudeSubagentRosterByPaneKey,
       state.claudeLeadStateByPaneKey,
@@ -136,6 +136,17 @@ describe('agent hook extraction boundaries', () => {
       cache.set(PANE, 'exact')
       cache.set(scoped, 'scoped')
       cache.set(sibling, 'sibling')
+    }
+    for (const [paneKey, prompt] of [
+      [PANE, 'exact'],
+      [scoped, 'scoped'],
+      [sibling, 'sibling']
+    ]) {
+      seedLegacyAgentStatusForTests(state, {
+        paneKey,
+        connectionId: null,
+        payload: { state: 'working', prompt }
+      })
     }
     const paneSets = [
       state.ampCompletedCacheKeys,
@@ -158,6 +169,10 @@ describe('agent hook extraction boundaries', () => {
       expect(cache.get(sibling)).toBe('sibling')
       expect(cache.has(PANE)).toBe(false)
     }
+    expect(state.lastStatusByPaneKey.get(MOVED_PANE)?.payload.prompt).toBe('exact')
+    expect(state.lastStatusByPaneKey.get(movedScoped)?.payload.prompt).toBe('scoped')
+    expect(state.lastStatusByPaneKey.get(sibling)?.payload.prompt).toBe('sibling')
+    expect(state.lastStatusByPaneKey.has(PANE)).toBe(false)
     for (const set of paneSets) {
       expect(set.has(MOVED_PANE)).toBe(true)
       expect(set.has(movedScoped)).toBe(true)
@@ -176,7 +191,6 @@ describe('agent hook extraction boundaries', () => {
     const paneMaps = [
       state.lastPromptByPaneKey,
       state.lastToolByPaneKey,
-      state.lastStatusByPaneKey,
       state.antigravityCompletedTranscriptByPaneKey
     ]
     for (const map of paneMaps) {
@@ -185,11 +199,22 @@ describe('agent hook extraction boundaries', () => {
       cache.set(scoped, 'scoped')
       cache.set(sibling, 'sibling')
     }
+    for (const [paneKey, prompt] of [
+      [PANE, 'exact'],
+      [scoped, 'scoped'],
+      [sibling, 'sibling']
+    ]) {
+      seedLegacyAgentStatusForTests(state, {
+        paneKey,
+        connectionId: null,
+        payload: { state: 'working', prompt }
+      })
+    }
     state.ampCompletedCacheKeys.add(PANE)
     state.ampCompletedCacheKeys.add(scoped)
     state.ampCompletedCacheKeys.add(sibling)
-    state.claudeLeadStateByPaneKey.set(PANE, { state: 'working' })
-    state.codexLeadStateByPaneKey.set(PANE, { state: 'working' })
+    state.claudeLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
+    state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
 
     clearPaneCacheState(state, PANE)
@@ -200,6 +225,9 @@ describe('agent hook extraction boundaries', () => {
       expect(cache.has(scoped)).toBe(false)
       expect(cache.get(sibling)).toBe('sibling')
     }
+    expect(state.lastStatusByPaneKey.has(PANE)).toBe(false)
+    expect(state.lastStatusByPaneKey.has(scoped)).toBe(false)
+    expect(state.lastStatusByPaneKey.get(sibling)?.payload.prompt).toBe('sibling')
     expect(state.ampCompletedCacheKeys.has(scoped)).toBe(false)
     expect(state.ampCompletedCacheKeys.has(sibling)).toBe(true)
     expect(state.claudeLeadStateByPaneKey.has(PANE)).toBe(false)
@@ -211,7 +239,11 @@ describe('agent hook extraction boundaries', () => {
     const state = createHookListenerState()
     state.lastPromptByPaneKey.set(PANE, 'old prompt')
     state.lastToolByPaneKey.set(PANE, { toolName: 'old tool' })
-    state.lastStatusByPaneKey.set(PANE, {} as never)
+    seedLegacyAgentStatusForTests(state, {
+      paneKey: PANE,
+      connectionId: null,
+      payload: { state: 'working', prompt: 'old status' }
+    })
 
     const event = normalizeHookPayload(
       state,
@@ -232,7 +264,7 @@ describe('agent hook extraction boundaries', () => {
     state.warnedEnvs.add('development->production')
     state.lastPromptByPaneKey.set(PANE, 'prompt')
     state.claudeRunningNonAgentTaskPaneKeys.add(PANE)
-    state.codexLeadStateByPaneKey.set(PANE, { state: 'working' })
+    state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
 
     clearAllListenerCaches(state)

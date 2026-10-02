@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 6 work-item-search specs, not shipped code, and it falls outside
+   the *.test / *.spec / tests glob set. One consumer lives in tests/e2e, where the relative mock ids ('../git/...') resolve to
+   different modules, so moving these calls into the specs would silently stop mocking there. */
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { randomUUID } from 'node:crypto'

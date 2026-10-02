@@ -15,13 +15,13 @@ import {
   hashMarkdownContent,
   isMarkdownContentByteLengthOverLimit,
   MOBILE_MARKDOWN_EDIT_MAX_BYTES,
+  truncateMobileMarkdownRead,
   type RuntimeMarkdownReadTabResult,
   type RuntimeMarkdownSaveTabResult,
   type RuntimeMobileMarkdownRequest,
   type RuntimeMobileMarkdownResponse
 } from '../../../shared/mobile-markdown-document'
 
-const MOBILE_MARKDOWN_READ_MAX_BYTES = 512 * 1024
 const saveQueues = new Map<string, Promise<void>>()
 
 type FileContent = {
@@ -67,16 +67,18 @@ async function readMobileMarkdownTab(
   flushEditorState(target.sourceFile.id)
   const { content, source } = await readCurrentContent(target.sourceFile)
   const readOnlyReason = getReadOnlyReason(target.tab, target.sourceFile, content)
+  const preview = truncateMobileMarkdownRead(content)
   return {
     tabId,
     filePath: target.sourceFile.filePath,
     relativePath: target.sourceFile.relativePath,
-    content,
+    content: preview.content,
     isDirty: target.sourceFile.isDirty || source === 'draft',
-    version: hashMarkdownContent(content),
+    version: hashMarkdownContent(preview.content),
     source,
     editable: readOnlyReason === undefined,
-    ...(readOnlyReason ? { readOnlyReason } : {})
+    ...(readOnlyReason ? { readOnlyReason } : {}),
+    ...(preview.truncated ? { truncated: true, byteLength: preview.byteLength } : {})
   }
 }
 
@@ -251,9 +253,6 @@ async function readFileContent(file: OpenFile): Promise<string> {
   })) as FileContent
   if (result.isBinary) {
     throw new Error('binary_file')
-  }
-  if (isMarkdownContentByteLengthOverLimit(result.content, MOBILE_MARKDOWN_READ_MAX_BYTES)) {
-    throw new Error('file_too_large')
   }
   return result.content
 }

@@ -150,10 +150,14 @@ describe('OrcaRuntimeService', () => {
       nextCursor: expect.any(String)
     })
 
-    const send = await runtime.sendTerminal(terminal.handle, {
-      text: 'continue',
-      enter: true
-    })
+    const send = await runtime.sendTerminal(
+      terminal.handle,
+      {
+        text: 'continue',
+        enter: true
+      },
+      { inputKind: 'driving' }
+    )
     expect(send).toMatchObject({
       handle: terminal.handle,
       accepted: true

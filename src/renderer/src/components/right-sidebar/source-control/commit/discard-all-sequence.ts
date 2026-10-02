@@ -75,8 +75,9 @@ export type DiscardAllDeps = {
   discardOne: (path: string) => Promise<void>
   /**
    * Called when either the pre-step (bulkUnstage) rejects OR an individual
-   * `discardOne` rejects. Invoked once per failure so callers can surface
-   * each error (e.g. a toast per stuck file) rather than swallowing them.
+   * `discardOne` rejects. Invoked once per failure; callers are expected to
+   * collect them and report ONE aggregated failure (see
+   * `use-discard-confirmation.ts`), not a toast per stuck file.
    */
   onError?: (error: unknown) => void
 }

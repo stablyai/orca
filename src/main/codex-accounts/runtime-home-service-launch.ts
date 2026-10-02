@@ -1,6 +1,9 @@
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
-import { syncSystemCodexResourcesIntoManagedHome } from '../codex/codex-home-paths'
+import {
+  resolveOrcaManagedCodexHomePath,
+  syncSystemCodexResourcesIntoManagedHome
+} from '../codex/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import {
@@ -12,6 +15,7 @@ import { markCodexSessionBackfillMarkerPending } from '../codex/codex-session-ba
 import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-scan-dates'
 import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfill'
 import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
+import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
 
 export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
@@ -74,6 +78,37 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
     return this.getRuntimeHomePath()
+  }
+
+  /**
+   * The CODEX_HOME `prepareForCodexLaunch` would pin for a host launch right
+   * now, resolved with no side effects: no home/auth sync, no session bridge,
+   * no backfill bookkeeping, no hook state, and never a cleared selection.
+   * Record-less model catalog reads key on it — a picker open is a read and
+   * must not change account state. Same null contract as prepare: null means
+   * the system-default real ~/.codex.
+   */
+  resolveHostCodexHomePathForLaunchReadOnly(launchEnv?: NodeJS.ProcessEnv): string | null {
+    const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+    if (selfContainedAccount) {
+      const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
+      if (resolved.kind === 'owned') {
+        return resolved.homePath
+      }
+      if (resolved.kind === 'indeterminate') {
+        // Why: launch prep refuses here too — an unreadable home must not key
+        // a read under the system default while the UI shows this account.
+        throw new ManagedCodexHomeTemporarilyUnavailableError()
+      }
+      // Why: launch prep deselects an UNTRUSTED home before routing onward, so
+      // its next check sees no selection; predict that route, clearing nothing.
+      return this.wouldSystemDefaultRouteToRealHome(launchEnv)
+        ? null
+        : resolveOrcaManagedCodexHomePath()
+    }
+    // Why the path-only resolver: getRuntimeHomePath() mkdirs the mirror, and
+    // this lookup must not create directories either.
+    return this.isHostSystemDefaultRealHome(launchEnv) ? null : resolveOrcaManagedCodexHomePath()
   }
 
   async prepareForCodexLaunchAsync(

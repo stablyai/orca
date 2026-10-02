@@ -56,7 +56,7 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
     accountHome: replay.record.accountHome,
     ...(input.options ? { options: input.options } : {}),
     adopt: { providerHandle: replay.providerHandle },
-    runtimeKind: replay.record.lease.runtimeKind
+    runtimeKind: 'native'
   }
 }
 

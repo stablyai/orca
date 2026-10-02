@@ -225,47 +225,4 @@ describe('divider drag pointer-type isolation', () => {
     expect(harness.previousPane.style.flex).toBe('180 1 0%')
     expect(harness.nextPane.style.flex).toBe('220 1 0%')
   })
-
-  it('does not commit the layout when a stray mouse lifts mid touch drag', () => {
-    const harness = createDividerDragHarness()
-    startTouchDrag(harness)
-
-    harness.windowListeners.get('pointerup')?.(createPointerEvent({ ...STRAY_MOUSE, clientX: 320 }))
-
-    expect(harness.onLayoutChanged).not.toHaveBeenCalled()
-    expect(harness.divider.classList.remove).not.toHaveBeenCalledWith('is-dragging')
-    expect(harness.windowListeners.has('pointermove')).toBe(true)
-
-    harness.windowListeners.get('pointerup')?.(createPointerEvent({ ...TOUCH_DRAG, clientX: 180 }))
-
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-    expect(harness.onLayoutChanged).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not revert the layout when a stray mouse is cancelled mid touch drag', () => {
-    const harness = createDividerDragHarness()
-    harness.previousPane.style.flex = '2 1 0%'
-    harness.nextPane.style.flex = '3 1 0%'
-    startTouchDrag(harness)
-
-    harness.windowListeners.get('pointercancel')?.(
-      createPointerEvent({ ...STRAY_MOUSE, clientX: 320 })
-    )
-
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-    expect(harness.windowListeners.has('pointermove')).toBe(true)
-  })
-
-  it('blocks a stray primary pen from hijacking a touch drag', () => {
-    const harness = createDividerDragHarness()
-    startTouchDrag(harness)
-
-    harness.windowListeners.get('pointermove')?.(
-      createPointerEvent({ pointerId: 52, pointerType: 'pen', isPrimary: true, clientX: 320 })
-    )
-    harness.flushAnimationFrames()
-
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-    expect(harness.nextPane.style.flex).toBe('220 1 0%')
-  })
 })

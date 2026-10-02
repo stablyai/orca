@@ -125,12 +125,13 @@ html, body {
 
 /* Why: the export subtree selection already excludes the big chrome (toolbar,
    search bar, etc.), but in-document affordances like the code-copy button
-   can still leak. Hide the well-known offenders as a belt-and-suspenders
-   defense on top of DOM scrubbing. */
+   and preview annotation controls can still leak. Hide the well-known
+   offenders as a belt-and-suspenders defense on top of DOM scrubbing. */
 .code-block-copy-btn,
 .markdown-preview-search,
+.markdown-annotation-controls,
 .rich-markdown-toolbar,
-[data-orca-export-hide="true"] {
+[data-orca-export-hide] {
   display: none !important;
 }
 

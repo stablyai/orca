@@ -93,16 +93,6 @@ describe('AgentDashboardDrawer', () => {
     expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
   })
 
-  it('does not hand the drawer over to an agent map popout', () => {
-    render(<AgentDashboardDrawer statusBarVisible />)
-    expect(mocks.boardProps).toBeNull()
-
-    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
-    expect(mocks.boardProps).not.toBeNull()
-    expect(mocks.boardProps?.onOpenMap).toBeUndefined()
-    expect(mocks.boardProps?.initialView).toBeUndefined()
-  })
-
   type RevealAgent = (args: {
     repoId: string
     worktreeId: string

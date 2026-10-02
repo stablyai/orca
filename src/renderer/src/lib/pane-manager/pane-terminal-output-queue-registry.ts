@@ -83,6 +83,8 @@ export type QueueEntry = {
   foregroundReleaseDeadlineAt: number | null
   // Why: an open frame's own hold chunks may still push the deadline out, but once coalesce has taken the entry over the deadline stops moving so the two mechanisms can't re-arm each other.
   foregroundReleaseDeadlineFixed: boolean
+  // Why: continuous tool output may re-arm hold chunks indefinitely; allow one split-frame extension, then force the safety flush.
+  foregroundHoldSafetyExtended: boolean
 }
 
 export const BACKGROUND_FLUSH_DELAY_MS = 50
@@ -106,11 +108,14 @@ export function getTerminalOutputMaxQueueChars(): number {
   return maxQueueChars
 }
 // Why: leading CAN aborts any partial escape sequence before the style reset so the backlog warning renders cleanly.
+// Why ?2026l too: the discarded tail may have held the TUI's closing \x1b[?2026l, and
+// xterm stops repainting until the latch closes or its 1000ms timeout fires — the
+// pane freezes on its last frame, so the warning itself would go unseen for a second.
 export const BACKGROUND_BACKLOG_WARNING =
-  '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog grew too large.]\r\n'
+  '\x18\x1b[?2026l\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog grew too large.]\r\n'
 // Why a separate foreground message: a visible pane hitting the cap means the drain couldn't keep up with a flood (starved renderer), not merely output produced while hidden.
 export const FOREGROUND_BACKLOG_WARNING =
-  '\x18\x1b[0m\r\n[Orca skipped a burst of terminal output because the backlog grew too large.]\r\n'
+  '\x18\x1b[?2026l\x1b[0m\r\n[Orca skipped a burst of terminal output because the backlog grew too large.]\r\n'
 export const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
 
 export const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()

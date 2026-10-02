@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Editor } from '@tiptap/core'
+import { Editor, type JSONContent } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
@@ -14,7 +14,7 @@ vi.mock('@/lib/shortcut-platform', () => ({
 
 const extensions = [StarterKit, createIsolatedMarkdownExtensionForTests()]
 
-function createEditor(content: object): Editor {
+function createEditor(content: JSONContent): Editor {
   return new Editor({
     element: null,
     extensions,
@@ -133,7 +133,7 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
   }
 }
 
-function emptyTopLevelOrderedList(): object {
+function emptyTopLevelOrderedList(): JSONContent {
   return {
     type: 'doc',
     content: [

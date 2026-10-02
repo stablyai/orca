@@ -3,15 +3,28 @@ import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from './orca-runtime
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
+import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { holdAgentSessionInventory } from './structured-agent-session-inventory-hold'
 import type { Tab } from '../../shared/tab-types'
-import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import {
+  resolveTerminalCloseTarget,
+  terminalSurfaceCloseMutation,
+  type PaneCloseResolution,
+  type RendererTerminalClose,
+  type TerminalSurfaceCloseOptions
+} from './terminal-surface-close'
+import type {
+  TerminalPaneCloseTarget,
+  TerminalSurfaceCloseTarget
+} from '../../shared/terminal-surface-close-target'
+import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
+import { captureAcknowledgedTerminalTabRetirement } from './workspace-session-terminal-tab-retirement-identity'
 
 export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
   // Why: headless serve backs browser panes with offscreen WebContents that live
@@ -78,44 +91,166 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
-  protected commitHeadlessTerminalTabRetirement(
+  protected captureTerminalTabRetirement(worktreeId: string, tabId: string) {
+    const originalHostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+    return captureAcknowledgedTerminalTabRetirement(worktreeId, tabId, () => {
+      const resolvedHostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+      const resolvedSession = this.store?.getWorkspaceSession?.(resolvedHostId)
+      // Emptying the last tab may reroute the worktree to its catalog host.
+      const hostId = resolvedSession?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)
+        ? resolvedHostId
+        : originalHostId
+      return {
+        hostId,
+        session: this.store?.getWorkspaceSession?.(hostId) ?? null,
+        snapshot: this.mobileSessionTabsByWorktree.get(worktreeId),
+        incarnationOf: (ptyId) => this.ptysById.get(ptyId)?.incarnationId
+      }
+    })
+  }
+
+  /**
+   * The one close transaction every explicit terminal close reaches: durably commits the membership
+   * removal in the owning host's partition. Callers publish and kill afterwards.
+   */
+  protected async closeTerminalSurface(
     worktreeId: string,
-    parentTabId: string,
-    options: { allowMissing?: boolean; force?: boolean } = {}
-  ): string[] {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
+    target: TerminalSurfaceCloseTarget,
+    options: TerminalSurfaceCloseOptions = {}
+  ): Promise<string[]> {
+    const store = this.store
+    if (!store?.getWorkspaceSession || !store.setWorkspaceSession || !store.runDurableMutation) {
       throw new Error('workspace_session_unavailable')
     }
-    const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId, {
-      force: options.force
-    })
-    if (result.pinned) {
-      throw new Error('terminal_tab_pinned')
-    }
-    if (!result.closed) {
-      if (!options.allowMissing) {
-        throw new Error('tab_not_found')
-      }
-    }
-    const persisted = result.closed
-      ? advanceTerminalTopologyRevision(result.session, worktreeId)
-      : session
-    this.setWorkspaceSessionForWorktree(worktreeId, persisted)
-    const staged = this.getWorkspaceSessionForWorktree(worktreeId)
+    // Why: a tab its layout owner already removed has no newer owner; refusing would only strand it.
+    const acknowledgeTabRetirement =
+      target.kind === 'tab' && !options.closedByLayoutOwner
+        ? this.captureTerminalTabRetirement(worktreeId, target.tabId)
+        : null
+    let ptyIdsToKill: string[] = []
+    let refusal: Error | undefined
     try {
-      this.store.flushOrThrow()
+      refusal = await store.runDurableMutation(
+        terminalSurfaceCloseMutation({
+          worktreeId,
+          target,
+          options,
+          requestedSession: this.getWorkspaceSessionForWorktree(worktreeId),
+          ownerMatches: () => !acknowledgeTabRetirement || acknowledgeTabRetirement().matches,
+          hostId: () => this.getWorkspaceSessionHostIdForWorktree(worktreeId),
+          getSession: (hostId) => store.getWorkspaceSession(hostId),
+          setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
+          onClosed: (closedPtyIds) => {
+            ptyIdsToKill = closedPtyIds
+          }
+        })
+      )
     } catch (error) {
-      const current = this.getWorkspaceSessionForWorktree(worktreeId)
-      if (staged && current) {
-        const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(session, staged, current)
-        if (rolledBack !== current) {
-          this.setWorkspaceSessionForWorktree(worktreeId, rolledBack)
-        }
-      }
-      throw error
+      console.error('[runtime] failed to persist terminal close:', error)
     }
-    return result.ptyIdsToKill
+    if (refusal) {
+      throw refusal
+    }
+    return ptyIdsToKill
+  }
+
+  /** The desktop renderer's close intent: it already guarded, removed and killed; this only reports. */
+  async closeTerminalSurfaceFromRenderer({ worktreeId, target, reason }: RendererTerminalClose) {
+    const options = { allowMissing: true, force: true, closedByLayoutOwner: true, reason }
+    await this.closeTerminalSurface(worktreeId, target, options)
+  }
+
+  /** Resolves a close main started against the copy of the tab's panes its layout owner holds. */
+  protected resolveTerminalCloseTarget(
+    worktreeId: string,
+    target: TerminalSurfaceCloseTarget
+  ): PaneCloseResolution | 'tab' {
+    const graphLeafIds: string[] = []
+    for (const leaf of this.leaves.values()) {
+      if (leaf.tabId === target.tabId) {
+        graphLeafIds.push(leaf.leafId)
+      }
+    }
+    return resolveTerminalCloseTarget(target, {
+      rendererListsTab: this.tabs.has(target.tabId),
+      snapshotRows: (this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs ?? []).filter(
+        (row) => row.type === 'terminal' && row.parentTabId === target.tabId
+      ),
+      graphLeafIds,
+      sessionLayout:
+        this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[target.tabId]
+    })
+  }
+
+  /**
+   * Commits a split pane's close that main started, then tells the desktop renderer to drop that
+   * pane. Never touches the tab: a pane the session no longer lists commits nothing.
+   */
+  protected async closeTerminalPane(
+    worktreeId: string,
+    target: TerminalPaneCloseTarget
+  ): Promise<void> {
+    try {
+      await this.closeTerminalSurface(worktreeId, target, { allowMissing: true })
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+        throw error
+      }
+    }
+    // Why: no exit may ever arrive to remove the pane. The notice is leaf-addressed, so it and the
+    // renderer's exit handling are each a no-op after the other.
+    this.retireClosedTerminalLeafFromMobileSnapshot(worktreeId, target.tabId, target.leafId)
+    this.notifier?.closeTerminalPane?.(target.tabId, target.leafId)
+  }
+
+  /** A paired client's close of one pane: stops only that pane's process, commits only that pane. */
+  protected async closeMobileSessionTerminalPane(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): Promise<void> {
+    // Why best-effort, as for a tab: a failed kill must not keep a pane the user closed.
+    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+    if (pty) {
+      this.ptyController?.kill(pty.ptyId)
+    } else if (!this.tabs.has(tab.parentTabId) && tab.ptyId && parseAppSshPtyId(tab.ptyId)) {
+      // Why: with no renderer to own the kill, a dormant SSH pane's durable id is its stop order.
+      this.ptyController?.kill(tab.ptyId)
+    }
+    await this.closeTerminalPane(worktreeId, {
+      kind: 'pane',
+      tabId: tab.parentTabId,
+      leafId: tab.leafId
+    })
+  }
+
+  private retireClosedTerminalLeafFromMobileSnapshot(
+    worktreeId: string,
+    tabId: string,
+    leafId: string
+  ): void {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const tab = snapshot?.tabs.find(
+      (candidate) =>
+        candidate.type === 'terminal' &&
+        candidate.parentTabId === tabId &&
+        candidate.leafId === leafId
+    )
+    // Why: a renderer that lists the tab republishes its own snapshot once it drops the pane.
+    if (!snapshot || !tab || this.tabs.has(tabId)) {
+      return
+    }
+    const proof = this.getMobileSessionTerminalRetirementProof(worktreeId, tab)
+    const retired = retireTerminalSurfacesFromSnapshot({
+      snapshot,
+      ptyId: tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[leafId] ?? '',
+      exactSurfaces: [{ parentTabId: tabId, leafId }],
+      exactOnly: true,
+      ...(proof ? { retirementProofs: [proof] } : {})
+    })
+    if (retired) {
+      this.storeMobileSessionSnapshot(worktreeId, retired.snapshot)
+      this.notifyMobileSessionTabsChanged(worktreeId)
+    }
   }
 
   protected persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {
@@ -160,26 +295,24 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
 
   /**
    * Answers one client's session-tabs question: whether this runtime has taken back *that* client's
-   * client-hosted pages yet, then that client's own tab selection.
+   * client-hosted pages yet and can say which chats exist, then that client's own tab selection.
    *
-   * The hold is decided here and nowhere else, and it is set or cleared rather than only set, so a
-   * frame built for one client can never carry another client's answer.
+   * The holds are decided here and nowhere else, and each is set or cleared rather than only set,
+   * so a frame built for one client can never carry another client's, or an earlier, answer.
    */
   protected projectMobileSessionTabsForClient(
     result: RuntimeMobileSessionTabsResult,
     clientNavigationId?: string
   ): RuntimeMobileSessionTabsResult {
     return this.clientSessionTabSelections.project(
-      this.withClientHostedPagesHold(result, clientNavigationId),
+      this.withSessionTabsHolds(result, clientNavigationId),
       clientNavigationId
     )
   }
 
-  protected withClientHostedPagesHold(
-    result: RuntimeMobileSessionTabsResult,
-    clientNavigationId: string | undefined
-  ): RuntimeMobileSessionTabsResult {
-    return this.clientHostedPageReconciliation.holdFor(result, clientNavigationId, Date.now())
+  protected withSessionTabsHolds(result: RuntimeMobileSessionTabsResult, navigationId?: string) {
+    const held = this.clientHostedPageReconciliation.holdFor(result, navigationId, Date.now())
+    return holdAgentSessionInventory(held, this.structuredAgentSessionInventoryUnverifiable)
   }
 
   protected async refreshMobileSessionPtyRecords(

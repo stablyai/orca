@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* Cold-restore seed transfer and the payload shapes handed back to the renderer. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hostname } from 'node:os'

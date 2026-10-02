@@ -90,6 +90,87 @@ describe('relay observability', () => {
     ])
   })
 
+  it('flags a readiness answer served from the last known good probe', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'cell', cellId: 'production-gce-c28', region: 'asia-east2' },
+      (entry) => entries.push(entry)
+    )
+
+    observability.recordReadiness({
+      ready: true,
+      degraded: true,
+      degradedDependencies: ['jwks'],
+      failure: 'jwks_timed_out',
+      jwksLatencyMs: 2_001,
+      sqlLatencyMs: 4,
+      totalLatencyMs: 2_002
+    })
+
+    expect(entries).toEqual([
+      expect.objectContaining({
+        severity: 'WARNING',
+        event: 'orca_relay_readiness_check',
+        ready: true,
+        degraded: true,
+        degradedDependencies: ['jwks'],
+        failure: 'jwks_timed_out'
+      })
+    ])
+  })
+
+  it('separates entering the readiness grace window from leaving it', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'cell', cellId: 'production-gce-c28', region: 'asia-east2' },
+      (entry) => entries.push(entry)
+    )
+
+    observability.recordReadinessGrace({
+      dependency: 'sql',
+      grace: 'entered',
+      failure: 'sql_failed',
+      lastSuccessAgeMs: 12_000,
+      graceMs: 180_000
+    })
+    observability.recordReadinessGrace({
+      dependency: 'sql',
+      grace: 'recovered',
+      lastSuccessAgeMs: 0,
+      graceMs: 180_000
+    })
+
+    expect(entries).toEqual([
+      {
+        severity: 'WARNING',
+        message: 'Orca Relay readiness entered last-known-good grace',
+        event: 'orca_relay_readiness_grace_entered',
+        metricVersion: 1,
+        role: 'cell',
+        cellId: 'production-gce-c28',
+        region: 'asia-east2',
+        dependency: 'sql',
+        grace: 'entered',
+        failure: 'sql_failed',
+        lastSuccessAgeMs: 12_000,
+        graceMs: 180_000
+      },
+      {
+        severity: 'INFO',
+        message: 'Orca Relay readiness left last-known-good grace',
+        event: 'orca_relay_readiness_grace_left',
+        metricVersion: 1,
+        role: 'cell',
+        cellId: 'production-gce-c28',
+        region: 'asia-east2',
+        dependency: 'sql',
+        grace: 'recovered',
+        lastSuccessAgeMs: 0,
+        graceMs: 180_000
+      }
+    ])
+  })
+
   it('excludes sockets stuck in closing state from observed relay work', () => {
     expect(observedRelayRequests(counts)).toBe(7)
   })

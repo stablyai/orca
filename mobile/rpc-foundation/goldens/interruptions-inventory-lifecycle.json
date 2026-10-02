@@ -1,29 +1,12 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "workspace.file-inventory",
   "family": "legacy-inventory",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 3,
   "values": {
-    "2837f481a843": {
+    "13ef648b37c5": {
       "name": "files.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
-    },
-    "602e35a92eec": {
-      "files": []
-    },
-    "9dea95bddfe5": {
-      "name": "files.searchPaths#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
-    },
-    "b5b30ad54c76": {
-      "name": "files.list#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -53,8 +36,9 @@
         }
       }
     },
-    "c0821dc354d7": {
+    "32c9018052ba": {
       "name": "files.searchPaths#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -89,8 +73,62 @@
         }
       }
     },
-    "ccb16672d904": {
+    "4d27427720e9": {
       "name": "files.list#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 120,
+        "settledAt": 30120,
+        "error": {
+          "category": "Error",
+          "message": "Request timed out: files.list",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "602e35a92eec": {
+      "files": []
+    },
+    "8db0d1234c94": {
+      "name": "files.searchPaths#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+    },
+    "c9b9d7a9b388": {
+      "name": "files.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+    },
+    "d2ad71e601c4": {
+      "status": "fulfilled",
+      "startedAt": 120,
+      "settledAt": 120,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "d831c788243a": {
+      "name": "files.list#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -125,51 +163,12 @@
         }
       }
     },
-    "d2ad71e601c4": {
-      "status": "fulfilled",
-      "startedAt": 120,
-      "settledAt": 120,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "ee88659ed950": {
-      "name": "files.list#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:A"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 120,
-        "settledAt": 30120,
-        "error": {
-          "category": "Error",
-          "message": "Request timed out: files.list",
-          "isRpcDeliveryUnknown": true
-        }
       }
     }
   },
@@ -179,8 +178,8 @@
       {
         "id": "inventory-lifecycle.timeout:interrupted",
         "observation": {
-          "sender": ["c0821dc354d7", "ee88659ed950"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "4d27427720e9"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a"
@@ -192,8 +191,8 @@
       {
         "id": "inventory-lifecycle.timeout:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "ee88659ed950"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "4d27427720e9"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a"
@@ -205,8 +204,8 @@
       {
         "id": "inventory-lifecycle.disconnect:interrupted",
         "observation": {
-          "sender": ["c0821dc354d7", "b5b30ad54c76"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "13ef648b37c5"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -219,8 +218,8 @@
       {
         "id": "inventory-lifecycle.disconnect:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "b5b30ad54c76"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "13ef648b37c5"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -233,8 +232,8 @@
       {
         "id": "inventory-lifecycle.cutover:interrupted",
         "observation": {
-          "sender": ["c0821dc354d7", "ccb16672d904"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "d831c788243a"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -247,8 +246,8 @@
       {
         "id": "inventory-lifecycle.cutover:settled",
         "observation": {
-          "sender": ["c0821dc354d7", "ccb16672d904"],
-          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "sender": ["32c9018052ba", "d831c788243a"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",

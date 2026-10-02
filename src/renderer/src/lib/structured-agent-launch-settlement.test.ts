@@ -15,7 +15,10 @@ vi.mock('@/lib/launch-structured-agent-session', () => ({
 }))
 
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
-import { settleStructuredAgentLaunch } from './structured-agent-launch-settlement'
+import {
+  beginStructuredAgentLaunchSettlement,
+  settleStructuredAgentLaunch
+} from './structured-agent-launch-settlement'
 
 type FakeLaunch = {
   launchResult: Promise<unknown>
@@ -23,35 +26,16 @@ type FakeLaunch = {
   promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
 }
 
-/** Mirrors the callers layer: the claim runs the callback once the launch is refused and resolves
- *  with whether it ran; a non-refusal settlement resolves it false without running it. */
 function fakeLaunch(args: FakeLaunch) {
   const releaseCallerAfterUnknownOutcome = vi.fn(() => true)
-  const claimDefinitiveRefusalFallback = vi.fn((fallback: () => Promise<void>) =>
-    args.launchResult.then(
-      () => false,
-      (error) =>
-        error instanceof StructuredAgentSessionCreateRefusalError
-          ? Promise.resolve()
-              .then(fallback)
-              .then(() => true)
-          : false
-    )
-  )
   mocks.startStructuredAgentLaunch.mockReturnValue({
     sessionId: 'session-1',
     launchResult: args.launchResult,
     ...(args.promptDeliveryResult ? { promptDeliveryResult: args.promptDeliveryResult } : {}),
     isVisibilityUnknown: () => args.visibilityUnknown === true,
-    releaseCallerAfterUnknownOutcome,
-    claimDefinitiveRefusalFallback
+    releaseCallerAfterUnknownOutcome
   })
-  return { releaseCallerAfterUnknownOutcome, claimDefinitiveRefusalFallback }
-}
-
-const fallbackResult = {
-  activation: { primaryTabId: 'fallback-tab' },
-  primaryTabId: 'fallback-tab'
+  return { releaseCallerAfterUnknownOutcome }
 }
 
 /** A caller-side cancel signal: `fire` is what the caller's store subscription would abort on. */
@@ -79,115 +63,42 @@ describe('settleStructuredAgentLaunch', () => {
       promptDeliveryResult
     })
     const onStructuredReady = vi.fn()
-    const legacyFallback = vi.fn()
 
     await expect(
-      settleStructuredAgentLaunch(
-        'worktree-1',
-        'codex',
-        { prompt: 'Fix' },
-        {
-          legacyFallback,
-          onStructuredReady
-        }
-      )
+      settleStructuredAgentLaunch('worktree-1', 'codex', { prompt: 'Fix' }, { onStructuredReady })
     ).resolves.toEqual({ kind: 'structured', sessionId: 'session-1', promptDeliveryResult })
     expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledWith('worktree-1', 'codex', {
       prompt: 'Fix'
     })
     expect(onStructuredReady).toHaveBeenCalledWith('session-1')
-    expect(legacyFallback).not.toHaveBeenCalled()
   })
 
-  it('runs the legacy fallback exactly once after a definitive refusal', async () => {
+  it('returns the session identity before the launch settles', async () => {
+    let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
     fakeLaunch({
-      launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
+      launchResult: new Promise((resolve) => {
+        resolveLaunch = resolve
+      })
     })
-    const legacyFallback = vi.fn().mockResolvedValue(fallbackResult)
-    const onStructuredReady = vi.fn()
 
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', {}, { legacyFallback, onStructuredReady })
-    ).resolves.toEqual({ kind: 'refused-then-legacy', ...fallbackResult })
-    expect(legacyFallback).toHaveBeenCalledOnce()
-    expect(onStructuredReady).not.toHaveBeenCalled()
-  })
+    const handle = beginStructuredAgentLaunchSettlement('worktree-1', 'codex', {}, {})
 
-  it('carries a fallback that opened a tab without activating a workspace', async () => {
-    fakeLaunch({
-      launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
-    })
-    const promptDeliveryResult = Promise.resolve({ delivered: true, failureNotified: false })
-    const legacyFallback = vi
-      .fn()
-      .mockResolvedValue({ primaryTabId: 'new-tab', promptDeliveryResult })
-
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', {}, { legacyFallback })
-    ).resolves.toEqual({
-      kind: 'refused-then-legacy',
-      primaryTabId: 'new-tab',
-      promptDeliveryResult
+    expect(handle.sessionId).toBe('session-1')
+    resolveLaunch({ sessionId: 'session-1', fence: 1 })
+    await expect(handle.settlement).resolves.toEqual({
+      kind: 'structured',
+      sessionId: 'session-1'
     })
   })
 
-  it('fails a refusal that has no legacy equivalent without claiming a fallback', async () => {
+  it('keeps a structured refusal on the structured failure path', async () => {
     const error = new StructuredAgentSessionCreateRefusalError('unsupported')
-    const { claimDefinitiveRefusalFallback } = fakeLaunch({ launchResult: Promise.reject(error) })
+    fakeLaunch({ launchResult: Promise.reject(error) })
 
     await expect(settleStructuredAgentLaunch('worktree-1', 'codex', {}, {})).resolves.toEqual({
       kind: 'failed',
       error
     })
-    // Why: a claimed no-op would tell the launch layer a terminal fallback was attempted.
-    expect(claimDefinitiveRefusalFallback).not.toHaveBeenCalled()
-  })
-
-  it('reports the surface of a legacy fallback that finished before the cancel', async () => {
-    fakeLaunch({
-      launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
-    })
-    const cancellation = fakeCancellation()
-    let finishFallback!: () => void
-    const legacyFallback = vi.fn(
-      () =>
-        new Promise<typeof fallbackResult>((resolve) => {
-          finishFallback = () => resolve(fallbackResult)
-        })
-    )
-
-    const settlement = settleStructuredAgentLaunch(
-      'worktree-1',
-      'codex',
-      {},
-      { legacyFallback, signal: cancellation.signal }
-    )
-    await vi.waitFor(() => expect(legacyFallback).toHaveBeenCalledOnce())
-    cancellation.fire()
-    finishFallback()
-
-    // Why: the fallback's terminal outlives the cancel, so its tab is the caller's real surface.
-    await expect(settlement).resolves.toEqual({
-      kind: 'cancelled',
-      sessionId: 'session-1',
-      fallback: fallbackResult
-    })
-    expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledExactlyOnceWith(
-      'worktree-1',
-      'session-1'
-    )
-  })
-
-  it('fails when the legacy fallback itself throws', async () => {
-    const fallbackError = new Error('no terminal')
-    fakeLaunch({
-      launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
-    })
-    const legacyFallback = vi.fn().mockRejectedValue(fallbackError)
-
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', {}, { legacyFallback })
-    ).resolves.toEqual({ kind: 'failed', error: fallbackError })
   })
 
   it('reports an unknown outcome, releases the caller, and never runs the fallback', async () => {
@@ -195,25 +106,23 @@ describe('settleStructuredAgentLaunch', () => {
       launchResult: Promise.reject(new Error('connection lost')),
       visibilityUnknown: true
     })
-    const legacyFallback = vi.fn()
 
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', {}, { legacyFallback })
-    ).resolves.toEqual({ kind: 'visibility-unknown', sessionId: 'session-1' })
+    await expect(settleStructuredAgentLaunch('worktree-1', 'codex', {}, {})).resolves.toEqual({
+      kind: 'visibility-unknown',
+      sessionId: 'session-1'
+    })
     expect(releaseCallerAfterUnknownOutcome).toHaveBeenCalledOnce()
-    expect(legacyFallback).not.toHaveBeenCalled()
   })
 
   it('fails a non-refusal error whose outcome is known', async () => {
     const error = new Error('boom')
     const { releaseCallerAfterUnknownOutcome } = fakeLaunch({ launchResult: Promise.reject(error) })
-    const legacyFallback = vi.fn()
 
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', {}, { legacyFallback })
-    ).resolves.toEqual({ kind: 'failed', error })
+    await expect(settleStructuredAgentLaunch('worktree-1', 'codex', {}, {})).resolves.toEqual({
+      kind: 'failed',
+      error
+    })
     expect(releaseCallerAfterUnknownOutcome).not.toHaveBeenCalled()
-    expect(legacyFallback).not.toHaveBeenCalled()
   })
 
   it('returns cancelled after a successful launch without activating', async () => {
@@ -234,24 +143,20 @@ describe('settleStructuredAgentLaunch', () => {
     expect(onStructuredReady).not.toHaveBeenCalled()
   })
 
-  it('returns cancelled after a refusal without running the fallback', async () => {
+  it('lets cancellation win over a refusal', async () => {
     fakeLaunch({
       launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
     })
-    const legacyFallback = vi.fn().mockResolvedValue(fallbackResult)
-
     await expect(
       settleStructuredAgentLaunch(
         'worktree-1',
         'codex',
         {},
         {
-          legacyFallback,
           signal: fakeCancellation(true).signal
         }
       )
     ).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
-    expect(legacyFallback).not.toHaveBeenCalled()
   })
 
   it('cancels the launch eagerly, once, before the launch settles', async () => {

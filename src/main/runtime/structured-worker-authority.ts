@@ -3,18 +3,22 @@
  *
  * The registry holds the handle→session mapping for this process; the durable worker-terminal
  * resource row is what survives a restart, so a miss falls back to rehydrating from it. The
- * durable agent-session record is the liveness half: a session handed to a TUI owner, released, or
- * pinned to another execution host is no longer this runtime's structured worker.
+ * durable agent-session record, the chat's tab and the orchestration's own resource row decide
+ * custody: see `structured-worker-custody`.
+ * Whether its provider process runs is a separate fact, `observeStructuredWorker`, and routing
+ * never reads it — an agent at rest still receives mail, which starts it.
  */
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { OrcaSessionId } from '../../shared/orca-session-address'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrchestrationDb } from './orchestration/db'
+import { structuredWorkerAddressable } from './structured-worker-custody'
 import {
   isStructuredWorkerHandle,
   structuredWorkerIdentities,
-  structuredWorkerRecordIsCurrent,
+  structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
 } from './structured-worker-identity'
 
@@ -47,7 +51,41 @@ export function resolveStructuredWorkerIdentity(
   return row ? structuredWorkerIdentities.rehydrate(row) : null
 }
 
-/** Identity plus a record that still proves this runtime owns the session. */
+/** The worker identity minted for a session, if that session is a structured worker. */
+export function resolveStructuredWorkerIdentityForSession(
+  sessionId: string,
+  db: OrchestrationDb | null | undefined
+): StructuredWorkerIdentity | null {
+  const known = structuredWorkerIdentities.getBySessionId(sessionId)
+  if (known) {
+    return known
+  }
+  const row = db?.getWorkerTerminalResourceByProcessIncarnation?.(
+    structuredWorkerProcessIncarnation(sessionId)
+  )
+  return row ? structuredWorkerIdentities.rehydrate(row) : null
+}
+
+/**
+ * Whether this session was assigned a Dispatch as a structured worker. Such a session acts with its
+ * worker handle, so one whose handle is gone must not act handle-less, as a chat would.
+ */
+export function isRecordedStructuredWorkerSession(
+  sessionId: OrcaSessionId,
+  db: OrchestrationDb
+): boolean {
+  return Boolean(
+    db.db
+      .prepare(
+        `SELECT 1 FROM dispatch_contexts
+         WHERE assignee_orca_session_id = ? AND process_incarnation = ? LIMIT 1`
+      )
+      .get(sessionId, structuredWorkerProcessIncarnation(sessionId))
+  )
+}
+
+/** Identity plus a record that still proves this runtime owns the session, for a worker its
+ *  orchestration has not released. */
 export function resolveStructuredWorkerAuthority(
   handle: string,
   db: OrchestrationDb | null | undefined
@@ -57,7 +95,14 @@ export function resolveStructuredWorkerAuthority(
     return null
   }
   const record = readStructuredAgentSessionRecord(identity.sessionId)
-  return record && structuredWorkerRecordIsCurrent(record) ? { identity, record } : null
+  return record &&
+    structuredWorkerAddressable(
+      db,
+      identity.sessionId,
+      db?.getWorkerTerminalResourceByHandle?.(identity.handle)
+    )
+    ? { identity, record }
+    : null
 }
 
 /**
@@ -78,6 +123,20 @@ export function structuredWorkerAgent(identity: StructuredWorkerIdentity): 'clau
 export type StructuredWorkerObservation = {
   status: 'live' | 'unverifiable' | 'exited'
   reason?: string
+}
+
+/**
+ * Whether a close left nothing running: `exited`, or `unverifiable` on a released lease — a release
+ * whose stop could not be proven, which sent no signal and is left as it is. Closing a chat is the
+ * user's action, and bookkeeping about a process already released must not refuse it.
+ */
+export function structuredSessionCloseSettled(sessionId: string): boolean {
+  const status = observeStructuredWorker({ sessionId }).status
+  return (
+    status === 'exited' ||
+    (status === 'unverifiable' &&
+      readStructuredAgentSessionRecord(sessionId)?.lease.claimStatus === 'released')
+  )
 }
 
 /**
@@ -116,12 +175,6 @@ export function observeStructuredWorker(
   }
   if (record.lease.claimStatus === 'released' && record.lease.deathEvidence) {
     return { status: 'exited' }
-  }
-  if (record.lease.runtimeKind !== 'native') {
-    return {
-      status: 'unverifiable',
-      reason: 'The session lease is held by a terminal owner, not this structured host.'
-    }
   }
   if (host.hasSession(identity.sessionId) && record.lease.claimStatus === 'live') {
     return { status: 'live' }

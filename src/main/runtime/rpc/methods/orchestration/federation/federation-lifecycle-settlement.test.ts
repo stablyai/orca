@@ -56,15 +56,14 @@ describe('orchestration federation lifecycle settlement', () => {
           failNextAckBeforeDelivery = false
           throw new Error('connection lost before acknowledgment')
         }
-        return (await workerDispatcher.dispatch({
+        return await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
           method,
           params,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId,
-          orchestrationCapability: envelope?.orchestrationCapability
-        })) as RuntimeRpcResponse<unknown>
+          orchestrationRequestId: envelope?.orchestrationRequestId
+        })
       }
     }
     homeRuntime = new OrcaRuntimeService(null, undefined, {
@@ -155,14 +154,11 @@ describe('orchestration federation lifecycle settlement', () => {
     await homeDispatcher.dispatch(startRequest(taskId))
     homeRuntime.stopOrchestrationFederationRelay()
     const dispatch = homeDb.getDispatchContext(taskId)!
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     const sent = workerDispatcher.dispatch({
       id: 'rpc_waiting_worker_done',
       authToken: 'worker-local-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'waiting_worker_done_request',
-      orchestrationCapability: capability,
       method: 'orchestration.send',
       params: {
         from: 'term_windows_worker',
@@ -192,15 +188,12 @@ describe('orchestration federation lifecycle settlement', () => {
     signal?: AbortSignal,
     outcome: 'succeeded' | 'failed' = 'succeeded'
   ) {
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     return workerDispatcher.dispatch(
       {
         id: `rpc_${requestId}`,
         authToken: 'worker-local-token',
         orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
         orchestrationRequestId: requestId,
-        orchestrationCapability: capability,
         method: 'orchestration.send',
         params: {
           from: 'term_windows_worker',
@@ -458,7 +451,7 @@ describe('orchestration federation lifecycle settlement', () => {
           payloadHash: `persisted_protocol_${protocolVersion}_payload`
         }
       })
-      const capability = workerDb.prepareRemoteAttachmentAuthority({
+      workerDb.prepareRemoteAttachmentAuthority({
         dispatchId,
         paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
         processIncarnation: 'windows_runtime:pty:1',
@@ -475,7 +468,6 @@ describe('orchestration federation lifecycle settlement', () => {
         authToken: 'worker-local-token',
         orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
         orchestrationRequestId: `persisted_protocol_${protocolVersion}_completion_request`,
-        orchestrationCapability: capability,
         method: 'orchestration.send',
         params: {
           from: 'term_windows_worker',
@@ -662,8 +654,6 @@ describe('orchestration federation lifecycle settlement', () => {
     await homeDispatcher.dispatch(startRequest(task.id))
     homeRuntime.stopOrchestrationFederationRelay()
     const dispatch = homeDb.getDispatchContext(task.id)!
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     const controller = new AbortController()
     const sent = workerDispatcher.dispatch(
       {
@@ -671,7 +661,6 @@ describe('orchestration federation lifecycle settlement', () => {
         authToken: 'worker-local-token',
         orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
         orchestrationRequestId: 'aborted_worker_done_request',
-        orchestrationCapability: capability,
         method: 'orchestration.send',
         params: {
           from: 'term_windows_worker',

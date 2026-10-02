@@ -8,10 +8,12 @@ import {
   summarizeSubagentGroup
 } from '../../../../shared/native-chat-subagent-summary'
 import type {
+  NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
 } from '../../../../shared/native-chat-types'
 import { formatNativeChatDuration } from './NativeChatWorkingStatus'
+import { nativeChatSubagentEntryRuns } from './native-chat-subagent-sections'
 
 /** Compact token counts: the row shows scale, not an exact ledger. */
 function formatSubagentTokens(tokens: number): string {
@@ -111,7 +113,7 @@ function SubagentGlyph(): React.JSX.Element {
 
 /** `pulsing` is separate from `state` so a group that is still working can show
  *  a failed sibling's colour without losing its in-flight cue. */
-function StatusDot({
+export function StatusDot({
   state,
   pulsing = false
 }: {
@@ -145,9 +147,77 @@ function SubagentElapsed({
   return <>{formatNativeChatDuration(Math.max(0, (end - startedAt) / 1000))}</>
 }
 
+/** A roster's entries, one per child. A child with a section is its head: its entry
+ *  opens and closes it, and its rows follow the entry. */
+export function NativeChatSubagentEntries({
+  agents,
+  sections,
+  onSetSectionOpen,
+  className
+}: {
+  agents: readonly NativeChatSubagentEntry[]
+  sections?: ReadonlyMap<string, boolean>
+  onSetSectionOpen?: (agentId: string, open: boolean) => void
+  className?: string
+}): React.JSX.Element {
+  return (
+    <ul className={cn('space-y-0.5', className)}>
+      {agents.map((agent) => {
+        const state = normalizeSubagentState(agent.state)
+        const sectionOpen = sections?.get(agent.id)
+        const entry = (
+          <>
+            <StatusDot state={state} pulsing={state === 'working'} />
+            <code
+              className={cn(
+                'min-w-0 truncate font-mono text-[11px]',
+                state === 'idle' ? 'text-muted-foreground/70' : 'text-foreground/80'
+              )}
+            >
+              {agent.label}
+            </code>
+            <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+              {subagentStateLabel(state, 1, 1)}
+              {typeof agent.tokens === 'number' ? ` · ${formatSubagentTokens(agent.tokens)}` : null}
+            </span>
+          </>
+        )
+        return (
+          <li key={agent.id}>
+            {sectionOpen === undefined ? (
+              <div className="flex items-center gap-1.5 py-0.5">{entry}</div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSetSectionOpen?.(agent.id, !sectionOpen)}
+                aria-expanded={sectionOpen}
+                className="group/subagent-entry flex w-full items-center gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+              >
+                {entry}
+                <ChevronRight
+                  aria-hidden
+                  className={cn(
+                    'size-3.5 shrink-0 text-muted-foreground transition-all',
+                    sectionOpen
+                      ? 'rotate-90 opacity-100'
+                      : 'opacity-0 group-hover/subagent-entry:opacity-100'
+                  )}
+                />
+              </button>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 /** One spawn group: how many children are working, their settled verdict, and
- *  the tokens they consumed. Deliberately flat — children are summarized here,
- *  never nested into the transcript as turns of their own.
+ *  the tokens they consumed. Each child is one entry here; the child's own rows
+ *  are never the conversation's. A child the session spawned shows them under its
+ *  entry, open while the running session's newest output is part of delegating to
+ *  it; the entry is where the reader overrides that. This row draws its entries
+ *  through the first open one; the transcript draws that child's rows, then the rest.
  *
  *  Every state is drawn exactly as the journal recorded it. Turn state is NOT
  *  consulted: `spawn_agent` children outlive the turn that spawned them and keep
@@ -157,11 +227,23 @@ function SubagentElapsed({
  *  when the provider goes away, and `staleSubagentRosterRevisions` on the next
  *  journal open when the host itself died mid-flight. */
 export function NativeChatSubagentRun({
-  block
+  block,
+  open: heldOpen,
+  onSetOpen,
+  sections,
+  onSetSectionOpen
 }: {
   block: NativeChatSubagentGroupBlock
+  /** Whether the entries show, when the transcript holds that past this row's lifetime. */
+  open?: boolean
+  onSetOpen?: (open: boolean) => void
+  /** The children whose rows open under their entries, and whether each is open. */
+  sections?: ReadonlyMap<string, boolean>
+  onSetSectionOpen?: (agentId: string, open: boolean) => void
 }): React.JSX.Element | null {
-  const [open, setOpen] = useState(false)
+  const [localOpen, setLocalOpen] = useState(false)
+  const open = heldOpen ?? localOpen
+  const setOpen = onSetOpen ?? setLocalOpen
   const agents = block.agents
   const summary = useMemo(() => summarizeSubagentGroup(agents), [agents])
   if (summary.total === 0) {
@@ -190,25 +272,25 @@ export function NativeChatSubagentRun({
   const alertState = working ? summary.adverseState : null
   const alert =
     alertState === null ? null : subagentStateLabel(alertState, summary.adverseCount, summary.total)
-  // A child settled by the reopen reads `unverifiable` with no terminal stamp:
-  // it stopped being observable at an unknown moment. Measuring to `now` would
-  // report the time since the host died as how long the child ran, on a row that
-  // is not even counting. A sibling's stamp is no better: in a mixed group it
-  // would present that sibling's duration as the group's while a child's fate is
-  // still unknown.
+  // A child settled with no terminal stamp — swept by the reopen, or given the
+  // provider's verdict after that — stopped being observable at an unknown
+  // moment. Measuring to `now` would report the time since the host died as how
+  // long the child ran, on a row that is not even counting. A sibling's stamp is
+  // no better: in a mixed group it would present that sibling's duration as the
+  // group's while a child's run length is still unknown.
   const runLengthUnknown = agents.some(
     (agent) =>
-      normalizeSubagentState(agent.state) === 'unverifiable' && typeof agent.settledAt !== 'number'
+      normalizeSubagentState(agent.state) !== 'working' && typeof agent.settledAt !== 'number'
   )
   const clockStartedAt =
-    !runLengthUnknown && (working || summary.settledAt !== null) ? summary.startedAt : null
+    !runLengthUnknown && (working || summary.settledAt !== null) ? summary.clockStartedAt : null
 
   return (
     <div>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="group flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed text-muted-foreground hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        onClick={() => setOpen(!open)}
+        className="group/subagent-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed text-muted-foreground hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         aria-expanded={open}
         aria-live="polite"
       >
@@ -240,35 +322,17 @@ export function NativeChatSubagentRun({
         <ChevronRight
           className={cn(
             'size-3.5 shrink-0 text-muted-foreground transition-all',
-            open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover:opacity-100'
+            open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/subagent-run:opacity-100'
           )}
         />
       </button>
       {open ? (
-        <ul className="mt-1 space-y-0.5">
-          {agents.map((agent) => {
-            const state = normalizeSubagentState(agent.state)
-            return (
-              <li key={agent.id} className="flex items-center gap-1.5 py-0.5">
-                <StatusDot state={state} pulsing={state === 'working'} />
-                <code
-                  className={cn(
-                    'min-w-0 truncate font-mono text-[11px]',
-                    state === 'idle' ? 'text-muted-foreground/70' : 'text-foreground/80'
-                  )}
-                >
-                  {agent.label}
-                </code>
-                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                  {subagentStateLabel(state, 1, 1)}
-                  {typeof agent.tokens === 'number'
-                    ? ` · ${formatSubagentTokens(agent.tokens)}`
-                    : null}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
+        <NativeChatSubagentEntries
+          agents={sections ? nativeChatSubagentEntryRuns(agents, sections)[0]! : agents}
+          sections={sections}
+          onSetSectionOpen={onSetSectionOpen}
+          className="mt-1"
+        />
       ) : null}
     </div>
   )

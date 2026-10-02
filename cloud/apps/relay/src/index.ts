@@ -10,10 +10,10 @@ import {
   reconcileCellAdmissionAtStartup,
   roleOwnsAssignmentMaintenance
 } from './cell-admission-startup.js'
+import { openRelayDatabaseAtBoot } from './boot-database-open.js'
 import {
   consumeRelayCellInventoryHold,
   consumeRelayDatabasePoolPressure,
-  openRelayDatabase,
   readRelayDatabasePoolPressure
 } from './database.js'
 import { runAssignmentCleanup } from './assignment-cleanup-steps.js'
@@ -28,7 +28,7 @@ import {
 } from './registered-migration-inventory.js'
 
 const config = loadRelayConfig()
-const database = await openRelayDatabase({
+const database = await openRelayDatabaseAtBoot({
   databaseUrl: config.databaseUrl,
   dataDir: config.dataDir,
   poolMax: config.databasePoolMax,
@@ -46,14 +46,19 @@ const {
   ready,
   cellIncarnation
 } = createRelayServer(config, database)
-const cleanupTimer = setInterval(
-  () =>
-    void runRelayBackgroundOperation(
-      () => store.cleanup(),
-      '[orca-relay] credential cleanup failed'
-    ),
-  30_000
-)
+// Same owner as the assignment sweep: the cleanup only expires credentials that every reader
+// already re-checks at read time, so running it in all 23 cells multiplied one table scan by 23
+// without changing any answer.
+const cleanupTimer = roleOwnsAssignmentMaintenance(config.role)
+  ? setInterval(
+      () =>
+        void runRelayBackgroundOperation(
+          () => store.cleanup(),
+          '[orca-relay] credential cleanup failed'
+        ),
+      jitteredSweepIntervalMs(30_000)
+    )
+  : null
 const assignmentCleanupTimer = roleOwnsAssignmentMaintenance(config.role)
   ? setInterval(() => {
       void runAssignmentCleanup(assignments)
@@ -82,7 +87,7 @@ const migrationInventoryTimer = roleOwnsAssignmentMaintenance(config.role)
       }, '[orca-relay] migration inventory failed')
     }, 5 * 60_000)
   : null
-cleanupTimer.unref()
+cleanupTimer?.unref()
 assignmentCleanupTimer?.unref()
 inventorySnapshotTimer?.unref()
 migrationInventoryTimer?.unref()
@@ -128,7 +133,7 @@ server.listen(config.port, () => {
 })
 
 const shutdown = (): void => {
-  clearInterval(cleanupTimer)
+  if (cleanupTimer) clearInterval(cleanupTimer)
   if (assignmentCleanupTimer) clearInterval(assignmentCleanupTimer)
   if (inventorySnapshotTimer) clearInterval(inventorySnapshotTimer)
   if (migrationInventoryTimer) clearInterval(migrationInventoryTimer)

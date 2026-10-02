@@ -50,6 +50,7 @@ vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMess
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
+vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('./MobileAgentWorkingIndicator', () => ({
   MobileAgentWorkingIndicator: 'WorkingIndicator'
 }))
@@ -85,6 +86,9 @@ type Overrides = {
   turnIndicator?: Parameters<typeof MobileNativeChatView>[0]['turnIndicator']
   agentWorking?: boolean
   canStop?: boolean
+  ask?: Parameters<typeof MobileNativeChatView>[0]['ask']
+  question?: Parameters<typeof MobileNativeChatView>[0]['question']
+  permission?: Parameters<typeof MobileNativeChatView>[0]['permission']
   sendSurfaceId?: string
   keyboardInset?: number
   hasMore?: boolean
@@ -259,7 +263,9 @@ describe('MobileNativeChatView', () => {
     try {
       const folded = [assistantTurn('a1', 'Starting')]
       await render({ folded })
-      await act(async () => vi.runOnlyPendingTimers())
+      await act(async () => {
+        vi.runOnlyPendingTimers()
+      })
       scrollToEnd.mockClear()
 
       await update({ folded, streaming: 'Streaming output' })
@@ -267,7 +273,9 @@ describe('MobileNativeChatView', () => {
 
       expect(scrollToOffset).toHaveBeenCalledOnce()
       expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 900 })
-      await act(async () => vi.advanceTimersByTime(60))
+      await act(async () => {
+        vi.advanceTimersByTime(60)
+      })
       expect(scrollToOffset).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
@@ -350,7 +358,9 @@ describe('MobileNativeChatView', () => {
         list().props.onContentSizeChange(320, 1_250)
         list().props.onMomentumScrollBegin?.({})
       })
-      await act(async () => vi.advanceTimersByTime(200))
+      await act(async () => {
+        vi.advanceTimersByTime(200)
+      })
       act(() => list().props.onContentSizeChange(320, 1_300))
 
       expect(scrollToEnd).not.toHaveBeenCalled()
@@ -436,7 +446,9 @@ describe('MobileNativeChatView', () => {
           }
         })
       })
-      await act(async () => vi.advanceTimersByTime(200))
+      await act(async () => {
+        vi.advanceTimersByTime(200)
+      })
       act(() => list().props.onContentSizeChange(320, 1_250))
 
       expect(scrollToEnd).toHaveBeenCalledOnce()
@@ -468,7 +480,9 @@ describe('MobileNativeChatView', () => {
       expect(scrollToEnd).not.toHaveBeenCalled()
       expect(scrollToOffset).not.toHaveBeenCalled()
 
-      await act(async () => vi.runOnlyPendingTimers())
+      await act(async () => {
+        vi.runOnlyPendingTimers()
+      })
 
       expect(scrollToEnd).toHaveBeenCalledOnce()
       expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
@@ -518,7 +532,9 @@ describe('MobileNativeChatView', () => {
           }
         })
       })
-      await act(async () => vi.advanceTimersByTime(200))
+      await act(async () => {
+        vi.advanceTimersByTime(200)
+      })
       act(() => list().props.onContentSizeChange(320, 950))
 
       expect(onLoadEarlier).toHaveBeenCalledOnce()
@@ -537,7 +553,9 @@ describe('MobileNativeChatView', () => {
     try {
       const folded = [assistantTurn('a1', 'History')]
       await render({ folded })
-      await act(async () => vi.runOnlyPendingTimers())
+      await act(async () => {
+        vi.runOnlyPendingTimers()
+      })
       await scrollAwayFromTail()
       scrollToEnd.mockClear()
 
@@ -545,7 +563,9 @@ describe('MobileNativeChatView', () => {
 
       expect(scrollToEnd).toHaveBeenCalledOnce()
       expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
-      await act(async () => vi.advanceTimersByTime(60))
+      await act(async () => {
+        vi.advanceTimersByTime(60)
+      })
       expect(scrollToEnd).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
@@ -574,7 +594,9 @@ describe('MobileNativeChatView', () => {
     try {
       const folded = [assistantTurn('a1', 'Latest')]
       await render({ folded })
-      await act(async () => vi.runOnlyPendingTimers())
+      await act(async () => {
+        vi.runOnlyPendingTimers()
+      })
       scrollToEnd.mockClear()
 
       await update({ folded, keyboardInset: 320 })
@@ -582,7 +604,9 @@ describe('MobileNativeChatView', () => {
 
       expect(scrollToEnd).toHaveBeenCalledOnce()
       expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
-      await act(async () => vi.advanceTimersByTime(60))
+      await act(async () => {
+        vi.advanceTimersByTime(60)
+      })
       expect(scrollToEnd).toHaveBeenCalledOnce()
 
       await scrollAwayFromTail()
@@ -608,14 +632,20 @@ describe('MobileNativeChatView', () => {
     vi.useFakeTimers()
     try {
       await render({ inputLockReason: 'waiting' })
-      await act(async () => vi.advanceTimersByTime(600))
+      await act(async () => {
+        vi.advanceTimersByTime(600)
+      })
       expect(composer().props.disabled).toBe(true)
 
       await update({ inputLockReason: null })
       expect(composer().props.disabled).toBe(true)
-      await act(async () => vi.advanceTimersByTime(300))
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+      })
       await update({ inputLockReason: 'waiting' })
-      await act(async () => vi.advanceTimersByTime(600))
+      await act(async () => {
+        vi.advanceTimersByTime(600)
+      })
 
       expect(composer().props.disabled).toBe(true)
       expect(composer().props.placeholder).toBe('Waiting for terminal…')
@@ -628,182 +658,23 @@ describe('MobileNativeChatView', () => {
     vi.useFakeTimers()
     try {
       await render({ inputLockReason: 'waiting' })
-      await act(async () => vi.advanceTimersByTime(600))
+      await act(async () => {
+        vi.advanceTimersByTime(600)
+      })
       await update({ inputLockReason: null })
-      await act(async () => vi.advanceTimersByTime(599))
+      await act(async () => {
+        vi.advanceTimersByTime(599)
+      })
       expect(composer().props.disabled).toBe(true)
 
-      await act(async () => vi.advanceTimersByTime(1))
+      await act(async () => {
+        vi.advanceTimersByTime(1)
+      })
 
       expect(composer().props.disabled).toBe(false)
       expect(composer().props.placeholder).toBe('Message, @files, /commands')
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  describe('structured turn status wiring', () => {
-    const userTurn = (id: string, text: string): NativeChatMessage => ({
-      id,
-      role: 'user',
-      blocks: [{ type: 'text', text }],
-      timestamp: 0,
-      source: 'transcript'
-    })
-
-    function rowProps(id: string): Record<string, unknown> {
-      return (renderedRow(id) as { props: Record<string, unknown> }).props
-    }
-
-    function footerProps(): Record<string, unknown> | null {
-      const list = renderer!.root.find((node) => node.type === 'FlatList')
-      const footer = list.props.ListFooterComponent as
-        | { props: Record<string, unknown> }
-        | null
-        | undefined
-      return footer?.props ?? null
-    }
-
-    function workingIndicators(): ReactTestInstance[] {
-      return renderer!.root.findAll((node) => node.type === 'WorkingIndicator')
-    }
-
-    it('puts the live status at the turn tail and drops the three-dot indicator', async () => {
-      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'still working')]
-      await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
-      const props = rowProps('u1')
-      expect(props.structuredActivityUi).toBe(true)
-      expect(props.turnStatus).toBeNull()
-      // Nothing reports reasoning, so the one live footer counts instead of guessing.
-      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
-      expect(listIds().at(-1)).toBe('a1')
-      expect(props.activeTurnIsWorking).toBe(true)
-      expect(workingIndicators()).toHaveLength(0)
-    })
-
-    it('reports the live turn as thinking only when its journal says it is reasoning', async () => {
-      const folded = [userTurn('u1', 'go')]
-      await render({
-        messages: folded,
-        folded,
-        structuredActivityUi: true,
-        agentWorking: true,
-        turnIndicator: { thinking: true, activityText: null }
-      })
-      expect(rowProps('u1').turnStatus).toBeNull()
-      expect(footerProps()).toMatchObject({ thinking: true, workedSeconds: null })
-    })
-
-    it('hands the live row the provider activity copy that outranks its fallbacks', async () => {
-      const folded = [userTurn('u1', 'go')]
-      await render({
-        messages: folded,
-        folded,
-        structuredActivityUi: true,
-        agentWorking: true,
-        turnIndicator: { thinking: true, activityText: 'Running pnpm test' }
-      })
-      expect(footerProps()).toMatchObject({
-        thinking: true,
-        activityText: 'Running pnpm test'
-      })
-    })
-
-    it('keeps the activity copy on the live footer instead of a historical row', async () => {
-      const folded = [userTurn('u1', 'go'), userTurn('u2', 'again')]
-      await render({
-        messages: folded,
-        folded,
-        structuredActivityUi: true,
-        agentWorking: true,
-        turnIndicator: { thinking: false, activityText: 'Running pnpm test' }
-      })
-      expect(rowProps('u1')).not.toHaveProperty('turnActivityText')
-      expect(rowProps('u2')).not.toHaveProperty('turnActivityText')
-      expect(footerProps()).toMatchObject({ activityText: 'Running pnpm test' })
-    })
-
-    it('keeps the bridge lane on the three-dot indicator with no turn status', async () => {
-      const folded = [userTurn('u1', 'go')]
-      await render({ messages: folded, folded, agentWorking: true })
-      const props = rowProps('u1')
-      expect(props.structuredActivityUi).toBe(false)
-      expect(props.turnStatus).toBeNull()
-      expect(props.activeTurnIsWorking).toBe(false)
-      expect(footerProps()).toBeNull()
-      expect(workingIndicators()).toHaveLength(1)
-    })
-
-    it('settles the finished turn to a tappable duration', async () => {
-      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
-      await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
-      expect(rowProps('u1').turnStatus).toBeNull()
-      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
-      await update({ messages: folded, folded, structuredActivityUi: true, agentWorking: false })
-      const settled = rowProps('u1')
-      expect(settled.turnStatus).toMatchObject({ thinking: false })
-      expect((settled.turnStatus as { workedSeconds: number | null }).workedSeconds).toBeTypeOf(
-        'number'
-      )
-      expect(settled.onToggleTurn).toBeTypeOf('function')
-      expect(settled.activeTurnIsWorking).toBe(false)
-      expect(footerProps()).toBeNull()
-    })
-
-    it('hangs no status row on an assistant row', async () => {
-      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
-      await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
-      expect(rowProps('a1').turnStatus).toBeNull()
-      // The assistant row still belongs to the live turn, so its tool row stays visible.
-      expect(rowProps('a1').activeTurnIsWorking).toBe(true)
-      expect(footerProps()).toMatchObject({ workedSeconds: null })
-    })
-
-    it('does not carry a running turn clock across chat surfaces', async () => {
-      vi.useFakeTimers()
-      try {
-        vi.setSystemTime(1_000)
-        const firstTab = [userTurn('u1', 'first')]
-        await render({
-          messages: firstTab,
-          folded: firstTab,
-          structuredActivityUi: true,
-          agentWorking: true,
-          sendSurfaceId: 'host\0worktree\0tab-a'
-        })
-        expect(footerProps()).toMatchObject({ startedAt: 1_000 })
-
-        vi.setSystemTime(12_000)
-        const secondTab = [userTurn('u2', 'second')]
-        await update({
-          messages: secondTab,
-          folded: secondTab,
-          structuredActivityUi: true,
-          agentWorking: true,
-          sendSurfaceId: 'host\0worktree\0tab-b'
-        })
-
-        expect(footerProps()).toMatchObject({ startedAt: 12_000 })
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-
-    it('does not treat pre-user history as part of the live turn', async () => {
-      const history = [
-        assistantTurn('a0', 'before the first prompt'),
-        userTurn('u1', 'go'),
-        assistantTurn('a1', 'working')
-      ]
-      await render({
-        messages: history,
-        folded: history,
-        structuredActivityUi: true,
-        agentWorking: true
-      })
-
-      expect(rowProps('a0').activeTurnIsWorking).toBe(false)
-      expect(rowProps('a1').activeTurnIsWorking).toBe(true)
-    })
   })
 })

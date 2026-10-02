@@ -19,7 +19,6 @@ import {
   getHermesHome,
   getPluginDir,
   getPluginFilesState,
-  readConfigContent,
   readConfigFile,
   writeConfigFile,
   writePluginFiles
@@ -86,7 +85,18 @@ export class HermesHookService {
 
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const next = updateConfigContent(readConfigContent(configPath), enablePlugin)
+    const parsed = readConfigFile(configPath)
+    if (!parsed.ok) {
+      return {
+        agent: 'hermes',
+        state: 'error',
+        configPath,
+        managedHooksPresent: getPluginFilesState().managed,
+        detail: `Could not parse Hermes config.yaml: ${parsed.detail}`
+      }
+    }
+
+    const next = updateConfigContent(parsed.content, enablePlugin)
     if (next.content === null) {
       return {
         agent: 'hermes',
@@ -96,9 +106,10 @@ export class HermesHookService {
         detail: `Could not update Hermes config.yaml: ${next.detail ?? 'unknown error'}`
       }
     }
-
     writePluginFiles()
-    writeConfigFile(configPath, next.content)
+    if (next.content !== parsed.content) {
+      writeConfigFile(configPath, next.content)
+    }
     return this.getStatus()
   }
 
@@ -115,12 +126,14 @@ export class HermesHookService {
           state: 'error',
           configPath: remoteConfigPath,
           managedHooksPresent: false,
-          detail: `Could not update remote Hermes config.yaml: ${next.detail ?? 'unknown error'}`
+          detail: `Could not parse remote Hermes config.yaml: ${next.detail ?? 'unknown error'}`
         }
       }
       await writeTextFileRemoteAtomic(sftp, `${remotePluginDir}/plugin.yaml`, getPluginManifest())
       await writeTextFileRemoteAtomic(sftp, `${remotePluginDir}/__init__.py`, getPluginInitSource())
-      await writeTextFileRemoteAtomic(sftp, remoteConfigPath, next.content)
+      if (next.content !== existing) {
+        await writeTextFileRemoteAtomic(sftp, remoteConfigPath, next.content)
+      }
       return {
         agent: 'hermes',
         state: 'installed',
@@ -141,7 +154,17 @@ export class HermesHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const next = updateConfigContent(readConfigContent(configPath), disablePlugin)
+    const parsed = readConfigFile(configPath)
+    if (!parsed.ok) {
+      return {
+        agent: 'hermes',
+        state: 'error',
+        configPath,
+        managedHooksPresent: getPluginFilesState().managed,
+        detail: `Could not parse Hermes config.yaml: ${parsed.detail}`
+      }
+    }
+    const next = updateConfigContent(parsed.content, disablePlugin)
     if (next.content === null) {
       return {
         agent: 'hermes',
@@ -151,11 +174,13 @@ export class HermesHookService {
         detail: `Could not update Hermes config.yaml: ${next.detail ?? 'unknown error'}`
       }
     }
+    if (next.content !== parsed.content) {
+      writeConfigFile(configPath, next.content)
+    }
     const pluginDir = getPluginDir()
     if (getPluginFilesState(pluginDir).managed) {
       rmSync(pluginDir, { recursive: true, force: true })
     }
-    writeConfigFile(configPath, next.content)
     return this.getStatus()
   }
 }

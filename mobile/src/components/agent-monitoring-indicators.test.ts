@@ -3,12 +3,14 @@ import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSpinner } from './AgentSpinner'
 import { AgentStateDot } from './AgentStateDot'
+import { colors } from '../theme/mobile-theme'
 
 const DESKTOP_WORKING_COLOR = '#eab308'
 
 type MonitoringTestRenderer = {
   readonly root: {
     findByType(type: string): { props: Record<string, unknown> }
+    findAllByType(type: string): { props: Record<string, unknown> }[]
   }
   unmount(): void
 }
@@ -83,5 +85,18 @@ describe('mobile monitoring indicators', () => {
 
     expect(animationTiming).toHaveBeenCalledOnce()
     expect(animationLoop).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    // A user's Stop is not news: muted, never the fault red a failure draws.
+    ['interrupted', colors.textMuted],
+    ['failed', '#ef4444']
+  ] as const)('draws %s with its own dot colour', async (state, color) => {
+    await act(async () => {
+      renderer = create(createElement(AgentStateDot, { state }))
+    })
+
+    const dot = renderer?.root.findAllByType('View').find((view) => Array.isArray(view.props.style))
+    expect(dot?.props.style).toContainEqual({ backgroundColor: color })
   })
 })

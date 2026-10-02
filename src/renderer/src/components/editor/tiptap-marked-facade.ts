@@ -1,3 +1,4 @@
+import { getMarkdownTokenizerStartMarker } from './markdown-tokenizer-start'
 import {
   Hooks,
   Lexer,
@@ -19,6 +20,27 @@ export function createTiptapMarkedFacade(): typeof marked {
   // Why: Tiptap 3.22.5 registers on the injected instance but parses with
   // `new instance.Lexer()`, so the constructor must retain the private registry.
   class RegistryLexer extends Lexer {
+    private readonly registeredExtensions = this.options.extensions
+    blockTokens(source: string, tokens?: TokensList, lastParagraphClipped?: boolean): TokensList
+    blockTokens(source: string, tokens?: Token[], lastParagraphClipped?: boolean): Token[]
+    blockTokens(source: string, tokens?: Token[], lastParagraphClipped?: boolean): Token[] {
+      const previousExtensions = this.options.extensions
+      const extensions = this.registeredExtensions
+      if (!extensions?.startBlock) {
+        return super.blockTokens(source, tokens, lastParagraphClipped)
+      }
+      const startBlock = extensions.startBlock.filter((start) => {
+        const marker = getMarkdownTokenizerStartMarker(start)
+        return !marker || source.includes(marker)
+      })
+      this.options.extensions = { ...extensions, startBlock }
+      try {
+        return super.blockTokens(source, tokens, lastParagraphClipped)
+      } finally {
+        this.options.extensions = previousExtensions
+      }
+    }
+
     constructor(options?: MarkedOptions) {
       super({
         ...registry.defaults,
@@ -32,7 +54,8 @@ export function createTiptapMarkedFacade(): typeof marked {
   const lexer = (src: string, options?: MarkedOptions): TokensList =>
     new RegistryLexer(options).lex(src)
   const facade = new Proxy(marked, {
-    apply: (_target, _thisArg, args) => Reflect.apply(registry.parse, registry, args),
+    apply: (_target, _thisArg, args: [src: string, options?: MarkedOptions | null]) =>
+      registry.parse(...args),
     get: (target, property, receiver) => {
       switch (property) {
         case 'defaults':
@@ -73,6 +96,7 @@ export function createTiptapMarkedFacade(): typeof marked {
             return facade
           }
         default:
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, property, receiver)
       }
     }

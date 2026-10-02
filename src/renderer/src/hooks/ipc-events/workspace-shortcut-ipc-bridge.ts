@@ -93,11 +93,10 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       const visibleTargets = getVisibleWorktreeShortcutTargets()
       const target = visibleTargets[index]
       if (target) {
-        if (target.executionHostId) {
-          activateAndRevealWorkspace(target.id, { executionHostId: target.executionHostId })
-        } else {
-          activateAndRevealWorkspace(target.id)
-        }
+        activateAndRevealWorkspace(target.id, {
+          navigationIntent: 'user-open',
+          ...(target.executionHostId ? { executionHostId: target.executionHostId } : {})
+        })
       }
     })
   )

@@ -70,7 +70,8 @@ describe('resolving a structured worker takeover by session', () => {
 
   it('answers nothing for a session this runtime no longer owns', () => {
     registerWorker()
-    installRecord({ runtimeKind: 'tui', claimStatus: 'live' })
+    // How a terminal owner an older build recorded loads.
+    installRecord({ runtimeKind: 'native', claimStatus: 'conflicted' })
     expect(runtime().getStructuredWorkerPaneKeyForSession(SESSION_ID)).toBeNull()
   })
 

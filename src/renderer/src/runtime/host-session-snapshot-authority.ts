@@ -9,6 +9,10 @@ type ClientHostedPagePublication = SnapshotPublication & {
   clientHostedPagesUnreconciled?: true
 }
 
+type AgentSessionPublication = SnapshotPublication & {
+  agentSessionsUnverifiable?: true
+}
+
 /**
  * Whether a session-tabs snapshot carries the host's answer about a worktree at all.
  *
@@ -41,4 +45,16 @@ export function hostSnapshotAffirmsClientHostedPages(
   snapshot: ClientHostedPagePublication
 ): boolean {
   return hostSnapshotAffirmsWorktreeContents(snapshot) && !snapshot.clientHostedPagesUnreconciled
+}
+
+/**
+ * Whether a snapshot's `agent-session` rows are the host's answer about which chats exist.
+ *
+ * Narrower than {@link hostSnapshotAffirmsWorktreeContents} for the same reason as client-hosted
+ * pages: a runtime whose chat journal will not open is authoritative about terminals but cannot
+ * list a single chat. Its empty chat set is "cannot tell", and culling on it would delete tabs
+ * whose chats are safe on disk.
+ */
+export function hostSnapshotAffirmsAgentSessions(snapshot: AgentSessionPublication): boolean {
+  return hostSnapshotAffirmsWorktreeContents(snapshot) && !snapshot.agentSessionsUnverifiable
 }

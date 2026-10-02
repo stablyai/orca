@@ -4,14 +4,14 @@ import {
   gitGenerateCommitMessageRun,
   type MobileGenerateCommitMessageResult
 } from './mobile-git-mutation-operations'
-import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 export type { MobileGenerateCommitMessageResult }
 
 // A refusal or a malformed payload collapses to { success:false } so the caller never has to
 // special-case either; the operation's reader owns the payload half of that.
 export async function requestMobileCommitMessage(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string
 ): Promise<MobileGenerateCommitMessageResult> {
   const reply = await gitGenerateCommitMessageRun.request(client, {
@@ -28,7 +28,7 @@ export async function requestMobileCommitMessage(
 }
 
 export async function cancelMobileCommitMessage(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string
 ): Promise<void> {
   const reply = await gitCancelGenerateCommitMessageRun.request(client, {

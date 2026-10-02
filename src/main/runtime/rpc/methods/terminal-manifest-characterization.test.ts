@@ -21,6 +21,7 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.agentStatus', { terminal: 'term' }, false],
   ['terminal.rename', { terminal: 'term', title: null }, false],
   ['terminal.clearBuffer', { terminal: 'term' }, false],
+  ['terminal.resetInputModes', { terminal: 'term' }, false],
   ['terminal.send', { terminal: 'term', text: 'x' }, false],
   ['terminal.wait', { terminal: 'term', for: 'exit' }, false],
   ['terminal.create', {}, false],
@@ -47,7 +48,8 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.subscribe', { terminal: 'term' }, true],
   ['terminal.unsubscribe', { subscriptionId: 'term' }, false],
   ['terminal.getAutoRestoreFit', {}, false],
-  ['terminal.setAutoRestoreFit', { ms: null }, false]
+  ['terminal.setAutoRestoreFit', { ms: null }, false],
+  ['terminal.setViewerColors', { colors: { foreground: '#ffffff', background: '#000000' } }, false]
 ]
 
 function schemaFor(name: string) {
@@ -67,11 +69,11 @@ async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntim
 
 describe('terminal RPC manifest characterization', () => {
   it('preserves all method names, order, streaming flags, and parseable minimum inputs', () => {
-    expect(TERMINAL_METHODS).toHaveLength(35)
+    expect(TERMINAL_METHODS).toHaveLength(37)
     expect(TERMINAL_METHODS.map((method) => [method.name, 'stream' in method])).toEqual(
       METHOD_CASES.map(([name, _params, stream]) => [name, stream])
     )
-    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(35)
+    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(37)
     for (const [name, params] of METHOD_CASES) {
       expect(() => schemaFor(name).parse(params), name).not.toThrow()
     }
@@ -91,9 +93,16 @@ describe('terminal RPC manifest characterization', () => {
       schemaFor('terminal.updateViewport').parse({
         terminal: 'term',
         client: { id: 'client' },
-        viewport: { cols: 241, rows: 120 }
+        viewport: { cols: 1025, rows: 120 }
       })
     ).toThrow()
+    expect(() =>
+      schemaFor('terminal.updateViewport').parse({
+        terminal: 'term',
+        client: { id: 'client' },
+        viewport: { cols: 1024, rows: 120 }
+      })
+    ).not.toThrow()
     expect(() =>
       schemaFor('terminal.subscribe').parse({
         terminal: 'term',

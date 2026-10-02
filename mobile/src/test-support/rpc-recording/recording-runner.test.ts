@@ -1,17 +1,25 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { operationModuleLoader } from './operation-module-loader'
 import { describe, expect, it } from 'vitest'
 import { captureArguments, captureError, captureValue } from './recording-values'
-import { RECORDER_DIRECTORY, recorderSha256 } from './recorder-digest'
+import { RECORDING_DRIVERS } from './recording-drivers'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import {
   compareGolden,
+  expectGoldenFile,
   GOLDEN_FORMAT_VERSION,
   goldenBytes,
-  PROJECTION_VERSION,
   readGolden,
   writeGolden,
   type GoldenRecording
@@ -38,7 +46,7 @@ describe('recording boundaries', () => {
 
   it('runs the actual stable-client projection and physical serialization', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const result = transport.client.sendRequest(
@@ -71,7 +79,7 @@ describe('recording boundaries', () => {
 
   it('requires logical bindings plus matching params for concurrent same-method calls', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const left = transport.client.sendRequest('files.list', { worktree: 'A' })
@@ -97,7 +105,7 @@ describe('recording boundaries', () => {
 
   it('records actual deadline ambiguity and leaves peers pending before their deadlines', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       void transport.client.sendRequest('short', {}, { timeoutMs: 5 }).catch(() => {})
@@ -122,34 +130,79 @@ describe('recording boundaries', () => {
     }
   })
 
-  it('never writes from candidate mode and requires both recording authorizations', async () => {
+  it('writes only in record mode and names the command for a missing or stale golden', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'rpc-recording-'))
     const golden = sampleGolden('test')
-    const previous = process.env.RPC_FOUNDATION_RECORD
     try {
-      process.env.RPC_FOUNDATION_RECORD = '0'
-      await expect(writeGolden(directory, golden, '--record')).rejects.toThrow('require')
-      process.env.RPC_FOUNDATION_RECORD = '1'
       await expect(writeGolden(directory, golden, 'candidate')).rejects.toThrow('require')
       await writeGolden(directory, golden, '--record')
       expect(readGolden(directory, 'test')).toEqual(golden)
       expect(() => readGolden(directory, '../escape')).toThrow('Unsafe')
+      expect(() => readGolden(directory, 'absent')).toThrow(
+        'No golden recorded for absent. Record it: pnpm --dir mobile rpc:record absent'
+      )
       writeFileSync(
         join(directory, 'stale.json'),
         JSON.stringify({
           ...JSON.parse(readFileSync(join(directory, 'test.json'), 'utf8')),
-          goldenFormatVersion: 1
+          goldenFormatVersion: 5
         })
       )
       expect(() => readGolden(directory, 'stale')).toThrow(
-        `format version 1; this reader requires ${GOLDEN_FORMAT_VERSION}`
+        `format version 5; this reader requires ${GOLDEN_FORMAT_VERSION}`
       )
     } finally {
-      if (previous === undefined) {
-        delete process.env.RPC_FOUNDATION_RECORD
-      } else {
-        process.env.RPC_FOUNDATION_RECORD = previous
-      }
+      rmSync(directory, { recursive: true })
+    }
+  })
+
+  it('replays only a file that is exactly what rpc:record writes for the run', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'rpc-recording-'))
+    const golden = sampleGolden('exact')
+    const path = join(directory, 'exact.json')
+    try {
+      await writeGolden(directory, golden, '--record')
+      const written = readFileSync(path, 'utf8')
+      await expectGoldenFile(directory, 'exact', golden)
+      const sameRecording =
+        /holds the same recording but is not the file rpc:record writes for it[\s\S]*pnpm --dir mobile rpc:record exact/
+      // Each edit below decodes to the same recording, so only the file text can catch it.
+      writeFileSync(path, written.replace('{\n', '{\n  "baseline": "abc123",\n'))
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(sameRecording)
+      writeFileSync(
+        path,
+        written.replace(
+          '"goldenFormatVersion": 6,\n  "operation": "op",',
+          '"operation": "op",\n  "goldenFormatVersion": 6,'
+        )
+      )
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(sameRecording)
+      const file = goldenFile(golden)
+      writeFileSync(
+        path,
+        JSON.stringify({ ...file, values: { ...file.values, [valueHash('unread')]: 'unread' } })
+      )
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(
+        /Golden exact: Golden pool holds unreferenced values[\s\S]*pnpm --dir mobile rpc:record exact/
+      )
+      writeFileSync(path, written.replace('"idle"', '"edited"'))
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(
+        /does not hash to its pool key[\s\S]*pnpm --dir mobile rpc:record exact/
+      )
+      writeFileSync(path, written.slice(0, -10))
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(
+        /Golden exact: [\s\S]*pnpm --dir mobile rpc:record exact/
+      )
+      writeFileSync(path, written)
+      const moved = sampleGolden('exact')
+      moved.recording.checkpoints[0]!.observation.state = { phase: 'busy' }
+      await expect(expectGoldenFile(directory, 'exact', moved)).rejects.toThrow(
+        /Recording differs: exact\n {2}checkpoint settled field state\.phase/
+      )
+      await expect(expectGoldenFile(directory, 'absent', sampleGolden('absent'))).rejects.toThrow(
+        'No golden recorded for absent'
+      )
+    } finally {
       rmSync(directory, { recursive: true })
     }
   })
@@ -225,27 +278,48 @@ describe('recording boundaries', () => {
     const actual = sampleGolden('diffable')
     actual.recording.checkpoints[0]!.observation.state = { phase: 'busy' }
     expect(() => compareGolden(expected, actual)).toThrow(
-      /Recording differs: diffable checkpoint settled field state\.phase[\s\S]*"idle"[\s\S]*"busy"/
+      /Recording differs: diffable\n {2}checkpoint settled field state\.phase\n[\s\S]*"idle"[\s\S]*"busy"[\s\S]*pnpm --dir mobile rpc:record diffable/
     )
   })
 
-  it('accepts a dependency bump but still refuses a different baseline', () => {
-    const expected = sampleGolden('provenance')
-    const bumped = sampleGolden('provenance')
-    bumped.lockfileSha256 = 'd'.repeat(64)
-    expect(() => compareGolden(expected, bumped)).not.toThrow()
-    const rebased = sampleGolden('provenance')
-    rebased.baseline = 'e'.repeat(40)
-    expect(() => compareGolden(expected, rebased)).toThrow(
-      /Recording differs: provenance header baseline/
+  it('reports every difference at once, identity fields by name', () => {
+    const expected = sampleGolden('several')
+    expected.recording.checkpoints.push({ id: 'later', observation: observation('idle') })
+    const actual = sampleGolden('several')
+    actual.family = 'moved'
+    actual.namedDeltas = ['delta']
+    actual.recording.checkpoints.push({ id: 'later', observation: observation('done') })
+    actual.recording.checkpoints[0]!.observation.effects = [{ name: 'extra' }]
+    let message = ''
+    try {
+      compareGolden(expected, actual)
+    } catch (error) {
+      message = String(error)
+    }
+    expect(message).toContain('family\n    expected "op"\n    actual   "moved"')
+    expect(message).toContain('namedDeltas\n    expected []\n    actual   ["delta"]')
+    expect(message).toContain('checkpoint settled field effects')
+    expect(message).toContain('checkpoint later field state.phase')
+  })
+
+  it('names a checkpoint list that moved, and lets the bytes decide when every field agrees', () => {
+    const expected = sampleGolden('listed')
+    const dropped = sampleGolden('listed')
+    dropped.recording.checkpoints = []
+    expect(() => compareGolden(expected, dropped)).toThrow(
+      /checkpoint list\n {4}no longer recorded: settled/
     )
+    const reordered = sampleGolden('listed')
+    reordered.recording.checkpoints[0]!.observation.state = { phase: 'idle', at: 1 }
+    const keyOrder = sampleGolden('listed')
+    keyOrder.recording.checkpoints[0]!.observation.state = { at: 1, phase: 'idle' }
+    expect(() => compareGolden(reordered, keyOrder)).toThrow(/encoding: every field matches/)
   })
 
   it('records a shared prefix once and refuses a variant that already diverged', () => {
     const base: RecordingScenario = {
       id: 'family',
       operation: 'op',
-      version: 1,
       family: 'op',
       sites: [],
       schedules: [],
@@ -289,7 +363,6 @@ describe('recording boundaries', () => {
     const base: RecordingScenario = {
       id: 'family',
       operation: 'op',
-      version: 1,
       family: 'op',
       sites: [],
       schedules: [],
@@ -315,7 +388,6 @@ describe('recording boundaries', () => {
     const scenario = (reply: unknown): RecordingScenario => ({
       id: 'family',
       operation: 'op',
-      version: 1,
       family: 'op',
       sites: [],
       schedules: [],
@@ -357,7 +429,6 @@ describe('recording boundaries', () => {
         {
           id: 'drift',
           operation: 'op',
-          version: 1,
           family: 'op',
           sites: [],
           schedules: [],
@@ -385,35 +456,88 @@ describe('recording boundaries', () => {
     })
   })
 
-  it('digests every executable recorder input and ignores prose', () => {
-    const root = mkdtempSync(join(tmpdir(), 'rpc-recorder-'))
-    try {
-      const directory = join(root, RECORDER_DIRECTORY)
-      mkdirSync(directory, { recursive: true })
-      mkdirSync(join(root, 'mobile/rpc-foundation'), { recursive: true })
-      writeFileSync(join(root, 'mobile/rpc-foundation/pilot-scenarios.json'), '{}')
-      writeFileSync(join(directory, 'runner.ts'), 'export const runner = 1')
-      const original = recorderSha256(root)
-      writeFileSync(join(directory, 'README.md'), 'prose')
-      expect(recorderSha256(join(root, '.'))).toBe(original)
-      writeFileSync(join(directory, 'runner.ts'), 'export const runner = 2')
-      expect(recorderSha256(join(root, './'))).not.toBe(original)
-    } finally {
-      rmSync(root, { recursive: true })
+  it('keeps every named driver real and unimported by the engine', () => {
+    const directory = resolve(import.meta.dirname)
+    const missing = RECORDING_DRIVERS.filter((driver) => !existsSync(join(directory, driver)))
+    const imported = readdirSync(directory)
+      .filter((file) => file.endsWith('.ts'))
+      .filter((file) =>
+        /(?:from|import\()\s*'\.[^']*\.test'/.test(readFileSync(join(directory, file), 'utf8'))
+      )
+    expect({ missing, imported }).toEqual({ missing: [], imported: [] })
+  })
+
+  it('stamps a write ordinal that moves when a subscribe is reordered against a send', async () => {
+    const subscribeFirst = await payloadsFrom((client) => {
+      client.subscribe(CLIENT_EVENTS, null, () => {})
+      void client.sendRequest('worktree.show', {}).catch(() => {})
+    })
+    const sendFirst = await payloadsFrom((client) => {
+      void client.sendRequest('worktree.show', {}).catch(() => {})
+      client.subscribe(CLIENT_EVENTS, null, () => {})
+    })
+    // The published order is identical either way, because a subscribe publishes synchronously
+    // while a request first waits for connected. Without the ordinal the swap moves no recorded
+    // byte; the send takes its ordinal at the logical call, before the payload it publishes later.
+    expect(sendFirst.map((payload) => payload.name)).toEqual(
+      subscribeFirst.map((payload) => payload.name)
+    )
+    expect(subscribeFirst.map((payload) => payload.ordinal)).toEqual([1, 3])
+    expect(sendFirst.map((payload) => payload.ordinal)).toEqual([2, 3])
+  })
+
+  it('orders a subscribe against an effect in an operation that sends no requests', async () => {
+    // The gap the request count left: with no request to count, every stamp was `0`, so the two
+    // independent lists had nothing ordering them against each other.
+    const drive = async (subscribeFirst: boolean): Promise<RecordedValue> => {
+      const recording = await runRecording(
+        {
+          id: 'request-free',
+          operation: 'op',
+          family: 'op',
+          sites: [],
+          schedules: [],
+          steps: [{ action: 'mount', id: 'mount' }, { checkpoint: 'settled' }]
+        },
+        ({ client, effect }) => ({
+          action: () => {
+            if (subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+            effect('device.write', { key: 'seen' })
+            if (!subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+          },
+          state: () => ({}),
+          dispose: () => {}
+        }),
+        vitestRecordingScheduler()
+      )
+      const observed = recording.checkpoints[0]!.observation
+      return { payloads: observed.payloads, effects: observed.effects }
     }
+    expect(await drive(true)).not.toEqual(await drive(false))
   })
 
   it('refuses a mutation anchor that matches more than once', () => {
     const root = mkdtempSync(join(tmpdir(), 'rpc-mutant-'))
     try {
       const anchor =
-        "const overrides = settings == null ? undefined : Reflect.get(Object(settings), 'prBotAuthorOverrides')"
+        "const overrides = settings == null ? undefined : settingsField(settings, 'prBotAuthorOverrides')"
       mkdirSync(join(root, 'mod'), { recursive: true })
       writeFileSync(
         join(root, 'mod/settings-read-operations.ts'),
         `const raw = {} as { settings?: unknown }\nconst settings = raw.settings\nexport function first() {\n  ${anchor}\n  return overrides\n}\nexport function second() {\n  ${anchor}\n  return overrides\n}\n`
       )
-      const loader = operationModuleLoader(root, 'bot-overrides-envelope')
+      // Its own spec, not one borrowed from the mutant table: the guard is the loader's, and the
+      // table is not an input to anything the loader does while recording.
+      const loader = operationModuleLoader(root, {
+        name: 'repeated-anchor',
+        file: 'settings-read-operations.ts',
+        before: anchor,
+        after: 'const overrides = undefined'
+      })
       expect(() => loader.load('mod/settings-read-operations.ts')).toThrow(
         'matched 2 sites, expected 1'
       )
@@ -422,6 +546,26 @@ describe('recording boundaries', () => {
     }
   })
 })
+
+const CLIENT_EVENTS = 'runtime.clientEvents.subscribe'
+
+/** The payloads one scripted client publishes, with the transport torn down either way. */
+async function payloadsFrom(
+  drive: (client: ScriptedRpcTransport['client']) => void
+): Promise<ScriptedRpcTransport['payloads']> {
+  const clock = vitestRecordingScheduler()
+  await clock.start()
+  const transport = new ScriptedRpcTransport(clock.elapsed)
+  try {
+    drive(transport.client)
+    await clock.flush()
+    return [...transport.payloads]
+  } finally {
+    transport.dispose()
+    await clock.flush()
+    clock.stop()
+  }
+}
 
 function entryHash(name: string): string {
   return valueHash({ name })
@@ -459,17 +603,10 @@ function observation(phase: string): Observation {
 
 function sampleGolden(id: string): GoldenRecording {
   return {
+    goldenFormatVersion: GOLDEN_FORMAT_VERSION,
     operation: 'op',
     family: 'op',
     namedDeltas: [],
-    runnerVersion: 1,
-    baseline: 'a'.repeat(40),
-    lockfileSha256: 'b'.repeat(64),
-    recorderSha256: 'c'.repeat(64),
-    platform: process.platform,
-    scenarioVersion: 1,
-    projectionVersion: PROJECTION_VERSION,
-    goldenFormatVersion: GOLDEN_FORMAT_VERSION,
     recording: { scenario: id, checkpoints: [{ id: 'settled', observation: observation('idle') }] }
   }
 }

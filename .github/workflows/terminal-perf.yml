@@ -55,6 +55,7 @@ jobs:
     timeout-minutes: 45
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_BACKGROUND_LAUNCH: '1'
       ORCA_E2E_FORWARD_APP_LOGS: '1'
       ORCA_E2E_TERMINAL_PERF_REPORT_PATH: ${{ inputs.report_path || 'test-results/terminal-scale-perf-report.json' }}
 
@@ -128,7 +129,7 @@ jobs:
           if [ -n "${ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES:-}" ]; then
             export ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES="$ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES"
           fi
-          xvfb-run --auto-servernum env SKIP_BUILD=1 pnpm run test:e2e:terminal-perf:scale:report -- "${args[@]}"
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_TERMINAL_PERF_XVFB=1 pnpm run test:e2e:terminal-perf:scale:report -- "${args[@]}"
 
       - name: Upload terminal perf report
         if: always()

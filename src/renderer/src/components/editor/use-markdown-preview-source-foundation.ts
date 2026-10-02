@@ -6,12 +6,14 @@ import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-images'
+import type { MarkdownPreviewSearchInstance } from './markdown-preview-search'
 import {
   deriveMarkdownPreviewSourceRoot,
   findMarkdownPreviewSourceOpenFile,
   getMarkdownPreviewSourceRelativePath,
   resolveMarkdownPreviewSourceWorktree
 } from './markdown-preview-source-routing'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 
 export function useMarkdownPreviewSourceFoundation({
@@ -40,7 +42,7 @@ export function useMarkdownPreviewSourceFoundation({
     input.select()
   }, [])
   const matchesRef = useRef<Range[]>([])
-  const searchInstanceRef = useRef<object>({})
+  const searchInstanceRef = useRef<MarkdownPreviewSearchInstance>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
   const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -142,9 +144,7 @@ export function useMarkdownPreviewSourceFoundation({
   )
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const isDark = useDocumentDarkTheme()
 
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
 

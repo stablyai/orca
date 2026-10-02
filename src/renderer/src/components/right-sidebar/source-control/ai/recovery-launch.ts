@@ -7,7 +7,7 @@ import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
-} from '@/lib/source-control-launch-agent-selection'
+} from '../../../../../../shared/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../../../shared/tui-agent-selection'
 import type {
   SourceControlActionRecipe,
@@ -170,8 +170,8 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  if (result.tabId) {
-    focusTerminalTabSurface(result.tabId)
+  if (result.surface.kind === 'local-terminal') {
+    focusTerminalTabSurface(result.surface.tabId)
   }
   toast.success(copy.success)
   return true

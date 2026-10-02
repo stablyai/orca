@@ -62,8 +62,8 @@ function installHost(options: {
   /**
    * Sessions this host is not holding, so they observe `unverifiable` rather than `live`.
    *
-   * The everyday shape, not an edge case: the provider child belongs to the VISIBLE pane, so any
-   * chat outside the active workspace has already been evicted by the release clock.
+   * The everyday shape, not an edge case: the idle sweep has already put to rest any chat quiet for
+   * its window, on screen or not.
    */
   detached?: Set<string>
   /**
@@ -89,7 +89,13 @@ function installHost(options: {
     }
   }
   hostRef.current = {
-    deps: { store: { listRecords: () => options.records, getRecord: () => null } },
+    deps: {
+      store: {
+        listRecords: () => options.records,
+        getRecord: () => null,
+        getSessionTabId: (sessionId: string) => (visible.has(sessionId) ? `tab-${sessionId}` : null)
+      }
+    },
     hasSession: (sessionId: string) => held.has(sessionId),
     getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...visible] }),
     setSessionTabVisibility: async (sessionId: string, isVisible: boolean) => {
@@ -144,7 +150,10 @@ function destructiveDeps(extra: { allowUnverifiedStop?: boolean; timeoutMs?: num
   }
 }
 
-function runtimeDouble(hooks: object): TeardownRuntime {
+/** Keys are pinned to the real runtime; each stub narrows its own args to what the case drives. */
+type TeardownRuntimeStubs = Partial<Record<keyof TeardownRuntime, unknown>>
+
+function runtimeDouble(hooks: TeardownRuntimeStubs): TeardownRuntime {
   return Object.assign(Object.create(null), hooks)
 }
 

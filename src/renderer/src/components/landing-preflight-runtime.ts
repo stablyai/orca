@@ -2,6 +2,10 @@ import { useEffect, useMemo } from 'react'
 import { useAppStore } from '../store'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
+import {
   getLandingPreflightIssues,
   hasGitHubBackedProject,
   type PreflightIssue
@@ -18,10 +22,13 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
       return 'local'
     }
     const runtimeStatus = s.runtimeStatusByEnvironmentId.get(environmentId)
+    // Why the shared verdict and not `entry.status`: an unverifiable probe nulls it while the
+    // transport is still up, and reading that as unreachable discarded the whole preflight
+    // result for a host that never went away (docs/reference/ssh-execution-boundary.md).
     const reachability = runtimeStatus
-      ? runtimeStatus.status === null
-        ? 'unreachable'
-        : 'reachable'
+      ? isConnectedRuntimeHostState(runtimeHostConnectionStateForEntry(runtimeStatus))
+        ? 'reachable'
+        : 'unreachable'
       : 'unknown'
     return `${environmentId}:${runtimeStatus?.connectionGeneration ?? 0}:${reachability}`
   })

@@ -142,3 +142,31 @@ it('does not cut a snippet at a private-use code point the transcript wrote', as
   )
   expect(snippet).toContain('qqqqq')
 })
+
+it('marks a phrase hit as one run, stop words included', async () => {
+  harness = await openSessionSearchHarness('ss-snippet-phrase-run')
+  addSyntheticSession(harness.db, {
+    id: 1,
+    text: 'Agent: the code already has several fixes for blank restores, including replaying'
+  })
+
+  const result = harness.engine.search({ query: 'the code already has several fixes' })
+  expect(result.planner.route).toBe('phrase')
+  expect(result.hits[0]?.evidence?.snippet).toContain(
+    `${SESSION_SEARCH_SNIPPET_MARK_OPEN}the code already has several fixes${SESSION_SEARCH_SNIPPET_MARK_CLOSE}`
+  )
+})
+
+it('marks every typed word of an AND hit, stop words included', async () => {
+  harness = await openSessionSearchHarness('ss-snippet-and-words')
+  addSyntheticSession(harness.db, { id: 1, text: 'fixes for the restore path, several of them' })
+
+  const result = harness.engine.search({ query: 'several fixes for the restore' })
+  expect(result.planner.route).toBe('and')
+  const snippet = result.hits[0]?.evidence?.snippet ?? ''
+  for (const word of ['several', 'fixes', 'for', 'the', 'restore']) {
+    expect(snippet).toContain(
+      `${SESSION_SEARCH_SNIPPET_MARK_OPEN}${word}${SESSION_SEARCH_SNIPPET_MARK_CLOSE}`
+    )
+  }
+})

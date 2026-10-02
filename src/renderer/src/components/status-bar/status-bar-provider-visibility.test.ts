@@ -75,7 +75,9 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     minimaxApiKeyConfigured: false,
+    opencodeGoApiKeyConfigured: false,
     grokAuthConfigured: false,
+    cursorAuthConfigured: false,
     ...overrides
   }
 }
@@ -123,11 +125,19 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
-    // Why: antigravity durability requires the Gemini OAuth opt-in; the
-    // checked item alone must not suppress the usage setup CTA.
-    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(
-      false
-    )
+    // Why: the checked item + PATH detection is durable on its own — the
+    // snapshot comes from the `agy` CLI probe and needs no Gemini OAuth.
+    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
+    // Why: an OPENCODE_API_KEY or a key OpenCode saved on /connect is invisible
+    // to the renderer, so main's presence flag is the only durable signal.
+    expect(hasUsageProviderSettings(usageSettings({ opencodeGoApiKeyConfigured: true }))).toBe(true)
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'opencode-go',
+        usageSettings({ opencodeGoApiKeyConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('opencode-go', usageSettings())).toBe(false)
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
@@ -163,21 +173,15 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
   })
 
-  it('requires both a checked Antigravity item and Gemini OAuth as the durable Antigravity signal', () => {
-    expect(
-      hasUsageProviderSettingsForProvider(
-        'antigravity',
-        usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
-      )
-    ).toBe(true)
-    // Why: the snapshot mirrors the Gemini fetch — without the OAuth opt-in it
-    // is permanently unavailable, so the checked item alone is not durable.
+  it('treats the checked Antigravity item as the durable Antigravity signal', () => {
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
         usageSettings({ antigravityUsageConfigured: true })
       )
-    ).toBe(false)
+    ).toBe(true)
+    // Why no Gemini OAuth term: the snapshot comes from the `agy` CLI probe, so
+    // the OAuth opt-in says nothing about Antigravity.
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
@@ -345,11 +349,11 @@ describe('getVisibleUsageProvider', () => {
     ).toBe(null)
   })
 
-  it('keeps Antigravity visible while the snapshot is pending when checked and Gemini OAuth is on', () => {
+  it('keeps Antigravity visible from the checked item alone while the snapshot is pending', () => {
     const visible = getVisibleUsageProvider(
       'antigravity',
       null,
-      usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+      usageSettings({ antigravityUsageConfigured: true })
     )
     expect(visible).toMatchObject({
       provider: 'antigravity',
@@ -359,30 +363,50 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
-  it('hides Antigravity while Gemini OAuth is off even when its status item is checked', () => {
-    // Why: without the OAuth opt-in the mirrored snapshot is permanently
-    // 'unavailable'; the default-on item must not pin a dead bar.
+  it('hides Antigravity when its status item is unchecked', () => {
+    // Why: without the checked item there is no durable signal, so an unavailable
+    // snapshot (e.g. a signed-out agy) must not pin a bar the user never asked for.
+    expect(getVisibleUsageProvider('antigravity', null, usageSettings())).toBe(null)
     expect(
       getVisibleUsageProvider(
         'antigravity',
-        null,
-        usageSettings({ antigravityUsageConfigured: true })
-      )
-    ).toBe(null)
-    expect(
-      getVisibleUsageProvider(
-        'antigravity',
-        provider('unavailable', {
-          provider: 'antigravity',
-          error: 'Gemini CLI OAuth is disabled in settings'
-        }),
-        usageSettings({ antigravityUsageConfigured: true })
+        provider('unavailable', { provider: 'antigravity' }),
+        usageSettings()
       )
     ).toBe(null)
   })
 })
 
 describe('isUsageEmptyState', () => {
+  it('keeps the Cursor bar visible on a local session before the first snapshot', () => {
+    // Why: the credential lives on disk, not in settings, so main's flag is the
+    // only durable signal that the bar has an account behind it.
+    const pending = getVisibleUsageProvider(
+      'cursor',
+      null,
+      usageSettings({ cursorAuthConfigured: true })
+    )
+    expect(pending).toMatchObject({ provider: 'cursor', status: 'fetching' })
+    expect(getVisibleUsageProvider('cursor', null, usageSettings())).toBeNull()
+  })
+
+  it('hides the Cursor bar when no local session exists, even on an unavailable snapshot', () => {
+    // Why: 'unavailable' is how a signed-out host reports Cursor; without the
+    // durable flag there is no account to show a bar for.
+    const unavailable = provider('unavailable', { provider: 'cursor' })
+    expect(getVisibleUsageProvider('cursor', unavailable, usageSettings())).toBeNull()
+    // With a session on disk the row stays, so "no allowance" is explained
+    // rather than silently vanishing.
+    expect(
+      getVisibleUsageProvider('cursor', unavailable, usageSettings({ cursorAuthConfigured: true }))
+    ).toBe(unavailable)
+  })
+
+  it('keeps a failing Cursor refresh visible so the error is not silently hidden', () => {
+    const failing = provider('error', { provider: 'cursor' })
+    expect(getVisibleUsageProvider('cursor', failing, usageSettings())).toBe(failing)
+  })
+
   it('waits for provider snapshots before showing the setup CTA', () => {
     expect(isUsageEmptyState(createEmptyRateLimitState(), usageSettings())).toBe(false)
   })
@@ -398,7 +422,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: undefined,
           minimax: undefined,
-          grok: undefined
+          grok: undefined,
+          cursor: undefined
         },
         usageSettings()
       )
@@ -416,7 +441,9 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          zcode: provider('unavailable', { provider: 'zcode' })
         },
         usageSettings()
       )
@@ -434,7 +461,9 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          zcode: provider('unavailable', { provider: 'zcode' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -457,21 +486,21 @@ describe('isUsageEmptyState', () => {
   })
 
   it('shows the setup CTA for a loaded profile with no configured usage provider', () => {
-    expect(
-      isUsageEmptyState(
-        {
-          claude: provider('unavailable', { provider: 'claude' }),
-          codex: provider('unavailable', { provider: 'codex' }),
-          gemini: provider('unavailable'),
-          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
-          kimi: provider('unavailable', { provider: 'kimi' }),
-          antigravity: null,
-          minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
-        },
-        usageSettings()
-      )
-    ).toBe(true)
+    const settledProviders = {
+      claude: provider('unavailable', { provider: 'claude' }),
+      codex: provider('unavailable', { provider: 'codex' }),
+      gemini: provider('unavailable'),
+      opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+      kimi: provider('unavailable', { provider: 'kimi' }),
+      antigravity: null,
+      minimax: provider('unavailable', { provider: 'minimax' }),
+      grok: provider('unavailable', { provider: 'grok' }),
+      cursor: provider('unavailable', { provider: 'cursor' }),
+      zcode: provider('unavailable', { provider: 'zcode' })
+    }
+    expect(isUsageEmptyState(settledProviders, usageSettings())).toBe(true)
+    expect(isUsageEmptyState({ ...settledProviders, zcode: undefined }, usageSettings())).toBe(true)
+    expect(isUsageEmptyState({ ...settledProviders, zcode: null }, usageSettings())).toBe(false)
   })
 
   it('does not show the setup CTA while checked Antigravity usage is awaiting a snapshot', () => {
@@ -485,16 +514,18 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          zcode: provider('unavailable', { provider: 'zcode' })
         },
-        usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+        usageSettings({ antigravityUsageConfigured: true })
       )
     ).toBe(false)
   })
 
-  it('still shows the setup CTA when Antigravity is checked but Gemini OAuth is off', () => {
-    // Why: the default-on Antigravity item is not configured usage on its own;
-    // it must not hide the teaching CTA from users who set nothing up.
+  it('still shows the setup CTA when no agent is detected, even with the Antigravity item checked', () => {
+    // Why: `antigravityUsageConfigured` is checked item + PATH detection, so a
+    // profile with nothing installed never counts Antigravity as set up.
     expect(
       isUsageEmptyState(
         {
@@ -505,9 +536,11 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          zcode: provider('unavailable', { provider: 'zcode' })
         },
-        usageSettings({ antigravityUsageConfigured: true })
+        usageSettings()
       )
     ).toBe(true)
   })

@@ -14,6 +14,7 @@ import {
   type GitAdmissionGrant,
   type GitAdmissionRequest
 } from './git-admission-state'
+import { resolveGitAdmissionTier } from './git-operation-executor'
 
 export type {
   GitAdmissionEvent,
@@ -30,10 +31,6 @@ export {
   ROUTE_CAP,
   ROUTE_HEADROOM
 } from './git-admission-state'
-
-function commandClass(args: readonly string[]): AdmissionClass {
-  return classifyGitCommand(args) === 'network' ? 'network' : 'general'
-}
 
 function routeKey(request: GitAdmissionRequest): string | null {
   const distro = request.wslDistro?.trim().toLowerCase()
@@ -113,7 +110,7 @@ export class GitAdmissionScheduler {
     route: string | null
     budgetKeys: readonly string[]
   } {
-    const admissionClass = commandClass(request.args)
+    const admissionClass = classifyGitCommand(request.args) === 'network' ? 'network' : 'general'
     const route = routeKey(request)
     const keys: string[] = [admissionClass]
     if (route) {
@@ -313,7 +310,7 @@ export function acquireGitAdmission(request: GitAdmissionRequest): Promise<GitAd
   if (process.env.ORCA_GIT_ADMISSION_DISABLED === '1') {
     return Promise.resolve({ queueWaitMs: 0, release: () => {} })
   }
-  return scheduler.acquire(request)
+  return scheduler.acquire({ ...request, tier: resolveGitAdmissionTier(request.tier) })
 }
 
 export function _resetGitAdmissionForTests(replacement = new GitAdmissionScheduler()): void {

@@ -51,7 +51,7 @@ describe('file RPC methods', () => {
       makeRequest('files.open', { worktree: 'id:wt-1', relativePath: 'docs/readme.md' })
     )
 
-    expect(runtime.openMobileFile).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md')
+    expect(runtime.openMobileFile).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', undefined)
     expect(response).toMatchObject({
       ok: true,
       result: { kind: 'markdown', opened: true }
@@ -78,7 +78,12 @@ describe('file RPC methods', () => {
       })
     )
 
-    expect(runtime.openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
+    expect(runtime.openMobileDiff).toHaveBeenCalledWith(
+      'id:wt-1',
+      'docs/readme.md',
+      true,
+      undefined
+    )
     expect(response).toMatchObject({
       ok: true,
       result: { kind: 'markdown', opened: true }

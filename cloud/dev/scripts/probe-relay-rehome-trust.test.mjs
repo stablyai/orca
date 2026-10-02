@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import {
   parseRehomeTrustProbeArguments,
@@ -112,15 +113,18 @@ test('fails when both trust-probe attempts return a transient 503', async () => 
   assert.equal(calls, 2)
 })
 
-test('approves the asia-east2 rehome sources and still rejects unlisted cells', () => {
-  for (const cellId of ['production-gce-c27', 'production-gce-c28', 'production-gce-c29']) {
+test('approves the asia-east2 and US 3,000 rehome sources and still rejects unlisted cells', () => {
+  for (const cellId of [
+    'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
+    'production-gce-c31', 'production-gce-c32', 'production-gce-c33'
+  ]) {
     const parsed = parseRehomeTrustProbeArguments(
       argv.map((value) => (value === 'production-gce-c7' ? cellId : value)),
       environment
     )
     assert.equal(parsed.cellId, cellId)
   }
-  for (const cellId of ['production-gce-c1', 'production-gce-c17', 'production-gce-c30']) {
+  for (const cellId of ['production-gce-c1', 'production-gce-c17', 'production-gce-c34']) {
     assert.throws(
       () =>
         parseRehomeTrustProbeArguments(
@@ -167,4 +171,32 @@ test('stops after the second wrapped transient failure', async () => {
     fetch: async () => { calls++; return Response.json({ error: 'regional_rehome_trust_probe_source_503' }, { status: 409 }) }
   }), /returned 409.*source_503/)
   assert.equal(calls, 2)
+})
+
+// The probe allowlist is the committed rehome source list, so a declared source can always probe.
+test('approves exactly the committed production rehome source cells', () => {
+  const tfvars = readFileSync(
+    new URL('../../infra/terraform/environments/production.tfvars', import.meta.url),
+    'utf8'
+  )
+  const start = tfvars.indexOf('relay_region_rehome_source_cell_ids = [')
+  const sources = new Set(
+    [...tfvars.slice(start, tfvars.indexOf(']', start)).matchAll(/"([^"]+)"/g)].map(([, cell]) => cell)
+  )
+  assert.ok(sources.has('production-gce-c33'))
+  for (let ordinal = 1; ordinal <= 40; ordinal++) {
+    const cellId = `production-gce-c${ordinal}`
+    const approved = (() => {
+      try {
+        parseRehomeTrustProbeArguments(
+          argv.map((value) => (value === 'production-gce-c7' ? cellId : value)),
+          environment
+        )
+        return true
+      } catch {
+        return false
+      }
+    })()
+    assert.equal(approved, sources.has(cellId), cellId)
+  }
 })

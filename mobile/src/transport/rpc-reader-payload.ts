@@ -25,3 +25,11 @@ export function rpcUncheckedPayloadReader<Variant extends string>(
 ): RpcCompatibleReader<unknown, Variant, unknown> {
   return (raw) => rpcReadUnchecked(variant, raw)
 }
+
+/** One property off the payload, unchecked. The shape for a call site that cast `result.field`. */
+export function rpcUncheckedMemberReader<Variant extends string>(
+  variant: Variant,
+  key: string
+): RpcCompatibleReader<unknown, Variant, unknown> {
+  return (raw) => rpcReadUnchecked(variant, rpcPayloadMember(raw, key))
+}

@@ -13,6 +13,8 @@ import {
   ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
 } from '../../shared/orchestration-compatibility-evidence'
+import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session-caller-env'
+import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
 import {
   REMOTE_ARTIFACT_INPUT_ENV,
   sshArtifactSourceKey,
@@ -131,6 +133,10 @@ export function buildHostCliEnv(args: {
   delete env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]
   delete env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]
   delete env[REMOTE_ARTIFACT_INPUT_ENV]
+  // Why: a remote command must never claim a local agent session. The host's env carries one only
+  // when Orca was launched inside a session, and identity by session id is same-host only.
+  delete env[ORCA_AGENT_SESSION_ID_ENV]
+  delete env[ORCA_STRUCTURED_SESSION_ENV]
   if (args.runtimeAuthority) {
     env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'
     env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = args.runtimeAuthority.targetId

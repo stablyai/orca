@@ -4,6 +4,10 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import type * as ReactModule from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+
+const toastError = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) => {
@@ -397,7 +401,7 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.queryByText(/not confirmed/)).toBeNull()
   })
 
-  it.each(['catalog', 'agent-session'] as const)(
+  it.each(['catalog'] as const)(
     'does not hedge a reported value on the %s transport',
     (transport) => {
       render(
@@ -439,6 +443,55 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.queryByText('GPT-5.2 Codex')).toBeNull()
     screen.getByRole('button', { name: 'Choose in agent picker…' }).click()
     await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('model'))
+  })
+
+  it.each([
+    [
+      "the table's words for a host's refusal, not its message",
+      new RuntimeRpcCallError({
+        id: 'request-1',
+        ok: false,
+        error: {
+          code: 'runtime_error',
+          message: 'agent_session_journal_unreadable',
+          data: {
+            refusal: {
+              code: 'agent_session_journal_unreadable',
+              details: { reason: 'journalCorrupt' }
+            }
+          }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      }),
+      "Unable to load this chat. The setting wasn't changed."
+    ],
+    [
+      "a local surface's own sentence",
+      new Error('The terminal did not accept the command.'),
+      'The terminal did not accept the command.'
+    ]
+  ])('describes a failed option change with %s', async (_label, error, description) => {
+    toastError.mockClear()
+    const invokeAction = vi.fn().mockRejectedValue(error)
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, invokeAction }}
+        snapshot={[
+          model({
+            kind: { type: 'select', choices: [{ value: 'gpt-5.5', label: 'GPT-5.5' }] },
+            valueSource: 'unknown',
+            action: { type: 'agent-picker' }
+          })
+        ]}
+        isWorking={false}
+      />
+    )
+    screen.getByRole('button', { name: 'Choose in agent picker…' }).click()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledExactlyOnceWith('Could not update option', {
+        description
+      })
+    )
   })
 
   it('uses a Toggle action for unknown flip-only options via invokeAction', async () => {

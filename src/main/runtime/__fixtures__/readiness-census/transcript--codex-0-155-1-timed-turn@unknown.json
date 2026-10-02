@@ -1,0 +1,17 @@
+{
+  "description": "codex recording at 120x40 replayed on the unknown pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-24: now=pending:open edge=pending:open quiet=pending:open wait=ready@poll",
+      "25-28: now=ready-strong edge=ready-strong quiet=ready-strong wait=ready@start",
+      "29-33: now=working edge=working quiet=ready-strong wait=ready@start",
+      "34-44: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "45-862: now=working edge=working quiet=ready-strong wait=ready@start",
+      "863-866: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start"
+    ],
+    "clockless": [
+      "0-24: verdict=pending:open wait=ready@poll",
+      "25-866: verdict=ready-strong wait=ready@start"
+    ]
+  }
+}

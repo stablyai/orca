@@ -100,17 +100,17 @@ export function resolveTerminalShortcutAction(
     return { type: 'switchInputSource' }
   }
 
-  // Why: held select-all keydowns must remain claimed until keyup so Kitty
-  // event reporting cannot encode their repeat or release into the PTY.
+  // Why: held select-all and copy keydowns must remain claimed until keyup so
+  // Kitty event reporting cannot encode their repeat or release into the PTY.
   if (keybindingMatchesAction('terminal.selectAll', event, platform, keybindings)) {
     return { type: 'selectAll' }
   }
 
-  if (!event.repeat) {
-    if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
-      return { type: 'copySelection' }
-    }
+  if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
+    return { type: 'copySelection' }
+  }
 
+  if (!event.repeat) {
     if (keybindingMatchesAction('terminal.search', event, platform, keybindings)) {
       return { type: 'toggleSearch' }
     }

@@ -72,6 +72,10 @@
         "af6e02c44a": "page",
         "f5a6b38a14": "sheet"
       },
+      "NativeChatResumeOnRestartModal": {
+        "continueUnconfirmed_one": "Continuation delivery is unconfirmed for {{value0}} chat. Open it to check before sending another message.",
+        "continueUnconfirmed_other": "Continuation delivery is unconfirmed for {{value0}} chats. Open them to check before sending another message."
+      },
       "NewWorkspaceComposerCard": {
         "0e587e31fb": "yaml",
         "2132b670da": "both",
@@ -324,6 +328,16 @@
           "BrowserToolbarMenu": {
             "6aa42813e4": "Imported {{value0}} cookies from {{value1}}{{value2}}."
           }
+        },
+        "profile": {
+          "user": {
+            "agent": {
+              "option": {
+                "04af3dc12b": "Use unmodified user agent",
+                "5bf47a3c91": "May improve Google sign-in, but can reduce compatibility with bot-protected sites."
+              }
+            }
+          }
         }
       },
       "contextual": {
@@ -367,10 +381,6 @@
         "EditorContent": {
           "d07e4b8553": "branch",
           "d16e037f40": "rich"
-        },
-        "IpynbViewer": {
-          "59b6cd874b": "code",
-          "ba149053d5": "markdown"
         },
         "ReviewNotesSendMenuContent": {
           "50f7e753ea": "Sending notes to active agent...",
@@ -819,6 +829,7 @@
             "424ee0e5bf": "error",
             "48a003c1b1": "Staged Changes",
             "522f44dce5": "Untracked Files",
+            "527e130b6f": "Stop generating",
             "77afaa8152": "All",
             "783a808870": "Close",
             "7a09d7f9d2": "base",
@@ -1049,17 +1060,24 @@
       },
       "settings": {
         "AccountsPane": {
+          "0023cc336e": "Paste either the raw token value (e.g.",
           "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
           "1fd1b1b6b4": "Cookie not set",
+          "338820326a": ") or the full cookie header (e.g.",
           "3455cf43fa": "Claude login.",
           "350b2a1aa7": "Use your current",
           "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
           "566d9a99ab": "_token=…; minimax_group_id_v2=…",
           "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
           "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
+          "7ce0e1907c": "). Find it in your browser's DevTools → Network → any opencode.ai request → Cookie header. OpenCode Go auth is web-based and shared across Windows and WSL terminals.",
+          "8951c5309f": "auth=Fe26.2**…",
           "9107406589": "Could not load Claude accounts.",
+          "922b51e02d": "Fe26.2**…",
+          "a7e38affcd": "Fe26.2**… token or auth=Fe26.2**… header",
           "b10cb4f696": "adding",
           "b11078a9c2": "wsl",
+          "b2b1aa936d": "Paste your opencode.ai session cookie for rate limit fetching.",
           "b43e761fe5": "MiniMax cookie update failed.",
           "b8c2905c2b": "Could not load Codex accounts.",
           "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
@@ -1129,9 +1147,11 @@
         },
         "BrowserProfileRow": {
           "7df818977e": "From",
+          "b5c0479e21": "Unmodified user agent",
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}."
         },
         "BrowserUsePane": {
+          "de9b2f32f3": "Enable",
           "e44c5d681e": "From"
         },
         "CliSection": {
@@ -1381,6 +1401,9 @@
           "updateOne": "Update server",
           "updating": "Updating servers…"
         },
+        "RepositoryGitHubAccountSection": {
+          "retry": "Retry"
+        },
         "RepositoryHooksSection": {
           "0e0dd5b9a5": "loaded",
           "32f417fe17": "text-emerald-700 dark:text-emerald-300",
@@ -1459,7 +1482,19 @@
           "a9359c8aa9": "Unknown error"
         },
         "SparsePresetSettingsSection": {
-          "68bbcd864a": "new"
+          "2d7d45e991": "Cancel",
+          "3b6f1abd3e": "e.g. web-only",
+          "3dfa765ca7": "{{value0}} directories will be saved.",
+          "623b4cf910": "Edit Preset",
+          "68bbcd864a": "new",
+          "694cc55ecb": "Saved directories are used when creating sparse worktrees for this repository.",
+          "a05bc9183f": "Save Preset",
+          "a6fcdd9e3c": "Name",
+          "b532b9c17d": "1 directory will be saved.",
+          "b9922ec194": "Cancel preset edit",
+          "c240a16f25": "Use repo-relative paths like packages/web or apps/api.",
+          "caf33029cc": "Directories",
+          "fde7ff2cc3": "packages/web shared/ui"
         },
         "SshPane": {
           "94c5284560": "Targets",
@@ -1528,6 +1563,11 @@
           "7c3bb36706": "remove",
           "e2b0ee267f": "stale"
         },
+        "accounts": {
+          "search": {
+            "d1d2ae383c": "Paste your opencode.ai session cookie for rate limit fetching."
+          }
+        },
         "agent-awake-copy": {
           "95d3031db2": "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings.",
           "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
@@ -1554,6 +1594,7 @@
             "2afd3b5858": "enable",
             "2e188c771c": "hide",
             "32836788b0": "generated title",
+            "34337ed5c7": "isolate",
             "48f84d10f1": "running",
             "52115d0d7c": "auto",
             "5784ae8c43": "rename",
@@ -1563,16 +1604,22 @@
             "66b6b82eb4": "awake",
             "6956646a1e": "title",
             "6984d4291a": "status",
+            "7e15b89f6e": "server",
             "845ad9128a": "power",
             "848dcae8d3": "generated",
             "8599603496": "done",
             "87fffe6c20": "show",
             "8a17fd6026": "stable",
             "966890236d": "name",
+            "9a84e65118": "agents overview",
+            "9f3becc4e8": "shared",
             "a6d594c17d": "install",
             "a79d266f71": "session",
             "afbf35be68": "stable session",
             "affbf130f6": "working",
+            "agent-trust-folder": "folder",
+            "agent-trust-trust": "trust",
+            "agent-trust-worktree": "worktree",
             "be59907510": "override",
             "be7ea3553b": "tab",
             "c1317fe641": "restore",
@@ -1585,6 +1632,7 @@
             "ef804b7337": "Agent Location",
             "f2932bf22b": "detected",
             "f412abbba5": "claude",
+            "ff457e1e7b": "daemon",
             "ff8de8a2ad": "display"
           }
         },
@@ -1978,6 +2026,15 @@
               }
             }
           }
+        },
+        "worktree": {
+          "card": {
+            "compact": {
+              "agents": {
+                "a128d7006b": "{{value0}} {{value1}} child {{value2}}"
+              }
+            }
+          }
         }
       },
       "skills": {
@@ -2153,7 +2210,18 @@
       },
       "sparse": {
         "SparseCheckoutPresetSelect": {
-          "bd6cec2056": "new"
+          "064c1e2d12": "Renderer UI",
+          "0e9ad9c798": "Directories",
+          "14952d451e": "{{value0}} directories",
+          "69c020eddc": "Edit preset",
+          "7c3275d307": "Edit {{value0}}",
+          "8b12c0850a": "Save",
+          "b3a500c623": "Name",
+          "bd6cec2056": "new",
+          "c7f9b3f0c1": "Off",
+          "ddbcaef7be": "src/renderer packages/ui",
+          "de8fce5854": "Cancel",
+          "e9283eb171": "1 directory"
         }
       },
       "stats": {
@@ -2437,8 +2505,16 @@
           "MobileDriverOverlay": {
             "3eed73394f": "Your keyboard is paused"
           },
+          "TerminalErrorToast": {
+            "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
+            "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again."
+          },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns."
+          },
+          "TerminalSessionStateSaveFailureDialog": {
+            "678c780a2c": "Disk space is unavailable",
+            "e2fcf07c0d": "Orca could not save this terminal session because local storage is full or not writable. Open the disk space analyzer to find workspace storage you can clean up."
           },
           "TerminalSshReconnectOverlay": {
             "connectButton": "Connect",
@@ -2535,6 +2611,14 @@
       }
     },
     "hooks": {
+      "useComposerState": {
+        "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
+        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
+      },
+      "useGlobalFileDrop": {
+        "nativeDropTempCopyFailed_one": "Orca couldn't copy {{count}} dropped file.",
+        "nativeDropTempCopyFailed_other": "Orca couldn't copy {{count}} dropped files."
+      },
       "useIpcEvents": {
         "60428567b4": "Local terminal reveal is unavailable while a remote runtime is active",
         "f6300deb8b": "New Browser Tab"
@@ -2553,6 +2637,12 @@
           }
         }
       },
+      "dropSkipReason": {
+        "missing": "No longer at its original path.",
+        "permissionDenied": "Permission denied.",
+        "symlink": "Symbolic links cannot be attached.",
+        "unsupported": "Unsupported file type."
+      },
       "terminal": {
         "shortcut": {
           "capture": {
@@ -2563,6 +2653,15 @@
         }
       },
       "worktree": {
+        "creation": {
+          "flow": {
+            "structured": {
+              "launch": {
+                "unknown": "Could not confirm whether {{value0}} chat opened. Retry to check again."
+              }
+            }
+          }
+        },
         "palette": {
           "search": {
             "0b01ff98d2": "Port",
@@ -2610,8 +2709,75 @@
   },
   "components": {
     "native-chat": {
+      "ask": {
+        "asked": "Asked:",
+        "awaiting": "Awaiting user input:",
+        "awaitingUnnamed": "Awaiting user input",
+        "questionCount": "{{value0}} questions"
+      },
       "composer": {
-        "effort": "Effort"
+        "effort": "Effort",
+        "imageUnsupported": "Image paste is not supported for this agent."
+      },
+      "failureWords": {
+        "accountSwitchInProgress": "A Claude account switch is in progress. Try again after it finishes.",
+        "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+        "attachmentAtMost": "{{agent}} accepts at most {{limit}} images in one message, so this message was not sent.",
+        "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
+        "attachmentInvalid": "An attachment on this message can't be sent to the agent.",
+        "attachmentLargerThan": "An image on this message is larger than {{size}} MB, so the message was not sent.",
+        "attachmentNoSource": "An image on this message has no file to send, so the message was not sent.",
+        "attachmentNotAFile": "An image on this message isn't a file, so the message was not sent.",
+        "attachmentTooLarge": "An image on this message is too large, so the message was not sent.",
+        "attachmentTooMany": "This message has too many images, so it was not sent.",
+        "attachmentTotalMoreThan": "The images on this message add up to more than {{size}} MB, so the message was not sent.",
+        "attachmentTotalTooLarge": "The images on this message are too large together, so the message was not sent.",
+        "attachmentUnreadable": "An attachment on this message couldn't be read, so the message was not sent.",
+        "attachmentUnsupportedType": "{{agent}} accepts only PNG, JPEG, GIF, and WebP images, so this message was not sent.",
+        "cancelUnconfirmed": "Cancellation was not confirmed.",
+        "cancelled": "This message was withdrawn before the agent started it.",
+        "chatClosed": "The chat closed before this message was sent.",
+        "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
+        "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
+        "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
+        "commandRefused": "This command didn't run.",
+        "commandRefusedTryAgain": "This command didn't run. Try it again.",
+        "compactionFailed": "Compaction failed.",
+        "compactionFailedQuoted": "Compaction failed: {{detail}}.",
+        "compactionUnconfirmed": "Compaction completion is unconfirmed.",
+        "couldNotRestart": "{{agent}} couldn't restart.",
+        "couldNotStart": "{{agent}} couldn't start.",
+        "emptyMessage": "This message is empty, so it was not sent.",
+        "historyTooLarge": "This conversation's history is too large to restore here.",
+        "hostFault": "Orca ran into a problem, so this didn't go through.",
+        "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
+        "hostRestarted": "Orca restarted before this message was sent.",
+        "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
+        "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
+        "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
+        "noTurnToStop": "{{agent}} had no turn running to stop.",
+        "notDelivered": "This message was not delivered.",
+        "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
+        "notSignedIn": "{{agent}} is not signed in for the selected account.",
+        "previousExitUnverifiable": "Orca couldn't confirm {{agent}}'s previous process ended. Messages wait to be sent until Orca confirms it has ended.",
+        "providerExitedRejection": "{{agent}} stopped before this message was sent.",
+        "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
+        "providerRateLimited": "{{agent}} is rate-limited and retrying.",
+        "providerRejected": "The provider did not accept this message.",
+        "providerRejectedQuoted": "The provider did not accept this message: {{detail}}.",
+        "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
+        "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}.",
+        "providerStartFailed": "{{agent}} stopped before it finished starting.",
+        "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
+        "runCommandAgain": "Run /{{command}} again.",
+        "sendToTryAgain": "Send your message to try again.",
+        "signInFirst": "Sign in first.",
+        "signInThenRunCommand": "Sign in, then run /{{command}} again.",
+        "signInThenSend": "Sign in, then send your message again.",
+        "stopRefused": "{{agent}} didn't stop.",
+        "stopRefusedQuoted": "{{agent}} didn't stop: {{detail}}.",
+        "theAgent": "The agent",
+        "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
       "question": {
         "other": "Other…"
@@ -2622,6 +2788,8 @@
           "title": "Start a chat with {{value0}}"
         },
         "error": {
+          "keepsTrying": "Orca keeps trying to load it.",
+          "retryingSubtitle": "The transcript could not be read. Orca keeps trying to load it.",
           "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
           "title": "Could not load conversation"
         },
@@ -2636,14 +2804,20 @@
       },
       "status": {
         "responding": "Agent is responding",
-        "thinking": "Thinking",
         "toggleDetails": "Toggle turn details",
         "workedFor": "Worked for {{value0}}",
+        "interruptedAfter": "Interrupted after {{value0}}",
+        "failedAfter": "Failed after {{value0}}",
         "workingFor": "Working for {{value0}}"
+      },
+      "subagents": {
+        "unnamed": "Subagent"
       },
       "tool": {
         "countN": "{{value0}} tool calls",
         "countOne": "1 tool call",
+        "failedCallsLabel": "Failed tool calls: {{value0}}",
+        "failedCount": "{{value0}} failed",
         "moreCalls": "+{{value0}} more",
         "ranCommandManyToolsSummary": "Ran {{commandCount}} command and used {{toolCount}} tools",
         "ranCommandOneToolSummary": "Ran {{commandCount}} command and used {{toolCount}} tool",
@@ -2656,6 +2830,58 @@
         "runningPreview": "Running {{preview}}",
         "usedManySummary": "Used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool"
+      },
+      "writeNotice": {
+        "agentRefused": "The agent turned this down.",
+        "agentStarting": "The agent is still starting.",
+        "answerFirst": "Answer the question or approval first.",
+        "backgroundTasksRunning": "Background tasks are still running.",
+        "capacity": "Orca has received too many requests in the last day.",
+        "chatNotFound": "The Orca running this chat has no record of it.",
+        "clearUnfinished": "The last /clear didn't finish.",
+        "commandRunning": "A /compact or /clear is still running.",
+        "conversationCleared": "This conversation has been cleared.",
+        "goalsUnsupported": "This agent doesn't support goals.",
+        "historyUnavailable": "Orca couldn't open this chat's history right now.",
+        "historyUnreadable": "Orca couldn't read this chat's saved history.",
+        "historyUnusable": "Unable to load this chat.",
+        "hostReconciling": "Orca is still checking on this chat after restarting.",
+        "messagesUnsettled": "A message you sent earlier hasn't been confirmed yet.",
+        "notDoneAnswer": "Your answer was not sent.",
+        "notDoneCommand": "The command didn't run.",
+        "notDoneGoal": "The goal wasn't changed.",
+        "notDoneOption": "The setting wasn't changed.",
+        "notDoneReadHistory": "This chat's history couldn't be loaded.",
+        "notDoneSend": "Your message was not sent.",
+        "notDoneStop": "The agent wasn't stopped.",
+        "notDoneStopTask": "The background task wasn't stopped.",
+        "notDoneStopTasks": "The background tasks weren't stopped.",
+        "openCurrentConversation": "Open the current conversation to continue.",
+        "optionRejected": "The agent didn't accept this setting.",
+        "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
+        "ownerUnproven": "Orca hasn't confirmed that this chat's previous agent stopped.",
+        "promptPending": "The agent is waiting for an answer to a question or approval.",
+        "questionChanged": "This question was already answered or has changed.",
+        "quitTerminalAgent": "Quit that agent to continue the chat here.",
+        "recordFailed": "Orca couldn't record it in this chat's history.",
+        "recordUnreadable": "Orca couldn't read this chat's saved state.",
+        "reopenChat": "Reopen the chat to check again.",
+        "restartFailed": "The agent couldn't restart.",
+        "savedByNewerOrca": "Chats were saved by a newer Orca.",
+        "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
+        "startNewChat": "Start a new chat to continue.",
+        "terminalAgentHoldsChat": "This chat is still open in a terminal agent.",
+        "tryAgain": "Try again.",
+        "tryAgainComposerSend": "Send it again.",
+        "turnActive": "The agent is still responding.",
+        "unreachable": "Orca couldn't reach the agent.",
+        "unsupported": "The Orca running this chat doesn't support this. Update Orca, then try again.",
+        "updateOrcaToKeepUsing": "Update Orca to keep using them.",
+        "waitForBackgroundTasks": "Wait for the background tasks to finish.",
+        "waitForCommand": "Wait for the /compact or /clear to finish.",
+        "waitForStart": "Wait for the agent to finish starting.",
+        "waitForTurn": "Wait for the agent to finish responding, or stop it.",
+        "waitMoment": "Wait a moment."
       }
     },
     "onboarding": {
@@ -2710,28 +2936,16 @@
       "subagents_one": "{{count}} subagent",
       "subagents_other": "{{count}} subagents"
     },
-    "map": {
-      "agentCount": "{{count}} agents",
-      "agentCount_one": "{{count}} agent",
-      "agentCount_other": "{{count}} agents",
-      "host": {
-        "local": "Local",
-        "remote": "Remote",
-        "ssh": "SSH",
-        "wsl": "WSL"
-      },
-      "liveContainmentMap": "Live containment map",
-      "worktreeSummary_one": "{{total}} agent · {{active}} active · {{done}} done",
-      "worktreeSummary_other": "{{total}} agents · {{active}} active · {{done}} done"
-    },
     "placeholder": {
       "description": "This is where all your agents will show up at a glance. The board is coming soon.",
       "title": "Agent dashboard"
-    },
-    "view": {
-      "board": "Dashboard",
-      "label": "Dashboard view",
-      "map": "Agent Map"
+    }
+  },
+  "fileExplorer": {
+    "root": {
+      "omittedFiles": "Files omitted by sparse checkout are not searched.",
+      "viewOnly": "Sparse checkout · View changes do not change checked-out files.",
+      "viewing": "Viewing: {{path}}"
     }
   },
   "runtimeRpc": {
@@ -2759,6 +2973,12 @@
         "title": "Browse through SSH workspace hosts"
       }
     }
+  },
+  "sparsePreset": {
+    "description": "Choose the folders a new workspace checks out.",
+    "findPath": "Find a folder…",
+    "finishEditing": "Save or cancel the preset to continue creating your workspace.",
+    "pathHelp": "One repository-relative directory per line. Spaces within a path are preserved."
   },
   "worktreeJumpPalette": {
     "filter": {

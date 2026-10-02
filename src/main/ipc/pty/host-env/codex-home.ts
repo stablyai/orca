@@ -1,7 +1,5 @@
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
@@ -29,12 +27,6 @@ export function shouldSkipCodexHomeEnvForWindowsShell(
   cwd: string | undefined
 ): boolean {
   return isWslShellName(shellPath) || (typeof cwd === 'string' && parseWslPath(cwd) !== null)
-}
-
-export function isCodexStatusHooksEnabled(settings: GlobalSettings | undefined): boolean {
-  return (
-    isAgentStatusHooksEnabled(settings) && isTuiAgentEnabled('codex', settings?.disabledTuiAgents)
-  )
 }
 
 // Why: with the real-home flag ON, a host system-default launch resolves to a

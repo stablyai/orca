@@ -1,3 +1,4 @@
+import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
@@ -15,6 +16,15 @@ vi.mock('../../telemetry/cohort-classifier', () => ({
  * green in typecheck while `orca worktree ps` and mobile's poll would list nothing.
  */
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+const SUBJECT = makeStructuredAgentStatusSubject(
+  {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: TEST_WORKTREE_ID,
+    workspaceKind: 'git-worktree'
+  },
+  SESSION
+)
 
 beforeEach(() => {
   _internals.resetCachesForTests()
@@ -23,15 +33,18 @@ beforeEach(() => {
 describe('worktree ps reads structured sessions from the agent-status store', () => {
   it('lists a host-held structured session with no terminal behind it', async () => {
     const statusStore = new AgentHookServer()
-    statusStore.ingestStructuredStatus({
-      sessionId: SESSION,
-      workspaceId: TEST_WORKTREE_ID,
-      agent: 'claude',
-      status: 'working',
-      hostExecutionOwned: true,
-      latestPrompt: 'ship the thing',
-      updatedAt: 1_757_030_400_000
-    })
+    statusStore.ingestStructuredStatus(
+      {
+        sessionId: SESSION,
+        workspaceId: TEST_WORKTREE_ID,
+        agent: 'claude',
+        status: 'working',
+        hostExecutionOwned: true,
+        latestPrompt: 'ship the thing',
+        updatedAt: 1_757_030_400_000
+      },
+      SUBJECT
+    )
     const getAgentStatusSnapshot = vi.fn(() => statusStore.getStatusSnapshot())
 
     const { worktrees } = await new OrcaRuntimeService(store, undefined, {
@@ -53,15 +66,18 @@ describe('worktree ps reads structured sessions from the agent-status store', ()
 
   it('lists nothing once the host has dropped the session', async () => {
     const statusStore = new AgentHookServer()
-    statusStore.ingestStructuredStatus({
-      sessionId: SESSION,
-      workspaceId: TEST_WORKTREE_ID,
-      agent: 'claude',
-      status: 'attention',
-      latestPrompt: 'rm the branch',
-      updatedAt: 1_757_030_400_000
-    })
-    statusStore.dropStructuredStatus(SESSION)
+    statusStore.ingestStructuredStatus(
+      {
+        sessionId: SESSION,
+        workspaceId: TEST_WORKTREE_ID,
+        agent: 'claude',
+        status: 'attention',
+        latestPrompt: 'rm the branch',
+        updatedAt: 1_757_030_400_000
+      },
+      SUBJECT
+    )
+    statusStore.dropStructuredStatus(SUBJECT)
 
     const { worktrees } = await new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => statusStore.getStatusSnapshot()

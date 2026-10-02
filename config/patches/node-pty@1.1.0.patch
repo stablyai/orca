@@ -707,7 +707,7 @@ index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650d
            // Stop processing immediately on unexpected error and log
            this._writeQueue.length = 0;
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c6678cf86 100644
+index 7b286d3d64..5239ba4e40 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
 @@ -18,6 +18,7 @@
@@ -718,7 +718,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
  #include <vector>
  #include <Windows.h>
  #include <strsafe.h>
-@@ -44,12 +45,40 @@ struct pty_baton {
+@@ -44,15 +45,37 @@ struct pty_baton {
    HANDLE hOut;
    HPCON hpc;
  
@@ -749,18 +749,25 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
  };
  
  static std::vector<std::unique_ptr<pty_baton>> ptyHandles;
-+// Orca: guards the job accessors below, and PtyKill, against the exit watcher
-+// thread. It does NOT make the whole table safe -- PtyResize and PtyClear still
-+// read it unlocked, as they always have -- but it closes the window this patch
-+// opened, where the watcher can close hShell/hJob and free the baton between a
-+// lookup and its use.
-+// Handle VALUES are recycled aggressively, so an unguarded read could pass the
-+// shell-pid check against an unrelated process and terminate the wrong job.
++// Orca: every table access shares the exit watcher's lock; handles can be recycled.
 +static std::mutex ptyJobMutex;
  static volatile LONG ptyCounter;
  
- static pty_baton* get_pty_baton(int id) {
-@@ -102,8 +131,31 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+-static pty_baton* get_pty_baton(int id) {
++static pty_baton* get_pty_baton_locked(int id) {
+   auto it = std::find_if(ptyHandles.begin(), ptyHandles.end(), [id](const auto& ptyHandle) {
+     return ptyHandle->id == id;
+   });
+@@ -62,7 +85,7 @@ static pty_baton* get_pty_baton(int id) {
+   return nullptr;
+ }
+ 
+-static bool remove_pty_baton(int id) {
++static bool remove_pty_baton_locked(int id) {
+   auto it = std::remove_if(ptyHandles.begin(), ptyHandles.end(), [id](const auto& ptyHandle) {
+     return ptyHandle->id == id;
+   });
+@@ -102,8 +125,31 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
      // Get process exit code.
      GetExitCodeProcess(baton->hShell, (LPDWORD)(&exit_event->exit_code));
      // Clean up handles
@@ -782,7 +789,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
 +      // NDEBUG would compile the call away and leak every baton.
 +      baton->shellExited = true;
 +      if (baton->consoleClosed) {
-+        const bool removed = remove_pty_baton(baton->id);
++        const bool removed = remove_pty_baton_locked(baton->id);
 +        assert(removed);
 +        (void)removed;
 +      }
@@ -794,7 +801,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
  
      auto status = tsfn.BlockingCall(exit_event, callback); // In main thread
      switch (status) {
-@@ -242,6 +294,20 @@
+@@ -242,6 +288,20 @@ HRESULT CreateNamedPipesAndPseudoConsole(const Napi::CallbackInfo& info,
    return HRESULT_FROM_WIN32(GetLastError());
  }
  
@@ -815,15 +822,40 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
  static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
    Napi::Env env(info.Env());
    Napi::HandleScope scope(env);
-@@ -303,6 +369,7 @@
+@@ -301,8 +361,10 @@ static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
+     // We were able to instantiate a conpty
+     const int ptyId = InterlockedIncrement(&ptyCounter);
      marshal.Set("pty", Napi::Number::New(env, ptyId));
-     ptyHandles.emplace_back(
-         std::make_unique<pty_baton>(ptyId, hIn, hOut, hpc));
-+    ptyHandles.back()->allowJobBreakaway = !usesCygwinRuntime(shellpath);
+-    ptyHandles.emplace_back(
+-        std::make_unique<pty_baton>(ptyId, hIn, hOut, hpc));
++    auto baton = std::make_unique<pty_baton>(ptyId, hIn, hOut, hpc);
++    baton->allowJobBreakaway = !usesCygwinRuntime(shellpath);
++    std::lock_guard<std::mutex> guard(ptyJobMutex);
++    ptyHandles.emplace_back(std::move(baton));
    } else {
      throw Napi::Error::New(env, "Cannot launch conpty");
    }
-@@ -409,6 +476,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -350,11 +412,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+   const bool useConptyDll = info[4].As<Napi::Boolean>().Value();
+   Napi::Function exitCallback = info[5].As<Napi::Function>();
+ 
+-  // Fetch pty handle from ID and start process
+-  pty_baton* handle = get_pty_baton(id);
+-  if (!handle) {
+-    throw Napi::Error::New(env, "Invalid pty handle");
++  pty_baton* handle;
++  {
++    std::lock_guard<std::mutex> guard(ptyJobMutex);
++    handle = get_pty_baton_locked(id);
++    if (!handle || handle->consoleClosed) {
++      throw Napi::Error::New(env, "Invalid pty handle");
++    }
+   }
++  // No watcher exists for this baton until SetupExitCallback below; pipe waits stay unlocked.
+ 
+   // Prepare command line
+   std::unique_ptr<wchar_t[]> mutableCommandline = std::make_unique<wchar_t[]>(cmdline.length() + 1);
+@@ -409,6 +475,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "UpdateProcThreadAttribute failed");
    }
  
@@ -839,7 +871,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
    PROCESS_INFORMATION piClient{};
    fSuccess = !!CreateProcessW(
        nullptr,
-@@ -416,7 +492,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -416,7 +491,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
        nullptr,                      // lpProcessAttributes
        nullptr,                      // lpThreadAttributes
        false,                        // bInheritHandles VERY IMPORTANT that this is false
@@ -851,7 +883,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
        envArg,                       // lpEnvironment
        mutableCwd.get(),             // lpCurrentDirectory
        &siEx.StartupInfo,            // lpStartupInfo
-@@ -426,8 +505,48 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -426,8 +504,48 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "Cannot create process");
    }
  
@@ -902,25 +934,52 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
    if (useConptyDll && fLoadedDll)
    {
      PFNRELEASEPSEUDOCONSOLE const pfnReleasePseudoConsole = (PFNRELEASEPSEUDOCONSOLE)GetProcAddress(
-@@ -440,6 +559,8 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -438,8 +556,12 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+     }
+   }
  
-   // Update handle
-   handle->hShell = piClient.hProcess;
-+  handle->shellPid = piClient.dwProcessId;
-+  handle->hJob = hJob;
+-  // Update handle
+-  handle->hShell = piClient.hProcess;
++  {
++    std::lock_guard<std::mutex> guard(ptyJobMutex);
++    handle->hShell = piClient.hProcess;
++    handle->shellPid = piClient.dwProcessId;
++    handle->hJob = hJob;
++  }
  
    // Close the thread handle to avoid resource leak
    CloseHandle(piClient.hThread);
-@@ -544,27 +665,213 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -472,9 +594,10 @@ static Napi::Value PtyResize(const Napi::CallbackInfo& info) {
+   SHORT rows = static_cast<SHORT>(info[2].As<Napi::Number>().Uint32Value());
+   const bool useConptyDll = info[3].As<Napi::Boolean>().Value();
+ 
+-  const pty_baton* handle = get_pty_baton(id);
++  std::lock_guard<std::mutex> guard(ptyJobMutex);
++  const pty_baton* handle = get_pty_baton_locked(id);
+ 
+-  if (handle != nullptr) {
++  if (handle != nullptr && !handle->consoleClosed) {
+     HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+     bool fLoadedDll = hLibrary != nullptr;
+     if (fLoadedDll)
+@@ -513,9 +636,10 @@ static Napi::Value PtyClear(const Napi::CallbackInfo& info) {
+     return env.Undefined();
+   }
+ 
+-  const pty_baton* handle = get_pty_baton(id);
++  std::lock_guard<std::mutex> guard(ptyJobMutex);
++  const pty_baton* handle = get_pty_baton_locked(id);
+ 
+-  if (handle != nullptr) {
++  if (handle != nullptr && !handle->consoleClosed) {
+     HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+     bool fLoadedDll = hLibrary != nullptr;
+     if (fLoadedDll)
+@@ -544,29 +668,215 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
 -  const pty_baton* handle = get_pty_baton(id);
--
--  if (handle != nullptr) {
--    HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
--    bool fLoadedDll = hLibrary != nullptr;
--    if (fLoadedDll)
 +  // Orca: resolve the DLL BEFORE touching any baton state, for the same reason
 +  // PtyConnect does it before creating anything. LoadConptyDll throws when
 +  // conpty.dll is missing, and a throw after consoleClosed was set would strand
@@ -934,7 +993,18 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
 +      (HMODULE)hLibrary,
 +      useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
 +  }
-+
+ 
+-  if (handle != nullptr) {
+-    HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+-    bool fLoadedDll = hLibrary != nullptr;
+-    if (fLoadedDll)
+-    {
+-      PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
+-        (HMODULE)hLibrary,
+-        useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
+-      if (pfnClosePseudoConsole)
+-      {
+-        pfnClosePseudoConsole(handle->hpc);
 +  // Orca: the baton now outlives the shell, so this runs on a self-exited pty
 +  // too -- that is the whole point. Take what we need under the lock: the
 +  // watcher thread nulls hShell the moment the shell dies, and TerminateProcess
@@ -945,7 +1015,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
 +  bool owed = false;
 +  {
 +    std::lock_guard<std::mutex> guard(ptyJobMutex);
-+    pty_baton* handle = get_pty_baton(id);
++    pty_baton* handle = get_pty_baton_locked(id);
 +    // Why the consoleClosed check: a second kill() would otherwise close the
 +    // same pseudoconsole twice. Upstream relied on the baton being gone.
 +    if (handle != nullptr && !handle->consoleClosed) {
@@ -965,9 +1035,9 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
 +          hShellDup = nullptr;
 +          TerminateProcess(handle->hShell, 1);
 +        }
-+      }
+       }
 +      if (handle->shellExited) {
-+        const bool removed = remove_pty_baton(id);
++        const bool removed = remove_pty_baton_locked(id);
 +        assert(removed);
 +        (void)removed;
 +      }
@@ -979,19 +1049,11 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
 +  // drained, and the watcher must be able to take the lock while it does.
 +  if (owed) {
 +    if (pfnClosePseudoConsole)
-     {
--      PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
--        (HMODULE)hLibrary,
--        useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
--      if (pfnClosePseudoConsole)
--      {
--        pfnClosePseudoConsole(handle->hpc);
--      }
--    }
++    {
++      pfnClosePseudoConsole(hpc);
+     }
 -    if (useConptyDll) {
 -      TerminateProcess(handle->hShell, 1);
-+      pfnClosePseudoConsole(hpc);
-+    }
 +    if (hShellDup != nullptr) {
 +      TerminateProcess(hShellDup, 1);
 +      CloseHandle(hShellDup);
@@ -999,8 +1061,8 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
    }
  
    return env.Undefined();
-+}
-+
+ }
+ 
 +/**
 + * Orca: confirm a baton really is the pty the caller means.
 + *
@@ -1032,7 +1094,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
 +  // Held across the lookup AND the Win32 call: the watcher thread can otherwise
 +  // close these handles and free the baton in between.
 +  std::lock_guard<std::mutex> guard(ptyJobMutex);
-+  const pty_baton* handle = get_pty_baton(info[0].As<Napi::Number>().Int32Value());
++  const pty_baton* handle = get_pty_baton_locked(info[0].As<Napi::Number>().Int32Value());
 +  if (!ownsShell(handle, info[1].As<Napi::Number>().Uint32Value())) {
 +    return Napi::Boolean::New(env, false);
 +  }
@@ -1064,7 +1126,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
 +  // Held across the lookup AND the Win32 call: the watcher thread can otherwise
 +  // close these handles and free the baton in between.
 +  std::lock_guard<std::mutex> guard(ptyJobMutex);
-+  const pty_baton* handle = get_pty_baton(info[0].As<Napi::Number>().Int32Value());
++  const pty_baton* handle = get_pty_baton_locked(info[0].As<Napi::Number>().Int32Value());
 +  if (!ownsShell(handle, info[1].As<Napi::Number>().Uint32Value())) {
 +    return env.Null();
 +  }
@@ -1138,10 +1200,12 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c
 +  }
 +  hHostJob = job;
 +  return Napi::Boolean::New(env, true);
- }
- 
++}
++
  /**
-@@ -577,6 +884,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+ * Init
+ */
+@@ -577,6 +887,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));

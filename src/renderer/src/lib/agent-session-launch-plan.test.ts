@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   buildAgentLaunchRouteInput: vi.fn(),
   resolveAgentLaunchRoute: vi.fn(),
   structuredAgentLaunchSupported: vi.fn(),
-  settleStructuredAgentLaunch: vi.fn()
+  beginStructuredAgentLaunchSettlement: vi.fn()
 }))
 
 vi.mock('@/lib/agent-launch-route-input', () => ({
@@ -16,7 +16,7 @@ vi.mock('@/lib/agent-launch-routing', () => ({
   structuredAgentLaunchSupported: mocks.structuredAgentLaunchSupported
 }))
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({
-  settleStructuredAgentLaunch: mocks.settleStructuredAgentLaunch
+  beginStructuredAgentLaunchSettlement: mocks.beginStructuredAgentLaunchSettlement
 }))
 
 import {
@@ -36,7 +36,10 @@ describe('planAgentSessionLaunch', () => {
     mocks.buildAgentLaunchRouteInput.mockReturnValue(ROUTE_INPUT)
     mocks.resolveAgentLaunchRoute.mockReturnValue('structured-native-chat')
     mocks.structuredAgentLaunchSupported.mockReturnValue(true)
-    mocks.settleStructuredAgentLaunch.mockResolvedValue(STRUCTURED)
+    mocks.beginStructuredAgentLaunchSettlement.mockReturnValue({
+      sessionId: 'session-1',
+      settlement: Promise.resolve(STRUCTURED)
+    })
   })
 
   it('decides the route once, from the builder input, and never again on launch', async () => {
@@ -74,7 +77,7 @@ describe('planAgentSessionLaunch', () => {
     })
 
     await expect(plan.launch(hooks)).resolves.toBe(STRUCTURED)
-    expect(mocks.settleStructuredAgentLaunch).toHaveBeenCalledWith(
+    expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
       'folder:ws-1',
       'claude',
       {
@@ -94,28 +97,13 @@ describe('planAgentSessionLaunch', () => {
     })
 
     await plan.launch(hooks)
-    expect(mocks.settleStructuredAgentLaunch).toHaveBeenCalledWith(
+    expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
       'folder:ws-1',
       'codex',
       {},
       hooks
     )
   })
-
-  it.each(['legacy-native-chat', 'terminal-tui'] as const)(
-    'returns null from launch on the %s route without touching the loop',
-    async (route) => {
-      mocks.resolveAgentLaunchRoute.mockReturnValue(route)
-      const plan = planAgentSessionLaunch(store, {
-        agent: 'codex',
-        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
-      })
-
-      expect(plan.route).toBe(route)
-      await expect(plan.launch(hooks)).resolves.toBeNull()
-      expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
-    }
-  )
 
   it('returns null for an agent that cannot hold a structured session even on the structured route', async () => {
     const plan = planAgentSessionLaunch(store, {
@@ -124,7 +112,8 @@ describe('planAgentSessionLaunch', () => {
     })
 
     await expect(plan.launch(hooks)).resolves.toBeNull()
-    expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
+    expect(plan.begin(hooks)).toBeNull()
+    expect(mocks.beginStructuredAgentLaunchSettlement).not.toHaveBeenCalled()
   })
 
   it('launches into the workspace created after planning when the target names one', async () => {
@@ -136,7 +125,7 @@ describe('planAgentSessionLaunch', () => {
     })
 
     await plan.launch(hooks, { worktreeId: 'wt-created' })
-    expect(mocks.settleStructuredAgentLaunch).toHaveBeenCalledWith(
+    expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
       'wt-created',
       'codex',
       { prompt: 'Fix it', promptDelivery: 'auto-submit' },
@@ -151,7 +140,7 @@ describe('planAgentSessionLaunch', () => {
     })
 
     await expect(plan.launch(hooks)).rejects.toThrow(/workspace/)
-    expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
+    expect(mocks.beginStructuredAgentLaunchSettlement).not.toHaveBeenCalled()
   })
 })
 
@@ -174,7 +163,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
       })
     ).toBe(supported)
     expect(mocks.resolveAgentLaunchRoute).not.toHaveBeenCalled()
-    expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
+    expect(mocks.beginStructuredAgentLaunchSettlement).not.toHaveBeenCalled()
   })
 
   it('builds the input from the named settings, not the store copy', () => {
@@ -199,7 +188,10 @@ describe('structuredAgentSessionLaunchFeasible', () => {
 describe('adoptAgentSessionLaunchVerdict', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.settleStructuredAgentLaunch.mockResolvedValue(STRUCTURED)
+    mocks.beginStructuredAgentLaunchSettlement.mockReturnValue({
+      sessionId: 'session-1',
+      settlement: Promise.resolve(STRUCTURED)
+    })
   })
 
   it('re-enters a persisted verdict without resolving the route again', async () => {
@@ -215,7 +207,7 @@ describe('adoptAgentSessionLaunchVerdict', () => {
     expect(mocks.buildAgentLaunchRouteInput).not.toHaveBeenCalled()
     expect(mocks.resolveAgentLaunchRoute).not.toHaveBeenCalled()
     expect(mocks.structuredAgentLaunchSupported).not.toHaveBeenCalled()
-    expect(mocks.settleStructuredAgentLaunch).toHaveBeenCalledWith(
+    expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
       'wt-recovered',
       'codex',
       { prompt: 'Fix it', promptDelivery: 'draft' },
@@ -231,6 +223,6 @@ describe('adoptAgentSessionLaunchVerdict', () => {
     })
 
     await expect(plan.launch(hooks)).resolves.toBeNull()
-    expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
+    expect(mocks.beginStructuredAgentLaunchSettlement).not.toHaveBeenCalled()
   })
 })

@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { leafIdForPane } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 
 type MockRef = { current: Mock }
 
@@ -16,7 +17,7 @@ export type PaneConnectionDeps = {
   mountFollowsTerminalPark: boolean
   paneTransportsRef: { current: Map<number, unknown> }
   paneMode2031Ref: { current: Map<number, unknown> }
-  paneKittyKeyboardModesRef: { current: Map<number, unknown> }
+  paneKittyKeyboardModesRef: { current: Map<number, TerminalKittyKeyboardModeTracker> }
   paneLastThemeModeRef: { current: Map<number, unknown> }
   replayingPanesRef: { current: Map<number, unknown> }
   isActiveRef: { current: boolean }

@@ -1,3 +1,4 @@
+import { paneIdentity } from './runtime-terminal-pane-identity'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -19,7 +20,6 @@ import type {
 
 type Ports = {
   canSpawn: boolean
-  markTrusted: (agent: TuiAgent, path: string) => Promise<void>
   createTerminal: (
     selector: string,
     options: TerminalCreateOptions
@@ -93,12 +93,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 
   if (sequencedStartup && ports.canSpawn) {
     try {
-      const trustAgent = args.draftPaste?.agent ?? args.createdWithAgent
-      if (trustAgent) {
-        await ports.markTrusted(trustAgent, worktree.path)
-      }
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
         command: sequencedStartup.command,
+        ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
+        ...paneIdentity(request.startupPaneKey),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),

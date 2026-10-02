@@ -30,6 +30,12 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   getReconnectAttempt: () => number
   getLastConnectedAt: () => number | null
   getLastInboundAt?: () => number | null
+  /**
+   * The logical authority epoch, advanced by `StableLogicalRpcClient.migrateTo`. Read-only and
+   * optional so a holder of a bare `RpcClient` can scope cached work to it without every
+   * implementation growing a counter it does not have.
+   */
+  getGeneration?: () => number
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   /**

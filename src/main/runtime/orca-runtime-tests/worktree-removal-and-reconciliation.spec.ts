@@ -6,6 +6,7 @@ import {
   closeLocalWatcherForWorktreePathMock,
   computeWorktreePathMock,
   deleteWorktreeHistoryDirMock,
+  describeCreatedWorktree,
   ensurePathWithinWorkspaceMock,
   findExistingWorktreeSymlinkPathsMock,
   forgetLocalWatcherRemovalSnapshotMock,
@@ -34,6 +35,7 @@ import {
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { getLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 
 describe('OrcaRuntimeService', () => {
   it('creates the first terminal by id when duplicate repo entries expose the same path', async () => {
@@ -329,7 +331,7 @@ describe('OrcaRuntimeService', () => {
     }
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
-    vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
+    vi.mocked(describeCreatedWorktree).mockResolvedValue(createdWorktree)
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
@@ -352,6 +354,7 @@ describe('OrcaRuntimeService', () => {
       return { stdout: '', stderr: '' }
     })
 
+    const inventoryCallsBefore = vi.mocked(listWorktrees).mock.calls.length
     try {
       const result = await runtime.createManagedWorktree({
         repoSelector: 'id:repo-1',
@@ -445,7 +448,13 @@ describe('OrcaRuntimeService', () => {
         branchName: 'contributor/runtime-wsl',
         remoteUrl: 'git@github.com:contributor/orca.git'
       })
-      expect(listWorktrees).toHaveBeenCalledWith(TEST_REPO_PATH, { wslDistro: 'Ubuntu' })
+      expect(describeCreatedWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'runtime-wsl',
+        { wslDistro: 'Ubuntu' }
+      )
+      expect(listWorktrees).toHaveBeenCalledTimes(inventoryCallsBefore)
     } finally {
       gitSpy.mockRestore()
     }
@@ -612,7 +621,12 @@ describe('OrcaRuntimeService', () => {
     })
 
     await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, 'runtime:env-b')
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: false,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'runtime:env-b'
+      })
     ).rejects.toThrow('no longer belongs to runtime:env-b')
 
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
@@ -674,5 +688,37 @@ describe('OrcaRuntimeService', () => {
     expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
     expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  // A headless host has no window notifier, so the removal itself must move the generation the
+  // runtime listing witnesses; otherwise a listing the delete overtook publishes the removed row.
+  it('moves the scan generation the runtime listing witnesses once the worktree is removed', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(removeWorktree).mockResolvedValue({})
+    const before = getLocalWorktreeScanGeneration(TEST_REPO_ID)
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(removeWorktree).toHaveBeenCalled()
+    expect(getLocalWorktreeScanGeneration(TEST_REPO_ID)).not.toBe(before)
+  })
+
+  it('moves the scan generation before the first step after git worktree remove', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    const witness: { during?: number; after?: number } = {}
+    vi.mocked(removeWorktree).mockImplementationOnce(async () => {
+      witness.during = getLocalWorktreeScanGeneration(TEST_REPO_ID)
+      return {}
+    })
+    // Why the watcher gate: releasing it is the first awaited step after the git removal.
+    vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({
+      finish: vi.fn(async () => {
+        witness.after ??= getLocalWorktreeScanGeneration(TEST_REPO_ID)
+      })
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(witness.after).toBeGreaterThan(witness.during ?? Infinity)
   })
 })

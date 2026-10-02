@@ -57,6 +57,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -77,6 +80,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why: rehearsal builds are never published, so the official-build
       # secrets (telemetry key, diagnostics URL) are intentionally omitted.
@@ -203,20 +210,25 @@ jobs:
       # signed and unsigned binaries.
       - name: Restore signed inner binaries into unpacked app
         shell: pwsh
+        env:
+          SIGNING_POLICY: ${{ inputs.signing-policy-slug || 'test-signing' }}
         run: |
+          $requireValid = $env:SIGNING_POLICY -ne 'test-signing'
           $root = Resolve-Path 'dist/win-unpacked'
           $failures = New-Object System.Collections.Generic.List[string]
           foreach ($relative in Get-Content 'inner-signing-list.txt') {
-            $signed = Get-ChildItem -Path signed-inner -Recurse -File |
-              Where-Object { [System.IO.Path]::GetRelativePath((Resolve-Path 'signed-inner'), $_.FullName).TrimStart('\', '/') -like "*$relative" } |
-              Select-Object -First 1
-            if ($null -eq $signed) {
-              $failures.Add("missing from signed artifact: $relative")
+            $candidates = @(
+              (Join-Path 'signed-inner' $relative),
+              (Join-Path 'signed-inner/signing-stage' $relative)
+            ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+            if (@($candidates).Count -ne 1) {
+              $failures.Add("missing or ambiguous signed artifact path: $relative")
               continue
             }
+            $signed = Get-Item -LiteralPath @($candidates)[0]
             $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
-            if ($null -eq $signature.SignerCertificate) {
-              $failures.Add("returned without a signature: $relative")
+            if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*'))) {
+              $failures.Add("returned without a valid SignPath signature: $relative")
               continue
             }
             Copy-Item -Path $signed.FullName -Destination (Join-Path $root $relative) -Force
@@ -229,15 +241,21 @@ jobs:
 
       - name: Restore signed uninstaller for the installer rebuild
         shell: pwsh
+        env:
+          SIGNING_POLICY: ${{ inputs.signing-policy-slug || 'test-signing' }}
         run: |
-          $signed = Get-ChildItem -Path signed-inner -Recurse -File -Filter 'orca-uninstaller.exe' |
-            Select-Object -First 1
-          if ($null -eq $signed) {
-            throw 'SignPath did not return uninstaller/orca-uninstaller.exe; check the inner-binaries artifact configuration covers it.'
+          $requireValid = $env:SIGNING_POLICY -ne 'test-signing'
+          $candidates = @(
+            (Join-Path 'signed-inner' 'uninstaller\orca-uninstaller.exe'),
+            (Join-Path 'signed-inner/signing-stage' 'uninstaller\orca-uninstaller.exe')
+          ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+          if (@($candidates).Count -ne 1) {
+            throw 'Missing or ambiguous uninstaller/orca-uninstaller.exe in the signed artifact; check the windows-inner-binaries-zip configuration.'
           }
+          $signed = Get-Item -LiteralPath @($candidates)[0]
           $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
-          if ($null -eq $signature.SignerCertificate) {
-            throw 'The returned NSIS uninstaller carries no signature.'
+          if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*'))) {
+            throw 'The returned NSIS uninstaller carries no valid SignPath signature.'
           }
           $signedDir = Join-Path $env:RUNNER_TEMP 'uninstaller-signing\signed'
           New-Item -ItemType Directory -Force -Path $signedDir | Out-Null
@@ -480,7 +498,11 @@ jobs:
             Test-Signature "shipped: Uninstall Orca.exe (via $installedVia)" $installedUninstaller.FullName
           }
 
-          foreach ($relative in Get-Content 'inner-signing-list.txt') {
+          $targets = @(Get-Content 'inner-signing-list.txt')
+          foreach ($requiredTarget in @('Orca.exe', 'resources\bin\orca.exe')) {
+            if ($targets -notcontains $requiredTarget) { $targets += $requiredTarget }
+          }
+          foreach ($relative in $targets) {
             $path = Join-Path $root $relative
             if (-not (Test-Path $path)) {
               $failures.Add("missing from installer payload: $relative")

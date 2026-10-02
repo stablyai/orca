@@ -1,4 +1,4 @@
-import type { WebContents } from 'electron'
+import type { PtyRendererDelivery } from '../session'
 import {
   didFinishLoadHandler,
   didFinishLoadWebContents,
@@ -60,9 +60,14 @@ export function clearRendererLifecycleResetHandlers(): void {
   setRendererLifecycleResetState({ contents: null, handler: null, navigation: null })
 }
 
-export function registerRendererLifecycleResetHandlers(webContents: WebContents): void {
+export function registerRendererLifecycleResetHandlers(
+  webContents?: PtyRendererDelivery['webContents']
+): void {
   clearRendererLifecycleResetHandlers()
   markRendererPtysHiddenForRendererLifecycleReset()
+  if (!webContents) {
+    return
+  }
   const handler = markRendererPtysHiddenForRendererLifecycleReset
   const navigationHandler = (details: { isMainFrame: boolean; isSameDocument: boolean }) => {
     if (!details.isMainFrame || details.isSameDocument) {

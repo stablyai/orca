@@ -1,28 +1,17 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "source-control.git-history",
   "family": "git.history-read",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 3,
   "values": {
-    "155f61ed496f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'items')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "17bc1e177fe1": {
+    "0e92a08f8380": {
       "name": "git.history#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}"
+    },
+    "242ef0a4462c": {
+      "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -43,8 +32,13 @@
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
       }
     },
     "32a7c0ae7918": {
@@ -79,8 +73,9 @@
         }
       ]
     },
-    "4e27a22332c7": {
+    "5d7a655deafc": {
       "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -101,18 +96,13 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "52b4fb4742f7": {
+    "71a5879c8eb4": {
       "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -140,13 +130,42 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "refused"
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
           }
         }
       }
     },
-    "69d0ebdefcd3": {
+    "7d520ecb92ad": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "author": "dev",
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "parentId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "relativeTime": "1h",
+          "shortId": "aaaaaaa",
+          "subject": "first"
+        },
+        {
+          "author": "",
+          "id": "cccccccccccccccccccccccccccccccccccccccc",
+          "parentId": {
+            "$rpc": "null"
+          },
+          "relativeTime": "",
+          "shortId": "ccccccc",
+          "subject": "(no commit message)"
+        }
+      ]
+    },
+    "87e9dffd3dee": {
       "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -167,18 +186,62 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
         }
       }
     },
-    "6b280ce22422": {
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9373c489f743": {
       "name": "git.history#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.history"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "9631f908d769": {
+      "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -228,33 +291,9 @@
         }
       }
     },
-    "7d520ecb92ad": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": [
-        {
-          "author": "dev",
-          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "parentId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "relativeTime": "1h",
-          "shortId": "aaaaaaa",
-          "subject": "first"
-        },
-        {
-          "author": "",
-          "id": "cccccccccccccccccccccccccccccccccccccccc",
-          "parentId": {
-            "$rpc": "null"
-          },
-          "relativeTime": "",
-          "shortId": "ccccccc",
-          "subject": "(no commit message)"
-        }
-      ]
-    },
-    "8bf6ec174c09": {
+    "9cd8aa651655": {
       "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -275,41 +314,19 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "93e7019b0698": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'map')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "acda0899d438": {
+    "a18e62c8efc5": {
       "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -330,117 +347,19 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "b834de93891d": {
+    "a73c7853778a": {
       "name": "git.history#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.history"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 50,
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "b948e8307e81": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Unknown method",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "ba8b415f2807": {
-      "name": "git.history#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.history"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 50,
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "d2ac5468a6f5": {
-      "name": "git.history#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}"
-    },
-    "d32fe6f7afe0": {
-      "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -474,8 +393,19 @@
         }
       }
     },
-    "de21ba03a5c2": {
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ab0cdc1ce2cc": {
       "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -500,17 +430,60 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
           "id": "frame-1",
-          "ok": false
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
         }
       }
     },
-    "dfb377a66ab7": {
+    "ade2b1f3660f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (git.history)",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "e7aad6e711f1": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Failed to load commit history",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "ef169a494b41": {
+      "rows": "unloaded"
+    },
+    "efb227cb6d68": {
       "name": "git.history#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -543,27 +516,40 @@
         }
       }
     },
-    "e7aad6e711f1": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Failed to load commit history",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "ef169a494b41": {
-      "rows": "unloaded"
-    },
-    "f51f34589c7a": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'items')",
-        "isRpcDeliveryUnknown": false
+    "f6f9ee2744b8": {
+      "name": "git.history#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.history"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
       }
     }
   },
@@ -573,8 +559,8 @@
       {
         "id": "sc-history-loaded.prelude:pending",
         "observation": {
-          "sender": ["17bc1e177fe1"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["5d7a655deafc"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -585,8 +571,8 @@
       {
         "id": "sc-history-loaded.normal:settled",
         "observation": {
-          "sender": ["6b280ce22422"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["9631f908d769"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "load": "7d520ecb92ad"
           },
@@ -597,10 +583,10 @@
       {
         "id": "sc-history-loaded.result-absent:settled",
         "observation": {
-          "sender": ["8bf6ec174c09"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["242ef0a4462c"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
-            "load": "f51f34589c7a"
+            "load": "ade2b1f3660f"
           },
           "state": "ef169a494b41",
           "effects": []
@@ -609,10 +595,10 @@
       {
         "id": "sc-history-loaded.result-null:settled",
         "observation": {
-          "sender": ["dfb377a66ab7"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["efb227cb6d68"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
-            "load": "155f61ed496f"
+            "load": "ade2b1f3660f"
           },
           "state": "ef169a494b41",
           "effects": []
@@ -621,10 +607,10 @@
       {
         "id": "sc-history-loaded.inner-ok-missing:settled",
         "observation": {
-          "sender": ["52b4fb4742f7"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["ab0cdc1ce2cc"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
-            "load": "93e7019b0698"
+            "load": "ade2b1f3660f"
           },
           "state": "ef169a494b41",
           "effects": []
@@ -633,10 +619,10 @@
       {
         "id": "sc-history-loaded.inner-false-string-error:settled",
         "observation": {
-          "sender": ["ba8b415f2807"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["9373c489f743"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
-            "load": "93e7019b0698"
+            "load": "ade2b1f3660f"
           },
           "state": "ef169a494b41",
           "effects": []
@@ -645,10 +631,10 @@
       {
         "id": "sc-history-loaded.inner-false-object-error:settled",
         "observation": {
-          "sender": ["acda0899d438"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["71a5879c8eb4"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
-            "load": "93e7019b0698"
+            "load": "ade2b1f3660f"
           },
           "state": "ef169a494b41",
           "effects": []
@@ -657,8 +643,8 @@
       {
         "id": "sc-history-loaded.outer-refused:settled",
         "observation": {
-          "sender": ["b834de93891d"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["f6f9ee2744b8"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "load": "32a7c0ae7918"
           },
@@ -669,8 +655,8 @@
       {
         "id": "sc-history-loaded.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["de21ba03a5c2"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["87e9dffd3dee"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "load": "e7aad6e711f1"
           },
@@ -681,8 +667,8 @@
       {
         "id": "sc-history-loaded.method-not-found:settled",
         "observation": {
-          "sender": ["d32fe6f7afe0"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["a73c7853778a"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "load": "b948e8307e81"
           },
@@ -693,8 +679,8 @@
       {
         "id": "sc-history-loaded.transport-rejection:settled",
         "observation": {
-          "sender": ["69d0ebdefcd3"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["a18e62c8efc5"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "load": "a947768bc0ed"
           },
@@ -705,8 +691,8 @@
       {
         "id": "sc-history-loaded.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["4e27a22332c7"],
-          "payloads": ["d2ac5468a6f5"],
+          "sender": ["9cd8aa651655"],
+          "payloads": ["0e92a08f8380"],
           "settlements": {
             "load": "c7584e82c72f"
           },

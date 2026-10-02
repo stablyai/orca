@@ -6,6 +6,7 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_REATTACH_RESET
 } from '../../../../shared/terminal-mode-reset-profiles'
+import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
@@ -520,15 +521,15 @@ describe('connectPanePty', () => {
 
       // A live agent owns ?1004h (focus reporting); the plain reset's ?1004l would silence focus events until restart, since agents only enable it at startup.
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_SNAPSHOT_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_SNAPSHOT_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_DEAD_TUI_RESET,
+        replayEpilogue(POST_REPLAY_DEAD_TUI_RESET),
         expect.any(Function)
       )
     } finally {
@@ -583,11 +584,11 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_DEAD_TUI_RESET,
+        replayEpilogue(POST_REPLAY_DEAD_TUI_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET),
         expect.any(Function)
       )
     } finally {
@@ -634,15 +635,15 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_SNAPSHOT_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_SNAPSHOT_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_REATTACH_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_DEAD_TUI_RESET,
+        replayEpilogue(POST_REPLAY_DEAD_TUI_RESET),
         expect.any(Function)
       )
     } finally {
@@ -689,11 +690,11 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_SNAPSHOT_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_SNAPSHOT_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_REATTACH_RESET),
         expect.any(Function)
       )
     } finally {
@@ -739,11 +740,11 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_DEAD_TUI_RESET,
+        replayEpilogue(POST_REPLAY_DEAD_TUI_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_SNAPSHOT_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_SNAPSHOT_RESET),
         expect.any(Function)
       )
       expect(window.api.pty.inspectProcess).not.toHaveBeenCalled()

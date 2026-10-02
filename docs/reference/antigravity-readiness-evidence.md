@@ -1,7 +1,10 @@
 # Antigravity readiness: what the transcripts show
 
-`findAntigravityReadyPromptIndex` in `src/main/runtime/terminal-wait-detection.ts` decides whether
-an Antigravity pane is ready for a prompt. It has been written five times, each version tuned
+Antigravity readiness lives in `src/main/runtime/agent-state-rules/antigravity.json`: a screen rule
+over the trusted grid, and a text anchor that runs the named scan
+`findAntigravityComposerIndex` (`agent-state-rules/antigravity-text-composer.ts`) over the
+line-folded tail when no trusted grid exists. That text scan decides whether a pane is ready for a
+prompt from its tail alone. It has been written five times, each version tuned
 against a five-line screen typed from memory into a `.spec.ts` fixture. Three of the first four
 were found worse than the bug they replaced, and the fifth was reverted.
 
@@ -10,10 +13,72 @@ Real transcripts now exist. They were recorded from a live `agy` on macOS with
 `src/main/runtime/__fixtures__/`. `src/main/runtime/antigravity-readiness-transcripts.test.ts`
 replays them through the runtime.
 
-**Headline: on real output the current detector is inverted.** It refuses a genuinely ready screen
-and accepts a live model picker. The five attempts argued about which extra condition to add; none
-of them had noticed that the condition they all shared — a line beginning with the model name —
-never matches a real Antigravity ready screen at all.
+**Headline (STA-8741, agy 1.2.14): readiness is now read off the live screen, not the text tail.**
+The screen's bottom four rows at an idle composer are rule, caret, rule, `? for shortcuts`. The
+caret alone is not enough: agy keeps it painted mid-turn and behind the `/model` picker. The hint
+row is what changes. [Attempt seven](#attempt-seven-the-live-screen-sta-8741) has the recordings;
+the sections after it are the 1.2.0 history that led there.
+
+## Attempt seven: the live screen (STA-8741)
+
+Recorded 2026-09-30 on macOS with `agy` 1.2.14 (binary and banner agree), a signed-in Google
+account, `AGY_CLI_HIDE_ACCOUNT_INFO=1`, in an already-trusted workspace. All are 120x40 except
+where the name says otherwise. `src/main/runtime/antigravity-screen-readiness-transcripts.test.ts`
+replays them.
+
+| Fixture (`antigravity-1-2-14-*.txt`) | Screen at the end                                   | Screen rule |
+| ------------------------------------ | --------------------------------------------------- | ----------- |
+| `ready`                              | settled startup, bare `>`                           | ready       |
+| `ready-accept-edits`                 | `> Accept-edits mode: …` (`--mode accept-edits`)    | ready       |
+| `ready-plan`                         | `> Plan mode: …` (`--mode plan`)                    | ready       |
+| `ready-80x24`                        | settled startup on an 80x24 PTY                     | ready       |
+| `picker-dismissed`                   | `/model` opened, then Esc                           | ready       |
+| `turn-ended`                         | a short turn has ended                              | ready       |
+| `model-picker`                       | `Switch Model` open; the bare `>` is still above it | not ready   |
+| `command-palette`                    | `> /` with the palette, hint `esc to cancel`        | not ready   |
+| `busy-thinking`                      | `Generating...` spinner, bare `>`, `esc to cancel`  | not ready   |
+| `busy-streaming`                     | answer streaming, bare `>`, `esc to cancel`         | not ready   |
+| `trust-dialog`                       | untrusted folder, alternate-screen trust menu       | not ready   |
+| `draft`                              | unsent text in the composer; the hint row is blank  | not ready   |
+
+What they show:
+
+- **The text tail misses three ready screens.** On `ready-accept-edits`, `ready-plan` and
+  `turn-ended` the line-folded tail never satisfies `findAntigravityComposerIndex`; the screen
+  rule does. (`turn-ended` is the 1.2.14 form of the old `busy-turn-ended` known defect.)
+- **A caret rule is wrong on the screen.** The grid keeps the bare `>` through a turn and behind
+  the picker. The text tail happened to lose it mid-turn (section 8); the screen does not.
+- **The rule can read ready for a moment mid-turn.** Replayed in 64-byte chunks, the submit repaint
+  clears the composer a moment before `? for shortcuts` becomes `esc to cancel`. So a pane with an
+  output clock is held to the same 3s quiescence as Codex (tier 1b in `tui-idle-evidence.ts`); an
+  idle agy goes silent within a second and a turn keeps repainting its spinner. A restored pane with no
+  clock settles from the screen alone.
+- **A name-only title settled the picker.** With the pane titled `agy`, the old ranking reached
+  its weak title lane and settled with `/model` open. When a trustworthy screen exists it now
+  decides, and that lane stays shut.
+- **A mismatched grid garbles the chrome.** At 80x24, 100x30 or 60x20 the 120x40 recordings lose
+  the four-row shape, and resizing the model does not make the TUI repaint. So the live screen
+  counts only when its grid matches the PTY's reported size and is not a reflow the TUI never
+  repainted for (a re-attach that learned the real size late; a later PTY resize off that size
+  repaints it). Otherwise every pre-existing lane (text rules, title, quiet process) decides, as
+  before this change.
+- **A readable screen outranks the text.** When the grid is trustworthy and refuses, the text rules
+  do not overrule it, in the ready-prompt tier or the quiet one; they decide only when there is no
+  trustworthy grid. The recorded picker-dismissed text over a model-picker screen proves it.
+
+The visible-read probe's Antigravity branch is retired. It read the provider screen with a looser
+rule (any caret after the banner) whenever the pane was Antigravity. The probe now runs the shared
+rule for every screen-ruled agent, only for a pane with no output clock. A clocked pane settles
+through the poll. The probe's screen read is the draft-blanking read projection, so it restores the
+blanked composer row before the rule reads it (Cline's `❯ Ask anything...` otherwise reads as a
+bare `❯`).
+
+Still not captured: a tool-permission prompt (the operator's `toolPermission` is
+`always-proceed`, and changing it means editing their settings), and the sign-in, theme, privacy and
+update dialogs, for the reasons in the table below. Windows and Linux are unrecorded.
+
+The 1.2.0 fixtures below were recorded before the recorder stopped writing ahead of shutdown. Their
+last bytes are agy's exit teardown (`ESC[J ESC[?2004l`), so their final screens have no hint row.
 
 ## Versions
 
@@ -68,19 +133,20 @@ painted **on the same physical lines as the logo**. What Orca derives is:
 ▄▀▀    ▀▀▄     ~
 ```
 
-The detector requires `normalized.startsWith('gemini', trimmedStart)` on a trimmed line. The
-trimmed line starts with `▀`. It never matches. Measured three ways on the real screen:
+The earlier detector required `normalized.startsWith('gemini', trimmedStart)` on a trimmed line. The
+trimmed line starts with `▀`, so that rule never matched. The shipped detector uses the bare
+composer caret instead. Measured three ways on the real screen:
 
 | Input                                                  | `isKnownReadyPromptPreview` |
 | ------------------------------------------------------ | --------------------------- |
-| Real ready screen                                      | `false`                     |
+| Real ready screen                                      | `true`                      |
 | The same screen with the logo glyphs stripped          | `true`                      |
-| Real ready screen followed by the live `/model` picker | `true`                      |
+| Real ready screen followed by the live `/model` picker | `false`                     |
 
-So the logo — decoration, and suppressible with `AGY_CLI_HIDE_LOGO` — is what decides readiness
-today, and the live dialog is what supplies the model line the ready screen could not.
+So the logo — decoration, and suppressible with `AGY_CLI_HIDE_LOGO` — no longer decides readiness,
+and the live dialog cannot reuse the stale composer caret as a ready signal.
 
-### 2. The dialog is what satisfies the model rule
+### 2. The dialog used to satisfy the model rule
 
 `/model` prints its options one per line:
 
@@ -91,9 +157,9 @@ Gemini 3.1 Pro
 ```
 
 Those lines _do_ begin with `Gemini`, and a bare `>` composer line sits earlier in the same tail
-from before the picker opened. Both halves of the rule are satisfied **while a dialog owns the
-screen**, and the pane reads ready. This is the false-ready hazard the last three attempts were
-each trying to close, reproduced from a real capture.
+from before the picker opened. Both halves of the old rule were satisfied **while a dialog owned the
+screen**, and the pane read ready. The shipped detector now recognizes the active `Switch Model`
+surface and rejects that stale caret until it sees `Exited /model command`.
 
 ### 3. `>` is the dialog selection marker, not only the composer caret
 
@@ -233,31 +299,34 @@ expressed against the model/caret positions, which is what 1.2 and 1.3b just inv
 | X4  | Banner-to-caret distance                                   | ~8 derived lines on a 120x40 PTY; the banner falls outside the 6-line preview window, so only the full retained tail can see it |
 | X5  | Pane title on the trust screen versus ready                | Identical: none                                                                                                                 |
 
-## Can attempt six be written?
+## Attempt six is shipped
 
 Yes — but not as a variation on any of the five. Every one of them refined a predicate over
 `\n`-delimited lines, and that is the layer where the evidence says the information is not.
 
-What the captures support:
+What the captures support and the shipped detector now does:
 
 - **The one stable, dialog-free ready marker is a line whose entire trimmed content is `>`.** It is
   present in every ready capture and absent from every dialog capture, because a dialog's `>` always
   carries its selected row's label. This is a much narrower rule than any attempt used, and it is
   the only one that survived contact with the transcripts.
-- **Drop the model-row requirement.** It matches dialogs and not ready screens. Keeping it inverted
-  the detector.
+- **Drop the model-row requirement.** The model rows match dialogs and not the ready screen, so
+  keeping that requirement inverted the detector.
 - **Do not require an account row.** It is optional by environment variable and carries no email for
   API-key users.
+- **Veto an active model picker.** `Switch Model` followed by a labeled selection row means the
+  bare caret belongs to the composer behind the picker; readiness resumes after `Exited /model
+command`.
 - **Do not anchor on `headerIndex`.** The banner is printed once and never reprinted.
 - **The blocked-signal path already works** for the trust dialog: `antigravity-dialog-trust-workspace.txt`
   is correctly refused today, by wording, not by structure.
 
-What is still unknown and should be captured before shipping: the sign-in, theme, privacy and
-update dialogs, and any ready screen where the composer is not idle (accept-edits and plan mode,
-which PRs #15840 and #15852 describe from a screenshot). A bare-`>` rule is only as good as the
-claim that those modes still end on a bare `>`; that claim is untested.
+What is still unknown and should be captured: the sign-in, theme, privacy and update dialogs, and
+any ready screen where the composer is not idle (accept-edits and plan mode, which PRs #15840 and
+#15852 describe from a screenshot). A bare-`>` rule is only as good as the claim that those modes
+still end on a bare `>`; that claim is untested.
 
 The honest summary is that this is a screen-shaped problem being solved with line-shaped tools. A
 rule over the derived tail can be made much better than what ships today, but the durable fix is to
 ask the terminal emulator what the bottom row of the screen actually is, rather than inferring it
-from a byte stream that was written with cursor addressing.
+from a byte stream that was written with cursor addressing. Attempt seven does that.

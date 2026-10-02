@@ -1,10 +1,8 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import { buildTailLines } from './terminal-tail-state'
 import { tailMayContainBlockedSignal } from './terminal-tail-sentinel-index'
-import {
-  findActionableTerminalWaitBlockedSignal,
-  TERMINAL_WAIT_BLOCKED_SENTINEL_RE
-} from './terminal-wait-detection'
+import { findActionableTerminalWaitBlockedSignal } from './terminal-wait-detection'
+import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './agent-state-rules/blocked-text-layer'
 
 export function buildTerminalWaitText(
   lines: string[],
@@ -32,15 +30,15 @@ export function computeTerminalTailWaitState(
   partialLine: string,
   preview: string
 ): TerminalTailWaitState {
-  const tailShape = inspectTerminalWaitTail(lines, partialLine)
-  if (!tailShape.fromTail) {
+  const tailInspection = inspectTerminalWaitTail(lines, partialLine)
+  if (!tailInspection.fromTail) {
     return {
       waitText: preview,
       signal: findActionableTerminalWaitBlockedSignal(preview.toLowerCase()),
       fromTail: false
     }
   }
-  if (!tailShape.mayContainBlockedSignal) {
+  if (!tailInspection.mayContainBlockedSignal) {
     // Why: reads waitText only when a signal exists; avoid retaining a rebuilt 256 KiB string in the common case.
     return { waitText: '', signal: null, fromTail: true }
   }

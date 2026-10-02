@@ -1,13 +1,8 @@
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
-import {
-  extractLinearIssueReadItems,
-  isHostedTaskRepo,
-  useCallback
-} from './mobile-tasks-dependencies'
+import { isHostedTaskRepo, useCallback } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   GITLAB_PER_PAGE,
-  type GitLabTodo,
   type GitLabWorkItem,
   LINEAR_LIMIT,
   type TaskItem,
@@ -16,10 +11,15 @@ import {
   createGitLabTask,
   createGitLabTodoTask,
   createLinearTask,
-  isSuccess,
   mapWithConcurrency,
   taskTime
 } from './mobile-tasks-legacy-foundation'
+import { gitlabTodoListRead } from './mobile-task-list-operations'
+import {
+  gitlabWorkItemSearchRead,
+  linearAssignedIssueListRead,
+  linearIssueSearchRead
+} from './mobile-task-source-search-operations'
 
 export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
   const {
@@ -140,17 +140,17 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             return
           }
           if (provider === 'gitlab' && gitlabView === 'todos') {
-            const response = await requestClient.sendRequest('gitlab.todos', {
+            const reply = await gitlabTodoListRead.request(requestClient, {
               repo: `id:${queriedRepos[0]!.id}`
             })
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
+            // The reader answers rows it has checked, so `.map is not a function` and a to-do
+            // with no `actionName` are both named at `gitlab.todos` instead of crashing the list.
+            const todos = gitlabTodoListRead.interpret(reply)
             if (!isCurrent()) {
               return
             }
             setItems(
-              ((response.result as GitLabTodo[]) ?? [])
+              (todos ?? [])
                 .map(createGitLabTodoTask)
                 .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
             )
@@ -161,17 +161,15 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             GITHUB_REPO_CONCURRENCY,
             async (repo) => {
               try {
-                const response = await requestClient.sendRequest('gitlab.listWorkItems', {
+                const reply = await gitlabWorkItemSearchRead.request(requestClient, {
                   repo: `id:${repo.id}`,
                   state: gitlabFilter,
                   page: 1,
                   perPage: GITLAB_PER_PAGE,
                   query: appliedQuery.trim() || undefined
                 })
-                if (!isSuccess(response)) {
-                  throw new Error(response.error.message)
-                }
-                const envelope = response.result as {
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and types each row at `GitLabWorkItem`'s own member types, requiring the ones a consumer reads unguarded; the row builder's own reads are unchanged.
+                const envelope = gitlabWorkItemSearchRead.interpret(reply) as {
                   items: Array<Omit<GitLabWorkItem, 'repoId' | 'repoName'>>
                   error?: { type?: string; message: string }
                 }
@@ -209,21 +207,24 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
           }
         } else {
           const normalizedQuery = appliedQuery.trim()
-          const response = normalizedQuery
-            ? await requestClient.sendRequest('linear.searchIssues', {
-                query: normalizedQuery,
-                limit: LINEAR_LIMIT,
-                workspaceId: selectedLinearWorkspaceId ?? undefined
-              })
-            : await requestClient.sendRequest('linear.listIssues', {
-                filter: linearFilter,
-                limit: LINEAR_LIMIT,
-                workspaceId: selectedLinearWorkspaceId ?? undefined
-              })
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          const issues = extractLinearIssueReadItems(response.result)
+          // A query searches and no query lists: two methods, so each arm sends its own
+          // operation. Both project the reply through the same Linear item reader.
+          const found = normalizedQuery
+            ? linearIssueSearchRead.interpret(
+                await linearIssueSearchRead.request(requestClient, {
+                  query: normalizedQuery,
+                  limit: LINEAR_LIMIT,
+                  workspaceId: selectedLinearWorkspaceId ?? undefined
+                })
+              )
+            : linearAssignedIssueListRead.interpret(
+                await linearAssignedIssueListRead.request(requestClient, {
+                  filter: linearFilter,
+                  limit: LINEAR_LIMIT,
+                  workspaceId: selectedLinearWorkspaceId ?? undefined
+                })
+              )
+          const issues = found
           const filtered =
             selectedLinearTeamIds.size > 0
               ? issues.filter((issue) => selectedLinearTeamIds.has(issue.team.id))

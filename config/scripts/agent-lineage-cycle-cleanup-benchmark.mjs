@@ -50,7 +50,7 @@ for (let sample = 0; sample < 500; sample++) {
 }
 
 const results = []
-for (const [shape, count] of [
+for (const [topology, count] of [
   ['flat', 1000],
   ['all-cycles', 1000],
   ['mixed-cycles', 100],
@@ -58,9 +58,9 @@ for (const [shape, count] of [
   ['mixed-cycles', 1000]
 ]) {
   const rows = Array.from({ length: count }, (_, index) =>
-    row(index, shape === 'flat' ? undefined : index ^ 1)
+    row(index, topology === 'flat' ? undefined : index ^ 1)
   )
-  if (shape === 'mixed-cycles') {
+  if (topology === 'mixed-cycles') {
     rows.unshift(row('root', undefined))
   }
   assert.deepEqual(after(rows), before(rows))
@@ -83,7 +83,7 @@ for (const [shape, count] of [
       samples[arm].push({ wallMs, cpuMs: (used.user + used.system) / 30_000 })
     }
   }
-  results.push({ shape, count, samples })
+  results.push({ topology, count, samples })
 }
 console.log(
   JSON.stringify({ baseline, node: process.version, parityGraphs: 500, results }, null, 2)

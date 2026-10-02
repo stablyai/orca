@@ -89,6 +89,8 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
           repoPath: args.worktreePath,
           connectionId: args.connectionId
         })
+        // Preparation can return before this lookup settles; retain its error for the later await.
+        void linkedIssueDetailsPromise.catch(() => undefined)
         let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
         try {
           const currentBody = await resolveHostedReviewBodyForGeneration({
@@ -151,6 +153,8 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
         connectionId: args.connectionId,
         localGitOptions: gitOptions
       })
+      // Preparation can return before this lookup settles; retain its error for the later await.
+      void linkedIssueDetailsPromise.catch(() => undefined)
       let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
       try {
         const currentBody = await resolveHostedReviewBodyForGeneration({

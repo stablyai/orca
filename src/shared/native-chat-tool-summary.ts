@@ -1,5 +1,6 @@
 import {
   collapsedToolInputPrefix,
+  unwrapLoginShellCommand,
   MAX_TOOL_PREVIEW_LENGTH
 } from './native-chat-tool-preview-prefix'
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
@@ -37,7 +38,9 @@ export type ToolInputDisplay = {
 }
 
 export function summarizeToolInput(input: unknown): string {
-  const collapsed = collapsedToolInputPrefix(toRawPreview(input))
+  // Unwrap before clipping: the closing quote is what proves the wrapper, and an
+  // 80-character prefix has already dropped it. Non-shell input is untouched.
+  const collapsed = collapsedToolInputPrefix(unwrapLoginShellCommand(toRawPreview(input)))
   return collapsed.length <= MAX_TOOL_PREVIEW_LENGTH
     ? collapsed
     : `${collapsed.slice(0, MAX_TOOL_PREVIEW_LENGTH - 1)}…`
@@ -106,12 +109,6 @@ function formatNormalizedToolInput(input: unknown): string {
   } catch {
     return ''
   }
-}
-
-/** Whether the expanded detail would show structured JSON rather than repeating
- *  the row label — i.e. whether expanding the row is worth offering. */
-export function isStructuredToolInput(input: unknown): boolean {
-  return isStructuredNormalizedToolInput(normalizeToolInput(input))
 }
 
 function isStructuredNormalizedToolInput(input: unknown): boolean {

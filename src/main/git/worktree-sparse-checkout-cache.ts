@@ -24,6 +24,7 @@ import { detectSparseCheckout } from './worktree-sparse-state'
 //    on the rare edge that actually flipped, rather than partial state that could quietly diverge.
 //  - App cold start: the map starts empty, so the first read is always a fresh detect.
 const SPARSE_CHECKOUT_CACHE_RECONCILE_INTERVAL_MS = 5 * 60_000
+export const MAX_SPARSE_CHECKOUT_CACHE_ENTRIES = 512
 
 // Part of the cache key, not just a probe argument. A distro-less read of a WSL-hosted repo
 // resolves the gitdir pointer against a fabricated Win32 path and reports "not sparse"; several
@@ -48,6 +49,18 @@ export type SparseCheckoutChangeListener = (
 
 const sparseCheckoutStateCache = new Map<string, SparseCheckoutCacheEntry>()
 let changeListener: SparseCheckoutChangeListener | undefined
+
+function retainSparseCheckoutCacheEntry(key: string, entry: SparseCheckoutCacheEntry): void {
+  sparseCheckoutStateCache.delete(key)
+  sparseCheckoutStateCache.set(key, entry)
+  while (sparseCheckoutStateCache.size > MAX_SPARSE_CHECKOUT_CACHE_ENTRIES) {
+    const oldest = sparseCheckoutStateCache.keys().next()
+    if (oldest.done || oldest.value === key) {
+      break
+    }
+    sparseCheckoutStateCache.delete(oldest.value)
+  }
+}
 
 // Distro last so the repo- and worktree-scoped prefix deletes below still match every variant.
 function cacheKey(
@@ -87,10 +100,11 @@ export async function detectSparseCheckoutCached(
   const cached = sparseCheckoutStateCache.get(key)
   if (!cached) {
     const isSparse = await detectSparseCheckout(worktreePath, options)
-    sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
+    retainSparseCheckoutCacheEntry(key, { isSparse, cachedAt: Date.now() })
     return isSparse
   }
   if (Date.now() - cached.cachedAt < SPARSE_CHECKOUT_CACHE_RECONCILE_INTERVAL_MS) {
+    retainSparseCheckoutCacheEntry(key, cached)
     return cached.isSparse
   }
   // Stale-while-revalidate: serve the still-cached value now and correct it in the background,
@@ -115,7 +129,7 @@ async function revalidateInBackground(
     // A `has()`/presence check can't tell "still mine" from "someone else's fresh value" sharing
     // the key; comparing the map's current entry object to the one we started from can.
     if (sparseCheckoutStateCache.get(key) === startingEntry) {
-      sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
+      retainSparseCheckoutCacheEntry(key, { isSparse, cachedAt: Date.now() })
     }
     if (isSparse !== startingEntry.isSparse) {
       changeListener?.(repoPath, worktreePath, isSparse)

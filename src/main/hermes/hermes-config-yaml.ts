@@ -1,7 +1,8 @@
-import { parse, stringify } from 'yaml'
+import { isDeepStrictEqual } from 'node:util'
+import { parse } from 'yaml'
 
 import { HERMES_PLUGIN_NAME } from './hermes-managed-plugin-source'
-import { editHermesPluginLists } from './hermes-config-source-edit'
+import { updateHermesPluginDocument } from './hermes-config-document'
 
 export type HermesConfig = Record<string, unknown>
 
@@ -42,10 +43,6 @@ export function parseHermesConfig(content: string | null): ConfigParseResult {
   }
 }
 
-export function serializeHermesConfig(config: HermesConfig): string {
-  return `${stringify(config, { lineWidth: 0 }).trimEnd()}\n`
-}
-
 export function enablePlugin(config: HermesConfig): HermesConfig {
   const next: HermesConfig = { ...config }
   const plugins = isRecord(next.plugins) ? { ...next.plugins } : {}
@@ -73,7 +70,7 @@ export function disablePlugin(config: HermesConfig): HermesConfig {
   }
   const plugins = { ...next.plugins }
   const enabled = asStringArray(plugins.enabled)
-  if (enabled?.includes(HERMES_PLUGIN_NAME)) {
+  if (enabled !== null && plugins.enabled !== undefined) {
     plugins.enabled = enabled.filter((name) => name !== HERMES_PLUGIN_NAME)
   }
   next.plugins = plugins
@@ -88,11 +85,11 @@ export function updateConfigContent(
   if (!parsed.ok) {
     return { content: null, detail: parsed.detail }
   }
-  try {
-    return { content: editHermesPluginLists(content ?? '', parsed.config, updater(parsed.config)) }
-  } catch (error) {
-    return { content: null, detail: error instanceof Error ? error.message : String(error) }
+  const next = updater(parsed.config)
+  if (isDeepStrictEqual(parsed.config, next)) {
+    return { content: content ?? '' }
   }
+  return updateHermesPluginDocument(content ?? '', next)
 }
 
 export function getConfigEnablement(config: HermesConfig): {

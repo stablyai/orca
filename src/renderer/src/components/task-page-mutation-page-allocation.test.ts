@@ -33,7 +33,12 @@ it('avoids allocating copies of unaffected pages during an item mutation', () =>
     if (inputs.has(this)) {
       allocations++
     }
-    return Reflect.apply(map, this, [callback, thisArg]) as U[]
+    // Explicit `call` type arguments: inference through `call` erases `map`'s own `U` to `unknown`.
+    return map.call<T[], [(value: T, index: number, array: T[]) => U, unknown], U[]>(
+      this,
+      callback,
+      thisArg
+    )
   }
   Array.prototype.slice = function (this: unknown[], ...args: Parameters<typeof slice>) {
     if (inputs.has(this)) {

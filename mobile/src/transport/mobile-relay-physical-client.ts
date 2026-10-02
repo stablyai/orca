@@ -7,6 +7,7 @@ import { isRpcResponse } from './rpc-response-shape'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogSink, RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 export { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
@@ -34,7 +35,7 @@ export function connectMobileRelayForPairing(args: {
   onLog?: ConnectionLogSink
 }): PairingCandidateClient {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
-  const socketUrl = relayPhoneWebSocketUrl(args.relay)
+  const socketUrl = relayConnectWebSocketUrl(args.relay.cellUrl, args.relay.relayHostId)
   const log = createPairingRelayLogger(args.onLog)
   const cellHost = redactSocketEndpoint(socketUrl)
   log('info', 'Relay: dialing cell', cellHost)
@@ -206,13 +207,6 @@ export function connectMobileRelayForPairing(args: {
       fail(new Error('relay pairing client closed'))
     }
   }
-}
-
-export function relayPhoneWebSocketUrl(relay: PairingRelay): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
 }
 
 function asError(error: unknown): Error {

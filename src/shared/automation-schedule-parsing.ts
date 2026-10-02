@@ -5,6 +5,7 @@ import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 import {
   DAY_NAMES,
   MONTH_NAMES,
+  isCronDayFieldRestricted,
   parseCronField,
   type CronParseOptions
 } from './automation-cron-field-parsing'
@@ -76,23 +77,6 @@ export function parseCronExpression(
   }
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
   const rejectOversizedStep = options.rejectOversizedStep ?? false
-  const daysOfMonth = parseCronField({
-    value: dayOfMonth,
-    min: 1,
-    max: 31,
-    field: 'day of month',
-    rejectOversizedStep
-  })
-  const daysOfWeek = parseCronField({
-    value: dayOfWeek,
-    min: 0,
-    max: 7,
-    field: 'day of week',
-    names: DAY_NAMES,
-    normalize: (value) => (value === 7 ? 0 : value),
-    distinctValueCount: 7,
-    rejectOversizedStep
-  })
   return {
     kind: 'cron',
     minutes: parseCronField({
@@ -103,7 +87,13 @@ export function parseCronExpression(
       rejectOversizedStep
     }),
     hours: parseCronField({ value: hour, min: 0, max: 23, field: 'hour', rejectOversizedStep }),
-    daysOfMonth,
+    daysOfMonth: parseCronField({
+      value: dayOfMonth,
+      min: 1,
+      max: 31,
+      field: 'day of month',
+      rejectOversizedStep
+    }),
     months: parseCronField({
       value: month,
       min: 1,
@@ -112,9 +102,18 @@ export function parseCronExpression(
       names: MONTH_NAMES,
       rejectOversizedStep
     }),
-    daysOfWeek,
-    dayOfMonthRestricted: daysOfMonth.size !== 31,
-    dayOfWeekRestricted: daysOfWeek.size !== 7
+    daysOfWeek: parseCronField({
+      value: dayOfWeek,
+      min: 0,
+      max: 7,
+      field: 'day of week',
+      names: DAY_NAMES,
+      normalize: (value) => (value === 7 ? 0 : value),
+      distinctValueCount: 7,
+      rejectOversizedStep
+    }),
+    dayOfMonthRestricted: isCronDayFieldRestricted(dayOfMonth),
+    dayOfWeekRestricted: isCronDayFieldRestricted(dayOfWeek)
   }
 }
 

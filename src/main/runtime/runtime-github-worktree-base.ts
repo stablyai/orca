@@ -9,7 +9,7 @@ import { resolveGitHubReviewHeadRemote } from '../github/review-head-remote'
 import { gitExecFileAsync } from '../git/runner'
 import {
   getLocalProjectGitExecOptions,
-  getLocalProjectWorktreeGitOptions
+  getLocalProjectGhExecOptions
 } from '../project-runtime-git-options'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -43,9 +43,11 @@ export async function resolveRuntimeGitHubWorktreeBase(
   const localGitExecOptions = sshGitProvider
     ? undefined
     : getLocalProjectGitExecOptions(deps.store, repo)
-  const localWorktreeGitOptions = sshGitProvider
-    ? {}
-    : getLocalProjectWorktreeGitOptions(deps.store, repo)
+  const localGhOptions = sshGitProvider
+    ? repo.ghAccount
+      ? { ghAccount: repo.ghAccount }
+      : undefined
+    : getLocalProjectGhExecOptions(deps.store, repo)
   const gitExec = sshGitProvider
     ? (gitArgs: string[]) => sshGitProvider.exec(gitArgs, repo.path)
     : (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions ?? { cwd: repo.path })
@@ -54,7 +56,7 @@ export async function resolveRuntimeGitHubWorktreeBase(
       repoPath: repo.path,
       issueSourcePreference: repo.issueSourcePreference,
       connectionId: repo.connectionId ?? null,
-      localGitOptions: localWorktreeGitOptions,
+      localGitOptions: localGhOptions,
       gitExec
     })
   const fetchRemoteTrackingRef = (remote: string, branch: string): Promise<void> =>
@@ -81,7 +83,7 @@ export async function resolveRuntimeGitHubWorktreeBase(
     isCrossRepository: args.isCrossRepository,
     issueSourcePreference: repo.issueSourcePreference,
     connectionId: repo.connectionId ?? null,
-    localGitOptions: localWorktreeGitOptions,
+    localGitOptions: localGhOptions,
     gitExec,
     fetchRemoteTrackingRef,
     fetchPullRequestHeadRef,
