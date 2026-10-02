@@ -1,5 +1,6 @@
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
 import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../shared/terminal-input'
 import type { CommandHandler } from '../dispatch'
 import { formatTerminalSend, printResult, terminalSendWarnings } from '../format'
 import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../flags'
@@ -7,24 +8,33 @@ import { readRetryRequestFlag } from '../retry-request-flag'
 import { RuntimeClientError } from '../runtime-client'
 import { attachUnverifiedTerminalPromptRecovery } from '../runtime/terminal-prompt-mutation-recovery'
 import { getTerminalHandle } from '../selectors'
+import { readStdinPayload } from '../stdin-payload'
 
 type TerminalSendResult = { send: RuntimeTerminalSend; warnings?: string[] }
 
 export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
-  const text = getOptionalStringFlag(flags, 'text')
+  const textStdin = flags.has('text-stdin')
+  if (textStdin && flags.has('text')) {
+    throw new RuntimeClientError('invalid_argument', 'Use either --text or --text-stdin, not both')
+  }
+  const argvText = getOptionalStringFlag(flags, 'text')
   const enter = flags.get('enter') === true
   const interrupt = flags.get('interrupt') === true
-  const promptCandidate = !!text && enter && !interrupt
   const retryRequest = readRetryRequestFlag(flags)
   const waitSubmitSeconds = getOptionalPositiveIntegerFlag(flags, 'wait-submit')
-  if ((retryRequest || waitSubmitSeconds) && !promptCandidate) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      '--retry-request and --wait-submit require --text with --enter and without --interrupt.'
-    )
+  const promptRequired = !!(retryRequest || waitSubmitSeconds)
+  const promptRequirementMessage =
+    '--retry-request and --wait-submit require nonempty --text or --text-stdin with --enter and without --interrupt.'
+  if (promptRequired && (!(argvText || textStdin) || !enter || interrupt)) {
+    throw new RuntimeClientError('invalid_argument', promptRequirementMessage)
   }
   if (waitSubmitSeconds && waitSubmitSeconds > 3600) {
     throw new RuntimeClientError('invalid_argument', '--wait-submit must be at most 3600 seconds.')
+  }
+  const text = textStdin ? await readStdinPayload(TERMINAL_INPUT_MAX_BYTES) : argvText
+  const promptCandidate = !!text && enter && !interrupt
+  if (promptRequired && !promptCandidate) {
+    throw new RuntimeClientError('invalid_argument', promptRequirementMessage)
   }
   const waitSubmitMs = waitSubmitSeconds ? waitSubmitSeconds * 1000 : undefined
   let promptDeliverySupported = false
