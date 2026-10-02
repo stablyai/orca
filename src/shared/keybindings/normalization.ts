@@ -4,6 +4,7 @@ import type {
   NormalizeKeybindingOptions
 } from './types'
 import { DEFINITIONS_BY_ID, DIGIT_INDEX_KEY_PATTERN, isDigitIndexActionId } from './definitions'
+import { isMouseKeyToken } from './mouse-bindings'
 import { canonicalizeParsedKeybinding, isSafeBareKey, parseKeybinding } from './parser'
 
 export function normalizeKeybindingWithOptions(
@@ -20,6 +21,7 @@ export function normalizeKeybindingWithOptions(
   if (parsed.doubleTapModifier) {
     return { ok: true, value: canonicalizeParsedKeybinding(parsed) }
   }
+  const isMouseButton = isMouseKeyToken(parsed.key)
   const isShiftInsert = parsed.shift && parsed.key === 'Insert'
   const isBareAllowed = options.allowBareKeybindings === true && isSafeBareKey(parsed)
   const isShiftOnlyAllowed =
@@ -34,6 +36,7 @@ export function normalizeKeybindingWithOptions(
     !parsed.meta &&
     !parsed.control &&
     !parsed.alt &&
+    !isMouseButton &&
     !isShiftInsert &&
     !isBareAllowed &&
     !isShiftOnlyAllowed
@@ -155,4 +158,36 @@ export function normalizeKeybindingArrayForAction(
     actionId,
     normalizeKeybindingArrayWithOptions(input, normalizeOptionsForAction(actionId))
   )
+}
+
+export type StoredKeybindingArrayNormalization = {
+  bindings: string[]
+  rejected: { binding: string; error: string }[]
+}
+
+/**
+ * Why: a stored list must lose only the entries a build cannot parse. The
+ * all-or-nothing variants above are right for a write (reject the edit), but a
+ * read that discards the whole action also discards the shortcuts it did
+ * understand — including the keyboard chords saved beside a newer token.
+ */
+export function normalizeStoredKeybindingArrayForAction(
+  actionId: KeybindingActionId,
+  input: readonly string[]
+): StoredKeybindingArrayNormalization {
+  const bindings: string[] = []
+  const rejected: { binding: string; error: string }[] = []
+  for (const binding of input) {
+    const result = normalizeKeybindingArrayForAction(actionId, [binding])
+    if (!Array.isArray(result)) {
+      rejected.push({ binding, error: result.ok ? 'Unable to parse shortcut.' : result.error })
+      continue
+    }
+    for (const normalized of result) {
+      if (!bindings.includes(normalized)) {
+        bindings.push(normalized)
+      }
+    }
+  }
+  return { bindings, rejected }
 }

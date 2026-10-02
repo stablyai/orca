@@ -131,6 +131,15 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 ## Shortcuts
 
 - Full keymap — every binding remappable.
+- Mouse Back/Forward side buttons can be recorded here, with optional modifiers. Assign them to Previous terminal tab and Next terminal tab to switch terminals with your mouse. In `~/.orca/keybindings.json` they live in a separate `mouse` section, which mirrors the keyboard sections and holds `MouseBack` or `MouseForward` (for example, `Shift+MouseForward`). Keeping them apart means an older Orca version can still read the keyboard shortcuts you saved on the same command.
+
+  ```json
+  {
+    "platforms": { "darwin": { "tab.nextTerminal": ["Mod+Shift+]"] } },
+    "mouse": { "platforms": { "darwin": { "tab.nextTerminal": ["MouseForward"] } } }
+  }
+  ```
+
 - Toggle Sleeping Workspaces ships unbound; assign it here if you want a direct shortcut for the sidebar sleeping-worktree filter.
 - **Toggle Workspace Board** ships unbound; assign it here to open or close the Workspace Board with one shortcut. Existing bindings for `workspace.openBoard` continue to work.
 - Close all editor tabs defaults to `Cmd+Option+W` on macOS and `Ctrl+Alt+W` on Windows / Linux.

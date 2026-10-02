@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
+  KEYBINDING_PLATFORMS,
   findKeybindingConflicts,
   getKeybindingDefinition,
   isKeybindingActionId,
   normalizeKeybindingArrayForAction,
-  normalizeKeybindingListForAction,
+  normalizeStoredKeybindingArrayForAction,
   type KeybindingActionId,
   type KeybindingFileDiagnostic,
   type KeybindingOverrides,
@@ -15,8 +16,9 @@ import {
 export type JsonObject = Record<string, unknown>
 
 export const FILE_VERSION = 1
-const PLATFORM_KEYS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
-const ROOT_KEYS = new Set(['$schema', 'version', 'keybindings', 'platforms'])
+/** Mouse bindings live here, not in `keybindings`/`platforms`; see splitBindingsByInputKind. */
+export const MOUSE_SECTION_KEY = 'mouse'
+const ROOT_KEYS = new Set(['$schema', 'version', 'keybindings', 'platforms', MOUSE_SECTION_KEY])
 
 export function isJsonObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -75,33 +77,31 @@ export function writeJsonDocument(path: string, document: JsonObject): void {
   }
 }
 
-function normalizeBindingValue(
+type StoredBindingValue =
+  | { ok: true; bindings: string[]; rejected: { binding: string; error: string }[] }
+  | { ok: false; error: string }
+
+function normalizeStoredBindingValue(
   actionId: KeybindingActionId,
   value: unknown
-): { ok: true; value: string[] } | { ok: false; error: string } {
+): StoredBindingValue {
   if (value === null || value === false) {
-    return { ok: true, value: [] }
+    return { ok: true, bindings: [], rejected: [] }
   }
-  if (typeof value === 'string') {
-    const normalized = normalizeKeybindingListForAction(actionId, value)
-    return Array.isArray(normalized)
-      ? { ok: true, value: normalized }
-      : normalized.ok
-        ? { ok: true, value: [normalized.value] }
-        : normalized
+  const entries =
+    typeof value === 'string'
+      ? [value]
+      : Array.isArray(value) && value.every(isString)
+        ? value
+        : null
+  if (!entries) {
+    return { ok: false, error: 'Use a string, string array, null, or false.' }
   }
-  if (Array.isArray(value)) {
-    if (!value.every((item) => typeof item === 'string')) {
-      return { ok: false, error: 'Use a string, string array, null, or false.' }
-    }
-    const normalized = normalizeKeybindingArrayForAction(actionId, value)
-    return Array.isArray(normalized)
-      ? { ok: true, value: normalized }
-      : normalized.ok
-        ? { ok: true, value: [normalized.value] }
-        : normalized
-  }
-  return { ok: false, error: 'Use a string, string array, null, or false.' }
+  return { ok: true, ...normalizeStoredKeybindingArrayForAction(actionId, entries) }
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string'
 }
 
 export function normalizeWriteBindingValue(
@@ -153,7 +153,7 @@ export function parseBindingSection(
       })
       continue
     }
-    const normalized = normalizeBindingValue(actionId, rawBinding)
+    const normalized = normalizeStoredBindingValue(actionId, rawBinding)
     if (!normalized.ok) {
       diagnostics.push({
         severity: 'error',
@@ -163,14 +163,32 @@ export function parseBindingSection(
       })
       continue
     }
-    overrides[actionId] = normalized.value
+    for (const { binding, error } of normalized.rejected) {
+      diagnostics.push({
+        severity: 'error',
+        section,
+        actionId,
+        message: `Shortcut "${binding}" for "${actionId}" was ignored: ${error}`
+      })
+    }
+    // Why: when nothing survived, leave the action unset so it falls back to its
+    // defaults instead of reading as deliberately unbound.
+    if (normalized.bindings.length === 0 && normalized.rejected.length > 0) {
+      continue
+    }
+    overrides[actionId] = normalized.bindings
   }
   return overrides
 }
 
+function isKeybindingPlatform(value: string): value is KeybindingPlatform {
+  return KEYBINDING_PLATFORMS.some((platform) => platform === value)
+}
+
 export function parsePlatformOverrides(
   document: JsonObject,
-  diagnostics: KeybindingFileDiagnostic[]
+  diagnostics: KeybindingFileDiagnostic[],
+  sectionPrefix = ''
 ): Partial<Record<KeybindingPlatform, KeybindingOverrides>> {
   const rawPlatforms = document.platforms
   if (rawPlatforms === undefined) {
@@ -179,7 +197,7 @@ export function parsePlatformOverrides(
   if (!isJsonObject(rawPlatforms)) {
     diagnostics.push({
       severity: 'error',
-      section: 'platforms',
+      section: `${sectionPrefix}platforms`,
       message: 'platforms must be an object with darwin, linux, or win32 sections.'
     })
     return {}
@@ -187,21 +205,48 @@ export function parsePlatformOverrides(
 
   const result: Partial<Record<KeybindingPlatform, KeybindingOverrides>> = {}
   for (const [platform, value] of Object.entries(rawPlatforms)) {
-    if (!PLATFORM_KEYS.includes(platform as KeybindingPlatform)) {
+    if (!isKeybindingPlatform(platform)) {
       diagnostics.push({
         severity: 'warning',
-        section: `platforms.${platform}`,
+        section: `${sectionPrefix}platforms.${platform}`,
         message: `Unknown platform "${platform}" was ignored.`
       })
       continue
     }
-    result[platform as KeybindingPlatform] = parseBindingSection(
+    result[platform] = parseBindingSection(
       value,
-      `platforms.${platform}`,
+      `${sectionPrefix}platforms.${platform}`,
       diagnostics
     )
   }
   return result
+}
+
+export type MouseSectionOverrides = {
+  common: KeybindingOverrides
+  platforms: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
+}
+
+export function parseMouseSection(
+  document: JsonObject,
+  diagnostics: KeybindingFileDiagnostic[]
+): MouseSectionOverrides {
+  const raw = document[MOUSE_SECTION_KEY]
+  if (raw === undefined) {
+    return { common: {}, platforms: {} }
+  }
+  if (!isJsonObject(raw)) {
+    diagnostics.push({
+      severity: 'error',
+      section: MOUSE_SECTION_KEY,
+      message: `${MOUSE_SECTION_KEY} must be an object with keybindings or platforms sections.`
+    })
+    return { common: {}, platforms: {} }
+  }
+  return {
+    common: parseBindingSection(raw.keybindings, `${MOUSE_SECTION_KEY}.keybindings`, diagnostics),
+    platforms: parsePlatformOverrides(raw, diagnostics, `${MOUSE_SECTION_KEY}.`)
+  }
 }
 
 export function removeConflictingOverrides(

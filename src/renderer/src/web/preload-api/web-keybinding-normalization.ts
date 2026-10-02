@@ -1,7 +1,8 @@
 import {
+  KEYBINDING_PLATFORMS,
   findKeybindingConflicts,
   isKeybindingActionId,
-  normalizeKeybindingArrayForAction
+  normalizeStoredKeybindingArrayForAction
 } from '../../../../shared/keybindings'
 import type {
   KeybindingActionId,
@@ -17,7 +18,11 @@ export type WebKeybindingDocument = {
   platforms: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
 }
 
-export const WEB_KEYBINDING_PLATFORMS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+export const WEB_KEYBINDING_PLATFORMS: readonly KeybindingPlatform[] = KEYBINDING_PLATFORMS
+
+function isWebKeybindingPlatform(value: string): value is KeybindingPlatform {
+  return WEB_KEYBINDING_PLATFORMS.some((platform) => platform === value)
+}
 
 export function isJsonObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -73,29 +78,33 @@ export function normalizeStoredWebOverrides(
       })
       continue
     }
-    const normalized = normalizeKeybindingArrayForAction(actionId, rawBindings)
-    if (!Array.isArray(normalized)) {
-      const error = normalized.ok ? 'Unable to parse shortcut.' : normalized.error
+    const normalized = normalizeStoredKeybindingArrayForAction(actionId, rawBindings)
+    for (const { binding, error } of normalized.rejected) {
       diagnostics.push({
         severity: 'error',
         section,
         actionId,
         message: translate(
-          'auto.web.web.preload.api.76122208ca',
-          'Shortcut for "{{value0}}" was ignored: {{value1}}',
-          { value0: actionId, value1: error }
+          'auto.web.preload.api.web.keybinding.normalization.472bb127b6',
+          'Shortcut "{{value0}}" for "{{value1}}" was ignored: {{value2}}',
+          { value0: binding, value1: actionId, value2: error }
         )
       })
+    }
+    // Why: when nothing survived, leave the action unset so it falls back to its
+    // defaults instead of reading as deliberately unbound.
+    if (normalized.bindings.length === 0 && normalized.rejected.length > 0) {
       continue
     }
-    overrides[actionId] = normalized
+    overrides[actionId] = normalized.bindings
   }
   return overrides
 }
 
 export function normalizeWebPlatformOverrides(
   value: unknown,
-  diagnostics: KeybindingFileDiagnostic[]
+  diagnostics: KeybindingFileDiagnostic[],
+  sectionPrefix = ''
 ): Partial<Record<KeybindingPlatform, KeybindingOverrides>> {
   if (value === undefined) {
     return {}
@@ -103,7 +112,7 @@ export function normalizeWebPlatformOverrides(
   if (!isJsonObject(value)) {
     diagnostics.push({
       severity: 'error',
-      section: 'platforms',
+      section: `${sectionPrefix}platforms`,
       message: translate(
         'auto.web.web.preload.api.0a69fcd8bc',
         'platforms must be an object with darwin, linux, or win32 sections.'
@@ -114,10 +123,10 @@ export function normalizeWebPlatformOverrides(
 
   const result: Partial<Record<KeybindingPlatform, KeybindingOverrides>> = {}
   for (const [platform, overrides] of Object.entries(value)) {
-    if (!WEB_KEYBINDING_PLATFORMS.includes(platform as KeybindingPlatform)) {
+    if (!isWebKeybindingPlatform(platform)) {
       diagnostics.push({
         severity: 'warning',
-        section: `platforms.${platform}`,
+        section: `${sectionPrefix}platforms.${platform}`,
         message: translate(
           'auto.web.web.preload.api.32f15bdb0f',
           'Unknown platform "{{value0}}" was ignored.',
@@ -126,9 +135,9 @@ export function normalizeWebPlatformOverrides(
       })
       continue
     }
-    result[platform as KeybindingPlatform] = normalizeStoredWebOverrides(
+    result[platform] = normalizeStoredWebOverrides(
       overrides,
-      `platforms.${platform}`,
+      `${sectionPrefix}platforms.${platform}`,
       diagnostics
     )
   }

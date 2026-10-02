@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
+import { registerMouseShortcutDispatch } from '@/lib/mouse-shortcut-dispatch'
+import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 
 const originalUserAgent = navigator.userAgent
@@ -36,13 +38,13 @@ function holdSettings(): GlobalSettings {
   } as GlobalSettings
 }
 
-function Probe(): null {
+function Probe({ keybindings }: { keybindings: KeybindingOverrides }): null {
   useHoldDictationGesture({
     dictationStateRef,
     holdGestureActiveRef,
     insertionTargetRef,
     intentionalTargetCancellationRef,
-    keybindings: {},
+    keybindings,
     settings: holdSettings(),
     startDictation,
     stopDictation
@@ -62,12 +64,12 @@ function dispatchKeyUp(init: KeyboardEventInit): KeyboardEvent {
   return event
 }
 
-async function renderProbe(): Promise<void> {
+async function renderProbe(keybindings: KeybindingOverrides = {}): Promise<void> {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(<Probe />)
+    root?.render(<Probe keybindings={keybindings} />)
   })
 }
 
@@ -225,4 +227,32 @@ describe('useHoldDictationGesture', () => {
     expect(stopDictation).toHaveBeenCalledTimes(1)
     expect(holdGestureActiveRef.current).toBe(false)
   })
+})
+
+it('starts and stops a mouse hold shortcut on press and release', async () => {
+  await renderProbe({ 'voice.dictation': ['MouseBack'] })
+  const cleanup = registerMouseShortcutDispatch(() => true)
+  try {
+    document.body.dispatchEvent(
+      new MouseEvent('mousedown', { button: 3, bubbles: true, cancelable: true })
+    )
+    expect(startDictation).toHaveBeenCalledOnce()
+    dictationStateRef.current = 'listening'
+    document.body.dispatchEvent(
+      new MouseEvent('mouseup', { button: 3, bubbles: true, cancelable: true })
+    )
+    expect(stopDictation).toHaveBeenCalledOnce()
+  } finally {
+    cleanup()
+  }
+})
+
+it('does not start dictation when recording its shortcut', async () => {
+  await renderProbe({ 'voice.dictation': ['MouseBack'] })
+  const recorder = document.createElement('button')
+  recorder.setAttribute('data-shortcut-recorder-active', '')
+  document.body.appendChild(recorder)
+  recorder.dispatchEvent(new KeyboardEvent('keydown', { key: 'MouseBack', bubbles: true }))
+  expect(startDictation).not.toHaveBeenCalled()
+  recorder.remove()
 })

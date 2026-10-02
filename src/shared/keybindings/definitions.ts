@@ -3,6 +3,7 @@ import type {
   AgentTabActionId,
   KeybindingActionId,
   KeybindingDefinition,
+  KeybindingPlatform,
   PluginKeybindingActionId
 } from './types'
 import type { TuiAgent } from '../tui-agent'
@@ -86,6 +87,8 @@ export function isPluginKeybindingActionId(value: string): value is PluginKeybin
 export function getKeybindingDefinition(actionId: KeybindingActionId): KeybindingDefinition | null {
   return DEFINITIONS_BY_ID.get(actionId) ?? null
 }
+
+export const KEYBINDING_PLATFORMS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
 
 export function getKeybindingPlatform(platform: NodeJS.Platform): 'darwin' | 'linux' | 'win32' {
   return platform === 'darwin' ? 'darwin' : platform === 'win32' ? 'win32' : 'linux'

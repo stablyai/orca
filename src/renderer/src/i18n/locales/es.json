@@ -211,13 +211,23 @@
             "10898045f3": "Se ignoró el atajo para \"{{value0}}\": usa un array de strings.",
             "36761d9604": "Se ignoró la acción de atajo desconocida \"{{value0}}\".",
             "d2e43e426a": "{{value0}} debe ser un objeto.",
-            "fb290366b2": "No está disponible en la web.",
-            "76122208ca": "Se ignoró el atajo para \"{{value0}}\": {{value1}}"
+            "fb290366b2": "No está disponible en la web."
           }
         },
         "runtime": {
           "environment": {
             "07f788de83": "WebSocket"
+          }
+        }
+      },
+      "preload": {
+        "api": {
+          "web": {
+            "keybinding": {
+              "normalization": {
+                "472bb127b6": "Se ignoró el atajo \"{{value0}}\" para \"{{value1}}\": {{value2}}"
+              }
+            }
           }
         }
       }
@@ -9751,7 +9761,7 @@
           "e27c8d45bf": "Los diagnósticos están desactivados por una variable de entorno."
         },
         "ShortcutCommandBlock": {
-          "eb72c52c28": "Pulsa un atajo o toca dos veces una tecla modificadora (p. ej., {{value0}}). Esc cancela.",
+          "eb72c52c28": "Pulsa teclas, un botón Atrás/Adelante del ratón o toca dos veces una tecla modificadora (p. ej., {{value0}}). Esc cancela.",
           "70b5d25583": "Atajo de {{value0}}",
           "287e07ddde": "Modificado",
           "3c83cd7d1c": "Desactivado",

@@ -376,13 +376,23 @@
             "10898045f3": "Raccourci pour « {{value0}} » ignoré : utilisez un tableau de chaînes.",
             "36761d9604": "Action de raccourci inconnue « {{value0}} » ignorée.",
             "d2e43e426a": "{{value0}} doit être un objet.",
-            "fb290366b2": "Indisponible sur le web.",
-            "76122208ca": "Raccourci pour « {{value0}} » ignoré : {{value1}}"
+            "fb290366b2": "Indisponible sur le web."
           }
         },
         "runtime": {
           "environment": {
             "07f788de83": "WebSocket"
+          }
+        }
+      },
+      "preload": {
+        "api": {
+          "web": {
+            "keybinding": {
+              "normalization": {
+                "472bb127b6": "Raccourci « {{value0}} » pour « {{value1}} » ignoré : {{value2}}"
+              }
+            }
           }
         }
       }
@@ -11087,7 +11097,7 @@
           "e27c8d45bf": "Les diagnostics sont désactivés par une variable d'environnement."
         },
         "ShortcutCommandBlock": {
-          "eb72c52c28": "Appuyez sur un raccourci, ou appuyez deux fois sur une touche modificatrice (ex. {{value0}}). Échap annule.",
+          "eb72c52c28": "Appuyez sur des touches, un bouton Précédent/Suivant de la souris ou deux fois sur une touche modificatrice (ex. {{value0}}). Échap annule.",
           "70b5d25583": "Raccourci {{value0}}",
           "287e07ddde": "Modifié",
           "3c83cd7d1c": "Désactivé",

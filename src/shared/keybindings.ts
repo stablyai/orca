@@ -3,6 +3,7 @@
 export * from './keybindings/types'
 export * from './keybindings/definitions'
 export * from './keybindings/parser'
+export * from './keybindings/mouse-bindings'
 export * from './keybindings/normalization'
 export * from './keybindings/input'
 export * from './keybindings/effective'

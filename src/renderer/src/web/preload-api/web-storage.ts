@@ -10,6 +10,11 @@ export const GITHUB_CACHE_STORAGE_KEY = 'orca.web.githubCache.v1'
 
 export const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 
+// Why: a rolled-back web bundle rewrites the keybindings document from its own
+// parsed view, so any binding it cannot parse is erased. Mouse bindings live
+// under a key older bundles never read or write.
+export const MOUSE_KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindingsMouse.v1'
+
 export function getBrowserPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Windows')) {
     return 'win32'

@@ -4,7 +4,11 @@ import {
   formatKeybindingList,
   getKeybindingPlatform,
   isKeybindingActionId,
-  normalizeKeybindingArrayForAction
+  normalizeKeybindingArrayForAction,
+  splitBindingsByInputKind,
+  splitOverridesByInputKind,
+  unionKeybindingOverrides,
+  unionPlatformKeybindingOverrides
 } from '../../../../shared/keybindings'
 import type {
   KeybindingActionId,
@@ -14,13 +18,20 @@ import type {
   KeybindingPlatform
 } from '../../../../shared/keybindings'
 import {
+  WEB_KEYBINDING_PLATFORMS,
   isJsonObject,
   normalizeStoredWebOverrides,
   normalizeWebPlatformOverrides,
   removeConflictingWebOverrides
 } from './web-keybinding-normalization'
 import type { WebKeybindingDocument } from './web-keybinding-normalization'
-import { KEYBINDINGS_STORAGE_KEY, getBrowserPlatform, readJson, writeJson } from './web-storage'
+import {
+  KEYBINDINGS_STORAGE_KEY,
+  MOUSE_KEYBINDINGS_STORAGE_KEY,
+  getBrowserPlatform,
+  readJson,
+  writeJson
+} from './web-storage'
 
 export type WebKeybindingsApi = NonNullable<PreloadApi['keybindings']>
 
@@ -42,8 +53,8 @@ export function getWebKeybindingPlatform(): KeybindingPlatform {
   return getKeybindingPlatform(getBrowserPlatform())
 }
 
-export function readWebKeybindingDocument(): WebKeybindingDocument {
-  const document = readJson(KEYBINDINGS_STORAGE_KEY, createEmptyWebKeybindingDocument())
+function readStoredKeybindingDocument(storageKey: string): WebKeybindingDocument {
+  const document = readJson(storageKey, createEmptyWebKeybindingDocument())
   return {
     version: 1,
     keybindings: isJsonObject(document.keybindings)
@@ -55,16 +66,33 @@ export function readWebKeybindingDocument(): WebKeybindingDocument {
   }
 }
 
+export function readWebKeybindingDocument(): WebKeybindingDocument {
+  return readStoredKeybindingDocument(KEYBINDINGS_STORAGE_KEY)
+}
+
+/**
+ * Why: this bundle can be rolled back to one that cannot parse `MouseBack`, and
+ * an older bundle rewrites the keybindings document from its own parsed view —
+ * erasing every binding it dropped, keyboard chords included. Mouse bindings are
+ * kept under a key no older bundle reads or writes, and rejoined on read.
+ */
+export function readWebMouseKeybindingDocument(): WebKeybindingDocument {
+  return readStoredKeybindingDocument(MOUSE_KEYBINDINGS_STORAGE_KEY)
+}
+
 export function getWebKeybindingSnapshot(): KeybindingFileSnapshot {
   const platform = getWebKeybindingPlatform()
   const diagnostics: KeybindingFileDiagnostic[] = []
   const document = readWebKeybindingDocument()
-  const commonOverrides = normalizeStoredWebOverrides(
-    document.keybindings,
-    'keybindings',
-    diagnostics
+  const mouseDocument = readWebMouseKeybindingDocument()
+  const commonOverrides = unionKeybindingOverrides(
+    normalizeStoredWebOverrides(document.keybindings, 'keybindings', diagnostics),
+    normalizeStoredWebOverrides(mouseDocument.keybindings, 'mouse.keybindings', diagnostics)
   )
-  const platformOverrides = normalizeWebPlatformOverrides(document.platforms, diagnostics)
+  const platformOverrides = unionPlatformKeybindingOverrides(
+    normalizeWebPlatformOverrides(document.platforms, diagnostics),
+    normalizeWebPlatformOverrides(mouseDocument.platforms, diagnostics, 'mouse.')
+  )
   const overrides = removeConflictingWebOverrides(
     platform,
     {
@@ -83,6 +111,52 @@ export function getWebKeybindingSnapshot(): KeybindingFileSnapshot {
     platformOverrides,
     diagnostics
   }
+}
+
+function splitOtherPlatformOverrides(
+  platformOverrides: Partial<Record<KeybindingPlatform, KeybindingOverrides>>,
+  activePlatform: KeybindingPlatform
+): {
+  keyboard: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
+  mouse: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
+} {
+  const keyboard: Partial<Record<KeybindingPlatform, KeybindingOverrides>> = {}
+  const mouse: Partial<Record<KeybindingPlatform, KeybindingOverrides>> = {}
+  for (const platform of WEB_KEYBINDING_PLATFORMS) {
+    if (platform === activePlatform) {
+      continue
+    }
+    const split = splitOverridesByInputKind(platformOverrides[platform] ?? {})
+    keyboard[platform] = split.keyboard
+    if (Object.keys(split.mouse).length > 0) {
+      mouse[platform] = split.mouse
+    }
+  }
+  return { keyboard, mouse }
+}
+
+// Why: keep the key out of storage until a mouse binding exists, so the feature
+// adds nothing for users who never bind one.
+function writeWebMouseKeybindingDocument(document: WebKeybindingDocument): void {
+  const populatedPlatforms: Partial<Record<KeybindingPlatform, KeybindingOverrides>> = {}
+  for (const platform of WEB_KEYBINDING_PLATFORMS) {
+    const overrides = document.platforms[platform]
+    if (overrides && Object.keys(overrides).length > 0) {
+      populatedPlatforms[platform] = overrides
+    }
+  }
+  if (
+    Object.keys(document.keybindings).length === 0 &&
+    Object.keys(populatedPlatforms).length === 0
+  ) {
+    window.localStorage.removeItem(MOUSE_KEYBINDINGS_STORAGE_KEY)
+    return
+  }
+  writeJson(MOUSE_KEYBINDINGS_STORAGE_KEY, {
+    version: 1,
+    keybindings: document.keybindings,
+    platforms: populatedPlatforms
+  } satisfies WebKeybindingDocument)
 }
 
 export function writeWebKeybindingAction(
@@ -115,24 +189,43 @@ export function writeWebKeybindingAction(
     )
   }
 
-  const activePlatform: KeybindingOverrides = { ...currentSnapshot.platformOverrides[platform] }
-  if (normalizedBindings === null) {
-    delete activePlatform[actionId]
+  // The snapshot is the rejoined view, so split every section before it is
+  // written back — a mouse binding must never land in the keyboard document.
+  const activeSplit = splitOverridesByInputKind({ ...currentSnapshot.platformOverrides[platform] })
+  const commonSplit = splitOverridesByInputKind(currentSnapshot.commonOverrides)
+  const editedSplit =
+    normalizedBindings === null ? null : splitBindingsByInputKind(normalizedBindings)
+  if (editedSplit === null) {
+    delete activeSplit.keyboard[actionId]
+    delete activeSplit.mouse[actionId]
   } else {
-    activePlatform[actionId] = normalizedBindings
+    // Written even when empty: a mouse-only action must read as "no keyboard
+    // shortcut" to a bundle that cannot parse the mouse one.
+    activeSplit.keyboard[actionId] = editedSplit.keyboard
+    if (editedSplit.mouse.length > 0) {
+      activeSplit.mouse[actionId] = editedSplit.mouse
+    } else {
+      delete activeSplit.mouse[actionId]
+    }
   }
 
+  const otherPlatforms = splitOtherPlatformOverrides(currentSnapshot.platformOverrides, platform)
   writeJson(KEYBINDINGS_STORAGE_KEY, {
     version: 1,
-    keybindings: currentSnapshot.commonOverrides,
+    keybindings: commonSplit.keyboard,
     platforms: {
-      ...currentSnapshot.platformOverrides,
-      darwin: currentSnapshot.platformOverrides.darwin ?? {},
-      linux: currentSnapshot.platformOverrides.linux ?? {},
-      win32: currentSnapshot.platformOverrides.win32 ?? {},
-      [platform]: activePlatform
+      darwin: {},
+      linux: {},
+      win32: {},
+      ...otherPlatforms.keyboard,
+      [platform]: activeSplit.keyboard
     }
   } satisfies WebKeybindingDocument)
+  writeWebMouseKeybindingDocument({
+    version: 1,
+    keybindings: commonSplit.mouse,
+    platforms: { ...otherPlatforms.mouse, [platform]: activeSplit.mouse }
+  })
 
   const snapshot = getWebKeybindingSnapshot()
   notifyWebKeybindingListeners(snapshot)
@@ -160,7 +253,7 @@ export function createWebKeybindingsApi(): WebKeybindingsApi {
     onChanged: (callback) => {
       webKeybindingListeners.add(callback)
       const onStorage = (event: StorageEvent): void => {
-        if (event.key === KEYBINDINGS_STORAGE_KEY) {
+        if (event.key === KEYBINDINGS_STORAGE_KEY || event.key === MOUSE_KEYBINDINGS_STORAGE_KEY) {
           callback(getWebKeybindingSnapshot())
         }
       }

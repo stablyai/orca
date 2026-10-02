@@ -6,6 +6,10 @@ import {
   getKeybindingPlatform,
   isKeybindingActionId,
   normalizeKeybindingArrayForAction,
+  splitBindingsByInputKind,
+  splitOverridesByInputKind,
+  unionKeybindingOverrides,
+  unionPlatformKeybindingOverrides,
   type KeybindingActionId,
   type KeybindingFileDiagnostic,
   type KeybindingFileSnapshot,
@@ -15,8 +19,10 @@ import {
   createEmptyDocument,
   FILE_VERSION,
   isJsonObject,
+  MOUSE_SECTION_KEY,
   normalizeWriteBindingValue,
   parseBindingSection,
+  parseMouseSection,
   parsePlatformOverrides,
   readJsonDocument,
   removeConflictingOverrides,
@@ -53,11 +59,16 @@ export function readKeybindingFile(
   }
 
   const document = readResult.document
-  const commonOverrides =
+  const keyboardCommon =
     document.keybindings === undefined
       ? parseBindingSection(document, 'root', diagnostics, { skipRootKeys: true })
       : parseBindingSection(document.keybindings, 'keybindings', diagnostics)
-  const platformOverrides = parsePlatformOverrides(document, diagnostics)
+  const keyboardPlatforms = parsePlatformOverrides(document, diagnostics)
+  const mouse = parseMouseSection(document, diagnostics)
+  // Why: the two sections are one list per action to every reader above this
+  // one; only the on-disk layout is split (see splitBindingsByInputKind).
+  const commonOverrides = unionKeybindingOverrides(keyboardCommon, mouse.common)
+  const platformOverrides = unionPlatformKeybindingOverrides(keyboardPlatforms, mouse.platforms)
   const mergedOverrides = {
     ...commonOverrides,
     ...platformOverrides[keybindingPlatform]
@@ -151,9 +162,9 @@ export function seedLegacyTabSwitchBindings(
   }
   const snapshot =
     pins.length > 0
-      ? writeActivePlatformSection(path, platform, current.commonOverrides, (activePlatform) => {
+      ? writeActivePlatformSection(path, platform, current.commonOverrides, (sections) => {
           for (const [actionId, normalized] of pins) {
-            activePlatform[actionId] = normalized
+            assignSplitBindings(sections, actionId, normalized)
           }
         })
       : current
@@ -163,13 +174,52 @@ export function seedLegacyTabSwitchBindings(
   return { seeded: pins.length > 0, snapshot }
 }
 
+/** The two active-platform sections a write may touch: keyboard bindings and mouse bindings. */
+type ActiveBindingSections = { keyboard: JsonObject; mouse: JsonObject }
+
+/** Routes an action's bindings to the section each kind is persisted in. */
+function assignSplitBindings(
+  sections: ActiveBindingSections,
+  actionId: KeybindingActionId,
+  bindings: readonly string[]
+): void {
+  const split = splitBindingsByInputKind(bindings)
+  // Written even when empty: a mouse-only action must read as "no keyboard
+  // shortcut" to a build that cannot parse the mouse one.
+  sections.keyboard[actionId] = split.keyboard
+  if (split.mouse.length > 0) {
+    sections.mouse[actionId] = split.mouse
+  } else {
+    delete sections.mouse[actionId]
+  }
+}
+
+// Why: keep the section out of the file entirely until a mouse binding exists,
+// so an ordinary keybindings.json gains no new shape from this feature.
+function buildMouseSection(common: JsonObject, platforms: JsonObject): JsonObject | null {
+  const section: JsonObject = {}
+  if (Object.keys(common).length > 0) {
+    section.keybindings = common
+  }
+  const populatedPlatforms: JsonObject = {}
+  for (const [platform, overrides] of Object.entries(platforms)) {
+    if (isJsonObject(overrides) && Object.keys(overrides).length > 0) {
+      populatedPlatforms[platform] = overrides
+    }
+  }
+  if (Object.keys(populatedPlatforms).length > 0) {
+    section.platforms = populatedPlatforms
+  }
+  return Object.keys(section).length > 0 ? section : null
+}
+
 // Why: the one-shot seed migration and Settings writes must produce the same
 // on-disk document shape; a single assembly path keeps them from drifting.
 function writeActivePlatformSection(
   path: string,
   platform: NodeJS.Platform,
   fallbackCommonOverrides: KeybindingOverrides,
-  mutateActivePlatform: (activePlatform: JsonObject) => void
+  mutateActiveSections: (sections: ActiveBindingSections) => void
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const readResult = readJsonDocument(path)
@@ -179,9 +229,12 @@ function writeActivePlatformSection(
     throw new Error(readResult.error ?? 'Could not read keybindings file.')
   }
   const document = { ...readResult.document }
+  // The fallback is a merged snapshot view, so re-split it before it is written
+  // back — a mouse binding must never land in the keyboard section.
+  const fallbackCommon = splitOverridesByInputKind(fallbackCommonOverrides)
   const common = isJsonObject(document.keybindings)
     ? { ...document.keybindings }
-    : { ...fallbackCommonOverrides }
+    : { ...fallbackCommon.keyboard }
   for (const rootKey of Object.keys(document)) {
     if (isKeybindingActionId(rootKey)) {
       delete document[rootKey]
@@ -191,7 +244,19 @@ function writeActivePlatformSection(
   const activePlatform = isJsonObject(platforms[keybindingPlatform])
     ? { ...(platforms[keybindingPlatform] as JsonObject) }
     : {}
-  mutateActivePlatform(activePlatform)
+
+  const storedMouseSection = document[MOUSE_SECTION_KEY]
+  const mouseSection = isJsonObject(storedMouseSection) ? storedMouseSection : {}
+  const mouseCommon = isJsonObject(mouseSection.keybindings)
+    ? { ...mouseSection.keybindings }
+    : { ...fallbackCommon.mouse }
+  const mousePlatforms = isJsonObject(mouseSection.platforms) ? { ...mouseSection.platforms } : {}
+  const storedMouseActivePlatform = mousePlatforms[keybindingPlatform]
+  const mouseActivePlatform = isJsonObject(storedMouseActivePlatform)
+    ? { ...storedMouseActivePlatform }
+    : {}
+
+  mutateActiveSections({ keyboard: activePlatform, mouse: mouseActivePlatform })
 
   document.version = FILE_VERSION
   document.keybindings = common
@@ -201,6 +266,15 @@ function writeActivePlatformSection(
     linux: isJsonObject(platforms.linux) ? platforms.linux : {},
     win32: isJsonObject(platforms.win32) ? platforms.win32 : {},
     [keybindingPlatform]: activePlatform
+  }
+  const nextMouseSection = buildMouseSection(mouseCommon, {
+    ...mousePlatforms,
+    [keybindingPlatform]: mouseActivePlatform
+  })
+  if (nextMouseSection) {
+    document[MOUSE_SECTION_KEY] = nextMouseSection
+  } else {
+    delete document[MOUSE_SECTION_KEY]
   }
   writeJsonDocument(path, document)
   return readKeybindingFile(path, platform)
@@ -234,19 +308,15 @@ export function writeKeybindingOverride(
     )
   }
 
-  return writeActivePlatformSection(
-    path,
-    platform,
-    currentSnapshot.commonOverrides,
-    (activePlatform) => {
-      if (normalizedBindings === null) {
-        // Why: Settings edits are scoped to the current platform. A hand-authored
-        // common binding may be intentional for other OSes, so reset only removes
-        // the platform-specific mask instead of deleting the shared value.
-        delete activePlatform[actionId]
-      } else {
-        activePlatform[actionId] = normalizedBindings
-      }
+  return writeActivePlatformSection(path, platform, currentSnapshot.commonOverrides, (sections) => {
+    if (normalizedBindings === null) {
+      // Why: Settings edits are scoped to the current platform. A hand-authored
+      // common binding may be intentional for other OSes, so reset only removes
+      // the platform-specific mask instead of deleting the shared value.
+      delete sections.keyboard[actionId]
+      delete sections.mouse[actionId]
+    } else {
+      assignSplitBindings(sections, actionId, normalizedBindings)
     }
-  )
+  })
 }

@@ -96,6 +96,10 @@ All changes must consider the SSH use case. Don't assume local-only execution. B
 
 All changes must consider folder workspaces as well as git worktrees. Don't assume every workspace is a git worktree.
 
+## Keybinding Tokens
+
+A user's saved shortcuts are read by older Orca builds too — after a downgrade, or by a rolled-back paired web app. A reader that cannot parse one binding string must not drop the rest of that action, so a new binding token (like `MouseBack`) is persisted in a section older builds ignore, and reads normalize each entry on its own. Before adding a token or touching either keybinding store, read [`docs/reference/keybinding-token-downgrade-safety.md`](./docs/reference/keybinding-token-downgrade-safety.md).
+
 ## Agent Status
 
 The execution host owns agent status in one store, the hook server's, and every reader (sidebar, `worktree ps`, mobile, dashboard) subscribes to it. Before adding a producer, a cache, or a reader-side precedence rule, read [`docs/reference/agent-status-store.md`](./docs/reference/agent-status-store.md): new producers write into that store, and readers keep only presentation policy.

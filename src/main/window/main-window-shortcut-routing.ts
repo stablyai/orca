@@ -1,4 +1,5 @@
-import type { BrowserWindow } from 'electron'
+import { ipcMain, type BrowserWindow } from 'electron'
+import { parseMouseShortcutInput } from '../../shared/mouse-shortcut-input'
 import { is } from '@electron-toolkit/utils'
 import {
   ModifierDoubleTapDetector,
@@ -110,6 +111,43 @@ export function installMainWindowShortcutRouting(args: {
     sendResolvedWindowShortcutAction(mainWindow, action, opts?.onBeforeReload)
     return true
   }
+
+  const onMouseShortcut = (event: Electron.IpcMainEvent, value: unknown): void => {
+    if (
+      event.sender !== mainWindow.webContents ||
+      event.senderFrame !== mainWindow.webContents.mainFrame ||
+      focus.isShortcutRecorderFocused()
+    ) {
+      return
+    }
+    const input = parseMouseShortcutInput(value)
+    if (!input) {
+      return
+    }
+    const focusedShortcutContext: KeybindingMatchOptions = {
+      context:
+        focus.isTerminalInputFocused() || focus.isFloatingTerminalInputFocused()
+          ? 'terminal'
+          : 'app',
+      terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
+        store?.getSettings().terminalShortcutPolicy
+      )
+    }
+    const action = resolveWindowShortcutAction(
+      input,
+      process.platform,
+      opts?.getKeybindings?.(),
+      focusedShortcutContext
+    )
+    if (action) {
+      dispatchResolvedWindowShortcutAction(event, action, {
+        isAutoRepeat: false,
+        focusedShortcutContext
+      })
+    }
+  }
+  ipcMain.on('ui:dispatchMouseShortcut', onMouseShortcut)
+  mainWindow.on('closed', () => ipcMain.removeListener('ui:dispatchMouseShortcut', onMouseShortcut))
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (focus.isShortcutRecorderFocused()) {
