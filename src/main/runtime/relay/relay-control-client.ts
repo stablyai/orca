@@ -1,3 +1,4 @@
+import type { Agent } from 'node:http'
 import type { RelayControlClientOptions } from './relay-control-client-options'
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
@@ -30,7 +31,7 @@ export class RelayControlClient {
   private readonly options: RelayControlClientOptions
   private readonly relayOrigin: string
   private readonly controlUrl: string
-  private readonly createSocket: NonNullable<RelayControlClientOptions['createSocket']>
+  private readonly createSocket: (url: string, token: string, agent?: Agent) => WebSocket
   private readonly liveness: RelayControlLiveness
   private readonly requests: RelayControlRequests
   private socket: WebSocket | null = null
@@ -56,11 +57,12 @@ export class RelayControlClient {
     )
     this.createSocket =
       options.createSocket ??
-      ((url, token) =>
+      ((url, token, agent) =>
         new WebSocket(url, {
           headers: { authorization: `Bearer ${token}`, ...RELAY_HOST_CAPABILITY_HEADERS },
           perMessageDeflate: false,
-          maxPayload: 64 * 1024
+          maxPayload: 64 * 1024,
+          ...(agent ? { agent } : {})
         }))
   }
 
@@ -69,7 +71,11 @@ export class RelayControlClient {
       return Promise.reject(new Error('relay_control_already_started'))
     }
     this.state = 'opening'
-    const socket = this.createSocket(this.controlUrl, this.options.relayJwt)
+    const socket = this.createSocket(
+      this.controlUrl,
+      this.options.relayJwt,
+      this.options.socketAgent
+    )
     this.socket = socket
     socket.once('open', () => this.sendHostHello())
     socket.on('pong', () => this.liveness.notePong())
