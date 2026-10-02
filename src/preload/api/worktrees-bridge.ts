@@ -7,6 +7,7 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../../shared/worktree/base-ref-drift-types'
+import type { CreateWorktreeProgressEvent } from '../../shared/worktree/create-types'
 import type { WorktreeHeadIdentity } from '../../shared/worktree/types'
 import type { PreloadApi } from '../api-types'
 
@@ -30,13 +31,9 @@ export const worktreesApi = {
 
   adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
 
-  onCreateProgress: (
-    callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { creationId?: string; phase: 'fetching' | 'creating' }
-    ) => callback(data)
+  onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: CreateWorktreeProgressEvent) =>
+      callback(data)
     ipcRenderer.on('createWorktree:progress', listener)
     return () => ipcRenderer.removeListener('createWorktree:progress', listener)
   },

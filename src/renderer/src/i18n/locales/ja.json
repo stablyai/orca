@@ -917,6 +917,14 @@
         "tooLarge": "サイズが大きすぎてコピーできないため、Orca は Agent に渡せませんでした。",
         "storageFull": "ドロップされたファイル用の Orca の保存先がいっぱいのため、Orca は Agent に渡せませんでした。",
         "generic": "もう一度ドロップしてください。"
+      },
+      "pendingWorktreeCreation": {
+        "checkingOutFiles": "ファイルをチェックアウト中… {{percent}}%",
+        "provisioningVm": "VMをプロビジョニング中…",
+        "settingUpWorkspace": "ワークスペースをセットアップ中…",
+        "preparingWorkspace": "ワークスペースを準備中…",
+        "creatingWorktree": "ワークツリーを作成中…",
+        "fetchingBaseBranch": "ベースブランチを取得中…"
       }
     },
     "hooks": {

@@ -1052,6 +1052,14 @@
         "tooLarge": "Too large to copy, so Orca couldn't hand it to the agent.",
         "storageFull": "Orca's storage for dropped files is full, so Orca couldn't hand it to the agent.",
         "generic": "Try the drop again."
+      },
+      "pendingWorktreeCreation": {
+        "checkingOutFiles": "Checking out files… {{percent}}%",
+        "provisioningVm": "Provisioning VM…",
+        "settingUpWorkspace": "Setting up your workspace…",
+        "preparingWorkspace": "Preparing workspace…",
+        "creatingWorktree": "Creating worktree…",
+        "fetchingBaseBranch": "Fetching base branch…"
       }
     },
     "hooks": {

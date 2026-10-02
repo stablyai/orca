@@ -154,6 +154,21 @@ export type CreateWorktreeArgs = {
   automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
 }
 
+/** Git's checkout meter during a local create: files written out of the total. */
+export type WorktreeCheckoutProgress = {
+  percent: number
+  completed: number
+  total: number
+}
+
+/** `createWorktree:progress` payload. `checkout` rides the 'creating' phase;
+ *  null means git finished writing files. */
+export type CreateWorktreeProgressEvent = {
+  creationId?: string
+  phase: 'fetching' | 'creating'
+  checkout?: WorktreeCheckoutProgress | null
+}
+
 export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
   runtimeId: string
   executionHostId: ExecutionHostId

@@ -22,6 +22,7 @@ import type {
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
 import { assertNoPendingWorktreeRemovalConflict } from '../worktree-background-removal'
+import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progress'
 
 export type WorktreeAddBaseContext = Pick<AddWorktreeResult, 'localBaseRefUpdateSuggestion'> & {
   effectiveBase: string
@@ -229,17 +230,24 @@ async function performAddWorktree(
       args.push(effectiveBase)
     }
   }
+  // Why: git already writes its checkout meter into our stderr pipe; read it, don't request it.
+  const checkoutProgress =
+    options.onCheckoutProgress && !noCheckout
+      ? createWorktreeCheckoutProgressReader(options.onCheckoutProgress)
+      : null
   try {
     await gitExecFileAsync(args, {
       ...gitExecOptions(repoPath, options),
       // Why: resolve per call — hoisting this to a module const would freeze the override at import.
-      timeout: resolveWorktreeAddTimeoutMs()
+      timeout: resolveWorktreeAddTimeoutMs(),
+      ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})
     })
   } catch (error) {
     // Why: settle the overlapped refresh inside the caller's ref-maintenance pause before reporting the failure.
     await pendingLocalBaseRefRefresh
     throw error
   } finally {
+    checkoutProgress?.close()
     // Git may have written the target's `.git` marker even when it reports a late
     // failure, so drop any pre-create route before the follow-up commands route.
     invalidateWslLinkedWorktreeGitRouting(worktreePath)

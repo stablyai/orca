@@ -1016,6 +1016,14 @@
         "tooLarge": "Trop volumineux pour être copié : Orca n'a pas pu le transmettre à l'agent.",
         "storageFull": "L'espace de stockage d'Orca pour les fichiers déposés est plein : Orca n'a pas pu le transmettre à l'agent.",
         "generic": "Réessayez de déposer les fichiers."
+      },
+      "pendingWorktreeCreation": {
+        "checkingOutFiles": "Extraction des fichiers… {{percent}}%",
+        "provisioningVm": "Provisionnement de la VM…",
+        "settingUpWorkspace": "Configuration de votre espace de travail…",
+        "preparingWorkspace": "Préparation de l'espace de travail…",
+        "creatingWorktree": "Création du worktree…",
+        "fetchingBaseBranch": "Récupération de la branche de base…"
       }
     },
     "hooks": {

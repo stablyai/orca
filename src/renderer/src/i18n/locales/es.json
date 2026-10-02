@@ -756,6 +756,14 @@
         "tooLarge": "Es demasiado grande para copiarlo, así que Orca no pudo pasárselo al agente.",
         "storageFull": "El almacenamiento de Orca para archivos soltados está lleno, así que Orca no pudo pasárselo al agente.",
         "generic": "Vuelve a soltar los archivos."
+      },
+      "pendingWorktreeCreation": {
+        "checkingOutFiles": "Extrayendo archivos… {{percent}}%",
+        "provisioningVm": "Provisionando VM…",
+        "settingUpWorkspace": "Configurando tu espacio de trabajo…",
+        "preparingWorkspace": "Preparando el espacio de trabajo…",
+        "creatingWorktree": "Creando el worktree…",
+        "fetchingBaseBranch": "Obteniendo la rama base…"
       }
     },
     "hooks": {

@@ -17,6 +17,7 @@ type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   createTimeoutError?: () => Error
   /** Called once when the deadline — not an abort — is what ended the process. */
   onDeadlineKill?: () => void
+  onStderr?: (chunk: string) => void
 }
 
 const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
@@ -24,7 +25,8 @@ const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
 export async function execFileCaptureToTermination(
   command: string,
   args: string[],
-  options: ExecFileCaptureOptions,
+  // Why: runProcess owns this child's streams; git-exec-file refuses onStderr with a barrier.
+  options: Omit<ExecFileCaptureOptions, 'onStderr'>,
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
   // Spawn cost is reported by spawnProcess's observer, which runProcess goes
@@ -94,6 +96,21 @@ function isExecFileResultObject(
     'stdout' in value &&
     'stderr' in value
   )
+}
+
+/** A second, passive stderr listener: execFile still captures every byte. */
+function observeStderr(child: ChildProcess, observer: (chunk: string) => void): void {
+  const onData = (chunk: string | Buffer): void => {
+    try {
+      observer(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
+    } catch (error) {
+      // Why: a throw inside a stream listener is an uncaught main-process
+      // exception; an observer must never be able to fail the command.
+      child.stderr?.off('data', onData)
+      console.warn('git stderr observer failed; detaching it', error)
+    }
+  }
+  child.stderr?.on('data', onData)
 }
 
 export function execFileCapture(
@@ -206,6 +223,9 @@ export function execFileCapture(
       }
     })
     child.once('close', reportChildTerminated)
+    if (options.onStderr) {
+      observeStderr(child, options.onStderr)
+    }
 
     if (options.stdin !== undefined) {
       endSubprocessStdin(child.stdin, options.stdin)

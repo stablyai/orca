@@ -121,3 +121,25 @@ it('starts both independent probes before either resolves and settles them befor
   await checked
   expect(gitExec.mock.calls.some(([args]) => args.includes('move'))).toBe(false)
 })
+
+// Why pin this: the create card's checkout meter comes only from `git worktree add`; claiming a
+// prepared checkout, even one that must be reset to a newer commit, reports none.
+it('reports no checkout progress while finalizing, even across a retarget reset', async () => {
+  const onCheckoutProgress = vi.fn()
+  await finalizePreparedWorktree(
+    '/repo',
+    '/prepared',
+    '/final',
+    'feature',
+    'refs/heads/main',
+    false,
+    {
+      onCheckoutProgress
+    }
+  )
+  expect(gitExec.mock.calls.some(([args]) => args.includes('reset'))).toBe(true)
+  for (const [, options] of gitExec.mock.calls) {
+    expect(options).not.toHaveProperty('onStderr')
+  }
+  expect(onCheckoutProgress).not.toHaveBeenCalled()
+})

@@ -917,6 +917,14 @@
         "tooLarge": "文件太大，无法复制，因此 Orca 无法将其交给代理。",
         "storageFull": "Orca 用于拖放文件的存储空间已满，因此 Orca 无法将其交给代理。",
         "generic": "请重新拖放。"
+      },
+      "pendingWorktreeCreation": {
+        "checkingOutFiles": "正在检出文件… {{percent}}%",
+        "provisioningVm": "正在预配虚拟机…",
+        "settingUpWorkspace": "正在设置工作区…",
+        "preparingWorkspace": "正在准备工作区…",
+        "creatingWorktree": "正在创建工作树…",
+        "fetchingBaseBranch": "正在获取基础分支…"
       }
     },
     "hooks": {

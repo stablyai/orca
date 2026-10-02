@@ -66,7 +66,7 @@ export function PendingWorktreeRow({
           </span>
           <span
             className={cn(
-              'block truncate text-[11px]',
+              'block truncate text-[11px] tabular-nums',
               isError ? 'text-destructive/90' : 'text-muted-foreground'
             )}
           >
