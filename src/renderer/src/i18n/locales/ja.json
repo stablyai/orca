@@ -8470,6 +8470,12 @@
           "4808966c41": "SSH ターゲットの削除"
         },
         "SshTargetForm": {
+          "httpProxyUrl": "HTTP プロキシ",
+          "httpProxyUrlPlaceholder": "http://proxy.example.com:8080",
+          "httpProxyUrlHelp": "このホスト上のターミナルに HTTP_PROXY/HTTPS_PROXY として適用されます。本マシンではなく、ホスト自身から到達可能である必要があります。http、https、socks、socks4、socks5 URL をサポートします。",
+          "httpProxyBypassRules": "プロキシ除外ルール",
+          "httpProxyBypassRulesPlaceholder": "localhost, 127.0.0.1, *.internal",
+          "httpProxyBypassRulesHelp": "任意。ホストはカンマ、セミコロン、または改行で区切ります。",
           "fea9cb402e": "キャンセル",
           "1b19b00e93": "制限付きタイムアウトは 60 秒から 7 日間にする必要があります。",
           "137e88ce8d": "Orca がこのホストから切断された後も、リモートターミナルは実行を続けます。",

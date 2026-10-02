@@ -8589,6 +8589,12 @@
           "4808966c41": "Supprimer la cible SSH"
         },
         "SshTargetForm": {
+          "httpProxyUrl": "Proxy HTTP",
+          "httpProxyUrlPlaceholder": "http://proxy.example.com:8080",
+          "httpProxyUrlHelp": "Appliqué en HTTP_PROXY/HTTPS_PROXY aux terminaux de cet hôte. Doit être joignable depuis l'hôte lui-même, pas depuis cette machine. Prend en charge les URL http, https, socks, socks4 et socks5.",
+          "httpProxyBypassRules": "Règles d'exclusion du proxy",
+          "httpProxyBypassRulesPlaceholder": "localhost, 127.0.0.1, *.internal",
+          "httpProxyBypassRulesHelp": "Optionnel. Séparez les hôtes par des virgules, des points-virgules ou des sauts de ligne.",
           "fea9cb402e": "Annuler",
           "1b19b00e93": "Les délais limités doivent être compris entre 60 secondes et 7 jours.",
           "7c13f58c91": "Jusqu'à la réinitialisation",
