@@ -137,11 +137,18 @@ type ResumeInvocation = {
   target: string | null
 }
 
+type ShellInvocations = {
+  segments: string[]
+  /** Substitution or an unquoted escape: the split may not be what the shell runs. */
+  unmodelable: boolean
+}
+
 // Why: a flag only describes its own invocation, so `fork && plain resume` must not share one exemption.
-function splitShellInvocations(command: string): string[] {
+function splitShellInvocations(command: string): ShellInvocations {
   const segments: string[] = []
   let current = ''
   let quote: '"' | "'" | null = null
+  let unmodelable = command.includes('$(') || command.includes('`')
   for (let index = 0; index < command.length; index++) {
     const char = command[index]!
     if (quote) {
@@ -154,6 +161,9 @@ function splitShellInvocations(command: string): string[] {
       }
       current += char
       continue
+    }
+    if (char === '\\') {
+      unmodelable = true
     }
     if (char === '"' || char === "'") {
       quote = char
@@ -168,17 +178,23 @@ function splitShellInvocations(command: string): string[] {
     current += char
   }
   segments.push(current)
-  return segments
+  return { segments, unmodelable }
 }
 
 function parseResumeInvocations(command: string): ResumeInvocation[] {
-  return splitShellInvocations(command).flatMap((segment) => {
-    const invocation = parseResumeInvocation(segment)
+  const { segments, unmodelable } = splitShellInvocations(command)
+  // Why: an untrusted split also reads the whole line, with no fork exemption, as before forks existed.
+  const candidates = unmodelable ? [...segments, command] : segments
+  return candidates.flatMap((segment) => {
+    const invocation = parseResumeInvocation(segment, { honourForkSession: !unmodelable })
     return invocation ? [invocation] : []
   })
 }
 
-function parseResumeInvocation(command: string): ResumeInvocation | null {
+function parseResumeInvocation(
+  command: string,
+  options: { honourForkSession: boolean }
+): ResumeInvocation | null {
   // Keep this deliberately conservative: shell quoting is normalized only
   // enough to identify executable/flag tokens; an unrecognized shape is not
   // treated as proof that a different session is being resumed.
@@ -193,7 +209,11 @@ function parseResumeInvocation(command: string): ResumeInvocation | null {
   const provider = /codex(?:\.exe)?$/i.test(normalized[executableIndex]!) ? 'codex' : 'claude'
   const args = normalized.slice(executableIndex + 1)
   // Why: --fork-session resumes into a new session id, so it never writes the named session.
-  if (provider === 'claude' && args.some((token) => token.toLowerCase() === '--fork-session')) {
+  if (
+    options.honourForkSession &&
+    provider === 'claude' &&
+    args.some((token) => token.toLowerCase() === '--fork-session')
+  ) {
     return null
   }
   // `--continue`/`-c` resume the most recent session and never take an id, so a

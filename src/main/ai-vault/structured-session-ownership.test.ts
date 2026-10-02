@@ -148,6 +148,29 @@ describe('structured AI Vault ownership', () => {
     ).resolves.toBeUndefined()
   })
 
+  it.each([
+    `claude --resume ${PROVIDER_SESSION} --fork-session \\" && claude --resume ${PROVIDER_SESSION} \\"`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session $(claude --resume ${PROVIDER_SESSION})`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session "$(claude --resume ${PROVIDER_SESSION})"`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session \`claude --resume ${PROVIDER_SESSION}\``,
+    `claude --resume ${PROVIDER_SESSION} --fork-session "\`claude --resume ${PROVIDER_SESSION}\`"`
+  ])('withholds the fork exemption from a command it cannot split: %s', async (command) => {
+    installOwnership({ provider: 'claude' })
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
+  it.each([
+    `claude '--model' 'sonnet' '--resume' '${PROVIDER_SESSION}' '--fork-session'`,
+    `& 'claude' '--resume' '${PROVIDER_SESSION}' '--fork-session'`
+  ])('still allows a single quoted fork command: %s', async (command) => {
+    installOwnership({ provider: 'claude' })
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+    ).resolves.toBeUndefined()
+  })
+
   it('still refuses a plain claude resume of an owned session', async () => {
     installOwnership({ provider: 'claude' })
     await expect(
