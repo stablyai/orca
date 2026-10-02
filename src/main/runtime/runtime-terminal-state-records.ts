@@ -42,6 +42,7 @@ export type RuntimeLeafRecord = RuntimeSyncedLeaf &
     lastAgentStatusObservedLive: boolean
     lastOscTitle: string | null
     lastOscTitleAt: number | null
+    lastOscTitleStaleWorkingClear?: boolean
     paneTitleUpdatedAt: number | null
   }
 
@@ -64,6 +65,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
+  launchNeedsHookAttestation: boolean
   launchAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
   foregroundAgent: TuiAgent | null
@@ -87,6 +89,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   lastOscTitleEpochMs: number | null
+  lastOscTitleStaleWorkingClear?: boolean
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null

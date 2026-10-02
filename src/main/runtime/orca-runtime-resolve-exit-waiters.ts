@@ -9,6 +9,7 @@ import {
   buildTerminalWaitResult
 } from './terminal-wait-results'
 import type { AgentStatus } from '../../shared/agent-detection'
+import { getPiStateTitleStatus } from '../../shared/pi-state-title-marker'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import {
@@ -219,6 +220,9 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
 
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
     const title = this.getAdoptedPtyTitle(pty)
+    if (title && pty.lastOscTitleStaleWorkingClear && getPiStateTitleStatus(title) === 'idle') {
+      return null
+    }
     return title ? detectExplicitIdleStatusFromTitle(title) : null
   }
 

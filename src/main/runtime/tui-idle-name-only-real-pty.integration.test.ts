@@ -32,7 +32,7 @@ afterEach(() => {
   }
 })
 
-async function startRealAgentPane(mode: 'explicit-idle' | 'quiet', workMs: number) {
+async function startRealAgentPane(mode: 'explicit-idle' | 'quiet' | 'omp-stale', workMs: number) {
   const child = pty.spawn(process.execPath, [FIXTURE, mode, String(workMs)], {
     name: 'xterm-256color',
     cols: 120,
@@ -125,6 +125,17 @@ describe.skipIf(process.platform === 'win32')('tui-idle against a real agent pty
     expect(outcome.satisfied).toBe(true)
     expect(outcome.elapsedMs).toBeGreaterThanOrEqual(1_500)
   }, 28_000)
+
+  it('rejects a timer-cleared OMP title until the real process reports idle', async () => {
+    const { runtime, transcript, handle } = await startRealAgentPane('omp-stale', 6_000)
+    await expect.poll(() => transcript.join(''), { timeout: 5_000 }).toContain('analysing chunk')
+
+    const staleOutcome = await terminalWait(runtime, handle, 500)
+    expect(staleOutcome.satisfied).toBe(false)
+    const genuineOutcome = await terminalWait(runtime, handle, 10_000)
+    expect(genuineOutcome.satisfied).toBe(true)
+    expect(transcript.join('')).toContain('\x1b]0;π > project\x07')
+  }, 20_000)
 
   it('satisfies once the real process goes quiet with the agent still in foreground', async () => {
     const { runtime, handle } = await startRealAgentPane('quiet', 3_000)

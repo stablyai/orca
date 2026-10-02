@@ -61,6 +61,72 @@ Three consequences:
   decay, acknowledgements, dismissals, unread. Those stay reader-side but
   become one shared implementation (PR 3).
 
+## Managed OMP hook status
+
+The managed extension sends OMP events to `/hook/omp` on the execution host.
+`normalizePiCompatibleEvent` maps them into the existing hook status store.
+Native, WSL, SSH, and folder workspaces use the same mapping.
+No second reporter or reader-side rule is required.
+
+- Startup and session switches send current activity. Readiness requires idle,
+  no pending messages, and no active jobs. Missing activity does not prove readiness.
+- Idle readiness uses `done` with `sessionBoundary: true`. It is not turn completion.
+  This also applies after a completed turn: retry, compaction, dialog close, and
+  approval resolution keep the prior main-agent outcome without another completion.
+  Native chat keeps the completed main-agent duration when its host turn stamp
+  remains present; a readiness-only row without that clock has no turn duration.
+- Retry and compaction start as `working`. Their end can restore readiness only
+  when current activity is clear and no continuation flag is true.
+- Real UI dialogs use `waiting`; tool approvals use `blocked`. Closing a dialog
+  restores current activity. Nested dialogs, reloads, and stale closes are tracked.
+- `agent_end` with `willContinue: true` does not complete a turn. Owned jobs,
+  children, and pending messages keep the combined row `working` after the main
+  agent completes. The final all-clear keeps the main-agent outcome and its clock.
+- OMP keeps checking owned jobs and pending messages after `agent_settled` until
+  they clear. Pi still uses `agent_settled` instead of its idle fallback check.
+- The last assistant stop reason maps `stop` to `success`, `error` to `failure`,
+  and `aborted` to `cancellation`. Other reasons have no outcome. Normal provider
+  completion does not prove that the user's task succeeded.
+- Shutdown clears local timers and dialog tracking without a completion event.
+  Missing hooks or transport loss never prove process exit. Process verdicts
+  remain `live`, `unverifiable`, and `exited`.
+- OMP redraws can emit `OSC 133;D` while its process still runs. Neither parsed
+  bytes nor daemon command-finished facts retire launch authority on their own.
+  Retirement requires a shell confirmed by the current execution host. Unknown,
+  failed, and non-shell foreground reads keep the row and admit later hooks.
+  Pending reads must still match the controller, PTY incarnation, lifecycle,
+  launch identity, restored inventory receipt, and host hook observations.
+  A new session, turn, or observation revision cancels an older shell response,
+  including activity with the same state and timestamp. Actual PTY exit keeps
+  its existing retirement rules.
+- A command-finished marker ends token-only startup takeover permission before
+  the foreground read starts. Unknown, failed, and non-shell reads still retain
+  status and the launch token, but takeover requires matching host hook
+  attestation afterward. Registering the same launch does not restore startup
+  permission. Admitting a fresh launch token restores the startup exception.
+- Renderer command-finished cleanup also requires a confirmed shell for a known
+  agent. An unanswered or failed read cancels pending cleanup without dropping the
+  status or launch record, even when the host has no checkable process identity.
+  A known `done` hook row still requires confirmation: turn completion is not
+  process exit. Repeated command-finished markers do not change this rule.
+- Parked SSH command-finished markers do not drop hook status or launch records.
+  They carry no execution-host process-exit proof. Host-proved process exit and
+  explicit user dismissal keep their existing cleanup rules.
+- Timer-cleared working titles do not prove readiness. Their origin survives
+  graph rebuilds and same-title hydration. While the stale-clear flag is set,
+  neither the OSC title nor the renderer title proves idle, even after rebranding.
+  A genuine OSC title clears the flag and restores idle-title evidence.
+- A fresh working hook prevents a retained prompt from proving readiness.
+- For Pi and OMP, a fresh authoritative hook turn takes priority over title and
+  screen evidence. Without a hook turn, rule-file title anchors and current
+  Pi/OMP state markers remain valid idle evidence.
+- Selected-target sends recognize current Pi and OMP idle state markers,
+  including wrapped titles, and keep support for the legacy idle title.
+
+Activity and outcome fields are optional payload fields. Existing remote clients
+do not need a new wire opcode. A source change does not update an installed app
+or its managed extension until that source is built and deployed.
+
 ## The store already exists
 
 The hook server's state is that store today for every PTY-based agent. The

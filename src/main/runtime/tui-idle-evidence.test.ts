@@ -116,6 +116,52 @@ describe('evaluateTuiIdle ranking', () => {
     expect(verdict).toEqual({ kind: 'ready-strong' })
   })
 
+  it.each([undefined, 'π > project', 'OMP > project'])(
+    'rejects timer-cleared title evidence with renderer title %s until genuine idle arrives',
+    (rendererTitle) => {
+      const evidence = input({
+        ...noMuse,
+        agent: 'omp',
+        record: record({
+          lastAgentStatus: 'idle',
+          lastOscTitle: 'π > project',
+          lastOscTitleStaleWorkingClear: true
+        }),
+        rendererTitle,
+        firstPartyStatus: { state: 'working', updatedAt: Date.now() }
+      })
+      expect(evaluateTuiIdle(evidence)).toEqual({ kind: 'working' })
+      evidence.record.lastOscTitleStaleWorkingClear = false
+      expect(evaluateTuiIdle(evidence)).toEqual({ kind: 'ready-strong' })
+    }
+  )
+
+  it('does not let an old prompt bypass a fresh working hook', () => {
+    expect(
+      evaluateTuiIdle(
+        input({
+          ...noMuse,
+          agent: 'claude',
+          readPositiveBodyEvidence: () => true,
+          firstPartyStatus: { state: 'working', updatedAt: Date.now() }
+        })
+      )
+    ).toEqual({ kind: 'working' })
+  })
+
+  it('accepts a genuine OMP idle title despite a retained working hook', () => {
+    expect(
+      evaluateTuiIdle(
+        input({
+          ...noMuse,
+          agent: 'omp',
+          record: record({ lastAgentStatus: 'idle', lastOscTitle: 'π > project' }),
+          firstPartyStatus: { state: 'working', updatedAt: Date.now() }
+        })
+      )
+    ).toEqual({ kind: 'ready-strong' })
+  })
+
   it('calls a name-only title weak, even for an agent it is the only rest signal of', () => {
     const verdict = evaluateTuiIdle(
       input({ ...noMuse, agent: 'grok', record: record({ lastAgentStatus: 'idle' }) })

@@ -26,8 +26,7 @@ export function getOmpSessionOwnerHandlerSourceLines(): string[] {
     '',
     '  function ownsSessionStatus(ctx): boolean {',
     '    if (!isOmpRuntime()) return true',
-    '    // Newer OMP builds may expose this computed runtime provenance directly.',
-    '    if (ctx?.agentKind === "sub") return false',
+    '    if (ctx?.agent?.kind === "sub" || ctx?.agentKind === "sub") return false',
     '    const current = sessionProvenance(ctx)',
     '    if (!current) return true',
     "    // A task transcript is never the pane's resumable root, even when its",
@@ -43,7 +42,7 @@ export function getOmpSessionOwnerHandlerSourceLines(): string[] {
     '    const pane = JSON.stringify([process.env.ORCA_PANE_KEY, process.env.ORCA_AGENT_LAUNCH_TOKEN])',
     '    const owner = owners.get(pane)',
     '    if (owner) {',
-    '      if (owner.manager === current.manager) return true',
+    '      if (owner.manager === current.manager) { owners.set(pane, current); return true }',
     '      if (current.parent === owner.file || current.parent === owner.id) return false',
     '      if (isNestedTaskTranscript(owner.file, current.file)) return false',
     '      return false',
@@ -55,11 +54,11 @@ export function getOmpSessionOwnerHandlerSourceLines(): string[] {
     '  function onStatus(name, handler): void {',
     '    pi.on(name, (event, ctx) => {',
     '      if (!ownsSessionStatus(ctx)) return',
+    '      installOmpUiTracking(ctx)',
     '      return handler(event, ctx)',
     '    })',
     '  }',
     '',
-    "  onStatus('session_start', () => {})",
     ''
   ]
 }

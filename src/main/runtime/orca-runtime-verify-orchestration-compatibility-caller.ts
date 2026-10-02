@@ -58,10 +58,10 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
     if (
       options?.currentRuntimeLaunchSufficient &&
       terminalProvenance === 'current_runtime' &&
+      this.ptysById.get(terminal.ptyId)?.launchNeedsHookAttestation !== true &&
       claimedPaneKey === terminal.paneKey
     ) {
-      // Why: the checks above bind a fresh launch to its live PTY, host, and
-      // launch secret. Only an exact live-pane match may skip hook attestation.
+      // Only an exact launch before its first command-finished marker may skip hook attestation.
       return this.freezeOrchestrationCompatibilityCallerAuthority(
         terminal,
         terminal.processIncarnation,

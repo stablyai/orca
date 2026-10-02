@@ -24,4 +24,25 @@ describe('detectAgentSendTitleStatus', () => {
     expect(detectAgentSendTitleStatus('Codex ready')).toBe('idle')
     expect(detectAgentSendTitleStatus('zsh')).toBeNull()
   })
+
+  it.each(['π > project', 'OMP > project', 'Pi > project', 'zsh | π > project', 'π - project'])(
+    'accepts Pi/OMP idle title %j for send',
+    (title) => {
+      expect(detectAgentSendTitleStatus(title)).toBe('idle')
+    }
+  )
+
+  it.each(['π : project', 'OMP : project', 'Pi : project'])(
+    'preserves Pi/OMP working title %j',
+    (title) => {
+      expect(detectAgentSendTitleStatus(title)).toBe('working')
+    }
+  )
+
+  it.each(['π ! project', 'OMP ! project', 'Pi ! project'])(
+    'preserves Pi/OMP attention title %j',
+    (title) => {
+      expect(detectAgentSendTitleStatus(title)).toBe('permission')
+    }
+  )
 })

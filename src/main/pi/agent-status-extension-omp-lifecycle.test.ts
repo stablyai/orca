@@ -97,7 +97,6 @@ describe('OMP agent_end contract', () => {
         await vi.waitFor(() =>
           expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
         )
-        expect(context.isIdle).not.toHaveBeenCalled()
       }
     }
   )

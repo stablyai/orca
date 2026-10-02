@@ -83,8 +83,7 @@ export class OrchestrationLegacyCompatibility {
       return { handled: false }
     }
     if (request.method === 'orchestration.runUse' && values.takeoverLegacy === true) {
-      // Why: takeover is a current-contract recovery action. An exact fresh runtime launch
-      // already proves its live PTY, process, pane, host, handle, and launch secret.
+      // A launch without a command-finished marker can authorize takeover before its first hook.
       const callerAuthority = this.runtime.verifyOrchestrationCompatibilityCaller(
         request.orchestrationCompatibilityEvidence,
         { currentRuntimeLaunchSufficient: true }

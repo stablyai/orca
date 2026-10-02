@@ -206,17 +206,17 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  const ompRuntime = isOmpRuntime()',
     '  cancelPostRetry()',
     '  const metadata = getPostSessionMetadata(ompRuntime)',
-    '// Model changes must not erase an unacknowledged completion in the latest-only slot.',
+    '  // Model and dialog events must not replace an undelivered completion.',
     "  const previousCompletion = latestPost?.hookEventName === 'agent_end' && !latestPost.delivered && latestPost.metadata.session_id === metadata.session_id",
+    "  const preserveCompletion = ompRuntime && previousCompletion && ['model_select', 'ui_prompt_start', 'ui_prompt_end'].includes(hookEventName)",
     '  pendingPost = {',
     '    revision: ++postRevision,',
     '    attempts: 0,',
     '    delivered: false,',
-    "    hookEventName: ompRuntime && hookEventName === 'model_select' && previousCompletion ? 'agent_end' : hookEventName,",
-    // Why: every coalesced snapshot must retain an open modal, not just its start event.
+    "    hookEventName: preserveCompletion ? 'agent_end' : hookEventName,",
     kind === 'pi'
-      ? '    extra: { ...extra, ...(!ompRuntime && piUiPromptDepth > 0 ? { ui_prompt_active: true } : {}) },'
-      : '    extra,',
+      ? '    extra: { ...(preserveCompletion ? latestPost.extra : {}), ...extra, ...((ompRuntime ? ompUiPromptDepth : piUiPromptDepth) > 0 ? { ui_prompt_active: true } : preserveCompletion ? { ui_prompt_active: false } : {}) },'
+      : '    extra: { ...(preserveCompletion ? latestPost.extra : {}), ...extra, ...(ompUiPromptDepth > 0 ? { ui_prompt_active: true } : preserveCompletion ? { ui_prompt_active: false } : {}) },',
     '    metadata,',
     '    ompRuntime,',
     '  }',

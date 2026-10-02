@@ -8,8 +8,16 @@ import { getPiAgentStatusExtensionSource } from './agent-status-extension-source
 
 export type HookContext = {
   hasUI?: boolean
-  ui?: { setEditorText?: (text: string) => void; notify?: (message: string, level: string) => void }
+  ui?: {
+    setEditorText?: (text: string) => void
+    notify?: (message: string, level: string) => void
+    confirm?: (title: string, message: string) => Promise<boolean>
+    input?: (title: string, placeholder?: string) => Promise<string | undefined>
+  }
   isIdle?: () => boolean
+  hasPendingMessages?: () => boolean
+  getAsyncJobSnapshot?: () => { running: unknown[]; recent?: unknown[] } | null
+  agent?: { kind: 'main' | 'sub' }
   model?: { provider?: unknown; id?: unknown } | null
   modelRegistry?: { getAvailable: () => { provider: string; id: string }[] }
   sessionManager?: {
@@ -205,7 +213,13 @@ export function createAgentStatusExtensionHarness(args: {
       setModel: setModelMock,
       events: piEvents,
       on(name: string, handler: HookHandler) {
-        target[name] = handler
+        const previous = target[name]
+        target[name] = previous
+          ? async (event, ctx) => {
+              await previous(event, ctx)
+              await handler(event, ctx)
+            }
+          : handler
       }
     })
   }

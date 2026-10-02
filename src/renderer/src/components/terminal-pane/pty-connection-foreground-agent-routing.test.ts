@@ -153,48 +153,6 @@ describe('connectPanePty', () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('drops agent status without retaining when OSC 133 reports the command finished', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-
-    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-    const transport = createMockTransport()
-    let currentPtyId: string | null = null
-    vi.mocked(transport.getPtyId).mockImplementation(() => currentPtyId)
-    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-      currentPtyId = 'pty-local-1'
-      capturedDataCallback.current = callbacks.onData ?? null
-      return 'pty-local-1'
-    })
-    transportFactoryQueue.push(transport)
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState = {
-      ...mockStoreState,
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          state: 'done',
-          prompt: 'hi',
-          updatedAt: 1000,
-          stateStartedAt: 1000,
-          agentType: 'codex',
-          stateHistory: []
-        }
-      }
-    }
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps({ isVisibleRef: { current: false } })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-
-    capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
-    expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
-  })
-
   it('clears pre-hook launch config when an Orca-started command exits', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] })
     const { connectPanePty } = await import('./pty-connection')

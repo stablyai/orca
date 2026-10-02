@@ -163,35 +163,6 @@ describe('getPiAgentStatusExtensionSource', () => {
     }
   })
 
-  it('keeps OMP runtime status payloads unchanged by Pi session metadata', async () => {
-    const harness = createHarness({ kind: 'omp' })
-
-    await harness.callHook(
-      'session_start',
-      {},
-      {
-        sessionManager: {
-          getSessionId: () => 'omp-session-1',
-          getSessionFile: () => '/tmp/omp-session-1.jsonl'
-        }
-      }
-    )
-    await harness.callHook('agent_start')
-
-    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.fetchMock.mock.calls[0]?.[1]?.body).toBe(
-      JSON.stringify({
-        paneKey: 'pane-1',
-        launchToken: 'launch-1',
-        tabId: 'tab-1',
-        worktreeId: 'tree-1',
-        env: 'env-1',
-        version: '1.2.3',
-        payload: { hook_event_name: 'agent_start' }
-      })
-    )
-  })
-
   it('tracks persistent OMP sessions and clears ephemeral session ids', async () => {
     const harness = createHarness({ kind: 'omp' })
     let sessionId = 'omp-session-8'

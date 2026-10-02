@@ -1,5 +1,6 @@
 import { isQoderComposerReady } from './qoder-terminal-readiness'
 import { memoizeTitleClassification } from '../../shared/terminal-title-classification-memo'
+import { getPiStateTitleStatus } from '../../shared/pi-state-title-marker'
 import { detectAgentStatusFromTitle, type AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -23,7 +24,10 @@ const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 function computeExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
   const status = detectAgentStatusFromTitle(title)
   // Why: launch titles like "Codex YOLO" contain an agent name but aren't readiness signals; terminal.wait needs explicit idle evidence.
-  return status === 'idle' && (EXPLICIT_IDLE_TITLE_RE.test(title) || showsIdleTitleAnchor(title))
+  return status === 'idle' &&
+    (EXPLICIT_IDLE_TITLE_RE.test(title) ||
+      showsIdleTitleAnchor(title) ||
+      getPiStateTitleStatus(title) === 'idle')
     ? 'idle'
     : null
 }

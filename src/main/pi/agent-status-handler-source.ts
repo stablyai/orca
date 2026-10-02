@@ -4,6 +4,7 @@ import { getAgentStatusInputRedactionSourceLines } from './agent-status-input-re
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getOmpSessionOwnerHandlerSourceLines } from './omp-session-status-owner-source'
 import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
+import * as ompStatusLifecycle from './omp-status-lifecycle-source'
 import {
   getPiSubagentRosterEventSourceLines,
   getPiSubagentRosterSetupSourceLines
@@ -17,6 +18,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       ? [
           "  onStatus('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
+          '    if (isOmpRuntime()) { invalidateOmpUiDialogs(); post("session_start", readOmpActivity(ctx)); return }',
           ...(kind === 'pi' ? ['    piUiPromptDepth = 0'] : []),
           '    // Why: /reload re-registers the active session, but it is not a',
           '    // turn boundary and must not clear the visible status or unread state.',
@@ -25,7 +27,13 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           '  })',
           ''
         ]
-      : []
+      : [
+          "  onStatus('session_start', (_event, ctx) => {",
+          '    invalidateOmpUiDialogs()',
+          '    updateRuntimeOmpSessionMetadata(ctx)',
+          "    post('session_start', readOmpActivity(ctx))",
+          '  })'
+        ]
 
   // Why: OMP can switch sessions in-process, so each latest-only post needs fresh identity.
   const ctxParam = ', ctx'
@@ -63,6 +71,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           "    post('tool_approval_resolved', {",
           '      tool_name: event.toolName,',
           '      approved: event.approved,',
+          '      ...readOmpActivity(ctx),',
           '    })',
           '  })',
           ''
@@ -123,6 +132,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     "    return (err as { code?: string } | null)?.code !== 'ESRCH'",
     '  }',
     '}',
+    ...ompStatusLifecycle.getOmpStatusLifecycleSourceLines(),
     '',
     "// Why: child agents inherit the lead's pane env; only its process may",
     '// register status hooks. PID identity keeps in-process reloads reporting.',
@@ -136,26 +146,14 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...getPiSubagentRosterSetupSourceLines(),
     ...(kind !== 'pi'
       ? [
-          "  pi.on('session_shutdown', () => { lifecycleState.active.clear(); lifecycleState.exited?.clear(); lifecycleState.waiting = false; resetPostQueue(); clearPendingAgentEndCheck() })"
-        ]
-      : []),
-    ...(kind !== 'prime-agent'
-      ? [
-          "  pi.on('session_switch', (_event, ctx) => {",
-          '    if (!isOmpRuntime()) return',
-          '    lifecycleState.active.clear()',
-          '    lifecycleState.exited?.clear()',
-          '    lifecycleState.waiting = false',
-          '    resetPostQueue()',
-          '    clearPendingAgentEndCheck()',
-          '    updateRuntimeOmpSessionMetadata(ctx)',
-          '  })'
+          "  pi.on('session_shutdown', (_event, ctx) => { if (!ownsSessionStatus(ctx)) return; lifecycleState.active.clear(); lifecycleState.exited?.clear(); lifecycleState.waiting = false; resetPostQueue(); clearPendingAgentEndCheck(); invalidateOmpUiDialogs(); ompCompletionExtra = {}; ompCompletionContext = null })"
         ]
       : []),
     ...getOmpSessionOwnerHandlerSourceLines(),
     ...getOmpModelCommandSourceLines(),
     ...sessionStartHandler,
     ...(kind === 'omp' ? getPiPrefillHandlerSourceLines('omp', true) : []),
+    ...ompStatusLifecycle.getOmpStatusLifecycleHandlerSourceLines(),
     `  onStatus('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    post('before_agent_start', { prompt: event.prompt ?? '' })",
@@ -166,6 +164,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    clearPendingAgentEndCheck()',
     '    lifecycleState.waiting = false',
     '    runGeneration += 1',
+    '    if (isOmpRuntime()) { invalidateOmpUiDialogs(); ompCompletionExtra = {}; ompCompletionContext = null }',
     // Why: a turn cannot begin under a dialog holding input focus, so this is the one
     // boundary that can recover a modal whose close never arrived.
     ...(kind === 'pi' ? ['    piUiPromptDepth = 0', '    piTurnInFlight = true'] : []),
@@ -212,8 +211,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     '  // Why: modern Pi stays non-idle across retry/compaction/follow-up work,',
     '  // while legacy Pi becomes idle after its final agent_end handlers.',
-    '  // OMP instead marks non-terminal agent_end events with willContinue, so it',
-    '  // returns before the recheck timer is ever armed.',
+    '  // OMP continuation events never establish completion; owned jobs delay all-clear.',
     '  const AGENT_END_IDLE_RECHECK_MS = 25',
     '  const AGENT_END_IDLE_RECHECK_MAX_MS = 250',
     '  let agentSettledSupported = false',
@@ -226,6 +224,8 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  let runGeneration = 0',
     '  let endedRunGeneration = 0',
     '  let completionPostedGeneration = -1',
+    '  let ompCompletionExtra: Record<string, unknown> = {}',
+    '  let ompCompletionContext = null',
     '  let agentEndIdleRecheckMs = AGENT_END_IDLE_RECHECK_MS',
     '  let pendingAgentEndCheck: ReturnType<typeof setTimeout> | null = null',
     '  let pendingAgentEndContext: { isIdle: () => boolean } | null = null',
@@ -241,7 +241,18 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    lifecycleState.exited?.clear()',
     '    if (lifecycleState.active.size > 0) {',
     '      lifecycleState.waiting = true',
+    '      if (isOmpRuntime()) post("agent_end", { ...ompCompletionExtra, has_active_jobs: true })',
     '      return',
+    '    }',
+    '    if (isOmpRuntime() && ompCompletionContext) {',
+    '      const activity = readOmpActivity(ompCompletionContext)',
+    '      if (activity.has_active_jobs === true || activity.has_pending_messages === true) {',
+    '        post("agent_end", { ...ompCompletionExtra, ...activity })',
+    '        pendingAgentEndContext = ompCompletionContext',
+    '        if (pendingAgentEndCheck === null) pendingAgentEndCheck = setTimeout(checkPendingAgentEnd, AGENT_END_IDLE_RECHECK_MS)',
+    '        pendingAgentEndCheck?.unref?.()',
+    '        return',
+    '      }',
     '    }',
     '    lifecycleState.waiting = false',
     '    if (completionPostedGeneration === endedRunGeneration) return',
@@ -249,18 +260,19 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     // Why: distinct from the completion guard, which holds the generation of the posted run
     // and so starts clean on a pane that has not run a turn yet — that pane is idle, not busy.
     ...(kind === 'pi' ? ['    piTurnInFlight = false'] : []),
-    "    post('agent_end')",
+    "    post('agent_end', isOmpRuntime() ? ompCompletionExtra : {})",
     '  }',
     '',
     '  function checkPendingAgentEnd(): void {',
     '    pendingAgentEndCheck = null',
     '    const ctx = pendingAgentEndContext',
-    '    if (!ctx || agentSettledSupported || completionPostedGeneration === endedRunGeneration) {',
+    '    if (!ctx || (agentSettledSupported && !isOmpRuntime()) || completionPostedGeneration === endedRunGeneration) {',
     '      pendingAgentEndContext = null',
     '      return',
     '    }',
     '    try {',
-    '      if (ctx.isIdle()) {',
+    '      const activity = isOmpRuntime() ? readOmpActivity(ctx) : null',
+    '      if (ctx.isIdle() && activity?.has_active_jobs !== true && activity?.has_pending_messages !== true) {',
     '        pendingAgentEndContext = null',
     '        postAgentEndOnce()',
     '        return',
@@ -289,6 +301,8 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    }',
     '    endedRunGeneration = runGeneration',
     '    if (isOmpRuntime()) {',
+    '      ompCompletionContext = ctx',
+    '      ompCompletionExtra = { turn_outcome: readOmpTurnOutcome(event?.messages) }',
     '      postAgentEndOnce()',
     '      return',
     '    }',

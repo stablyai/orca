@@ -134,6 +134,8 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       const observedAt = this.nextTitleObservationSequence()
+      pty.lastOscTitleStaleWorkingClear =
+        pty.lastOscTitle === seededTitle && pty.lastOscTitleStaleWorkingClear === true
       pty.lastOscTitle = seededTitle
       pty.lastOscTitleAt = observedAt
       this.setPtyManagementTitleFromObservedTitle(pty, seededTitle, observedAt)
@@ -142,6 +144,8 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
       // Why: seed lastOscTitle even when the seeded title doesn't classify
       // as an agent state, so worktree.ps recomputes status from the live
       // title rather than treating the leaf as agentless.
+      leaf.lastOscTitleStaleWorkingClear =
+        leaf.lastOscTitle === seededTitle && leaf.lastOscTitleStaleWorkingClear === true
       leaf.lastOscTitle = seededTitle
       leaf.lastOscTitleAt = this.nextTitleObservationSequence()
       if (status !== null) {

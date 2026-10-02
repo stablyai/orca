@@ -46,6 +46,43 @@ describe('terminal side-effect fact channel', () => {
     }
   })
 
+  it('waits for a genuine OMP idle title after a timer clear and graph rebuild', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime } = createSideEffectRuntime()
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime, 'pty-1', { tabTitle: 'OMP' })
+      runtime.onPtyData('pty-1', '\x1b]0;π : project\x07', Date.now())
+      runtime.onPtyData('pty-1', 'still working\r\n', Date.now())
+      await vi.advanceTimersByTimeAsync(3_000)
+      runtime.onPtyData('pty-1', 'work continues\r\n', Date.now())
+      syncSinglePty(runtime, 'pty-1', { tabTitle: 'OMP', paneTitle: 'π > project' })
+      const [terminal] = (await runtime.listTerminals()).terminals
+      const staleWait = runtime.waitForTerminal(terminal.handle, {
+        condition: 'tui-idle',
+        timeoutMs: 200
+      })
+      const timeoutAssertion = expect(staleWait).rejects.toThrow('timeout')
+      await vi.advanceTimersByTimeAsync(200)
+      await timeoutAssertion
+
+      const genuineWait = runtime.waitForTerminal(terminal.handle, {
+        condition: 'tui-idle',
+        timeoutMs: 5_000
+      })
+      runtime.onPtyData('pty-1', '\x1b]0;π > project\x07', Date.now())
+      const readyAssertion = expect(genuineWait).resolves.toMatchObject({ satisfied: true })
+      await vi.advanceTimersByTimeAsync(2_000)
+      await readyAssertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('emits command-code-working facts only after the banner arms the scrape', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)

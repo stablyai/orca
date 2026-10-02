@@ -53,16 +53,14 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     const candidate = resolveLaunchAgentCandidate(useAppStore.getState())
     return isTuiAgent(candidate) ? candidate : null
   }
-  // Why: a launched/hook-known agent pane must confirm — not trust — a 133;D so a
-  // full-screen agent's leaked nested-shell 133;D can't clear its tab identity,
-  // even on a restore where no command-start read has recorded evidence yet.
+  // Known agent identity requires process confirmation before command-finished cleanup.
   session.paneHasKnownAgentIdentity = (): boolean => {
     const state = useAppStore.getState()
     const registeredLaunchAgent =
       state.agentLaunchConfigByPaneKey[session.cacheKey]?.identity.agentType
     return (
       Boolean(state.paneForegroundAgentByPaneKey[session.cacheKey]?.agent) ||
-      session.paneHasLiveHookAgentIcon(state) ||
+      Boolean(agentTypeToIconAgent(state.agentStatusByPaneKey[session.cacheKey]?.agentType)) ||
       isTuiAgent(registeredLaunchAgent)
     )
   }
@@ -120,30 +118,13 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   ): void => {
     const dropStatus = session.deferredCommandFinishedStatusDrop
     const reconcile = session.deferredConfirmedShellReconcile
+    session.deferredCommandFinishedStatusDrop = null
     session.deferredConfirmedShellReconcile = null
-    if (options.confirmedShell || !dropStatus) {
-      session.deferredCommandFinishedStatusDrop = null
-      if (options.confirmedShell) {
-        dropStatus?.()
-        reconcile?.()
-      }
-      return
+    // Unanswered foreground reads do not prove that the agent exited.
+    if (options.confirmedShell) {
+      dropStatus?.()
+      reconcile?.()
     }
-    // Why: only a pane whose agent process the host can check keeps its row on an unanswered read;
-    // every other pane keeps today's cleanup until the renderer reads the owner record (step 2).
-    // The drop stays armed while main answers, so a new command start still cancels it.
-    const dropUnlessVerifiable = (verifiable: boolean): void => {
-      if (session.deferredCommandFinishedStatusDrop !== dropStatus) {
-        return
-      }
-      session.deferredCommandFinishedStatusDrop = null
-      if (!verifiable) {
-        dropStatus()
-      }
-    }
-    void Promise.resolve(window.api?.agentStatus?.hasVerifiableAgentProcess?.(session.cacheKey))
-      .then((verifiable) => dropUnlessVerifiable(verifiable === true))
-      .catch(() => dropUnlessVerifiable(false))
   }
   const isRemotePtyId = (id: string): boolean =>
     Boolean(isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id))

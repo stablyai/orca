@@ -133,6 +133,17 @@ describe('tui-idle evidence ranking', () => {
     ).resolves.toMatchObject({ satisfied: true })
   })
 
+  it.each(['π > leviathan', 'Pi > workspace', 'OMP > workspace', 'zsh | OMP > workspace'])(
+    'settles the native idle marker %s without waiting for output silence',
+    async (title) => {
+      const pty = makeTuiIdlePty({ lastAgentStatus: 'idle', lastOscTitle: title })
+      const { wait } = createWait({ pty, agent: 'omp' })
+      const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 1000 }))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toHaveBeenCalledWith({ ok: expect.objectContaining({ satisfied: true }) })
+    }
+  )
+
   // Why this case exists: tier 1 used to read only the renderer-synced pane title, so a
   // daemon-hosted pane with no renderer dropped its explicit `Codex ready` to the
   // quiescence lane and waited the whole window for a result it already had.

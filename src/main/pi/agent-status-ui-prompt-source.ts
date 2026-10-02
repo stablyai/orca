@@ -35,7 +35,7 @@ export function getPiAgentStatusUiPromptHandlerSourceLines(kind: PiAgentKind): s
     "  onStatus('session_shutdown', () => {",
     '    resetPostQueue()',
     '    clearPendingAgentEndCheck()',
-    '    if (isOmpRuntime()) return',
+    '    if (isOmpRuntime()) { invalidateOmpUiDialogs(); ompCompletionExtra = {}; ompCompletionContext = null; lifecycleState.active.clear(); lifecycleState.exited?.clear(); lifecycleState.waiting = false; return }',
     '    // Why: pi tears an open dialog down through resetExtensionUI without resolving its',
     '    // promise, so a replaced session never emits the matching ui_prompt_end and the wait',
     '    // would stick forever. Reset without posting: shutdown is not a turn boundary, and',
