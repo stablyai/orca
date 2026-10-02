@@ -15,6 +15,7 @@ import {
 import { useRadixBodyPointerEventsRecovery } from '../hooks/useRadixBodyPointerEventsRecovery'
 import { useGitStatusPolling } from '../components/right-sidebar/useGitStatusPolling'
 import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/osc52-clipboard-default-on-notice'
+import { useRepoTerminalViewAttributesPublisher } from '../components/terminal-pane/repo-terminal-view-attributes-publisher'
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
@@ -54,6 +55,7 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   useLargeTextControlPaste()
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
+  useRepoTerminalViewAttributesPublisher()
   useBrowserIdentityMigrationNotice()
   useCodexTerminalServerIsolationNotice()
 }

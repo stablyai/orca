@@ -97,6 +97,8 @@ export type CreateOrAttachRequest = {
       claim: AgentSessionExecutionClaim
       surface: AgentSessionSurfaceBinding
     }
+    /** Orca worktree identity; a caller-supplied session id need not embed it. Older daemons ignore it. */
+    worktreeId?: string
   }
 }
 

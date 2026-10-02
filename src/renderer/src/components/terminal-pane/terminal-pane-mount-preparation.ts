@@ -291,7 +291,8 @@ export function prepareTerminalPaneMount(
         deps.paneTransportsRef.current,
         deps.effectiveMacOptionAsAltRef.current,
         deps.paneMode2031Ref.current,
-        deps.paneLastThemeModeRef.current
+        deps.paneLastThemeModeRef.current,
+        deps.repoTerminalThemeRef.current
       )
     },
     cancelResizeAll

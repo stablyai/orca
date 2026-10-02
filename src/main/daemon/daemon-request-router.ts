@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks'
-import { setPtyOwnerHostColors } from '../../shared/pty-owner-color-query-colors'
+import { setPtyOwnerColors } from '../../shared/pty-owner-color-query-colors'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -72,7 +72,7 @@ export class DaemonRequestRouter {
           appliedSeq: this.options.host.closeStartupQueryAuthority(request.payload.sessionId)
         }
       case 'setColorQueryReplyColors':
-        setPtyOwnerHostColors(request.payload.colors)
+        setPtyOwnerColors(request.payload)
         return {}
       case 'write':
         return this.write(client, request.payload.sessionId, request.payload.data)

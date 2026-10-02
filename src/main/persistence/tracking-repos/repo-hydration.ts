@@ -5,6 +5,7 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
+import { normalizeRepoTerminalThemeOverrides } from '../../../shared/repo-terminal-theme'
 import {
   sanitizeForkSyncMode,
   sanitizeGitRemoteIdentity,
@@ -34,6 +35,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     upstream: rawUpstream,
     gitRemoteIdentity: rawGitRemoteIdentity,
     sourceControlAi: rawSourceControlAi,
+    terminalTheme: rawTerminalTheme,
     projectHostSetupMethod: rawProjectHostSetupMethod,
     forkSyncMode: rawForkSyncMode,
     ghAccount: rawGhAccount,
@@ -45,6 +47,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   const upstream = sanitizeRepoUpstream(rawUpstream)
   const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
   const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
+  const terminalTheme = normalizeRepoTerminalThemeOverrides(rawTerminalTheme)
   const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
   const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
   const ghAccount = normalizeGhAccountBinding(rawGhAccount)
@@ -68,6 +71,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     ...(upstream !== undefined ? { upstream } : {}),
     ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),
     ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
+    ...(terminalTheme !== undefined ? { terminalTheme } : {}),
     ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
     ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
     ...(ghAccount ? { ghAccount } : {}),

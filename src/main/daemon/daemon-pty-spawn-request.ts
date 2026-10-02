@@ -134,7 +134,8 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
           : {}),
         ...(!context.attachOnly && opts.agentSessionEnsure
           ? { agentSessionEnsure: opts.agentSessionEnsure }
-          : {})
+          : {}),
+        ...(!context.attachOnly && opts.worktreeId ? { worktreeId: opts.worktreeId } : {})
       }
       return opts.signal
         ? this.client.request<CreateOrAttachResult>(

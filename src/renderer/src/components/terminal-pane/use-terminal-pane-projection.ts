@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react'
 import type { CSSProperties } from 'react'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
+  applyRepoTerminalThemeOverride,
   isTerminalBackgroundLight,
   normalizeColor,
   resolveEffectiveTerminalAppearance,
@@ -39,6 +40,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     toggleNativeChatForLeaf,
     paneTitles,
     paneTransportsRef,
+    repoTerminalTheme,
     resolveTitleAgentForLeaf,
     setTerminalError,
     setTerminalErrorsByPaneId,
@@ -53,7 +55,10 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     terminalTab
   } = controller
   const effectiveAppearance = settings
-    ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
+    ? resolveEffectiveTerminalAppearance(
+        applyRepoTerminalThemeOverride(settings, repoTerminalTheme),
+        systemPrefersDark
+      )
     : null
   const terminalBackground =
     settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background
