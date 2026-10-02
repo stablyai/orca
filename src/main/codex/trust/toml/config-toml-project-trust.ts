@@ -44,6 +44,29 @@ export function upsertProjectTrustContent(
   return `${existing.slice(0, headerLineEnd)}${eol}${trustLine}${existing.slice(headerLineEnd)}`
 }
 
+/** Whether any `[projects."<path>"]` table for the path already exists, in any spelling. */
+export function hasProjectTrustEntry(content: string, projectPath: string): boolean {
+  return findProjectHeaderLineEnd(content, projectPath) !== null
+}
+
+/**
+ * Removes every `[projects."<path>"]` table for the path, leaving all other
+ * bytes untouched: only whole tables go, never a sibling key or table.
+ */
+export function removeProjectTrustContent(content: string, projectPath: string): string {
+  let updated = content
+  for (;;) {
+    const headerLineEnd = findProjectHeaderLineEnd(updated, projectPath)
+    if (headerLineEnd === null) {
+      return updated
+    }
+    const headerLineStart = updated.lastIndexOf('\n', Math.max(0, headerLineEnd - 1)) + 1
+    const nextHeaderOffset = findNextTomlTableHeader(updated.slice(headerLineEnd))
+    const blockEnd = nextHeaderOffset === -1 ? updated.length : headerLineEnd + nextHeaderOffset
+    updated = updated.slice(0, headerLineStart) + updated.slice(blockEnd)
+  }
+}
+
 function canonicalizeLocalProjectPath(projectPath: string): string {
   try {
     return realpathSync.native(projectPath)

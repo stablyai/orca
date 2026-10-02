@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { writeFileAtomically } from '../../codex-accounts/fs-utils'
-import { upsertProjectTrustLevel } from '../../codex/trust/toml/config-toml-trust'
+import { upsertProjectTrustLevel, upsertOrcaCreatedProjectTrustLevel } from '../../codex/trust/toml/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from '../../codex/trust/toml/codex-trust-config-mutation-queue'
-import type { TuiAgentConfig } from '../../../shared/agent-launch/catalog/tui-agent-config-types'
+import type { TuiAgentConfig } from '../../../shared/agent-launch/catalog/tui-agent-config-types' 
 
 export type AgentTrustPreset = NonNullable<TuiAgentConfig['preflightTrust']>
 
@@ -136,7 +136,7 @@ export function markCodexProjectTrusted(
     (inner, configFile) => () => runExclusivelyForCodexTrustConfig(configFile, inner),
     async () => {
       for (const configFile of configFiles) {
-        upsertProjectTrustLevel(configFile, absPath, 'trusted')
+        upsertOrcaCreatedProjectTrustLevel(configFile, absPath, 'trusted')
       }
     }
   )
