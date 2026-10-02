@@ -140,6 +140,43 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     })
   })
 
+  it('routes Antigravity through the resumable-agent startup plan with conversation_id', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'antigravity',
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+      }),
+      hostPlatform: 'darwin'
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && agy '--dangerously-skip-permissions' '--conversation' 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'",
+      launchConfig: { agentCommand: "agy '--dangerously-skip-permissions'" },
+      launchAgent: 'antigravity'
+    })
+  })
+
+  it('respects custom Antigravity launch arguments when resuming on mobile', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'antigravity',
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+      }),
+      hostPlatform: 'darwin',
+      settings: {
+        agentDefaultArgs: { antigravity: '' }
+      }
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && agy '--conversation' 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'",
+      launchConfig: { agentCommand: 'agy' },
+      launchAgent: 'antigravity'
+    })
+  })
+
   it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({
