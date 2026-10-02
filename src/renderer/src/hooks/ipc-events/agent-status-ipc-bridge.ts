@@ -14,6 +14,13 @@ import type {
   PendingAgentStatusEvent
 } from './agent-status-bridge-types'
 import { shouldRetryPendingAgentStatusesAfterStoreUpdate } from './agent-status-pending-retry-gate'
+import {
+  armAgentStatusStartupSnapshot,
+  holdAgentStatusStartupSnapshotForReplay,
+  releaseAgentStatusStartupSnapshotReplayHold,
+  resetAgentStatusStartupSnapshotGate,
+  settleAgentStatusStartupSnapshot
+} from './agent-status-startup-snapshot-gate'
 
 const PENDING_AGENT_STATUS_RETRY_MS = 100
 const PENDING_AGENT_STATUS_TTL_MS = 15_000
@@ -65,6 +72,8 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
       return
     }
     if (pendingAgentStatusEvents.length === 0) {
+      // A clear can empty the queue without entering the flush loop below.
+      releaseAgentStatusStartupSnapshotReplayHold(false, pendingAgentStatusEvents)
       return
     }
     isFlushingAgentStatuses = true
@@ -93,6 +102,10 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
         globalThis.clearTimeout(pendingAgentStatusRetryTimer)
         pendingAgentStatusRetryTimer = null
       }
+      releaseAgentStatusStartupSnapshotReplayHold(
+        pendingAgentStatusEvents.some((event) => event.replay),
+        pendingAgentStatusEvents
+      )
     } finally {
       isFlushingAgentStatuses = false
       schedulePendingAgentStatusFlush()
@@ -109,6 +122,9 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
   const requestAgentStatusSnapshotIfReady = (): void => {
     const store = useAppStore.getState()
     if (!store.workspaceSessionReady) {
+      if (snapshotRequestedForReadyWindow) {
+        resetAgentStatusStartupSnapshotGate()
+      }
       snapshotRequestedForReadyWindow = false
       return
     }
@@ -121,7 +137,11 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
     }
     snapshotRequestedForReadyWindow = true
     const requestId = ++snapshotRequestId
-    void getSnapshot()
+    // Why: the first restored pane connects in this same turn. Arm before the IPC round-trip so
+    // that pane can wait until this snapshot is applied (#24291).
+    const snapshotEpoch = armAgentStatusStartupSnapshot()
+    void Promise.resolve()
+      .then(() => getSnapshot())
       .then((entries) => {
         if (disposed || requestId !== snapshotRequestId) {
           return
@@ -130,7 +150,11 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
         if (!current.workspaceSessionReady) {
           return
         }
-        applyAgentStatusBatch(entries.map((data) => ({ data, replay: true })))
+        const results = applyAgentStatusBatch(entries.map((data) => ({ data, replay: true })))
+        // Why: an unroutable snapshot entry is replayed later. Hold the reattach gate until then (#24291).
+        if (results.some((result) => result === 'pending')) {
+          holdAgentStatusStartupSnapshotForReplay(snapshotEpoch, pendingAgentStatusEvents)
+        }
         const getMigrationUnsupportedSnapshot =
           window.api.agentStatus.getMigrationUnsupportedSnapshot
         if (typeof getMigrationUnsupportedSnapshot !== 'function') {
@@ -158,6 +182,15 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
       .catch((err) => {
         // Why: stay latched on failure; the store subscriber fires on every update, so resetting here would turn a persistent IPC failure into a retry storm (flag clears on workspaceSessionReady toggle).
         console.warn('[agent-status] failed to load startup snapshot:', err)
+      })
+      .finally(() => {
+        const replayStillQueued = pendingAgentStatusEvents.some((event) => event.replay)
+        if (
+          releaseAgentStatusStartupSnapshotReplayHold(replayStillQueued, pendingAgentStatusEvents)
+        ) {
+          return
+        }
+        settleAgentStatusStartupSnapshot(snapshotEpoch)
       })
   }
 
@@ -276,6 +309,7 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
     disposeAsyncState: () => {
       disposed = true
       snapshotRequestId += 1
+      resetAgentStatusStartupSnapshotGate()
       if (pendingAgentStatusRetryTimer !== null) {
         globalThis.clearTimeout(pendingAgentStatusRetryTimer)
       }

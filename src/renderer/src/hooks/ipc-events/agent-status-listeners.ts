@@ -9,6 +9,7 @@ import {
 } from '../legacy-worker-terminal-recovery-event'
 import { useAppStore } from '../../store'
 import { resolvePaneKey } from './agent-status-routing'
+import { releaseAgentStatusStartupSnapshotReplayHold } from './agent-status-startup-snapshot-gate'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 
 export function registerAgentStatusListeners(args: {
@@ -27,6 +28,12 @@ export function registerAgentStatusListeners(args: {
     transientClearWatermarkByConnectionId,
     liveAgentStatusBurstQueue
   } = args
+  const releaseStartupReplayHold = (): void => {
+    releaseAgentStatusStartupSnapshotReplayHold(
+      pendingAgentStatusEvents.some((event) => event.replay === true),
+      pendingAgentStatusEvents
+    )
+  }
   unsubs.push(
     window.api.agentStatus.onSet((data) => {
       enqueueLiveAgentStatus(data)
@@ -57,6 +64,7 @@ export function registerAgentStatusListeners(args: {
             pendingAgentStatusEvents.splice(index, 1)
           }
         }
+        releaseStartupReplayHold()
         for (let index = liveAgentStatusBurstQueue.length - 1; index >= 0; index -= 1) {
           const queued = liveAgentStatusBurstQueue[index]
           if (
@@ -81,6 +89,7 @@ export function registerAgentStatusListeners(args: {
           pendingAgentStatusEvents.splice(index, 1)
         }
       }
+      releaseStartupReplayHold()
       const store = useAppStore.getState()
       if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
         return

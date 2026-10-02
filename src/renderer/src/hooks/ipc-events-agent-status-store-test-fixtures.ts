@@ -173,6 +173,7 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     markWorktreeUnread: vi.fn(),
     markAgentCompletionPaneUnread: vi.fn(),
     agentStatusByPaneKey: {},
+    setAgentStatus: vi.fn(),
     setAgentStatuses: vi.fn(() => []),
     recordAgentProviderSession: vi.fn(),
     clearTransientAgentStatuses: vi.fn(),

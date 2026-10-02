@@ -1,3 +1,7 @@
+import {
+  AGENT_STATUS_STARTUP_SNAPSHOT_WAIT_MS,
+  waitForAgentStatusStartupSnapshot
+} from '../../../hooks/ipc-events/agent-status-startup-snapshot-gate'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 import { isSshSessionGoneError, recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
@@ -11,6 +15,30 @@ export function startDeferredSessionReattach(
   session: ConnectPanePtySession,
   deferredReattachSessionId: string
 ): void {
+  void startDeferredSessionReattachAfterStartupSnapshot(session, deferredReattachSessionId)
+}
+
+async function startDeferredSessionReattachAfterStartupSnapshot(
+  session: ConnectPanePtySession,
+  deferredReattachSessionId: string
+): Promise<void> {
+  // Why: registerAgentStatusIpcBridge requests the startup snapshot in the same turn the first
+  // restored pane connects. Building the resume command before that snapshot is applied returns
+  // null, so the pane opens without its provider session (#24291). Later panes already see it.
+  // Why: a keystroke during this wait must count as a connect still settling. The marker used to
+  // be set only after the wait, so recovery treated the unbound transport as dead and remounted it.
+  session.transportConnectInFlightSince = Date.now()
+  await waitForAgentStatusStartupSnapshot(
+    AGENT_STATUS_STARTUP_SNAPSHOT_WAIT_MS,
+    session.cacheKey
+  )
+  if (
+    session.disposed ||
+    session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport
+  ) {
+    session.transportConnectInFlightSince = null
+    return
+  }
   session.allowInitialIdleCacheSeed = true
   recordPtyConnectDiagnostic(`pane=${session.pane.id} -> REATTACH ${deferredReattachSessionId}`)
   session.prepaintParkedSshSnapshot(deferredReattachSessionId)
