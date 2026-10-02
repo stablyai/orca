@@ -11,7 +11,11 @@ export type CompletionSource = 'hook' | 'title' | 'process-exit'
 export type CompletionDispatch = (
   source: CompletionSource,
   title: string,
-  options?: { terminalIdleConfirmed?: boolean; completionIdentity?: LastCompletionIdentity | null }
+  options?: {
+    terminalIdleConfirmed?: boolean
+    completionIdentity?: LastCompletionIdentity | null
+    requiresUnnotifiedTurn?: boolean
+  }
 ) => boolean
 export type PendingProcessExit = {
   process: RecognizedAgentProcess

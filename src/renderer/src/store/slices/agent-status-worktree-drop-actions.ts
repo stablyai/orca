@@ -24,6 +24,21 @@ export function createAgentStatusWorktreeDropActions(
           ([paneKey, entry]) =>
             entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
         )
+        const presenceKeys = new Set(
+          Object.entries(s.agentPresenceByPaneKey)
+            .filter(
+              ([paneKey, record]) =>
+                record.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+            )
+            .map(([key]) => key)
+        )
+        const presencePatch = presenceKeys.size
+          ? {
+              agentPresenceByPaneKey: removePaneKeys(s.agentPresenceByPaneKey, presenceKeys),
+              agentStatusEpoch: s.agentStatusEpoch + 1,
+              sortEpoch: s.sortEpoch + 1
+            }
+          : {}
         const liveKeys = liveEntries.map(([paneKey]) => paneKey)
         const liveKeySet = new Set(liveKeys)
         const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
@@ -99,6 +114,7 @@ export function createAgentStatusWorktreeDropActions(
           !migrationUnsupported.changed
         ) {
           const cleanupPatch = {
+            ...presencePatch,
             ...(nextAck !== s.acknowledgedAgentsByPaneKey
               ? { acknowledgedAgentsByPaneKey: nextAck }
               : {}),
@@ -149,6 +165,7 @@ export function createAgentStatusWorktreeDropActions(
           }
         }
         return {
+          ...presencePatch,
           agentStatusByPaneKey: nextLive,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           retainedAgentsByPaneKey: nextRetained,
@@ -164,8 +181,13 @@ export function createAgentStatusWorktreeDropActions(
             ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
             : {}),
           agentStatusEpoch:
-            hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+            hadLive || presenceKeys.size > 0 || migrationUnsupported.changed
+              ? s.agentStatusEpoch + 1
+              : s.agentStatusEpoch,
+          sortEpoch:
+            hadLive || presenceKeys.size > 0 || migrationUnsupported.changed
+              ? s.sortEpoch + 1
+              : s.sortEpoch
         }
       })
       if (hadLive) {

@@ -23,6 +23,7 @@ import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-
 import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { matchesProcessIncarnation } from './orchestration/worker-terminal-process-liveness'
+import { WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS } from './orca-runtime-postlude'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   /** Every pane key this PTY could be addressed by, including restored receipts. */
@@ -42,6 +43,13 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       }
     }
     return paneKeys
+  }
+
+  /** Whether Orca is stopping this pane's terminal for sleep or hibernation right now. */
+  isPaneTerminalSleepStopInFlight(paneKey: string): boolean {
+    return this.intentionalPtyStops
+      .reversibleStopPtyIdsInFlightWithin(WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS)
+      .some((ptyId) => this.collectPaneKeysForPty(ptyId).has(paneKey))
   }
 
   /** Status cleanup also owns runtime-admitted legacy OSC rows; orchestration authority does not. */

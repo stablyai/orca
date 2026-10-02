@@ -108,6 +108,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }
     }
     const snapshot = cases.map((entry, index): AgentStatusSetData => ({
+      agentPresence: {
+        agent: 'claude',
+        process: { pid: 4001 + index, platform: 'linux', startTime: 'birth' }
+      },
       paneKey: makePaneKey(entry.tabId, entry.leafId),
       worktreeId: entry.payloadWorktreeId,
       ...(entry.connectionId ? { connectionId: entry.connectionId } : {}),
@@ -160,9 +164,16 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }
     }))
     stubAuxiliaryModules()
+    const liveEvent: { current: ((event: AgentStatusSetData) => void) | null } = { current: null }
     vi.stubGlobal(
       'window',
-      buildWindowApi({ getSnapshot: vi.fn().mockResolvedValue(snapshot), onSet: () => () => {} })
+      buildWindowApi({
+        getSnapshot: vi.fn().mockResolvedValue(snapshot),
+        onSet: (listener) => {
+          liveEvent.current = listener
+          return () => {}
+        }
+      })
     )
 
     const { useIpcEvents } = await import('./useIpcEvents')
@@ -179,9 +190,37 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
     for (const entry of cases) {
       expect(
+        store.getState().agentPresenceByPaneKey[makePaneKey(entry.tabId, entry.leafId)] !==
+          undefined
+      ).toBe(entry.expected)
+      expect(
         store.getState().agentStatusByPaneKey[makePaneKey(entry.tabId, entry.leafId)] !== undefined
       ).toBe(entry.expected)
     }
+
+    const paneKey = snapshot[0].paneKey
+    const currentStatus = store.getState().agentStatusByPaneKey[paneKey]
+    store.setState({
+      agentStatusByPaneKey: {
+        ...store.getState().agentStatusByPaneKey,
+        [paneKey]: { ...currentStatus, updatedAt: snapshot[0].receivedAt + 1_000 }
+      }
+    })
+    liveEvent.current?.({
+      ...snapshot[0],
+      providerSessionOnly: true,
+      receivedAt: snapshot[0].receivedAt + 1,
+      agentPresence: {
+        agent: 'claude',
+        process: { pid: 4001, platform: 'linux', startTime: 'birth' },
+        ended: true
+      }
+    })
+    await vi.waitFor(() =>
+      expect(store.getState().agentPresenceByPaneKey[paneKey]?.presence.ended).toBe(true)
+    )
+    // A proven exit drops the owner's row, as a confirmed shell return does.
+    expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
   })
 
   it('projects ordered tab titles across panes in an inactive split snapshot', async () => {

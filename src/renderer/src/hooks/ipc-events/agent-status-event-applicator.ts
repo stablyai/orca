@@ -1,4 +1,5 @@
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { applyAgentPresenceEvent } from './agent-status-presence-event'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import {
   resolveAgentStatusIdentity,
@@ -148,12 +149,22 @@ export function createAgentStatusEventApplicator(args: {
       return 'dropped'
     }
     const existingStatus = store.agentStatusByPaneKey[paneKey]
-    if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
+    const agentPresence = applyAgentPresenceEvent(
+      store,
+      paneKey,
+      data,
+      ownershipConnectionId,
+      data.worktreeId ?? owningWorktreeId
+    )
+    if (agentPresence === null) {
       return 'dropped'
+    }
+    if (existingStatus && data.receivedAt < existingStatus.updatedAt && !data.providerSessionOnly) {
+      return agentPresence ? 'applied' : 'dropped'
     }
     if (data.providerSessionOnly) {
       if (!data.providerSession || data.agentType !== 'pi') {
-        return 'dropped'
+        return agentPresence ? 'applied' : 'dropped'
       }
       const providerSessionUpdate: AgentStatusBatchUpdate = {
         kind: 'providerSession',

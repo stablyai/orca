@@ -109,4 +109,18 @@ describe('terminal intentional stops', () => {
     expect(stops.claimExit('pty-pinned', 'inc-1')).toEqual(['reversible'])
     expect(stops.claimExit('pty-in-flight', null)).toEqual(['replaced'])
   })
+
+  it('names a reversible stop only while it is in flight and within its window', () => {
+    vi.useFakeTimers()
+    const stops = new TerminalIntentionalStops()
+    const settleSleep = stops.mark('pty-sleep', 'reversible', 'inc-1')
+    stops.mark('pty-restart', 'replaced', 'inc-2')
+
+    expect(stops.reversibleStopPtyIdsInFlightWithin(1_000)).toEqual(['pty-sleep'])
+    vi.setSystemTime(Date.now() + 1_001)
+    expect(stops.reversibleStopPtyIdsInFlightWithin(1_000)).toEqual([])
+    expect(stops.reversibleStopPtyIdsInFlightWithin(5_000)).toEqual(['pty-sleep'])
+    settleSleep(true)
+    expect(stops.reversibleStopPtyIdsInFlightWithin(5_000)).toEqual([])
+  })
 })

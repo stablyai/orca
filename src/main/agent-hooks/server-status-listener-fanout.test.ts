@@ -199,7 +199,7 @@ describe('AgentHookServer listener replay', () => {
       },
       'conn-1'
     )
-    server.clearPaneState(PANE)
+    server.clearPaneState(PANE, 'released')
 
     expect(listener).toHaveBeenNthCalledWith(2, [])
     expect(listener).toHaveBeenNthCalledWith(4, [])
@@ -357,8 +357,8 @@ describe('AgentHookServer listener replay', () => {
       },
       'conn-1'
     )
-    server.clearPaneState(PANE)
-    server.clearPaneState(PANE)
+    server.clearPaneState(PANE, 'released')
+    server.clearPaneState(PANE, 'released')
 
     expect(listener).toHaveBeenCalledTimes(1)
     expect(listener).toHaveBeenCalledWith({ paneKey: PANE })

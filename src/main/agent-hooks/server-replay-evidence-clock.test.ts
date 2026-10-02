@@ -105,7 +105,7 @@ describe('the observation clock a relay replay must not restamp', () => {
 
   it('gives a torn-down pane no inherited observation time', () => {
     ingest(server, { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' })
-    server.clearPaneState(PANE)
+    server.clearPaneState(PANE, 'released')
 
     vi.setSystemTime(T0 + 25 * 60 * 1000)
     ingest(

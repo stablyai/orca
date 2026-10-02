@@ -18,8 +18,10 @@ import { getWorktreeScanMutationRevision } from '../local-worktree-scan-generati
 import {
   registerPtyHandlers,
   clearProviderPtyState,
+  clearPtyOwnershipForConnection,
   getPtyIdForPaneKey,
-  setLocalPtyProvider
+  setLocalPtyProvider,
+  setPtyOwnership
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -578,11 +580,43 @@ describe('registerPtyHandlers', () => {
     clearProviderPtyState(first.id)
 
     expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
-    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalledWith(stablePaneKey)
+    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalledWith(stablePaneKey, expect.anything())
 
     clearProviderPtyState(second.id)
     expect(getPtyIdForPaneKey(stablePaneKey)).toBeUndefined()
-    expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey)
+    expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey, 'released')
+  })
+  it('tells the host a local teardown ended the owner and a remote one proves nothing', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+    const spawnPane = async (): Promise<string> => {
+      const spawned = await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId,
+        env: { ORCA_PANE_KEY: stablePaneKey }
+      })
+      if (!spawned || typeof spawned !== 'object' || !('id' in spawned)) {
+        throw new Error('spawn returned no PTY')
+      }
+      return String(spawned.id)
+    }
+
+    clearProviderPtyState(await spawnPane())
+    expect(clearAgentHookPaneStateMock).toHaveBeenLastCalledWith(stablePaneKey, 'released')
+
+    const disconnected = await spawnPane()
+    setPtyOwnership(disconnected, 'ssh-a')
+    clearPtyOwnershipForConnection('ssh-a')
+    expect(clearAgentHookPaneStateMock).toHaveBeenLastCalledWith(stablePaneKey, 'unverified')
+
+    const remote = await spawnPane()
+    setPtyOwnership(remote, 'ssh-a')
+    clearProviderPtyState(remote)
+    expect(clearAgentHookPaneStateMock).toHaveBeenLastCalledWith(stablePaneKey, 'unverified')
   })
   it('does not let restart-era alias cleanup clear a newer pane-key owner', async () => {
     registerPtyHandlers(mainWindow as never)
@@ -605,7 +639,7 @@ describe('registerPtyHandlers', () => {
 
     const cleanupOptions = clearPaneKeyAliasesForPtyMock.mock.calls.find(
       ([ptyId]) => ptyId === 'old-pty-without-forward-pane-key'
-    )?.[1]
+    )?.[2]
     expect(cleanupOptions?.shouldClearStablePaneKey(stablePaneKey)).toBe(false)
   })
 })

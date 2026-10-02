@@ -7,6 +7,8 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { AppState } from '@/store/types'
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
+import { selectWorktreeAgentPresence } from '../sidebar/worktree-agent-presence-selector'
 import { applyAgentRowLineage, type DashboardAgentRowWithLineage } from './agent-row-lineage'
 import { buildWorktreeAgentRows } from '../sidebar/worktree-agent-rows'
 import {
@@ -23,6 +25,7 @@ import {
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 type WorktreeAgentRowsCacheEntry = {
+  agentPresenceByPaneKey: AgentPresenceByPaneKey
   /** Caller-provided invalidation token for time-based freshness (agentStatusEpoch). */
   generation: unknown
   liveEntries: AgentStatusEntry[]
@@ -91,7 +94,12 @@ export type WorktreeAgentRowsState = Pick<
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
 > &
-  Partial<Pick<AppState, 'unifiedTabsByWorktree' | 'paneForegroundAgentByPaneKey'>>
+  Partial<
+    Pick<
+      AppState,
+      'unifiedTabsByWorktree' | 'paneForegroundAgentByPaneKey' | 'agentPresenceByPaneKey'
+    >
+  >
 
 // Why not identity: the per-worktree layout/title/ptyId selectors build a fresh top-level
 // record per call while preserving per-tab value references, so shallow equality is the
@@ -122,6 +130,7 @@ export function selectWorktreeAgentRowsCached(args: {
   const migrationUnsupported = selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
   const retained = selectRetainedAgentEntriesForWorktree(state, worktreeId)
   const tabs = state.tabsByWorktree[worktreeId]
+  const agentPresenceByPaneKey = selectWorktreeAgentPresence(state, worktreeId)
   const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
   const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
   const ptyIdsByTabId = selectLivePtyIdsForWorktree(state, worktreeId)
@@ -130,6 +139,7 @@ export function selectWorktreeAgentRowsCached(args: {
   const cached = cache?.byWorktree.get(worktreeId)
   if (
     cached &&
+    cached.agentPresenceByPaneKey === agentPresenceByPaneKey &&
     cached.generation === generation &&
     cached.liveEntries === liveEntries &&
     cached.migrationUnsupported === migrationUnsupported &&
@@ -156,6 +166,7 @@ export function selectWorktreeAgentRowsCached(args: {
       : liveEntries
   const rows = applyAgentRowLineage(
     buildWorktreeAgentRows({
+      agentPresenceByPaneKey,
       tabs: tabs ?? [],
       entries,
       retained,
@@ -171,6 +182,7 @@ export function selectWorktreeAgentRowsCached(args: {
     cache.computeCount += 1
     cache.lastComputedWorktreeIds.push(worktreeId)
     cache.byWorktree.set(worktreeId, {
+      agentPresenceByPaneKey,
       generation,
       liveEntries,
       migrationUnsupported,

@@ -81,6 +81,7 @@ export function useWorktreeJumpPaletteStoreState({
   const sleepingAgentSessionsByPaneKey = useAppStore(
     (state) => state.sleepingAgentSessionsByPaneKey
   )
+  const agentPresenceByPaneKey = useAppStore((state) => state.agentPresenceByPaneKey)
   const paneForegroundAgentByPaneKey = useAppStore((state) => state.paneForegroundAgentByPaneKey)
   const settings = useAppStore((state) => state.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore(
@@ -164,6 +165,7 @@ export function useWorktreeJumpPaletteStoreState({
     groupsByWorktree,
     retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey,
+    agentPresenceByPaneKey,
     paneForegroundAgentByPaneKey,
     settings,
     worktreeVisibilityDefaultsByHost,

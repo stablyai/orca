@@ -7,7 +7,7 @@ import { SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS } from '../ipc/pty/delivery/vis
  */
 export type TerminalIntentionalStopKind = 'reversible' | 'replaced'
 
-type IntentionalStopOwners = { inFlight: number; stopped: boolean }
+type IntentionalStopOwners = { inFlight: number; stopped: boolean; inFlightSince: number }
 
 type IntentionalStop = {
   /** Null until known; the first exit that claims the stop pins it to that process. */
@@ -43,7 +43,10 @@ export class TerminalIntentionalStops {
       stop = { incarnationId, ownersByKind: new Map() }
       this.stopsByPtyId.set(ptyId, stop)
     }
-    const owners = stop.ownersByKind.get(kind) ?? { inFlight: 0, stopped: false }
+    const owners = stop.ownersByKind.get(kind) ?? { inFlight: 0, stopped: false, inFlightSince: 0 }
+    if (owners.inFlight === 0) {
+      owners.inFlightSince = Date.now()
+    }
     owners.inFlight += 1
     stop.ownersByKind.set(kind, owners)
     const owned = stop
@@ -81,6 +84,16 @@ export class TerminalIntentionalStops {
   /** Whether a stop of this PTY that may still be undone is in flight. */
   isReversibleStopInFlight(ptyId: string): boolean {
     return (this.stopsByPtyId.get(ptyId)?.ownersByKind.get('reversible')?.inFlight ?? 0) > 0
+  }
+
+  /** PTYs whose reversible stop is in flight and began within `maxAgeMs`; a stop that outlived it
+   *  no longer explains what happens inside its terminal. */
+  reversibleStopPtyIdsInFlightWithin(maxAgeMs: number): string[] {
+    const now = Date.now()
+    return [...this.stopsByPtyId].flatMap(([ptyId, stop]) => {
+      const owners = stop.ownersByKind.get('reversible')
+      return owners && owners.inFlight > 0 && now - owners.inFlightSince <= maxAgeMs ? [ptyId] : []
+    })
   }
 
   /** A process committed on this id. A landed stop's process is dead, so an entry no exit ever

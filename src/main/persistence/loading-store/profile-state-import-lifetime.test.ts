@@ -36,7 +36,7 @@ it('refuses a writable Store before constructing domains without an authority', 
 afterEach(async () => {
   agentHookServer.setPaneKeyAliasPersistenceListener(null)
   setMigrationUnsupportedPtyPersistenceListener(null)
-  agentHookServer.clearPaneKeyAliasesForPty('later-live-pty')
+  agentHookServer.clearPaneKeyAliasesForPty('later-live-pty', 'released')
   clearMigrationUnsupportedPty('later-live-pty')
   for (const store of stores.splice(0)) {
     await store.freezeWritesAsync()

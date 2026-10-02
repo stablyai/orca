@@ -1,4 +1,5 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import {
   isNativeChatTabWideFallbackSafe,
@@ -12,6 +13,7 @@ type TabBarAgentProjectionSelectorDependencies = {
 }
 
 export type TabBarAgentProjectionState = {
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
   settings?: { experimentalNativeChat?: boolean } | null
@@ -21,16 +23,20 @@ export type TabBarAgentProjections = {
   nativeChatEnabled: boolean
   tabAgentTypesByTabId: Record<string, AgentType>
   nativeChatTabWideFallbackUnsafeTabsById: Record<string, true>
+  /** The exited owner of each tab's active leaf, whose own evidence Chat must not count. */
+  endedChatOwnerByTabId: Record<string, AgentType>
 }
 
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: Record<string, AgentStatusEntry> = Object.freeze({})
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: Record<string, TerminalLayoutSnapshot> = Object.freeze({})
 const EMPTY_TAB_AGENT_TYPES_BY_TAB_ID: Record<string, AgentType> = Object.freeze({})
 const EMPTY_UNSAFE_TABS_BY_ID: Record<string, true> = Object.freeze({})
+const EMPTY_PRESENCE: AgentPresenceByPaneKey = Object.freeze({})
 const DISABLED_TAB_BAR_AGENT_PROJECTIONS: TabBarAgentProjections = Object.freeze({
   nativeChatEnabled: false,
   tabAgentTypesByTabId: EMPTY_TAB_AGENT_TYPES_BY_TAB_ID,
-  nativeChatTabWideFallbackUnsafeTabsById: EMPTY_UNSAFE_TABS_BY_ID
+  nativeChatTabWideFallbackUnsafeTabsById: EMPTY_UNSAFE_TABS_BY_ID,
+  endedChatOwnerByTabId: EMPTY_TAB_AGENT_TYPES_BY_TAB_ID
 })
 
 function reuseRecordIfEqual<T>(
@@ -82,6 +88,27 @@ function projectTabAgentTypesByTabId(
     claimed.add(tabId)
     if (entry.agentType != null) {
       byTabId[tabId] = entry.agentType
+    }
+  }
+  return byTabId
+}
+
+function projectEndedChatOwnerByTabId(
+  presence: AgentPresenceByPaneKey,
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+): Record<string, AgentType> {
+  const byTabId: Record<string, AgentType> = {}
+  // Why walk the owners, not the layouts: few panes have one, and the layouts are scanned enough.
+  for (const [paneKey, record] of Object.entries(presence)) {
+    const owner = record.presence
+    const colon = paneKey.indexOf(':')
+    if (!owner.process || !owner.ended || colon <= 0) {
+      continue
+    }
+    const tabId = paneKey.slice(0, colon)
+    const layout = terminalLayoutsByTabId[tabId]
+    if (layout && resolveNativeChatActiveLayoutLeafId(layout) === paneKey.slice(colon + 1)) {
+      byTabId[tabId] = owner.agent
     }
   }
   return byTabId
@@ -139,6 +166,9 @@ export function createTabBarAgentProjectionSelector(
   let cachedAgentTypesByTabId = EMPTY_TAB_AGENT_TYPES_BY_TAB_ID
   let cachedUnsafeLayoutsByTabId: Record<string, TerminalLayoutSnapshot> | null = null
   let cachedUnsafeTabsById = EMPTY_UNSAFE_TABS_BY_ID
+  let cachedPresence: AgentPresenceByPaneKey | null = null
+  let cachedEndedOwnerLayoutsByTabId: Record<string, TerminalLayoutSnapshot> | null = null
+  let cachedEndedOwnerByTabId = EMPTY_TAB_AGENT_TYPES_BY_TAB_ID
   let cachedEnabledResult: TabBarAgentProjections | null = null
 
   return (state) => {
@@ -149,6 +179,9 @@ export function createTabBarAgentProjectionSelector(
         cachedAgentTypesByTabId = EMPTY_TAB_AGENT_TYPES_BY_TAB_ID
         cachedUnsafeLayoutsByTabId = null
         cachedUnsafeTabsById = EMPTY_UNSAFE_TABS_BY_ID
+        cachedPresence = null
+        cachedEndedOwnerLayoutsByTabId = null
+        cachedEndedOwnerByTabId = EMPTY_TAB_AGENT_TYPES_BY_TAB_ID
         cachedEnabledResult = null
       }
       return DISABLED_TAB_BAR_AGENT_PROJECTIONS
@@ -171,16 +204,27 @@ export function createTabBarAgentProjectionSelector(
       )
       cachedUnsafeLayoutsByTabId = layouts
     }
+    const presence = state.agentPresenceByPaneKey ?? EMPTY_PRESENCE
+    if (presence !== cachedPresence || layouts !== cachedEndedOwnerLayoutsByTabId) {
+      cachedEndedOwnerByTabId = reuseRecordIfEqual(
+        cachedEndedOwnerByTabId,
+        projectEndedChatOwnerByTabId(presence, layouts)
+      )
+      cachedPresence = presence
+      cachedEndedOwnerLayoutsByTabId = layouts
+    }
     if (
       cachedEnabledResult?.tabAgentTypesByTabId === cachedAgentTypesByTabId &&
-      cachedEnabledResult.nativeChatTabWideFallbackUnsafeTabsById === cachedUnsafeTabsById
+      cachedEnabledResult.nativeChatTabWideFallbackUnsafeTabsById === cachedUnsafeTabsById &&
+      cachedEnabledResult.endedChatOwnerByTabId === cachedEndedOwnerByTabId
     ) {
       return cachedEnabledResult
     }
     cachedEnabledResult = {
       nativeChatEnabled: true,
       tabAgentTypesByTabId: cachedAgentTypesByTabId,
-      nativeChatTabWideFallbackUnsafeTabsById: cachedUnsafeTabsById
+      nativeChatTabWideFallbackUnsafeTabsById: cachedUnsafeTabsById,
+      endedChatOwnerByTabId: cachedEndedOwnerByTabId
     }
     return cachedEnabledResult
   }

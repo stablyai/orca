@@ -1,6 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { AgentProcessPresence } from '../../../../shared/agent-process-presence'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,
@@ -204,5 +205,44 @@ describe('connectPanePty process-exit retirement', () => {
       agent: 'codex',
       agentEvidence: 'process-read'
     })
+  })
+
+  it("keeps an identified owner's exit record through its own exit confirmation", async () => {
+    vi.useFakeTimers()
+    const ptyId = 'pty-unmarked-claude-exit'
+    const cacheKey = makePaneKey(`tab-${ptyId}`, LEAF_1)
+    const owner = {
+      agent: 'claude',
+      process: { pid: 4001, platform: 'darwin', startTime: 'boot:1' }
+    } satisfies AgentProcessPresence
+    mockStoreState.agentPresenceByPaneKey = { [cacheKey]: { presence: owner, receivedAt: 1 } }
+    vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => 'claude')
+    vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(async () => true)
+
+    await connectRestoredPane(ptyId, true)
+    const onTitleChange = createdTransportOptions.at(-1)?.onTitleChange
+    expect(typeof onTitleChange).toBe('function')
+    // Claude's own title is the run evidence the pane holds before its owner exits.
+    if (typeof onTitleChange === 'function') {
+      onTitleChange('✳ Claude Code', '✳ Claude Code')
+    }
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toMatchObject({
+      agent: 'claude',
+      agentEvidence: 'process-read'
+    })
+
+    const ended = { ...owner, ended: true } satisfies AgentProcessPresence
+    mockStoreState.agentPresenceByPaneKey = { [cacheKey]: { presence: ended, receivedAt: 2 } }
+    const { publishAgentPresence } = await import('@/lib/agent-presence-transitions')
+    publishAgentPresence(cacheKey, ended)
+    await flushAsyncTicks(20)
+
+    // The exit confirmation ran, but the record that hides Claude's leftovers must survive it.
+    expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+      agent: null,
+      shellForeground: false
+    })
+    expect(mockStoreState.retireEndedAgentPresence).not.toHaveBeenCalledWith(cacheKey)
   })
 })

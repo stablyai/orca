@@ -322,7 +322,7 @@ describe('Last-status persistence', () => {
     try {
       expect(server.getStatusSnapshot()).toHaveLength(1)
 
-      server.clearPaneKeyAliasesForPty('pty-1')
+      server.clearPaneKeyAliasesForPty('pty-1', 'released')
 
       expect(server.getStatusSnapshot()).toEqual([])
       expect(statusListener).toHaveBeenCalledWith([])
@@ -344,7 +344,9 @@ describe('Last-status persistence', () => {
       'conn-1'
     )
 
-    server.clearPaneKeyAliasesForPty('old-pty', { shouldClearStablePaneKey: () => false })
+    server.clearPaneKeyAliasesForPty('old-pty', 'released', {
+      shouldClearStablePaneKey: () => false
+    })
 
     expect(server.getStatusSnapshot()).toEqual([
       expect.objectContaining({
@@ -401,7 +403,7 @@ describe('Last-status persistence', () => {
       let parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(parsed.entries[PANE]).toBeTruthy()
 
-      server.clearPaneState(PANE)
+      server.clearPaneState(PANE, 'released')
       server.flushStatusPersistSync()
       parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(parsed.entries[PANE]).toBeUndefined()
@@ -425,7 +427,7 @@ describe('Last-status persistence', () => {
       const firstMtime = statSync(lastStatusPath()).mtimeMs
 
       // Why: clearPaneState on a paneKey not in the cache must not trigger a redundant write (clear bails when nothing was evicted).
-      server.clearPaneState(makePaneKey('non-existent', LEAF_5))
+      server.clearPaneState(makePaneKey('non-existent', LEAF_5), 'released')
       server.flushStatusPersistSync()
       // Assert no rewrite happened: mtime unchanged after a forced sync flush.
       const secondMtime = statSync(lastStatusPath()).mtimeMs

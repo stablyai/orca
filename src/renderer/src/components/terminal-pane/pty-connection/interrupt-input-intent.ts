@@ -1,3 +1,4 @@
+import { applyLegacyCommandFinishedStatus } from '@/lib/legacy-unidentified-agent-presence'
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
@@ -68,41 +69,9 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
     entry: AgentStatusEntry | undefined,
     options?: { allowInferredInterrupt?: boolean }
   ): void => {
-    const state = useAppStore.getState()
-    if (!entry) {
-      // Why: an Orca-started agent can exit before its first hook status. The
-      // launch registry was still created up front, so clear it on command exit.
-      state.clearAgentLaunchConfig(session.cacheKey)
-      return
-    }
-    const current = state.agentStatusByPaneKey[session.cacheKey]
-    if (!current) {
-      state.clearAgentLaunchConfig(session.cacheKey)
-      return
-    }
-    const unchanged =
-      current.state === entry.state &&
-      current.prompt === entry.prompt &&
-      current.updatedAt === entry.updatedAt &&
-      current.stateStartedAt === entry.stateStartedAt &&
-      current.agentType === entry.agentType
-    const inferredFromEntry =
-      options?.allowInferredInterrupt === true &&
-      current.state === 'done' &&
-      current.interrupted === true &&
-      current.prompt === entry.prompt &&
-      current.agentType === entry.agentType &&
-      current.stateHistory?.some(
-        (history) =>
-          history.state === entry.state &&
-          history.prompt === entry.prompt &&
-          history.startedAt === entry.stateStartedAt
-      ) === true
-    if (!unchanged && !inferredFromEntry) {
-      return
-    }
-    state.dropAgentStatus(session.cacheKey)
+    applyLegacyCommandFinishedStatus(useAppStore.getState(), session.cacheKey, entry, options)
   }
+
   session.pendingTerminalInputIntent = null
   session.clearPendingTerminalInputIntentTimer = null
   session.clearPendingTerminalInputIntent = (): void => {

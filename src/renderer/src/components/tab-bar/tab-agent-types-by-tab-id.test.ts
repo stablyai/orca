@@ -3,6 +3,9 @@ import { shallow } from 'zustand/shallow'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
+import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { resolveNativeChatTabAgentEvidence } from './native-chat-tab-agent-evidence'
+import { evidenceAfterEndedAgent } from '@/lib/agent-presence-selectors'
 import {
   createTabBarAgentProjectionSelector,
   selectTabBarAgentProjections,
@@ -376,5 +379,50 @@ describe('selectTabAgentTypesByTabId', () => {
     }
     expect(statusEnumerations).toBe(1)
     expect(layoutEnumerations).toBe(2)
+  })
+
+  it('stops offering Chat for an exited owner the pane itself no longer offers', () => {
+    const select = createTabBarAgentProjectionSelector()
+    const projection = select({
+      settings: { experimentalNativeChat: true },
+      agentStatusByPaneKey: { 'tab-1:leaf-a': entry({ agentType: 'claude', state: 'done' }) },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: 'leaf-a' },
+          activeLeafId: 'leaf-a',
+          expandedLeafId: null
+        }
+      },
+      agentPresenceByPaneKey: {
+        'tab-1:leaf-a': {
+          presence: {
+            agent: 'claude',
+            process: { pid: 4001, platform: 'linux', startTime: 'boot:1' },
+            ended: true
+          },
+          receivedAt: 1
+        }
+      }
+    })
+    const endedOwner = projection.endedChatOwnerByTabId['tab-1']
+    expect(endedOwner).toBe('claude')
+    // The tab strip gate, with the title Claude leaves behind after /exit.
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: evidenceAfterEndedAgent(endedOwner, 'claude'),
+        detectedAgent: evidenceAfterEndedAgent(
+          endedOwner,
+          projection.tabAgentTypesByTabId['tab-1']
+        ),
+        resolvedAgent: evidenceAfterEndedAgent(
+          endedOwner,
+          resolveNativeChatTabAgentEvidence({ title: '✳ Claude Code' })
+        ),
+        nativeChatTranscriptIsLocalReadable: true,
+        isChatViewMode: false
+      })
+    ).toBe(false)
   })
 })

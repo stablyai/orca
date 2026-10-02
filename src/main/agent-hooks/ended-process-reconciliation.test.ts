@@ -65,7 +65,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       claudeRow(server, 'working')
       expect(paneState(server)).toBe('working')
 
-      expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(1)
+      expect(server.reconcileEndedProcessForPaneKeys([PANE], { kind: 'terminal-ended' })).toBe(1)
 
       expect(paneState(server)).toBe('missing')
     } finally {
@@ -83,7 +83,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.add(PANE)
       server._getStateForTests().claudeActiveSessionCronPaneKeys.add(PANE)
 
-      expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(1)
+      expect(server.reconcileEndedProcessForPaneKeys([PANE], { kind: 'terminal-ended' })).toBe(1)
 
       expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(false)
       expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(false)
@@ -95,7 +95,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
   it('is a no-op for a pane with nothing to retire', async () => {
     const server = await startServer()
     try {
-      expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(0)
+      expect(server.reconcileEndedProcessForPaneKeys([PANE], { kind: 'terminal-ended' })).toBe(0)
     } finally {
       server.stop()
     }
@@ -115,7 +115,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       expect(afterDrop?.providerSession?.id).toBe('resume-me')
 
       expect(
-        server.reconcileEndedProcessForPaneKeys([PANE], { preserveResumeIdentity: true })
+        server.reconcileEndedProcessForPaneKeys([PANE], { kind: 'legacy-shell-foreground' })
       ).toBe(1)
 
       const kept = server.getStatusSnapshotForPane(PANE)[0]
@@ -143,7 +143,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       resumableClaudeRow(server)
       server.dropStatusEntry(PANE)
 
-      expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(1)
+      expect(server.reconcileEndedProcessForPaneKeys([PANE], { kind: 'terminal-ended' })).toBe(1)
 
       expect(paneState(server)).toBe('missing')
     } finally {
@@ -157,7 +157,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       claudeRow(server, 'working')
       server._getStateForTests().claudeSessionOwnerByPaneKey.set(PANE, 'session-a')
 
-      server.reconcileEndedProcessForPaneKeys([PANE])
+      server.reconcileEndedProcessForPaneKeys([PANE], { kind: 'terminal-ended' })
 
       expect(server._getStateForTests().claudeSessionOwnerByPaneKey.has(PANE)).toBe(false)
     } finally {

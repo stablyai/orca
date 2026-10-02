@@ -129,8 +129,12 @@ export function sanitizeHydratedEntry(
   const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
   const providerSessionOnly = record.providerSessionOnly === true
   const retainedForLiveness = record.retainedForLiveness === true
+  const agentPresence = readAgentProcessPresence(record.agentPresence)
   const validRetainedIdentity = Boolean(
-    retainedForLiveness && providerSession && payload.agentType && payload.agentType !== 'unknown'
+    retainedForLiveness &&
+    (providerSession || agentPresence?.process) &&
+    payload.agentType &&
+    payload.agentType !== 'unknown'
   )
   if (
     providerSessionOnly &&
@@ -153,7 +157,7 @@ export function sanitizeHydratedEntry(
   const turnStartedAt = record.turnStartedAt
   return {
     paneKey,
-    agentPresence: readAgentProcessPresence(record.agentPresence),
+    agentPresence,
     source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,

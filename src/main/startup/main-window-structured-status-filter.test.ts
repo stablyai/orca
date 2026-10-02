@@ -19,7 +19,8 @@ vi.mock('../agent-hooks/server', () => ({
     setListener: (listener: ((payload: EnrichedAgentHookEventPayload) => void) | null) => {
       hooks.listener = listener
     },
-    setPaneStatusClearListener: vi.fn()
+    setPaneStatusClearListener: vi.fn(),
+    setAgentPresenceReleaseListener: vi.fn()
   }
 }))
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({

@@ -1,8 +1,9 @@
+import type { Tab } from '../../../shared/tab-types'
+import { getActiveUnifiedTabId, isCurrentWorkspaceTab } from './workspace-tab-palette-selection'
 import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../shared/tab-title-resolution'
-import type { Tab } from '../../../shared/tab-types'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { buildPaletteTabDocument } from './palette-match/tab-document'
 import {
@@ -20,9 +21,9 @@ import {
   collectAgentMetadataFromIndex
 } from './workspace-tab-agent-metadata'
 import type {
+  WorkspaceTabContentType,
   BuildSearchableWorkspaceTabsOptions,
-  SearchableWorkspaceTab,
-  WorkspaceTabContentType
+  SearchableWorkspaceTab
 } from './workspace-tab-palette-search'
 import {
   findAmbiguousWorktreeIds,
@@ -35,66 +36,6 @@ import {
 import type { OpenFile } from '@/store/slices/editor'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
-
-function getActiveUnifiedTabId({
-  worktreeId,
-  isCurrentWorktree,
-  activeTabType,
-  activeGroupIdByWorktree,
-  groupsByWorktree
-}: Pick<
-  BuildSearchableWorkspaceTabsOptions,
-  'activeGroupIdByWorktree' | 'activeTabType' | 'groupsByWorktree'
-> & { worktreeId: string; isCurrentWorktree: boolean }): string | null {
-  if (!isCurrentWorktree) {
-    return null
-  }
-  const activeGroupId = activeGroupIdByWorktree[worktreeId]
-  const activeGroup = activeGroupId
-    ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
-    : undefined
-  const activeUnifiedTabId = activeGroup?.activeTabId ?? null
-  return activeTabType === 'terminal' || activeTabType === 'editor' ? activeUnifiedTabId : null
-}
-
-function isCurrentWorkspaceTab({
-  tab,
-  isCurrentWorktree,
-  activeTabType,
-  activeTabId,
-  activeTabIdByWorktree,
-  activeFileId,
-  activeFileIdByWorktree,
-  activeTabTypeByWorktree,
-  activeUnifiedTabId
-}: Pick<
-  BuildSearchableWorkspaceTabsOptions,
-  | 'activeFileId'
-  | 'activeFileIdByWorktree'
-  | 'activeTabId'
-  | 'activeTabIdByWorktree'
-  | 'activeTabType'
-  | 'activeTabTypeByWorktree'
-> & {
-  tab: Tab & { contentType: WorkspaceTabContentType }
-  isCurrentWorktree: boolean
-  activeUnifiedTabId: string | null
-}): boolean {
-  if (!isCurrentWorktree) {
-    return false
-  }
-  if (activeUnifiedTabId) {
-    return activeUnifiedTabId === tab.id
-  }
-  const visibleType = tab.contentType === 'terminal' ? 'terminal' : 'editor'
-  const storedType = activeTabTypeByWorktree[tab.worktreeId] ?? activeTabType
-  if (storedType !== visibleType) {
-    return false
-  }
-  return visibleType === 'terminal'
-    ? (activeTabIdByWorktree[tab.worktreeId] ?? activeTabId) === tab.entityId
-    : (activeFileIdByWorktree[tab.worktreeId] ?? activeFileId) === tab.entityId
-}
 
 export function buildSearchableWorkspaceTabEntries({
   worktrees,
@@ -120,6 +61,7 @@ export function buildSearchableWorkspaceTabEntries({
   activeTabTypeByWorktree,
   generatedTitlesEnabled,
   terminalLayoutsByTabId,
+  agentPresenceByPaneKey,
   paneForegroundAgentByPaneKey
 }: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] {
   const entries: SearchableWorkspaceTab[] = []
@@ -260,6 +202,7 @@ export function buildSearchableWorkspaceTabEntries({
             agentStatusByPaneKey,
             retainedAgentsByPaneKey,
             sleepingAgentSessionsByPaneKey,
+            agentPresenceByPaneKey,
             paneForegroundAgentByPaneKey
           })
         })

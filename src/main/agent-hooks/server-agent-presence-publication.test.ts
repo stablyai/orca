@@ -1,0 +1,219 @@
+import { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AgentHookServer } from './server'
+import { PANE } from './server.test-fixtures'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
+import type { AgentProcessPresence } from '../../shared/agent-process-presence'
+import { toAgentStatusIpcPayload } from './server/server-status-identity'
+import { sanitizeHydratedEntry } from './server/server-persistence-validation'
+
+vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
+vi.mock('../../shared/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn(async () => 'live')
+}))
+
+const owner = {
+  agent: 'claude',
+  process: { pid: 4001, platform: 'linux', startTime: 'boot:123' }
+} satisfies AgentProcessPresence
+
+class PublicationServer extends AgentHookServer {
+  serializedStatus(): string {
+    return this.serializeStatusFile()
+  }
+
+  publish(overrides: Partial<AgentHookEventPayload> = {}): void {
+    this.applyNormalizedStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'folder-1',
+      connectionId: null,
+      source: 'claude',
+      hookEventName: 'SessionStart',
+      agentPresence: owner,
+      payload: { agentType: 'claude', state: 'done', prompt: '' },
+      ...overrides
+    })
+  }
+}
+
+const servers: PublicationServer[] = []
+function createServer(): PublicationServer {
+  const server = new PublicationServer()
+  servers.push(server)
+  return server
+}
+afterEach(() => {
+  vi.mocked(probeAgentProcessPresence).mockReset().mockResolvedValue('live')
+  for (const server of servers.splice(0)) {
+    server.stop()
+  }
+})
+
+describe('desktop owner publication', () => {
+  it('does not check a replacement on behalf of a stale desktop owner', async () => {
+    const server = createServer()
+    server.publish()
+    await expect(
+      server.checkAgentPresence(PANE, { ...owner.process, startTime: 'older:birth' })
+    ).resolves.toBe('unverifiable')
+  })
+
+  it('returns the already-published exit for the exact desktop owner', async () => {
+    const server = createServer()
+    server.publish()
+    server.publish({ agentPresence: { ...owner, ended: true } })
+    await expect(server.checkAgentPresence(PANE, owner.process)).resolves.toBe('exited')
+  })
+  it('carries the same idle owner in live publications and snapshots', () => {
+    const server = createServer()
+    const live = vi.fn()
+    server.subscribeEnrichedStatus((row) => live(toAgentStatusIpcPayload(row)))
+    server.publish()
+    expect(live).toHaveBeenLastCalledWith(expect.objectContaining({ agentPresence: owner }))
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ paneKey: PANE, agentPresence: owner })
+    ])
+  })
+
+  it.each([false, true])('publishes exit before a shell prompt, resume metadata=%s', (resume) => {
+    const server = createServer()
+    server.publish(resume ? { providerSession: { key: 'session_id', id: 'session-a' } } : {})
+    const live = vi.fn()
+    server.subscribeEnrichedStatus((row) => live(toAgentStatusIpcPayload(row)))
+    server.publish({
+      hookEventName: 'SessionEnd',
+      agentPresence: { ...owner, ended: true },
+      providerSessionOnly: true
+    })
+    const ended = expect.objectContaining({
+      paneKey: PANE,
+      providerSessionOnly: true,
+      agentPresence: { ...owner, ended: true }
+    })
+    expect(live).toHaveBeenLastCalledWith(ended)
+    expect(server.getStatusSnapshot()).toEqual([ended])
+    expect(server.getStatusChangeSnapshot()).toEqual([])
+  })
+
+  it('keeps dismissal distinct from process death, including without resume metadata', () => {
+    const server = createServer()
+    server.publish()
+    server.dropStatusEntry(PANE)
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ providerSessionOnly: true, agentPresence: owner })
+    ])
+    expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
+    expect(server.getStatusChangeSnapshot()).toEqual([])
+  })
+
+  it('replaces an ended owner with a new process and rejects the old exit', () => {
+    const server = createServer()
+    server.publish()
+    server.publish({ agentPresence: { ...owner, ended: true } })
+    const replacement = {
+      agent: 'claude',
+      process: { pid: 4002, platform: 'linux', startTime: 'boot:456' }
+    } as const
+    server.publish({ agentPresence: replacement })
+    server.publish({ agentPresence: { ...owner, ended: true } })
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ agentPresence: replacement })
+    ])
+  })
+
+  it('keeps a dismissed process owner when a nested agent reports', () => {
+    const server = createServer()
+    server.publish()
+    server.dropStatusEntry(PANE)
+    server.publish({
+      agentPresence: {
+        agent: 'codex',
+        process: { pid: 4002, platform: 'linux', startTime: 'boot:456' }
+      },
+      payload: { agentType: 'codex', state: 'done', prompt: '' }
+    })
+    expect(server.getStatusSnapshot()).toEqual([expect.objectContaining({ agentPresence: owner })])
+  })
+
+  it.each([false, true])(
+    'retains owner-only evidence through disk validation, ended=%s',
+    (ended) => {
+      const server = createServer()
+      server.publish()
+      if (ended) {
+        server.publish({ agentPresence: { ...owner, ended: true } })
+      } else {
+        server.dropStatusEntry(PANE)
+      }
+      const file = JSON.parse(server.serializedStatus())
+      expect(sanitizeHydratedEntry(PANE, file.entries[PANE])).toMatchObject({
+        providerSessionOnly: true,
+        agentPresence: ended ? { ...owner, ended: true } : owner
+      })
+    }
+  )
+  it('can still check the recorded owner after an unverified cleanup without guessing process death', async () => {
+    const server = createServer()
+    server.publish()
+    server.clearPaneState(PANE, 'unverified')
+    vi.mocked(probeAgentProcessPresence).mockResolvedValueOnce('exited')
+    await expect(server.checkAgentPresence(PANE, owner.process)).resolves.toBe('exited')
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ agentPresence: { ...owner, ended: true } })
+    ])
+  })
+
+  it.each([false, true])(
+    'preserves owner metadata through alias and cache cleanup, ended=%s',
+    (ended) => {
+      const server = createServer()
+      server.registerPaneKeyAlias('tab-1:0', PANE, 'pty-1')
+      server.publish()
+      server.publish({ agentPresence: ended ? { ...owner, ended: true } : owner })
+      server.clearPaneKeyAliasesForPty('pty-1', 'unverified')
+      server.clearPaneState(PANE, 'unverified')
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          providerSessionOnly: true,
+          agentPresence: ended ? { ...owner, ended: true } : owner
+        })
+      ])
+      expect(server.getStatusChangeSnapshot()).toEqual([])
+    }
+  )
+
+  it('keeps one record after disconnects and deletes it when a never-returning pane is retired', () => {
+    const server = createServer()
+    server.publish({ connectionId: 'ssh-a' })
+    for (let i = 0; i < 3; i++) {
+      // What clearPtyOwnershipForConnection -> clearProviderPtyState passes for a lost transport.
+      server.clearPaneState(PANE, 'unverified')
+      expect(server.getStatusSnapshot()).toHaveLength(1)
+      expect(Object.keys(JSON.parse(server.serializedStatus()).entries)).toEqual([PANE])
+    }
+    expect(server.getStatusChangeSnapshot()).toEqual([])
+    server.retirePaneAuthority(PANE)
+    expect(server.getStatusSnapshot()).toEqual([])
+    expect(JSON.parse(server.serializedStatus()).entries).toEqual({})
+  })
+
+  it('deletes an ended retained record on explicit tab close', () => {
+    const server = createServer()
+    server.publish()
+    server.publish({ agentPresence: { ...owner, ended: true } })
+    server.clearPaneState(PANE, 'unverified')
+    server.dropStatusEntriesByTabPrefix('tab-1')
+    expect(server.getStatusSnapshot()).toEqual([])
+    expect(JSON.parse(server.serializedStatus()).entries).toEqual({})
+  })
+  it('releases an owner retained by earlier provider cleanup when its terminal exits', () => {
+    const server = createServer()
+    server.publish()
+    server.clearPaneState(PANE, 'unverified')
+    server.reconcileEndedProcessForPaneKeys([PANE], { kind: 'terminal-ended' })
+    expect(server.getStatusSnapshot()).toEqual([])
+    expect(JSON.parse(server.serializedStatus()).entries).toEqual({})
+  })
+})

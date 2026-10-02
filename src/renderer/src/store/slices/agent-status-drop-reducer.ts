@@ -41,7 +41,8 @@ export type AgentStatusTabPrefixDropState = Pick<
   | 'retentionSuppressedPaneKeys'
   | 'sortEpoch'
   | 'tabsByWorktree'
->
+> &
+  Partial<Pick<AppState, 'agentPresenceByPaneKey'>>
 
 /** Pure form of the dropAgentStatusByTabPrefix reducer: the paired snapshot
  *  apply folds the same sweep into a patch it assembles itself, so the two
@@ -203,5 +204,10 @@ export function buildAgentStatusTabPrefixDropPatch(
     }
   }
   const patch = buildPatch()
+  if (s.agentPresenceByPaneKey) {
+    patch.agentPresenceByPaneKey = Object.fromEntries(
+      Object.entries(s.agentPresenceByPaneKey).filter(([key]) => !matchesPane(key))
+    )
+  }
   return { patch, hadLive }
 }

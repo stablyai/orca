@@ -64,6 +64,7 @@ export function PaletteLiveStatusProvider({
 }): React.JSX.Element {
   const now = useNow(30_000, active)
   const {
+    agentPresenceByPaneKey,
     agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
@@ -77,6 +78,7 @@ export function PaletteLiveStatusProvider({
     useShallow((s) =>
       active
         ? {
+            agentPresenceByPaneKey: s.agentPresenceByPaneKey,
             agentStatusByPaneKey: s.agentStatusByPaneKey,
             runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
             ptyIdsByTabId: s.ptyIdsByTabId,
@@ -109,6 +111,7 @@ export function PaletteLiveStatusProvider({
       agentStatusPaneIdsByTabId: livePaneIds.paneIdsByTabId,
       stalePaneIdsByTabId: livePaneIds.stalePaneIdsByTabId,
       paneSources: {
+        agentPresenceByPaneKey,
         entriesByTabId,
         ptyIdsByTabId,
         runtimePaneTitlesByTabId,
@@ -122,6 +125,7 @@ export function PaletteLiveStatusProvider({
       now
     }
   }, [
+    agentPresenceByPaneKey,
     agentStatusByPaneKey,
     browserTabsByWorktree,
     migrationUnsupportedByPtyId,
@@ -178,6 +182,7 @@ function buildLiveAgentStatusPaneIdsByTabId(
 }
 
 const EMPTY_LIVE_INPUTS = Object.freeze({
+  agentPresenceByPaneKey: {},
   agentStatusByPaneKey: {},
   runtimePaneTitlesByTabId: {},
   ptyIdsByTabId: {},
@@ -215,7 +220,8 @@ export function PaletteWorktreeStatusDot({
       liveAgentStatus: live.liveAgentStatusByWorktreeId.get(worktree.id),
       agentStatusPaneIdsByTabId: live.agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId: live.stalePaneIdsByTabId,
-      terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId
+      terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId,
+      agentPresenceByPaneKey: live.paneSources.agentPresenceByPaneKey
     }
   )
   return (

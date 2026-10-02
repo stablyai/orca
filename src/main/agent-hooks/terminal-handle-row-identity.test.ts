@@ -114,7 +114,9 @@ describe('the terminal handle a status row is stamped with', () => {
         providerSession: { key: 'session_id', id: 'session-1' }
       })
     ])
-    expect(server.reconcileEndedProcessForPaneKeys([NEW_PANE_KEY])).toBe(1)
+    expect(
+      server.reconcileEndedProcessForPaneKeys([NEW_PANE_KEY], { kind: 'terminal-ended' })
+    ).toBe(1)
     expect(server.getStatusSnapshot()).toEqual([])
     expect(mutations).toHaveLength(3)
     expect(

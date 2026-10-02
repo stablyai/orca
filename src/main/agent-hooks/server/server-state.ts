@@ -1,7 +1,4 @@
-import type {
-  AgentProcessPresence,
-  AgentProcessVerdict
-} from '../../../shared/agent-process-presence'
+import type { AgentProcessVerdict } from '../../../shared/agent-process-presence'
 import type { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
 
@@ -34,10 +31,13 @@ import type {
   AgentHookProviderSessionIdentity,
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
+  AgentPresenceReleaseListener,
   AgentPromptSentDedupeEntry,
+  EndedProcessEvidence,
   EnrichedAgentHookEventPayload,
   NormalizedLocalHook,
   PaneKeyAliasEntry,
+  PaneOwnerDisposition,
   PaneKeyAliasPersistenceListener,
   PaneStatusClearListener,
   ProviderSessionChangeListener,
@@ -95,6 +95,9 @@ export abstract class AgentHookServerState {
   protected onPaneStatusCleared: PaneStatusClearListener | null = null
   protected paneStatusClearListeners = new Set<PaneStatusClearListener>()
   protected statusDropListeners = new Set<StatusDropListener>()
+  protected onAgentPresenceReleased: AgentPresenceReleaseListener | null = null
+  /** Orca's own fact that it is stopping a pane's terminal for sleep or hibernation. */
+  protected isPaneTerminalSleepStopInFlight: ((paneKey: string) => boolean) | null = null
   protected statusChangeListeners = new Set<StatusChangeListener>()
   protected statusFreshnessListeners = new Set<StatusFreshnessListener>()
   protected providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
@@ -258,6 +261,10 @@ export abstract class AgentHookServerState {
   protected abstract toRetainedProviderSessionRow(
     entry: EnrichedAgentHookEventPayload | null | undefined
   ): EnrichedAgentHookEventPayload | null
+  protected abstract commitPaneRowAfterCleanup(
+    previous: EnrichedAgentHookEventPayload | undefined,
+    disposition: PaneOwnerDisposition
+  ): void
   protected abstract hasLiveClaimsForPaneKey(paneKey: string): boolean
   abstract checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null>
   abstract checkAgentPresenceAfterHook(
@@ -267,13 +274,10 @@ export abstract class AgentHookServerState {
 
   abstract reconcileEndedProcessForPaneKeys(
     paneKeys: Iterable<string>,
-    options?: { preserveResumeIdentity?: boolean; endedPresence?: AgentProcessPresence }
+    evidence: EndedProcessEvidence
   ): number
 
-  protected abstract clearPaneState(
-    paneKey: string,
-    options?: { emitStatusRowMutation?: boolean }
-  ): void
+  protected abstract clearPaneState(paneKey: string, owner: PaneOwnerDisposition): void
   protected abstract deleteStatusEntry(
     paneKey: string,
     options?: { preserveAuthority?: boolean }

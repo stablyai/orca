@@ -212,4 +212,32 @@ describe('buildDashboardSnapshot rows cache', () => {
       'Provider title'
     )
   })
+  it('invalidates only the owner workspace on positive host exit without a shell event', () => {
+    const cache = createWorktreeAgentRowsCache()
+    const state = baseState()
+    buildDashboardSnapshot(state, NOW, { rowsCache: cache, rowsGeneration: 1 })
+    const { [PANE_1]: _removedByExit, ...agentStatusByPaneKey } = state.agentStatusByPaneKey
+    const exited: DashboardSnapshotState = {
+      ...state,
+      // The mirrored exit removes the owner's row in the same store write.
+      agentStatusByPaneKey,
+      agentPresenceByPaneKey: {
+        [PANE_1]: {
+          presence: {
+            agent: 'claude',
+            process: { pid: 4001, platform: 'linux', startTime: 'birth' },
+            ended: true
+          },
+          receivedAt: NOW + 1
+        }
+      }
+    }
+    const snapshot = buildDashboardSnapshot(exited, NOW + 1, {
+      rowsCache: cache,
+      rowsGeneration: 1
+    })
+    expect(cache.lastComputedWorktreeIds).toEqual(['w1'])
+    expect(snapshot.cards.some((card) => card.paneKey === PANE_1)).toBe(false)
+    expect(snapshot.cards.some((card) => card.paneKey === PANE_2)).toBe(true)
+  })
 })

@@ -22,7 +22,8 @@ type WorktreeActivityStatusState = Pick<
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'
->
+> &
+  Partial<Pick<AppState, 'agentPresenceByPaneKey'>>
 
 export function selectWorktreeActivityStatuses(
   statusInputs: WorktreeActivityStatusState,
@@ -53,6 +54,7 @@ export function selectWorktreeActivityStatuses(
         agentStatusPaneIdsByTabId,
         stalePaneIdsByTabId,
         terminalLayoutRootsByTabId: selectTerminalLayoutRootsForWorktree(statusInputs, worktreeId),
+        agentPresenceByPaneKey: statusInputs.agentPresenceByPaneKey,
         hasPermission,
         hasLiveWorking,
         hasLiveMonitoring,

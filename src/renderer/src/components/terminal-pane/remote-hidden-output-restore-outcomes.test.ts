@@ -504,6 +504,7 @@ describe('remote hidden-output restore outcomes', () => {
       consumePendingSnapshot: vi.fn(() => null),
       runtimePaneTitlesByTabId: {},
       agentStatusByPaneKey: {} as Record<string, unknown>,
+      agentPresenceByPaneKey: {},
       retainedAgentsByPaneKey: {},
       paneForegroundAgentByPaneKey: {} as Record<string, unknown>,
       sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,

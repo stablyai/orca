@@ -121,10 +121,12 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
         chatLeafId,
         activeLeafId,
         chatLeafStillMounted,
-        activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId)
+        activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
+        launchPending: Boolean(terminalTab?.launchAgent)
       })
     )
   }, [
+    terminalTab?.launchAgent,
     isChatViewMode,
     chatLeafId,
     activePane?.leafId,

@@ -10,10 +10,16 @@ import type { PluginAgentStatusChangedPayload } from '../../shared/plugins/plugi
 export function projectPluginAgentStatusChangedPayload(
   enriched: Pick<
     EnrichedAgentHookEventPayload,
-    'worktreeId' | 'paneKey' | 'receivedAt' | 'restoredUnconfirmed' | 'payload'
+    | 'worktreeId'
+    | 'paneKey'
+    | 'receivedAt'
+    | 'restoredUnconfirmed'
+    | 'retainedForLiveness'
+    | 'payload'
   >
 ): PluginAgentStatusChangedPayload | null {
-  if (enriched.restoredUnconfirmed) {
+  // Why: a cleanup-retained row republishes only its process owner; its payload is the dead turn.
+  if (enriched.restoredUnconfirmed || enriched.retainedForLiveness) {
     return null
   }
   const mainAgent = enriched.payload.mainAgent

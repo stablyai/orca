@@ -1,3 +1,4 @@
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
 import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
@@ -136,6 +137,7 @@ type TerminalTabActivityInput = {
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayout?: TerminalLayoutSnapshot
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
 }
 
 /**
@@ -150,7 +152,8 @@ export function resolveTerminalTabActivityStatus({
   agentStatusEpoch,
   runtimePaneTitlesByTabId,
   ptyIdsByTabId,
-  terminalLayout
+  terminalLayout,
+  agentPresenceByPaneKey
 }: TerminalTabActivityInput): TerminalTabActivityStatus {
   const flags = getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tab.id)
   return resolveWorktreeStatus({
@@ -161,6 +164,7 @@ export function resolveTerminalTabActivityStatus({
     agentStatusPaneIdsByTabId: { [tab.id]: flags?.paneIds ?? EMPTY_PANE_IDS },
     stalePaneIdsByTabId: { [tab.id]: flags?.stalePaneIds ?? EMPTY_PANE_IDS },
     terminalLayoutsByTabId: terminalLayout ? { [tab.id]: terminalLayout } : undefined,
+    agentPresenceByPaneKey,
     hasPermission: flags?.hasPermission ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
     hasLiveMonitoring: flags?.hasLiveMonitoring ?? false,

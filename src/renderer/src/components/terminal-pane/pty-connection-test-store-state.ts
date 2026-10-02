@@ -3,6 +3,7 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
 
 export type StoreState = {
   activeWorktreeId: string | null
@@ -97,6 +98,8 @@ export type StoreState = {
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  agentPresenceByPaneKey: AgentPresenceByPaneKey
+  retireEndedAgentPresence: ReturnType<typeof vi.fn>
   agentStatusByPaneKey: Record<string, unknown>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>

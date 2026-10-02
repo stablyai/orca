@@ -16,6 +16,8 @@ import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/list
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 
+const RESTORED_OWNER_RECHECK_CONCURRENCY = 4
+
 export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv {
   /** Start the loopback listener after hydration and spool replay have settled. */
   async start(options?: {
@@ -45,21 +47,26 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       this.captureHydratedAuthorityCommitments()
       // Drain before binding the listener so replay cannot race a live hook during startup.
       if (this.endpointDir) {
-        const replayedPaneKeys = new Set<string>()
         drainAgentHookSpool({
           endpointDir: this.endpointDir,
           getPersistedLaunchTokenHash: (paneKey) =>
             this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
-          ingest: (record: SpoolRecord) => {
-            this.ingestSpoolRecord(record)
-            replayedPaneKeys.add(this.resolvePaneKeyAlias(record.paneKey))
-          }
+          ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
         })
-        // Why: the owner may have died while Orca was down; check each replayed pane once.
-        for (const paneKey of replayedPaneKeys) {
-          void this.checkAgentPresence(paneKey)
+      }
+      // Why: an owner may have died while Orca was down; re-derive each recorded owner once, a few
+      // probes at a time so a busy boot neither forks per pane nor stalls behind one slow probe.
+      const restored = [...this.state.lastStatusByPaneKey.keys()]
+      const recheckNext = async (): Promise<void> => {
+        for (let paneKey = restored.shift(); paneKey; paneKey = restored.shift()) {
+          await this.checkAgentPresence(paneKey)
         }
       }
+      for (let worker = 0; worker < RESTORED_OWNER_RECHECK_CONCURRENCY; worker += 1) {
+        void recheckNext()
+      }
+      // Hydrated owners skip the row-write path that arms the recheck beat.
+      this.noteLiveAgentOwner()
       this.ownerStateInitialized = true
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {

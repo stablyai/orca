@@ -1,4 +1,5 @@
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
+import { isLegacyUnidentified } from '@/lib/legacy-unidentified-agent-presence'
 import type { InspectionPriority } from './agent-process-inspection-queue'
 import type { PendingTitleController } from './agent-completion-pending-title'
 import type { ProcessMonitorState } from './agent-completion-process-types'
@@ -27,6 +28,10 @@ export function createAgentCompletionPollScheduler(args: {
   }
 
   function shouldRunCadenceInspection(): boolean {
+    // Why: the host publishes a live owner's exit, so polling it would only repeat its answer.
+    if (!isLegacyUnidentified(options.getAgentPresence?.())) {
+      return false
+    }
     const ptyId = options.getPtyId()
     if (ptyId && options.isRemotePtyId?.(ptyId) === true) {
       return false

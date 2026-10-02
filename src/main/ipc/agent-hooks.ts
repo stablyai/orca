@@ -1,3 +1,4 @@
+import { readAgentProcessIdentity } from '../../shared/agent-process-presence'
 import { ipcMain } from 'electron'
 import type {
   AgentStatusIpcPayload,
@@ -37,6 +38,7 @@ export function registerAgentHookHandlers(
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
   ipcMain.removeHandler('agentStatus:hasVerifiableAgentProcess')
+  ipcMain.removeHandler('agentStatus:checkAgentPresence')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   registerAgentStatusRowTeardownIpcHandlers()
   registerAgentPaneAuthorityIpcHandlers({
@@ -70,6 +72,16 @@ export function registerAgentHookHandlers(
     }
     return agentHookServer.inferQuestionAnswered(request as AgentQuestionAnsweredInferenceRequest)
   })
+  ipcMain.handle(
+    'agentStatus:checkAgentPresence',
+    (_event, paneKey: unknown, expected: unknown) => {
+      const process = readAgentProcessIdentity(expected)
+      if (typeof paneKey !== 'string' || !process) {
+        return 'unverifiable'
+      }
+      return agentHookServer.checkAgentPresence(paneKey, process)
+    }
+  )
   ipcMain.handle('agentStatus:hasVerifiableAgentProcess', (_event, paneKey: unknown): boolean =>
     typeof paneKey === 'string' ? agentHookServer.hasVerifiableAgentProcess(paneKey) : false
   )

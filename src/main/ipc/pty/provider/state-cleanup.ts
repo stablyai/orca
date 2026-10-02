@@ -78,7 +78,9 @@ export function clearProviderPtyState(
   // Why: cover paths that bypass runtime.onPtyExit (SSH reattach/shutdown, daemon spawn-failure) — else the watcher's per-PTY buffer and worktree binding outlive the PTY.
   advertisedUrlWatcher.unbindPty(id)
   clearMigrationUnsupportedPty(id)
-  agentHookServer.clearPaneKeyAliasesForPty(id, {
+  // Why: a local PTY takes its agent with it; a disconnect or remote handle proves nothing.
+  const owner = opts.preserveAgentSessionOwners || ptyOwnership.get(id) ? 'unverified' : 'released'
+  agentHookServer.clearPaneKeyAliasesForPty(id, owner, {
     shouldClearStablePaneKey: (stablePaneKey) => {
       // Why: when this PTY never rebuilt ptyPaneKey after restart, alias ownership is our only proof — don't erase a newer PTY that now owns the same stable paneKey.
       const stablePaneOwner = paneKeyPtyId.get(stablePaneKey)
@@ -91,7 +93,7 @@ export function clearProviderPtyState(
   // Why: clear the hook server's per-paneKey caches (via the spawn-time paneKey mapping, its only ptyId→paneKey correlation) so dead panes don't accumulate over process lifetime.
   if (paneKey) {
     if (stillOwnsPaneKey) {
-      agentHookServer.clearPaneState(paneKey)
+      agentHookServer.clearPaneState(paneKey, owner)
       paneKeyPtyId.delete(paneKey)
     }
     ptyPaneKey.delete(id)

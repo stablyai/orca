@@ -1,4 +1,5 @@
 import type {
+  AgentPresenceReleaseIpcPayload,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload
 } from '../../../shared/agent-status-types'
@@ -13,6 +14,7 @@ import type {
   AgentHookProviderSessionIdentity,
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
+  AgentPresenceReleaseListener,
   EnrichedAgentHookEventPayload,
   StatusDropListener
 } from './server-types'
@@ -169,6 +171,18 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     if (this.runtimeObservedStatusPaneKeys.delete(paneKey)) {
       this.notifyStatusChangeListeners()
     }
+  }
+
+  setPaneTerminalSleepStopProbe(probe: ((paneKey: string) => boolean) | null): void {
+    this.isPaneTerminalSleepStopInFlight = probe
+  }
+
+  setAgentPresenceReleaseListener(listener: AgentPresenceReleaseListener | null): void {
+    this.onAgentPresenceReleased = listener
+  }
+
+  protected emitAgentPresenceReleased(release: AgentPresenceReleaseIpcPayload): void {
+    this.onAgentPresenceReleased?.(release)
   }
 
   setPaneStatusClearListener(listener: ((clear: AgentStatusClearIpcPayload) => void) | null): void {

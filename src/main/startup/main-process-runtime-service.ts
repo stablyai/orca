@@ -121,7 +121,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       agentHookServer.retirePaneAuthority(paneKey),
     checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
-      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
+      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys, { kind: 'terminal-ended' }),
+    dropAgentStatusForWorktree: (worktreeId) =>
+      agentHookServer.dropStatusEntriesForWorktree(worktreeId),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Why: evaluated per call, not captured — the RPC server that owns the device registry is
     // constructed with this runtime and does not exist yet at this point.
@@ -169,6 +171,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
+  agentHookServer.setPaneTerminalSleepStopProbe((paneKey) =>
+    runtime.isPaneTerminalSleepStopInFlight(paneKey)
+  )
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
   )

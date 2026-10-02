@@ -67,6 +67,7 @@ const ITEMS: TabBarItem[] = [
 ]
 
 // Only the fields renderTabBarItems reads; nothing else reaches an isActive decision.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: renderTabBarItems reads only these fields of the runtime model.
 const RUNTIME = {
   resolvedGroupId: 'group-1',
   generatedTabTitlesEnabled: false,
@@ -74,6 +75,7 @@ const RUNTIME = {
   nativeChatEnabled: false,
   tabAgentTypesByTabId: {},
   nativeChatTabWideFallbackUnsafeTabsById: {},
+  endedChatOwnerByTabId: {},
   nativeChatTranscriptIsLocalReadable: false,
   managedBrowserCreationEnabled: false,
   toggleTabViewMode: () => {},

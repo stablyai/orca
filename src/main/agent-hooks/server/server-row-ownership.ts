@@ -6,6 +6,7 @@ import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../../shared/
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { structuralValuesEqualIgnoringUndefined } from '../../../shared/structural-value-equality'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { isSameAgentProcess } from '../../../shared/agent-process-presence'
 import type {
   AgentHookStatusRowIdentity,
   AgentHookStatusRowMutation,
@@ -112,11 +113,23 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     )
   }
 
+  /** A row write recorded a live owner; the owner recheck arms itself from here. */
+  protected noteLiveAgentOwner(): void {}
+
   protected commitStatusRowMutation(
     before: EnrichedAgentHookEventPayload | null | undefined,
     after: EnrichedAgentHookEventPayload | null | undefined,
     emit = true
   ): boolean {
+    const owner = before?.agentPresence?.process
+    const carried = after?.agentPresence?.process
+    // Why: the one place every row write passes, so no deletion path can strand a renderer owner.
+    if (owner && !(carried && isSameAgentProcess(carried, owner))) {
+      this.emitAgentPresenceReleased({ paneKey: before.paneKey, process: owner })
+    }
+    if (carried && !after?.agentPresence?.ended) {
+      this.noteLiveAgentOwner()
+    }
     if (
       before?.terminalHandle &&
       this.paneKeyByTerminalHandle.get(before.terminalHandle) === before.paneKey

@@ -4,6 +4,7 @@ import { LEAF_1 } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 
 export function createInitialStoreState(getState: () => StoreState): StoreState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every key matches StoreState; the cast only widens typed vi.fn doubles to the fixture's generic mocks.
   return {
     activeWorktreeId: 'wt-1',
     tabsByWorktree: {
@@ -45,6 +46,8 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     consumePendingColdRestore: vi.fn(() => null),
     consumePendingSnapshot: vi.fn(() => null),
     runtimePaneTitlesByTabId: {},
+    agentPresenceByPaneKey: {},
+    retireEndedAgentPresence: vi.fn(),
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
     paneForegroundAgentByPaneKey: {},

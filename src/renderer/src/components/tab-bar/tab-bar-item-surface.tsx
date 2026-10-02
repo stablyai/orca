@@ -1,3 +1,4 @@
+import { evidenceAfterEndedAgent } from '@/lib/agent-presence-selectors'
 import React from 'react'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -65,6 +66,7 @@ export function renderTabBarItems({
     nativeChatEnabled,
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
+    endedChatOwnerByTabId,
     nativeChatTranscriptIsLocalReadable,
     toggleTabViewMode,
     statusByRelativePath
@@ -105,16 +107,25 @@ export function renderTabBarItems({
       // Carry the agent *identity* (not just "an agent exists") so the native-chat gate can reject agents like Grok.
       const resolvedAgent = resolveNativeChatTabAgentEvidence(terminalTab, unifiedTabForItem)
       // Key the live-agent lookup by the backing terminal tab id: agent-status pane keys use it, not the unified tab id.
-      const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
+      // Same per-leaf rule as the pane: an exited owner's own evidence no longer offers Chat.
+      const endedOwner = endedChatOwnerByTabId[terminalTab.id]
+      const detectedAgent = evidenceAfterEndedAgent(
+        endedOwner,
+        tabAgentTypesByTabId[terminalTab.id]
+      )
       const tabWideFallbackSafe = nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
       const canToggleViewMode =
         unifiedTabForItem !== undefined &&
         canToggleNativeChat({
           experimentalNativeChatEnabled: nativeChatEnabled,
           contentType: 'terminal',
-          launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
+          launchAgent: tabWideFallbackSafe
+            ? evidenceAfterEndedAgent(endedOwner, terminalTab.launchAgent)
+            : null,
           detectedAgent,
-          resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
+          resolvedAgent: tabWideFallbackSafe
+            ? evidenceAfterEndedAgent(endedOwner, resolvedAgent)
+            : null,
           nativeChatTranscriptIsLocalReadable,
           isChatViewMode: unifiedTabForItem.viewMode === 'chat'
         })

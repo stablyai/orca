@@ -339,7 +339,11 @@ describe('host-owned hook presence', () => {
     expect(visible(server)).toBe(true)
     await hook(server, 'SessionStart', 'relaunch', undefined, 4002)
     await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
-    await vi.waitFor(() => expect(visible(server)).toBe(false))
+    // The proven-dead owner hands the pane to the relaunch instead of ending its first row.
+    await vi.waitFor(() =>
+      expect(server.getStatusSnapshot()[0]?.agentPresence?.process?.pid).toBe(4002)
+    )
+    expect(visible(server)).toBe(true)
     await hook(server, 'UserPromptSubmit', 'relaunch', undefined, 4002)
     expect(state(server)).toBe('working')
   })

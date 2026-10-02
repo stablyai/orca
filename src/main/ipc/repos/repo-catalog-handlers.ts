@@ -10,6 +10,7 @@ import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import { enrichRepoGitUsernames } from '../../repo-git-username-enrichment'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { agentHookServer } from '../../agent-hooks/server'
 import { notifyReposChanged } from './repos-changed-notification'
 import { ProjectUpdateIpcArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
 import { listReposForExecutionHost } from './host-repo-catalog-snapshot'
@@ -87,6 +88,8 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
 
   ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
     store.removeProject(args.repoId)
+    // Why: its workspaces' panes are gone, so their owner records must die like closed tabs'.
+    agentHookServer.dropStatusEntriesForRepo(args.repoId)
     invalidateAuthorizedRootsCache()
     notifyReposChanged(mainWindow)
   })

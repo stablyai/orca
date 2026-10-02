@@ -3,6 +3,7 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
 import type {
   EnrichedAgentHookEventPayload,
+  PaneOwnerDisposition,
   RetiredPaneAlias,
   RetiredPaneFence
 } from './server-types'
@@ -157,6 +158,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
 
   clearPaneKeyAliasesForPty(
     ptyId: string,
+    owner: PaneOwnerDisposition,
     options?: { shouldClearStablePaneKey?: (paneKey: string) => boolean }
   ): void {
     let aliasChanged = false
@@ -203,7 +205,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       this.notifyPaneKeyAliasPersistenceListener()
     }
     for (const row of clearedStatusRows.values()) {
-      this.commitStatusRowMutation(row, undefined)
+      this.commitPaneRowAfterCleanup(row, owner)
     }
     if (statusChanged) {
       this.scheduleStatusPersist()

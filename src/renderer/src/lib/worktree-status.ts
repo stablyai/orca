@@ -11,6 +11,10 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
+import type { AgentProcessPresence } from '../../../shared/agent-process-presence'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
+import { paneEvidenceCounts } from './agent-presence-selectors'
 
 export type WorktreeStatus =
   | 'active'
@@ -30,6 +34,7 @@ type WorktreeStatusHeuristicOptions = {
   stalePaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
 }
 
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
@@ -103,9 +108,13 @@ function tabHasStatus(
       ) {
         continue
       }
+      const presence =
+        leafId === null
+          ? undefined
+          : options.agentPresenceByPaneKey?.[makePaneKey(tab.id, leafId)]?.presence
       if (
         classifyTitleActivity(title) === status &&
-        titleStatusIsAgentAttributable(title, tab.launchAgent)
+        titleStatusIsAgentAttributable(title, tab.launchAgent, presence)
       ) {
         return true
       }
@@ -120,9 +129,13 @@ function tabHasStatus(
   if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
+  const activeLeafId = options.terminalLayoutsByTabId?.[tab.id]?.activeLeafId
+  const presence = activeLeafId
+    ? options.agentPresenceByPaneKey?.[makePaneKey(tab.id, activeLeafId)]?.presence
+    : undefined
   return (
     classifyTitleActivity(tab.title) === status &&
-    titleStatusIsAgentAttributable(tab.title, tab.launchAgent)
+    titleStatusIsAgentAttributable(tab.title, tab.launchAgent, presence)
   )
 }
 
@@ -151,8 +164,16 @@ function suppressingPaneIds(
 }
 
 // Why: require agent attribution so a bare never-cleared spinner title can't spin the dot "0 agents" forever with no matching sidebar row.
-function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | null): boolean {
-  if (resolveAgentTypeFromTerminalTitle(title) !== null) {
+function titleStatusIsAgentAttributable(
+  title: string,
+  launchAgent?: TuiAgent | null,
+  presence?: AgentProcessPresence
+): boolean {
+  const titleAgent = resolveAgentTypeFromTerminalTitle(title)
+  if (!paneEvidenceCounts(presence, titleAgent)) {
+    return false
+  }
+  if (titleAgent !== null) {
     return true
   }
   // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
@@ -182,6 +203,7 @@ export function resolveWorktreeStatus(args: {
   stalePaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring?: boolean
@@ -201,7 +223,8 @@ export function resolveWorktreeStatus(args: {
       agentStatusPaneIdsByTabId: args.agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId: args.stalePaneIdsByTabId,
       terminalLayoutsByTabId: args.terminalLayoutsByTabId,
-      terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
+      terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId,
+      agentPresenceByPaneKey: args.agentPresenceByPaneKey
     }
   )
   if (args.hasPermission) {

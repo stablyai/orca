@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand'
+import { createAgentPresenceActions } from './agent-presence'
 import type { AppState } from '../types'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import { createAgentStatusRuntime } from './agent-status-runtime'
@@ -75,6 +76,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     return composedActions
   })
   const actions = {
+    ...createAgentPresenceActions(runtime),
     ...createAgentStatusAuthorityActions(runtime),
     ...createAgentStatusCleanupActions(runtime),
     ...createAgentStatusDropActions(runtime),
@@ -85,13 +87,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     ...createAgentStatusProviderSessionActions(runtime),
     ...createAgentStatusRecoveryActions(runtime),
     ...createAgentStatusRetentionActions(runtime)
-  } as AgentStatusSlice
+  }
   composedActions = {
     setAgentStatus: actions.setAgentStatus,
     recordAgentProviderSession: actions.recordAgentProviderSession
   }
   return {
     ...actions,
+    agentPresenceByPaneKey: {},
     agentStatusByPaneKey: {},
     runtimeAgentOrchestrationByPaneKey: {},
     migrationUnsupportedByPtyId: {},

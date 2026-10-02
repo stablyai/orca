@@ -28,10 +28,13 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
-    const transitioned = transitionHookPresence(
-      incoming,
-      this.state.lastStatusByPaneKey.get(incoming.paneKey)
-    )
+    // Why: a relay already chose the live owner on its own host; re-deciding against a record it
+    // replaced would pin the pane to an owner this desktop can never check. Exits still need our fence.
+    const relayOwner = incoming.connectionId !== null ? incoming.agentPresence : undefined
+    const transitioned =
+      relayOwner?.process && !relayOwner.ended
+        ? incoming
+        : transitionHookPresence(incoming, this.state.lastStatusByPaneKey.get(incoming.paneKey))
     if (!transitioned) {
       return undefined
     }
@@ -41,8 +44,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     }
     if (payload.agentPresence?.ended) {
       this.reconcileEndedProcessForPaneKeys([payload.paneKey], {
-        preserveResumeIdentity: true,
-        endedPresence: payload.agentPresence
+        kind: 'owner-exited',
+        presence: payload.agentPresence
       })
       return undefined
     }

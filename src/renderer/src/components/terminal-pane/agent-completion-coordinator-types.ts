@@ -1,3 +1,8 @@
+import type {
+  AgentProcessPresence,
+  AgentProcessIdentity,
+  AgentProcessVerdict
+} from '../../../../shared/agent-process-presence'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
@@ -24,6 +29,12 @@ export type AgentAttentionDispatchMeta = {
 export type AgentCompletionCoordinatorOptions = {
   paneKey: string
   statusLane?: 'hook' | 'pty'
+  getAgentPresence?: () => AgentProcessPresence | undefined
+  /** Asked only on title/command triggers; a live owner's exit arrives through the subscription. */
+  checkAgentPresence?: (process: AgentProcessIdentity) => Promise<AgentProcessVerdict>
+  subscribeAgentPresence?: (
+    listener: (presence: AgentProcessPresence | undefined) => void
+  ) => () => void
   getPtyId: () => string | null
   /** Remote authorities are event-triggered only; no periodic process polls. */
   isRemotePtyId?: (ptyId: string) => boolean

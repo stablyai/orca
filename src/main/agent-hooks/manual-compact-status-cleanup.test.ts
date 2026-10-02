@@ -33,7 +33,7 @@ describe('manual compact status cleanup', () => {
     }
 
     begin()
-    server.clearPaneState(PANE_KEY)
+    server.clearPaneState(PANE_KEY, 'released')
     server.ingestRemote(compactEvent('PostCompact', 'done'), 'conn-a')
     expect(server.getStatusSnapshot()).toEqual([])
 

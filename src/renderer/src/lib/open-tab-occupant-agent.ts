@@ -1,4 +1,6 @@
+import { selectFocusedPanePresence } from './agent-presence-selectors'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
@@ -17,6 +19,7 @@ import {
 import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
 
 export type OpenTabOccupantAgentInput = {
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
   tabId: string
   /**
    * Resolved unified tab label — the same string the tab strip feeds `useTabAgent`.
@@ -43,6 +46,7 @@ export function resolveOpenTabOccupantAgent({
   defaultTitle,
   launchAgent,
   layout,
+  agentPresenceByPaneKey,
   agentStatusByPaneKey,
   retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey,
@@ -69,6 +73,7 @@ export function resolveOpenTabOccupantAgent({
     : Boolean(explicitTitleAgent || siblingHookAgent)
 
   return resolveTabAgentFromSignals({
+    agentPresence: selectFocusedPanePresence(agentPresenceByPaneKey, tabId, focusedPaneKey),
     hasObservedAgentSignal: Boolean(
       hookAgent || focusedCompletedHookAgent || processAgent || fallbackAgentSignal
     ),

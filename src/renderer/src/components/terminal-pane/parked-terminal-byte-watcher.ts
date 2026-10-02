@@ -5,6 +5,8 @@
 import { isClaudeAgent } from '../../../../shared/agent-detection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
+import { applyLegacyUnidentifiedAgentSignal } from '@/lib/legacy-unidentified-agent-presence'
+import { requestAgentOwnerCheck } from '@/lib/agent-owner-check'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
@@ -179,8 +181,12 @@ export function startParkedTerminalByteWatcher(
       }
     },
     onAgentExited: (): void => {
-      // Why: title reverting to a plain shell means the agent session ended; clear the countdown so it doesn't survive in the sidebar while parked.
-      useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+      const state = useAppStore.getState()
+      const presence = state.agentPresenceByPaneKey?.[paneKey]?.presence
+      requestAgentOwnerCheck(paneKey, presence)
+      applyLegacyUnidentifiedAgentSignal(presence, () =>
+        state.setCacheTimerStartedAt(paneKey, null)
+      )
     }
   }
 

@@ -1,4 +1,8 @@
 import { useMemo } from 'react'
+import {
+  EMPTY_AGENT_PRESENCE,
+  selectWorktreeAgentPresence
+} from './worktree-agent-presence-selector'
 import { useShallow } from 'zustand/react/shallow'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
@@ -58,6 +62,9 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     [worktreeId]
   )
   const tabs = useAppStore((s) => (active ? s.tabsByWorktree[worktreeId] : EMPTY_TABS))
+  const agentPresenceByPaneKey = useAppStore((s) =>
+    active ? selectWorktreeAgentPresence(s, worktreeId) : EMPTY_AGENT_PRESENCE
+  )
   // Why: narrow the subscriptions to only THIS worktree's entries via
   // useShallow. Subscribing to the whole agentStatusByPaneKey map would make
   // every on-screen card re-render on any agent-status update anywhere —
@@ -131,6 +138,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         : liveEntries
     return applyAgentRowLineage(
       buildWorktreeAgentRows({
+        agentPresenceByPaneKey,
         tabs: tabs ?? EMPTY_TABS,
         entries,
         retained,
@@ -145,6 +153,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     active,
+    agentPresenceByPaneKey,
     tabs,
     liveEntries,
     migrationUnsupported,

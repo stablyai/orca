@@ -67,6 +67,7 @@ export function createAgentStatusAuthorityActions(
           nextRetentionSuppressedPaneKeys[key] = true
         }
         return {
+          agentPresenceByPaneKey: removePaneKeys(s.agentPresenceByPaneKey, retiredPaneKeySet),
           agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
           runtimeAgentOrchestrationByPaneKey: removePaneKeys(
             s.runtimeAgentOrchestrationByPaneKey,
@@ -190,6 +191,7 @@ export function createAgentStatusAuthorityActions(
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
       const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
       set((s) => ({
+        agentPresenceByPaneKey: movePaneKeyedRecord(s.agentPresenceByPaneKey, from, to),
         agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
           ...entry,
           paneKey: to,

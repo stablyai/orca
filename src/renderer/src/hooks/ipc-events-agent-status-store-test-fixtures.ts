@@ -1,3 +1,4 @@
+import type { AgentProcessPresence } from '../../../shared/agent-process-presence'
 import { expect, vi } from 'vitest'
 import type {
   AgentStatusBatchTransaction,
@@ -20,6 +21,7 @@ export function expectWorktreeRouting(worktreeId: string): unknown {
 }
 
 export type AgentStatusSetData = {
+  agentPresence?: AgentProcessPresence
   paneKey: string
   tabId?: string
   worktreeId?: string

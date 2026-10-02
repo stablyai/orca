@@ -8,6 +8,7 @@ import {
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '../legacy-worker-terminal-recovery-event'
 import { useAppStore } from '../../store'
+import { readAgentProcessIdentity } from '../../../../shared/agent-process-presence'
 import { resolvePaneKey } from './agent-status-routing'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 
@@ -90,6 +91,20 @@ export function registerAgentStatusListeners(args: {
   )
   if (unsubscribeAgentStatusClear) {
     unsubs.push(unsubscribeAgentStatusClear)
+  }
+  const unsubscribePresenceRelease = window.api.agentStatus.onPresenceReleased?.((data) => {
+    const process = readAgentProcessIdentity(data?.process)
+    if (typeof data?.paneKey !== 'string' || !process) {
+      return
+    }
+    // Why: preserve set→release FIFO so a queued owner publication cannot outlive its release.
+    if (liveAgentStatusBurstQueue.some((queued) => queued.paneKey === data.paneKey)) {
+      drainQueuedLiveAgentStatusesForPane(data.paneKey)
+    }
+    useAppStore.getState().releaseAgentPresence(data.paneKey, process)
+  })
+  if (unsubscribePresenceRelease) {
+    unsubs.push(unsubscribePresenceRelease)
   }
   const unsubscribeMigrationUnsupported = window.api.agentStatus.onMigrationUnsupported?.(
     (entry) => {

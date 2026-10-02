@@ -1,3 +1,5 @@
+import { evidenceAfterEndedAgent } from '@/lib/agent-presence-selectors'
+import { selectTabBarAgentProjections } from '../tab-bar/tab-agent-types-by-tab-id'
 import { useEffect } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
@@ -71,20 +73,28 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       // the unified tab id.
       const terminalLayout = state.terminalLayoutsByTabId[tab.entityId]
       const tabWideFallbackSafe = isNativeChatTabWideFallbackSafe(terminalLayout)
-      const detectedAgent = resolveNativeChatToggleShortcutDetectedAgent({
-        terminalTabId: tab.entityId,
-        terminalLayout,
-        agentStatusByPaneKey: state.agentStatusByPaneKey
-      })
+      // Same per-leaf rule as the pane and the tab strip.
+      const endedOwner = selectTabBarAgentProjections(state).endedChatOwnerByTabId[tab.entityId]
+      const detectedAgent = evidenceAfterEndedAgent(
+        endedOwner,
+        resolveNativeChatToggleShortcutDetectedAgent({
+          terminalTabId: tab.entityId,
+          terminalLayout,
+          agentStatusByPaneKey: state.agentStatusByPaneKey
+        })
+      )
       const titleFallbackAgent =
         tabWideFallbackSafe && terminalTab
-          ? resolveNativeChatTabAgentEvidence(terminalTab, tab)
+          ? evidenceAfterEndedAgent(endedOwner, resolveNativeChatTabAgentEvidence(terminalTab, tab))
           : null
       if (
         !canToggleNativeChat({
           experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
           contentType: 'terminal',
-          launchAgent: detectedAgent || !tabWideFallbackSafe ? null : terminalTab?.launchAgent,
+          launchAgent:
+            detectedAgent || !tabWideFallbackSafe
+              ? null
+              : evidenceAfterEndedAgent(endedOwner, terminalTab?.launchAgent),
           detectedAgent,
           resolvedAgent: detectedAgent ? null : titleFallbackAgent,
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(

@@ -16,7 +16,10 @@ import {
   type AgentStatusEntry,
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
+import { paneEvidenceCounts } from '@/lib/agent-presence-selectors'
+import { resolveAgentTypeFromTerminalTitle } from './worktree-title-derived-agent-rows'
 
 /**
  * Ordinal class for the "Smart" sort. Lower number = more attention-demanding.
@@ -59,30 +62,7 @@ export type WorktreeAttention = {
 
 export const IDLE: WorktreeAttention = { cls: 5, attentionTimestamp: 0 }
 
-export function hasFreshAttributedAgentStatus(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
-  now: number,
-  tabsByWorktree: Record<string, TerminalTab[]>
-): boolean {
-  const freshUnstampedTabIds = new Set<string>()
-  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
-    const parsed = parsePaneKey(entry.paneKey)
-    if (parsed === null || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-      continue
-    }
-    if (entry.worktreeId) {
-      return true
-    }
-    // Why: hook rows can omit the worktree stamp but still map via paneKey to a mirrored tab — enough to end cold-start.
-    freshUnstampedTabIds.add(parsed.tabId)
-  }
-  if (freshUnstampedTabIds.size === 0) {
-    return false
-  }
-  return Object.values(tabsByWorktree).some((tabs) =>
-    tabs.some((tab) => freshUnstampedTabIds.has(tab.id))
-  )
-}
+export { hasFreshAttributedAgentStatus } from './smart-attention-attribution'
 
 /**
  * Return the timestamp of the most recent `done`/`blocked`/`waiting` history row, ignoring
@@ -278,6 +258,7 @@ function leafIdFromPaneKey(paneKey: string): string | null {
 
 /** Renderer state a single tab's panes are resolved from. */
 export type TabPaneInputSources = {
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
   entriesByTabId: ReadonlyMap<string, AgentStatusEntry[]>
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
@@ -329,7 +310,14 @@ export function collectTabPaneInputs(
     const coveredLeafIds = isSyntheticAgentPermissionTitle(tab.title)
       ? permissionHookLeafIds
       : hookLeafIds
-    if (coveredLeafIds.size === 0) {
+    const activeLeafId = sources.terminalLayoutsByTabId?.[tab.id]?.activeLeafId
+    const presence = activeLeafId
+      ? sources.agentPresenceByPaneKey?.[makePaneKey(tab.id, activeLeafId)]?.presence
+      : undefined
+    if (
+      coveredLeafIds.size === 0 &&
+      paneEvidenceCounts(presence, resolveAgentTypeFromTerminalTitle(tab.title))
+    ) {
       // Why: unmounted tabs (restored-but-unvisited) expose only the legacy tab title.
       panes.push({
         kind: 'title',
@@ -353,6 +341,13 @@ export function collectTabPaneInputs(
     if ((leafId !== null && coveredLeafIds.has(leafId)) || hasSingleUnmappedHook) {
       continue
     }
+    const presence =
+      leafId === null
+        ? undefined
+        : sources.agentPresenceByPaneKey?.[makePaneKey(tab.id, leafId)]?.presence
+    if (!paneEvidenceCounts(presence, resolveAgentTypeFromTerminalTitle(title))) {
+      continue
+    }
     panes.push({ kind: 'title', status: classifyTitleActivity(title), worktreeLastActivityAt })
   }
   return panes
@@ -371,7 +366,8 @@ export function buildAttentionByWorktree(
   ptyIdsByTabId: Record<string, string[]>,
   now: number,
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>,
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>,
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
 ): Map<string, WorktreeAttention> {
   const byTab = buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId)
   const byAttributedWorktree = buildExplicitEntriesByWorktreeId(agentStatusByPaneKey)
@@ -382,6 +378,7 @@ export function buildAttentionByWorktree(
     }
   }
   const paneSources: TabPaneInputSources = {
+    agentPresenceByPaneKey,
     entriesByTabId: byTab,
     ptyIdsByTabId,
     runtimePaneTitlesByTabId,

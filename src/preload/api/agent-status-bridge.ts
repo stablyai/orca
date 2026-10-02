@@ -1,5 +1,7 @@
+import type { AgentProcessIdentity, AgentProcessVerdict } from '../../shared/agent-process-presence'
 import { ipcRenderer } from 'electron'
 import type {
+  AgentPresenceReleaseIpcPayload,
   AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
@@ -23,11 +25,22 @@ export const agentStatusApi = {
     ipcRenderer.on('agentStatus:clear', listener)
     return () => ipcRenderer.removeListener('agentStatus:clear', listener)
   },
+  onPresenceReleased: (callback: (data: AgentPresenceReleaseIpcPayload) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentPresenceReleaseIpcPayload) =>
+      callback(data)
+    ipcRenderer.on('agentStatus:presenceReleased', listener)
+    return () => ipcRenderer.removeListener('agentStatus:presenceReleased', listener)
+  },
   /** Pull cached hook statuses after renderer hydration, so startup replays aren't lost before tabs exist. */
   getSnapshot: (): Promise<AgentStatusIpcPayload[]> =>
     ipcRenderer.invoke('agentStatus:getSnapshot'),
   inferInterrupt: (request: AgentInterruptInferenceRequest): Promise<boolean> =>
     ipcRenderer.invoke('agentStatus:inferInterrupt', request),
+  checkAgentPresence: (
+    paneKey: string,
+    expectedProcess: AgentProcessIdentity
+  ): Promise<AgentProcessVerdict> =>
+    ipcRenderer.invoke('agentStatus:checkAgentPresence', paneKey, expectedProcess),
   hasVerifiableAgentProcess: (paneKey: string): Promise<boolean> =>
     ipcRenderer.invoke('agentStatus:hasVerifiableAgentProcess', paneKey),
   inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest): Promise<boolean> =>

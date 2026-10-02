@@ -74,6 +74,7 @@ export function useWorktreeJumpPaletteOpenTabs({
   activeTabTypeByWorktree,
   settings,
   terminalLayoutsByTabId,
+  agentPresenceByPaneKey,
   paneForegroundAgentByPaneKey,
   deferredQuery,
   paletteSearchContext,
@@ -187,6 +188,7 @@ export function useWorktreeJumpPaletteOpenTabs({
       activeTabTypeByWorktree,
       generatedTitlesEnabled: settings?.tabAutoGenerateTitle === true,
       terminalLayoutsByTabId,
+      agentPresenceByPaneKey,
       paneForegroundAgentByPaneKey
     })
   }, [
@@ -210,6 +212,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     retainedAgentsByPaneKey,
     settings?.tabAutoGenerateTitle,
     sleepingAgentSessionsByPaneKey,
+    agentPresenceByPaneKey,
     paneForegroundAgentByPaneKey,
     tabsByWorktree,
     terminalLayoutsByTabId,

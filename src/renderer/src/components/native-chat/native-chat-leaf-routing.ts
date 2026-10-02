@@ -90,13 +90,15 @@ export function resolveNativeChatLeafRoute(args: {
   activeLeafId: string | null
   chatLeafStillMounted: boolean
   activeLeafIsEligible: boolean
-  chatLeafHasConfirmedAgentExit?: boolean
+  chatLeafAgentExit?: 'exited' | 'legacy-unidentified'
+  /** Orca launched an agent that has not yet exited; its evidence may still be hydrating. */
+  launchPending?: boolean
 }): NativeChatLeafRoute {
-  const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit
+  const agentExit = args.chatLeafAgentExit
   if (!args.isChatViewMode) {
     return { chatLeafId: null, exitChat: false }
   }
-  if (args.chatLeafId && args.chatLeafStillMounted && !confirmedAgentExit) {
+  if (args.chatLeafId && args.chatLeafStillMounted && !agentExit) {
     // Why: agent/title evidence can disappear while local, SSH, or runtime
     // transports reconnect. A mounted owning pane is not a terminal lifecycle
     // event, so keep its chat surface until the pane itself is removed.
@@ -104,16 +106,21 @@ export function resolveNativeChatLeafRoute(args: {
   }
   // Manager hydration can briefly have no active pane; preserve the requested
   // mode until a concrete leaf exists instead of toggling it off during mount.
-  if (!args.activeLeafId && !confirmedAgentExit) {
+  if (!args.activeLeafId && !agentExit) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
-  if (args.chatLeafId && !args.chatLeafStillMounted && !confirmedAgentExit) {
+  if (args.chatLeafId && !args.chatLeafStillMounted && !agentExit) {
     // A user-closed chat pane is an explicit close, not an agent handoff. Do not
     // retarget the chat surface to whichever sibling became active.
     return { chatLeafId: null, exitChat: true }
   }
-  if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
+  if (args.activeLeafIsEligible && (!agentExit || args.activeLeafId !== args.chatLeafId)) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
+  }
+  if (!args.chatLeafId && !agentExit && args.launchPending) {
+    // Why launch only: evidence for a launched agent can hydrate after the pane; any other request
+    // would stay armed with no way to end but flipping the pane into Chat later, unasked.
+    return { chatLeafId: null, exitChat: false }
   }
   // Why: removing the owning leaf or confirming its agent exited must not leave
   // the composer targeting a plain shell. Return the tab to terminal mode.

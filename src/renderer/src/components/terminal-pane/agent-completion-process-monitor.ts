@@ -1,4 +1,9 @@
 import {
+  createAgentOwnerExitObserver,
+  inspectAgentCompletionHostPresence
+} from './agent-completion-host-presence'
+import { isLegacyUnidentified } from '@/lib/legacy-unidentified-agent-presence'
+import {
   enqueueAgentProcessInspection,
   type InspectionPriority
 } from './agent-process-inspection-queue'
@@ -107,6 +112,22 @@ export function createAgentCompletionProcessMonitor({
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
+          const ownerCheck = inspectAgentCompletionHostPresence({
+            options,
+            state,
+            identityScope,
+            pendingTitle,
+            establishAgentEvidence,
+            clearAgentRunEvidence,
+            hasPendingHookDone,
+            dispatchCompletion
+          })
+          if (ownerCheck) {
+            inspectedRecognizedAgent = await ownerCheck
+            inspectionSucceeded = true
+            return
+          }
+          // Temporary until step 3 captures hookless/Windows owners: no live identified owner only.
           // Only a cadence tick on a local pane reads nothing but the name; every other read
           // (pending-title, remote) needs the full capture and must not ask for the cheap one.
           const inspectOptions = {
@@ -122,6 +143,7 @@ export function createAgentCompletionProcessMonitor({
             : options.inspectProcess(options.getSettings(), ptyId))
           if (
             !state.disposed &&
+            isLegacyUnidentified(options.getAgentPresence?.()) &&
             generationAtRequest === state.inspectionGeneration &&
             (options.getExpectedIncarnationId?.() ?? null) === expectedIncarnationIdAtRequest
           ) {
@@ -185,10 +207,17 @@ export function createAgentCompletionProcessMonitor({
     scheduleNextPoll,
     clearPollTimer,
     observeRecognizedProcess: (process: RecognizedAgentProcess) => {
-      if (!state.disposed) {
+      if (!state.disposed && isLegacyUnidentified(options.getAgentPresence?.())) {
         handleRecognizedProcess(process)
       }
     },
+    observeAgentPresence: createAgentOwnerExitObserver({
+      options,
+      state,
+      clearAgentRunEvidence,
+      dispatchCompletion,
+      scheduleNextPoll
+    }),
     start: () => {
       state.pollTrackingStarted = true
       scheduleNextPoll()

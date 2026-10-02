@@ -9,6 +9,7 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
+import { selectWorktreeAgentPresence } from './worktree-agent-presence-selector'
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
@@ -22,6 +23,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const terminalLayoutRootsByTabId = useAppStore(
     useShallow((s) => selectTerminalLayoutRootsForWorktree(s, worktreeId))
   )
+  const agentPresenceByPaneKey = useAppStore((s) => selectWorktreeAgentPresence(s, worktreeId))
   const {
     hasPermission,
     hasLiveWorking,
@@ -49,6 +51,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         agentStatusPaneIdsByTabId,
         stalePaneIdsByTabId,
         terminalLayoutRootsByTabId,
+        agentPresenceByPaneKey,
         hasPermission,
         hasLiveWorking,
         hasLiveMonitoring,
@@ -67,6 +70,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId,
       terminalLayoutRootsByTabId,
+      agentPresenceByPaneKey,
       hasPermission,
       hasLiveWorking,
       hasLiveMonitoring,

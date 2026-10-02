@@ -16,6 +16,7 @@ export type AgentBucketCountState = Pick<
   | 'worktreesByRepo'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
+  | 'agentPresenceByPaneKey'
   | 'agentStatusByPaneKey'
   | 'retainedAgentsByPaneKey'
   | 'migrationUnsupportedByPtyId'
@@ -54,6 +55,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     previous.worktreesByRepo === s.worktreesByRepo &&
     previous.tabsByWorktree === s.tabsByWorktree &&
     previous.unifiedTabsByWorktree === s.unifiedTabsByWorktree &&
+    previous.agentPresenceByPaneKey === s.agentPresenceByPaneKey &&
     previous.agentStatusByPaneKey === s.agentStatusByPaneKey &&
     previous.retainedAgentsByPaneKey === s.retainedAgentsByPaneKey &&
     previous.migrationUnsupportedByPtyId === s.migrationUnsupportedByPtyId &&
@@ -73,6 +75,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     worktreesByRepo: s.worktreesByRepo,
     tabsByWorktree: s.tabsByWorktree,
     unifiedTabsByWorktree: s.unifiedTabsByWorktree,
+    agentPresenceByPaneKey: s.agentPresenceByPaneKey,
     agentStatusByPaneKey: s.agentStatusByPaneKey,
     retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
     migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,

@@ -1,3 +1,4 @@
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 import type {
   RetainedAgentEntry,
   DropAgentStatusByTabPrefixOptions,
@@ -38,6 +39,12 @@ export function createAgentStatusDropActions(
     dropAgentStatus: (paneKey, opts?: DropAgentStatusOptions) => {
       let liveExisted = false
       set((s) => {
+        const presencePatch =
+          opts?.paneRemoved && s.agentPresenceByPaneKey[paneKey]
+            ? {
+                agentPresenceByPaneKey: removePaneKeys(s.agentPresenceByPaneKey, new Set([paneKey]))
+              }
+            : {}
         const hasLive = paneKey in s.agentStatusByPaneKey
         liveExisted = hasLive
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
@@ -63,6 +70,7 @@ export function createAgentStatusDropActions(
         }
         if (!hasLive && !hasRetained && !migrationUnsupported.changed) {
           const cleanupPatch = {
+            ...presencePatch,
             ...(hasLaunchConfig ? { agentLaunchConfigByPaneKey: nextLaunchConfigs } : {}),
             ...(nextAck !== s.acknowledgedAgentsByPaneKey
               ? { acknowledgedAgentsByPaneKey: nextAck }
@@ -88,6 +96,7 @@ export function createAgentStatusDropActions(
         }
         const needsSuppressor = hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
         return {
+          ...presencePatch,
           agentStatusByPaneKey: nextLive,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           retainedAgentsByPaneKey: nextRetained,

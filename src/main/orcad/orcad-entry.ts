@@ -246,7 +246,9 @@ async function startOrcadRuntime(
     },
     checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
-      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
+      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys, { kind: 'terminal-ended' }),
+    dropAgentStatusForWorktree: (worktreeId) =>
+      agentHookServer.dropStatusEntriesForWorktree(worktreeId),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(profileStore.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     // Why the dedupe here and not in the instance: `apply` closes and reconstructs
@@ -271,6 +273,10 @@ async function startOrcadRuntime(
     await import('../runtime/agent-state-rules/agent-state-rules-live-update')
   startAgentStateRulesLiveUpdates(profileStore, (rules) =>
     console.info(`[orcad] agent state rules ${rules.version} (${rules.source})`)
+  )
+
+  agentHookServer.setPaneTerminalSleepStopProbe((paneKey) =>
+    runtime.isPaneTerminalSleepStopInFlight(paneKey)
   )
 
   // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a

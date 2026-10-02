@@ -80,7 +80,7 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
         // sweep stands in for the exit Orca never observed, so it does what that exit does:
         // `clearProviderPtyState` -> `clearPaneState`.
         if (this.hasLiveClaimsForPaneKey(paneKey)) {
-          this.clearPaneState(paneKey)
+          this.clearPaneState(paneKey, 'released')
           changedPanes += 1
         }
         continue

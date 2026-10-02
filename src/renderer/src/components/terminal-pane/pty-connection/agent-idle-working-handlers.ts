@@ -1,4 +1,6 @@
 import { useAppStore } from '@/store'
+import { applyLegacyUnidentifiedAgentSignal } from '@/lib/legacy-unidentified-agent-presence'
+import { requestAgentOwnerCheck } from '@/lib/agent-owner-check'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
@@ -32,16 +34,15 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     }
   }
   session.onAgentExited = (): void => {
-    // Why: eligibility can disappear transiently during reconnect, but a
-    // confirmed shell-title transition is authoritative for native-chat exit.
-    session.deps.onAgentExitedRef.current(session.pane.leafId)
+    const presence = useAppStore.getState().agentPresenceByPaneKey?.[session.cacheKey]?.presence
+    requestAgentOwnerCheck(session.cacheKey, presence)
+    applyLegacyUnidentifiedAgentSignal(presence, () => {
+      session.deps.onAgentExitedRef.current(session.pane.leafId)
+      session.deps.setCacheTimerStartedAt(session.cacheKey, null)
+    })
     session.clearSuppressedTitleSideEffects()
     session.clearCommandInferredPaneAgent()
     session.requestKnownWindowsShiftEnterReconfirmation()
-    // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
-    // the agent has exited. Clear any running cache timer so the sidebar doesn't
-    // show a stale countdown for a tab that no longer has an active Claude session.
-    session.deps.setCacheTimerStartedAt(session.cacheKey, null)
     session.clearTitleOnlyInterruptTimer()
     // Why: title reversion alone is not process death. The process/PTY tracker
     // owns removing agent rows when the TUI actually exits.

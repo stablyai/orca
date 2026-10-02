@@ -1,6 +1,8 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
+import { paneEvidenceCounts, selectLiveOwnerAgent } from '@/lib/agent-presence-selectors'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -140,6 +142,7 @@ function markCompletedWorkerParentPaneKeysSeen(args: {
 }
 
 export function buildWorktreeAgentRows(args: {
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
   tabs: TerminalTab[]
   entries: AgentStatusEntry[]
   retained: RetainedAgentEntry[]
@@ -186,7 +189,9 @@ export function buildWorktreeAgentRows(args: {
         paneKey: rowEntry.paneKey,
         entry: rowEntry,
         tab,
-        agentType: resolveRowAgentType(rowEntry, tab),
+        agentType:
+          selectLiveOwnerAgent(args.agentPresenceByPaneKey?.[entry.paneKey]?.presence) ??
+          resolveRowAgentType(rowEntry, tab),
         rowSource: 'live',
         state: shouldDecay ? resolveDecayedAgentRowState(rowEntry, hasLivePty) : rowEntry.state,
         startedAt
@@ -205,7 +210,12 @@ export function buildWorktreeAgentRows(args: {
     seenPaneKeys
   })
 
-  rows.push(...buildTitleDerivedAgentRows({ ...args, seenPaneKeys }))
+  // Why: an exited owner's leftover title or process read is history; another agent's still counts.
+  rows.push(
+    ...buildTitleDerivedAgentRows({ ...args, seenPaneKeys }).filter((row) =>
+      paneEvidenceCounts(args.agentPresenceByPaneKey?.[row.paneKey]?.presence, row.agentType)
+    )
+  )
 
   // Why: orchestration workers can be attributed to a worktree by main before
   // their tab is present in this renderer. Keep those live rows visible in the

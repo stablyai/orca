@@ -43,7 +43,7 @@ export function makeAgentStatusStoreWiring(): {
       getAgentProviderSessionRowsForPane: (paneKey) =>
         statusStore.getStatusSnapshotForPane(paneKey),
       reconcileAgentStatusForEndedProcess: (paneKeys) => {
-        statusStore.reconcileEndedProcessForPaneKeys(paneKeys)
+        statusStore.reconcileEndedProcessForPaneKeys(paneKeys, { kind: 'terminal-ended' })
       }
     },
     attach: (runtime) => installHookStatusSessionTabsRepublish(statusStore, () => runtime)

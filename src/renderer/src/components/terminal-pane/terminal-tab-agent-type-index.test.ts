@@ -97,4 +97,16 @@ describe('createTerminalTabAgentTypeSelector', () => {
       })
     ).toEqual({})
   })
+  it('uses a live host owner; an ended one hides only its own identity', () => {
+    const select = createTerminalTabAgentTypeSelector()
+    const owner = {
+      agent: 'claude',
+      process: { pid: 4001, platform: 'linux', startTime: 'birth' }
+    } as const
+    const live = { 'tab:leaf': { presence: owner, receivedAt: 1 } }
+    const ended = { 'tab:leaf': { presence: { ...owner, ended: true as const }, receivedAt: 2 } }
+    expect(select({ 'tab:leaf': entry('codex') }, 'tab', {}, live)).toEqual({ leaf: 'claude' })
+    expect(select({ 'tab:leaf': entry('claude') }, 'tab', {}, ended)).toEqual({})
+    expect(select({ 'tab:leaf': entry('codex') }, 'tab', {}, ended)).toEqual({ leaf: 'codex' })
+  })
 })

@@ -83,11 +83,10 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     try {
       // Why: a process-table-confirmed agent exit is exactly the case the dismissal above excludes
       // — the pane's agent is NOT still alive — so its latches must go with the row (STA-4612).
+      // The PTY outlived the agent, so resume identity stays usable in that very pane. Rows with a
+      // process owner are refused: only their host's exact check may end them.
       agentHookServer.reconcileEndedProcessForPaneKeys([paneKey], {
-        // Why: this route only fires on a confirmed shell foreground, so the PTY outlived the
-        // agent. The row's resume identity is still usable in that very pane — only its live
-        // claims are dead.
-        preserveResumeIdentity: true
+        kind: 'legacy-shell-foreground'
       })
       clearMigrationUnsupportedPtysForPaneKey(paneKey)
     } catch (err) {

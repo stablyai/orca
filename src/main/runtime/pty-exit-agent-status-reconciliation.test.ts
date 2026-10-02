@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { AgentHookServer } from '../agent-hooks/server'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE = makePaneKey('tab-1', LEAF)
@@ -32,6 +33,26 @@ function runtimeWithBoundPane(
     ...(options.connectionId ? { connectionId: options.connectionId } : {})
   } as never)
   return runtime
+}
+
+const owner = {
+  agent: 'claude',
+  process: { pid: 4001, platform: 'linux', startTime: 'boot:1' }
+} as const
+
+class OwnerStatusStore extends AgentHookServer {
+  publishOwner(): void {
+    this.applyNormalizedStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId: null,
+      source: 'claude',
+      hookEventName: 'UserPromptSubmit',
+      agentPresence: owner,
+      payload: { agentType: 'claude', state: 'working', prompt: 'task' }
+    })
+  }
 }
 
 function reconciledPaneKeys(calls: Iterable<string>[]): string[] {
@@ -88,4 +109,23 @@ describe('onPtyExit agent-status reconciliation', () => {
 
     expect(reconcile).not.toHaveBeenCalled()
   })
+
+  // The runtime resolves exit pane keys from its own PTY record, not the provider's pane mapping
+  // that clearProviderPtyState has already dropped by the time onPtyExit runs.
+  it.each([false, true])(
+    'retires the identified owner through the runtime pane key, after provider cleanup=%s',
+    (providerCleanupRan) => {
+      const store = new OwnerStatusStore()
+      store.publishOwner()
+      if (providerCleanupRan) {
+        store.clearPaneState(PANE, 'unverified')
+      }
+      runtimeWithBoundPane((paneKeys) =>
+        store.reconcileEndedProcessForPaneKeys(paneKeys, { kind: 'terminal-ended' })
+      ).onPtyExit(PTY, 0)
+      expect(store.getStatusSnapshotForPane(PANE)).toEqual([])
+      expect(store.hasVerifiableAgentProcess(PANE)).toBe(false)
+      store.stop()
+    }
+  )
 })

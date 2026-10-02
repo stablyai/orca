@@ -32,6 +32,7 @@ export function useWorktreeJumpPaletteWorktrees({
   paletteSearchContext,
   repos,
   worktreesByRepo,
+  agentPresenceByPaneKey,
   agentStatusByPaneKey,
   tabsByWorktree,
   allWorktrees,
@@ -191,7 +192,8 @@ export function useWorktreeJumpPaletteWorktrees({
       runtimePaneTitlesByTabId,
       ptyIdsByTabId,
       migrationUnsupportedByPtyId,
-      terminalLayoutsByTabId
+      terminalLayoutsByTabId,
+      agentPresenceByPaneKey
     )
   }, [
     paletteStatusInputsActive,
@@ -199,6 +201,7 @@ export function useWorktreeJumpPaletteWorktrees({
     filterPredicate,
     tabsByWorktree,
     repoMap,
+    agentPresenceByPaneKey,
     agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,

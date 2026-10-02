@@ -168,7 +168,7 @@ describe('AgentHookServer authority evidence', () => {
       })
     ).toEqual({ paneKey: PANE_KEY, source: 'hydrated_commitment' })
 
-    server.clearPaneState(PANE_KEY)
+    server.clearPaneState(PANE_KEY, 'released')
 
     expect(server.getHydratedAuthorityCommitments()).toBe(commitments)
     expect(
@@ -210,7 +210,9 @@ describe('AgentHookServer authority evidence', () => {
       'ssh-target'
     )
 
-    server.clearPaneKeyAliasesForPty('old-pty', { shouldClearStablePaneKey: () => false })
+    server.clearPaneKeyAliasesForPty('old-pty', 'released', {
+      shouldClearStablePaneKey: () => false
+    })
 
     expect(
       server.attestCompatibilityAuthority({

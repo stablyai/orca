@@ -1,3 +1,4 @@
+import { observeAgentPresence } from '@/lib/agent-presence-transitions'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -174,6 +175,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   session.agentCompletionCoordinator = createAgentCompletionCoordinator({
     paneKey: session.cacheKey,
     statusLane: 'pty',
+    getAgentPresence: () =>
+      useAppStore.getState().agentPresenceByPaneKey[session.cacheKey]?.presence,
+    checkAgentPresence: async (process) =>
+      (await window.api.agentStatus.checkAgentPresence?.(session.cacheKey, process)) ??
+      'unverifiable',
+    subscribeAgentPresence: (listener) => observeAgentPresence(session.cacheKey, listener),
     getPtyId: () => session.transport.getPtyId(),
     isRemotePtyId: (ptyId) =>
       Boolean(isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId)),

@@ -1,3 +1,4 @@
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
 import type { OpenFile } from '@/store/slices/editor'
 import type { PaletteDocument } from './palette-match/palette-document'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
@@ -72,6 +73,7 @@ export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState
   activeTabTypeByWorktree: Record<string, WorkspaceTabPaletteActiveTabType | undefined>
   generatedTitlesEnabled: boolean
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
 

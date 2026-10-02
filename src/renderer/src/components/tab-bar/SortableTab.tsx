@@ -103,6 +103,7 @@ export default function SortableTab({
   const activityStatus = useAppStore((s) =>
     resolveTerminalTabActivityStatus({
       tab,
+      agentPresenceByPaneKey: s.agentPresenceByPaneKey,
       agentStatusByPaneKey: s.agentStatusByPaneKey,
       agentStatusEpoch: s.agentStatusEpoch,
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,

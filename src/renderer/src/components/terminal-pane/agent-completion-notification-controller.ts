@@ -151,12 +151,17 @@ export function createAgentCompletionNotificationController({
       completionIdentity?: LastCompletionIdentity | null
       /** Announce only. The pane is still genuinely `working` (Claude background inventory), so the synthetic `done` must not run pane lifecycle. */
       notifyWithoutLifecycle?: boolean
+      /** Only a working turn begun since the last completion is news. */
+      requiresUnnotifiedTurn?: boolean
     } = {}
   ): boolean {
     if (source !== 'hook' && state.pendingHookDoneTimer !== null) {
       return false
     }
     if (state.requiresFreshWorking || state.lastCompletedTurn === state.currentTurn) {
+      return false
+    }
+    if (optionsOverride.requiresUnnotifiedTurn === true && !state.workingStatusObserved) {
       return false
     }
     if (!options.isLive() || !processState.hasAgentRunEvidence) {
