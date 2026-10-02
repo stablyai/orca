@@ -144,6 +144,10 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         timing
       })
       const recordedLineage = this.recordCreatedWorktreeLineage(result.worktree, lineageResolution)
+      // Why: the remote create invalidated before this edge was recorded; projections read it fresh.
+      if (recordedLineage.lineage) {
+        this.invalidateResolvedWorktreeCache()
+      }
       this.emitWorktreeLifecycle({
         kind: 'created',
         worktreeId: result.worktree.id,

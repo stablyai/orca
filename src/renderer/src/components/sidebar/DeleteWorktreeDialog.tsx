@@ -389,6 +389,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           <DeleteWorktreeLineageNotice
             descendants={lineageDelete.descendants}
             dirtyChangeCountsByWorktreeId={dirtyChangeCountsByWorktreeId}
+            parentRepoId={worktree?.repoId}
+            repoMap={repoMap}
           />
         )}
 

@@ -6,8 +6,10 @@ import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
 import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
 import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree-fallback'
+import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
 import {
   listStoredWorktreeRowsForRepo,
+  projectRepoWorktreeRowsLineage,
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
   type RepoWorktreeRowDeps
@@ -390,4 +392,109 @@ describe('folder-to-Git checkout identity', () => {
       expect(Object.keys(deps.metaById)).toEqual([oldId])
     }
   )
+})
+
+describe('cross-repo lineage (#8886)', () => {
+  const repoA = repo('repo-a', '/a', { executionHostId: 'local' })
+  const repoB = repo('repo-b', '/b', { executionHostId: 'local' })
+  const parentId = 'repo-a::/a/parent'
+  const childId = 'repo-b::/b/child'
+  const meta = (hostId: ExecutionHostId, instanceId: string): WorktreeMeta =>
+    mergeWorktreeMetaForWrite(undefined, { hostId, instanceId })
+
+  function createCrossRepoDeps(
+    repos: Repo[],
+    lineageById: Record<string, WorktreeLineage>
+  ): ReturnType<typeof createDeps> {
+    const deps = createDeps(repos)
+    Object.assign(deps.store, { getAllWorktreeLineage: () => lineageById })
+    deps.scanRepo.mockImplementation(async (owner) => ({
+      ok: true,
+      worktrees: [gitWorktree(owner.id === 'repo-a' ? '/a/parent' : '/b/child')]
+    }))
+    deps.metaById[parentId] = meta('local', 'parent-instance')
+    deps.metaById[childId] = meta('local', 'child-instance')
+    return deps
+  }
+
+  const crossRepoLineage = (): Record<string, WorktreeLineage> => ({
+    [childId]: {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+  })
+
+  async function fleetRows(deps: ReturnType<typeof createDeps>, repos: Repo[]) {
+    const perRepo = await Promise.all(
+      repos.map(async (owner) => ({
+        repo: owner,
+        rows: await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
+      }))
+    )
+    return projectRepoWorktreeRowsLineage(perRepo, deps.store.getAllWorktreeLineage())
+  }
+
+  it('projects a same-host edge across repos in the fleet scan, keeping repo order', async () => {
+    const deps = createCrossRepoDeps([repoA, repoB], crossRepoLineage())
+
+    const rows = await fleetRows(deps, [repoA, repoB])
+
+    expect(rows).toMatchObject([
+      { id: parentId, childWorktreeIds: [childId], parentWorktreeId: null },
+      { id: childId, parentWorktreeId: parentId, childWorktreeIds: [] }
+    ])
+  })
+
+  it('does not link repos on different execution hosts', async () => {
+    const remoteA = repo('repo-a', '/a', { connectionId: 'box', executionHostId: 'ssh:box' })
+    const deps = createCrossRepoDeps([remoteA, repoB], crossRepoLineage())
+    deps.metaById[parentId] = meta('ssh:box', 'parent-instance')
+
+    const rows = await fleetRows(deps, [remoteA, repoB])
+
+    expect(rows).toMatchObject([
+      { id: parentId, childWorktreeIds: [] },
+      { id: childId, parentWorktreeId: null }
+    ])
+  })
+
+  it.each([
+    ['cross-repo child', childId],
+    ['cross-repo parent', parentId]
+  ])(
+    'defers a %s to the fleet scan instead of reporting a one-repo projection',
+    async (_label, worktreeId) => {
+      const deps = createCrossRepoDeps([repoA, repoB], crossRepoLineage())
+
+      await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toBeNull()
+      const fleet = (await fleetRows(deps, [repoA, repoB])).find((row) => row.id === worktreeId)
+      expect(fleet?.parentWorktreeId ?? fleet?.childWorktreeIds[0]).toBeTruthy()
+    }
+  )
+
+  it('keeps the one-repo fast path for intra-repo lineage', async () => {
+    const siblingId = 'repo-a::/a/sibling'
+    const deps = createCrossRepoDeps([repoA, repoB], {
+      [siblingId]: {
+        ...crossRepoLineage()[childId],
+        worktreeId: siblingId,
+        worktreeInstanceId: 'sibling-instance'
+      }
+    })
+    deps.scanRepo.mockImplementation(async () => ({
+      ok: true,
+      worktrees: [gitWorktree('/a/parent'), gitWorktree('/a/sibling')]
+    }))
+    deps.metaById[siblingId] = meta('local', 'sibling-instance')
+
+    await expect(resolveScopedWorktreeIdRow(deps, parentId, 'local')).resolves.toMatchObject({
+      id: parentId,
+      childWorktreeIds: [siblingId]
+    })
+  })
 })

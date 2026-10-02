@@ -69,7 +69,6 @@ export type NewWorkspaceComposerCardProps = {
   parentWorktreeId?: string | null
   onParentWorktreeIdChange?: (value: string | null) => void
   selectedRepoExecutionHostId?: ExecutionHostId | null
-  selectedRepoProjectId?: string | null
   activeFolderWorkspaceId?: string | null
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void

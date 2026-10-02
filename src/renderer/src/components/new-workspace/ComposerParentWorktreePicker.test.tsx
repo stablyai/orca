@@ -305,7 +305,7 @@ describe('ComposerParentWorktreePicker', () => {
     expect(rows()).toHaveLength(0)
   })
 
-  it('excludes archived worktrees and worktrees from another repo', () => {
+  it('excludes archived worktrees and, with no known child host, other repos', () => {
     seed(
       [
         makeWorktree({ id: 'alpha', displayName: 'Alpha' }),
@@ -323,28 +323,54 @@ describe('ComposerParentWorktreePicker', () => {
     expect(candidateLabels().join(' ')).not.toContain('Other repo')
   })
 
-  it('excludes candidates on another execution host or project', () => {
-    seed([
-      makeWorktree({ id: 'same', displayName: 'Same host', hostId: 'local', projectId: 'proj1' }),
-      makeWorktree({
-        id: 'otherHost',
-        displayName: 'Other host',
-        hostId: 'ssh:box',
-        projectId: 'proj1'
-      }),
-      makeWorktree({
-        id: 'otherProject',
-        displayName: 'Other project',
-        hostId: 'local',
-        projectId: 'proj2'
-      })
-    ])
+  it('offers same-host worktrees from other repos and projects, labelled with their repo', () => {
+    seed(
+      [
+        makeWorktree({ id: 'same', displayName: 'Same repo', hostId: 'local', projectId: 'p1' }),
+        makeWorktree({
+          id: 'otherRepo',
+          displayName: 'Other repo',
+          repoId: 'repo2',
+          hostId: 'local',
+          projectId: 'p2'
+        }),
+        makeWorktree({ id: 'unrecorded', displayName: 'Unrecorded host', repoId: 'repo2' })
+      ],
+      [REPO_ID, 'repo2']
+    )
 
     render(
       <ComposerParentWorktreePicker
         repoId={REPO_ID}
         executionHostId="local"
-        projectId="proj1"
+        value={null}
+        onChange={vi.fn()}
+      />
+    )
+    fireEvent.click(trigger())
+
+    const labels = candidateLabels()
+    expect(labels.find((label) => label.includes('Other repo'))).toContain('repo2')
+    expect(labels.find((label) => label.includes('Unrecorded host'))).toContain('repo2')
+    expect(labels.find((label) => label.includes('Same repo'))).not.toContain('repo1')
+  })
+
+  it('excludes candidates on another execution host, including via their repo', () => {
+    seed(
+      [
+        makeWorktree({ id: 'same', displayName: 'Same host', hostId: 'local' }),
+        makeWorktree({ id: 'otherHost', displayName: 'Other host', hostId: 'ssh:box' }),
+        // No recorded hostId: the SSH repo that owns it decides, so it is not a wildcard.
+        makeWorktree({ id: 'sshRepo', displayName: 'SSH repo', repoId: 'ssh-repo' })
+      ],
+      [REPO_ID]
+    )
+    storeState.repos = [...storeState.repos, { ...makeRepo('ssh-repo'), connectionId: 'box' }]
+
+    render(
+      <ComposerParentWorktreePicker
+        repoId={REPO_ID}
+        executionHostId="local"
         value={null}
         onChange={vi.fn()}
       />
@@ -353,18 +379,17 @@ describe('ComposerParentWorktreePicker', () => {
 
     expect(candidateLabels().join(' ')).toContain('Same host')
     expect(candidateLabels().join(' ')).not.toContain('Other host')
-    expect(candidateLabels().join(' ')).not.toContain('Other project')
+    expect(candidateLabels().join(' ')).not.toContain('SSH repo')
   })
 
   // A worktree with no recorded hostId inherits its repo's host, which is the child's host too.
-  it('keeps candidates whose host or project is unrecorded', () => {
+  it('keeps same-repo candidates whose host is unrecorded', () => {
     seed([makeWorktree({ id: 'unscoped', displayName: 'Unscoped' })])
 
     render(
       <ComposerParentWorktreePicker
         repoId={REPO_ID}
         executionHostId="local"
-        projectId="proj1"
         value={null}
         onChange={vi.fn()}
       />
