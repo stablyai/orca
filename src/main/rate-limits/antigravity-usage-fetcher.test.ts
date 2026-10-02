@@ -165,6 +165,21 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.error).toContain('Sign in with `agy`')
   })
 
+  it('does not classify non-auth stderr as signed-out on non-zero exit', async () => {
+    // Why pinned: stderr containing unrelated words like "oauth" or "author" must not be misclassified
+    // as missing-credentials.
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stderr: 'Failed to contact https://oauth2.googleapis.com/token: connection refused'
+      })
+    }).fetch()
+
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('parse')
+    expect(result.error).toContain('did not report a quota (exit 1)')
+  })
+
   it('reports a timeout as its own failure kind', async () => {
     const result = await harness({ result: processResult({ timedOut: true }) }).fetch()
 
@@ -320,6 +335,17 @@ describe('the agy version gate', () => {
   it('runs the quota read at exactly the floor', async () => {
     const h = harness({
       versionResult: processResult({ stdout: 'agy version 1.1.11\n' }),
+      result: processResult({ stdout: USAGE_ENVELOPE })
+    })
+    const result = await h.fetch()
+
+    expect(result.status).toBe('ok')
+    expect(h.runCommand).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads the version from stderr if stdout is empty on exit 0', async () => {
+    const h = harness({
+      versionResult: processResult({ stdout: '', stderr: 'agy version 1.1.11\n' }),
       result: processResult({ stdout: USAGE_ENVELOPE })
     })
     const result = await h.fetch()
