@@ -1,5 +1,9 @@
-import { net, session } from 'electron'
-import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { EnvHttpProxyAgent, fetch as nodeFetch, type Dispatcher } from 'undici'
+import {
+  buildConfiguredProxyEnv,
+  getProxyUrlFromEnvironment,
+  type NetworkProxySettings
+} from '../../shared/network-proxy'
 
 // Why: the OAuth client id and token endpoint are the public Claude Code
 // values, verified against the installed `claude` binary (2.1.177) and the
@@ -113,6 +117,50 @@ export function applyRefreshedToken(
   return JSON.stringify(parsed)
 }
 
+export type ClaudeOauthRefreshOptions = {
+  networkProxySettings?: NetworkProxySettings | null
+  env?: Record<string, string | undefined>
+  now?: number
+  /** Caller cancellation; the request also carries its own timeout. */
+  signal?: AbortSignal
+}
+
+const NODE_PROXY_PROTOCOLS = new Set(['http:', 'https:'])
+
+type RefreshRoute =
+  | { kind: 'direct' }
+  | { kind: 'proxy'; dispatcher: Dispatcher }
+  /** A proxy is configured but undici cannot tunnel through it; never bypass it. */
+  | { kind: 'unsupported-proxy'; protocol: string }
+
+/**
+ * Proxy for the token request, resolved the way child processes get theirs:
+ * Orca's configured proxy wins over the shell's, and its bypass list replaces
+ * NO_PROXY.
+ */
+function resolveRefreshRoute(
+  settings: NetworkProxySettings | null | undefined,
+  env: Record<string, string | undefined>
+): RefreshRoute {
+  const merged = { ...env, ...buildConfiguredProxyEnv(settings) }
+  const proxy = getProxyUrlFromEnvironment(merged)
+  if (!proxy.ok || !proxy.value) {
+    return { kind: 'direct' }
+  }
+  const protocol = new URL(proxy.value).protocol
+  if (!NODE_PROXY_PROTOCOLS.has(protocol)) {
+    return { kind: 'unsupported-proxy', protocol }
+  }
+  return {
+    kind: 'proxy',
+    dispatcher: new EnvHttpProxyAgent({
+      httpProxy: proxy.value,
+      httpsProxy: proxy.value,
+      noProxy: merged.NO_PROXY ?? merged.no_proxy ?? ''
+    })
+  }
+}
+
 /**
  * Refresh the OAuth token for a stored credentials blob.
  *
@@ -123,23 +171,29 @@ export function applyRefreshedToken(
  */
 export async function refreshClaudeOauthCredentials(
   credentialsJson: string,
-  now: number = Date.now()
+  options: ClaudeOauthRefreshOptions = {}
 ): Promise<string | null> {
   const refreshToken = readRefreshToken(credentialsJson)
   if (!refreshToken) {
     return null
   }
 
-  await ensureElectronProxyFromEnvironment({
-    proxySession: session.defaultSession,
-    probeUrl: OAUTH_TOKEN_URL
-  }).catch(() => {})
-
+  // Why: the token endpoint answers 429 to Chromium's network stack (Electron
+  // net.fetch) while the same request from Node succeeds (orca#18716), so the
+  // refresh goes through Node's stack like the `claude` CLI's own refresh.
+  const route = resolveRefreshRoute(options.networkProxySettings, options.env ?? process.env)
+  if (route.kind === 'unsupported-proxy') {
+    // Why: connecting directly would leave the configured egress route; keeping the old token is the safer failure.
+    console.warn(
+      `[claude-oauth-refresh] ${route.protocol} proxies are not supported for token refresh; skipping`
+    )
+    return null
+  }
+  const dispatcher = route.kind === 'proxy' ? route.dispatcher : undefined
   try {
     // Why: the `claude` CLI posts grant_type=refresh_token as
-    // application/x-www-form-urlencoded with the public client id. net.fetch
-    // routes through Chromium's stack so the env proxy bridge above applies.
-    const res = await net.fetch(OAUTH_TOKEN_URL, {
+    // application/x-www-form-urlencoded with the public client id.
+    const res = await nodeFetch(OAUTH_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -147,7 +201,10 @@ export async function refreshClaudeOauthCredentials(
         refresh_token: refreshToken,
         client_id: OAUTH_CLIENT_ID
       }).toString(),
-      signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS)
+      signal: options.signal
+        ? AbortSignal.any([options.signal, AbortSignal.timeout(REFRESH_TIMEOUT_MS)])
+        : AbortSignal.timeout(REFRESH_TIMEOUT_MS),
+      ...(dispatcher ? { dispatcher } : {})
     })
     if (!res.ok) {
       // Why: surface the status (never the token) so a throttle (429) or a
@@ -156,15 +213,21 @@ export async function refreshClaudeOauthCredentials(
       // Callers keep the existing credentials on null — a transient 429 just
       // means the still-valid token is reused until the next attempt.
       console.warn(`[claude-oauth-refresh] token endpoint returned ${res.status}`)
+      // Why: an unread undici body can crash the process (orca#8695).
+      await res.body?.cancel().catch(() => {})
       return null
     }
     const data = (await res.json()) as TokenEndpointResponse
-    return applyRefreshedToken(credentialsJson, data, now)
+    return applyRefreshedToken(credentialsJson, data, options.now ?? Date.now())
   } catch (error) {
+    // Why: undici reports every transport failure as "fetch failed"; the cause carries the real error.
     console.warn(
       '[claude-oauth-refresh] token refresh request failed:',
-      error instanceof Error ? error.message : error
+      error instanceof Error ? error.message : error,
+      error instanceof Error && error.cause instanceof Error ? error.cause.message : ''
     )
     return null
+  } finally {
+    await dispatcher?.close().catch(() => {})
   }
 }
