@@ -12,6 +12,7 @@ import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
+  decodeMuseTranscriptLine,
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
@@ -63,6 +64,9 @@ export async function readNativeChatTranscript(
     }
     if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
+    }
+    if (transcriptAgent === 'muse') {
+      return { messages: await readTranscript(filePath, decodeMuseTranscriptLine) }
     }
     if (transcriptAgent === 'omp') {
       return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
