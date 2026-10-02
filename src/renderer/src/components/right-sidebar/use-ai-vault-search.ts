@@ -20,6 +20,7 @@ import type { AiVaultSearchScopeIdentity } from '../../../../shared/ai-vault-sea
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
+import { useSessionSearchStatus } from '../settings/use-session-search-status'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
 
 type SearchIdentity = {
@@ -153,10 +154,19 @@ export function useAiVaultPanelSearch(
     executionHostScope === ALL_EXECUTION_HOSTS_SCOPE ? ALL_EXECUTION_HOSTS_SCOPE : host
   const trimmed = query.trim()
   const hasQuery = trimmed.length > 0
-  const needsLocalConsent =
-    executionHostScope === 'local' && !isWebClientLocation() && !policy.enabled
+  const ownsPolicy = executionHostScope === 'local' && !isWebClientLocation()
+  const needsLocalConsent = ownsPolicy && !policy.enabled
+  // A host whose index this renderer's settings do not govern (SSH relay, paired
+  // server) reports its own switch; asked up front so no keystroke waits on a
+  // search round-trip only to learn it is off.
+  const hostStatus = useSessionSearchStatus({
+    executionHostId: host ?? LOCAL_EXECUTION_HOST_ID,
+    active: hasQuery && host !== null && !ownsPolicy
+  })
+  const hostSearchOff =
+    hasQuery && host !== null && !ownsPolicy && hostStatus.status?.enabled === false
   // Until indexing is on the box is still the legacy title filter, not index search.
-  const searching = hasQuery && !needsLocalConsent
+  const searching = hasQuery && !needsLocalConsent && !hostSearchOff
   // `within` is memoized by the caller; a fresh object per render would restart
   // the search on every render and never let one settle.
   const request = useMemo(
@@ -193,6 +203,7 @@ export function useAiVaultPanelSearch(
     searching,
     hasQuery,
     needsLocalConsent,
+    hostSearchOff,
     host,
     resetKey: JSON.stringify([scope, request])
   }

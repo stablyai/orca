@@ -91,6 +91,11 @@ export function AiVaultPanelSearch({
       'sessionSearch.panel.consent',
       'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.'
     )
+  } else if (search.hostSearchOff) {
+    message = translate(
+      'sessionSearch.panel.hostSearchOff',
+      'Full-text search is off on this computer, so only session titles are matched.'
+    )
   } else if (noAgents) {
     message = translate(
       'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',

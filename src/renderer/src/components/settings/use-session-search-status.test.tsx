@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault-search-client'
 import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   sessionSearchStatusDetails,
   sessionSearchStatusMessage
@@ -267,4 +267,18 @@ it('marks the host too old on a host-too-old rejection and stops polling', async
     await vi.advanceTimersByTimeAsync(30_000)
   })
   expect(mocks.status.mock.calls.length).toBe(calls)
+})
+
+it("drops one host's answer when pointed at another, even while inactive", async () => {
+  const initialProps: { host: ExecutionHostId; active: boolean } = { host: 'ssh:a', active: true }
+  const view = renderHook(
+    (props: { host: ExecutionHostId; active: boolean }) =>
+      useSessionSearchStatus({ executionHostId: props.host, active: props.active }),
+    { initialProps }
+  )
+  await act(async () => {})
+  expect(view.result.current.status).toEqual(current)
+  view.rerender({ host: 'ssh:b', active: false })
+  expect(view.result.current.status).toBeNull()
+  expect(mocks.status).toHaveBeenCalledTimes(1)
 })
