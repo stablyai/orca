@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { runProcess } from '../../shared/child-process/run-process'
 import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
@@ -195,10 +195,50 @@ async function writeBytesAtomically(path: string, data: Buffer): Promise<void> {
   const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`
   try {
     await writeFile(temporaryPath, data)
+    if (await pathExists(path)) {
+      await copyFileSettings(path, temporaryPath)
+    }
     await renameFileWithWindowsRetryAsync(temporaryPath, path)
   } finally {
     await unlink(temporaryPath).catch(() => undefined)
   }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return false
+    }
+    throw error
+  }
+}
+
+async function copyFileSettings(fromPath: string, toPath: string): Promise<void> {
+  if (process.platform !== 'win32') {
+    await chmod(toPath, (await stat(fromPath)).mode)
+    return
+  }
+  const command = [
+    `$source = Get-Item -LiteralPath ${powershellSingleQuote(fromPath)}`,
+    `$target = Get-Item -LiteralPath ${powershellSingleQuote(toPath)}`,
+    '$target.SetAccessControl($source.GetAccessControl())',
+    '$target.Attributes = $source.Attributes'
+  ].join('; ')
+  const result = await runProcess({
+    program: windowsPowerShellPath(),
+    args: ['-NoProfile', '-NonInteractive', '-Command', command],
+    timeoutMs: 20_000
+  })
+  if (!result.timedOut && result.code === 0) {
+    return
+  }
+  console.warn(
+    '[cli] kept the PowerShell profile text but could not copy its file settings:',
+    result.stderr.trim() || result.stdout.trim()
+  )
 }
 
 function powershellSingleQuote(value: string): string {
