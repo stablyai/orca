@@ -3,18 +3,11 @@ import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-
 
 export const SHELL_PATH_DELIMITER = '__ORCA_SHELL_PATH__'
 
-/**
- * Argv for the one-shot login-shell PATH probe.
- *
- * Nushell is started with `nu -l -c` and prints `$env.PATH`. `printf "$PATH"`
- * stays the literal text `$PATH` there, so hydration would report success and
- * drop the real login PATH. bash, zsh, and the Windows probes keep their commands.
- */
+/** Build the login PATH probe in the selected shell's native syntax. */
 export function shellPathProbe(shell: string): { args: string[]; pathDelimiter: string } {
   if (process.platform !== 'win32') {
     if (pathWin32.basename(shell).toLowerCase() === 'nu') {
-      // Why: `nu -ilc` runs, but `"$PATH"` stays the literal text `$PATH`, so hydration
-      // reports success and never merges the login PATH. `$env.PATH` is a list.
+      // Why: Nushell's PATH is a list; POSIX "$PATH" prints a literal instead.
       const command = [
         `print -n '${SHELL_PATH_DELIMITER}';`,
         'print -n ($env.PATH | str join (char esep));',

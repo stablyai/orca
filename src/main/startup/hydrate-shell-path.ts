@@ -179,10 +179,7 @@ export function runWithLaunchPath<T>(action: () => T): T {
   }
 }
 
-/**
- * Run the login-shell PATH probe and parse the delimited stdout.
- * A timeout, a spawn error, or output with no delimiter is a failed hydration.
- */
+/** Capture the login PATH without profile banners. */
 function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
   return new Promise((resolve) => {
     // Why: delimiters isolate PATH from profile banners and MOTDs.
