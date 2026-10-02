@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { TodoistConnectDialog } from '@/components/todoist-connect-dialog'
+import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
@@ -120,6 +122,59 @@ export function JiraSetupSteps(
         onOpenChange={setDialogOpen}
         onConnected={props.onConnected}
       />
+    </>
+  )
+}
+
+export function TodoistSetupSteps(props: ConnectStepProps): React.JSX.Element {
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const disconnectTodoist = useAppStore((s) => s.disconnectTodoist)
+  const viewerEmail = useAppStore((s) => s.todoistStatus.viewer?.email)
+
+  return (
+    <>
+      <ol className="divide-y divide-border/50">
+        <TaskSourceStepRow
+          index={1}
+          state={getConnectStepState(props)}
+          title={translate(
+            'auto.components.settings.TasksPane.connectTodoistTitle',
+            'Connect Todoist'
+          )}
+          description={
+            props.connected && viewerEmail
+              ? translate(
+                  'auto.components.settings.TasksPane.todoistConnectedAs',
+                  'Connected as {{email}}.',
+                  { email: viewerEmail }
+                )
+              : translate(
+                  'auto.components.settings.TasksPane.connectTodoistDescription',
+                  'Add your Todoist API token from Todoist integration settings.'
+                )
+          }
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant={props.connected ? 'outline' : 'default'}
+              onClick={props.connected ? () => void disconnectTodoist() : () => setDialogOpen(true)}
+            >
+              {props.connected
+                ? translate('auto.components.settings.TasksPane.disconnectTodoist', 'Disconnect')
+                : translate('auto.components.settings.TasksPane.addTodoist', 'Add Todoist token')}
+            </Button>
+          }
+        />
+        <TaskSourceShowInTasksStep
+          index={2}
+          providerLabel={translate('auto.components.settings.TasksPane.todoistLabel', 'Todoist')}
+          visible={props.visible}
+          canHide={props.canHide}
+          onToggleVisible={props.onToggleVisible}
+        />
+      </ol>
+      <TodoistConnectDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </>
   )
 }

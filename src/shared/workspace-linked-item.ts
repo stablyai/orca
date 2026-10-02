@@ -31,7 +31,8 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     raw.provider !== 'github' &&
     raw.provider !== 'gitlab' &&
     raw.provider !== 'linear' &&
-    raw.provider !== 'jira'
+    raw.provider !== 'jira' &&
+    raw.provider !== 'todoist'
   ) {
     return null
   }
@@ -64,4 +65,15 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
       ? { repoId: raw.repoId.trim() }
       : {})
   }
+}
+
+// Why: Jira and Todoist links ride only in linkedWorkItem/linkedTaskSourceContext, which a
+// runtime without worktree.linked-work-item-context.v1 strips silently.
+export function getContextOnlyLinkProviderLabel(
+  ...providers: (string | null | undefined)[]
+): 'Jira' | 'Todoist' | null {
+  if (providers.includes('jira')) {
+    return 'Jira'
+  }
+  return providers.includes('todoist') ? 'Todoist' : null
 }
