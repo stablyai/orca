@@ -36,9 +36,9 @@ export function mayOpenOffscreenPageSelect(input: OffscreenPageUserInput): boole
 export function toHostSelectAnchor(
   popup: OffscreenPageSelectPopup,
   contents: WebContents,
-  hostZoom: { factor: number } | null
+  hostZoomFactor: number
 ): OffscreenPageSelectAnchor {
-  const scale = contents.getZoomFactor() / (hostZoom?.factor ?? 1)
+  const scale = contents.getZoomFactor() / hostZoomFactor
   const { x, y, width, height } = popup.anchor
   return { x: x * scale, y: y * scale, width: width * scale, height: height * scale }
 }

@@ -24,7 +24,14 @@ export function createOffscreenPageSurface(args: {
   height: number
   webPreferences: WebPreferences
 }): OffscreenPageSurface {
-  const window = new BaseWindow({ show: false, width: args.width, height: args.height })
+  // Why frameless: in a titled window an offscreen view lays the page out 32px (the title bar)
+  // taller than its bounds, so the frame drawn into the pane came out squashed.
+  const window = new BaseWindow({
+    show: false,
+    frame: false,
+    width: args.width,
+    height: args.height
+  })
   // Why the widest display: the factor is fixed at creation, and downscaling on a 1x display
   // stays sharp while upscaling on a Retina display would blur.
   const scaleFactor = Math.max(...screen.getAllDisplays().map((d) => d.scaleFactor), 1)
@@ -51,16 +58,18 @@ export function createOffscreenPageSurface(args: {
     contents,
     scaleFactor,
     size() {
-      const [width, height] = window.isDestroyed() ? [0, 0] : window.getContentSize()
+      if (window.isDestroyed()) {
+        return { width: 0, height: 0 }
+      }
+      const { width, height } = view.getBounds()
       return { width, height }
     },
     setSize(width, height) {
       if (window.isDestroyed()) {
         return
       }
-      // Why the window too: an offscreen view lays out at its window's content size.
-      const [currentWidth, currentHeight] = window.getContentSize()
-      if (currentWidth !== width || currentHeight !== height) {
+      const current = view.getBounds()
+      if (current.width !== width || current.height !== height) {
         window.setContentSize(width, height)
         view.setBounds({ x: 0, y: 0, width, height })
       }

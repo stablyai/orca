@@ -80,8 +80,8 @@ describe('offscreen page select popup', () => {
   it('converts the anchor from page CSS px to host CSS px', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every WebContents member the module calls.
     const contents = fakeContents() as never
-    expect(toHostSelectAnchor(openSelect, contents, { factor: 1.2 })).toEqual(openSelect.anchor)
-    expect(toHostSelectAnchor(openSelect, contents, null).width).toBeCloseTo(96)
+    expect(toHostSelectAnchor(openSelect, contents, 1.2)).toEqual(openSelect.anchor)
+    expect(toHostSelectAnchor(openSelect, contents, 1).width).toBeCloseTo(96)
   })
 
   it('builds a native menu with groups as headings and the chosen option checked', () => {
