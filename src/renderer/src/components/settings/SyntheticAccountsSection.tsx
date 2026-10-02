@@ -102,7 +102,7 @@ export function SyntheticAccountsSection({
       </SearchableSetting>
       {quota && (
         <div className="space-y-2">
-          <Label>{translate('settings.synthetic.fiveHours', 'Five-hour request usage')}</Label>
+          <Label>{translate('settings.synthetic.requestUsage', 'Request usage')}</Label>
           <p className="text-xs tabular-nums">
             {translate('settings.synthetic.requests', '{{requests}} / {{limit}} requests used', {
               requests: quota.requests,

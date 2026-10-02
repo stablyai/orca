@@ -16,7 +16,7 @@ const CREDIT_REFILL_INTERVAL_MS = 202 * 60_000
 const quotaSchema = z.object({
   rollingFiveHourLimit: z
     .object({
-      nextTickAt: z.string().datetime({ offset: true }),
+      nextTickAt: z.string().datetime({ offset: true }).nullish(),
       remaining: z.number().finite().nonnegative(),
       max: z.number().finite().nonnegative(),
       tickPercent: z.unknown().optional()
@@ -92,7 +92,8 @@ export async function fetchSyntheticRateLimits(
     const limit = rolling ? rolling.max : subscription.limit
     const resetsAt = !rolling && requests > 0 ? Date.parse(subscription.renewsAt) : null
     const usedPercent = limit > 0 ? Math.min(100, (requests / limit) * 100) : requests > 0 ? 100 : 0
-    const requestRefillAt = rolling && requests > 0 ? Date.parse(rolling.nextTickAt) : null
+    const requestRefillAt =
+      rolling?.nextTickAt && requests > 0 ? Date.parse(rolling.nextTickAt) : null
     const weeklyRefillAt =
       weekly && weekly.percentRemaining < 100 && weekly.nextRegenAt
         ? Date.parse(weekly.nextRegenAt)

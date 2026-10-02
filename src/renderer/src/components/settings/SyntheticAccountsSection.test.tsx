@@ -66,6 +66,8 @@ it('shows counts and renewal, including an error beside stale data', () => {
     />
   )
   expect(screen.getByText('27 / 135 requests used')).toBeTruthy()
+  expect(screen.getByText('Request usage')).toBeTruthy()
+  expect(screen.queryByText('Five-hour request usage')).toBeNull()
   expect(screen.getByText(/^Renews /)).toBeTruthy()
   expect(screen.getByRole('alert').textContent).toContain('failed')
 })

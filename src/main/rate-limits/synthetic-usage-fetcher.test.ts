@@ -15,6 +15,39 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Synthetic quotas', () => {
+  it.each([
+    { remaining: 750, nextTickAt: undefined },
+    { remaining: 750, nextTickAt: null },
+    { remaining: 600, nextTickAt: undefined },
+    { remaining: 600, nextTickAt: null }
+  ])('retains request and weekly usage without a refill timestamp: %j', async (rolling) => {
+    netFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          subscription,
+          rollingFiveHourLimit: { max: 750, tickPercent: 0.05, ...rolling },
+          weeklyTokenLimit: { percentRemaining: 60, nextRegenAt: '2026-10-01T17:00:00Z' }
+        })
+      )
+    )
+    const result = await fetchSyntheticRateLimits('placeholder')
+    expect(result.status).toBe('ok')
+    expect(result.requestQuota).toEqual({
+      requests: 750 - rolling.remaining,
+      limit: 750,
+      renewsAt: null
+    })
+    expect(result.session).toMatchObject({
+      usedPercent: ((750 - rolling.remaining) / 750) * 100,
+      refillsAt: null,
+      rechargesAt: null
+    })
+    expect(result.weekly).toMatchObject({
+      usedPercent: 40,
+      refillsAt: Date.parse('2026-10-01T17:00:00Z')
+    })
+  })
+
   it('prefers rolling usage and reports weekly refills, not full resets', async () => {
     netFetch.mockResolvedValue(
       new Response(
