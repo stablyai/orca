@@ -153,11 +153,43 @@ describe('deep-link resolution', () => {
     expect(map.get('local-1')).toBe('local-1')
   })
 
-  it('maps a repoId to its owning project + host for selection', () => {
+  it('maps a repoId to its owning project + host + setup for selection', () => {
     const map = buildRepoIdToHostSelection(projects)
     expect(map.get('remote-9')).toEqual({
       projectId: projects[0].projectId,
-      hostId: 'runtime:home-mac'
+      hostId: 'runtime:home-mac',
+      setupId: 'remote-9'
+    })
+  })
+
+  it('splits same-host clones of one project into a settings entry per checkout (#18493)', () => {
+    // Two local clones of the same remote: one merged project, two distinct `local` checkouts.
+    const cloneRepos: Repo[] = [
+      makeRepo({ id: 'ios', gitRemoteIdentity: gitRemote, path: '/repos/ios' }),
+      makeRepo({ id: 'ios2', gitRemoteIdentity: gitRemote, path: '/repos/ios2' })
+    ]
+    const cloneProjects = buildSettingsProjectList(cloneRepos)
+    // One settings entry per checkout, mirroring the sidebar's per-checkout rows.
+    expect(cloneProjects).toHaveLength(2)
+    const byRepo = new Map(cloneProjects.map((entry) => [entry.representativeRepoId, entry]))
+    expect([...byRepo.keys()].sort()).toEqual(['ios', 'ios2'])
+    // Each entry renders/edits its own checkout even with no explicit selection.
+    expect(getSettingsProjectHostRepo(byRepo.get('ios')!, cloneRepos, undefined)?.path).toBe(
+      '/repos/ios'
+    )
+    expect(getSettingsProjectHostRepo(byRepo.get('ios2')!, cloneRepos, undefined)?.path).toBe(
+      '/repos/ios2'
+    )
+    // Deep-link maps resolve each clone to its own section, not a shared representative.
+    const rep = buildRepoIdToRepresentative(cloneProjects)
+    expect(rep.get('ios')).toBe('ios')
+    expect(rep.get('ios2')).toBe('ios2')
+    // Each checkout still carries its own setupId for precise deep-link selection.
+    const hostSelection = buildRepoIdToHostSelection(cloneProjects)
+    expect(hostSelection.get('ios2')).toEqual({
+      projectId: byRepo.get('ios2')!.projectId,
+      hostId: 'local',
+      setupId: 'ios2'
     })
   })
 
@@ -234,7 +266,7 @@ describe('deep-link resolution', () => {
     ).toBe('/remote/repo')
   })
 
-  it('selects a same-transport setup by setup id', () => {
+  it('splits distinct checkouts sharing one runtime host into an entry per checkout', () => {
     const directRepo = makeRepo({
       id: 'direct-repo',
       gitRemoteIdentity: gitRemote,
@@ -248,16 +280,23 @@ describe('deep-link resolution', () => {
       path: '/jump/repo'
     })
     const sameHubProjects = buildSettingsProjectList([directRepo, jumpRepo])
-    const jumpSetup = sameHubProjects[0].setups.find((setup) => setup.repoId === 'jump-repo')
+    expect(sameHubProjects).toHaveLength(2)
+    const byRepo = new Map(sameHubProjects.map((entry) => [entry.representativeRepoId, entry]))
 
     expect(
       getSettingsProjectHostRepo(
-        sameHubProjects[0],
+        byRepo.get('jump-repo')!,
         [directRepo, jumpRepo],
-        'runtime:home-mac',
-        jumpSetup?.id
+        'runtime:home-mac'
       )?.path
     ).toBe('/jump/repo')
+    expect(
+      getSettingsProjectHostRepo(
+        byRepo.get('direct-repo')!,
+        [directRepo, jumpRepo],
+        'runtime:home-mac'
+      )?.path
+    ).toBe('/direct/repo')
   })
 })
 
