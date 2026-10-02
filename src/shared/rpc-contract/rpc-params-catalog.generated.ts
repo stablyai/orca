@@ -1060,6 +1060,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.add': RepoPath,
   'repo.baseRefDefault': RepoSelector,
   'repo.clone': RepoClone,
+  'repo.convertToGit': RepoPath,
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,
   'repo.hooks': RepoSelector,

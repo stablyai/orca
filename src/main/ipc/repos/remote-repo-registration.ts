@@ -3,7 +3,12 @@ import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { getRepoSshConnectionId, toSshExecutionHostId } from '../../../shared/execution-host'
+import { isFolderRepo } from '../../../shared/repo-kind'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  toSshExecutionHostId
+} from '../../../shared/execution-host'
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { getActiveMultiplexer } from '../../ssh/ssh-target-registry'
@@ -37,7 +42,7 @@ export async function addRemoteRepoFromPath(
         normalizeRuntimePathForComparison(repo.path) ===
           normalizeRuntimePathForComparison(resolvedPath)
     )
-  if (existing) {
+  if (existing && (args.kind === 'folder' || !isFolderRepo(existing))) {
     return { repo: existing, alreadyExisted: true }
   }
 
@@ -69,6 +74,32 @@ export async function addRemoteRepoFromPath(
           normalizeRuntimePathForComparison(resolvedPath)
     )
   if (existingAfterRootResolve) {
+    if (repoKind === 'git' && isFolderRepo(existingAfterRootResolve)) {
+      const detected = await detectRepoIconAndUpstream({
+        repoPath: resolvedPath,
+        kind: 'git',
+        executionHostId: toSshExecutionHostId(args.connectionId)
+      })
+      const updated = store.updateRepo(
+        existingAfterRootResolve.id,
+        {
+          kind: 'git',
+          ...detected,
+          externalWorktreeVisibility: 'hide',
+          projectHostSetupMethod:
+            args.setupMethod ??
+            existingAfterRootResolve.projectHostSetupMethod ??
+            'imported-existing-folder'
+        },
+        getRepoExecutionHostId(existingAfterRootResolve)
+      )
+      if (updated) {
+        getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
+          rootPath: resolvedPath
+        })
+        return { repo: updated, alreadyExisted: true }
+      }
+    }
     return { repo: existingAfterRootResolve, alreadyExisted: true }
   }
 

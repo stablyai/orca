@@ -121,6 +121,11 @@ export const REPO_METHODS = [
       )
   }),
   defineMethod({
+    name: 'repo.convertToGit',
+    params: RepoPath,
+    handler: async (params, { runtime }) => runtime.convertRepoToGit(params.path)
+  }),
+  defineMethod({
     name: 'repo.gitAvailable',
     params: null,
     handler: async (_params, { runtime }) => ({ available: await runtime.isGitAvailable() })
