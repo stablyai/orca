@@ -20,7 +20,7 @@ export type FocusExistingMainWindowOptions = {
   warn?: (message: string, error?: unknown) => void
 }
 
-function safelyFocusApp(app: Pick<App, 'focus'>): void {
+export function safelyFocusApp(app: Pick<App, 'focus'>): void {
   // Why: stealing the foreground is the whole point of this path for a real
   // second-instance launch, and exactly what an automated run must never do.
   if (isBackgroundLaunch()) {
