@@ -33,7 +33,7 @@ export function renderWorktreeCardIndicators(
   )
   return (
     <div className="flex shrink-0 items-center gap-1">
-      {hasPorts && <WorktreeCardPortsTrigger ports={card.workspacePorts} />}
+      {hasPorts && <WorktreeCardPortsTrigger ports={card.workspacePorts} worktree={worktree} />}
       {hasDetails && (
         <WorktreeCardMetaBadges
           linkedItemCount={allReferenceItems.length}
@@ -84,7 +84,9 @@ export function WorktreeCardMetaDetailsHover({
       automationProvenance={card.metaAutomationProvenance}
       cliProvenance={card.metaCliProvenance}
       bot={card.metaBot}
-      detailsAfter={card.hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+      detailsAfter={
+        card.hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} worktree={worktree} /> : null
+      }
       hoverControl={card.detailsHoverControl}
       onEditIssue={affiliateListMode ? undefined : card.handleEditIssue}
       onEditComment={affiliateListMode ? undefined : card.handleEditComment}
@@ -144,7 +146,7 @@ export function WorktreeCardIdentityHover({
       workspaceTitle={workspaceTitle}
       workspaceTitleRenameDisabled={card.isDeleting || affiliateListMode}
       detailsAfter={
-        card.compactLine || workspacePorts.length > 0 ? (
+        card.compactLine || workspacePorts.length > 0 || worktree.workspaceUrl ? (
           <>
             {card.compactLine ? (
               <WorktreeCardLineActivity
@@ -154,7 +156,9 @@ export function WorktreeCardIdentityHover({
                 workspaceMenuEnabled={!affiliateListMode}
               />
             ) : null}
-            {workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+            {workspacePorts.length > 0 || worktree.workspaceUrl ? (
+              <WorktreeCardPortsDetails ports={workspacePorts} worktree={worktree} />
+            ) : null}
           </>
         ) : null
       }
