@@ -4,17 +4,13 @@ type ClipboardAnchor = {
   href: string
 }
 
-const WINDOWS_ABSOLUTE_PATH_PATTERN =
-  /(?:[A-Za-z]:[\\/][^\s<>"|?*\r\n]+|\\\\[^\s\\/:*?"<>|\r\n]+\\[^\s\\/:*?"<>|\r\n]+(?:\\[^\s<>"|?*\r\n]+)*)/g
+const WINDOWS_ABSOLUTE_PATH_PREFIX =
+  /(?:[A-Za-z]:[\\/](?:[^<>:"|?*\\/\r\n]+[\\/])*|\\\\[^\\/:*?"<>|\r\n]+\\(?:[^<>:"|?*\\/\r\n]+[\\/])*)/
+    .source
+const WINDOWS_PATH_TRAILING_BOUNDARY = /(?=$|[\s<>:"|?*\r\n])/.source
 
 function readClipboardText(event: ClipboardEvent, type: string): string {
   return event.clipboardData?.getData(type) ?? ''
-}
-
-function getWindowsPathBasename(filePath: string): string {
-  const normalized = filePath.replaceAll('/', '\\')
-  const separatorIndex = normalized.lastIndexOf('\\')
-  return separatorIndex !== -1 ? normalized.slice(separatorIndex + 1) : normalized
 }
 
 function extractClipboardAnchors(html: string): ClipboardAnchor[] {
@@ -28,17 +24,29 @@ function extractClipboardAnchors(html: string): ClipboardAnchor[] {
   }))
 }
 
-function hrefPointsAtPathBasename(href: string, basename: string): boolean {
-  if (!href || !basename) {
+function getHttpHostname(href: string): string | null {
+  try {
+    const url = new URL(href)
+    return url.protocol.startsWith('http') ? url.hostname.toLowerCase() : null
+  } catch {
+    return null
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^$(){}|[\]\\]/g, '\\$&')
+}
+
+function containsWindowsPathWithBasename(plainText: string, basename: string): boolean {
+  if (!basename) {
     return false
   }
 
-  try {
-    const url = new URL(href)
-    return url.protocol.startsWith('http') && url.hostname.toLowerCase() === basename.toLowerCase()
-  } catch {
-    return false
-  }
+  const pattern = new RegExp(
+    WINDOWS_ABSOLUTE_PATH_PREFIX + escapeRegExp(basename) + WINDOWS_PATH_TRAILING_BOUNDARY,
+    'i'
+  )
+  return pattern.test(plainText)
 }
 
 export function shouldPasteTerminalWindowsPathAsPlainText({
@@ -48,19 +56,14 @@ export function shouldPasteTerminalWindowsPathAsPlainText({
   plainText: string
   htmlText: string
 }): boolean {
-  const paths = Array.from(plainText.matchAll(WINDOWS_ABSOLUTE_PATH_PATTERN), (match) => match[0])
-  if (paths.length === 0) {
-    return false
-  }
-
   const anchors = extractClipboardAnchors(htmlText)
   if (anchors.length === 0) {
     return false
   }
 
-  return paths.some((filePath) => {
-    const basename = getWindowsPathBasename(filePath)
-    return anchors.some((anchor) => hrefPointsAtPathBasename(anchor.href, basename))
+  return anchors.some((anchor) => {
+    const basename = getHttpHostname(anchor.href)
+    return basename !== null && containsWindowsPathWithBasename(plainText, basename)
   })
 }
 
