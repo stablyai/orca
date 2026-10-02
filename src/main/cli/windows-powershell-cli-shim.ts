@@ -127,12 +127,13 @@ export async function installWindowsPowerShellCliShim(input: {
   if (unsafePath) {
     throw new Error('Refusing to write a PowerShell shim for a path that contains a newline')
   }
-  await mkdir(dirname(input.shimPath), { recursive: true })
   // Why BOM: Windows PowerShell 5.1 reads a no-BOM .ps1 as the ANSI code page.
-  await writeBytesAtomically(
-    input.shimPath,
-    encodeProfile(renderOrcaPowerShellCliShim(input.launcherPath), 'utf8-bom')
-  )
+  // Why skip a matching file: rewriting it copies ACLs through PowerShell on every launch.
+  const shimBytes = encodeProfile(renderOrcaPowerShellCliShim(input.launcherPath), 'utf8-bom')
+  if (!(await sameBytes(input.shimPath, shimBytes))) {
+    await mkdir(dirname(input.shimPath), { recursive: true })
+    await writeBytesAtomically(input.shimPath, shimBytes)
+  }
   // Why BOM: Windows PowerShell 5.1 reads a no-BOM profile as the ANSI code page,
   // so a non-ASCII shim path in that file never loads. UTF-16 already has a BOM.
   const profileEncoding: ProfileEncoding = existing?.encoding === 'utf16le' ? 'utf16le' : 'utf8-bom'
@@ -201,6 +202,17 @@ async function writeBytesAtomically(path: string, data: Buffer): Promise<void> {
     await renameFileWithWindowsRetryAsync(temporaryPath, path)
   } finally {
     await unlink(temporaryPath).catch(() => undefined)
+  }
+}
+
+async function sameBytes(path: string, data: Buffer): Promise<boolean> {
+  try {
+    return (await readFile(path)).equals(data)
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return false
+    }
+    throw error
   }
 }
 

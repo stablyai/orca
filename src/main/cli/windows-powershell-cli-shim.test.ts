@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -83,6 +83,21 @@ describe('windows powershell cli shim', () => {
     })
     expect(status).toBe('skipped-undecodable-profile')
     expect(await readFile(profilePath)).toEqual(Buffer.from([0xc0, 0x80]))
+  })
+
+  it('leaves a current shim file untouched on refresh', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ps-unchanged-'))
+    const shimPath = join(root, 'shim.ps1')
+    const input = {
+      launcherPath: 'C:\\Orca\\orca.exe',
+      documentsPath: join(root, 'docs'),
+      shimPath
+    }
+    await installWindowsPowerShellCliShim(input)
+    const stamped = new Date('2020-01-01T00:00:00Z')
+    await utimes(shimPath, stamped, stamped)
+    await installWindowsPowerShellCliShim(input)
+    expect((await stat(shimPath)).mtimeMs).toBe(stamped.getTime())
   })
 
   it('adds a UTF-8 BOM when a no-BOM profile gains a non-ASCII shim path', async () => {
