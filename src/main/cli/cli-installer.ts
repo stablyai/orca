@@ -13,6 +13,17 @@ import {
 } from './appimage-extracted-root'
 import { isAppImageStableLauncherReady } from './appimage-stable-launcher'
 import { CliPathRegistration } from './cli-path-registration'
+
+let windowsPowerShellProfileQueue: Promise<void> = Promise.resolve()
+
+function enqueueWindowsPowerShellProfileWork(operation: () => Promise<void>): Promise<void> {
+  const run = windowsPowerShellProfileQueue.then(operation, operation)
+  windowsPowerShellProfileQueue = run.then(
+    () => undefined,
+    () => undefined
+  )
+  return run
+}
 import {
   defaultWindowsPowerShellShimPath,
   installWindowsPowerShellCliShim,
@@ -221,6 +232,12 @@ export class CliInstaller extends CliPathRegistration {
     if (!this.syncWindowsPowerShellProfile || this.platform !== 'win32') {
       return
     }
+    await enqueueWindowsPowerShellProfileWork(() => this.syncWindowsPowerShellCliShimQueued(options))
+  }
+
+  private async syncWindowsPowerShellCliShimQueued(
+    options: { requireInstalled?: boolean }
+  ): Promise<void> {
     try {
       // Why: the bundled exe survives CLI removal, so startup must not put the
       // function back into a profile the user already cleared (#24428).
@@ -256,6 +273,10 @@ export class CliInstaller extends CliPathRegistration {
     if (!this.syncWindowsPowerShellProfile || this.platform !== 'win32') {
       return
     }
+    await enqueueWindowsPowerShellProfileWork(() => this.removeWindowsPowerShellCliProfileQueued())
+  }
+
+  private async removeWindowsPowerShellCliProfileQueued(): Promise<void> {
     try {
       const documentsPath = this.windowsDocumentsPath ?? (await resolveWindowsMyDocumentsPath())
       const shimPath =

@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { runProcess } from '../../shared/child-process/run-process'
 import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
+import { renameFileWithWindowsRetryAsync } from '../codex-accounts/fs-utils'
 import type { CliInstallerOptions } from './cli-installer-contracts'
 
 export const ORCA_POWERSHELL_SHIM_BEGIN = '# >>> orca cli utf-8 shim >>>'
@@ -127,7 +129,10 @@ export async function installWindowsPowerShellCliShim(input: {
   }
   await mkdir(dirname(input.shimPath), { recursive: true })
   // Why BOM: Windows PowerShell 5.1 reads a no-BOM .ps1 as the ANSI code page.
-  await writeFile(input.shimPath, encodeProfile(renderOrcaPowerShellCliShim(input.launcherPath), 'utf8-bom'))
+  await writeBytesAtomically(
+    input.shimPath,
+    encodeProfile(renderOrcaPowerShellCliShim(input.launcherPath), 'utf8-bom')
+  )
   // Why BOM: Windows PowerShell 5.1 reads a no-BOM profile as the ANSI code page,
   // so a non-ASCII shim path in that file never loads. UTF-16 already has a BOM.
   const profileEncoding: ProfileEncoding = existing?.encoding === 'utf16le' ? 'utf16le' : 'utf8-bom'
@@ -135,7 +140,7 @@ export async function installWindowsPowerShellCliShim(input: {
     return 'installed'
   }
   await mkdir(dirname(profilePath), { recursive: true })
-  await writeFile(profilePath, encodeProfile(next, profileEncoding))
+  await writeBytesAtomically(profilePath, encodeProfile(next, profileEncoding))
   return 'installed'
 }
 
@@ -157,7 +162,10 @@ export async function removeWindowsPowerShellCliShim(input: {
   if (next === existing.text) {
     return
   }
-  await writeFile(profilePath, encodeProfile(next.endsWith('\n') ? next : `${next}\n`, existing.encoding))
+  await writeBytesAtomically(
+    profilePath,
+    encodeProfile(next.endsWith('\n') ? next : `${next}\n`, existing.encoding)
+  )
 }
 
 /**
@@ -180,6 +188,17 @@ export async function resolveWindowsMyDocumentsPath(): Promise<string> {
     throw new Error('Windows MyDocuments folder is empty')
   }
   return path
+}
+
+// Why not writeFile: it truncates the target before the new bytes land.
+async function writeBytesAtomically(path: string, data: Buffer): Promise<void> {
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    await writeFile(temporaryPath, data)
+    await renameFileWithWindowsRetryAsync(temporaryPath, path)
+  } finally {
+    await unlink(temporaryPath).catch(() => undefined)
+  }
 }
 
 function powershellSingleQuote(value: string): string {

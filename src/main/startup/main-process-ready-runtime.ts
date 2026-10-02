@@ -143,17 +143,19 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   }
   // Why not inside install(): a Windows PATH entry already registered is not
   // rewritten on launch, so the PowerShell ASCII pipe would stay broken (#24428).
+  // Why deferred: resolving the launcher calls existsSync before its first await,
+  // and that stat competes with the first window paint (#24428).
   if (process.platform === 'win32') {
-    void Promise.resolve()
-      .then(() =>
-        new CliInstaller({
-          syncWindowsPowerShellProfile: true,
-          windowsDocumentsPath: app.getPath('documents')
-        }).syncWindowsPowerShellCliShim({ requireInstalled: true })
-      )
-      .catch((error: unknown) => {
-        console.warn('[cli] failed to refresh the Windows PowerShell UTF-8 shim:', error)
+    runAfterFirstWindowShown(() => {
+      void new CliInstaller({
+        syncWindowsPowerShellProfile: true,
+        windowsDocumentsPath: app.getPath('documents')
       })
+        .syncWindowsPowerShellCliShim({ requireInstalled: true })
+        .catch((error: unknown) => {
+          console.warn('[cli] failed to refresh the Windows PowerShell UTF-8 shim:', error)
+        })
+    }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   }
   // Why: process-gone metrics only see survivors, and the gone-time host memory
   // read lands after the corpse released its pages; both need a live pre-gone
