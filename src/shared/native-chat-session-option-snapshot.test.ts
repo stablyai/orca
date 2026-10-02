@@ -10,6 +10,7 @@ import {
 } from './agent-session-option-catalog-claude-codex'
 import { CURSOR_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-gemini-cursor'
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
+import { MUSE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-muse'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
   createNativeChatSessionOptionRecord,
@@ -187,11 +188,25 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         CLAUDE_SESSION_OPTION_CATALOG.models,
         record
       )
+      // Why: an unlisted id still gets the catalog's unknown-model options, so
+      // a reported-but-unseeded model renders its pills instead of none.
       expect(reconciled.at(-1)).toEqual({
         id: 'experimental-model',
         label: 'experimental-model',
-        options: []
+        options: CLAUDE_SESSION_OPTION_CATALOG.unknownModelOptions ?? []
       })
+    })
+
+    it('gives an unlisted tracked model the catalog unknown-model options', () => {
+      const record = createNativeChatSessionOptionRecord('muse')
+      record.model = { value: 'muse-spark-1.3-contributor', source: 'reported' }
+      const reconciled = withTrackedNativeChatModel(
+        MUSE_SESSION_OPTION_CATALOG,
+        MUSE_SESSION_OPTION_CATALOG.models,
+        record
+      )
+      expect(reconciled).toHaveLength(1)
+      expect(reconciled[0].options.map((option) => option.id)).toEqual(['effort'])
     })
 
     it('leaves the list alone when the tracked model is already listed', () => {
