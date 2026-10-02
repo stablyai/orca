@@ -274,6 +274,9 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
     worktreeId: WORKTREE_ID,
     title: 'PR 4626 unified correction r3'
   })
+  // The brief names the worker's handle and CLI command, so both are settled before the spawn.
+  vi.spyOn(runtime, 'createPreAllocatedTerminalHandle').mockReturnValue(TERMINAL_HANDLE)
+  vi.spyOn(runtime, 'predictOrchestrationCliCommandForSpawn').mockResolvedValue('orca')
   vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
     handle: TERMINAL_HANDLE,
     condition: 'tui-idle',

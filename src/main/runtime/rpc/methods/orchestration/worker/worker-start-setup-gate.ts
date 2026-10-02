@@ -1,11 +1,14 @@
 /**
- * The `wait-for-setup` gate for a structured worker on a worktree this start created.
+ * The `wait-for-setup` gate for a worker on a worktree this start created, when no readiness wait
+ * reads its outcome: a structured worker, or a PTY worker whose brief rode its launch line.
  *
- * A PTY worker gets the gate for free: agent-first creation sequences the agent's startup command
- * behind the setup runner, so `tui-idle` cannot arrive until setup exits, and the worker start
- * reads the gate's outcome off that wait. A structured session has no startup command to sequence,
- * so without this the worker would take its dispatch preamble while `install` was still running,
- * and the repo's wait-for-setup policy would record no evidence at all.
+ * A PTY worker whose brief is pasted gets the gate for free: agent-first creation sequences the
+ * agent's startup command behind the setup runner, so `tui-idle` cannot arrive until setup exits,
+ * and the worker start reads the gate's outcome off that wait. A brief that rode the line is
+ * sequenced the same way (the runner skips the agent when setup fails) but waits on no readiness,
+ * and a structured session has no startup command to sequence at all; without this, either would
+ * report a start while `install` was still running, and the repo's wait-for-setup policy would
+ * record no evidence at all.
  *
  * Bounded by the start's own timeout, and deliberately forgiving: a wait that cannot be taken —
  * an in-process hook with no setup terminal, or a setup pty already gone — yields no verdict
@@ -20,19 +23,19 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
 
-export type StructuredWorkerSetupGate = {
+export type WorkerSetupGate = {
   satisfied: boolean
   status: string
   /** A setup gate has no agent prompt to block on; declared so the wait union stays property-typed. */
   blockedReason?: undefined
 }
 
-export async function awaitStructuredWorkerSetupGate(args: {
+export async function awaitWorkerSetupGate(args: {
   runtime: Pick<OrcaRuntimeService, 'waitForSetupTerminalCompletion'>
   setup: WorkerSetupReceipt
   effects: WorkerEffect[]
   timeoutMs: number
-}): Promise<StructuredWorkerSetupGate | null> {
+}): Promise<WorkerSetupGate | null> {
   if (args.setup.startupPolicy !== 'wait-for-setup' || args.setup.state !== 'running') {
     return null
   }
@@ -47,7 +50,7 @@ export async function awaitStructuredWorkerSetupGate(args: {
         satisfied: completion.exitCode === 0,
         status: 'exited'
       })),
-      new Promise<StructuredWorkerSetupGate>((resolve) => {
+      new Promise<WorkerSetupGate>((resolve) => {
         timer = setTimeout(() => resolve({ satisfied: false, status: 'timeout' }), args.timeoutMs)
       })
     ])

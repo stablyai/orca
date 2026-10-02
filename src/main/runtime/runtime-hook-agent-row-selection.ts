@@ -74,6 +74,7 @@ export function selectFreshExplicitAgentStatus(args: {
   status: NonNullable<RuntimeTerminalAgentStatus['status']>
   updatedAt: number
   stateStartedAt: number
+  explicitPromptStartedAt: number | null
 } | null {
   const row = selectFreshExplicitAgentStatusRow({
     handles: [args.handle],
@@ -84,7 +85,8 @@ export function selectFreshExplicitAgentStatus(args: {
     ? {
         status: mapExplicitAgentStateToRuntimeTerminalStatus(row.state),
         updatedAt: row.receivedAt,
-        stateStartedAt: typeof row.stateStartedAt === 'number' ? row.stateStartedAt : row.receivedAt
+        stateStartedAt: typeof row.stateStartedAt === 'number' ? row.stateStartedAt : row.receivedAt,
+        explicitPromptStartedAt: row.explicitPromptStartedAt ?? null
       }
     : null
 }

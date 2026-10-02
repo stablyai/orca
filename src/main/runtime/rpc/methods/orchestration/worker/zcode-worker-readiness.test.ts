@@ -12,6 +12,8 @@ describe('composer-marker first dispatch readiness', () => {
     'waits for %s’s new composer before delivering exactly one dispatch',
     async (agent) => {
       h.setup()
+      // The paste path: a host whose line cannot carry the brief leaves it for after readiness.
+      h.leaveBriefForPaste()
       const gate = h.deferred<RuntimeTerminalWait>()
       vi.spyOn(h.runtime, 'waitForFreshWorkerComposer').mockReturnValue(gate.promise)
       const pending = h.startWorker({ agent })

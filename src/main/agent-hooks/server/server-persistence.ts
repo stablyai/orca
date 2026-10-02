@@ -43,6 +43,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // A terminal handle belongs to the runtime that issued it; a hydrated one could only
         // rejoin a row to somebody else's terminal.
         terminalHandle: _terminalHandle,
+        // Only an in-memory launch observer reads it.
+        explicitPromptStartedAt: _explicitPromptStartedAt,
         launchToken,
         ...persistedPayload
       } = enrichedPayload

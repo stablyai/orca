@@ -11,6 +11,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { MAX_LINE_PROMPT_BYTES, carryInLaunchFile } from '../../shared/launch-prompt-file'
 
+// Whether this machine can write the folder staged lines and launch files go in; flipped per test.
+const launchArtifacts = vi.hoisted(() => ({ writable: true }))
+vi.mock('../providers/local-launch-artifact-directory', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  localLaunchArtifactsWritable: () => launchArtifacts.writable
+}))
+
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
   webContents: { fromId: vi.fn(() => null) },
@@ -115,6 +122,48 @@ describe('a terminal create that is handed a launch prompt', () => {
     expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
     expect(spawn.mock.calls[0]?.[0]?.launchFile).toBeUndefined()
     expect(spawnedCommand(spawn)).not.toContain('x'.repeat(100))
+  })
+
+  // Why: orchestration pasted worker briefs on every host; such a caller keeps that paste.
+  it('leaves a prompt the line cannot carry to a caller whose paste is main’s', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+    const onStartupPromptCarry = vi.fn()
+
+    await runtime.createTerminal('id:wt-1', {
+      startupAgent: 'claude',
+      startupPrompt: 'x'.repeat(MAX_LINE_PROMPT_BYTES + 1),
+      startupPromptPaste: 'once-agent-runs',
+      onStartupPromptCarry
+    })
+
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(spawn.mock.calls[0]?.[0]?.launchFile).toBeUndefined()
+    expect(spawnedCommand(spawn)).not.toContain('x'.repeat(100))
+  })
+
+  // Why: a worker brief on a host that cannot stage its line or write a launch file gets main's paste,
+  // not a launch refused at terminal create.
+  it('leaves a brief to main’s paste where this host cannot write its staging folder', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+    const onStartupPromptCarry = vi.fn()
+    const brief = Array.from({ length: 12 }, (_, i) => `brief line ${i}`.padEnd(400, '.')).join(
+      '\n'
+    )
+    launchArtifacts.writable = false
+    try {
+      await runtime.createTerminal('id:wt-1', {
+        startupAgent: 'claude',
+        startupPrompt: brief,
+        startupPromptPaste: 'once-agent-runs',
+        onStartupPromptCarry
+      })
+    } finally {
+      launchArtifacts.writable = true
+    }
+
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(spawn.mock.calls[0]?.[0]?.launchFile).toBeUndefined()
+    expect(spawnedCommand(spawn)).not.toContain('brief line')
   })
 
   it('refuses such a prompt when the caller cannot paste it, rather than dropping it', async () => {

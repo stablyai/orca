@@ -16,6 +16,7 @@ function activity(overrides: Partial<AgentPromptActivity> = {}): AgentPromptActi
     permissionSequence: 2,
     workingSequence: 4,
     explicitWorkingStartedAt: null,
+    explicitPromptStartedAt: null,
     outputSequence: 7,
     status: 'idle',
     ...overrides

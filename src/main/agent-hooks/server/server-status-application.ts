@@ -150,6 +150,12 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         ? previous.stateStartedAt
         : (observedAt ?? now)
     const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
+    const explicitPromptStartedAt = resolveExplicitPromptStartedAt(
+      payload,
+      previous,
+      stateStartedAt,
+      observedAt ?? now
+    )
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,
@@ -157,7 +163,8 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
       stateStartedAt,
       // Always written here, so a producer can never declare it.
-      turnStartedAt
+      turnStartedAt,
+      ...(explicitPromptStartedAt !== undefined ? { explicitPromptStartedAt } : {})
     }
   }
 
@@ -281,4 +288,23 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
           : 'transition'
     })
   }
+}
+
+/** Pinned for the rest of a `working` run once a prompt-carrying event lands in it; a replay
+ *  restates old evidence, so it never starts one. */
+function resolveExplicitPromptStartedAt(
+  payload: AgentHookEventPayload,
+  previous: EnrichedAgentHookEventPayload | undefined,
+  stateStartedAt: number,
+  at: number
+): number | undefined {
+  if (payload.payload.state !== 'working') {
+    return undefined
+  }
+  const sameRun =
+    previous?.payload.state === 'working' && previous.stateStartedAt === stateStartedAt
+  if (sameRun && previous.explicitPromptStartedAt !== undefined) {
+    return previous.explicitPromptStartedAt
+  }
+  return payload.hasExplicitPrompt === true && payload.isReplay !== true ? at : undefined
 }

@@ -104,6 +104,7 @@ export async function createRuntimeRemoteManagedWorktree(
         command: sequencedStartup.command,
         ...(args.startupCwd ? { cwd: args.startupCwd } : {}),
         ...paneIdentity(args.startupPaneKey),
+        ...(args.startupTerminalHandle ? { preAllocatedHandle: args.startupTerminalHandle } : {}),
         ...(result.setup && args.startup
           ? { claudeAgentTeamsSourceCommand: args.startup.command }
           : {}),

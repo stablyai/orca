@@ -110,26 +110,11 @@ async function createPromptContractHarness(
     candidate === handle ? `runtime_test:${handle}:1` : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-  vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-    handle: 'term_coord',
-    worktreeId: 'repo::parent',
-    status: 'running'
-  } as never)
-  vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
-    id: 'repo::parent',
-    repoId: 'repo-1'
-  } as never)
-  vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'repo-1', kind: 'git' } as never)
-  vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
-    worktree: { id: AGENT_PROMPT_TEST_WORKTREE_ID, repoId: 'repo-1' },
-    startupTerminal: { spawned: true, handle },
-    setupReceipt: {
-      requested: 'run',
-      hookFound: false,
-      startupPolicy: 'start-immediately',
-      state: 'not_configured'
-    }
-  } as never)
+  vi.spyOn(runtime, 'showTerminal').mockImplementation(
+    async (candidate) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the fields worker-start reads are returned.
+      ({ handle: candidate, worktreeId: AGENT_PROMPT_TEST_WORKTREE_ID, status: 'running' }) as never
+  )
   vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
 
   return {
@@ -144,13 +129,8 @@ async function createPromptContractHarness(
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: `${REQUEST_ID}_${outcome}`,
       method: 'orchestration.workerStart',
-      params: {
-        task: task.id,
-        from: 'term_coord',
-        worktree: 'new-child',
-        name: `prompt-contract-${outcome}`,
-        agent: 'codex'
-      }
+      // Reusing a running agent's terminal still pastes; a created one carries its brief at launch.
+      params: { task: task.id, from: 'term_coord', terminal: handle }
     },
     requestId: `${REQUEST_ID}_${outcome}`,
     taskId: task.id,

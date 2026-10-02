@@ -14,6 +14,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { LaunchFile } from '../../shared/launch-prompt-file'
+import type { LaunchPromptPaste } from '../../shared/launch-prompt-carry'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
@@ -54,6 +55,9 @@ export type TerminalCreateOptions = {
   startupPrompt?: string
   /** Main-internal: whether `startupPrompt` rode the launch command. Called once the plan is built. */
   onStartupPromptCarry?: (carried: boolean) => void
+  /** Main-internal: the caller's paste for an uncarried `startupPrompt`; defaults to #24257's guarded
+   *  paste when `onStartupPromptCarry` is set. */
+  startupPromptPaste?: LaunchPromptPaste
   /** Written by the execution host before the launch line naming it is typed (`startupPrompt`
    *  carries its pointer). */
   launchFile?: LaunchFile

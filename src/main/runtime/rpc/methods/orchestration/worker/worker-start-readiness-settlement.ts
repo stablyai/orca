@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
@@ -6,9 +7,11 @@ import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preambl
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import {
   describeUnobservedWorkerTurnStart,
+  observeWorkerLaunchTurnStart,
   observeWorkerTurnStart,
   type WorkerTurnStartObservation
 } from './worker-start-turn-observation'
+import type { WorkerLaunchBrief } from './worker-launch-brief'
 import {
   monitorWorkerSetup,
   type createStructuredWorkerSessionForWorktree,
@@ -33,32 +36,38 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   coordinatorHandle: string
   devMode: boolean | undefined
   requestId: string
-  agent: string | null
+  agent: TuiAgent | null
   setupReceipt: WorkerSetupReceipt
   launchReceipt: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
   timeoutMs: number
   effects: WorkerEffect[]
   terminalRevealWarning: string | undefined
+  /** The brief already rode the agent's launch line; nothing is pasted. */
+  launchBrief: WorkerLaunchBrief | null
+  /** What is left of the start's budget for a launched brief's turn start (setup shared it). */
+  launchObservationTimeoutMs: number
   /** Keeps the caller's failure receipt naming the stage that actually failed. */
   onStage: (stage: 'dispatch_input' | 'turn_observation') => void
 }): Promise<unknown> {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
   args.onStage('dispatch_input')
-  const delivery = await deliverWorkerDispatchPreamble({
-    runtime,
-    db,
-    structuredSession,
-    terminalHandle,
-    dispatchId: args.dispatchId,
-    dispatchDepth: args.dispatchDepth,
-    taskId: task.id,
-    taskSpec: task.spec,
-    coordinatorHandle: args.coordinatorHandle,
-    devMode: args.devMode,
-    requestId: args.requestId
-  })
+  const delivery: Awaited<ReturnType<typeof deliverWorkerDispatchPreamble>> = args.launchBrief
+    ? {}
+    : await deliverWorkerDispatchPreamble({
+        runtime,
+        db,
+        structuredSession,
+        terminalHandle,
+        dispatchId: args.dispatchId,
+        dispatchDepth: args.dispatchDepth,
+        taskId: task.id,
+        taskSpec: task.spec,
+        coordinatorHandle: args.coordinatorHandle,
+        devMode: args.devMode,
+        requestId: args.requestId
+      })
   effects.push({
     kind: 'dispatch_input',
     role: 'agent',
@@ -72,9 +81,16 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   // reported ready — a wedged agent and a working one looked identical before this gate.
   // A structured preamble send is its own evidence: acknowledged, or still held for its agent.
   const promptDelivery = delivery.prompt
-  const turnStart: WorkerTurnStartObservation =
-    delivery.structuredTurnStart ??
-    (await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery }))
+  const turnStart: WorkerTurnStartObservation = args.launchBrief
+    ? await observeWorkerLaunchTurnStart({
+        runtime,
+        terminalHandle,
+        agent: args.agent,
+        launchStartedAt: args.launchBrief.launchStartedAt,
+        timeoutMs: args.launchObservationTimeoutMs
+      })
+    : (delivery.structuredTurnStart ??
+      (await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery })))
   const deliveredPrompt = turnStart.prompt ?? promptDelivery
   monitorWorkerSetup({
     runtime,
@@ -95,12 +111,12 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       kind: 'dispatch_input',
       role: 'agent',
       id: terminalHandle,
-      state: 'turn_unobserved'
+      state: turnStart.blockedReason ? 'turn_blocked' : 'turn_unobserved'
     })
     const reason = turnStart.reason ?? describeUnobservedWorkerTurnStart(args.agent)
     const worker = db.markWorkerStartUnknown(
       args.dispatchId,
-      'turn_start_unobserved',
+      turnStart.blockedReason ? 'turn_start_blocked' : 'turn_start_unobserved',
       reason,
       effects
     )
@@ -123,7 +139,10 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
         `orca orchestration worker-show --dispatch ${args.dispatchId} --json`,
         // A structured worker has no screen to read.
         ...(structuredSession ? [] : [`orca terminal read --terminal ${terminalHandle} --screen`]),
-        `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
+        // Why stop, not abandon: the brief stays armed behind the dialog until its terminal closes.
+        turnStart.blockedReason
+          ? `orca orchestration worker-stop --dispatch ${args.dispatchId} --json`
+          : `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
       ],
       ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
     }

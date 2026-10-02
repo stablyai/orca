@@ -17,6 +17,8 @@ export type AgentPromptActivity = Readonly<{
   /** When the hook's current `working` turn began; reaches the runtime with no window and no
    *  title coverage. Pinned across same-state pings, so a refresh alone cannot move it. */
   explicitWorkingStartedAt: number | null
+  /** When the hook's current `working` run first carried an explicit prompt; null until one does. */
+  explicitPromptStartedAt: number | null
   /** PTY bytes seen on this pane; delivery evidence when a turn-start edge cannot be observed. */
   outputSequence: number
   status: 'working' | 'permission' | 'idle' | null
@@ -40,6 +42,9 @@ type AgentPromptVerificationOptions = {
   allowHookEvidence?: boolean
   /** Existing-turn output proves legacy delivery, but not a durable new-turn receipt. */
   allowOutputEvidence?: boolean
+  /** Accept only a hook turn whose event carried a prompt, after the baseline's; a title edge, a
+   *  prompt-less start or output bytes prove nothing about a launch prompt. */
+  explicitPromptOnly?: boolean
   signal?: AbortSignal
   timeoutMs?: number
 }
@@ -94,15 +99,7 @@ export async function verifyAgentPromptSubmission(
     const current = options.readActivity()
     assertSamePromptGeneration(options.baseline, current)
     assertPromptNotBlocked(options.baseline, current)
-    if (
-      agentPromptEffectAccepted(
-        options.baseline,
-        current,
-        options.acceptTurnStart,
-        options.allowHookEvidence,
-        options.allowOutputEvidence
-      )
-    ) {
+    if (agentPromptEffectAccepted(options.baseline, current, options)) {
       return
     }
     await waitForAgentPromptPoll(options.signal)
@@ -111,15 +108,7 @@ export async function verifyAgentPromptSubmission(
   const current = options.readActivity()
   assertSamePromptGeneration(options.baseline, current)
   assertPromptNotBlocked(options.baseline, current)
-  if (
-    agentPromptEffectAccepted(
-      options.baseline,
-      current,
-      options.acceptTurnStart,
-      options.allowHookEvidence,
-      options.allowOutputEvidence
-    )
-  ) {
+  if (agentPromptEffectAccepted(options.baseline, current, options)) {
     return
   }
   throw new Error(AGENT_PROMPT_STALLED_ERROR)
@@ -128,10 +117,20 @@ export async function verifyAgentPromptSubmission(
 function agentPromptEffectAccepted(
   baseline: AgentPromptActivity,
   current: AgentPromptActivity,
-  acceptTurnStart?: (evidence: AgentPromptTurnStartEvidence) => boolean,
-  allowHookEvidence = true,
-  allowOutputEvidence = true
+  options: AgentPromptVerificationOptions
 ): boolean {
+  const {
+    acceptTurnStart,
+    allowHookEvidence = true,
+    allowOutputEvidence = true,
+    explicitPromptOnly = false
+  } = options
+  if (explicitPromptOnly) {
+    return (
+      current.explicitPromptStartedAt !== null &&
+      current.explicitPromptStartedAt > (baseline.explicitPromptStartedAt ?? 0)
+    )
+  }
   if (current.workingSequence > baseline.workingSequence) {
     return (
       acceptTurnStart?.({
