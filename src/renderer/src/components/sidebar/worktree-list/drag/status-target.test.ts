@@ -22,6 +22,32 @@ describe('nested workspace status drag targets', () => {
     ).toBe(true)
   })
 
+  it('prefers an exact nested Status lane for a drag originating in Pinned', () => {
+    expect(
+      shouldPreferSidebarStatusDropTarget({
+        sourceGroupKey: 'pinned',
+        target: {
+          status: 'in-progress',
+          groupKey: 'repo:repo-1/workspace-status:in-progress',
+          isPinDrop: false
+        },
+        workspaceStatuses: STATUSES
+      })
+    ).toBe(true)
+  })
+
+  it('does not turn a hover inside the exact source lane into a status move', () => {
+    const groupKey = 'repo:repo-1/workspace-status:in-progress'
+
+    expect(
+      shouldPreferSidebarStatusDropTarget({
+        sourceGroupKey: groupKey,
+        target: { status: 'in-progress', groupKey, isPinDrop: false },
+        workspaceStatuses: STATUSES
+      })
+    ).toBe(false)
+  })
+
   it('replaces a secondary Status segment while preserving its Project parent', () => {
     expect(
       getWorkspaceStatusTargetGroupKey({

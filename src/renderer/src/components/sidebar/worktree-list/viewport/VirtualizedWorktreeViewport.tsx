@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { translate } from '@/i18n/i18n'
@@ -32,13 +32,10 @@ import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { useWorktreeDragSourceChange } from './use-worktree-drag-source-change'
+import { WORKTREE_SIDEBAR_SCROLL_STYLE } from './worktree-sidebar-scroll-style'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
-
-const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
-  // Why: TanStack Virtual owns scroll correction; native overflow anchoring fights it and causes jumps.
-  overflowAnchor: 'none'
-}
 
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
@@ -157,17 +154,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     statusDropAnchorsRef: session.statusDropAnchorsRef,
     onWorkspaceBoardDragPreviewCancel: props.onWorkspaceBoardDragPreviewCancel
   })
-  const worktreeDragSourceGroupKey = runtime.worktreeDragState.sourceGroupKey
-  const draggingWorktreeId = runtime.worktreeDragState.draggingWorktreeId
-  useEffect(() => {
-    onWorktreeDragSourceChange(worktreeDragSourceGroupKey, draggingWorktreeId)
-  }, [draggingWorktreeId, onWorktreeDragSourceChange, worktreeDragSourceGroupKey])
-  useEffect(
-    () => () => {
-      onWorktreeDragSourceChange(null, null)
-    },
-    [onWorktreeDragSourceChange]
-  )
+  useWorktreeDragSourceChange(runtime.worktreeDragState, onWorktreeDragSourceChange)
 
   const primaryActive = usePrimaryActiveWorktreeRow({
     rows,

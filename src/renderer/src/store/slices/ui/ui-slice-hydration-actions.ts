@@ -1,6 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
@@ -68,6 +67,7 @@ import {
 } from './ui-slice-hydration-sanitizers'
 import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
+import { normalizeHydratedSidebarState } from './ui-slice-hydration-sidebar-state'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
@@ -98,19 +98,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
-        const rightSidebarRoute = normalizeRightSidebarRoute(
-          ui.rightSidebarTab,
-          ui.rightSidebarExplorerView
-        )
-        const persistedGroupBy: string = ui.groupBy
-        const groupBy: UISlice['groupBy'] = persistedGroupBy === 'parent' ? 'repo' : ui.groupBy
-        const groupBySecondary: UISlice['groupBySecondary'] =
-          ui.groupBySecondary !== groupBy &&
-          (ui.groupBySecondary === 'workspace-status' ||
-            ui.groupBySecondary === 'repo' ||
-            ui.groupBySecondary === 'pr-status')
-            ? ui.groupBySecondary
-            : 'none'
+        const { rightSidebarRoute, groupBy, groupBySecondary } = normalizeHydratedSidebarState(ui)
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(

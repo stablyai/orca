@@ -9,6 +9,7 @@ import { useWorkspaceStatusDocumentDrop } from '../../use-workspace-status-drop'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { WorktreeDragSession } from './use-session'
 import type { WorktreeDragRuntime } from './use-runtime'
+import { getWorkspaceStatusTargetGroupKey } from './status-target'
 
 export function useWorkspaceStatusRowDrag(args: {
   ctx: WorktreeDropCommitContext
@@ -99,20 +100,30 @@ export function useWorkspaceStatusRowDrag(args: {
       }
       event.preventDefault()
       const dragSession = session.worktreeDragSessionRef.current
+      const targetGroupKey = dragSession
+        ? (event.currentTarget.getAttribute('data-workspace-status-group-key') ??
+          getWorkspaceStatusTargetGroupKey({
+            sourceGroupKey: dragSession.sourceGroupKey,
+            status,
+            workspaceStatuses: ctx.workspaceStatuses
+          }))
+        : null
       const statusDrop = dragSession
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
             status,
+            groupKey: targetGroupKey,
             draggedKeys: dragSession.reorderDraggedKeys
           })
         : null
       setDragOverStatus(null)
       setDragOverStatusGroupKey(null)
-      if (dragSession && statusDrop) {
+      if (dragSession && statusDrop && targetGroupKey) {
         event.stopPropagation()
         ctx.onMoveWorktreesToStatusAtIndex({
           worktreeIds: dragSession.reorderDraggedIds,
           status,
+          targetGroupKey,
           dropIndex: statusDrop.dropIndex,
           groups: ctx.worktreeDragGroups
         })

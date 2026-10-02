@@ -59,8 +59,28 @@ export type PendingSidebarRevealArgs = {
   cancelPendingRevealFrames: () => void
 }
 
+export type PendingSidebarRevealExpansionArgs = Pick<
+  PendingSidebarRevealArgs,
+  | 'occurrencePlan'
+  | 'renderRows'
+  | 'worktrees'
+  | 'folderWorkspaces'
+  | 'repoMap'
+  | 'worktreeLineageById'
+  | 'collapsedGroups'
+  | 'toggleGroup'
+  | 'groupBy'
+  | 'groupBySecondary'
+  | 'pinnedDisplayPolicy'
+  | 'defaultHostId'
+  | 'prCache'
+  | 'workspaceStatuses'
+  | 'projectGroups'
+  | 'projectGrouping'
+>
+
 export function expandGroupsForWorktreeReveal(
-  args: PendingSidebarRevealArgs,
+  args: PendingSidebarRevealExpansionArgs | PendingSidebarRevealArgs,
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): void {

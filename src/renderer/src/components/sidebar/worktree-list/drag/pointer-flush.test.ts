@@ -211,6 +211,7 @@ describe('nested Status targeting', () => {
     expect(computeStatusDrop).toHaveBeenCalledWith({
       pointerY: 300,
       status: 'in-progress',
+      groupKey: 'repo:git:git.example.com/org/orca/workspace-status:in-progress',
       draggedKeys: ['child']
     })
     expect(computeSourceDrop).not.toHaveBeenCalled()
@@ -223,6 +224,33 @@ describe('nested Status targeting', () => {
       status: 'in-progress',
       groupKey: 'repo:git:git.example.com/org/orca/workspace-status:in-progress'
     })
+  })
+
+  it('uses the nested Status lane under the pointer for a Pinned source', () => {
+    const t = setup()
+    t.args.drag.sourceGroupKey = 'pinned'
+    t.args.ctx.scrollRef.current = document.createElement('div')
+    const targetGroupKey = 'repo:repo-1/workspace-status:completed'
+    t.status('completed', targetGroupKey)
+    const computeStatusDrop = vi.fn(() => ({
+      dropIndex: 0,
+      dropIndicatorY: 240,
+      dropAnchorId: null,
+      previewOffsetsByWorktreeId: new Map<string, number>()
+    }))
+    const computeSourceDrop = vi.fn(t.args.ctx.computeWorktreeDrop)
+    t.args.ctx.computeWorktreeStatusDrop = computeStatusDrop
+    t.args.ctx.computeWorktreeDrop = computeSourceDrop
+
+    flushWorktreePointerDragFrame(t.args)
+
+    expect(computeStatusDrop).toHaveBeenCalledWith({
+      pointerY: 300,
+      status: 'completed',
+      groupKey: targetGroupKey,
+      draggedKeys: ['child']
+    })
+    expect(computeSourceDrop).not.toHaveBeenCalled()
   })
 
   it('carries every selected worktree into a nested Status drop', () => {
@@ -250,6 +278,7 @@ describe('nested Status targeting', () => {
     expect(computeStatusDrop).toHaveBeenCalledWith({
       pointerY: 300,
       status: 'in-progress',
+      groupKey: 'repo:repo-1/workspace-status:in-progress',
       draggedKeys: ['child', 'selected-sibling']
     })
     expect(t.args.drag.latestStatusDropTarget?.target).toMatchObject({

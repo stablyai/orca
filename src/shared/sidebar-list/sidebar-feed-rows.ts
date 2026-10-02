@@ -55,6 +55,7 @@ import type { SortBy } from './smart-sort'
 import { selectVisibleSidebarWorktrees } from './visible-worktrees'
 import { isIdleWorkspaceActivity } from './workspace-activity-facts'
 import { prGroupOfReviewFact } from './workspace-review-facts'
+import { getPairedDeviceIdsByEnvironment } from './sidebar-feed-paired-devices'
 
 /** The host's view settings a reader shows the list with; the host's own phone reads them off ui.get. */
 export type SidebarFeedView = {
@@ -149,14 +150,7 @@ export function planSidebarFeedRows(
   const retained = new Set(domains.retention?.retainedIds)
   const rankByIdentity = new Map(rankedIdentities.map((identity, rank) => [identity, rank]))
   const factsOf = (worktree: Worktree) => byIdentity.get(getWorktreeHostIdentity(worktree))?.facts
-  const pairedDeviceIdsByEnvironment = new Map(
-    [...domains.pairedServerHosts].flatMap(([hostId, { host }]) => {
-      const environmentId = parseExecutionHostId(hostId)
-      return environmentId?.kind === 'runtime' && host?.pairedDeviceId
-        ? [[environmentId.environmentId, host.pairedDeviceId] as const]
-        : []
-    })
-  )
+  const pairedDeviceIdsByEnvironment = getPairedDeviceIdsByEnvironment(domains)
 
   const visibleWorktrees = selectVisibleSidebarWorktrees({
     rows: allWorktrees,

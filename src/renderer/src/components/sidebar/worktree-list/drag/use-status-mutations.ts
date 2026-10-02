@@ -97,7 +97,7 @@ export function useWorktreeStatusMutations(args: {
       const draggedKeys = uniqueDraggedKeys(dropArgs.worktreeIds.flatMap(rowsFor.status))
       const order = buildManualOrderUpdatesForGroupDrop({
         groups: dropArgs.groups,
-        targetGroupKey: getWorkspaceStatusGroupKey(dropArgs.status),
+        targetGroupKey: dropArgs.targetGroupKey ?? getWorkspaceStatusGroupKey(dropArgs.status),
         draggedIds: draggedKeys,
         dropIndex: dropArgs.dropIndex,
         now: Date.now(),
