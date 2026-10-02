@@ -223,7 +223,33 @@ export async function dedupeCodexRolloutCopyAliases<T>(
   return candidates.filter((candidate) => !aliasesToDrop.has(candidate))
 }
 
-export function codexSessionAliasKey(session: AiVaultSession): string | null {
+// Codex Esc-revert writes rollout-<ts>-<sessionId>_<suffixUuid>.jsonl beside the base log.
+const CODEX_REVERT_CONTINUATION_SUFFIX =
+  /_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i
+
+export function isCodexRevertContinuationFileName(fileName: string, sessionId: string): boolean {
+  if (!sessionId) {
+    return false
+  }
+  const suffix = fileName.match(CODEX_REVERT_CONTINUATION_SUFFIX)
+  if (!suffix) {
+    return false
+  }
+  const stem = fileName.slice(0, -suffix[0].length)
+  return stem.endsWith(sessionId)
+}
+
+/** True when the filename is a revert continuation of this parsed session id. */
+export function isCodexRevertContinuationPath(filePath: string, sessionId: string): boolean {
+  return isCodexRevertContinuationFileName(lastPathSegment(filePath), sessionId)
+}
+
+/** Alias key plus the revert facts already visible from that key's filename. */
+export function codexSessionAliasAdmission(session: AiVaultSession): {
+  key: string
+  revertContinuation: boolean
+  revertIdentity: string | null
+} | null {
   if (session.agent !== 'codex') {
     return null
   }
@@ -231,7 +257,58 @@ export function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
     return null
   }
-  return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
+  const namespace = codexPathExecutionNamespace(session.filePath)
+  const revertIdentity = session.sessionId
+    ? `${session.executionHostId}\0${namespace}\0${session.sessionId}`
+    : null
+  return {
+    key: `${session.executionHostId}\0${namespace}\0${session.sessionId}\0${fileName}`,
+    revertContinuation:
+      revertIdentity !== null && isCodexRevertContinuationFileName(fileName, session.sessionId),
+    revertIdentity
+  }
+}
+
+export function codexRevertIdentityKey(session: AiVaultSession): string | null {
+  if (session.agent !== 'codex' || !session.sessionId) {
+    return null
+  }
+  return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}`
+}
+
+/** Same host, namespace, and session, with at least one revert continuation filename. */
+export function codexRevertPeers(left: AiVaultSession, right: AiVaultSession): boolean {
+  const leftKey = codexRevertIdentityKey(left)
+  if (!leftKey || leftKey !== codexRevertIdentityKey(right)) {
+    return false
+  }
+  return (
+    isCodexRevertContinuationPath(left.filePath, left.sessionId) ||
+    isCodexRevertContinuationPath(right.filePath, right.sessionId)
+  )
+}
+
+/** Continuation files win. Two continuations keep the later activity, then the alias ranking. */
+export function codexRevertContinuationBeats(
+  candidate: AiVaultSession,
+  best: AiVaultSession
+): boolean {
+  const candidateContinuation = isCodexRevertContinuationPath(
+    candidate.filePath,
+    candidate.sessionId
+  )
+  const bestContinuation = isCodexRevertContinuationPath(best.filePath, best.sessionId)
+  if (candidateContinuation !== bestContinuation) {
+    return candidateContinuation
+  }
+  if (candidateContinuation && bestContinuation) {
+    const candidateTime = sessionSortTime(candidate)
+    const bestTime = sessionSortTime(best)
+    if (candidateTime !== bestTime) {
+      return candidateTime > bestTime
+    }
+  }
+  return codexSessionAliasBeats(candidate, best)
 }
 
 export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {

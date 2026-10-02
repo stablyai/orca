@@ -373,6 +373,84 @@ describe('dedupeScannedSessions', () => {
     expect(dedupeScannedSessions([older, newer])).toEqual([older, newer])
   })
 
+  it('keeps the Esc-revert continuation and drops the base rollout with the same session id', () => {
+    const sessionId = '01a0f0c3-d426-70a2-969e-85692b340778'
+    const base = codexSession({
+      sessionId,
+      filePath: `/Users/ada/.codex/sessions/2026/09/30/rollout-2026-09-30T13-22-40-${sessionId}.jsonl`,
+      updatedAt: '2026-09-30T13:22:40.000Z',
+      modifiedAt: '2026-09-30T13:22:40.000Z'
+    })
+    const continuation = codexSession({
+      sessionId,
+      filePath: `/Users/ada/.codex/sessions/2026/09/30/rollout-2026-09-30T13-32-37-${sessionId}_01a0f0cc-ee9c-7171-b7b4-ba812a365ba8.jsonl`,
+      updatedAt: '2026-09-30T13:32:37.000Z',
+      modifiedAt: '2026-09-30T13:32:37.000Z'
+    })
+    expect(dedupeScannedSessions([base, continuation])).toEqual([continuation])
+    expect(dedupeScannedSessions([continuation, base])).toEqual([continuation])
+  })
+
+  it('prefers the newer Esc-revert continuation when several share a session id', () => {
+    const sessionId = '01a0f0c3-d426-70a2-969e-85692b340778'
+    const older = codexSession({
+      sessionId,
+      filePath: `/Users/ada/.codex/sessions/2026/09/30/rollout-2026-09-30T13-32-37-${sessionId}_01a0f0cc-ee9c-7171-b7b4-ba812a365ba8.jsonl`,
+      updatedAt: '2026-09-30T13:32:37.000Z',
+      modifiedAt: '2026-09-30T13:32:37.000Z'
+    })
+    const newer = codexSession({
+      sessionId,
+      filePath: `/Users/ada/.codex/sessions/2026/09/30/rollout-2026-09-30T13-40-00-${sessionId}_01a0f0dd-ee9c-7171-b7b4-ba812a365ba9.jsonl`,
+      updatedAt: '2026-09-30T13:40:00.000Z',
+      modifiedAt: '2026-09-30T13:40:00.000Z'
+    })
+    expect(dedupeScannedSessions([older, newer])).toEqual([newer])
+  })
+
+  it('keeps the newer Esc-revert continuation when an older one sits in a preferred home', () => {
+    const sessionId = '01a0f0c3-d426-70a2-969e-85692b340778'
+    const olderPreferredHome = codexSession({
+      sessionId,
+      codexHome: null,
+      filePath: `/Users/ada/.codex/sessions/2026/09/30/rollout-2026-09-30T13-32-37-${sessionId}_01a0f0cc-ee9c-7171-b7b4-ba812a365ba8.jsonl`,
+      updatedAt: '2026-09-30T13:32:37.000Z',
+      modifiedAt: '2026-09-30T13:32:37.000Z'
+    })
+    const newerManagedHome = codexSession({
+      sessionId,
+      codexHome: MANAGED_HOME,
+      filePath: `${MANAGED_HOME}/sessions/2026/09/30/rollout-2026-09-30T13-40-00-${sessionId}_01a0f0dd-ee9c-7171-b7b4-ba812a365ba9.jsonl`,
+      updatedAt: '2026-09-30T13:40:00.000Z',
+      modifiedAt: '2026-09-30T13:40:00.000Z'
+    })
+    expect(dedupeScannedSessions([olderPreferredHome, newerManagedHome])).toEqual([
+      newerManagedHome
+    ])
+  })
+
+  it('does not collapse a revert continuation across hosts or WSL namespaces', () => {
+    const sessionId = '01a0f0c3-d426-70a2-969e-85692b340778'
+    const continuation = codexSession({
+      sessionId,
+      filePath: `/Users/ada/.codex/sessions/2026/09/30/rollout-2026-09-30T13-32-37-${sessionId}_01a0f0cc-ee9c-7171-b7b4-ba812a365ba8.jsonl`
+    })
+    const remoteBase = codexSession({
+      sessionId,
+      executionHostId: 'ssh:build-box',
+      filePath: `/home/ada/.codex/sessions/2026/09/30/rollout-2026-09-30T13-22-40-${sessionId}.jsonl`
+    })
+    const wslBase = codexSession({
+      sessionId,
+      filePath: `\\\\wsl$\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout-2026-09-30T13-22-40-${sessionId}.jsonl`
+    })
+    expect(dedupeScannedSessions([continuation, remoteBase, wslBase])).toEqual([
+      continuation,
+      remoteBase,
+      wslBase
+    ])
+  })
+
   it('resolves same-rollout aliases with a stable path tie-break', () => {
     const tieA = codexSession({
       sessionId: 'tie',

@@ -139,6 +139,56 @@ describe('ScannedSessionCollection', () => {
     ).toEqual([native, ssh, ubuntu, debian, otherId, otherName])
   })
 
+  it('collapses an Esc-revert continuation in scan order and keeps distinct rollout names', () => {
+    const sessionId = '01a0f0c3-d426-70a2-969e-85692b340778'
+    const base = session({
+      sessionId,
+      filePath: `/Users/ada/.codex/sessions/2026/09/30/rollout-2026-09-30T13-22-40-${sessionId}.jsonl`,
+      updatedAt: '2026-09-30T13:22:40.000Z'
+    })
+    const continuation = session({
+      sessionId,
+      filePath: `/Users/ada/.codex/sessions/2026/09/30/rollout-2026-09-30T13-32-37-${sessionId}_01a0f0cc-ee9c-7171-b7b4-ba812a365ba8.jsonl`,
+      updatedAt: '2026-09-30T13:32:37.000Z'
+    })
+    const olderName = session({
+      sessionId: 'collision',
+      filePath: '/Users/ada/.codex/sessions/2026/07/01/rollout-old.jsonl'
+    })
+    const newerName = session({
+      sessionId: 'collision',
+      filePath: '/Users/ada/.codex/sessions/2026/07/02/rollout-new.jsonl'
+    })
+    expect(
+      checkBatches([
+        [base, olderName],
+        [continuation, continuation, newerName]
+      ])
+    ).toEqual([olderName, continuation, continuation, newerName])
+  })
+
+  it('collapses a base that arrives after its revert continuation was admitted alone', () => {
+    const sessionId = '01a0f0c3-d426-70a2-969e-85692b340778'
+    const continuation = session({
+      sessionId,
+      codexHome: '/custom',
+      filePath: `/custom/sessions/rollout-2026-09-30T13-32-37-${sessionId}_01a0f0cc-ee9c-7171-b7b4-ba812a365ba8.jsonl`,
+      updatedAt: '2026-09-30T13:32:37.000Z'
+    })
+    const sshBase = session({
+      sessionId,
+      executionHostId: 'ssh:build-box',
+      filePath: `/remote/rollout-2026-09-30T13-22-40-${sessionId}.jsonl`,
+      updatedAt: '2026-09-30T13:22:40.000Z'
+    })
+    const localBase = session({
+      sessionId,
+      filePath: `/Users/ada/.codex/sessions/rollout-2026-09-30T13-40-00-${sessionId}.jsonl`,
+      updatedAt: '2026-09-30T13:40:00.000Z'
+    })
+    expect(checkBatches([[continuation], [sshBase], [localBase]])).toEqual([continuation, sshBase])
+  })
+
   it('does not rescan retained rows on admission', () => {
     let pathReads = 0
     const collection = new ScannedSessionCollection()
