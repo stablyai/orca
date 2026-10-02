@@ -4,166 +4,50 @@
 // orchestration database, RPC dispatcher and methods; the runtime's pointer lanes. Fake: only the
 // Codex app-server child, which answers the JSON-RPC calls the real one does.
 
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import { describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import {
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../shared/agent-session-host-authority'
 import { refuse } from '../../shared/agent-session-wire-refusals'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
-import { OrcaRuntimeService } from './orca-runtime'
-import { OrchestrationDb } from './orchestration/db'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { formatMessagePointer } from './orchestration/formatter'
 import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
-import type { RpcRequest } from './rpc/core'
-import { RpcDispatcher } from './rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
-import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
+import { idOf } from './rpc/orchestration-session-caller-test-fixture'
+import { operationId, providerFaults } from './structured-chat-coordinator-fake-codex-fixture'
 import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import {
-  attachParams,
-  fakeCodex,
-  operationId,
-  providerFaults,
-  resetProviderFaults,
-  type FakeConnection
-} from './structured-chat-coordinator-fake-codex-fixture'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+  call,
+  clearChat,
+  codex,
+  connectionFor,
+  coordinatorRunAndTask,
+  COORDINATOR,
+  db,
+  dispatcher,
+  host,
+  installStructuredChatRealHost,
+  openChat,
+  PEER_CHAT,
+  POINTER,
+  ptyPointer,
+  request,
+  restartRuntime,
+  runtime,
+  sendUserMessage,
+  settleTurn,
+  startSuccessor,
+  turnText,
+  userTexts,
+  WAIT,
+  WORKER_2_PANE,
+  WORKER_PANE
+} from './structured-chat-real-host-test-fixture'
 
-const COORDINATOR = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
-const PEER_CHAT = '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
-const WORKER_PANE = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-const WORKER_2_PANE = 'tab_worker2:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
-
-let codex: ReturnType<typeof fakeCodex>
-let root: string
-let runtime: OrcaRuntimeService
-let db: OrchestrationDb
-let host: StructuredAgentSessionHost
-let dispatcher: RpcDispatcher
-let requests = 0
-
-function request(
-  method: string,
-  params: Record<string, unknown>,
-  options: { sessionId?: string } = {}
-): RpcRequest {
-  requests += 1
-  return {
-    id: `rpc-${requests}`,
-    authToken: 'test',
-    method,
-    params,
-    orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-    orchestrationRequestId: `req-${requests}`,
-    ...(options.sessionId
-      ? { orchestrationCompatibilityEvidence: { agentSessionId: options.sessionId } }
-      : {})
-  }
-}
-
-async function call(
-  method: string,
-  params: Record<string, unknown>,
-  options?: { sessionId?: string }
-): Promise<Record<string, unknown>> {
-  const response = await dispatcher.dispatch(request(method, params, options))
-  if (!response.ok) {
-    throw new Error(`${method} failed: ${JSON.stringify(response)}`)
-  }
-  return resultOf(response)
-}
-
-async function openChat(sessionId: string): Promise<FakeConnection> {
-  const attached = await host.attach({ callerKey: 'test-surface' }, attachParams(sessionId))
-  expect(attached, JSON.stringify(attached)).toMatchObject({ ok: true })
-  await host.setSessionTabVisibility(sessionId, true)
-  threadBySession.set(sessionId, codex.connections.at(-1)!.threadId!)
-  return connectionFor(sessionId)
-}
-
-const threadBySession = new Map<string, string>()
-
-function connectionFor(sessionId: string): FakeConnection {
-  // A cleared chat's successor starts on its first message; its record then names its thread.
-  const head = agentSessionProviderHandleChainHead(
-    host.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
-  )
-  const thread =
-    threadBySession.get(sessionId) ?? (head?.handle.provider === 'codex' && head.handle.threadId)
-  const connection = codex.connections.findLast((candidate) => candidate.threadId === thread)
-  if (!connection) {
-    throw new Error(`no app-server for ${sessionId}`)
-  }
-  return connection
-}
-
-/** Codex's own sequence for a turn: it starts, echoes the user message, and completes. */
-async function settleTurn(sessionId: string, turnIndex: number): Promise<void> {
-  const connection = connectionFor(sessionId)
-  const turn = connection.turns[turnIndex]!
-  const turnId = `turn-${turnIndex + 1}`
-  const notify = (method: string, params: unknown) =>
-    connection.handlers.onNotification?.(method, params)
-  notify('turn/started', { turn: { id: turnId } })
-  notify('item/completed', {
-    item: {
-      type: 'userMessage',
-      id: `echo-${turn.clientUserMessageId}`,
-      clientId: turn.clientUserMessageId,
-      content: [{ type: 'text', text: 'pointer' }]
-    }
-  })
-  notify('turn/completed', { turn: { id: turnId } })
-  await host.flushStreamedEvents(sessionId)
-}
-
-/** A user message typed into the chat, as the chat surface sends it. */
-function sendUserMessage(sessionId: string, text: string) {
-  const body = {
-    kind: 'message' as const,
-    role: 'user' as const,
-    blocks: [{ type: 'text' as const, text }]
-  }
-  return host.send(
-    { callerKey: 'test-surface' },
-    {
-      envelope: {
-        sessionId,
-        clientOperationId: operationId(),
-        expectedRuntimeFence: host.deps.store.getRecord(sessionId)!.lease.runtimeFence,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.send',
-          sessionId,
-          fields: { body }
-        })
-      },
-      body
-    }
-  )
-}
-
-async function userTexts(sessionId: string): Promise<string[]> {
-  return (await host.journalSnapshot(sessionId)).items.flatMap((item: AgentJournalRenderItem) =>
-    item.body?.kind === 'message' && item.body.role === 'user'
-      ? item.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
-      : []
-  )
-}
+installStructuredChatRealHost()
 
 /** A supervised terminal worker under the coordinator's Run, and its worker_done. */
 async function finishWorker(
@@ -192,121 +76,6 @@ async function finishWorker(
     type: 'worker_done',
     payload: JSON.stringify({ taskId, dispatchId: started.dispatch.id, outcome: 'succeeded' })
   })
-}
-
-async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: string }> {
-  const created = await call(
-    'orchestration.runCreate',
-    { objective: 'ship' },
-    {
-      sessionId: COORDINATOR
-    }
-  )
-  const runId = idOf(created.run)
-  const task = await call(
-    'orchestration.taskCreate',
-    { spec: 'build it' },
-    {
-      sessionId: COORDINATOR
-    }
-  )
-  return { runId, taskId: idOf(task.task) }
-}
-
-/** `/clear` as the chat surface runs it: the conversation continues in a new session. */
-async function clearChat(sessionId: string): Promise<string> {
-  const command = 'clear' as const
-  const cleared = await host.conversationCommand(
-    { callerKey: 'test-surface' },
-    {
-      command,
-      envelope: {
-        sessionId,
-        clientOperationId: operationId(),
-        expectedRuntimeFence: host.deps.store.getRecord(sessionId)!.lease.runtimeFence,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.conversationCommand',
-          sessionId,
-          fields: { command }
-        })
-      }
-    }
-  )
-  const successor = cleared.ok ? cleared.value.replacementSessionId : undefined
-  if (!successor) {
-    throw new Error(`clear failed: ${JSON.stringify(cleared)}`)
-  }
-  // The surface swaps the tab over to the session that continues the chat.
-  await host.setSessionTabVisibility(sessionId, false)
-  await host.setSessionTabVisibility(successor, true)
-  return successor
-}
-
-/** A cleared chat's successor runs once the user writes to it; only then can its agent act. */
-async function startSuccessor(successor: string): Promise<void> {
-  expect(await sendUserMessage(successor, 'hello')).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(1), WAIT)
-  await settleTurn(successor, 0)
-}
-
-beforeEach(async () => {
-  resetProviderFaults()
-  root = await mkdtemp(join(tmpdir(), 'orca-structured-coordinator-mail-'))
-  codex = fakeCodex()
-  db = new OrchestrationDb(':memory:')
-  runtime = startRuntime()
-  host = await ensureStructuredAgentSessionHost({
-    logger: createStructuredAgentSessionLogger(),
-    stateDirectory: root,
-    hostId: 'local',
-    claimKeyId: 'key-1',
-    resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-    resolveCodexCommand: () => '/usr/local/bin/codex',
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
-    resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
-    openCodexConnection: codex.openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000,
-    // The same call the runtime's own host install makes on every status change.
-    onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary)
-  })
-  dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-})
-
-/** The runtime over the shared database; a second call is what an Orca restart leaves behind. */
-function startRuntime(): OrcaRuntimeService {
-  const started = new OrcaRuntimeService()
-  started.setOrchestrationDb(db)
-  vi.spyOn(started, 'ensureStructuredAgentSessionHost').mockResolvedValue()
-  vi.spyOn(started, 'getTerminalPaneKey').mockImplementation((handle) =>
-    handle === 'term_worker' ? WORKER_PANE : handle === 'term_worker_2' ? WORKER_2_PANE : null
-  )
-  return started
-}
-
-afterEach(async () => {
-  await stopStructuredAgentSessionRuntime()
-  db.close()
-  vi.restoreAllMocks()
-  await rm(root, { recursive: true, force: true })
-})
-
-// Pointers are sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
-const WAIT = { timeout: 10_000 }
-
-const POINTER =
-  /You have 1 orchestration message\. Run `orca(-dev)? orchestration check --run run_\w+`\./
-
-/** The text the PTY lane types into a local terminal for this mailbox, byte for byte. */
-function ptyPointer(mailboxHandle: string): string {
-  return formatMessagePointer(1, mailboxHandle, localOrchestrationCliCommand()).trim()
-}
-
-/** The text of a turn the fake provider received. */
-function turnText(turn: { text: string }): string {
-  const input: unknown = JSON.parse(turn.text)
-  return Array.isArray(input)
-    ? input.map((item: unknown) => (isRecord(item) ? String(item.text) : '')).join('')
-    : ''
 }
 
 describe('a worker result reaches the structured chat that coordinates it', () => {
@@ -521,8 +290,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
     // The next process: a fresh runtime over the same database redrives restored mail. The
     // provider still dies, so exactly one start proves it is pointed once, not in a loop.
-    runtime = startRuntime()
-    dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+    restartRuntime()
     const before = providerFaults.starts
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
     await new Promise((resolve) => setTimeout(resolve, 1_500))
@@ -679,6 +447,36 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       formatMessagePointer(2, `run:${runId}`, localOrchestrationCliCommand()).trim()
     )
     expect(codex.connections.length).toBe(before)
+  })
+
+  it("does not hold mail behind the user's own send a refused turn/start left in doubt", async () => {
+    const chat = await openChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    providerFaults.refuseTurnStarts = 1
+    await sendUserMessage(COORDINATOR, 'user question')
+    await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(1), WAIT)
+
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+  })
+
+  it('keeps pointing after two of its own sends were left in doubt', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    const more = async () =>
+      idOf(
+        (await call('orchestration.taskCreate', { spec: 'more' }, { sessionId: COORDINATOR })).task
+      )
+    const [second, third] = [await more(), await more()]
+    providerFaults.refuseTurnStarts = 2
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(1), WAIT)
+    await finishWorker(second, { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
+    await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
+
+    await finishWorker(third, { handle: 'term_worker_3', paneKey: 'tab_worker3:pane' })
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    expect(providerFaults.turnStarts).toBe(3)
   })
 
   it('points a coordinator whose agent is not running through the send alone, which starts it', async () => {
@@ -915,5 +713,36 @@ describe('any live session is addressable by its id', () => {
     )
     expect(response).toMatchObject({ ok: false, error: { code: 'session_caller_not_live' } })
     expect(db.getInbox(100)).toEqual([])
+  })
+})
+
+describe('an existing chat dispatched to by its Orca session ID', () => {
+  it('takes the preamble as a turn through the host, and its worker_done reaches the coordinator', async () => {
+    const coordinator = await openChat(COORDINATOR)
+    const peer = await openChat(PEER_CHAT)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    const dispatched = await call(
+      'orchestration.dispatch',
+      { task: taskId, to: `orca_session_id:${PEER_CHAT}`, inject: true, returnPreamble: true },
+      { sessionId: COORDINATOR }
+    )
+    const preamble = String(dispatched.preamble)
+    const dispatchId = idOf(dispatched.dispatch)
+    await vi.waitFor(() => expect(peer.turns).toHaveLength(1), WAIT)
+    expect(turnText(peer.turns[0]!)).toBe(preamble)
+    await settleTurn(PEER_CHAT, 0)
+
+    const payload = JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
+    const done = await call(
+      'orchestration.send',
+      { from: `orca_session_id:${PEER_CHAT}`, type: 'worker_done', subject: 'Done', payload },
+      { sessionId: PEER_CHAT }
+    )
+    expect(done).toMatchObject({ lifecycle: { action: 'completed' } })
+    await vi.waitFor(() => expect(coordinator.turns).toHaveLength(1), WAIT)
+    expect(turnText(coordinator.turns[0]!)).toBe(ptyPointer(`run:${runId}`))
+    expect(await call('orchestration.check', {}, { sessionId: COORDINATOR })).toMatchObject({
+      messages: [{ type: 'worker_done', from_handle: `orca_session_id:${PEER_CHAT}` }]
+    })
   })
 })

@@ -5,7 +5,7 @@ import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../or
 import { toAgentStatusIpcPayload } from '../../../../../agent-hooks/server/server-status-identity'
 import type { EnrichedAgentHookEventPayload } from '../../../../../agent-hooks/server/server-types'
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status-types'
-import { projectFleetWorkerPage } from './worker-observation'
+import { projectFleetWorkerPage } from './worker-list-projection'
 
 const PANE_KEY = 'tab-fleet:leaf-fleet'
 /** The pane key a remint moves the agent to; the durable worker still names `PANE_KEY`. */
@@ -103,8 +103,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
     expect(hookRowAsPublished().orchestration).toBeUndefined()
   })
 
-  it('reads live for a running local worker whose pane still owns its handle', () => {
-    const page = projectFleetWorkerPage(
+  it('reads live for a running local worker whose pane still owns its handle', async () => {
+    const page = await projectFleetWorkerPage(
       createRuntime({ handleForPane: TERMINAL_HANDLE }),
       createDb(),
       DISPATCH_ID
@@ -119,8 +119,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
     })
   })
 
-  it('carries the dispatch context the renderer boundary attaches', () => {
-    const page = projectFleetWorkerPage(
+  it('carries the dispatch context the renderer boundary attaches', async () => {
+    const page = await projectFleetWorkerPage(
       createRuntime({
         handleForPane: TERMINAL_HANDLE,
         orchestration: { dispatchId: DISPATCH_ID } as AgentStatusOrchestrationContext
@@ -132,8 +132,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
     expect(page?.workers[0]?.liveness.verdict).toBe('live')
   })
 
-  it('refuses a pane whose handle now belongs to another terminal', () => {
-    const page = projectFleetWorkerPage(
+  it('refuses a pane whose handle now belongs to another terminal', async () => {
+    const page = await projectFleetWorkerPage(
       createRuntime({ handleForPane: 'term_reused' }),
       createDb(),
       DISPATCH_ID
@@ -145,8 +145,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
     })
   })
 
-  it('refuses a pane whose handle now belongs to another dispatch', () => {
-    const page = projectFleetWorkerPage(
+  it('refuses a pane whose handle now belongs to another dispatch', async () => {
+    const page = await projectFleetWorkerPage(
       createRuntime({
         handleForPane: TERMINAL_HANDLE,
         orchestration: { dispatchId: 'disp-other' } as AgentStatusOrchestrationContext
@@ -161,8 +161,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
     })
   })
 
-  it('refuses a pane that no longer resolves to a terminal', () => {
-    const page = projectFleetWorkerPage(createRuntime({}), createDb(), DISPATCH_ID)
+  it('refuses a pane that no longer resolves to a terminal', async () => {
+    const page = await projectFleetWorkerPage(createRuntime({}), createDb(), DISPATCH_ID)
 
     expect(page?.workers[0]?.liveness).toMatchObject({
       verdict: 'unverifiable',
@@ -173,8 +173,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
   // A hook row carries no incarnation of its own, so a row replayed after a runtime restart
   // is indistinguishable from a current one by pane and handle alone. The pane's incarnation
   // at mint time is what says which process the evidence is about.
-  it('refuses a replayed row once the pane runs a different incarnation', () => {
-    const page = projectFleetWorkerPage(
+  it('refuses a replayed row once the pane runs a different incarnation', async () => {
+    const page = await projectFleetWorkerPage(
       createRuntime({ handleForPane: TERMINAL_HANDLE, incarnationForHandle: 'pty-fleet:inc-2' }),
       createDb(),
       DISPATCH_ID
@@ -186,8 +186,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
     })
   })
 
-  it('refuses a replayed row before the restarted runtime has rebound the incarnation', () => {
-    const page = projectFleetWorkerPage(
+  it('refuses a replayed row before the restarted runtime has rebound the incarnation', async () => {
+    const page = await projectFleetWorkerPage(
       createRuntime({ handleForPane: TERMINAL_HANDLE, incarnationForHandle: null }),
       createDb(),
       DISPATCH_ID
@@ -201,8 +201,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
 
   // The positive control the fail-closed tightening owes: once the rebind lands on the
   // incarnation the durable resource named, the same pane reads live again.
-  it('reads live again once the rebind restores the durable incarnation', () => {
-    const page = projectFleetWorkerPage(
+  it('reads live again once the rebind restores the durable incarnation', async () => {
+    const page = await projectFleetWorkerPage(
       createRuntime({ handleForPane: TERMINAL_HANDLE, incarnationForHandle: PROCESS_INCARNATION }),
       createDb(),
       DISPATCH_ID
@@ -215,8 +215,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
   // equality — so a dispatch-labelled row from the previous incarnation bound to the new worker.
   // The row must be published for a DIFFERENT pane than the worker names, or the remint arm of
   // the matcher never runs and the case proves only the incarnation guard.
-  it('refuses a reminted pane whose dispatch matches but whose incarnation does not', () => {
-    const page = projectFleetWorkerPage(
+  it('refuses a reminted pane whose dispatch matches but whose incarnation does not', async () => {
+    const page = await projectFleetWorkerPage(
       createRuntime({
         rowPaneKey: REMINTED_PANE_KEY,
         handleForPane: TERMINAL_HANDLE,
@@ -234,8 +234,8 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
   })
 
   // The positive half of the same arm: a remint the durable incarnation still authorizes.
-  it('accepts a reminted pane whose dispatch and incarnation both match', () => {
-    const page = projectFleetWorkerPage(
+  it('accepts a reminted pane whose dispatch and incarnation both match', async () => {
+    const page = await projectFleetWorkerPage(
       createRuntime({
         rowPaneKey: REMINTED_PANE_KEY,
         handleForPane: TERMINAL_HANDLE,

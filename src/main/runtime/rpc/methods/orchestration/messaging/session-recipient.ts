@@ -23,9 +23,15 @@ import {
   lookupOrcaAgentSession,
   structuredSessionMailReach
 } from '../../../../orchestration/structured-session-mail-address'
-import type { AgentSessionRecordReader } from '../../../../orchestration/structured-session-lineage'
+import {
+  readAgentSessionRecordStore,
+  type AgentSessionRecordReader
+} from '../../../../orchestration/structured-session-lineage'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
+import type { OrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 /** `address` is the named session's own spelling; the mailbox mail lands in is its identity address. */
 export type SessionRecipient = { sessionId: OrcaSessionId; address: OrcaSessionAddress }
@@ -60,7 +66,8 @@ export function readSessionRecipient(
   const sessionId = isOrcaSessionId(recipient) ? recipient : null
   const found = sessionId && store ? lookupOrcaAgentSession(store, sessionId) : null
   if (found?.kind === 'provider-id') {
-    return providerIdRefusal(recipient, found.orcaSessionId, store)
+    const refusal = providerIdRefusal(recipient, found.orcaSessionId, store)
+    return { ...refusal, message: `${refusal.message} No message was sent.` }
   }
   return sessionId && found?.kind === 'found'
     ? { sessionId, address: formatOrcaSessionAddress(sessionId) }
@@ -71,13 +78,48 @@ export function readSessionRecipient(
 export function refuseUndeliverableSessionRecipient(
   recipient: SessionRecipient,
   store: AgentSessionRecordReader | null,
+  db: OrchestrationDb,
+  noEffect = 'No message was sent.'
+): SessionRecipientRefusal | null {
+  const refusal = undeliverableSessionRecipient(recipient, store, db)
+  return refusal ? { ...refusal, message: `${refusal.message} ${noEffect}` } : null
+}
+
+/**
+ * A chat named as a Dispatch assignee: refused by the same reach rules as mail to it, since the
+ * preamble and everything after it reach the chat as mail does.
+ */
+export async function assertChatAssigneeReachable(
+  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
+  party: OrchestrationParty,
+  db: OrchestrationDb
+): Promise<void> {
+  if (party.terminalHandle !== null || party.orcaSessionId === null) {
+    return
+  }
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  const sessionId = party.orcaSessionId
+  const refusal = refuseUndeliverableSessionRecipient(
+    { sessionId, address: formatOrcaSessionAddress(sessionId) },
+    readAgentSessionRecordStore(),
+    db,
+    'No effects were applied.'
+  )
+  if (refusal) {
+    throw new OrchestrationError(refusal.code, refusal.message, { effectsApplied: false })
+  }
+}
+
+function undeliverableSessionRecipient(
+  recipient: SessionRecipient,
+  store: AgentSessionRecordReader | null,
   db: OrchestrationDb
 ): SessionRecipientRefusal | null {
   const { sessionId } = recipient
   if (!store) {
     return {
       code: CODES.unknown,
-      message: `Agent session ${sessionId} cannot be verified: this Orca is not running its agent-session host. No message was sent.`
+      message: `Agent session ${sessionId} cannot be verified: this Orca is not running its agent-session host.`
     }
   }
   const found = lookupOrcaAgentSession(store, sessionId)
@@ -87,14 +129,14 @@ export function refuseUndeliverableSessionRecipient(
   if (found.kind === 'unknown') {
     return {
       code: CODES.unknown,
-      message: `No Orca agent session ${sessionId} exists on this host. No message was sent.`
+      message: `No Orca agent session ${sessionId} exists on this host.`
     }
   }
   const reach = structuredSessionMailReach(store, found.record, db)
   if (reach.kind === 'other-host') {
     return {
       code: CODES.hostBoundary,
-      message: `Agent session ${sessionId} runs on another host; mail reaches a session only on the host that runs it. Send from that host. No message was sent.`
+      message: `Agent session ${sessionId} runs on another host; mail reaches a session only on the host that runs it. Send from that host.`
     }
   }
   if (reach.kind === 'ended') {
@@ -102,10 +144,10 @@ export function refuseUndeliverableSessionRecipient(
       code: CODES.notLive,
       message:
         reach.reason === 'continuation-missing'
-          ? `Agent session ${sessionId} was cleared, and this host has no record of the session that continues it. No message was sent.`
+          ? `Agent session ${sessionId} was cleared, and this host has no record of the session that continues it.`
           : reach.reason === 'worker-identity-lost'
-            ? `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has, so it can never read that mail. No message was sent.`
-            : `Agent session ${sessionId} has ended: its chat was closed. No message was sent.`
+            ? `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has, so it can never read that mail.`
+            : `Agent session ${sessionId} has ended: its chat was closed.`
     }
   }
   return null
@@ -123,6 +165,6 @@ function providerIdRefusal(
   const address = `${ORCA_SESSION_ADDRESS_PREFIX}${root}`
   return {
     code: CODES.providerId,
-    message: `${id} is the provider's own session id, which changes on /clear. This session's Orca session ID is ${address}; address it by that instead. No message was sent.`
+    message: `${id} is the provider's own session id, which changes on /clear. This session's Orca session ID is ${address}; address it by that instead.`
   }
 }

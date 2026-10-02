@@ -1,8 +1,8 @@
 /**
  * Where a mailbox owned by a structured session is delivered: a chat that coordinates a Run
- * (`run:<id>` with no coordinator handle), a session addressed directly at `orca_session_id:<id>`, and the
- * live session behind a structured worker's handle. The session is resolved here, never a pane, and
- * takes the pointer as a session turn.
+ * (`run:<id>` with no coordinator handle), a session addressed directly at `orca_session_id:<id>`, a
+ * chat holding a Dispatch, and the live session behind a structured worker's handle. The session is
+ * resolved here, never a pane, and takes the pointer as a session turn.
  */
 
 import {
@@ -13,15 +13,14 @@ import {
 } from '../../../shared/orca-session-address'
 import type { OrchestrationDb } from './db'
 import { currentRunCoordinatorOrcaSessionId } from './db/runs/run-coordinator-orca-session'
-import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
   addressableSessionParty,
   structuredSessionMailReach
 } from './structured-session-mail-address'
 import {
-  lineageLiveSession,
   readAgentSessionRecordStore,
+  resolveExecutingSession,
   type AgentSessionRecordReader
 } from './structured-session-lineage'
 import type { RunRow } from './types'
@@ -65,14 +64,15 @@ export function structuredSessionMailTarget(
 
 /**
  * The session a structured worker's mail reaches: the one minted for it, or that session's live
- * `/clear` successor, which carries on as the worker the way a terminal keeps its handle.
+ * `/clear` successor, which carries on as the worker the way a terminal keeps its handle. Null
+ * whenever it cannot be delivered here.
  */
 export function structuredWorkerMailSessionId(
   mintedSessionId: string,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
 ): string | null {
-  const live = store ? lineageLiveSession(store, mintedSessionId) : null
-  return live && structuredWorkerHostScope(live.location) ? live.sessionId : null
+  const executing = store ? resolveExecutingSession(store, mintedSessionId) : null
+  return executing?.kind === 'here' ? executing.sessionId : null
 }
 
 /**
@@ -91,7 +91,8 @@ export function structuredSessionAddressTarget(
 }
 
 /**
- * Every mailbox a session reads for itself: the Runs it coordinates and its own direct mail.
+ * Every mailbox a session reads for itself: the Runs it coordinates, the Dispatches it holds as a
+ * chat assignee (each sends its owed preamble turn before its mail), and its own direct mail.
  * Re-derived from the database on each idle edge rather than remembered, so mail that arrived
  * while the session could not take it (mid-turn, closed) is found again.
  */
@@ -101,6 +102,11 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
     return []
   }
   const mailboxes = db.runsBoundToCoordinator(party).map((run) => `run:${run.id}`)
+  if (party.terminalHandle === null) {
+    for (const dispatch of db.getActiveDispatchMailboxOwners(party.address)) {
+      mailboxes.push(`dispatch:${dispatch.id}`)
+    }
+  }
   if (db.getUnreadDirectMessageTypes(party.address).length > 0) {
     mailboxes.push(party.address)
   }

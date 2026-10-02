@@ -40,7 +40,7 @@ import { agentHookServer } from '../../../../../agent-hooks/server'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
-import { projectFleetWorkerPage } from './worker-observation'
+import { projectFleetWorkerPage } from './worker-list-projection'
 
 const PANE_KEY = 'tab-census:leaf-census'
 const TERMINAL_HANDLE = 'term_census'
@@ -163,14 +163,14 @@ describe('agent status identity across every producer and consumer path', () => 
     }
   })
 
-  it('reads live on worker-show from a hook row that carries only a pane key', () => {
+  it('reads live on worker-show from a hook row that carries only a pane key', async () => {
     const db = new OrchestrationDb(':memory:')
     try {
       seedWorker(db)
       const runtime = censusRuntime()
       runtime.setOrchestrationDb(db)
 
-      const page = projectFleetWorkerPage(runtime, db, DISPATCH_ID)
+      const page = await projectFleetWorkerPage(runtime, db, DISPATCH_ID)
 
       expect(page?.workers[0]?.liveness).toMatchObject({
         verdict: 'live',

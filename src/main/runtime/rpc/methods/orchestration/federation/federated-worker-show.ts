@@ -8,22 +8,22 @@ import {
   exposeDispatchContext,
   exposeFederatedWorkerObservation,
   exposeWorker,
-  projectFleetWorkerPage,
   resolvePinnedFederatedServer
 } from '../worker/worker-observation'
+import { projectFleetWorkerPage } from '../worker/worker-list-projection'
 import { applyFederatedFleetObservations } from './federated-fleet-snapshot'
 
 /** Why worker-show cannot use the plain fleet projection: the push-fed agent-status snapshot
  *  only covers local panes, so a federated Dispatch got a fabricated `unverifiable` beside the
  *  execution host's real answer, and the guide makes the fleet verdict the one that decides. */
-export function projectFederatedFleetWorker(args: {
+export async function projectFederatedFleetWorker(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchId: string
   environmentId: string
   observation: { status?: string; exactWorker: boolean; reason?: string }
-}): OrchestrationFleetWorker | null {
-  const fleet = projectFleetWorkerPage(args.runtime, args.db, args.dispatchId)
+}): Promise<OrchestrationFleetWorker | null> {
+  const fleet = await projectFleetWorkerPage(args.runtime, args.db, args.dispatchId)
   if (!fleet) {
     return null
   }
@@ -98,7 +98,7 @@ export async function showFederatedWorker(args: {
   return {
     dispatch: exposeDispatchContext(db.getDispatchContextById(dispatchId) ?? args.dispatch),
     worker: exposeWorker(worker),
-    projection: projectFederatedFleetWorker({
+    projection: await projectFederatedFleetWorker({
       runtime,
       db,
       dispatchId,

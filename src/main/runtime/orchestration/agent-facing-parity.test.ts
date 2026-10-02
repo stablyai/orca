@@ -14,6 +14,7 @@ import {
 } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { deliverWorkerDispatchPreamble } from '../rpc/methods/orchestration/worker/deliver-worker-dispatch-preamble'
+import { decideWorkerStartMode } from '../rpc/methods/orchestration-worker-start-mode'
 import {
   localOrchestrationCliCommand,
   resolveTerminalOrchestrationCliCommand,
@@ -71,8 +72,12 @@ function installApp(isPackaged: boolean): void {
 function runtime(prompts: string[]): OrcaRuntimeService {
   const fake: Pick<
     OrcaRuntimeService,
-    'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
+    | 'getNestedWorkerMaxDepth'
+    | 'getTerminalOrchestrationCliCommand'
+    | 'sendTerminalAgentPrompt'
+    | 'deliverPendingMessagesForHandle'
   > = {
+    deliverPendingMessagesForHandle: () => {},
     getNestedWorkerMaxDepth: () => 2,
     getTerminalOrchestrationCliCommand: () => 'orca',
     sendTerminalAgentPrompt: async (handle, text) => {
@@ -92,13 +97,19 @@ function structuredSession(): StructuredSession {
   return session as unknown as StructuredSession
 }
 
-async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
+/** A structured worker Orca started, an existing chat assigned by its Orca session ID, or a terminal. */
+async function renderPreamble(worker: 'chat' | 'chat assignee' | 'terminal'): Promise<string> {
   const prompts: string[] = []
-  await deliverWorkerDispatchPreamble({
+  const delivery = await deliverWorkerDispatchPreamble({
     runtime: runtime(prompts),
     db,
     structuredSession: worker === 'chat' ? structuredSession() : null,
-    terminalHandle: worker === 'chat' ? CHAT_WORKER_HANDLE : TERMINAL_HANDLE,
+    terminalHandle:
+      worker === 'chat'
+        ? CHAT_WORKER_HANDLE
+        : worker === 'chat assignee'
+          ? CHAT_ADDRESS
+          : TERMINAL_HANDLE,
     dispatchId: 'ctx_1',
     dispatchDepth: 1,
     taskId: 'task_1',
@@ -107,6 +118,9 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
     devMode: false,
     requestId: 'req_1'
   })
+  if (delivery.chatPreambleTurn) {
+    return db.getDispatchPreambleTurn('ctx_1')!.body
+  }
   return worker === 'chat' ? sent.preambles[0]! : prompts[0]!
 }
 
@@ -147,6 +161,14 @@ describe('a chat agent and a terminal agent see the same text but for how each i
     expect(chat.replace(SELF_LINE, '').split(CHAT_ADDRESS).join(TERMINAL_HANDLE)).toBe(terminal)
   })
 
+  it('renders an existing chat dispatched to by its Orca session ID the preamble a started chat gets', async () => {
+    const assignee = await renderPreamble('chat assignee')
+    const terminal = await renderPreamble('terminal')
+
+    expect(assignee).toBe(await renderPreamble('chat'))
+    expect(assignee.replace(SELF_LINE, '').split(CHAT_ADDRESS).join(TERMINAL_HANDLE)).toBe(terminal)
+  })
+
   it.each([
     ['a packaged app', true],
     ['a dev build', false]
@@ -170,6 +192,27 @@ describe('a chat agent and a terminal agent see the same text but for how each i
       }
     }
   )
+})
+
+describe('the worker-start receipt for a reused agent', () => {
+  it.each([
+    [
+      'a structured default',
+      {
+        experimentalNativeChat: true,
+        experimentalStructuredNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+    ],
+    ['a terminal default', {}]
+  ])('names neither kind, whichever the address is, under %s', (_label, settings) => {
+    const chat = decideWorkerStartMode({ params: { terminal: CHAT_ADDRESS }, settings })
+    const terminal = decideWorkerStartMode({ params: { terminal: TERMINAL_HANDLE }, settings })
+
+    expect(chat).toEqual(terminal)
+    expect(chat.mode).toBe('reused')
+    expect(chat.detail).not.toMatch(/terminal agent|chat|structured/i)
+  })
 })
 
 describe('the orchestration guide an agent loads', () => {

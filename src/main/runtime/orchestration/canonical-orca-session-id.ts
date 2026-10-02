@@ -1,6 +1,6 @@
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import {
-  clearedInto,
+  clearLineageFromNewest,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from './structured-session-lineage'
@@ -17,22 +17,7 @@ export function canonicalOrcaSessionId(
   if (!store) {
     return orcaSessionId
   }
-  const clearedFrom = new Map<string, string>()
-  for (const record of store.listRecords()) {
-    const next = clearedInto(record)
-    if (next) {
-      clearedFrom.set(next, record.sessionId)
-    }
-  }
-  // A clear chain is acyclic by construction; the visited set only bounds a corrupt store.
-  let root: string = orcaSessionId
-  const earlier = new Set([root])
-  let prior = clearedFrom.get(root)
-  while (prior && !earlier.has(prior)) {
-    earlier.add(prior)
-    root = prior
-    prior = clearedFrom.get(root)
-  }
+  const root = clearLineageFromNewest(store, orcaSessionId).at(-1) ?? orcaSessionId
   // Record ids are minted as Orca session ids; one that is not cannot name the conversation.
   return isOrcaSessionId(root) ? root : orcaSessionId
 }

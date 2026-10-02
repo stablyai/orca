@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import {
   decideStructuredSessionPointerDelivery,
   retainReasonForDispatch,
@@ -77,6 +80,21 @@ describe('structured session gate facts', () => {
         pendingApproval()
       ])
     ).toEqual({ turnRunning: true, awaitingHuman: true })
+  })
+})
+
+describe('a send the provider has not answered yet', () => {
+  const sent = (dispatchState: AgentJournalSubmission['dispatchState']) => [{ dispatchState }]
+
+  it('reads as a running turn in its echo window, whoever sent it, as the chat shows Working', () => {
+    // Claude writes its running row only when it echoes the message, seconds later.
+    expect(structuredSessionGateFacts([], sent('pending'))).toMatchObject({ turnRunning: true })
+  })
+
+  it('stops reading as running once answered, and leaves a send in doubt to the mail policy', () => {
+    expect(structuredSessionGateFacts([], sent('accepted'))).toEqual(IDLE)
+    // A live `unknown` may never clear; the lane does not hold new mail behind it.
+    expect(structuredSessionGateFacts([], sent('unknown'))).toEqual(IDLE)
   })
 })
 

@@ -1,14 +1,16 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import { assigneeActiveDispatchRefusal } from '../dispatch-context/assignee-active-dispatch-refusal'
 
 export function prepareStartingWorkerAuthority(
   this: OrchestrationDb,
   params: {
     dispatchId: string
     handle: string
-    paneKey: string
-    processIncarnation: string
+    /** Both null for a chat assignee, which is proven by its session instead. */
+    paneKey: string | null
+    processIncarnation: string | null
     launchTokenHash?: string
     worktreeId: string
     effects: unknown[]
@@ -41,11 +43,9 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} already has a different launch-token commitment.`
       )
     }
-    const existing = this.findActiveDispatchForAssignee(params.handle, params.paneKey)
+    const existing = this.findActiveDispatchForAssignee(params.handle, params.paneKey ?? undefined)
     if (existing && existing.id !== params.dispatchId) {
-      throw new Error(
-        `Terminal ${params.handle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
-      )
+      throw assigneeActiveDispatchRefusal(params.handle, existing)
     }
     const endpointId = this.getWorkerDispatch(params.dispatchId)?.runtime_epoch ?? null
     const contextUpdate = this.db
@@ -61,7 +61,10 @@ export function prepareStartingWorkerAuthority(
       .run(
         params.handle,
         params.paneKey,
-        dispatchAssigneeOrcaSessionId(params.processIncarnation),
+        dispatchAssigneeOrcaSessionId({
+          handle: params.handle,
+          processIncarnation: params.processIncarnation
+        }),
         params.processIncarnation,
         params.hostScope ?? null,
         params.launchTokenHash ?? null,

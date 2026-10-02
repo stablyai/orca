@@ -29,6 +29,12 @@ import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
+import { resolveDispatchAssigneeParty } from '../../../../orchestration/orchestration-party'
+import {
+  awaitChatTakesTurn,
+  chatNotReadyStatus
+} from '../../../../orchestration/chat-assignee-readiness'
+import { resolveStructuredAssignee } from '../../../../structured-worker-authority'
 
 type WorkerStartMutation = {
   callerFingerprint: string
@@ -49,8 +55,14 @@ export async function startLocalWorker(args: {
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
 }): Promise<unknown> {
-  const { params, runtime, db, run, coordinator, callerSession, existingTask } = args
+  const { runtime, db, run, coordinator, callerSession, existingTask } = args
   const { orchestrationMutation } = args
+  // An Orca session ID names its party's one mailbox address; a chat's is its `/clear` root.
+  const terminalParty = args.params.terminal
+    ? resolveDispatchAssigneeParty(args.params.terminal, db)
+    : null
+  const params = terminalParty ? { ...args.params, terminal: terminalParty.address } : args.params
+  const chatTerminal = terminalParty?.terminalHandle === null
   const coordinatorPane = coordinator?.paneKey ?? null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
@@ -76,10 +88,10 @@ export async function startLocalWorker(args: {
     : requestedWorktree === 'current'
       ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
       : await runtime.showManagedTerminalWorkspace(requestedWorktree)
-  if (params.terminal) {
+  if (terminalParty) {
     await assertExplicitWorkerTerminalUsable({
       runtime,
-      terminal: params.terminal,
+      terminal: terminalParty,
       from: params.from,
       coordinator,
       resolvedWorktreeId: resolvedWorktree?.id
@@ -181,24 +193,25 @@ export async function startLocalWorker(args: {
     // A structured session is ready the moment its attach returns ok: there is no boot-to-idle
     // gap and no terminal title to read an idle edge from. Only the repo's wait-for-setup policy
     // still holds it back, and that gate has to be waited on explicitly here.
-    const wait = structuredSession
-      ? await awaitStructuredWorkerSetupGate({
-          runtime,
-          setup: setupReceipt,
-          effects,
-          timeoutMs: params.timeoutMs ?? 60_000
-        })
-      : // ZCode emits SessionStart only after input; its first dispatch must wait for the composer.
-        agent === 'zcode' && !params.terminal
-        ? await runtime.waitForFreshWorkerComposer(
-            terminalHandle,
-            agent,
-            params.timeoutMs ?? 60_000
-          )
-        : await runtime.waitForTerminal(terminalHandle, {
-            condition: 'tui-idle',
+    const wait =
+      structuredSession || chatTerminal
+        ? await awaitStructuredWorkerSetupGate({
+            runtime,
+            setup: setupReceipt,
+            effects,
             timeoutMs: params.timeoutMs ?? 60_000
           })
+        : // ZCode emits SessionStart only after input; its first dispatch must wait for the composer.
+          agent === 'zcode' && !params.terminal
+          ? await runtime.waitForFreshWorkerComposer(
+              terminalHandle,
+              agent,
+              params.timeoutMs ?? 60_000
+            )
+          : await runtime.waitForTerminal(terminalHandle, {
+              condition: 'tui-idle',
+              timeoutMs: params.timeoutMs ?? 60_000
+            })
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
       if (!wait.satisfied) {
@@ -214,7 +227,20 @@ export async function startLocalWorker(args: {
         )
       }
     }
-    const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
+    // A chat is ready once it can take a turn, as a terminal is once its agent is idle; nothing is
+    // attached before then, so a start that times out leaves the chat as it was.
+    if (chatTerminal) {
+      const chat = resolveStructuredAssignee(terminalHandle, db)
+      const takes = chat
+        ? await awaitChatTakesTurn(chat.sessionId, params.timeoutMs ?? 60_000)
+        : ({ deliver: false, retain: 'session-not-attached' } as const)
+      if (!takes.deliver) {
+        throw new Error(`Agent did not become ready (${chatNotReadyStatus(takes)}).`)
+      }
+    }
+    const terminalAuthority = chatTerminal
+      ? { paneKey: null, processIncarnation: null }
+      : requireWorkerAuthority(runtime, terminalHandle)
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: terminalHandle,

@@ -48,14 +48,17 @@ export async function readStructuredSessionGateFacts(
   sessionId: string
 ): Promise<StructuredSessionGateFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot ? structuredSessionGateFacts(snapshot.items) : null
+  return snapshot ? structuredSessionGateFacts(snapshot.items, snapshot.submissions) : null
 }
 
 /** The pointer lane's gate: the shared idle facts, plus what each recorded send settled as. */
 async function readPointerGateFacts(sessionId: string): Promise<StructuredPointerGateFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
   return snapshot
-    ? { ...structuredSessionGateFacts(snapshot.items), submissions: snapshot.submissions }
+    ? {
+        ...structuredSessionGateFacts(snapshot.items, snapshot.submissions),
+        submissions: snapshot.submissions
+      }
     : null
 }
 

@@ -191,8 +191,23 @@ export function transitionLifecycleWithDb(
       `${params.entity} ${params.id} changed while transitioning.`
     )
   }
+  if (params.entity === 'dispatch' && !ACTIVE_DISPATCH_STATUSES.includes(params.to)) {
+    dropEndedDispatchPreambleTurn(db, params.id)
+  }
 
   return { changed: true }
+}
+
+const ACTIVE_DISPATCH_STATUSES: readonly string[] = ['pending', 'dispatched']
+
+/** Bookkeeping only: an ended Dispatch's preamble can never be sent, since delivery is derived
+ *  from the Dispatch's status, so a failed delete is reported and never fails the transition. */
+function dropEndedDispatchPreambleTurn(db: Database.Database, dispatchId: string): void {
+  try {
+    db.prepare('DELETE FROM dispatch_preamble_turns WHERE dispatch_id = ?').run(dispatchId)
+  } catch (error) {
+    console.warn(`[orchestration] dropping Dispatch ${dispatchId}'s preamble turn failed`, error)
+  }
 }
 
 export type LifecycleTransitionMethods = {

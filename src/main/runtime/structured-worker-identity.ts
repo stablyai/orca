@@ -25,7 +25,11 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
+import {
+  isOrcaSessionId,
+  parseOrcaSessionAddress,
+  type OrcaSessionId
+} from '../../shared/orca-session-address'
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,
   isStructuredWorkerHandle
@@ -40,6 +44,13 @@ export {
   isStructuredWorkerHandle
 } from '../../shared/structured-worker-handle'
 export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
+
+/** Whether an assignee address names a structured session, a minted worker or a chat, not a pane. */
+export function isStructuredSessionAddress(address: string | null | undefined): boolean {
+  return Boolean(
+    address && (isStructuredWorkerHandle(address) || parseOrcaSessionAddress(address) !== null)
+  )
+}
 
 export type StructuredWorkerIdentity = {
   handle: string

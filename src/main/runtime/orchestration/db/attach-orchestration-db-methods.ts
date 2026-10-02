@@ -34,6 +34,7 @@ import { attachMessageInbox } from './messages/message-inbox'
 import { attachMessageInsert } from './messages/message-insert'
 import { attachRoleMailboxDelivery } from './messages/role-mailbox-delivery'
 import { attachStructuredPointerOperationStore } from './messages/structured-pointer-operation-store'
+import { attachDispatchPreambleTurnStore } from './dispatch-context/dispatch-preamble-turn-store'
 import { attachMutationReceiptStore } from './mutation-receipts/mutation-receipt-store'
 import { attachLifecycleTransition } from './lifecycle-transition'
 import { attachQuestionThreads } from './questions/question-threads'
@@ -95,6 +96,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachMessageInsert(ctor)
   attachRoleMailboxDelivery(ctor)
   attachStructuredPointerOperationStore(ctor)
+  attachDispatchPreambleTurnStore(ctor)
   attachMessageInbox(ctor)
   attachMailboxPointerEnterState(ctor)
   attachDirectMailboxRouting(ctor)

@@ -10,7 +10,7 @@ import {
   recordObservedAgentStatusPaneIdentity
 } from '../../../../agent-status-observed-pane-identity'
 import type { EnrichedAgentHookEventPayload } from '../../../../../agent-hooks/server/server-types'
-import { projectFleetWorkerPage } from './worker-observation'
+import { projectFleetWorkerPage } from './worker-list-projection'
 
 /**
  * A cached hook row must keep the identity it was observed under.
@@ -132,8 +132,12 @@ function createDb(worker: {
   } as unknown as OrchestrationDb
 }
 
-function livenessOf(world: ObservedWorld, db: OrchestrationDb, dispatchId: string): unknown {
-  return projectFleetWorkerPage(world.runtime, db, dispatchId)?.workers[0]?.liveness
+async function livenessOf(
+  world: ObservedWorld,
+  db: OrchestrationDb,
+  dispatchId: string
+): Promise<unknown> {
+  return (await projectFleetWorkerPage(world.runtime, db, dispatchId))?.workers[0]?.liveness
 }
 
 describe('fleet evidence keeps the identity it was observed under', () => {
@@ -164,7 +168,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     })
   })
 
-  it('reads live while the pane still runs the process the row was observed on', () => {
+  it('reads live while the pane still runs the process the row was observed on', async () => {
     const world = createWorld()
     world.bindPane(PANE_KEY, TERMINAL_HANDLE)
     world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
@@ -172,7 +176,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     world.ingest(PANE_KEY, 'working')
 
     expect(
-      livenessOf(
+      await livenessOf(
         world,
         createDb({
           dispatchId: DISPATCH_OLD,
@@ -185,7 +189,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     ).toMatchObject({ verdict: 'live', source: 'agent_status' })
   })
 
-  it('refuses the same row once the durable resource advances to the new incarnation', () => {
+  it('refuses the same row once the durable resource advances to the new incarnation', async () => {
     const world = createWorld()
     world.bindPane(PANE_KEY, TERMINAL_HANDLE)
     world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
@@ -196,7 +200,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     world.runProcess(TERMINAL_HANDLE, INCARNATION_TWO)
 
     expect(
-      livenessOf(
+      await livenessOf(
         world,
         createDb({
           dispatchId: DISPATCH_OLD,
@@ -209,7 +213,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     ).toMatchObject({ verdict: 'unverifiable', reason: 'missing_status' })
   })
 
-  it('refuses the same row for a dispatch that took the pane over afterwards', () => {
+  it('refuses the same row for a dispatch that took the pane over afterwards', async () => {
     const world = createWorld()
     world.bindPane(PANE_KEY, TERMINAL_HANDLE)
     world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
@@ -218,7 +222,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     world.dispatchPane(PANE_KEY, DISPATCH_NEW)
 
     expect(
-      livenessOf(
+      await livenessOf(
         world,
         createDb({
           dispatchId: DISPATCH_NEW,
@@ -231,7 +235,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     ).toMatchObject({ verdict: 'unverifiable', reason: 'missing_status' })
   })
 
-  it('refuses the same row after a remint when no resource names an incarnation', () => {
+  it('refuses the same row after a remint when no resource names an incarnation', async () => {
     const world = createWorld()
     world.bindPane(PANE_KEY, TERMINAL_HANDLE)
     world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
@@ -242,7 +246,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     // An unsupervised worker has no materialized resource, so nothing downstream can
     // contradict the incarnation the row was minted with.
     expect(
-      livenessOf(
+      await livenessOf(
         world,
         createDb({
           dispatchId: DISPATCH_OLD,
@@ -255,7 +259,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     ).toMatchObject({ verdict: 'unverifiable', reason: 'missing_status' })
   })
 
-  it('still binds a legitimate pane remint on the same dispatch and incarnation', () => {
+  it('still binds a legitimate pane remint on the same dispatch and incarnation', async () => {
     const world = createWorld()
     world.bindPane(REMINTED_PANE_KEY, TERMINAL_HANDLE)
     world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
@@ -263,7 +267,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     world.ingest(REMINTED_PANE_KEY, 'working')
 
     expect(
-      livenessOf(
+      await livenessOf(
         world,
         createDb({
           dispatchId: DISPATCH_OLD,
@@ -276,7 +280,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     ).toMatchObject({ verdict: 'live', source: 'agent_status' })
   })
 
-  it('reads live for the rebound worker and not for the one it replaced', () => {
+  it('reads live for the rebound worker and not for the one it replaced', async () => {
     const world = createWorld()
     world.bindPane(PANE_KEY, TERMINAL_HANDLE)
     world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
@@ -287,7 +291,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     world.ingest(PANE_KEY, 'waiting')
 
     expect(
-      livenessOf(
+      await livenessOf(
         world,
         createDb({
           dispatchId: DISPATCH_NEW,
@@ -299,7 +303,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
       )
     ).toMatchObject({ verdict: 'live', source: 'agent_status' })
     expect(
-      livenessOf(
+      await livenessOf(
         world,
         createDb({
           dispatchId: DISPATCH_OLD,

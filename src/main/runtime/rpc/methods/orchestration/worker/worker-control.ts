@@ -6,10 +6,10 @@ import {
   exposeObservation,
   exposeWorker,
   inspectWorkerTerminal,
-  projectFleetWorker,
   resolvePinnedFederatedServer,
   showContextOnlyWorker
 } from './worker-observation'
+import { projectFleetWorker } from './worker-list-projection'
 import { readArchivedWorkerOutput } from './worker-archive-read'
 import { readStructuredWorkerOutput } from '../../orchestration-structured-worker-lifecycle'
 import { releaseStructuredWorkerSession } from '../../orchestration-structured-worker-session'
@@ -69,7 +69,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         dispatch: exposeDispatchContext(dispatch),
         worker: exposeWorker(worker),
         // Why: the fleet verdict, so worker-show and worker-list cannot disagree.
-        projection: projectFleetWorker(runtime, db, params.dispatch),
+        projection: await projectFleetWorker(runtime, db, params.dispatch),
         terminal: observation.exact ? observation.terminal : null,
         observation: exposeObservation(observation),
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null
@@ -134,7 +134,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           limit: params.limit,
           liveness
         })
-        return { ...archived, projection: projectFleetWorker(runtime, db, params.dispatch) }
+        return { ...archived, projection: await projectFleetWorker(runtime, db, params.dispatch) }
       }
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
       if (!observation.exact) {
@@ -193,7 +193,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         )
       }
       // Two verdicts: status.liveness is the PTY's, the projection is the agent's.
-      return { ...output, projection: projectFleetWorker(runtime, db, params.dispatch) }
+      return { ...output, projection: await projectFleetWorker(runtime, db, params.dispatch) }
     }
   }),
   defineMethod({

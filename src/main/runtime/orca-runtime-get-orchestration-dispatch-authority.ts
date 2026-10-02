@@ -15,6 +15,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
+  localOrchestrationCliCommand,
   resolveTerminalOrchestrationCliCommand,
   runtimeOrchestrationCliCommand,
   type OrchestrationCliCommand
@@ -22,6 +23,7 @@ import {
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
+import { isStructuredSessionAddress } from './structured-worker-identity'
 import { matchesProcessIncarnation } from './orchestration/worker-terminal-process-liveness'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
@@ -258,7 +260,8 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       return 'orca'
     }
     if (!pty) {
-      return 'orca'
+      // A structured session runs in this runtime's own process, as the pointer lane says.
+      return isStructuredSessionAddress(handle) ? localOrchestrationCliCommand() : 'orca'
     }
     return resolveTerminalOrchestrationCliCommand({
       connectionId: pty.connectionId,

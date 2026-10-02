@@ -1,5 +1,6 @@
 /**
- * `terminal read` for a worker that IS a structured agent session.
+ * `terminal read` for a worker that IS a structured agent session, or any chat named by its
+ * `orca_session_id:<id>` address.
  *
  * Peers peek at each other's recent output constantly, and for a PTY worker that is `terminal
  * read`. A structured worker had no answer at all: `worker-read` demands a dispatch id and
@@ -28,6 +29,7 @@
  * writable and is not.
  */
 
+import { parseOrcaSessionAddress } from '../../shared/orca-session-address'
 import type { RuntimeTerminalRead } from '../../shared/runtime-types'
 import { formatWorkerTranscriptMessage } from '../../shared/worker-transcript-text'
 import { AGENT_SESSION_NOT_ATTACHED } from '../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
@@ -35,14 +37,18 @@ import type { OrchestrationDb } from './orchestration/db'
 import { boundStructuredJournalTail } from './orchestration/structured-worker-journal-archive'
 import { readStructuredJournalPage } from './orchestration/structured-worker-journal-page'
 import {
-  observeStructuredWorker,
+  observeResolvedStructuredAssignee,
+  resolveStructuredAssignee,
   resolveStructuredWorkerAuthority,
-  structuredWorkerTerminalState
+  structuredWorkerSessionId,
+  structuredWorkerTerminalState,
+  type StructuredAssignee
 } from './structured-worker-authority'
 import { readTerminalTail } from './terminal-tail-read'
 
 /**
- * The recent output of a structured worker, or null when this handle is not one.
+ * The recent output of a structured session, named by a structured worker's handle or by any
+ * session's `orca_session_id:<id>`, the address every agent is shown; null when the handle names neither.
  *
  * Null is the "not mine" answer, so the PTY path keeps every handle it already owned. A handle that
  * IS a structured worker never falls through: an unreadable journal refuses rather than answering
@@ -54,10 +60,11 @@ export async function readStructuredWorkerTerminal(args: {
   cursor?: number
   limit?: number
 }): Promise<RuntimeTerminalRead | null> {
-  const identity = resolveStructuredWorkerAuthority(args.handle, args.db)?.identity
-  if (!identity) {
+  const assignee = structuredSessionReadTarget(args.handle, args.db)
+  if (!assignee) {
     return null
   }
+  const { sessionId } = assignee
   if (args.cursor !== undefined) {
     // No index can be re-anchored here, so this refusal names no paging alternative — there is
     // none. `terminal.read`'s cursor indexes an append-only completed-line buffer with a monotone
@@ -76,7 +83,7 @@ export async function readStructuredWorkerTerminal(args: {
         'A structured session has no durable line anchor to page from — nothing else does either.'
     )
   }
-  const page = await readStructuredJournalPage(identity.sessionId)
+  const page = await readStructuredJournalPage(sessionId)
   if (!page) {
     // Honest refusal, and the same one the send lane reports: an empty tail would read as "this
     // worker has produced no output", which is a different and false claim.
@@ -89,7 +96,10 @@ export async function readStructuredWorkerTerminal(args: {
   )
   const read = readTerminalTail({
     handle: args.handle,
-    status: structuredWorkerTerminalState(observeStructuredWorker(identity).status),
+    // The status worker-show and worker-list report for the same worker.
+    status: structuredWorkerTerminalState(
+      observeResolvedStructuredAssignee(assignee, args.db).status
+    ),
     previewLines: lines,
     // Unreachable without a cursor, and deliberately empty rather than a copy of `lines`: a
     // running turn's text is still growing, so calling it "completed" is the `"hel"`/`"hello"`
@@ -107,4 +117,18 @@ export async function readStructuredWorkerTerminal(args: {
   // honour.
   const { oldestCursor: _oldest, latestCursor: _latest, ...withoutCursorSpace } = read
   return { ...withoutCursorSpace, nextCursor: null }
+}
+
+/** The session a read names, as it runs now: a worker's successor, or a chat's live session. */
+function structuredSessionReadTarget(
+  handle: string,
+  db: OrchestrationDb | null
+): StructuredAssignee | null {
+  if (parseOrcaSessionAddress(handle)) {
+    return resolveStructuredAssignee(handle, db)
+  }
+  const worker = resolveStructuredWorkerAuthority(handle, db)?.identity
+  return worker
+    ? { kind: 'worker', sessionId: structuredWorkerSessionId(worker), handle: worker.handle }
+    : null
 }

@@ -67,12 +67,6 @@ describe('worker-start mode receipt wording', () => {
       'this worker runs on a remote execution host'
     ],
     [
-      'reused terminal',
-      { agent: 'claude', terminal: 'term_1' },
-      'reused_terminal',
-      '--terminal reuses a running terminal agent'
-    ],
-    [
       'agent with no structured session',
       { agent: 'grok' },
       'agent_without_structured_session',

@@ -104,6 +104,12 @@ export function structuredPointerPayloadFingerprint(
   })
 }
 
+/** Where a send's live operation id is kept: the mailbox's row, unless what it sends keeps its own. */
+export type StructuredPointerLedger = {
+  stored: StructuredPointerOperationRow | undefined
+  put: (row: StructuredPointerOperationRow) => void
+}
+
 export type StructuredPointerOperation =
   | { kind: 'send'; operationId: string; payloadFingerprint: string }
   | { kind: 'stamp' }
@@ -119,18 +125,26 @@ export function resolveStructuredPointerOperation(args: {
   submissions: readonly StructuredPointerSubmission[]
   /** The operation id this process last sent for this mailbox, if any. */
   sentByThisProcess: string | undefined
+  ledger?: StructuredPointerLedger
   now?: number
 }): StructuredPointerOperation {
   const now = args.now ?? Date.now()
   const payloadFingerprint = structuredPointerPayloadFingerprint(args.sessionId, args.body)
   const batchFingerprint = structuredPointerBatchFingerprint(args.sessionId, args.messageIds)
-  const stored = args.db.getStructuredPointerOperation(args.mailboxHandle)
+  const ledger = args.ledger ?? {
+    stored: args.db.getStructuredPointerOperation(args.mailboxHandle),
+    put: (row) => args.db.putStructuredPointerOperation(row)
+  }
+  const stored = ledger.stored
   const attempt = decideStructuredPointerAttempt({
     row: stored,
     sessionId: args.sessionId,
     batchFingerprint,
     submissions: args.submissions,
-    mintedByThisProcess: stored?.operation_id === args.sentByThisProcess,
+    // A send that keeps its id on its own durable row (the preamble) owns that id across a restart,
+    // so a recorded `unknown` replays under it rather than going again as a new turn.
+    mintedByThisProcess:
+      args.ledger !== undefined || stored?.operation_id === args.sentByThisProcess,
     now
   })
   if (attempt === 'stamp' || attempt === 'park') {
@@ -140,7 +154,7 @@ export function resolveStructuredPointerOperation(args: {
     return { kind: 'send', operationId: stored.operation_id, payloadFingerprint }
   }
   const operationId = mintAgentSessionOperationId(now)
-  args.db.putStructuredPointerOperation({
+  ledger.put({
     mailbox_handle: args.mailboxHandle,
     session_id: args.sessionId,
     operation_id: operationId,

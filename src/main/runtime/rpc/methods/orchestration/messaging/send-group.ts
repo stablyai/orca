@@ -5,9 +5,12 @@ import { resolveGroupAddress } from '../../../../orchestration/groups'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import {
+  chatAssigneeAgentIdentity,
   listAddressableStructuredWorkers,
   type OrchestrationAddressableAgent
 } from '../../../../orchestration/structured-worker-group-addressing'
+import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessages } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
@@ -62,13 +65,19 @@ function listRunGroupCandidates(args: {
       row.agentTerminalHandle ??
       to
     // Nested coordinators consume their child Run mailbox, not their parent Dispatch mailbox.
-    const coordinated = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+    const chat = !paneKey && parseOrcaSessionAddress(handle)
+    const coordinated = paneKey
+      ? db.getCurrentRunForPane(paneKey)
+      : chat
+        ? db.getCurrentRunForCoordinator(resolveOrchestrationParty(handle, db))
+        : undefined
     if (coordinated?.id === row.runId) {
       return []
     }
     // Discovery can precede a handle remint; the pane still owns the captured identity.
     const agentIdentity =
       identityByHandle.get(handle) ??
+      chatAssigneeAgentIdentity(handle) ??
       agents.find(
         (agent) =>
           paneKey &&

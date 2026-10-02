@@ -6,6 +6,7 @@ import { detectAgentStatusFromTitle, isClaudeManagementTitle } from '../../share
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { structuredWorkerIdentities } from './structured-worker-identity'
+import { parseOrcaSessionAddress } from '../../shared/orca-session-address'
 import type { StructuredPointerTarget } from './orchestration/structured-mailbox-pointer-delivery'
 import {
   handleLessCoordinatorSessionId,
@@ -246,11 +247,19 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       return this.resolveStructuredWorkerDirectMailboxTarget(mailboxHandle)
     }
     const dispatchId = mailboxHandle.slice('dispatch:'.length)
-    const assignee = this._orchestrationDb?.getDispatchContextById?.(dispatchId)?.assignee_handle
-    if (!assignee) {
+    const dispatch = this._orchestrationDb?.getDispatchContextById?.(dispatchId)
+    if (!dispatch?.assignee_handle) {
       return null
     }
-    const sessionId = this.liveStructuredWorkerSessionId(assignee)
+    const chat = parseOrcaSessionAddress(dispatch.assignee_handle)
+    if (chat) {
+      // A chat assignee is reached as a chat is, and only while it holds the Dispatch: a settled
+      // one's undelivered preamble dies with it.
+      const active = dispatch.status === 'pending' || dispatch.status === 'dispatched'
+      const target = active ? structuredSessionMailTarget(chat, this._orchestrationDb) : null
+      return target ? { ...target, dispatchId } : null
+    }
+    const sessionId = this.liveStructuredWorkerSessionId(dispatch.assignee_handle)
     return sessionId ? { sessionId, dispatchId } : null
   }
 
@@ -316,10 +325,12 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     let handles: Set<string>
     try {
       const db = this._orchestrationDb
-      // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
+      // Pointer-phase rows are excluded from the undelivered scan, so they need their own, and so
+      // does a chat's owed preamble, which is not mail.
       handles = new Set([
         ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
-        ...(db?.getPendingMailboxPointerHandles?.() ?? [])
+        ...(db?.getPendingMailboxPointerHandles?.() ?? []),
+        ...(db?.getOwedDispatchPreambleMailboxes?.() ?? [])
       ])
     } catch (error) {
       console.warn('[orchestration] failed to scan restored mailboxes', error)

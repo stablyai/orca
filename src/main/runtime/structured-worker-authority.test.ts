@@ -19,7 +19,24 @@ const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 function installRecordProvider(provider: 'claude' | 'codex' | null): void {
   hostRef.current = {
-    deps: { store: { getRecord: () => (provider ? { provider } : null) } }
+    // Every record the store serves carries a location: it refuses to load one without
+    // (`isPersistedAgentSessionRecord`).
+    deps: {
+      store: {
+        getRecord: () =>
+          provider
+            ? {
+                provider,
+                location: {
+                  executionHostId: 'local',
+                  wslDistro: null,
+                  workspaceId: 'wt_1',
+                  workspaceKind: 'git-worktree'
+                }
+              }
+            : null
+      }
+    }
   }
 }
 

@@ -64,8 +64,11 @@ describe('shared feasibility owns every caller decision', () => {
           ...(customized ? { agentCmdOverrides: { [agent]: `${agent}-wrapper` } } : {})
         }
         const input = { params: { agent, ...placement }, settings: launchSettings }
+        // `--terminal` names an agent already running, so worker-start launches nothing and its
+        // receipt names no mode; the shared verdict still decides every launch it does make.
+        const reused = Boolean(placement.terminal)
         predicate.mockReturnValue({ supported: true })
-        expect(decideWorkerStartMode(input).mode).toBe('structured')
+        expect(decideWorkerStartMode(input).mode).toBe(reused ? 'reused' : 'structured')
         expect(predicate).toHaveBeenLastCalledWith(
           expect.objectContaining({
             agent,
@@ -77,6 +80,14 @@ describe('shared feasibility owns every caller decision', () => {
         for (const blocker of blockers) {
           predicate.mockReturnValue({ supported: false, blocker })
           const receipt = decideWorkerStartMode(input)
+          if (reused) {
+            expect(receipt).toMatchObject({
+              mode: 'reused',
+              preferred: 'structured',
+              reason: 'reused_terminal'
+            })
+            continue
+          }
           expect(receipt).toMatchObject({ mode: 'terminal', preferred: 'structured' })
           expect(receipt.reason).not.toBe('user_default')
           expect(receipt.detail).toContain('Your default is a structured chat session')

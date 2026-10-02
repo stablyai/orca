@@ -9,6 +9,7 @@ import {
   structuredPointerBatchFingerprint,
   type StructuredPointerSubmission
 } from './structured-pointer-operation-id'
+import type { DispatchPreambleTurnRow } from './db/dispatch-context/dispatch-preamble-turn-store'
 import { structuredSessionGateFacts } from './structured-session-pointer-delivery'
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
 
@@ -82,6 +83,10 @@ function harness(options: {
   /** The coordinator of this worker's Run is mid-batch: it checked and has not acked yet. */
   outstandingRunDelivery?: boolean
   outstandingOwnDelivery?: boolean
+  /** Undelivered unread rows on the mailbox, oldest first. */
+  unread?: { id: string; type: string }[]
+  /** A chat assignee's preamble owed on Dispatch d1. */
+  preamble?: string
   /** The mailbox this worker owns; its own handle for direct peer mail outside a dispatch. */
   mailbox?: string
   dispatchId?: string | null
@@ -98,34 +103,81 @@ function harness(options: {
   }))
   const sendMock = vi.mocked(send)
   const stored = new Map<string, StructuredPointerOperationRow>()
+  let preambleRow: DispatchPreambleTurnRow | undefined = options.preamble
+    ? {
+        dispatch_id: 'd1',
+        body: options.preamble,
+        state: 'owed',
+        session_id: null,
+        operation_id: null,
+        batch_fingerprint: null,
+        minted_at_ms: null
+      }
+    : undefined
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
     hasOutstandingMailboxDelivery: (handle: string) =>
       ((options.outstandingRunDelivery ?? false) && handle.startsWith('run:')) ||
       ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:')),
-    getUndeliveredUnreadMessages: () => [{ id: 'm1', type: 'status', sequence: 3 }],
+    getUndeliveredUnreadMessages: () =>
+      (options.unread ?? [{ id: 'm1', type: 'status' }]).map((message, index) => ({
+        ...message,
+        sequence: index + 3
+      })),
     markAsDelivered,
+    getDispatchPreambleTurn: (id: string) =>
+      preambleRow?.dispatch_id === id ? preambleRow : undefined,
+    claimDispatchPreambleTurnSend: (id: string) => {
+      if (preambleRow?.dispatch_id !== id || preambleRow.state === 'delivered') {
+        return false
+      }
+      preambleRow = { ...preambleRow, state: 'sending' }
+      return true
+    },
+    recordDispatchPreambleTurnOperation: (
+      id: string,
+      operation: Omit<StructuredPointerOperationRow, 'mailbox_handle'>
+    ) => {
+      if (preambleRow?.dispatch_id === id && preambleRow.state !== 'delivered') {
+        preambleRow = { ...preambleRow, ...operation }
+      }
+    },
+    settleDispatchPreambleTurnSend: (id: string, state: DispatchPreambleTurnRow['state']) => {
+      if (preambleRow?.dispatch_id === id) {
+        preambleRow = { ...preambleRow, state }
+      }
+    },
     getStructuredPointerOperation: (key: string) => stored.get(key),
     putStructuredPointerOperation: (row: StructuredPointerOperationRow) =>
       stored.set(row.mailbox_handle, row),
     deleteStructuredPointerOperation: (key: string) => stored.delete(key)
   }
-  const delivery = new OrchestrationStructuredMailboxPointerDelivery({
-    getDb: () => db as never,
-    getMessageWaiters: () => undefined,
-    resolveStructuredTarget: (mailboxHandle) =>
-      mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
-    getCliCommand: () => 'orca-dev',
-    host: {
-      readGateFacts: async () =>
-        journal === null ? null : { ...structuredSessionGateFacts(journal), submissions },
-      currentFence: () => 4,
-      send
-    }
-  })
+  const lane = () =>
+    new OrchestrationStructuredMailboxPointerDelivery({
+      getDb: () => db as never,
+      getMessageWaiters: () => undefined,
+      resolveStructuredTarget: (mailboxHandle) =>
+        mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
+      getCliCommand: () => 'orca-dev',
+      host: {
+        readGateFacts: async () =>
+          journal === null ? null : { ...structuredSessionGateFacts(journal), submissions },
+        currentFence: () => 4,
+        send
+      }
+    })
+  let delivery = lane()
   return {
-    delivery,
+    get delivery() {
+      return delivery
+    },
+    /** A new process over the same database: nothing the lane kept in memory survives. */
+    restart: () => {
+      delivery = lane()
+    },
     markAsDelivered,
+    preambleState: () => preambleRow?.state,
+    preambleOperationId: () => preambleRow?.operation_id ?? null,
     send: sendMock,
     stored,
     setJournal: (next: AgentJournalRenderItem[] | null) => {
@@ -533,5 +585,131 @@ describe('forgetting one settled worker', () => {
     delivery.onJournalActivity('session-1')
     await flush()
     expect(send).not.toHaveBeenCalled()
+  })
+})
+
+describe("a chat assignee's dispatch preamble", () => {
+  const PREAMBLE = 'You are a dispatched worker.'
+  const sentText = (h: ReturnType<typeof harness>, call: number) =>
+    h.send.mock.calls[call]![0].body.blocks
+
+  it('goes first, alone and as its own body; the mail behind it is pointed at the next edge', async () => {
+    const h = harness({ journal: idleJournal(), preamble: PREAMBLE })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(sentText(h, 0)).toEqual([{ type: 'text', text: PREAMBLE }])
+    expect(h.preambleState()).toBe('delivered')
+    expect(h.markAsDelivered).not.toHaveBeenCalled()
+
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(sentText(h, 1)).toEqual([
+      { type: 'text', text: expect.stringContaining('orchestration message') }
+    ])
+    expect(h.markAsDelivered).toHaveBeenCalledWith(['m1'])
+  })
+
+  it('is sent although the chat holds an unacknowledged check batch on its Dispatch mailbox', async () => {
+    const h = harness({ journal: idleJournal(), preamble: PREAMBLE, outstandingOwnDelivery: true })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(sentText(h, 0)).toEqual([{ type: 'text', text: PREAMBLE }])
+  })
+
+  it('gives `dispatch`-typed mail the pointer, never its body', async () => {
+    const h = harness({ journal: idleJournal(), unread: [{ id: 'msg_forged', type: 'dispatch' }] })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(sentText(h, 0)).toEqual([
+      { type: 'text', text: expect.stringContaining('orchestration message') }
+    ])
+  })
+
+  it('is in doubt while a send it stopped waiting on is unknown, and delivered once echoed', async () => {
+    const h = harness({ journal: idleJournal(), preamble: PREAMBLE, dispatchState: 'unknown' })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.preambleState()).toBe('in_doubt')
+    const first = h.send.mock.calls[0]![0].operationId
+    h.setSubmissions([
+      { clientMessageId: first, dispatchState: 'accepted', submittedAt: Date.now() }
+    ])
+    h.delivery.onJournalActivity(IDENTITY.sessionId)
+    await flush()
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(h.preambleState()).toBe('delivered')
+  })
+
+  it('replays a refused send under its own id, and goes again only after a later turn runs', async () => {
+    const h = harness({ journal: idleJournal(), preamble: PREAMBLE, dispatchState: 'rejected' })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.preambleState()).toBe('owed')
+    const first = h.send.mock.calls[0]![0].operationId
+    h.setSubmissions([
+      { clientMessageId: first, dispatchState: 'rejected', submittedAt: Date.now() }
+    ])
+    for (let edge = 0; edge < 3; edge++) {
+      h.delivery.onJournalActivity(IDENTITY.sessionId)
+      await flush()
+    }
+    // The host answers a recorded id from its ledger and starts nothing: no respawn loop.
+    expect(h.send.mock.calls.map(([input]) => input.operationId)).toEqual([
+      first,
+      first,
+      first,
+      first
+    ])
+
+    h.setSubmissions([
+      { clientMessageId: first, dispatchState: 'rejected', submittedAt: Date.now() },
+      { clientMessageId: 'user-turn', dispatchState: 'accepted', submittedAt: Date.now() + 1 }
+    ])
+    h.delivery.onJournalActivity(IDENTITY.sessionId)
+    await flush()
+    expect(h.send.mock.calls.at(-1)![0].operationId).not.toBe(first)
+  })
+
+  it('replays a send left in doubt under its own id after a restart, never sending the task again', async () => {
+    const h = harness({ journal: idleJournal(), preamble: PREAMBLE, dispatchState: 'unknown' })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    const first = h.send.mock.calls[0]![0].operationId
+    // Restart recovery leaves the in-flight send `unknown`; the startup scan redrives the row.
+    h.setSubmissions([
+      { clientMessageId: first, dispatchState: 'unknown', submittedAt: Date.now() }
+    ])
+    h.restart()
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    // The host answers a recorded id from its ledger and starts nothing.
+    expect(h.send.mock.calls.map(([input]) => input.operationId)).toEqual([first, first])
+  })
+
+  it('keeps its operation id on its own row, never in the mailbox ledger a mail reset clears', async () => {
+    const h = harness({ journal: idleJournal(), preamble: PREAMBLE, dispatchState: 'unknown' })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    const first = h.send.mock.calls[0]![0].operationId
+    expect(h.preambleOperationId()).toBe(first)
+    expect(h.stored.get('dispatch:d1')).toBeUndefined()
+
+    // A mail reset clears the ledger, and the preamble still replays under its own id.
+    h.stored.clear()
+    h.delivery.onJournalActivity(IDENTITY.sessionId)
+    await flush()
+    expect(h.send.mock.calls.map(([input]) => input.operationId)).toEqual([first, first])
+  })
+
+  it('waits out a running turn like any mail', async () => {
+    const h = harness({ journal: runningJournal(), preamble: PREAMBLE })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.send).not.toHaveBeenCalled()
+    h.setJournal(idleJournal())
+    h.delivery.onJournalActivity(IDENTITY.sessionId)
+    await flush()
+    expect(sentText(h, 0)).toEqual([{ type: 'text', text: PREAMBLE }])
   })
 })

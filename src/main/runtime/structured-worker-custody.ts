@@ -20,6 +20,10 @@ import {
 } from './orchestration/worker-terminal-ownership'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
+  clearLineageFromNewest,
+  readAgentSessionRecordStore
+} from './orchestration/structured-session-lineage'
+import {
   structuredWorkerHostScope,
   structuredWorkerProcessIncarnation,
   structuredWorkerRecordIsCurrent
@@ -104,7 +108,8 @@ export function structuredWorkerAddressable(
  * addressed to its incarnation, on a process this host owns a terminal for. That covers its own
  * worker-start dispatch (whose context stays open while the worker is active, a stop in doubt
  * included, because a supervised worker's context settles only with it) and any task later
- * dispatched to it. A `reclaimable` worker's dispatch has settled, so it owes nothing.
+ * dispatched to it. A `reclaimable` worker's dispatch has settled, so it owes nothing. A `/clear`
+ * successor owes what the session it continues owes: it is the same worker.
  */
 export function structuredWorkerOwesWork(
   db: OrchestrationDb | null,
@@ -114,20 +119,32 @@ export function structuredWorkerOwesWork(
   if (!db || !hostScope) {
     return false
   }
-  const incarnation = structuredWorkerProcessIncarnation(record.sessionId)
-  const owned = db.db
-    .prepare(
-      `SELECT 1 FROM worker_terminal_resources
-        WHERE process_incarnation = ? AND host_scope IS ? AND ownership_state = 'owned' LIMIT 1`
-    )
-    .get(incarnation, JSON.stringify(hostScope))
-  return (
-    owned !== undefined &&
-    db.db
+  return structuredWorkerLineage(record.sessionId).some((sessionId) => {
+    const incarnation = structuredWorkerProcessIncarnation(sessionId)
+    const owned = db.db
       .prepare(
-        `SELECT 1 FROM dispatch_contexts
-          WHERE process_incarnation = ? AND status IN ('pending', 'dispatched') LIMIT 1`
+        `SELECT 1 FROM worker_terminal_resources
+          WHERE process_incarnation = ? AND host_scope IS ? AND ownership_state = 'owned' LIMIT 1`
       )
-      .get(incarnation) !== undefined
-  )
+      .get(incarnation, JSON.stringify(hostScope))
+    return (
+      owned !== undefined &&
+      db.db
+        .prepare(
+          `SELECT 1 FROM dispatch_contexts
+            WHERE process_incarnation = ? AND status IN ('pending', 'dispatched') LIMIT 1`
+        )
+        .get(incarnation) !== undefined
+    )
+  })
+}
+
+/** The session and those it continues; just itself when the lineage cannot be read. */
+function structuredWorkerLineage(sessionId: string): string[] {
+  const store = readAgentSessionRecordStore()
+  try {
+    return store ? clearLineageFromNewest(store, sessionId) : [sessionId]
+  } catch {
+    return [sessionId]
+  }
 }

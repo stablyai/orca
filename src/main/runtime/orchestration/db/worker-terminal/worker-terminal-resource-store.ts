@@ -174,8 +174,8 @@ export function transferWorkerTerminalResourceStatement(
     resourceId: string
     toDispatchId: string
     terminalHandle: string
-    paneKey: string
-    processIncarnation: string
+    paneKey: string | null
+    processIncarnation: string | null
     endpointId?: string | null
     endpointIncarnation?: string | null
     hostScope: string | null

@@ -3,7 +3,8 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   formatOrcaSessionAddress,
-  isOrcaSessionId
+  isOrcaSessionId,
+  parseOrcaSessionAddress
 } from '../../../../../../shared/orca-session-address'
 import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
 import { orcaSessionIdOrHandle } from '../../../../orchestration/orchestration-party'
@@ -14,17 +15,28 @@ import {
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
+import { queueDispatchPreambleTurn } from '../../../../orchestration/dispatch-preamble-turn'
 
 type StructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
+
+/** What the delivery left to observe: a PTY write's receipt, a structured send's own evidence, or a
+ *  chat's owed preamble turn. */
+export type WorkerPreambleDelivery = {
+  prompt?: RuntimeTerminalSend['prompt']
+  /** A structured worker's preamble send is its own evidence: acknowledged, or still held. */
+  structuredTurnStart?: WorkerTurnStartObservation
+  /** A chat is owed the preamble as its next turn (see `dispatch-preamble-turn.ts`). */
+  chatPreambleTurn?: true
+}
 
 /**
  * Hands a started worker the dispatch preamble, over whichever transport it has.
  *
- * The preamble is identical for both but for how it names the worker: a worker is taught the same
+ * The preamble is identical for all but for how it names the worker: a worker is taught the same
  * verbs whichever mode it runs in, and only the delivery differs — a PTY write returns a
- * queued/accepted receipt, while a structured turn is acknowledged, still held for an agent that has
- * not started, or throws. Held is a turn start nobody observed yet: the start is left unknown, not
- * torn down.
+ * queued/accepted receipt, a structured turn is acknowledged, still held for an agent that has not
+ * started, or throws, and a chat is owed it as a turn its mail lane delivers once the chat can take
+ * one. Held is a turn start nobody observed yet: the start is left unknown, not torn down.
  */
 export async function deliverWorkerDispatchPreamble(args: {
   runtime: OrcaRuntimeService
@@ -38,10 +50,7 @@ export async function deliverWorkerDispatchPreamble(args: {
   coordinatorHandle: string
   devMode: boolean | undefined
   requestId: string
-}): Promise<{
-  prompt?: RuntimeTerminalSend['prompt']
-  structuredTurnStart?: WorkerTurnStartObservation
-}> {
+}): Promise<WorkerPreambleDelivery> {
   const { runtime, structuredSession, terminalHandle } = args
   const preamble = buildDispatchPreamble({
     // Depth only. A worker is taught the same verbs whichever mode it runs in, so this must not
@@ -56,7 +65,7 @@ export async function deliverWorkerDispatchPreamble(args: {
     workerHandle:
       structuredSession && isOrcaSessionId(structuredSession.identity.sessionId)
         ? formatOrcaSessionAddress(canonicalOrcaSessionId(structuredSession.identity.sessionId))
-        : terminalHandle,
+        : orcaSessionIdOrHandle(terminalHandle, args.db),
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
   })
@@ -80,13 +89,14 @@ export async function deliverWorkerDispatchPreamble(args: {
             }
     }
   }
-  return {
-    prompt: (
-      await runtime.sendTerminalAgentPrompt(
-        terminalHandle,
-        preamble,
-        dispatchPreambleSendOptions(args.requestId)
-      )
-    ).prompt
+  if (parseOrcaSessionAddress(terminalHandle)) {
+    queueDispatchPreambleTurn(runtime, args.db, args.dispatchId, preamble)
+    return { chatPreambleTurn: true }
   }
+  const sent = await runtime.sendTerminalAgentPrompt(
+    terminalHandle,
+    preamble,
+    dispatchPreambleSendOptions(args.requestId)
+  )
+  return sent.prompt ? { prompt: sent.prompt } : {}
 }

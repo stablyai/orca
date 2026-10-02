@@ -63,6 +63,7 @@ import type { WorkerTerminalArchiveMethods } from './worker-terminal/worker-term
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
 import type { StructuredPointerOperationStoreMethods } from './messages/structured-pointer-operation-store'
+import type { DispatchPreambleTurnStoreMethods } from './dispatch-context/dispatch-preamble-turn-store'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
@@ -120,6 +121,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   RemoteQuestionStoreMethods &
   FederationRelayItemMethods &
   StructuredPointerOperationStoreMethods &
+  DispatchPreambleTurnStoreMethods &
   WorkerTerminalResourceStoreMethods &
   WorkerTerminalTransferMethods &
   WorkerTerminalReleaseMethods &

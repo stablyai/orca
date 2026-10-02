@@ -10,6 +10,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
 import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import { assigneeActiveDispatchRefusal } from './assignee-active-dispatch-refusal'
 
 export function createDispatchContext(
   this: OrchestrationDb,
@@ -43,9 +44,7 @@ export function createDispatchContext(
   const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
 
   if (existing) {
-    throw new Error(
-      `Terminal ${assigneeHandle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
-    )
+    throw assigneeActiveDispatchRefusal(assigneeHandle, existing)
   }
 
   // Carry forward failure_count so the circuit breaker accumulates across retries for the same task.
@@ -66,7 +65,10 @@ export function createDispatchContext(
       launchTokenHash: launchTokenHash ?? null,
       assigneeHandle,
       assigneePaneKey: assigneePaneKey ?? null,
-      assigneeOrcaSessionId: dispatchAssigneeOrcaSessionId(processIncarnation),
+      assigneeOrcaSessionId: dispatchAssigneeOrcaSessionId({
+        handle: assigneeHandle,
+        processIncarnation
+      }),
       processIncarnation: processIncarnation ?? null,
       creatorDispatchId,
       ...recordedCreatorIdentity(params.creator),
@@ -79,9 +81,7 @@ export function createDispatchContext(
       const current = this.getTask(taskId)
       const occupied = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
       if (current?.status === 'ready' && occupied) {
-        throw new Error(
-          `Terminal ${assigneeHandle} already has an active dispatch (${occupied.id} for task ${occupied.task_id})`
-        )
+        throw assigneeActiveDispatchRefusal(assigneeHandle, occupied)
       }
       // Why: the atomic claim lost to a concurrent status change; report it with the same
       // typed receipt as the precheck so the loser can recover instead of reading runtime_error.

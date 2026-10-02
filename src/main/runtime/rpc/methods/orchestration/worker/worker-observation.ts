@@ -3,13 +3,16 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
-import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
-import { projectWorkerFleet } from './worker-list-projection'
-import {
-  observeStructuredWorker,
-  resolveStructuredWorkerForDispatch
-} from '../../orchestration-structured-worker-lifecycle'
+import { projectFleetWorker } from './worker-list-projection'
+import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
 import { structuredWorkerAddressable } from '../../../../structured-worker-custody'
+import { isStructuredSessionAddress } from '../../../../structured-worker-identity'
+import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import {
+  observeResolvedStructuredAssignee,
+  observeStructuredAssignee,
+  structuredWorkerSessionId
+} from '../../../../structured-worker-authority'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -30,7 +33,8 @@ export async function inspectWorkerTerminal(
   /** Set only on a proven-exact worker parked on a prompt that needs a human. */
   agentWait?: RuntimeTerminalInteractiveWait | null
   /** Structured workers only: whether mail still reaches it — at rest included, since the mail
-   *  starts it. Absent when ownership cannot be read. `status` stays the process verdict. */
+   *  starts it. Absent when ownership cannot be read. A held worker at rest reads `live`
+   *  (`observeResolvedStructuredAssignee`). */
   addressable?: boolean
   /** The handle that actually resolved: the durable one, or a live handle re-minted from the
    *  recorded process incarnation after the durable handle went stale. Null when none resolved. */
@@ -41,6 +45,10 @@ export async function inspectWorkerTerminal(
     worker?.agent_terminal_handle ?? db.getDispatchContextById(dispatchId)?.assignee_handle
   if (!terminalHandle) {
     return { terminal: null, exact: false, status: 'unattached', terminalHandle: null }
+  }
+  if (isStructuredSessionAddress(terminalHandle)) {
+    // A session is read off the host's record store, which nothing has installed after a restart.
+    await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   }
   const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
   if (structured) {
@@ -56,10 +64,14 @@ export async function inspectWorkerTerminal(
       paneKey: structured.paneKey,
       processIncarnation: structured.processIncarnation
     })
-    const observation = observeStructuredWorker(structured)
+    const sessionId = structuredWorkerSessionId(structured)
+    const observation = observeResolvedStructuredAssignee(
+      { kind: 'worker', sessionId, handle: structured.handle },
+      db
+    )
     const addressable = structuredWorkerAddressable(
       db,
-      structured.sessionId,
+      sessionId,
       db.getWorkerTerminalResourceByHandle?.(structured.handle)
     )
     return {
@@ -68,6 +80,24 @@ export async function inspectWorkerTerminal(
       status: exact ? observation.status : 'identity_changed',
       ...(exact && observation.reason ? { reason: observation.reason } : {}),
       ...(exact && addressable !== null ? { addressable } : {}),
+      terminalHandle: null
+    }
+  }
+  if (parseOrcaSessionAddress(terminalHandle)) {
+    // A chat assignee is its address, which nothing re-points, so it is the exact worker once the
+    // Dispatch is attached to it, as a terminal's is once its pane and process are; its liveness
+    // is the session running it now. `agentWait` is absent as for any session.
+    if (db.getDispatchContextById(dispatchId)?.assignee_handle !== terminalHandle) {
+      return { terminal: null, exact: false, status: 'identity_changed', terminalHandle: null }
+    }
+    const observation = observeStructuredAssignee(terminalHandle, db) ?? {
+      status: 'unverifiable' as const
+    }
+    return {
+      terminal: null,
+      exact: true,
+      status: observation.status,
+      ...(observation.reason ? { reason: observation.reason } : {}),
       terminalHandle: null
     }
   }
@@ -231,7 +261,7 @@ export async function showContextOnlyWorker(
   return {
     dispatch: exposeDispatchContext(dispatch),
     worker: exposeContextOnlyWorker(dispatch),
-    projection: projectFleetWorker(runtime, db, dispatch.id),
+    projection: await projectFleetWorker(runtime, db, dispatch.id),
     terminal: observation.exact ? observation.terminal : null,
     observation: exposeObservation(observation),
     terminalResource: null
@@ -257,40 +287,6 @@ export function exposeWorker(worker: WorkerDispatchRow) {
     createdAt: worker.created_at,
     updatedAt: worker.updated_at
   }
-}
-
-/**
- * The same fleet verdict `worker-list` publishes, for one Dispatch.
- *
- * Why worker-show needs it: `observation.status` is PTY liveness, so an agent that died
- * at a trust prompt inside a live pane read `live` here and `unverifiable` from
- * `worker-list` — and `worker-list`'s own `nextAction` pointed back at this command.
- */
-export function projectFleetWorkerPage(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  dispatchId: string
-): ReturnType<typeof projectWorkerFleet> | null {
-  const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
-  if (rows.length === 0) {
-    return null
-  }
-  const now = Date.now()
-  return projectWorkerFleet({
-    rows,
-    attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
-    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
-    limit: 1,
-    now
-  })
-}
-
-export function projectFleetWorker(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  dispatchId: string
-): OrchestrationFleetWorker | null {
-  return projectFleetWorkerPage(runtime, db, dispatchId)?.workers[0] ?? null
 }
 
 export function exposeFederatedWorkerObservation(
