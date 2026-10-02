@@ -9,7 +9,7 @@ vi.mock('@/i18n/i18n', () => ({
       : fallback
 }))
 
-import { humanizeTerminalError } from './TerminalErrorToast'
+import { humanizeTerminalError, isRemoteTerminalClosedError } from './TerminalErrorToast'
 
 describe('remote-closed terminal banner localization', () => {
   it('translates the remote-closed line instead of pinning it to English', () => {
@@ -20,5 +20,13 @@ describe('remote-closed terminal banner localization', () => {
     expect(humanizeTerminalError('Paste failed.\nRemote terminal was closed.')).toBe(
       'Paste failed.\n远程终端已关闭。'
     )
+  })
+
+  it('identifies localized remote terminal closed error strings', () => {
+    expect(isRemoteTerminalClosedError('远程终端已关闭。')).toBe(true)
+  })
+
+  it('identifies localized remote terminal closed error strings in accumulated errors', () => {
+    expect(isRemoteTerminalClosedError('Paste failed.\n远程终端已关闭。')).toBe(true)
   })
 })
