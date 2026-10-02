@@ -16,7 +16,11 @@ export class CdpPointerCommands extends CdpBridgeCommandModule {
       const refSender = this.senderForRef(guest, node)
 
       await this.scrollIntoView(refSender, node.backendDOMNodeId)
-      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
+      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId, element)
+      await this.assertElementInteractable(refSender, node.backendDOMNodeId, element, {
+        pointerCenter: localCenter,
+        requireEnabled: true
+      })
       const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
 
       // Why: mouseMoved fires mouseenter/mouseover so sites reveal hover-dependent menus/targets before the click lands.
@@ -49,7 +53,10 @@ export class CdpPointerCommands extends CdpBridgeCommandModule {
       const node = await this.resolveRef(guest, sender, element)
       const refSender = this.senderForRef(guest, node)
       await this.scrollIntoView(refSender, node.backendDOMNodeId)
-      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
+      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId, element)
+      await this.assertElementInteractable(refSender, node.backendDOMNodeId, element, {
+        pointerCenter: localCenter
+      })
       const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
 
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
@@ -70,9 +77,20 @@ export class CdpPointerCommands extends CdpBridgeCommandModule {
       const toSender = this.senderForRef(guest, toNode)
 
       await this.scrollIntoView(fromSender, fromNode.backendDOMNodeId)
-      const fromLocal = await this.getElementCenter(fromSender, fromNode.backendDOMNodeId)
+      const fromLocal = await this.getElementCenter(
+        fromSender,
+        fromNode.backendDOMNodeId,
+        fromElement
+      )
+      await this.assertElementInteractable(fromSender, fromNode.backendDOMNodeId, fromElement, {
+        pointerCenter: fromLocal
+      })
       const from = await this.getPageCoordinates(guest, fromNode, fromLocal.cx, fromLocal.cy)
-      const toLocal = await this.getElementCenter(toSender, toNode.backendDOMNodeId)
+      await this.scrollIntoView(toSender, toNode.backendDOMNodeId)
+      const toLocal = await this.getElementCenter(toSender, toNode.backendDOMNodeId, toElement)
+      await this.assertElementInteractable(toSender, toNode.backendDOMNodeId, toElement, {
+        pointerCenter: toLocal
+      })
       const to = await this.getPageCoordinates(guest, toNode, toLocal.cx, toLocal.cy)
 
       // Why: interpolate the drag so intermediate elements fire dragenter/dragover, which many drag-and-drop libs require.

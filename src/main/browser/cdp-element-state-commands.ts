@@ -98,7 +98,11 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
 
       if (currentState.value !== checked) {
         await this.scrollIntoView(refSender, node.backendDOMNodeId)
-        const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
+        const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId, element)
+        await this.assertElementInteractable(refSender, node.backendDOMNodeId, element, {
+          pointerCenter: localCenter,
+          requireEnabled: true
+        })
         const { cx, cy } = await this.getPageCoordinates(
           guest,
           node,

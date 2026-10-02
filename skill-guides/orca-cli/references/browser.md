@@ -61,5 +61,6 @@ Common recoveries:
 
 - `browser_no_tab`: open a tab with `ORCA tab create --url <url> --json`.
 - `browser_stale_ref`: run `ORCA snapshot --json` and retry with fresh refs.
+- `browser_element_not_interactable`: re-snapshot, scroll, or choose another visible, enabled ref; do not busy-retry the same action.
 - `browser_tab_not_found`: run `ORCA tab list --json` before switching or closing.
 - `browser_host_unavailable`: the desktop hosting the page is offline. Bring it back, or recreate the page with server placement if the work must outlive the desktop session.

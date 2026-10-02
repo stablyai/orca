@@ -7,8 +7,8 @@ const CAPTURE_LOG_LIMIT = 1000
 export function createCdpDebuggerMessageListener(
   guest: WebContents,
   state: CdpTabState
-): (_event: unknown, method: string, params: unknown) => void {
-  return (_event: unknown, method: string, params: unknown): void => {
+): (_event: unknown, method: string, params: unknown, sessionId?: string) => void {
+  return (_event: unknown, method: string, params: unknown, parentSessionId?: string): void => {
     if (method === 'Page.frameNavigated') {
       state.snapshotResult = null
       state.navigationId = null
@@ -32,11 +32,19 @@ export function createCdpDebuggerMessageListener(
         | undefined
       if (p?.sessionId && p.targetInfo?.type === 'iframe' && p.targetInfo.targetId) {
         state.iframeSessions.set(p.targetInfo.targetId, p.sessionId)
+        state.iframeParentSessions.set(p.sessionId, parentSessionId || null)
         // Why: no Runtime.enable here. Cross-origin iframes include challenge widgets
         // (Cloudflare Turnstile), and the Runtime domain's console/Error.stack serialization
         // is the CDP tell they detect; nothing reads iframe Runtime events anyway.
         guest.debugger.sendCommand('DOM.enable', {}, p.sessionId).catch(() => {})
         guest.debugger.sendCommand('Accessibility.enable', {}, p.sessionId).catch(() => {})
+        guest.debugger
+          .sendCommand(
+            'Target.setAutoAttach',
+            { autoAttach: true, waitForDebuggerOnStart: false, flatten: true },
+            p.sessionId
+          )
+          .catch(() => {})
       }
     }
     if (method === 'Target.detachedFromTarget') {
@@ -45,6 +53,7 @@ export function createCdpDebuggerMessageListener(
         for (const [frameId, sid] of state.iframeSessions) {
           if (sid === p.sessionId) {
             state.iframeSessions.delete(frameId)
+            state.iframeParentSessions.delete(p.sessionId)
             break
           }
         }
