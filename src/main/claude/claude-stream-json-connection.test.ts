@@ -91,12 +91,12 @@ const spawnedChildren: SpawnedProcess[] = []
 
 async function open(
   launch: ClaudeStreamJsonLaunch,
-  handlers: Parameters<typeof openClaudeStreamJsonConnection>[1] = {},
+  handlers: Omit<Parameters<typeof openClaudeStreamJsonConnection>[1], 'sessionId' | 'logger'> = {},
   queryImpl?: typeof query
 ): Promise<ClaudeStreamJsonConnection> {
   const connection = await openClaudeStreamJsonConnection(
     launch,
-    handlers,
+    { ...testEventSinkLogging(), ...handlers },
     (spec) => {
       spawned.push(spec)
       const child = spawnProcess(spec)
@@ -804,7 +804,7 @@ describe('the managed-auth live gate', () => {
 
     try {
       await expect(
-        openClaudeStreamJsonConnection(launchFor(scenario), {}, (spec) => {
+        openClaudeStreamJsonConnection(launchFor(scenario), testEventSinkLogging(), (spec) => {
           const child = spawnProcess(spec)
           started = child
           const attach = child.stderr.on.bind(child.stderr)

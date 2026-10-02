@@ -29,6 +29,7 @@ import { journalDirectoryFor, legacyJournalDatabaseFile } from './journal-paths'
 import { importPerSessionJournal } from './journal-per-session-import'
 import { readJournalSessionEpoch, type JournalStoredRow } from './journal-row-table'
 import { createStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger-test-support'
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
@@ -380,7 +381,7 @@ describe('importing a per-chat journal', () => {
     const { epoch, rows } = await historyRows()
     await writeLegacyJournal(epoch, rows)
     const database = openTestJournalHostDatabase(root)
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const errors = vi.spyOn(database.logger, 'error')
     const input = {
       database,
       identity: IDENTITY,
@@ -403,6 +404,10 @@ describe('importing a per-chat journal', () => {
       total: 0
     })
     expect(errors).toHaveBeenCalledOnce()
+    expect(errors.mock.calls[0]?.[1]).toMatchObject({
+      scope: 'journal-import-verify',
+      sessionId: IDENTITY.sessionId
+    })
     // A copy that reads back whole then imports it, over what the refused ones left.
     const journal = await openChat()
     expect(readTestJournalRows(database.db, IDENTITY.sessionId, epoch)).toEqual(rows)
@@ -416,7 +421,7 @@ describe('importing a per-chat journal', () => {
     expect(rows.filter((row) => row.rowJson.includes('On it.'))).toHaveLength(1)
     await writeLegacyJournal(epoch, rows)
     const database = openTestJournalHostDatabase(root)
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const errors = vi.spyOn(database.logger, 'error')
     const input = {
       database,
       identity: IDENTITY,
@@ -441,6 +446,8 @@ describe('importing a per-chat journal', () => {
     await writeLegacyJournal(epoch, rows)
     removeFails()
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const logged = recordingStructuredAgentSessionLogger()
+    openTestJournalHostDatabase(root, logged.logger)
 
     const journal = await openChat()
     await journal.appendItem(
@@ -449,6 +456,13 @@ describe('importing a per-chat journal', () => {
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     expect(existsSync(legacyJournalDatabaseFile(legacyDir()))).toBe(true)
+    expect(logged.entries.map(({ fields }) => fields)).toEqual([
+      expect.objectContaining({
+        scope: 'journal-import-retire',
+        sessionId: IDENTITY.sessionId,
+        legacyDirectory: legacyDir()
+      })
+    ])
     // The process exits and the database closes.
     await journals.closeAll()
     await removeWorks()

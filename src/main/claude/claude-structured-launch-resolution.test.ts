@@ -16,6 +16,9 @@ import {
   createClaudeStructuredLaunchResolver
 } from './claude-structured-launch-resolution'
 import { claudeStructuredPermissionModeForSettings } from './claude-structured-permission-mode'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const SESSION_ID = 'orca-session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -62,6 +65,7 @@ function resolverFor(
   hasTranscript: () => Promise<boolean> = async () => true
 ) {
   return createClaudeStructuredLaunchResolver({
+    logger: TEST_LOGGER,
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
@@ -356,6 +360,7 @@ describe('claude structured launch resolution', () => {
 
   it('builds on the supplied inherited env instead of Orca process env', async () => {
     const launch = await createClaudeStructuredLaunchResolver({
+      logger: TEST_LOGGER,
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
@@ -368,6 +373,7 @@ describe('claude structured launch resolution', () => {
 
   it('drops an inherited CLAUDE_CONFIG_DIR so the record stays the only Claude home the pin sees', async () => {
     const launch = await createClaudeStructuredLaunchResolver({
+      logger: TEST_LOGGER,
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
@@ -386,6 +392,7 @@ describe('claude structured launch resolution', () => {
 
   it('keeps a configured overlay CLAUDE_CONFIG_DIR over the dropped inherited one', async () => {
     const launch = await createClaudeStructuredLaunchResolver({
+      logger: TEST_LOGGER,
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
@@ -399,6 +406,7 @@ describe('claude structured launch resolution', () => {
 
   it('still strips an inherited auth key under a managed account', async () => {
     const launch = await createClaudeStructuredLaunchResolver({
+      logger: TEST_LOGGER,
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
@@ -436,6 +444,7 @@ describe('claude structured launch resolution', () => {
     makeExecutable(nodeCommand)
 
     const launch = await createClaudeStructuredLaunchResolver({
+      logger: TEST_LOGGER,
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => claudeCommand,
@@ -478,6 +487,7 @@ describe('claude structured launch resolution', () => {
   describe('managed-account gate on every acquisition', () => {
     function resolverWithGate(read: () => ClaudeManagedAccountGateSettings | null) {
       return createClaudeStructuredLaunchResolver({
+        logger: TEST_LOGGER,
         store: { getRecord: () => RESUMABLE } as unknown as AgentSessionRecordStore,
         resolveWorkspacePath: async (id) => `/repos/${id}`,
         resolveCommand: () => '/usr/local/bin/claude',

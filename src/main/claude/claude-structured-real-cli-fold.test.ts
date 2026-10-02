@@ -27,6 +27,9 @@ import {
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const SESSION_ID = 'real-cli-fold'
 // Pins the live proof order (SessionStart hook frame before system/init) and lets the
@@ -78,6 +81,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI fold', () => {
       }
       const settled = vi.fn()
       const adapter = new ClaudeStructuredSessionAdapter({
+        logger: TEST_LOGGER,
         resolveLaunch: async () => ({
           pathToClaudeCodeExecutable: realClaudeCommand,
           options: {

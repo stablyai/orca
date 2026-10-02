@@ -15,6 +15,7 @@ import {
 } from './journal-database-schema'
 import { JournalUnreleasedSchemaError } from './journal-open-failure'
 import { ensureQueuedMessagesTable } from './queued-message-schema'
+import type { StructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 /** Bounds the WAL a checkpoint leaves behind; SQLite truncates it back to this after a reset. */
@@ -98,7 +99,8 @@ export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean | und
 
 export function openJournalDatabase(
   dbPath: string,
-  legacyRecords: JournalLegacyRecordImport
+  legacyRecords: JournalLegacyRecordImport,
+  logger: StructuredAgentSessionLogger
 ): OpenJournalDatabase {
   const probe = new Database(dbPath)
   let stored: number
@@ -125,7 +127,7 @@ export function openJournalDatabase(
       )
     }
     configureJournalPragmas(probe, stored)
-    const legacyRecordImportOwed = migrateJournalSchema(probe, stored, legacyRecords)
+    const legacyRecordImportOwed = migrateJournalSchema(probe, stored, legacyRecords, logger)
     // Outside `migrateJournalSchema` on purpose: its early return skips a db
     // already at the current version, and this table must exist at EVERY
     // writable open with no `user_version` bump (see `ensureQueuedMessagesTable`).
@@ -167,12 +169,13 @@ function configureJournalPragmas(db: Database.Database, stored: number): void {
 function migrateJournalSchema(
   db: Database.Database,
   stored: number,
-  legacyRecords: JournalLegacyRecordImport
+  legacyRecords: JournalLegacyRecordImport,
+  logger: StructuredAgentSessionLogger
 ): boolean {
   if (stored >= JOURNAL_DB_SCHEMA_VERSION) {
     return false
   }
-  runJournalTransaction(db, () => {
+  runJournalTransaction(db, logger, () => {
     if (stored === 0) {
       db.exec(createJournalTablesSql())
     }
@@ -199,6 +202,7 @@ function migrateJournalSchema(
  */
 export function runJournalTransaction<T>(
   db: Database.Database,
+  logger: StructuredAgentSessionLogger,
   run: (db: Database.Database) => T,
   onStranded: () => void = () => undefined
 ): T {
@@ -215,10 +219,10 @@ export function runJournalTransaction<T>(
       try {
         db.exec('ROLLBACK')
       } catch (rollbackError) {
-        console.warn(
-          '[agent-session-journal] rolling back a failed transaction failed',
-          rollbackError
-        )
+        logger.warn('rolling back a failed chat journal transaction failed', {
+          scope: 'journal-transaction-rollback',
+          error: rollbackError
+        })
         onStranded()
       }
     }

@@ -21,6 +21,7 @@ import {
 import { stopClaudeBackgroundTasks } from './claude-structured-control-actions'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
@@ -107,6 +108,7 @@ async function stoppedAsItCompleted(ahead: number) {
       }
     },
     {
+      ...testEventSinkLogging(),
       onMessage: (message) => {
         seen.push(`${String(message.type)}:${String(message.subtype ?? '')}`)
         decoder.observe(message)

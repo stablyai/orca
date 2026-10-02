@@ -22,6 +22,9 @@ import {
   identityFor,
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 export const parent = makeStructuredAgentStatusSubject(
   {
@@ -115,6 +118,7 @@ export async function producer(host?: AgentHookServer) {
   const evidenceLog: AgentChildWorkEvidence[][] = []
   const ingested: (AgentChildWorkReconcileOutcome | null)[] = []
   const adapter = new ClaudeStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},

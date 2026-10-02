@@ -180,7 +180,10 @@ function structuredCreateMayHaveCommitted(
  */
 export async function discardStructuredWorkerSession(
   sessionId: string,
-  runtime: Pick<OrcaRuntimeService, 'retireStructuredAgentSessionTabFromSnapshot'>
+  runtime: Pick<
+    OrcaRuntimeService,
+    'retireStructuredAgentSessionTabFromSnapshot' | 'structuredAgentSessionLogger'
+  >
 ): Promise<void> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
@@ -190,11 +193,11 @@ export async function discardStructuredWorkerSession(
     await host.setSessionTabVisibility?.(sessionId, false)
     await host.close(sessionId, 'evict')
   } catch (error) {
-    console.warn(
-      '[orchestration] failed to discard a half-started structured worker',
+    host.deps.logger.warn('discarding a half-started structured worker failed', {
+      scope: 'worker-discard',
       sessionId,
       error
-    )
+    })
     return
   }
   retireSettledStructuredWorkerTab(sessionId, runtime)
@@ -346,7 +349,11 @@ async function subscribeForRedrive(
       unsubscribe()
     }
   } catch (error) {
-    console.warn('[orchestration] structured worker redrive subscription failed', sessionId, error)
+    host.deps.logger.warn('subscribing a structured worker for mail redrive failed', {
+      scope: 'worker-redrive-subscribe',
+      sessionId,
+      error
+    })
     coalescer.dispose()
     return () => {}
   }

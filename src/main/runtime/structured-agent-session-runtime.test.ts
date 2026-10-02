@@ -29,6 +29,9 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const HOST_ID = 'local'
 
@@ -76,7 +79,7 @@ describe('structured agent-session store presence', () => {
     legacyRecords: JournalLegacyRecordImport = NO_LEGACY_JOURNAL_RECORDS
   ): Promise<JournalHostDatabase> {
     profile = await mkdtemp(join(tmpdir(), 'orca-session-presence-'))
-    return JournalHostDatabase.openWith(profile, legacyRecords)
+    return JournalHostDatabase.openWith(profile, legacyRecords, TEST_LOGGER)
   }
 
   async function writeRecordsFile(): Promise<void> {

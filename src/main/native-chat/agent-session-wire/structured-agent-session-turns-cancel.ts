@@ -111,8 +111,6 @@ export async function performCancel(
     /** Ends the provider child, for a running command the provider did not take the Stop on, or a
      *  turn whose interrupt failed. */
     stopChild?: () => Promise<void>
-    /** A child end after a failed interrupt that threw. */
-    onStopChildError?: (error: unknown) => void
     /** After that throw: whether the host let go of the child, its exit proven before a later
      *  cleanup step failed. */
     childReleased?: () => boolean
@@ -242,7 +240,11 @@ export async function performCancel(
       await input.stopChild()
       ended = true
     } catch (error) {
-      input.onStopChildError?.(error)
+      ctx.logger.warn('ending the agent process on Stop failed', {
+        scope: 'stop-child',
+        sessionId: ctx.sessionId,
+        error
+      })
       // Unless the exit was proven, the child may still run the turn and the failed row stays true.
       ended = input.childReleased?.() === true
     }

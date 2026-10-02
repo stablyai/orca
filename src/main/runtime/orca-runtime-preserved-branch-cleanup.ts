@@ -11,6 +11,7 @@ import type {
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
@@ -68,6 +69,9 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
 
   protected readonly structuredAgentStatusSinkFn: StructuredAgentSessionStatusSink | null
+
+  /** The structured chat host's logger, held here so callers outside the host report to it too. */
+  readonly structuredAgentSessionLogger: StructuredAgentSessionLogger
 
   protected readonly readObservedAgentStatusPaneIdentityFn: (
     paneKey: string

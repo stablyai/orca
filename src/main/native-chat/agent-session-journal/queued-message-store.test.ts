@@ -24,7 +24,8 @@ import {
 import type { AgentSessionJournal } from './journal-store'
 import {
   closeTestJournalHostDatabases,
-  createTrackedJournalOpener
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
 } from './journal-host-database-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -505,12 +506,16 @@ describe('open-time repair and retention', () => {
     const repair = vi
       .spyOn(JournalQueuedMessages.prototype, 'repairAndPrune')
       .mockRejectedValueOnce(new Error('SQLITE_FULL'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const warn = vi.spyOn(openTestJournalHostDatabase(root).logger, 'warn')
     try {
       const journal = await open()
       expect(warn).toHaveBeenCalledWith(
-        '[journal-open] queued-message repair skipped:',
-        expect.objectContaining({ error: 'SQLITE_FULL' })
+        'repairing queued messages at open was skipped',
+        expect.objectContaining({
+          scope: 'journal-queued-message-repair',
+          sessionId: IDENTITY.sessionId,
+          error: new Error('SQLITE_FULL')
+        })
       )
       await queueDraft(journal, 'draft-1')
       expect(journal.queuedMessages.list()).toHaveLength(1)

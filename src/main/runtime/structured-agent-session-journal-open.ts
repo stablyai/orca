@@ -37,12 +37,15 @@ export async function openStructuredAgentSessionJournalDatabase(args: {
   logger: StructuredAgentSessionLogger
 }): Promise<JournalHostDatabase> {
   try {
-    const opened = await JournalHostDatabase.open(args.stateDirectory, async () =>
-      legacyAgentSessionRecordImport(
-        await readLegacyAgentSessionRecords(args.stateDirectory, args.hostId),
-        args.hostId,
-        (report) => reportLegacyRecordImport(args.logger, report)
-      )
+    const opened = await JournalHostDatabase.open(
+      args.stateDirectory,
+      async () =>
+        legacyAgentSessionRecordImport(
+          await readLegacyAgentSessionRecords(args.stateDirectory, args.hostId),
+          args.hostId,
+          (report) => reportLegacyRecordImport(args.logger, report)
+        ),
+      args.logger
     )
     recordStructuredAgentSessionHostInstallRefusal(null)
     lastLoggedOpenFailure = null

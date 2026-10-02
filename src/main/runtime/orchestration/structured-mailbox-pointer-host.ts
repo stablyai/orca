@@ -70,7 +70,11 @@ async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapsh
   } catch (error) {
     // Not attached is a retain reason, not a failure; anything else is still unreadable.
     if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
-      console.warn('[orchestration] structured journal unreadable', sessionId, error)
+      host.deps.logger.warn('a structured session journal was unreadable for mail', {
+        scope: 'mail-journal-read',
+        sessionId,
+        error
+      })
     }
     return null
   }

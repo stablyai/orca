@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
 import {
   adapterFor,
+  CLAUDE_ADAPTER_TEST_LOGGER,
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
@@ -106,7 +107,7 @@ describe('Claude resume point is the last completed turn on every exit path', ()
   })
 
   it('on an unexpected exit whose durable write fails, still ends the session and logs', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warn = vi.spyOn(CLAUDE_ADAPTER_TEST_LOGGER, 'warn')
     const events: ClaudeStructuredSessionEvent[] = []
     const claude = fakeClaude()
     const adapter = adapterFor(
@@ -135,8 +136,12 @@ describe('Claude resume point is the last completed turn on every exit path', ()
     await tick()
     expect(events.at(-1)).toMatchObject({ type: 'ended', cause: 'unexpected-exit' })
     expect(warn).toHaveBeenCalledWith(
-      '[claude-resume-point] exit cursor was not persisted:',
-      expect.objectContaining({ sessionId: 'session-1', error: expect.any(Error) })
+      'the exit cursor was not persisted',
+      expect.objectContaining({
+        scope: 'claude-exit-cursor-persist',
+        sessionId: 'session-1',
+        error: expect.any(Error)
+      })
     )
   })
 })

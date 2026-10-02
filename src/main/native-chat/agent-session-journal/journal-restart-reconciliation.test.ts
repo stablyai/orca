@@ -103,6 +103,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     const journal = await reopenAfterCrash()
 
     const settled = await reconcileJournalSubmissionsAgainstHistory({
+      sessionId: IDENTITY.sessionId,
       journal,
       fence: 2,
       history: window([history('uuid-1', 'deploy the thing')])
@@ -118,6 +119,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     const journal = await reopenAfterCrash()
 
     const settled = await reconcileJournalSubmissionsAgainstHistory({
+      sessionId: IDENTITY.sessionId,
       journal,
       fence: 2,
       history: window([])
@@ -144,6 +146,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     const journal = await reopenAfterCrash()
 
     const settled = await reconcileJournalSubmissionsAgainstHistory({
+      sessionId: IDENTITY.sessionId,
       journal,
       fence: 2,
       history: window([], { turnInFlight: true })
@@ -157,6 +160,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     const journal = await reopenAfterCrash()
 
     const settled = await reconcileJournalSubmissionsAgainstHistory({
+      sessionId: IDENTITY.sessionId,
       journal,
       fence: 2,
       history: window([], { boundaryConsistent: false })
@@ -180,6 +184,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     )
 
     const settled = await reconcileJournalSubmissionsAgainstHistory({
+      sessionId: IDENTITY.sessionId,
       journal,
       fence: 2,
       history: window([])
@@ -203,6 +208,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     )
 
     const settled = await reconcileJournalSubmissionsAgainstHistory({
+      sessionId: IDENTITY.sessionId,
       journal,
       fence: 2,
       history: window([history('uuid-1', 'first\nsecond')])
@@ -229,6 +235,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     await restarted.markPendingSubmissionsUnknown(2)
 
     await reconcileJournalSubmissionsAgainstHistory({
+      sessionId: IDENTITY.sessionId,
       journal: restarted,
       fence: 2,
       history: window([history('uuid-old', 'deploy the thing')])
@@ -261,6 +268,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     await restarted.markPendingSubmissionsUnknown(2)
 
     await reconcileJournalSubmissionsAgainstHistory({
+      sessionId: IDENTITY.sessionId,
       journal: restarted,
       fence: 2,
       history: window([history('uuid-old', 'deploy the thing')])
@@ -287,6 +295,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     await restarted.markPendingSubmissionsUnknown(2)
 
     await reconcileJournalSubmissionsAgainstHistory({
+      sessionId: IDENTITY.sessionId,
       journal: restarted,
       fence: 2,
       history: window([history('uuid-1', 'ping'), history('uuid-2', 'ping')])

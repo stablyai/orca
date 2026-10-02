@@ -93,7 +93,7 @@ describe('draft bookkeeping inside a journal append', () => {
   it('a throwing draft transition still commits the rejection row, and the next open recovers the draft', async () => {
     let journal = await open()
     await queueAndConsume(journal, 'draft-1')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const warn = vi.spyOn(journal.logger, 'warn')
     vi.spyOn(JournalQueuedMessages.prototype, 'onRowInTransaction').mockImplementationOnce(() => {
       throw new Error('table queued_messages has no column named returned_rejection')
     })
@@ -107,8 +107,8 @@ describe('draft bookkeeping inside a journal append', () => {
     expect(journal.submission('sub-draft-1')?.dispatchState).toBe('rejected')
     expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
     expect(warn).toHaveBeenCalledWith(
-      '[journal-append] row bookkeeping skipped:',
-      expect.objectContaining({ kind: 'dispatch' })
+      'row bookkeeping was skipped',
+      expect.objectContaining({ scope: 'journal-row-bookkeeping', kind: 'dispatch' })
     )
     await journal.close()
     journal = await open()

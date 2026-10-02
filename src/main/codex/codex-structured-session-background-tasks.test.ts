@@ -10,6 +10,9 @@ import { CodexStructuredSessionAdapter } from './codex-structured-session-adapte
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 // Proves the host's child records are actually REACHED from provider traffic: the tracker is
 // unit-tested separately, and a producer that is correct but unwired publishes nothing while
@@ -85,6 +88,7 @@ async function adapterWithSession(
 ): Promise<{ adapter: CodexStructuredSessionAdapter; codex: ReturnType<typeof fakeCodex> }> {
   const codex = fakeCodex(close)
   const adapter = new CodexStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       command: 'codex',
       args: ['app-server'],

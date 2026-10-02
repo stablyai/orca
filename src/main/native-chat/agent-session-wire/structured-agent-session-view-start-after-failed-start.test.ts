@@ -26,6 +26,9 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 /** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
 function eventually(assertion: () => unknown): Promise<unknown> {
@@ -54,6 +57,7 @@ beforeEach(async () => {
   // Every start spawns, is published, and exits before it answers initialize.
   claude = fakeClaude({ initDelayMs: 20, exitBeforeInit: LAUNCH_FAILURE })
   adapter = new ClaudeStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},

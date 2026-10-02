@@ -26,6 +26,9 @@ import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subj
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const parent = makeStructuredAgentStatusSubject(
   {
@@ -105,6 +108,7 @@ async function producer() {
       )
     })
   const adapter = new CodexStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       command: 'codex',
       args: ['app-server'],

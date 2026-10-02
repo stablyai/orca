@@ -8,6 +8,9 @@ import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch
 } from './codex-structured-session-adapter'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-1'
@@ -49,6 +52,7 @@ describe('CodexStructuredSessionAdapter shutdown', () => {
     const firstLaunch = Promise.withResolvers<CodexStructuredLaunch>()
     let launchCount = 0
     const adapter = new CodexStructuredSessionAdapter({
+      logger: TEST_LOGGER,
       resolveLaunch: () => {
         launchCount += 1
         return launchCount === 1 ? firstLaunch.promise : Promise.resolve(LAUNCH)
@@ -88,6 +92,7 @@ describe('CodexStructuredSessionAdapter shutdown', () => {
         close
       }) satisfies CodexAppServerConnection) as typeof openCodexAppServerConnection
     const adapter = new CodexStructuredSessionAdapter({
+      logger: TEST_LOGGER,
       resolveLaunch: async () => LAUNCH,
       openConnection,
       readProcessStartTime: async () => 1_700_000_000_000

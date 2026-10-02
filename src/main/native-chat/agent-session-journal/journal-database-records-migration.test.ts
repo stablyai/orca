@@ -16,6 +16,9 @@ import {
 } from './journal-database'
 import { createJournalTablesSql } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
+import { recordingStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 let root: string
 let dbPath: string
@@ -82,7 +85,7 @@ describe('the version-4 migration', () => {
     seedVersion3()
     const copy = importOf('session-a')
 
-    const opened = openJournalDatabase(dbPath, copy)
+    const opened = openJournalDatabase(dbPath, copy, TEST_LOGGER)
     opened.db.close()
 
     expect(opened).toMatchObject({ readOnly: false, legacyRecordImportOwed: false })
@@ -96,10 +99,10 @@ describe('the version-4 migration', () => {
 
   it('never runs the copy again once the database is at 4', () => {
     seedVersion3()
-    openJournalDatabase(dbPath, importOf('session-a')).db.close()
+    openJournalDatabase(dbPath, importOf('session-a'), TEST_LOGGER).db.close()
     const again = importOf('session-b')
 
-    openJournalDatabase(dbPath, again).db.close()
+    openJournalDatabase(dbPath, again, TEST_LOGGER).db.close()
 
     expect(again.runs).toBe(0)
     inspect((db) => expect(recordIds(db)).toEqual(['session-a']))
@@ -119,7 +122,7 @@ describe('the version-4 migration', () => {
       return original.call(this, sql, options)
     })
 
-    expect(() => openJournalDatabase(dbPath, importOf('session-a'))).toThrow(
+    expect(() => openJournalDatabase(dbPath, importOf('session-a'), TEST_LOGGER)).toThrow(
       'crash before the version is published'
     )
     pragma.mockRestore()
@@ -129,7 +132,7 @@ describe('the version-4 migration', () => {
     })
 
     const retry = importOf('session-a')
-    openJournalDatabase(dbPath, retry).db.close()
+    openJournalDatabase(dbPath, retry, TEST_LOGGER).db.close()
     expect(retry.runs).toBe(1)
     inspect((db) => {
       expect(journalPragmaNumber(db, 'user_version')).toBe(4)
@@ -140,7 +143,7 @@ describe('the version-4 migration', () => {
   it('makes the tables but keeps the copy owed when the records file could not be read', () => {
     seedVersion3()
 
-    const opened = openJournalDatabase(dbPath, { owed: true })
+    const opened = openJournalDatabase(dbPath, { owed: true }, TEST_LOGGER)
     // A chat created while the copy is owed keeps its row through the copy that follows.
     opened.db
       .prepare("INSERT INTO agent_session_records (session_id, record_json) VALUES ('new', '{}')")
@@ -149,7 +152,7 @@ describe('the version-4 migration', () => {
 
     expect(opened.legacyRecordImportOwed).toBe(true)
     inspect((db) => expect(journalPragmaNumber(db, 'user_version')).toBe(3))
-    openJournalDatabase(dbPath, importOf('session-a')).db.close()
+    openJournalDatabase(dbPath, importOf('session-a'), TEST_LOGGER).db.close()
     inspect((db) => {
       expect(journalPragmaNumber(db, 'user_version')).toBe(4)
       expect(recordIds(db)).toEqual(['new', 'session-a'])
@@ -157,7 +160,7 @@ describe('the version-4 migration', () => {
   })
 
   it('stamps a fresh file with the released version while the copy is owed', () => {
-    openJournalDatabase(dbPath, { owed: true }).db.close()
+    openJournalDatabase(dbPath, { owed: true }, TEST_LOGGER).db.close()
 
     inspect((db) => {
       expect(journalPragmaNumber(db, 'user_version')).toBe(3)
@@ -173,7 +176,7 @@ describe('the version-4 migration', () => {
   })
 
   it('creates every table on a fresh file at version 4', () => {
-    openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db.close()
+    openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER).db.close()
 
     inspect((db) => {
       expect(journalPragmaNumber(db, 'user_version')).toBe(4)
@@ -208,7 +211,7 @@ function openAsVersion3Build(path: string): { db: Database.Database; readOnly: b
 
 describe('a build from before the move', () => {
   it('opens a version-4 database read-only, so it never writes beside the records', () => {
-    openJournalDatabase(dbPath, importOf('session-a')).db.close()
+    openJournalDatabase(dbPath, importOf('session-a'), TEST_LOGGER).db.close()
 
     const older = openAsVersion3Build(dbPath)
     try {

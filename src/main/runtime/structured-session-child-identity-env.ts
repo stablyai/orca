@@ -49,10 +49,12 @@ import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session-caller-env
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
 import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
 import { structuredWorkerIdentities } from './structured-worker-identity'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export function structuredSessionChildIdentityEnv(
   sessionId: string,
-  childEnv: Record<string, string>
+  childEnv: Record<string, string>,
+  logger: StructuredAgentSessionLogger
 ): Record<string, string> {
   const identity = structuredWorkerIdentities.getBySessionId(sessionId)
   const env: Record<string, string> = {
@@ -61,7 +63,7 @@ export function structuredSessionChildIdentityEnv(
     [ORCA_AGENT_SESSION_ID_ENV]: sessionId,
     [ORCA_STRUCTURED_SESSION_ENV]: '1'
   }
-  applyThisAppCli(env)
+  applyThisAppCli(env, sessionId, logger)
   return env
 }
 
@@ -69,7 +71,11 @@ export function structuredSessionChildIdentityEnv(
  * A host with no app environment installed — a plain-Node fork, or a unit test — has no userData
  * root to resolve, and inventing one would write a shim into the wrong directory.
  */
-function applyThisAppCli(env: Record<string, string>): void {
+function applyThisAppCli(
+  env: Record<string, string>,
+  sessionId: string,
+  logger: StructuredAgentSessionLogger
+): void {
   delete env.ORCA_CLI_COMMAND
   if (!hasAppEnvironment()) {
     return
@@ -86,8 +92,9 @@ function applyThisAppCli(env: Record<string, string>): void {
   if (launcher) {
     env.ORCA_CLI_COMMAND = launcher
   } else {
-    console.warn(
-      "[structured-session] This app's CLI launcher did not resolve; the session's child has no ORCA_CLI_COMMAND."
-    )
+    logger.warn("this app's CLI launcher did not resolve; the child has no ORCA_CLI_COMMAND", {
+      scope: 'child-cli-launcher',
+      sessionId
+    })
   }
 }

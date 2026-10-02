@@ -25,6 +25,7 @@ import { claudeContentBlocks } from '../native-chat/transcript-record-blocks'
 import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import {
   replayClaudeTranscriptBranchAncestry,
   replayClaudeTranscriptBranchAncestryFromJsonl
@@ -240,6 +241,7 @@ export async function resolveClaudeProviderHistoryWindow(input: {
   identity: AgentSessionJournalIdentity
   accountHomePath: string
   hasLiveSession: boolean
+  logger: StructuredAgentSessionLogger
 }): Promise<ProviderHistoryWindow | null> {
   const handle = input.identity.providerHandle
   if (handle.kind !== 'claude') {
@@ -256,12 +258,13 @@ export async function resolveClaudeProviderHistoryWindow(input: {
     providerSessionId: handle.sessionId,
     previousLeafUuid: handle.leafUuid,
     sessionId: input.identity.sessionId,
-    turnInFlight: input.hasLiveSession
+    turnInFlight: input.hasLiveSession,
+    logger: input.logger
   })
 }
 
 export async function readClaudeProviderHistoryWindow(
-  input: HistoryWindowInput & { transcriptPath: string }
+  input: HistoryWindowInput & { transcriptPath: string; logger: StructuredAgentSessionLogger }
 ): Promise<ProviderHistoryWindow> {
   const ancestryAnchorUuid = input.previousLeafUuid
   if (!ancestryAnchorUuid) {
@@ -282,9 +285,10 @@ export async function readClaudeProviderHistoryWindow(
     // Unreadable, unprovable, or a single record too large to frame: all of them
     // leave the boundary unvouched for, which is not the same as an empty window.
     // Oversize is no longer among them, so only the log separates what is left.
-    console.warn('[claude-history-window] transcript unprovable; boundary inconsistent:', {
-      transcriptPath: input.transcriptPath,
+    input.logger.warn('the transcript is unprovable, so the history boundary is inconsistent', {
+      scope: 'claude-history-window',
       sessionId: input.sessionId,
+      transcriptPath: input.transcriptPath,
       error
     })
     return INCONSISTENT

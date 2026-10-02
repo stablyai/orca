@@ -15,6 +15,7 @@ import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/age
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { closeClaudeSession } from './claude-structured-session-close'
 import { ClaudeAcquisitionRegistry } from './claude-structured-session-state'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 describe('Claude published session close lifecycle', () => {
   it('reports a proven root exit when published-session close cannot prove descendants', async () => {
@@ -69,11 +70,10 @@ describe('Claude published session close lifecycle', () => {
     })
     const acquisitions = new ClaudeAcquisitionRegistry()
     const { attempt } = acquisitions.start('session-1', new ClaudePromptRegistry())
-    attempt.connection = await claude.openConnection({
-      pathToClaudeCodeExecutable: 'claude',
-      options: {},
-      cwd: '/work/repo'
-    })
+    attempt.connection = await claude.openConnection(
+      { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
+      testEventSinkLogging()
+    )
 
     await expect(
       closeClaudeSession({ sessionId: 'session-1', sessions: new Map(), acquisitions })

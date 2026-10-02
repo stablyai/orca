@@ -21,6 +21,7 @@ import {
 import { journalOpenRefusalError } from './journal-open-failure'
 import { journalDirectoryFor } from './journal-paths'
 import { AgentSessionJournalError } from './journal-write-guards'
+import type { StructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
 
 const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
 
@@ -39,7 +40,9 @@ export class JournalHostDatabase {
 
   private constructor(
     readonly stateDirectory: string,
-    opened: OpenJournalDatabase
+    opened: OpenJournalDatabase,
+    /** The host's logger: every chat's journal reports a failure it carries on past here. */
+    readonly logger: StructuredAgentSessionLogger
   ) {
     this.connection = opened.db
     this.readOnly = opened.readOnly
@@ -49,7 +52,8 @@ export class JournalHostDatabase {
   /** `readLegacyRecords` runs only when this open migrates to version 4, before any transaction. */
   static async open(
     stateDirectory: string,
-    readLegacyRecords: () => Promise<JournalLegacyRecordImport>
+    readLegacyRecords: () => Promise<JournalLegacyRecordImport>,
+    logger: StructuredAgentSessionLogger
   ): Promise<JournalHostDatabase> {
     mkdirSync(stateDirectory, { recursive: true })
     const migrates = journalDatabaseMigratesRecords(
@@ -57,19 +61,22 @@ export class JournalHostDatabase {
     )
     return JournalHostDatabase.openWith(
       stateDirectory,
-      migrates ? await readLegacyRecords() : NO_LEGACY_JOURNAL_RECORDS
+      migrates ? await readLegacyRecords() : NO_LEGACY_JOURNAL_RECORDS,
+      logger
     )
   }
 
   /** The same open with the records file already read; tests pass `NO_LEGACY_JOURNAL_RECORDS`. */
   static openWith(
     stateDirectory: string,
-    legacyRecords: JournalLegacyRecordImport
+    legacyRecords: JournalLegacyRecordImport,
+    logger: StructuredAgentSessionLogger
   ): JournalHostDatabase {
     mkdirSync(stateDirectory, { recursive: true })
     return new JournalHostDatabase(
       stateDirectory,
-      openJournalDatabase(journalDatabasePath(stateDirectory), legacyRecords)
+      openJournalDatabase(journalDatabasePath(stateDirectory), legacyRecords, logger),
+      logger
     )
   }
 
@@ -90,7 +97,7 @@ export class JournalHostDatabase {
 
   /** One IMMEDIATE transaction; see `runJournalTransaction`. */
   transaction<T>(run: (db: Database.Database) => T): T {
-    return runJournalTransaction(this.db, run, () => {
+    return runJournalTransaction(this.db, this.logger, run, () => {
       this.stranded = true
     })
   }

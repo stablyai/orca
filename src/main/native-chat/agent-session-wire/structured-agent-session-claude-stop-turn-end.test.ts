@@ -30,6 +30,9 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const CALLER = { callerKey: 'client-1' }
 // As Claude Code 2.1.280 advertises them on a turn's system/init frame.
@@ -47,6 +50,7 @@ beforeEach(async () => {
   claude = fakeClaude({ replayUuid: null })
   const lifecycle: Promise<void>[] = []
   adapter = new ClaudeStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},

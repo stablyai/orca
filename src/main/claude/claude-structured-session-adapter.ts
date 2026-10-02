@@ -140,7 +140,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       identity: input.identity,
       accountHomePath: input.accountHome.path,
       hasLiveSession:
-        this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId)
+        this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId),
+      logger: this.deps.logger
     })
 
   private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {

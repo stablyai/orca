@@ -15,6 +15,7 @@ import {
 } from '../../../shared/agent-session-record.test-fixture'
 import { formatOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -84,6 +85,7 @@ function probe(extra: Record<string, unknown> = {}): MailTargetProbe {
   return Object.assign(Object.create(MailTargetProbe.prototype), {
     _orchestrationDb: db,
     ptysById: new Map(),
+    structuredAgentSessionLogger: recordingStructuredAgentSessionLogger().logger,
     ...extra
   }) as MailTargetProbe
 }
@@ -244,8 +246,12 @@ describe('the idle edge after a restart, before any orchestration call', () => {
   })
 
   /** A runtime whose database has not been opened in this process yet. */
-  function restarted(delivered: string[]): MailTargetProbe {
+  function restarted(
+    delivered: string[],
+    logger = recordingStructuredAgentSessionLogger().logger
+  ): MailTargetProbe {
     return probe({
+      structuredAgentSessionLogger: logger,
       _orchestrationDb: null,
       ensureOrchestrationFederationRelay: vi.fn(),
       scheduleRestoredMessageRepoints: vi.fn(),
@@ -277,22 +283,25 @@ describe('the idle edge after a restart, before any orchestration call', () => {
 
   it('creates no database for a profile that never orchestrated, and says nothing', () => {
     installStore(chatRecord())
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const log = recordingStructuredAgentSessionLogger()
     const delivered: string[] = []
 
-    restarted(delivered).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
+    restarted(delivered, log.logger).onStructuredSessionStatusForMail({
+      sessionId: CHAT,
+      status: 'idle'
+    })
 
     expect(delivered).toEqual([])
     expect(existsSync(join(userData, 'orchestration.db'))).toBe(false)
-    expect(warn).not.toHaveBeenCalled()
-    warn.mockRestore()
+    expect(log.entries).toEqual([])
   })
 
   it('says so when the database cannot be opened, instead of skipping silently', () => {
     installStore(chatRecord())
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const log = recordingStructuredAgentSessionLogger()
     const deliver = vi.fn()
     probe({
+      structuredAgentSessionLogger: log.logger,
       _orchestrationDb: null,
       getExistingOrchestrationDb: () => {
         throw new Error('userData unavailable')
@@ -301,11 +310,9 @@ describe('the idle edge after a restart, before any orchestration call', () => {
       notifyStructuredSessionJournalActivity: vi.fn()
     }).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
     expect(deliver).not.toHaveBeenCalled()
-    expect(warn).toHaveBeenCalledWith(
-      '[orchestration] skipped a structured session mail edge: no database',
-      { sessionId: CHAT, error: 'userData unavailable' }
-    )
-    warn.mockRestore()
+    expect(log.entries.map(({ fields }) => fields)).toEqual([
+      { scope: 'mail-edge-database', sessionId: CHAT, error: new Error('userData unavailable') }
+    ])
   })
 })
 

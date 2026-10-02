@@ -78,7 +78,9 @@ export async function stopStructuredWorker(
   dispatchId: string,
   runtime?: Pick<
     OrcaRuntimeService,
-    'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
+    | 'forgetStructuredSessionMail'
+    | 'retireStructuredAgentSessionTabFromSnapshot'
+    | 'structuredAgentSessionLogger'
   >
 ): Promise<StructuredWorkerStopOutcome> {
   return closeStructuredAgentSessionChild(identity.sessionId, {

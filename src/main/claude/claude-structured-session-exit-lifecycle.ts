@@ -22,7 +22,7 @@ export type ClaudeExitLifecycle = {
   exits: Map<string, ClaudeSessionExit>
   /** A settled exit's diagnostic, kept for a send admitted before the host heard of the exit. */
   settledExitErrors: Map<string, Error>
-  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle' | 'now'>
+  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle' | 'now' | 'logger'>
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
 }
 
@@ -80,7 +80,11 @@ export function settleClaudeUnexpectedExit(
     // event that lets the host release and reacquire this exact child.
     await persistClaudeSessionHandle(sessionId, exit.session, deps).catch((error: unknown) => {
       // Recovery still publishes: the record keeps its last durable point, and the loss is logged.
-      console.warn('[claude-resume-point] exit cursor was not persisted:', { sessionId, error })
+      deps.logger.warn('the exit cursor was not persisted', {
+        scope: 'claude-exit-cursor-persist',
+        sessionId,
+        error
+      })
     })
     if (exits.get(sessionId) !== exit) {
       settleClaudeExitedSession(exit.session)

@@ -13,6 +13,9 @@ import {
   tick
 } from './claude-structured-session-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
   it('shares concurrent close finalization and emits lifecycle once', async () => {
@@ -57,6 +60,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     const events: ClaudeStructuredSessionEvent[] = []
     const callbackError = new Error('handle delivery failed')
     const adapter = new ClaudeStructuredSessionAdapter({
+      logger: TEST_LOGGER,
       resolveLaunch: async () => ({
         pathToClaudeCodeExecutable: 'claude',
         options: {},
@@ -325,6 +329,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       }
     )
     const adapter = new ClaudeStructuredSessionAdapter({
+      logger: TEST_LOGGER,
       resolveLaunch,
       openConnection: claude.openConnection,
       onEvent: (event) => events.push(event),

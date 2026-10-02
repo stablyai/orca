@@ -26,6 +26,8 @@ import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtim
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
+
 const caller = { callerKey: 'desktop' }
 const PROVIDER_SESSION_ID = claudeSessionIdForOrcaSession(HOST_TEST_SESSION)
 const TARGET = agentJournalItemKey({
@@ -112,6 +114,7 @@ beforeEach(async () => {
   store = await openTestAgentSessionRecordStore(directory)
   claude = fakeClaude({ initSessionId: PROVIDER_SESSION_ID })
   adapter = createStructuredClaudeRuntimeAdapter({
+    logger: TEST_LOGGER,
     store,
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveClaudeCommand: () => '/usr/local/bin/claude',

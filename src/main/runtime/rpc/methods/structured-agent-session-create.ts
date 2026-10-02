@@ -173,8 +173,9 @@ export async function createStructuredAgentSessionForWorktree(args: {
   tabId?: string
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const prepared: PreparedStructuredAgentSessionCreate | StructuredCreateRefused =
-    await resolveUncommittedStructuredCreate(() =>
-      prepareStructuredAgentSessionCreateForWorktree(args)
+    await resolveUncommittedStructuredCreate(
+      () => prepareStructuredAgentSessionCreateForWorktree(args),
+      args.runtime.structuredAgentSessionLogger
     )
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }

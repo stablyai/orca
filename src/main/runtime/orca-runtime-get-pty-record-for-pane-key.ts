@@ -11,7 +11,7 @@ import {
   handleLessCoordinatorSessionId,
   structuredSessionAddressTarget,
   structuredSessionMailTarget,
-  structuredSessionIdleEdgeMailboxes,
+  redriveStructuredSessionMail,
   structuredWorkerMailSessionId
 } from './orchestration/structured-session-mail-target'
 import {
@@ -206,18 +206,12 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     if (summary.status === 'working' || summary.status === 'attention') {
       return
     }
-    // Logged, never thrown: the same status callback goes on to the first-turn workspace rename.
-    try {
-      this.notifyStructuredSessionJournalActivity(summary.sessionId)
-      const openDb = () => this.getExistingOrchestrationDb()
-      const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
-      structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
-    } catch (error) {
-      console.warn('[orchestration] structured session mail redrive failed', {
-        sessionId: summary.sessionId,
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
+    redriveStructuredSessionMail(summary.sessionId, {
+      notifyJournalActivity: (sessionId) => this.notifyStructuredSessionJournalActivity(sessionId),
+      openDb: () => this.getExistingOrchestrationDb(),
+      deliver: (mailbox) => this.deliverPendingMessagesForHandle(mailbox),
+      logger: this.structuredAgentSessionLogger
+    })
   }
 
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */

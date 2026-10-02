@@ -6,8 +6,11 @@
 // Tests install a host with a stub adapter and clear it on teardown.
 
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 let host: StructuredAgentSessionHost | null = null
+// Kept past teardown, so a listener that throws when the last chat is released still reports.
+let logger: StructuredAgentSessionLogger | null = null
 let held = false
 let stopWatchingHost: (() => void) | null = null
 const heldListeners = new Set<(held: boolean) => void>()
@@ -29,11 +32,11 @@ function publishHeld(): void {
       try {
         listener(next)
       } catch (error) {
-        console.warn('[structured-agent-session] a held-chats listener threw', error)
+        logger?.warn('a held-chats listener threw', { scope: 'held-chats-listener', error })
       }
     }
   } catch (error) {
-    console.warn('[structured-agent-session] reading whether chats are held failed', error)
+    logger?.warn('reading whether chats are held failed', { scope: 'held-chats-read', error })
   }
 }
 
@@ -41,11 +44,15 @@ export function setStructuredAgentSessionHost(next: StructuredAgentSessionHost |
   stopWatchingHost?.()
   stopWatchingHost = null
   host = next
+  // Why typeof: tests install partial hosts.
+  if (typeof next?.deps?.logger?.warn === 'function') {
+    logger = next.deps.logger
+  }
   try {
     stopWatchingHost =
       typeof next?.onSessionsHeld === 'function' ? next.onSessionsHeld(publishHeld) : null
   } catch (error) {
-    console.warn('[structured-agent-session] watching for held chats failed', error)
+    logger?.warn('watching for held chats failed', { scope: 'held-chats-watch', error })
   }
   publishHeld()
 }

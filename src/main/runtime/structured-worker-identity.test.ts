@@ -20,6 +20,9 @@ import {
 } from './structured-worker-identity'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
@@ -300,7 +303,7 @@ describe('structured workers stay outside the PTY-only fail-closed paths', () =>
       hostScope: { kind: 'local', hostId: 'local' }
     })
     try {
-      const env = structuredSessionChildIdentityEnv(SESSION_ID, {})
+      const env = structuredSessionChildIdentityEnv(SESSION_ID, {}, TEST_LOGGER)
       // Registered, so the worker's handle is present; without it the pane-key assertion would pass
       // for the wrong reason.
       expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)

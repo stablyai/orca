@@ -8,6 +8,11 @@ import type { RuntimeTerminalAgentStatusEvent } from './runtime-terminal-contrac
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger,
+  type StructuredAgentSessionLogger
+} from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
@@ -66,6 +71,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       /** Where structured (native chat) sessions publish into that same store, so the snapshot
        *  above lists them like every other agent. */
       structuredAgentStatusSink?: StructuredAgentSessionStatusSink
+      structuredAgentSessionLogger?: StructuredAgentSessionLogger
       /** The identity the runtime resolved for a pane as each status arrived. Without it the
        *  fleet path reminted cached rows against whatever the pane owns now. */
       readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
@@ -219,6 +225,9 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
+    this.structuredAgentSessionLogger = neverThrowingStructuredAgentSessionLogger(
+      deps?.structuredAgentSessionLogger ?? createStructuredAgentSessionLogger()
+    )
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))
     this.getAgentProviderSessionSnapshotFn =

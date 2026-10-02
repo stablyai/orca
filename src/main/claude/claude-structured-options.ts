@@ -268,9 +268,12 @@ export async function restoreClaudeStructuredSessionOptions(
       // A write the CLI never answered must not fault a start that is otherwise fine. Silence is
       // not a refusal, so the choice stays wanted, unconfirmed, and the next start retries it.
       if (error instanceof ClaudeControlRequestTimeoutError) {
-        console.warn(
-          `[claude-structured] restore of ${key} for ${session.providerSessionId} was not answered in time; keeping it unconfirmed`
-        )
+        session.logger.warn('restoring an option was not answered in time; it stays unconfirmed', {
+          scope: 'claude-option-restore',
+          sessionId: session.sessionId,
+          providerSessionId: session.providerSessionId,
+          key
+        })
         session.options.set(key, value)
         session.confirmedOptions.delete(key)
         continue

@@ -71,6 +71,7 @@ function adapter(catalog: ClaudeAtRestCommandCatalog): StructuredAgentSessionAda
 
 function catalogFor(workspacePath: string): ClaudeAtRestCommandCatalog {
   return new ClaudeAtRestCommandCatalog({
+    logger: recordingStructuredAgentSessionLogger().logger,
     resolveWorkspacePath: async () => workspacePath,
     now: () => clock,
     // Only the folders this test writes, never the machine's own home.
@@ -173,6 +174,7 @@ describe("a Claude chat whose Claude isn't running shows the `/` surface from it
   it('keeps a slow scan once it answers, never a staler one after a newer, and runs at most two', async () => {
     const pending: ((skills: string[]) => void)[] = []
     const catalog = new ClaudeAtRestCommandCatalog({
+      logger: recordingStructuredAgentSessionLogger().logger,
       resolveWorkspacePath: async () => workspace,
       now: () => clock,
       discover: () =>
@@ -231,7 +233,9 @@ describe("a Claude chat whose Claude isn't running shows the `/` surface from it
   it('waits out the window from when a scan lands, even one that failed', async () => {
     let calls = 0
     let failNext = true
+    const logged = recordingStructuredAgentSessionLogger()
     const catalog = new ClaudeAtRestCommandCatalog({
+      logger: logged.logger,
       resolveWorkspacePath: async () => workspace,
       now: () => clock,
       discover: async (args) => {
@@ -247,25 +251,24 @@ describe("a Claude chat whose Claude isn't running shows the `/` surface from it
       }
     })
     const record = store.getRecord(SESSION)!
-    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    try {
-      catalog.read(record)
-      await vi.waitFor(() => expect(warned).toHaveBeenCalledOnce())
-      catalog.read(record)
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      expect(calls).toBe(1)
-      clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
-      catalog.read(record)
-      await vi.waitFor(() =>
-        expect(namesOf(catalog.read(record) ?? null, 'skill')).toEqual(['review-pr'])
-      )
-      clock += CLAUDE_AT_REST_COMMANDS_TTL_MS - 1
-      catalog.read(record)
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      expect(calls).toBe(2)
-    } finally {
-      warned.mockRestore()
-    }
+    catalog.read(record)
+    await vi.waitFor(() => expect(logged.entries).toHaveLength(1))
+    expect(logged.entries[0].fields).toMatchObject({
+      scope: 'claude-at-rest-commands',
+      sessionId: SESSION
+    })
+    catalog.read(record)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(calls).toBe(1)
+    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
+    catalog.read(record)
+    await vi.waitFor(() =>
+      expect(namesOf(catalog.read(record) ?? null, 'skill')).toEqual(['review-pr'])
+    )
+    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS - 1
+    catalog.read(record)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(calls).toBe(2)
   })
 
   it('after a relaunch, with nothing remembered from before it', async () => {

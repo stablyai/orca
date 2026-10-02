@@ -20,6 +20,7 @@ import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
@@ -98,6 +99,8 @@ export type CodexStructuredSessionAdapterDeps = {
   requestTimeoutMs?: number
   /** Host model catalog; sessions write their listings through and read back. */
   modelCatalog?: AgentModelCatalogStore
+  /** Where a failure this adapter carries on past is reported: the host's logger. */
+  logger: StructuredAgentSessionLogger
 }
 
 export type CodexSession = {

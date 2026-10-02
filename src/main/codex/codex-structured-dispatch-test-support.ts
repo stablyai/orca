@@ -14,6 +14,9 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 export const CODEX_TEST_THREAD_ID = 'thread-abc'
 
@@ -96,6 +99,7 @@ export async function acquiredCodexAdapter(input: {
   requestTimeoutMs?: number
 }): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       command: 'codex',
       args: ['app-server'],

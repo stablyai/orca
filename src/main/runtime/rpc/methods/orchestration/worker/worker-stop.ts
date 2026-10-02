@@ -133,10 +133,9 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
           // installed the structured host, and both the observation below and the close read it.
           // Without this a restarted worker answers `unknown` forever and can never be stopped.
           await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
-            console.warn(
-              '[orchestration] structured host install failed before stop',
-              handle,
-              error
+            runtime.structuredAgentSessionLogger.warn(
+              'installing the structured host before a worker stop failed',
+              { scope: 'worker-stop-host-install', dispatchId: params.dispatch, error }
             )
           })
         }

@@ -86,6 +86,7 @@ function unseenHistory(
  * ids this pass settled, so the attach result stops reporting them unconfirmed.
  */
 export async function reconcileJournalSubmissionsAgainstHistory(input: {
+  sessionId: string
   journal: AgentSessionJournal
   fence: number
   history: ProviderHistoryWindow
@@ -101,7 +102,9 @@ export async function reconcileJournalSubmissionsAgainstHistory(input: {
   })) {
     if (outcome.outcome === 'unknown') {
       // Narrowing failed: the submission stays unconfirmed, so record why.
-      console.warn('[journal-reconcile] submission left unconfirmed:', {
+      input.journal.logger.warn('a submission was left unconfirmed', {
+        scope: 'journal-submission-reconcile',
+        sessionId: input.sessionId,
         clientMessageId: outcome.clientMessageId,
         reason: outcome.reason,
         fence: input.fence

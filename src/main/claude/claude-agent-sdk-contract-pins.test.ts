@@ -18,6 +18,9 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
 import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 // Contract pins for @anthropic-ai/claude-agent-sdk, run against the real SDK
 // driving a scripted fake CLI (never the real Claude binary). These tests exist
@@ -159,6 +162,7 @@ function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = [
     launchArgs
   } as unknown as AgentSessionRecord
   return createClaudeStructuredLaunchResolver({
+    logger: TEST_LOGGER,
     store: { getRecord: () => record } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath: async () => '/repos/workspace-1',
     resolveCommand: () => FAKE_CLI,

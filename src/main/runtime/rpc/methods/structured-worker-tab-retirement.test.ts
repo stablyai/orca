@@ -18,6 +18,7 @@ import {
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
 } from '../../structured-worker-identity'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const createSpy = vi.fn()
 vi.mock('./structured-agent-session-create', () => ({
@@ -160,18 +161,23 @@ describe('structured worker stop retires the chat tab', () => {
   it('cannot turn a proven stop into a retained one when the prune throws', async () => {
     installHost()
     const identity = registerIdentity()
+    const log = recordingStructuredAgentSessionLogger()
     const runtime = {
       forgetStructuredSessionMail: vi.fn(),
       retireStructuredAgentSessionTabFromSnapshot: vi.fn(() => {
         throw new Error('snapshot is wedged')
-      })
-    } as unknown as OrcaRuntimeService
+      }),
+      structuredAgentSessionLogger: log.logger
+    }
 
     await expect(stopStructuredWorker(identity, 'd1', runtime)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
     expect(runtime.retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledWith(SESSION)
+    expect(log.entries.map(({ fields }) => [fields.scope, fields.sessionId])).toEqual([
+      ['chat-tab-retire', SESSION]
+    ])
   })
 
   it('settles a runtime that has no tab surface at all', async () => {

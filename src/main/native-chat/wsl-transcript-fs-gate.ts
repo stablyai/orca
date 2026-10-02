@@ -1,4 +1,5 @@
 import { wslTranscriptFsLaneKey, wslTranscriptFsRouteKey } from './wsl-transcript-fs-route'
+import { reportWslTranscriptFsTimeout } from './wsl-transcript-fs-timeout-report'
 import {
   WslTranscriptFsError,
   wslTranscriptFsCapacityError as capacityError,
@@ -257,10 +258,7 @@ function pumpTasks(): void {
     activeTasks.add(task)
     task.deadlineTimer = setTimeout(() => {
       const error = timeoutError()
-      console.warn(
-        `[wsl-transcript-fs-gate] ${task.priority} filesystem task exceeded ` +
-          `${timeoutMs(task.priority)}ms; replacing its I/O process: ${task.key}`
-      )
+      reportWslTranscriptFsTimeout(task, timeoutMs(task.priority), error)
       // Keep polling from churning replacement processes on the same stalled mount.
       quarantineRoute(task.route, timeoutMs(task.priority), task.startedAt ?? performance.now())
       failQueuedRouteTasks(task.route)

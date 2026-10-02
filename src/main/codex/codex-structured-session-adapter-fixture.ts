@@ -14,6 +14,9 @@ import {
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 export const THREAD_ID = 'thread-abc'
 
@@ -111,6 +114,7 @@ export function adapterFor(
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
   return new CodexStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       command: 'codex',
       args: ['app-server'],

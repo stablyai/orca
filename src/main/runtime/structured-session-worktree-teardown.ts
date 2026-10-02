@@ -48,7 +48,9 @@ export type UnclosedStructuredSession = StructuredSessionInWorkspace & {
 
 export type StructuredWorktreeSweepRuntime = Pick<
   OrcaRuntimeService,
-  'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
+  | 'forgetStructuredSessionMail'
+  | 'retireStructuredAgentSessionTabFromSnapshot'
+  | 'structuredAgentSessionLogger'
 >
 
 /**

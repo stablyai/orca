@@ -107,8 +107,15 @@ export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
 }
 
 /** The row keeps only the marker released clients hide; why the write failed belongs in the log. */
-function claudeWriteFailureRejection(error: unknown): AgentJournalDispatchRejection {
-  console.warn('[claude-dispatch] message could not be handed to Claude:', error)
+function claudeWriteFailureRejection(
+  error: unknown,
+  session: ClaudeSession
+): AgentJournalDispatchRejection {
+  session.logger.warn('a message could not be handed to Claude', {
+    scope: 'claude-dispatch-write',
+    sessionId: session.sessionId,
+    error
+  })
   return claudeDispatchRejection(agentSessionFailureFact('writeFailed'))
 }
 
@@ -127,7 +134,7 @@ export async function dispatchClaudeTurn(
   try {
     content = await claudeDispatchMessageContent(input.body)
   } catch (error) {
-    return { state: 'rejected', ...claudeDispatchContentRejection(error) }
+    return { state: 'rejected', ...claudeDispatchContentRejection(error, session) }
   }
   if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
     return { state: 'rejected', ...claudeDispatchRejection(agentSessionFailureFact('queueFull')) }
@@ -180,7 +187,7 @@ export async function dispatchClaudeTurn(
       if (error instanceof AgentSessionPreDispatchError) {
         throw error
       }
-      return { state: 'rejected', ...claudeWriteFailureRejection(error) }
+      return { state: 'rejected', ...claudeWriteFailureRejection(error, session) }
     }
     const waiter = replay.waiter
     if (waiter.settledUuid) {
@@ -198,7 +205,7 @@ export async function dispatchClaudeTurn(
       waiter.resolve(null)
       // The frame was never handed to the SDK's input pump, so this is not doubt:
       // the message provably did not happen, which is what `rejected` means.
-      return { state: 'rejected', ...claudeWriteFailureRejection(error) }
+      return { state: 'rejected', ...claudeWriteFailureRejection(error, session) }
     }
     if (!waiter.retired) {
       retireWaiter(session, waiter)

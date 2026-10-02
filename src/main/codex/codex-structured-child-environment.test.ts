@@ -8,6 +8,9 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from '../runtime/structured-worker-identity'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const DEV_CLI_BIN_FIRST = /^[^:;]*[\\/]cli[\\/]bin[:;]/
 // The dev launcher by absolute path: a login shell's profile cannot reorder it behind a global.
@@ -26,7 +29,8 @@ describe('buildCodexStructuredChildEnvironment', () => {
           env: { EXAMPLE_GATEWAY_TOKEN: 'shell-exported', CODEX_HOME: '/shell/home' }
         },
         'spawn-token',
-        'session-not-a-worker'
+        'session-not-a-worker',
+        TEST_LOGGER
       )
     ).toEqual({
       EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
@@ -51,7 +55,9 @@ describe('buildCodexStructuredChildEnvironment', () => {
       env: {}
     }
     const sessionId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
-    expect(buildCodexStructuredChildEnvironment(launch, 'spawn-token', sessionId)).toEqual({
+    expect(
+      buildCodexStructuredChildEnvironment(launch, 'spawn-token', sessionId, TEST_LOGGER)
+    ).toEqual({
       [CODEX_SPAWN_TOKEN_ENV]: 'spawn-token',
       // Not a worker, so no handle: the id alone names this chat as a caller.
       ORCA_AGENT_SESSION_ID: sessionId,
@@ -72,7 +78,12 @@ describe('buildCodexStructuredChildEnvironment', () => {
       hostScope: { kind: 'local', hostId: 'local' }
     })
     try {
-      const env = buildCodexStructuredChildEnvironment(launch, 'spawn-token', sessionId)
+      const env = buildCodexStructuredChildEnvironment(
+        launch,
+        'spawn-token',
+        sessionId,
+        TEST_LOGGER
+      )
       expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
       expect(env.ORCA_AGENT_SESSION_ID).toBe(sessionId)
       expect(env.ORCA_CLI_COMMAND).toMatch(DEV_CLI_LAUNCHER)
@@ -124,7 +135,8 @@ describe('the spawned Codex child', () => {
         env: {}
       },
       'spawn-token',
-      sessionId
+      sessionId,
+      TEST_LOGGER
     )
     const connection = await openCodexAppServerConnection({
       command: process.execPath,

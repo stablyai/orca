@@ -126,4 +126,20 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
       }
     )
   })
+
+  it('reports a failed host install by dispatch, never by the worker handle', async () => {
+    const dispatchId = startStructuredWorker()
+    const failure = new Error('journal database unavailable')
+    vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockRejectedValue(failure)
+    const warn = vi.spyOn(runtime.structuredAgentSessionLogger, 'warn')
+
+    await expect(call('orchestration.workerStop', { dispatch: dispatchId })).resolves.toMatchObject(
+      { processAction: 'none', state: 'stop_unknown' }
+    )
+    expect(warn).toHaveBeenCalledOnce()
+    const fields = warn.mock.calls[0][1]
+    // The handle is a bearer credential; the trace file and diagnostic bundle must not carry it.
+    expect(fields).toEqual({ scope: 'worker-stop-host-install', dispatchId, error: failure })
+    expect(JSON.stringify(fields)).not.toContain(HANDLE)
+  })
 })

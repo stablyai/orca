@@ -1,6 +1,9 @@
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
 vi.mock('../cli/linux-terminal-orca-cli-shim', () => shim)
@@ -63,7 +66,7 @@ describe('structuredSessionChildIdentityEnv', () => {
     pinPlatform('linux')
     installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
     const childEnv = { PATH: '/usr/bin' }
-    const env = structuredSessionChildIdentityEnv(SESSION_ID, childEnv)
+    const env = structuredSessionChildIdentityEnv(SESSION_ID, childEnv, TEST_LOGGER)
     expect(env).toEqual({
       PATH: `${SHIM_DIR}:/usr/bin`,
       ORCA_AGENT_SESSION_ID: SESSION_ID,
@@ -81,10 +84,14 @@ describe('structuredSessionChildIdentityEnv', () => {
 
   it('replaces an id inherited from an Orca launched inside another session', () => {
     installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
-    const env = structuredSessionChildIdentityEnv(SESSION_ID, {
-      ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
-      PATH: '/usr/bin'
-    })
+    const env = structuredSessionChildIdentityEnv(
+      SESSION_ID,
+      {
+        ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+        PATH: '/usr/bin'
+      },
+      TEST_LOGGER
+    )
     expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
   })
 
@@ -93,7 +100,7 @@ describe('structuredSessionChildIdentityEnv', () => {
     // one identity; the handle stays for the handle-based surfaces outside orchestration.
     installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
     const handle = registerWorker()
-    const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
+    const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' }, TEST_LOGGER)
     expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
     expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
   })
@@ -110,7 +117,11 @@ describe('structuredSessionChildIdentityEnv', () => {
       // installs as `orca-ide` on Linux (stablyai/orca#7904) — and the dispatch hangs to timeout.
       pinPlatform('linux')
       installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
-      const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin:/bin' })
+      const env = structuredSessionChildIdentityEnv(
+        SESSION_ID,
+        { PATH: '/usr/bin:/bin' },
+        TEST_LOGGER
+      )
       expect(env.ORCA_CLI_COMMAND).toBe(join(SHIM_DIR, 'orca'))
       expect(env.PATH).toBe(`${SHIM_DIR}:/usr/bin:/bin`)
     })
@@ -118,7 +129,7 @@ describe('structuredSessionChildIdentityEnv', () => {
     it('on packaged macOS, through the bundled CLI dir', () => {
       pinPlatform('darwin')
       installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
-      const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
+      const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' }, TEST_LOGGER)
       expect(env.PATH).toBe(`${join(RESOURCES, 'bin')}:/usr/bin`)
       expect(env.ORCA_CLI_COMMAND).toBe(join(RESOURCES, 'bin', 'orca'))
     })
@@ -126,7 +137,11 @@ describe('structuredSessionChildIdentityEnv', () => {
     it('on packaged Windows, through the bundled CLI dir under the env block spelling', () => {
       pinPlatform('win32')
       installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
-      const env = structuredSessionChildIdentityEnv(SESSION_ID, { Path: 'C:\\Windows' })
+      const env = structuredSessionChildIdentityEnv(
+        SESSION_ID,
+        { Path: 'C:\\Windows' },
+        TEST_LOGGER
+      )
       expect(env.Path).toBe(`${join(RESOURCES, 'bin')};C:\\Windows`)
       expect(env.PATH).toBeUndefined()
       // The native launcher: `orca.cmd` refuses message bodies cmd.exe would mangle.
@@ -136,7 +151,7 @@ describe('structuredSessionChildIdentityEnv', () => {
     it('unpackaged, through the dev launcher dir', () => {
       pinPlatform('darwin')
       installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
-      const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
+      const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' }, TEST_LOGGER)
       expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
       expect(env.ORCA_CLI_COMMAND).toBe(join(USER_DATA, 'cli', 'bin', 'orca-dev'))
     })
@@ -148,16 +163,22 @@ describe('structuredSessionChildIdentityEnv', () => {
     pinPlatform('linux')
     installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
     shim.ensureLinuxTerminalOrcaCliShimDir.mockReturnValue(null)
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const env = structuredSessionChildIdentityEnv(SESSION_ID, {
-      PATH: '/usr/bin',
-      ORCA_CLI_COMMAND: '/Applications/Other Orca.app/Contents/Resources/bin/orca',
-      ORCA_USER_DATA_PATH: '/data/other-orca'
-    })
+    const log = recordingStructuredAgentSessionLogger()
+    const env = structuredSessionChildIdentityEnv(
+      SESSION_ID,
+      {
+        PATH: '/usr/bin',
+        ORCA_CLI_COMMAND: '/Applications/Other Orca.app/Contents/Resources/bin/orca',
+        ORCA_USER_DATA_PATH: '/data/other-orca'
+      },
+      log.logger
+    )
     expect(env).not.toHaveProperty('ORCA_CLI_COMMAND')
     expect(env.PATH).toBe('/usr/bin')
     expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
-    expect(console.warn).toHaveBeenCalledOnce()
+    expect(log.entries.map(({ fields }) => fields)).toEqual([
+      { scope: 'child-cli-launcher', sessionId: SESSION_ID }
+    ])
   })
 
   it('never puts a pane key in the child environment', () => {
@@ -166,7 +187,7 @@ describe('structuredSessionChildIdentityEnv', () => {
     pinPlatform('linux')
     installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
     registerWorker()
-    const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
+    const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' }, TEST_LOGGER)
     expect(env.ORCA_PANE_KEY).toBeUndefined()
     expect(Object.keys(env).filter((key) => key.includes('PANE'))).toEqual([])
   })
@@ -187,7 +208,8 @@ describe('structuredSessionChildIdentityEnv', () => {
     installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
     registerWorker()
     expect(
-      structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' }).ORCA_CLI_COMMAND
+      structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' }, TEST_LOGGER)
+        .ORCA_CLI_COMMAND
     ).not.toBe('orca-ide')
   })
 })

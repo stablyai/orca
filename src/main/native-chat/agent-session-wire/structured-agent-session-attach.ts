@@ -248,6 +248,7 @@ async function reconcileAgainstProviderHistory(input: {
     return []
   }
   return reconcileJournalSubmissionsAgainstHistory({
+    sessionId: input.identity.sessionId,
     journal: input.journal,
     fence: input.fence,
     history

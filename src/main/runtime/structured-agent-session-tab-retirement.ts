@@ -10,6 +10,7 @@ import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 
 /** The snapshot's tab for a structured session, matched by session id and by published tab id. */
@@ -68,12 +69,19 @@ export function retireStructuredAgentSessionTabFrom(
 export function retireSettledStructuredWorkerTab(
   sessionId: string,
   runtime:
-    | { retireStructuredAgentSessionTabFromSnapshot?: (sessionId: string) => boolean }
+    | {
+        retireStructuredAgentSessionTabFromSnapshot?: (sessionId: string) => boolean
+        structuredAgentSessionLogger: StructuredAgentSessionLogger
+      }
     | undefined
 ): void {
   try {
     runtime?.retireStructuredAgentSessionTabFromSnapshot?.(sessionId)
   } catch (error) {
-    console.warn('[orchestration] structured worker tab retirement failed', sessionId, error)
+    runtime?.structuredAgentSessionLogger.warn('retiring a settled chat tab failed', {
+      scope: 'chat-tab-retire',
+      sessionId,
+      error
+    })
   }
 }

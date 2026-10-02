@@ -404,9 +404,16 @@ async function sweepStructuredSessions(
   // verbatim, like the unstopped-PTY warn above: this line is the only record a forced removal
   // leaves, and appending "still attached" asserted the live verdict over sessions the sweep had
   // just said it could not confirm either way.
-  console.warn(
-    `[worktree-teardown] forcing removal of ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${describeUnclosedStructuredSessions(unstopped)}`
-  )
+  const forced = `forcing removal of ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${describeUnclosedStructuredSessions(unstopped)}`
+  const logger = deps.runtime?.structuredAgentSessionLogger
+  if (logger) {
+    logger.warn(forced, {
+      scope: 'worktree-forced-removal',
+      sessionIds: unstopped.map((session) => session.sessionId)
+    })
+  } else {
+    console.warn(`[worktree-teardown] ${forced}`)
+  }
   // A best-effort or forced removal still discards the workspace when a live close remains
   // unproven. Its close path intentionally leaves the live snapshot tab in place, so carry those
   // sessions into the post-removal retirement pass alongside the detached members.

@@ -99,12 +99,6 @@ export function mutateWithChatStop<TValue>(
             clientOperationId: envelope.clientOperationId,
             ...named,
             stopChild,
-            onStopChildError: (error) =>
-              context.deps.logger.warn('ending the agent process on Stop failed', {
-                scope: 'stop-child',
-                sessionId,
-                error
-              }),
             // The host drops its child only once the exit is proven, and nothing else runs meanwhile.
             childReleased: () => context.sessions.get(sessionId)?.child !== child,
             endSession: (owed) => {

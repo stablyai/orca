@@ -24,6 +24,9 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const CALLER = { callerKey: 'client-1' }
 const INIT_DELAY_MS = 40
@@ -52,6 +55,7 @@ beforeEach(async () => {
     }
   })
   adapter = new ClaudeStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},

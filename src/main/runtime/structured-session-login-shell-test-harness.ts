@@ -10,6 +10,9 @@ import { join } from 'node:path'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { runProcess } from '../../shared/child-process/run-process'
 import { structuredSessionChildIdentityEnv } from './structured-session-child-identity-env'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
 
@@ -40,7 +43,11 @@ export function createLoginShellHarness(): LoginShellHarness {
   writeFileSync(join(home, '.zprofile'), prependGlobal)
   writeFileSync(join(home, '.bash_profile'), prependGlobal)
   installFakeAppEnvironment({ isPackaged: () => false, getPath: () => userData })
-  const env = structuredSessionChildIdentityEnv(SESSION_ID, { HOME: home, PATH: '/usr/bin:/bin' })
+  const env = structuredSessionChildIdentityEnv(
+    SESSION_ID,
+    { HOME: home, PATH: '/usr/bin:/bin' },
+    TEST_LOGGER
+  )
   return {
     run: async (spec) => (await runProcess({ ...spec, env })).stdout,
     dispose: () => rmSync(root, { recursive: true, force: true })

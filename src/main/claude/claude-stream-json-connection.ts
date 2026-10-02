@@ -22,6 +22,7 @@ import {
   createClaudeUserMessageQueue
 } from './claude-agent-sdk-user-message-queue'
 import type { ClaudeStructuredSdkOptions } from './claude-structured-launch-resolution'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export { ClaudeControlRequestError }
 
@@ -53,6 +54,9 @@ export type ClaudeStreamJsonLaunch = {
 }
 
 export type ClaudeStreamJsonConnectionHandlers = {
+  /** The chat this connection serves, and where its close reports what it could not reap. */
+  sessionId: string
+  logger: StructuredAgentSessionLogger
   onMessage?: (message: Record<string, unknown>) => void
   /**
    * The SDK owns inbound permission control: it hands `can_use_tool` to this callback with
@@ -114,7 +118,7 @@ function exitError(stderrTail: string, status: ExitStatus | null, cause?: Error)
 
 export async function openClaudeStreamJsonConnection(
   launch: ClaudeStreamJsonLaunch,
-  handlers: ClaudeStreamJsonConnectionHandlers = {},
+  handlers: ClaudeStreamJsonConnectionHandlers,
   spawnImpl: typeof spawnProcess = spawnProcess,
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
@@ -323,7 +327,9 @@ export async function openClaudeStreamJsonConnection(
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {
         if (exited && tree.treeVerdict === 'live') {
-          console.warn('[claude-stream-json] root exited but a descendant survived the close:', {
+          handlers.logger.warn('the Claude process exited but a descendant survived the close', {
+            scope: 'claude-close-descendant',
+            sessionId: handlers.sessionId,
             pid: spawner.pid
           })
         }

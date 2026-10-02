@@ -9,6 +9,7 @@ import {
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
   WslTranscriptFsError
 } from './wsl-transcript-fs-gate'
+import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
 
 const SLOW_MESSAGE =
   'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues.'
@@ -761,6 +762,34 @@ describe('WSL transcript filesystem task scheduling', () => {
       stalled.resolve('late')
       await vi.advanceTimersByTimeAsync(0)
       vi.useRealTimers()
+    }
+  })
+
+  it('writes a task that outlives its deadline to the trace, not only the console', async () => {
+    vi.useFakeTimers()
+    const records: unknown[] = []
+    setActiveSink({ push: (record) => records.push(record), flush: () => {}, close: () => {} })
+    const stalled = deferred<string>()
+    try {
+      const stuck = run('\\\\wsl.localhost\\Ubuntu\\traced', 'exact', () => stalled.promise)
+      const stuckRejected = expect(stuck).rejects.toMatchObject({ code: 'timeout' })
+      await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS)
+      await stuckRejected
+      expect(records).toEqual([
+        expect.objectContaining({
+          name: 'wslTranscriptFs.timeout',
+          attributes: expect.objectContaining({
+            priority: 'exact',
+            timeoutMs: WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS
+          }),
+          exit: expect.objectContaining({ _tag: 'Failure' })
+        })
+      ])
+    } finally {
+      stalled.resolve('late')
+      await vi.advanceTimersByTimeAsync(0)
+      vi.useRealTimers()
+      _resetTracerForTests()
     }
   })
 

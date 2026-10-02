@@ -293,9 +293,10 @@ export class JournalQueuedMessages {
    *  never allowed to fail opening the chat. */
   repairAndPruneAtOpen(): Promise<void> {
     return this.repairAndPrune().catch((error: unknown) => {
-      console.warn('[journal-open] queued-message repair skipped:', {
+      this.deps.database().logger.warn('repairing queued messages at open was skipped', {
+        scope: 'journal-queued-message-repair',
         sessionId: this.deps.sessionId,
-        error: error instanceof Error ? error.message : String(error)
+        error
       })
     })
   }

@@ -50,7 +50,7 @@ describe("the runtime's own structured host install", () => {
     const closed = new OrchestrationDb(':memory:')
     closed.close()
     vi.spyOn(runtime, 'getExistingOrchestrationDb').mockReturnValue(closed)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warn = vi.spyOn(runtime.structuredAgentSessionLogger, 'warn').mockImplementation(() => {})
     expect(() =>
       runtime.onStructuredSessionStatusForMail({
         sessionId: '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37',
@@ -58,8 +58,11 @@ describe("the runtime's own structured host install", () => {
       })
     ).not.toThrow()
     expect(warn).toHaveBeenCalledWith(
-      '[orchestration] structured session mail redrive failed',
-      expect.objectContaining({ sessionId: '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37' })
+      'a structured session mail redrive failed',
+      expect.objectContaining({
+        scope: 'mail-redrive',
+        sessionId: '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+      })
     )
   })
 })

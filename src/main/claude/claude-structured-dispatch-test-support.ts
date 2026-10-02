@@ -6,10 +6,13 @@ import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 import { createClaudeSessionStartup } from './claude-structured-session-startup-state'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): ClaudeSession {
   return {
     connection: { send } as unknown as ClaudeSession['connection'],
+    sessionId: 'session-1',
+    logger: recordingStructuredAgentSessionLogger().logger,
     providerSessionId: 'provider-session',
     leafUuid: null,
     turnEndLeafUuid: null,

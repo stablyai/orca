@@ -15,6 +15,9 @@ import {
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const SESSION_ID = 'orca-session-auth'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -42,6 +45,7 @@ function resolverFor(options: {
   authSwitchSettleTimeoutMs?: number
 }): ReturnType<typeof createClaudeStructuredLaunchResolver> {
   return createClaudeStructuredLaunchResolver({
+    logger: TEST_LOGGER,
     store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
@@ -67,7 +71,9 @@ function realResolverAdapter(
     ]
   } as unknown as AgentSessionRecord
   return new ClaudeStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: createClaudeStructuredLaunchResolver({
+      logger: TEST_LOGGER,
       store: { getRecord: () => resumable } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',

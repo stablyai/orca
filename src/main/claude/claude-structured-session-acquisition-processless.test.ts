@@ -6,6 +6,9 @@ import type {
   openClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -20,10 +23,7 @@ describe('Claude structured processless acquisition', () => {
   it('classifies pre-pid error and close as processless with idempotent cleanup', async () => {
     const fault = new Error('spawn claude ENOENT')
     const close = vi.fn(async () => true)
-    const openConnection: typeof openClaudeStreamJsonConnection = async (
-      _launch,
-      handlers = {}
-    ) => {
+    const openConnection: typeof openClaudeStreamJsonConnection = async (_launch, handlers) => {
       // A failed spawn reports its error on a later tick, as child_process does.
       setTimeout(() => handlers.onFault?.(fault), 0)
       const connection: ClaudeStreamJsonConnection = {
@@ -48,6 +48,7 @@ describe('Claude structured processless acquisition', () => {
       return connection
     }
     const adapter = new ClaudeStructuredSessionAdapter({
+      logger: TEST_LOGGER,
       resolveLaunch: async () => ({
         pathToClaudeCodeExecutable: 'claude',
         options: {},

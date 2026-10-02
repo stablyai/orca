@@ -26,6 +26,9 @@ import {
 } from './journal-row-table'
 import type { JournalRow } from './journal-row-schema'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import { recordingStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 let root: string
 let dbPath: string
@@ -67,7 +70,7 @@ afterEach(async () => {
 
 describe('the host journal database open', () => {
   it('creates every table and reads back every load-bearing pragma', () => {
-    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db
+    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER).db
     try {
       const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
@@ -98,14 +101,14 @@ describe('the host journal database open', () => {
 
   // T5: a newer build's database opens read-only, its rows readable, and is left byte-identical.
   it('opens a newer user_version read-only without touching the file', async () => {
-    const seeded = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db
+    const seeded = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER).db
     publishJournalSessionEpoch(seeded, SESSION, 'epoch-1')
     insertJournalRow(seeded, 'session-1', epochRow(1))
     seeded.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 5}`)
     seeded.close()
     const before = await digest(dbPath)
 
-    const opened = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS)
+    const opened = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER)
     try {
       expect(opened.readOnly).toBe(true)
       expect(readJournalSessionEpoch(opened.db, 'session-1')).toBe('epoch-1')
@@ -122,7 +125,7 @@ describe('the host journal database open', () => {
 
   it('closes the raw connection when schema setup throws', async () => {
     const failing = join(root, 'nested', 'agent-session-journal.db')
-    expect(() => openJournalDatabase(failing, NO_LEGACY_JOURNAL_RECORDS)).toThrow()
+    expect(() => openJournalDatabase(failing, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER)).toThrow()
     await expect(stat(`${failing}-wal`)).rejects.toThrow()
     await expect(rm(root, { recursive: true, force: true })).resolves.toBeUndefined()
     root = await mkdtemp(join(tmpdir(), 'orca-journal-db-'))
@@ -131,7 +134,7 @@ describe('the host journal database open', () => {
 
 describe('journal row statements', () => {
   it('serves replay, resume, suffix truncation and an epoch discard', () => {
-    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db
+    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER).db
     try {
       db.exec('BEGIN IMMEDIATE')
       for (let seq = 1; seq <= 5; seq += 1) {
@@ -162,7 +165,7 @@ describe('journal row statements', () => {
   })
 
   it('deletes only the rows no pointer names', () => {
-    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db
+    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER).db
     try {
       insertJournalRow(db, 'session-1', epochRow(1, 'epoch-copying'))
       insertJournalRow(db, 'session-2', epochRow(1, 'epoch-live'))
@@ -181,7 +184,7 @@ describe('journal row statements', () => {
   })
 
   it('refuses a duplicate sequence inside one epoch of one chat', () => {
-    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db
+    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER).db
     try {
       insertJournalRow(db, 'session-1', epochRow(1))
       expect(() => insertJournalRow(db, 'session-1', epochRow(1))).toThrow()
@@ -193,7 +196,7 @@ describe('journal row statements', () => {
   })
 
   it('moves the epoch pointer in place', () => {
-    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db
+    const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER).db
     try {
       publishJournalSessionEpoch(db, SESSION, 'epoch-1')
       publishJournalSessionEpoch(db, SESSION, 'epoch-2')
@@ -221,7 +224,7 @@ describe('schema creation', () => {
       return original.call(this, sql, options)
     })
 
-    expect(() => openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS)).toThrow(
+    expect(() => openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER)).toThrow(
       'crash before the version is published'
     )
     pragma.mockRestore()
@@ -253,10 +256,10 @@ INSERT INTO journal_sessions VALUES ('s1', 'ws', 'e1', 0, NULL, NULL);`)
     earlier.close()
     const before = await digest(dbPath)
 
-    expect(() => openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS)).toThrow(
+    expect(() => openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER)).toThrow(
       `unreleased schema ${version}`
     )
-    expect(() => openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS)).toThrow(
+    expect(() => openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS, TEST_LOGGER)).toThrow(
       JournalUnreleasedSchemaError
     )
 

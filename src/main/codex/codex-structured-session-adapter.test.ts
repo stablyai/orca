@@ -20,6 +20,9 @@ import {
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 describe('CodexStructuredSessionAdapter.acquire', () => {
   it('starts a new thread and reports the process and link the lease will prove', async () => {
@@ -239,6 +242,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
   it('refuses to publish a session whose child died while it was being acquired', async () => {
     const codex = fakeCodex()
     const adapter = new CodexStructuredSessionAdapter({
+      logger: TEST_LOGGER,
       resolveLaunch: async () => ({
         command: 'codex',
         args: ['app-server'],
@@ -271,6 +275,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
   it('classifies launch validation failure as pre-spawn without opening a child', async () => {
     const codex = fakeCodex()
     const adapter = new CodexStructuredSessionAdapter({
+      logger: TEST_LOGGER,
       resolveLaunch: async () => {
         throw new Error('workspace no longer exists')
       },
@@ -316,6 +321,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       return codex.openConnection(...args)
     }
     const adapter = new CodexStructuredSessionAdapter({
+      logger: TEST_LOGGER,
       resolveLaunch: async () => ({
         command: 'codex',
         args: ['app-server'],
@@ -345,6 +351,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     const launch = Promise.withResolvers<CodexStructuredLaunch>()
     const codex = fakeCodex()
     const adapter = new CodexStructuredSessionAdapter({
+      logger: TEST_LOGGER,
       resolveLaunch: () => launch.promise,
       openConnection: codex.openConnection,
       readProcessStartTime: async () => 1_700_000_000_000

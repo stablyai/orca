@@ -26,6 +26,7 @@ import type { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from './claude-at-rest-commands'
 import type { ClaudeSessionStartup } from './claude-structured-session-startup-state'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export type ClaudeAuthDiagnostic = {
   apiKeySourceConfigured: boolean
@@ -124,6 +125,8 @@ export type ClaudeStructuredSessionAdapterDeps = {
   }) => Promise<void>
   /** Host model catalog; sessions write their listings through. */
   modelCatalog?: AgentModelCatalogStore
+  /** Where a failure this adapter carries on past is reported: the host's logger. */
+  logger: StructuredAgentSessionLogger
 }
 
 export type ClaudeDispatchWaiter = {
@@ -149,6 +152,10 @@ export type ClaudeDispatchWaiter = {
 
 export type ClaudeSession = {
   connection: ClaudeStreamJsonConnection
+  /** The Orca chat this child serves. */
+  sessionId: string
+  /** The adapter's logger, for a step on this session that carries on past a failure. */
+  logger: StructuredAgentSessionLogger
   providerSessionId: string
   /** Latest main-chain message seen on the live stream, mid-turn included. */
   leafUuid: string | null
@@ -207,7 +214,9 @@ export type ClaudeSession = {
   startup: ClaudeSessionStartup
 }
 
-export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAdapterDeps): string {
+export function mintClaudeAcquisitionGeneration(
+  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'mintAcquisitionGeneration'>
+): string {
   return deps.mintAcquisitionGeneration?.() ?? randomUUID()
 }
 

@@ -31,6 +31,8 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
+
 const CALLER = { callerKey: 'client-1' }
 const CAPABILITIES = ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1', 'msg_lifecycle_v1']
 
@@ -51,6 +53,7 @@ beforeEach(async () => {
   })
   const lifecycle: Promise<void>[] = []
   adapter = new ClaudeStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},

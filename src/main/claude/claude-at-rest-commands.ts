@@ -5,6 +5,7 @@ import { structuredSlashCommands } from '../../shared/structured-agent-session-c
 import { discoverSkills } from '../skills/discovery'
 import { scanClaudeCommandFolders } from './claude-command-folder-scan'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 /** How long one scan answers for a workspace and account before the next read scans again. */
 export const CLAUDE_AT_REST_COMMANDS_TTL_MS = 10_000
@@ -14,6 +15,7 @@ const SCAN_OVERDUE_MS = 30_000
 const MAX_SCANS_IN_FLIGHT = 2
 
 export type ClaudeAtRestCommandsDeps = {
+  logger: StructuredAgentSessionLogger
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   now?: () => number
   discover?: typeof discoverSkills
@@ -101,7 +103,11 @@ export class ClaudeAtRestCommandCatalog {
         (error: unknown) => {
           // Waits out the window before trying again, but leaves room for an older scan's answer.
           entry.scannedAt = this.now()
-          console.warn('[claude] reading the at-rest `/` commands failed:', error)
+          this.deps.logger.warn('reading the at-rest `/` commands failed', {
+            scope: 'claude-at-rest-commands',
+            sessionId: record.sessionId,
+            error
+          })
         }
       )
       .finally(() => {

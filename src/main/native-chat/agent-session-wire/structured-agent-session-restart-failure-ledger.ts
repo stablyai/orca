@@ -182,7 +182,8 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
       .catch(() => {
         deps.logger.warn('completing a restart offer failed', {
           scope: 'restart-offer-complete',
-          operationId
+          operationId,
+          sessionIds: completed
         })
       })
     // Filed before the rollback so a failure the user must act on is never reopened as an offer
@@ -192,7 +193,8 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
       .catch(() => {
         deps.logger.warn('recording a restart failure failed', {
           scope: 'restart-failure-record',
-          operationId
+          operationId,
+          sessionIds: failures.map((failure) => failure.sessionId)
         })
       })
     // This only reopens rows still owned by this operation. Rows removed by completeResume stay
@@ -202,7 +204,9 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
       .catch(() => {
         deps.logger.warn('rolling back a restart offer failed', {
           scope: 'restart-offer-rollback',
-          operationId
+          operationId,
+          // Every session the operation settled: which rows it still owned depends on the writes above.
+          sessionIds: outcomes.map((outcome) => outcome.sessionId)
         })
       })
   }

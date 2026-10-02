@@ -75,7 +75,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
   let root: string | null = null
   let operations = 0
 
-  const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
+  const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers) => {
     const providerSessionId = String(launch.options.sessionId ?? launch.options.resume)
     const sessionId = sessionIds.find(
       (candidate) => claudeSessionIdForOrcaSession(candidate) === providerSessionId

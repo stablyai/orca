@@ -2,7 +2,11 @@ import type { AgentSessionAcquisition } from '../native-chat/agent-session-wire/
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
-import type { ClaudeSession } from './claude-structured-session-state'
+import {
+  mintClaudeAcquisitionGeneration,
+  type ClaudeSession,
+  type ClaudeStructuredSessionAdapterDeps
+} from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
@@ -11,12 +15,16 @@ import { createClaudeSessionStartup } from './claude-structured-session-startup-
 /** The session as published at spawn: nothing the CLI reports at init is assumed yet. */
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
+  sessionId: string
+  deps: Pick<
+    ClaudeStructuredSessionAdapterDeps,
+    'logger' | 'mintAcquisitionGeneration' | 'mintLinkId' | 'now'
+  >
   providerSessionId: string
   leafUuid: string | null
   /** The launch's stored leaf: a frame seen before publication is not a completed turn. */
   turnEndLeafUuid: string | null
   fence: number
-  acquisitionGeneration: string
   /** The record's chain already heads this provider session: the link resumes, never creates. */
   continuesChain: boolean
   prompts: ClaudePromptRegistry
@@ -24,10 +32,11 @@ export function createClaudeSessionPublication(input: {
   events: ClaudeSession['events']
   unbindReadingControl?: () => void
   process: AgentSessionAcquisition['process']
-  linkId?: string
-  observedAt: number
   options?: ReadonlyMap<string, string>
 }): { acquisition: AgentSessionAcquisition; session: ClaudeSession } {
+  const { deps } = input
+  const acquisitionGeneration = mintClaudeAcquisitionGeneration(deps)
+  const linkId = deps.mintLinkId?.()
   return {
     acquisition: {
       process: input.process,
@@ -36,18 +45,20 @@ export function createClaudeSessionPublication(input: {
         leafUuid: input.leafUuid,
         resumed: input.continuesChain,
         fence: input.fence,
-        ...(input.linkId ? { linkId: input.linkId } : {}),
-        observedAt: input.observedAt
+        ...(linkId ? { linkId } : {}),
+        observedAt: deps.now?.() ?? Date.now()
       }),
-      acquisitionGeneration: input.acquisitionGeneration
+      acquisitionGeneration
     },
     session: {
       connection: input.connection,
+      sessionId: input.sessionId,
+      logger: deps.logger,
       providerSessionId: input.providerSessionId,
       leafUuid: input.leafUuid,
       turnEndLeafUuid: input.turnEndLeafUuid,
       fence: input.fence,
-      acquisitionGeneration: input.acquisitionGeneration,
+      acquisitionGeneration,
       prompts: input.prompts,
       dispatchWaiters: [],
       retiredDispatchWaiters: [],

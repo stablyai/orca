@@ -9,6 +9,7 @@ import { startJournalRowFold, type JournalLoad } from './journal-open'
 import { legacyJournalDatabaseFile } from './journal-paths'
 import type { PerSessionJournalHead } from './journal-per-session-reimport'
 import { pendingJournalRepairSequence } from './journal-repair-marker'
+import type { StructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
 
 /** The newest per-chat file shape any build wrote. */
 const LEGACY_JOURNAL_SCHEMA_VERSION = 2
@@ -123,6 +124,8 @@ export async function foldLegacyJournal(
  */
 export function retireLegacyJournal(
   legacyDirectory: string,
+  sessionId: string,
+  logger: StructuredAgentSessionLogger,
   remove: (path: string) => void = (path) => rmSync(path, { force: true })
 ): void {
   const file = legacyJournalDatabaseFile(legacyDirectory)
@@ -133,7 +136,12 @@ export function retireLegacyJournal(
       remove(path)
     }
   } catch (error) {
-    console.warn(`[agent-session-journal] deleting imported ${legacyDirectory} failed`, error)
+    logger.warn('deleting an imported per-chat journal failed', {
+      scope: 'journal-import-retire',
+      sessionId,
+      legacyDirectory,
+      error
+    })
     return
   }
   try {

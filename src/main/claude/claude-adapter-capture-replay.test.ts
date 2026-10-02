@@ -26,6 +26,9 @@ import {
   identityFor,
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 type CapturedEvent =
   | { at: number; kind: 'meta'; providerSessionId: string }
@@ -108,6 +111,7 @@ async function replayCapture(name: string): Promise<Replay> {
   // The capture supplies every frame, startup proof included.
   const claude = fakeClaude({ initProof: 'none', replayUuid: null })
   const deps: ClaudeStructuredSessionAdapterDeps = {
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},

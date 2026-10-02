@@ -25,6 +25,7 @@ import {
   type AgentSessionRecordReader
 } from './structured-session-lineage'
 import type { RunRow } from './types'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 
 /**
  * The session a Run's coordinator binding names when that binding has no handle. A structured
@@ -112,17 +113,42 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
  *  no mail, so `openDb` answers null and nothing is created. */
 export function structuredSessionIdleEdgeMailboxes(
   sessionId: string,
-  openDb: () => OrchestrationDb | null
+  openDb: () => OrchestrationDb | null,
+  logger: StructuredAgentSessionLogger
 ): string[] {
   let db: OrchestrationDb | null
   try {
     db = openDb()
   } catch (error) {
-    console.warn('[orchestration] skipped a structured session mail edge: no database', {
+    logger.warn('a structured session mail edge was skipped: no database', {
+      scope: 'mail-edge-database',
       sessionId,
-      error: error instanceof Error ? error.message : String(error)
+      error
     })
     return []
   }
   return db ? structuredSessionOwnedMailboxes(sessionId, db) : []
+}
+
+/** A session's idle edge: retry what is parked on it and point the mail it owns again. Logged,
+ *  never thrown: the same status callback goes on to the first-turn workspace rename. */
+export function redriveStructuredSessionMail(
+  sessionId: string,
+  deps: {
+    notifyJournalActivity: (sessionId: string) => void
+    openDb: () => OrchestrationDb | null
+    deliver: (mailbox: string) => void
+    logger: StructuredAgentSessionLogger
+  }
+): void {
+  try {
+    deps.notifyJournalActivity(sessionId)
+    structuredSessionIdleEdgeMailboxes(sessionId, deps.openDb, deps.logger).forEach(deps.deliver)
+  } catch (error) {
+    deps.logger.warn('a structured session mail redrive failed', {
+      scope: 'mail-redrive',
+      sessionId,
+      error
+    })
+  }
 }

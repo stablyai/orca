@@ -16,10 +16,12 @@ import {
 } from './agent-session-provider-handle-transition'
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
+  logger: StructuredAgentSessionLogger
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveClaudeCommand?: () => string
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
@@ -75,10 +77,12 @@ export function createStructuredClaudeRuntimeAdapter(
   const { store } = deps
   return new ClaudeStructuredSessionAdapter({
     atRestCommands: new ClaudeAtRestCommandCatalog({
+      logger: deps.logger,
       resolveWorkspacePath: deps.resolveWorkspacePath
     }),
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
+      logger: deps.logger,
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
@@ -133,6 +137,7 @@ export function createStructuredClaudeRuntimeAdapter(
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.openClaudeConnection ? { openConnection: deps.openClaudeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
-    ...(deps.modelCatalog ? { modelCatalog: deps.modelCatalog } : {})
+    ...(deps.modelCatalog ? { modelCatalog: deps.modelCatalog } : {}),
+    logger: deps.logger
   })
 }

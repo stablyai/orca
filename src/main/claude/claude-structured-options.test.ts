@@ -17,6 +17,9 @@ import {
   observeClaudeFastModeFacts,
   readClaudeStructuredSessionOptions
 } from './claude-structured-session-options'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSession {
   return {
@@ -26,6 +29,8 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
       setModel,
       supportedModels: async (): Promise<unknown[]> => []
     } as ClaudeSession['connection'],
+    sessionId: 'session-1',
+    logger: TEST_LOGGER,
     providerSessionId: 'provider-session',
     leafUuid: null,
     turnEndLeafUuid: null,
@@ -458,10 +463,25 @@ describe('Claude structured option restore under the request deadline', () => {
       ['effort', 'high'],
       ['permissionMode', 'plan']
     ])
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const logged = recordingStructuredAgentSessionLogger()
+    session.logger = logged.logger
 
     await expect(restoreClaudeStructuredSessionOptions(session, 10)).resolves.toBeUndefined()
 
+    expect(logged.entries.map(({ level, fields }) => ({ level, ...fields }))).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        scope: 'claude-option-restore',
+        sessionId: 'session-1',
+        key: 'model'
+      }),
+      expect.objectContaining({
+        level: 'warn',
+        scope: 'claude-option-restore',
+        sessionId: 'session-1',
+        key: 'effort'
+      })
+    ])
     expect(Object.fromEntries(session.options)).toEqual({ model: 'sonnet', effort: 'high' })
     expect([...session.restoreSkippedOptions]).toEqual(['permissionMode'])
     expect(claudeStructuredSessionOptionsFrom(session, null).current).toEqual({

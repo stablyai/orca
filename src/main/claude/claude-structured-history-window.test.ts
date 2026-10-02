@@ -13,6 +13,9 @@ import {
   claudeProviderHistoryWindowFromJsonl,
   resolveClaudeProviderHistoryWindow
 } from './claude-structured-history-window'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const PROVIDER_SESSION = 'provider-1'
 const ORCA_SESSION = 'session-1'
@@ -77,6 +80,7 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
     )
 
     const window = await resolveClaudeProviderHistoryWindow({
+      logger: TEST_LOGGER,
       identity: {
         sessionId: ORCA_SESSION,
         workspaceId: 'workspace-1',

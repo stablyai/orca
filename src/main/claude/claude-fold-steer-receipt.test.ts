@@ -50,6 +50,9 @@ import {
   twoSteersCapture,
   TWO_STEERS_SEND_AT
 } from './claude-captured-fold-steer-frames.test-fixture'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const T0 = 1_700_000_100_000
 
@@ -80,6 +83,7 @@ async function riggedAdapter(
   const settled = vi.fn()
   const claude = fakeClaude({ replayUuid: null, ...claudeOptions })
   const deps: ClaudeStructuredSessionAdapterDeps = {
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},

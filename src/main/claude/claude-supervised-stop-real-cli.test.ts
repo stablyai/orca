@@ -14,6 +14,7 @@ import {
   CLAUDE_STRUCTURED_BASE_OPTIONS,
   claudeStructuredPermissionOptions
 } from './claude-structured-launch-resolution'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 // Opt-in only: spends a real (haiku) turn per case. Run it in an isolated HOME with
 // ORCA_REAL_CLAUDE_BIN set, and ORCA_REAL_CLAUDE_SETTINGS when auth lives in a settings file.
@@ -96,7 +97,7 @@ async function open(sessionId: string, cwd: string, resume: boolean, frames: Fra
       },
       cwd
     },
-    { onMessage: (message) => frames.push({ at: Date.now(), message }) }
+    { ...testEventSinkLogging(), onMessage: (message) => frames.push({ at: Date.now(), message }) }
   )
   connections.push(connection)
   recordedPids.add(connection.pid!)

@@ -30,6 +30,7 @@ import { resolveClaudeCommand } from '../codex-cli/command'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
@@ -107,6 +108,8 @@ export type ClaudeStructuredLaunch = {
 
 export type ClaudeStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
+  /** Where a launch step that carries on past a failure reports it: the host's logger. */
+  logger: StructuredAgentSessionLogger
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCommand?: () => string
   resolveEnv?: () =>
@@ -289,11 +292,15 @@ export function createClaudeStructuredLaunchResolver(
     )
     const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) =>
       // Every structured session speaks orchestration as itself: its injected id and the Orca CLI.
-      structuredSessionChildIdentityEnv(record.sessionId, {
-        ...base,
-        // The turn translator relies on Claude's authoritative idle frame when no result arrives.
-        [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
-      })
+      structuredSessionChildIdentityEnv(
+        record.sessionId,
+        {
+          ...base,
+          // The turn translator relies on Claude's authoritative idle frame when no result arrives.
+          [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
+        },
+        deps.logger
+      )
     )
     return {
       pathToClaudeCodeExecutable: command,

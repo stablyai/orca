@@ -88,6 +88,7 @@ async function create(
       ...resolvedIntent
     })),
     publishStructuredAgentSessionTab: vi.fn(async () => undefined),
+    structuredAgentSessionLogger: log.logger,
     ...runtimeOverrides
   }
   const replies: RpcResponse[] = []
@@ -115,9 +116,11 @@ function refusalOf(response: RpcResponse): { code: string; message: string } | n
   return result.ok ? null : (result.refusal ?? null)
 }
 
+let log: ReturnType<typeof recordingStructuredAgentSessionLogger>
+
 beforeEach(() => {
   setStructuredAgentSessionHost(hostStub())
-  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  log = recordingStructuredAgentSessionLogger()
 })
 
 afterEach(() => {
@@ -155,6 +158,7 @@ describe('a create refused before it commits', () => {
     expect(refusal?.message).not.toContain('Codex')
     expect(refusal?.message).toContain('No worktree matches id:workspace-1')
     expect(attach).not.toHaveBeenCalled()
+    expect(log.scopes()).toEqual(['create-precommit'])
   })
 
   it('answers a host that will not install as a definitive envelope', async () => {

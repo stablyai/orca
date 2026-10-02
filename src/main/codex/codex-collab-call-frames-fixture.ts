@@ -5,6 +5,9 @@ import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 // Shapes as a live default-mode session sent them (codex-cli 0.157); only the sender is remapped.
 export const HELPER = '01a0ea72-80bc-7632-a97f-4a9a0d50d08f'
@@ -80,6 +83,7 @@ export const waitStarted = collab('item/started', {
 export async function publishedRows(frames: Frame[]): Promise<AgentJournalRenderItem[]> {
   const codex = fakeCodex()
   const adapter = new CodexStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       command: 'codex',
       args: ['app-server'],

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { IPtyProvider } from '../providers/types'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -471,6 +472,21 @@ describe('worktree teardown and structured agent sessions', () => {
     )
     // The marker still leads, so the toast keeps showing the stronger of the two warnings.
     expect(isProvenLiveStructuredSessionRemovalError(error as string)).toBe(true)
+  })
+
+  it("records a forced removal's unclosed sessions through the runtime's chat logger", async () => {
+    const logged = recordingStructuredAgentSessionLogger()
+    installHost({ records: [record('s1', WORKTREE)], stuck: new Set(['s1']) })
+    await killAllProcessesForWorktree(WORKTREE, {
+      ...destructiveDeps({ allowUnverifiedStop: true }),
+      runtime: runtimeDouble({ structuredAgentSessionLogger: logged.logger })
+    })
+    expect(logged.entries).toHaveLength(1)
+    expect(logged.entries[0].message).toContain('still live: 1 agent session (claude)')
+    expect(logged.entries[0].fields).toEqual({
+      scope: 'worktree-forced-removal',
+      sessionIds: ['s1']
+    })
   })
 
   it('still reports what it closed when a forced removal skips the PTY verdict', async () => {

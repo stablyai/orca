@@ -397,12 +397,12 @@ describe('Claude structured dispatch image limits', () => {
   })
 
   it('does not let a provably unwritten attempt block retry correlation', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const send = vi
       .fn()
       .mockRejectedValueOnce(claudeUnwrittenUserMessageError(new Error('broken pipe')))
       .mockResolvedValue(undefined)
     const session = sessionFor(send)
+    const warn = vi.spyOn(session.logger, 'warn')
     const body = userMessage([{ type: 'text', text: 'retry me' }])
 
     await expect(
@@ -414,10 +414,13 @@ describe('Claude structured dispatch image limits', () => {
     })
     // The row keeps only the marker; why the write failed goes to the log.
     expect(warn).toHaveBeenCalledWith(
-      '[claude-dispatch] message could not be handed to Claude:',
-      expect.objectContaining({ message: expect.stringContaining('broken pipe') })
+      'a message could not be handed to Claude',
+      expect.objectContaining({
+        scope: 'claude-dispatch-write',
+        sessionId: session.sessionId,
+        error: expect.objectContaining({ message: expect.stringContaining('broken pipe') })
+      })
     )
-    warn.mockRestore()
     expect(session.dispatchWaiters).toHaveLength(0)
     expect(session.retiredDispatchWaiters).toHaveLength(0)
 

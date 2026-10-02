@@ -12,7 +12,7 @@ import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 export function persistClaudeTurnResumePoint(
   sessionId: string,
   session: ClaudeSession,
-  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistResumePoint'>
+  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistResumePoint' | 'logger'>
 ): void {
   if (session.closeFinalization || session.closeFinalized) {
     return
@@ -38,7 +38,8 @@ export function persistClaudeTurnResumePoint(
         })
       )
       .catch((error: unknown) => {
-        console.warn('[claude-resume-point] turn-end resume point was not persisted:', {
+        deps.logger.warn('the turn-end resume point was not persisted', {
+          scope: 'claude-resume-point-persist',
           sessionId,
           leafUuid,
           error

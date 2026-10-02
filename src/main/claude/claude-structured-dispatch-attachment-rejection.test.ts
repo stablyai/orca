@@ -152,8 +152,8 @@ describe('Claude structured dispatch attachment rejections', () => {
   })
 
   it('rejects an attachment it cannot read with the generic sentence and no path', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const session = sessionFor()
+    const warn = vi.spyOn(session.logger, 'warn')
     const path = join(tmpdir(), 'orca-claude-image-missing', 'gone.png')
 
     await expect(
@@ -169,9 +169,12 @@ describe('Claude structured dispatch attachment rejections', () => {
     expect(session.connection.send).not.toHaveBeenCalled()
     // The row drops the error, so the log is the only place left to find why.
     expect(warn).toHaveBeenCalledWith(
-      '[claude-dispatch] attachment could not be read:',
-      expect.objectContaining({ code: 'ENOENT' })
+      'an attachment could not be read',
+      expect.objectContaining({
+        scope: 'claude-attachment-read',
+        sessionId: session.sessionId,
+        error: expect.objectContaining({ code: 'ENOENT' })
+      })
     )
-    warn.mockRestore()
   })
 })

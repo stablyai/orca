@@ -183,7 +183,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         }
         const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
         return { host, attachParams, tab: null }
-      })
+      }, ctx.runtime.structuredAgentSessionLogger)
       if ('refusal' in prepared) {
         return { ok: false, refusal: prepared.refusal }
       }

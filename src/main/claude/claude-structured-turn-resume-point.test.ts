@@ -20,6 +20,9 @@ import {
   recordingJournalSink,
   tick
 } from './claude-structured-session-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const FENCE = 7
 
@@ -58,6 +61,7 @@ async function liveOwner(
   const events: ClaudeStructuredSessionEvent[] = []
   const persistedHandles: unknown[] = []
   const adapter = new ClaudeStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
       options: { resume: PROVIDER_SESSION_ID },
@@ -138,6 +142,7 @@ describe('Claude durable resume point at turn end', () => {
     expect(head).toMatchObject({ leafUuid: 'a2' })
 
     const resolve = createClaudeStructuredLaunchResolver({
+      logger: TEST_LOGGER,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only getRecord from its store.
       store: { getRecord: () => store.record } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
@@ -168,7 +173,7 @@ describe('Claude durable resume point at turn end', () => {
   })
 
   it('never fails or holds up a turn when the write fails', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warn = vi.spyOn(TEST_LOGGER, 'warn')
     const persist = vi.fn(async () => {
       throw new Error('record write failed')
     })
@@ -180,8 +185,12 @@ describe('Claude durable resume point at turn end', () => {
       events.filter((event) => event.type === 'message' && event.message.type === 'result')
     ).toHaveLength(2)
     expect(warn).toHaveBeenCalledWith(
-      '[claude-resume-point] turn-end resume point was not persisted:',
-      expect.objectContaining({ leafUuid: 'a2' })
+      'the turn-end resume point was not persisted',
+      expect.objectContaining({
+        scope: 'claude-resume-point-persist',
+        sessionId: 'session-1',
+        leafUuid: 'a2'
+      })
     )
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
     expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'a2' })])

@@ -77,6 +77,8 @@ export { AgentSessionJournalError } from './journal-write-guards'
 export class AgentSessionJournal {
   private readonly identity: AgentSessionJournalIdentity
   private readonly database: JournalHostDatabase
+  /** The host's logger, for a step on this chat that carries on past a failure. */
+  readonly logger: JournalHostDatabase['logger']
   private readonly now: () => number
   private readonly mintEpoch: () => string
 
@@ -99,6 +101,7 @@ export class AgentSessionJournal {
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
     this.database = options.database
+    this.logger = options.database.logger
     this.now = options.now ?? (() => Date.now())
     this.mintEpoch = options.mintEpoch ?? randomUUID
     this.state = createJournalReducerState(options.identity.sessionId, '')

@@ -18,6 +18,7 @@ import {
   type AgentSessionWireRefusal,
   type AgentSessionWireRefusalCode
 } from '../../../../shared/agent-session-wire'
+import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export type StructuredCreateRefused = { refusal: AgentSessionWireRefusal }
 
@@ -45,7 +46,10 @@ function wireRefusalCode(error: unknown): AgentSessionWireRefusalCode | null {
 
 const PRECOMMIT_REFUSAL_MESSAGE = 'Orca cannot open a structured agent chat for this workspace.'
 
-function precommitRefusal(error: unknown): AgentSessionWireRefusal {
+function precommitRefusal(
+  error: unknown,
+  logger: StructuredAgentSessionLogger
+): AgentSessionWireRefusal {
   // A refusal the host raised keeps its situation; a bare code names none.
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalFromReference(error.refusal, PRECOMMIT_REFUSAL_MESSAGE)
@@ -57,7 +61,10 @@ function precommitRefusal(error: unknown): AgentSessionWireRefusal {
   const message = error instanceof Error ? error.message : String(error)
   // A code-less failure here is often a defect, not a policy answer; the refusal keeps the user
   // moving, the log keeps the cause findable. Nothing names its situation, so it carries no reason.
-  console.warn('[agent-session] create refused before it committed anything', error)
+  logger.warn('a create was refused before it committed anything', {
+    scope: 'create-precommit',
+    error
+  })
   return refuseUnclassified(
     UNCODED_PRECOMMIT_REFUSAL_CODE,
     `Orca could not prepare a structured agent chat for this workspace: ${message}`
@@ -70,11 +77,12 @@ function precommitRefusal(error: unknown): AgentSessionWireRefusal {
  * longer proves the session does not exist.
  */
 export async function resolveUncommittedStructuredCreate<TPrepared>(
-  prepare: () => Promise<TPrepared | StructuredCreateRefused>
+  prepare: () => Promise<TPrepared | StructuredCreateRefused>,
+  logger: StructuredAgentSessionLogger
 ): Promise<TPrepared | StructuredCreateRefused> {
   try {
     return await prepare()
   } catch (error) {
-    return { refusal: precommitRefusal(error) }
+    return { refusal: precommitRefusal(error, logger) }
   }
 }

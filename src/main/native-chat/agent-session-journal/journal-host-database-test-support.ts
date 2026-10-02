@@ -17,16 +17,22 @@ import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
 import { openAgentSessionJournal } from './journal-store-factory'
+import type { StructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger-test-support'
 
 const opened = new Map<string, JournalHostDatabase>()
 
-export function openTestJournalHostDatabase(stateDirectory: string): JournalHostDatabase {
+/** `logger` applies only to the open that creates this directory's database. */
+export function openTestJournalHostDatabase(
+  stateDirectory: string,
+  logger: StructuredAgentSessionLogger = recordingStructuredAgentSessionLogger().logger
+): JournalHostDatabase {
   const directory = resolve(stateDirectory)
   const existing = opened.get(directory)
   if (existing && !existing.isClosed) {
     return existing
   }
-  const database = JournalHostDatabase.openWith(directory, NO_LEGACY_JOURNAL_RECORDS)
+  const database = JournalHostDatabase.openWith(directory, NO_LEGACY_JOURNAL_RECORDS, logger)
   opened.set(directory, database)
   return database
 }

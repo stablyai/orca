@@ -101,10 +101,9 @@ async function completeWorkerTerminalReleaseOnce(
     // worker's redrive subscription. Until that exists, a worker that survives a restart has its
     // parked mail wait for the next arrival rather than a settle edge.
     await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
-      console.warn(
-        '[orchestration] structured host install failed before release',
-        dispatchId,
-        error
+      runtime.structuredAgentSessionLogger.warn(
+        'installing the structured host before a worker release failed',
+        { scope: 'worker-release-host-install', dispatchId, error }
       )
     })
   }

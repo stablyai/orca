@@ -10,6 +10,9 @@ import { tmpdir } from 'node:os'
 import type { FileHandle } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const state = vi.hoisted(() => ({
   path: '',
@@ -95,6 +98,7 @@ let directory = ''
 
 const read = (previousLeafUuid: string | null = 'anchor') =>
   readClaudeProviderHistoryWindow({
+    logger: TEST_LOGGER,
     transcriptPath: state.path,
     providerSessionId: 'provider',
     previousLeafUuid,

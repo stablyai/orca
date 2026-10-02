@@ -18,6 +18,9 @@ import { createCodexJournalTranslator } from './codex-structured-journal-transla
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { readCodexSubagentAnnouncements } from './codex-subagent-activity'
 import type { CodexThreadItem } from './codex-thread-item-identity'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+
+const TEST_LOGGER = recordingStructuredAgentSessionLogger().logger
 
 const parent = makeStructuredAgentStatusSubject(
   {
@@ -141,6 +144,7 @@ async function session() {
     mintChildWorkId: () => `child-${++minted}`
   })
   const adapter = new CodexStructuredSessionAdapter({
+    logger: TEST_LOGGER,
     resolveLaunch: async () => ({
       command: 'codex',
       args: ['app-server'],

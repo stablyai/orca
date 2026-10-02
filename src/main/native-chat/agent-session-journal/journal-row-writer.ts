@@ -83,10 +83,11 @@ export class JournalRowWriter {
       this.deps.rolledBack?.()
       // The draft store re-derives what this missed from the committed rows: at open, and in
       // the drain step before a draft sends.
-      console.warn('[journal-append] row bookkeeping skipped:', {
+      this.deps.database().logger.warn('row bookkeeping was skipped', {
+        scope: 'journal-row-bookkeeping',
         sessionId: this.deps.sessionId,
         kind: row.kind,
-        error: error instanceof Error ? error.message : String(error)
+        error
       })
     }
   }

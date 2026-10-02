@@ -24,7 +24,7 @@ export function fakeClaude(providerSession: string) {
     null
   let contextUsage: () => Promise<unknown> = async () => ({})
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake answers every control request the session issues; the real opener's signature is what the runtime under test calls.
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection = (async (launch, handlers) => {
     const connection: FakeClaudeConnection = {
       launch,
       handlers,

@@ -14,6 +14,7 @@ import {
 } from '../../shared/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import { claudeRecord } from './claude-structured-item-translation'
+import type { ClaudeSession } from './claude-structured-session-state'
 
 /** Orca refused the message's content, as opposed to failing to read an attachment. */
 export class ClaudeDispatchContentError extends Error {
@@ -47,12 +48,19 @@ export function claudeDispatchRejection(
 
 /** Why a message whose content could not be built was not sent: Orca's own refusal of it, or an
  *  attachment it could not read. Never the provider. */
-export function claudeDispatchContentRejection(error: unknown): AgentJournalDispatchRejection {
+export function claudeDispatchContentRejection(
+  error: unknown,
+  session: Pick<ClaudeSession, 'sessionId' | 'logger'>
+): AgentJournalDispatchRejection {
   if (error instanceof ClaudeDispatchContentError) {
     return claudeDispatchRejection(error.failure)
   }
   // The row says only that it could not be read; why belongs in the log.
-  console.warn('[claude-dispatch] attachment could not be read:', error)
+  session.logger.warn('an attachment could not be read', {
+    scope: 'claude-attachment-read',
+    sessionId: session.sessionId,
+    error
+  })
   return claudeDispatchRejection(agentSessionFailureFact('attachmentUnreadable'))
 }
 

@@ -7,6 +7,10 @@ import {
   openClaudeStreamJsonConnection,
   type ClaudeStreamJsonLaunch
 } from './claude-stream-json-connection'
+import {
+  recordingStructuredAgentSessionLogger,
+  testEventSinkLogging
+} from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const mocks = vi.hoisted(() => {
   const refresh = vi.fn()
@@ -66,6 +70,7 @@ describe('Claude stream-json close ordering', () => {
     connection = await openClaudeStreamJsonConnection(
       { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
       {
+        ...testEventSinkLogging(),
         onMessage: (message) => {
           seen.push(String(message.type))
           if (message.type === 'first') {
@@ -115,6 +120,7 @@ describe('Claude stream-json close ordering', () => {
     const connection = await openClaudeStreamJsonConnection(
       { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
       {
+        ...testEventSinkLogging(),
         onMessage: (message) => events.push(`message:${String(message.type)}`),
         onExit: () => events.push('exit')
       },
@@ -153,7 +159,7 @@ describe('Claude stream-json close ordering', () => {
     }) as unknown as typeof query
     const connection = await openClaudeStreamJsonConnection(
       { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
-      {},
+      testEventSinkLogging(),
       () => child,
       queryImpl
     )
@@ -190,7 +196,12 @@ describe('Claude stream-json close ordering', () => {
       })()
       return (async function* () {})()
     }) as typeof query
-    const connection = await openClaudeStreamJsonConnection(launch, {}, () => child, queryImpl)
+    const connection = await openClaudeStreamJsonConnection(
+      launch,
+      testEventSinkLogging(),
+      () => child,
+      queryImpl
+    )
 
     const closing = connection.close()
     await new Promise((resolve) => setImmediate(resolve))
@@ -231,7 +242,12 @@ describe('Claude stream-json close ordering', () => {
       })()
       return (async function* () {})()
     }) as typeof query
-    const connection = await openClaudeStreamJsonConnection(launch, {}, () => child, queryImpl)
+    const connection = await openClaudeStreamJsonConnection(
+      launch,
+      testEventSinkLogging(),
+      () => child,
+      queryImpl
+    )
 
     child.stderr.emit('data', 'output')
     await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1))
@@ -247,5 +263,41 @@ describe('Claude stream-json close ordering', () => {
     closeCapture.resolve()
     await expect(closing).resolves.toBe(true)
     expect(child.stdin.writableEnded).toBe(true)
+  })
+
+  it('reports a descendant that outlived an exited root through the chat logger', async () => {
+    mocks.refresh.mockReset()
+    mocks.proveClaudeChildExit.mockReset()
+    mocks.refresh.mockResolvedValue(undefined)
+    mocks.proveClaudeChildExit.mockResolvedValueOnce(false)
+    const child = fakeChild()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This injected query only has to spawn the child; the close never reads a message.
+    const queryImpl = ((params: Parameters<typeof query>[0]) => {
+      params.options?.spawnClaudeCodeProcess?.({
+        command: 'claude',
+        args: [],
+        env: {},
+        signal: new AbortController().signal
+      })
+      return (async function* () {})()
+    }) as typeof query
+    const logged = recordingStructuredAgentSessionLogger()
+    const connection = await openClaudeStreamJsonConnection(
+      { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
+      { sessionId: 'session-1', logger: logged.logger },
+      () => child,
+      queryImpl
+    )
+    child.emit('exit', 0, null)
+    Object.assign(mocks.tree, { treeVerdict: 'live' })
+    try {
+      await expect(connection.close()).resolves.toBe(false)
+    } finally {
+      Object.assign(mocks.tree, { treeVerdict: 'unverifiable' })
+    }
+
+    expect(logged.entries.map((entry) => entry.fields)).toEqual([
+      { scope: 'claude-close-descendant', sessionId: 'session-1', pid: 424242 }
+    ])
   })
 })
