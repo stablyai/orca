@@ -157,6 +157,7 @@ ORCA terminal create --title "Worker" --json
 ORCA terminal create --worktree active --command "codex" --json
 ORCA terminal split --terminal <handle> --direction vertical --json
 ORCA terminal split --terminal <handle> --direction horizontal --command "npm test" --json
+ORCA terminal equalize --terminal <handle> --json
 ORCA terminal rename --terminal <handle> --title "New Name" --json
 ORCA terminal switch --terminal <handle> --json
 ORCA terminal close --terminal <handle> --json

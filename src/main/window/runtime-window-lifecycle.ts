@@ -161,6 +161,7 @@ export function registerRuntimeWindowLifecycle(
         newLeafId: opts.newLeafId
       })
     },
+    equalizeTerminal: (tabId) => send('ui:equalizeTerminal', { tabId }),
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),

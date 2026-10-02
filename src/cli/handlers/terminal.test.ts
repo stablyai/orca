@@ -11,6 +11,56 @@ import { TERMINAL_HANDLERS } from './terminal'
 
 const ORIGINAL_EXIT_CODE = process.exitCode
 
+describe('terminal equalize CLI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    process.exitCode = ORIGINAL_EXIT_CODE
+  })
+
+  it('calls terminal.equalize RPC and outputs json', async () => {
+    const call = vi.fn().mockResolvedValue({
+      id: 'req-equalize',
+      ok: true,
+      result: { equalize: { handle: 'term-1', tabId: 'tab-1' } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal equalize']({
+      flags: new Map([['terminal', 'term-1']]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.equalize', { terminal: 'term-1' })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      ok: true,
+      result: { equalize: { handle: 'term-1', tabId: 'tab-1' } }
+    })
+  })
+
+  it('formats human result with handle and tabId', async () => {
+    const call = vi.fn().mockResolvedValue({
+      id: 'req-equalize',
+      ok: true,
+      result: { equalize: { handle: 'term-1', tabId: 'tab-1' } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal equalize']({
+      flags: new Map([['terminal', 'term-1']]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: false
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.equalize', { terminal: 'term-1' })
+    expect(log).toHaveBeenCalledWith('Equalized pane sizes for terminal term-1 (tab tab-1).')
+  })
+})
+
 describe('terminal close CLI', () => {
   afterEach(() => {
     vi.restoreAllMocks()

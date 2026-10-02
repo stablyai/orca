@@ -1,5 +1,6 @@
 import type {
   RuntimeTerminalCreate,
+  RuntimeTerminalEqualize,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
@@ -12,6 +13,7 @@ import type { CommandHandler } from '../dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {
   formatTerminalCreate,
+  formatTerminalEqualize,
   formatTerminalFocus,
   formatTerminalList,
   formatTerminalRead,
@@ -220,5 +222,11 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       command: getOptionalStringFlag(flags, 'command')
     })
     printResult(result, json, formatTerminalSplit)
+  },
+  'terminal equalize': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{ equalize: RuntimeTerminalEqualize }>('terminal.equalize', {
+      terminal: await getTerminalHandle(flags, cwd, client)
+    })
+    printResult(result, json, formatTerminalEqualize)
   }
 }

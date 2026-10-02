@@ -89,6 +89,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  terminal create           Create a terminal session in a worktree',
   '  terminal rename           Set or clear the title of a terminal tab',
   '  terminal split            Split an existing terminal pane',
+  '  terminal equalize         Equalize pane sizes in a terminal tab',
   '  terminal switch           Bring a terminal tab to the foreground',
   '  terminal focus            Alias for terminal switch',
   '  terminal close            Close one terminal, its whole tab with --tab, or all in a worktree',
