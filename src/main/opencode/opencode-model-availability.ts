@@ -3,16 +3,16 @@ import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-ag
 import { runProcess } from '../../shared/child-process/run-process'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
 
-export async function probeOpenCodeModelAvailability(options: {
+export async function resolveOpenCodeDirectModelExecutable(options: {
   command: string | undefined
   model: string
   env: NodeJS.ProcessEnv
   cwd?: string
   wsl?: { distro?: string }
-}): Promise<boolean> {
+}): Promise<string | null> {
   // WSL needs the same guest account/profile environment as its actual launch.
   if (options.wsl || !options.cwd) {
-    return false
+    return null
   }
   const parsed = tokenizeStartupCommand(
     options.command ?? '',
@@ -24,12 +24,18 @@ export async function probeOpenCodeModelAvailability(options: {
     parsed.spans.some((span) => span.divergesFromShell) ||
     !isAbsolute(parsed.tokens[0])
   ) {
-    return false
+    return null
   }
-  const executable = await resolveCommandOnLocalPath(parsed.tokens[0], {
+  return resolveCommandOnLocalPath(parsed.tokens[0], {
     env: options.env,
     cwd: options.cwd
   })
+}
+
+export async function probeOpenCodeModelAvailability(
+  options: Parameters<typeof resolveOpenCodeDirectModelExecutable>[0]
+): Promise<boolean> {
+  const executable = await resolveOpenCodeDirectModelExecutable(options)
   if (!executable) {
     return false
   }

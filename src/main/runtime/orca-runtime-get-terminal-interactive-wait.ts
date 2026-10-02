@@ -18,13 +18,10 @@ import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-termi
 import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from './orchestration/configured-worker-agent-selector'
-import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
-import { probeOpenCodeModelAvailability } from '../opencode/opencode-model-availability'
-import { probeOpenCodeLaunchCapabilities } from '../opencode/opencode-launch-capabilities'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveLocalProjectRuntimeForRepo } from '../project-runtime-git-options'
+import { prepareOpenCodeModelStartupInputs } from '../opencode/opencode-model-startup-plan'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 
 export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
   async getTerminalInteractiveWait(
@@ -256,32 +253,26 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
       : projectRuntime?.runtime.kind === 'wsl'
         ? { distro: projectRuntime.runtime.distro }
         : undefined
-    const platform = wsl ? 'linux' : process.platform
-    const command =
-      settings.agentCmdOverrides?.opencode ||
-      getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, platform)
-    const env: Record<string, string> = {}
-    for (const [key, value] of Object.entries({
-      ...process.env,
-      ...resolveTuiAgentLaunchEnv('opencode', settings.agentDefaultEnv)
-    })) {
-      if (value !== undefined) {
-        env[key] = value
-      }
+    if (!path) {
+      return false
     }
-    applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode', isWsl: Boolean(wsl) })
-    const capabilities = await probeOpenCodeLaunchCapabilities({
-      command,
-      agent: 'opencode',
-      cwd: path,
-      wsl,
-      env,
-      hostIdentity: this.getRuntimeId()
-    })
-    return (
-      capabilities?.version === '1.18.30' &&
-      (await probeOpenCodeModelAvailability({ command, model: target.model, cwd: path, wsl, env }))
-    )
+    try {
+      await prepareOpenCodeModelStartupInputs({
+        inputs: resolveAgentStartupPlanInputs({
+          agent: 'opencode',
+          settings,
+          platform: wsl ? 'linux' : process.platform,
+          isRemote: false,
+          sessionOptions: { model: target.model }
+        }),
+        cwd: path,
+        isWsl: Boolean(wsl),
+        hostIdentity: this.getRuntimeId()
+      })
+      return true
+    } catch {
+      return false
+    }
   }
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {

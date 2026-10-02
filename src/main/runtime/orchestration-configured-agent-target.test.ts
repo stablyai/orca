@@ -23,11 +23,12 @@ it.each(['folder', 'ssh', 'wsl'] as const)(
           )
       )
     }
-    const result = await Reflect.apply(
-      OrcaRuntimeService.prototype.resolveOrchestrationAgentLauncherForTarget,
-      context,
-      ['opencode-private', { worktree: 'id:workspace' }]
-    )
+    const result =
+      await OrcaRuntimeService.prototype.resolveOrchestrationAgentLauncherForTarget.call(
+        context,
+        'opencode-private',
+        { worktree: 'id:workspace' }
+      )
     expect(result).toBe('opencode')
     expect(context.getAgentLaunchPlatformForWorkspace).toHaveBeenCalledWith(scope)
     expect(context.resolveOrchestrationAgentLauncher).toHaveBeenCalledWith(
@@ -42,10 +43,10 @@ describe('canonical worker agent target', () => {
   it('keeps canonical selectors authoritative without probing another host', async () => {
     const resolve = vi.fn()
     expect(
-      await Reflect.apply(
-        OrcaRuntimeService.prototype.resolveOrchestrationAgentLauncherForTarget,
+      await OrcaRuntimeService.prototype.resolveOrchestrationAgentLauncherForTarget.call(
         { resolveTerminalWorkspaceLaunchScope: resolve },
-        ['opencode', { worktree: 'id:remote' }]
+        'opencode',
+        { worktree: 'id:remote' }
       )
     ).toBe('opencode')
     expect(resolve).not.toHaveBeenCalled()
@@ -71,10 +72,10 @@ it('resolves local Windows shell settings rather than assuming PowerShell', asyn
     )
   }
   expect(
-    await Reflect.apply(
-      OrcaRuntimeService.prototype.resolveOrchestrationAgentLauncherForTarget,
+    await OrcaRuntimeService.prototype.resolveOrchestrationAgentLauncherForTarget.call(
       context,
-      ['opencode-private', { worktree: 'id:workspace' }]
+      'opencode-private',
+      { worktree: 'id:workspace' }
     )
   ).toBe('opencode')
   expect(context.resolveOrchestrationAgentLauncher).toHaveBeenCalledWith(

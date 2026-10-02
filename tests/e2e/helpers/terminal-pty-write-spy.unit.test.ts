@@ -7,12 +7,16 @@ it('sets and clears paste backpressure using the main-process evaluate argument'
   vi.stubGlobal('__terminalPtyWriteDelayMs', 0)
   const evaluate = vi.fn()
   evaluate.mockImplementation(
-    (callback: (electron: object, argument: number) => void, delay: number) => callback({}, delay)
+    (callback: (electron: unknown, argument: number) => void, delay: number) => callback({}, delay)
   )
   const app = { evaluate }
 
   await setTerminalPtyWriteDelay(app, 35)
-  expect(Reflect.get(globalThis, '__terminalPtyWriteDelayMs')).toBe(35)
+  expect(
+    '__terminalPtyWriteDelayMs' in globalThis ? globalThis.__terminalPtyWriteDelayMs : undefined
+  ).toBe(35)
   await setTerminalPtyWriteDelay(app, 0)
-  expect(Reflect.get(globalThis, '__terminalPtyWriteDelayMs')).toBe(0)
+  expect(
+    '__terminalPtyWriteDelayMs' in globalThis ? globalThis.__terminalPtyWriteDelayMs : undefined
+  ).toBe(0)
 })
