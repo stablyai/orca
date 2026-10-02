@@ -23,13 +23,38 @@ export function buildAgentSessionForkOptions(
   return options
 }
 
+/** The option forking the preselected pane itself: its native session or its transcript. */
+function preselectedPaneOption(
+  options: AgentSessionForkSource[],
+  preselectedPaneKey: string | null
+): AgentSessionForkSource | undefined {
+  if (preselectedPaneKey === null) {
+    return undefined
+  }
+  return options.find(
+    (option) =>
+      option.kind === 'transcript' ||
+      (option.kind === 'native' && option.session.paneKey === preselectedPaneKey)
+  )
+}
+
+/** True when the fork came from a pane that has nothing to fork, e.g. an empty terminal. */
+export function isPreselectedPaneWithoutOption(
+  options: AgentSessionForkSource[],
+  preselectedPaneKey: string | null
+): boolean {
+  return preselectedPaneKey !== null && !preselectedPaneOption(options, preselectedPaneKey)
+}
+
 export function initialAgentSessionForkOptionKey(
   options: AgentSessionForkSource[],
   preselectedPaneKey: string | null
 ): string {
-  const preselected = options.find(
-    (option) => option.kind === 'native' && option.session.paneKey === preselectedPaneKey
-  )
+  const preselected = preselectedPaneOption(options, preselectedPaneKey)
+  // Why: a pane with nothing to fork must not silently default to another pane's conversation.
+  if (!preselected && preselectedPaneKey !== null) {
+    return agentSessionForkOptionKey({ kind: 'none' })
+  }
   return agentSessionForkOptionKey(preselected ?? options[0] ?? { kind: 'none' })
 }
 

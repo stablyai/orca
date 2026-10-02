@@ -16,6 +16,7 @@ import {
   agentSessionForkOptionKey,
   buildAgentSessionForkOptions,
   initialAgentSessionForkOptionKey,
+  isPreselectedPaneWithoutOption,
   resolveSelectedAgentSessionForkOption
 } from './agent-session-fork-options'
 import { readForkSource, resolveCarryAvailability } from './agent-session-fork-parent-probe'
@@ -247,7 +248,9 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     selectedKey: agentSessionForkOptionKey(selectedOption),
     setSelectedKey,
     selectedOption,
-    showSessionField: options.length !== 2,
+    // Why: with a single other session hidden behind "No agent", the user could not pick it deliberately.
+    showSessionField:
+      options.length !== 2 || isPreselectedPaneWithoutOption(options, data.preselectedPaneKey),
     name,
     setName,
     nameInvalid,

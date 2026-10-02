@@ -11,6 +11,7 @@ import {
   buttonByText,
   carrySwitch,
   closeSessionSelect,
+  findButton,
   mountedDialogs,
   nameInput,
   openSessionSelect,
@@ -224,6 +225,31 @@ describe('AgentSessionForkDialog', () => {
       expect.any(Function)
     )
   })
+
+  it.each([
+    ['an empty pane', null],
+    ['a pane whose agent is unknown', { agent: null, prompt: 'pane context' }]
+  ])(
+    "never defaults to another pane's session from %s, and shows the picker",
+    async (_label, transcript) => {
+      mocks.listForkableAgentSessions.mockReturnValue([session('s1')])
+      state.modalData = {
+        sourceWorktreeId: 'repo::wt',
+        launchSource: 'terminal_context_menu',
+        preselectedPaneKey: 'tab-9:pane-1',
+        transcript
+      }
+      await renderDialog()
+      expect(sessionTrigger()?.textContent).toContain('No agent (branch only)')
+      expect(bodyText()).toContain('Start a new branch from Fix auth.')
+      expect(Boolean(findButton('Copy context'))).toBe(transcript !== null)
+      await submitWithEnter()
+      expect(mocks.runAgentSessionFork).toHaveBeenCalledWith(
+        expect.objectContaining({ source: { kind: 'none' } }),
+        expect.any(Function)
+      )
+    }
+  )
 
   it('lists the transcript first, ahead of the native sessions, and selects it', async () => {
     mocks.listForkableAgentSessions.mockReturnValue([session('s1')])
