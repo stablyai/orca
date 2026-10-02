@@ -32,3 +32,23 @@ export function initialAgentSessionForkOptionKey(
   )
   return agentSessionForkOptionKey(preselected ?? options[0] ?? { kind: 'none' })
 }
+
+/** The option behind `selectedKey`; a transcript replaced by its pane's native session follows it there. */
+export function resolveSelectedAgentSessionForkOption(
+  options: AgentSessionForkSource[],
+  selectedKey: string,
+  preselectedPaneKey: string | null
+): AgentSessionForkSource {
+  const selected = options.find((option) => agentSessionForkOptionKey(option) === selectedKey)
+  if (selected) {
+    return selected
+  }
+  const paneSession =
+    selectedKey === 'transcript'
+      ? options.find(
+          (option) => option.kind === 'native' && option.session.paneKey === preselectedPaneKey
+        )
+      : undefined
+  // Why: a session can vanish while the dialog is open; fall back to "No agent", never a stale one.
+  return paneSession ?? { kind: 'none' }
+}

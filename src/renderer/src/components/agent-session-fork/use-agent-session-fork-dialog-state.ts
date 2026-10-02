@@ -16,7 +16,8 @@ import type { AgentSessionForkModalData } from './agent-session-fork-modal-data'
 import {
   agentSessionForkOptionKey,
   buildAgentSessionForkOptions,
-  initialAgentSessionForkOptionKey
+  initialAgentSessionForkOptionKey,
+  resolveSelectedAgentSessionForkOption
 } from './agent-session-fork-options'
 import {
   probeParentWorkingTree,
@@ -70,13 +71,9 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
   const [selectedKey, setSelectedKey] = useState(() =>
     initialAgentSessionForkOptionKey(options, data.preselectedPaneKey)
   )
-  // Why: a session can vanish while the dialog is open; fall back to "No agent", never a stale one.
   const selectedOption = useMemo<AgentSessionForkSource>(
-    () =>
-      options.find((option) => agentSessionForkOptionKey(option) === selectedKey) ?? {
-        kind: 'none'
-      },
-    [options, selectedKey]
+    () => resolveSelectedAgentSessionForkOption(options, selectedKey, data.preselectedPaneKey),
+    [options, selectedKey, data.preselectedPaneKey]
   )
 
   const [name, setName] = useState(

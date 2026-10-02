@@ -64,7 +64,16 @@ export function AgentSessionForkSessionField({
       <Label htmlFor={triggerId}>
         {translate('components.agentSessionFork.session', 'Session')}
       </Label>
-      <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+      <Select
+        value={value}
+        // Why: Radix reports '' when the selected item is swapped for a new one mid-render; keep ours.
+        onValueChange={(next) => {
+          if (next) {
+            onValueChange(next)
+          }
+        }}
+        disabled={disabled}
+      >
         <SelectTrigger id={triggerId} size="sm" className="w-full">
           <SelectValue />
         </SelectTrigger>

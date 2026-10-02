@@ -16,6 +16,7 @@ import {
   openSessionSelect,
   pickerValue,
   renderDialog,
+  rerenderDialog,
   session,
   sessionTrigger,
   statusWith,
@@ -132,6 +133,7 @@ vi.mock('@/components/repo/CreateFromPicker', () => ({
 
 beforeEach(() => {
   sourceWorktree.branch = SOURCE_BRANCH
+  state.agentStatusByPaneKey = {}
   state.activeModal = 'agent-session-fork'
   state.modalData = {
     sourceWorktreeId: 'repo::wt',
@@ -237,6 +239,30 @@ describe('AgentSessionForkDialog', () => {
     expect(options[0]).toContain('(transcript)')
     expect(options[1]).toContain('Session s1')
     expect(options[2]).toContain('No agent (branch only)')
+  })
+
+  it('follows the pane to its native session when it replaces the selected transcript', async () => {
+    mocks.listForkableAgentSessions.mockReturnValue([session('s1'), session('s2')])
+    state.modalData = {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: 'tab-9:pane-1',
+      transcript: { agent: 'claude', prompt: 'transcript prompt' }
+    }
+    await renderDialog()
+    expect(sessionTrigger()?.textContent).toContain('(transcript)')
+
+    const paneSession = session('s9', { paneKey: 'tab-9:pane-1' })
+    mocks.listForkableAgentSessions.mockReturnValue([session('s1'), session('s2'), paneSession])
+    state.agentStatusByPaneKey = {}
+    await rerenderDialog()
+    expect(sessionTrigger()?.textContent).toContain('Session s9')
+
+    await submitWithEnter()
+    expect(mocks.runAgentSessionFork).toHaveBeenCalledWith(
+      expect.objectContaining({ source: { kind: 'native', session: paneSession } }),
+      expect.any(Function)
+    )
   })
 
   it('describes a branch-only fork when no agent is selected', async () => {
