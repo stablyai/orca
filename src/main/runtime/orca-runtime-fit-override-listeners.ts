@@ -15,6 +15,7 @@ import type { WaitBlockedCheckState } from './wait-blocked-check-state'
 import type { createAgentStatusOscProcessor } from '../../shared/agent-status-osc'
 import { RuntimeTerminalViewSubscribers } from './runtime-terminal-view-subscribers'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import type { TuiIdleProviderScreenVersion } from './runtime-terminal-provider-screen'
 
 export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
   // Why: mobile clients need to know when the desktop restores a terminal
@@ -66,7 +67,12 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
 
   protected providerVisibleStateReadsByPtyId = new Map<
     string,
-    { generation: number; promise: Promise<RuntimeVisibleTerminalState | null> }
+    {
+      generation: number
+      providerOnly: boolean
+      owner: TuiIdleProviderScreenVersion | null
+      promise: Promise<RuntimeVisibleTerminalState | null>
+    }
   >()
 
   protected providerVisibleRetryAtByPtyId = new Map<string, number>()

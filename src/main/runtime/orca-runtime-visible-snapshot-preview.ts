@@ -10,10 +10,18 @@ import {
   VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './orca-runtime-postlude'
-import { projectTerminalVisibleLines } from './orca-runtime-terminal-projection'
+import {
+  projectTerminalVisibleLines,
+  restoreProjectedComposerDraft
+} from './orca-runtime-terminal-projection'
 import { visibleNonBlankTerminalLines } from './terminal-tail-read'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { withTimeout } from './runtime-async-boundaries'
+import {
+  sameProviderScreenOwner,
+  type TuiIdleProviderScreen,
+  type TuiIdleProviderScreenVersion
+} from './runtime-terminal-provider-screen'
 
 export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
@@ -35,43 +43,69 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
   }
 
   protected async readVisibleTerminalState(
-    ptyId: string
+    ptyId: string,
+    providerOnly = false
   ): Promise<RuntimeVisibleTerminalState | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
+    const owner = this.getTuiIdleProviderScreenVersion(ptyId)
     const pending = this.providerVisibleStateReadsByPtyId.get(ptyId)
-    if (pending?.generation === generation) {
+    if (
+      pending?.generation === generation &&
+      pending.providerOnly === providerOnly &&
+      (owner && pending.owner
+        ? sameProviderScreenOwner(owner, pending.owner)
+        : owner === pending.owner)
+    ) {
       return pending.promise
     }
-    let entry: { generation: number; promise: Promise<RuntimeVisibleTerminalState | null> }
-    const promise = this.loadVisibleTerminalState(ptyId).finally(() => {
+    let entry: {
+      generation: number
+      providerOnly: boolean
+      owner: TuiIdleProviderScreenVersion | null
+      promise: Promise<RuntimeVisibleTerminalState | null>
+    }
+    const promise = this.loadVisibleTerminalState(ptyId, providerOnly).finally(() => {
       if (this.providerVisibleStateReadsByPtyId.get(ptyId) === entry) {
         this.providerVisibleStateReadsByPtyId.delete(ptyId)
       }
     })
-    entry = { generation, promise }
+    entry = { generation, providerOnly, owner, promise }
     this.providerVisibleStateReadsByPtyId.set(ptyId, entry)
     return promise
   }
 
   protected async loadVisibleTerminalState(
-    ptyId: string
+    ptyId: string,
+    providerOnly = false
   ): Promise<RuntimeVisibleTerminalState | null> {
-    if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
+    if (!providerOnly && !this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.readHeadlessVisibleTerminalState(ptyId)
     }
 
     const generation = this.getPtyLifecycleGeneration(ptyId)
+    const owner = this.getTuiIdleProviderScreenVersion(ptyId)
+    const ownsRead = (): boolean => {
+      const live = this.getTuiIdleProviderScreenVersion(ptyId)
+      return (
+        this.ptyLifecycleGenerationById.get(ptyId) === generation &&
+        (!owner || (live !== null && sameProviderScreenOwner(owner, live)))
+      )
+    }
+    if (providerOnly && !owner) {
+      return null
+    }
     const outputSequence = this.getPtyOutputSequence(ptyId)
     const cached = this.providerVisibleStateByPtyId.get(ptyId)
     const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
     if (
+      !providerOnly &&
       cached?.generation === generation &&
       outputSequence <= cached.sequence &&
       (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
     ) {
       return cached
     }
-    if (trackedMode && !trackedMode.isAlternateScreen) {
+    if (!providerOnly && trackedMode && !trackedMode.isAlternateScreen) {
       const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
       return headlessState
         ? { ...headlessState, isAlternateScreen: false }
@@ -89,14 +123,17 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
-      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
+      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, retireOnTimeout: providerOnly }
     )
-    if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+    if (!ownsRead()) {
+      return null
+    }
+    if (!snapshot || this.getPtyOutputSequence(ptyId) > snapshot.seq) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
     }
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
-    if (this.providerSnapshotsWithLiveModeTransition.has(snapshot)) {
+    if (!providerOnly && this.providerSnapshotsWithLiveModeTransition.has(snapshot)) {
       // Why: the provider frame can predate a mode switch observed while its
       // RPC was pending; the ordered live emulator owns the post-switch grid.
       const liveState = await this.readHeadlessVisibleTerminalState(ptyId)
@@ -105,10 +142,7 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
       }
     }
     const projection = await this.parseVisibleSnapshot(snapshot)
-    if (
-      this.getPtyLifecycleGeneration(ptyId) !== generation ||
-      this.getPtyOutputSequence(ptyId) > snapshot.seq
-    ) {
+    if (!ownsRead() || this.getPtyOutputSequence(ptyId) > snapshot.seq) {
       return null
     }
     const visibleState: RuntimeVisibleTerminalState = {
@@ -119,6 +153,46 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     }
     this.providerVisibleStateByPtyId.set(ptyId, visibleState)
     return visibleState
+  }
+
+  protected getTuiIdleProviderScreenVersion(ptyId: string): TuiIdleProviderScreenVersion | null {
+    const record = this.ptysById.get(ptyId)
+    return record?.connected
+      ? {
+          record,
+          incarnationId: record.incarnationId,
+          generation: this.getPtyLifecycleGeneration(ptyId),
+          sequence: this.getPtyOutputSequence(ptyId)
+        }
+      : null
+  }
+
+  protected async readTuiIdleProviderScreen(ptyId: string): Promise<TuiIdleProviderScreen | null> {
+    const owner = this.getTuiIdleProviderScreenVersion(ptyId)
+    if (!owner || this.readWholeScreenModel(ptyId)) {
+      return null
+    }
+    // Keep provider-only reads separate from a pending hydration's partial headless grid.
+    const screen = await withTimeout(
+      this.readVisibleTerminalState(ptyId, true),
+      VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      null
+    )
+    if (!screen) {
+      return null
+    }
+    const isCurrent = (): boolean => {
+      const live = this.getTuiIdleProviderScreenVersion(ptyId)
+      return (
+        live !== null &&
+        sameProviderScreenOwner(owner, live) &&
+        screen.generation === live.generation &&
+        live.sequence <= screen.sequence
+      )
+    }
+    return isCurrent()
+      ? { lines: restoreProjectedComposerDraft(screen.lines, screen.draft), isCurrent }
+      : null
   }
 
   protected async readHeadlessVisibleTerminalState(

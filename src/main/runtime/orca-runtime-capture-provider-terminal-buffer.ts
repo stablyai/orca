@@ -20,6 +20,8 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
     opts: { scrollbackRows?: number },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
+    const owner = this.ptysById.get(ptyId)
+    const incarnationId = owner?.incarnationId
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
     if (!liveModeTrackers) {
@@ -31,7 +33,12 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
       const snapshot = await this.ptyController?.serializeProviderBuffer?.(ptyId, opts)
-      if (!snapshot || this.ptyLifecycleGenerationById.get(ptyId) !== generation) {
+      if (
+        !snapshot ||
+        this.ptyLifecycleGenerationById.get(ptyId) !== generation ||
+        this.ptysById.get(ptyId) !== owner ||
+        owner?.incarnationId !== incarnationId
+      ) {
         return null
       }
       const snapshotModeTracker = new TerminalKittyKeyboardModeTracker()

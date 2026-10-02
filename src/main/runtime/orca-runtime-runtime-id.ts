@@ -356,6 +356,8 @@ export class OrcaRuntimeWithRuntimeId {
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
     ...this.tuiIdleEvidenceSource,
     intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
+    getProviderScreenVersion: (ptyId) => this.getTuiIdleProviderScreenVersion(ptyId),
+    readProviderScreen: (ptyId) => this.readTuiIdleProviderScreen(ptyId),
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
     hasCommandPainted: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
