@@ -79,6 +79,8 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca repo add --path <path> [--json]',
   '  orca repo show --repo <selector> [--json]',
   '  orca repo set-base-ref --repo <selector> --ref <ref> [--json]',
+  '  orca repo hooks show --repo <selector> [--json]',
+  '  orca repo hooks set --repo <selector> [--setup-script <text|null>|--setup-script-file <path|->] [--archive-script <text|null>|--archive-script-file <path|->] [--setup-run-policy ask|run-by-default|skip-by-default] [--agent-startup start-immediately|wait-for-setup] [--command-source shared-only|local-only|run-both] [--json]',
   '  orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]',
   '',
   'Selectors:',

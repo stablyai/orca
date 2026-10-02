@@ -83,9 +83,13 @@ orca repo add --path /abs/path/to/repo --json
 orca repo show --repo id:<repoId> --json
 orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
+orca repo hooks show --repo id:<repoId> --json
+orca repo hooks set --repo id:<repoId> --setup-script "pnpm install" --json
 ```
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
+
+`repo hooks show` prints the setup and archive scripts for a repo side by side: the local ones stored on this machine, the ones committed in `orca.yaml`, and the effective ones the host would actually run. `repo hooks set` edits the local side, the same settings the Repository settings pane edits, and never rewrites `orca.yaml`. Pass a multi-line script with `--setup-script-file <path|->`, clear one with `--setup-script null`, and change the defaults for new worktrees with `--setup-run-policy`, `--agent-startup`, and `--command-source`.
 
 ## Worktrees
 
