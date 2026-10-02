@@ -139,8 +139,15 @@ type ResumeInvocation = {
 
 type ShellInvocations = {
   segments: string[]
-  /** Substitution or an unquoted escape: the split may not be what the shell runs. */
+  /** Syntax whose meaning differs across POSIX, PowerShell and cmd, so the split may be wrong. */
   unmodelable: boolean
+}
+
+const QUOTE_OR_SEPARATOR = new Set(['"', "'", '`', ';', '&', '|', '\n', '\r'])
+
+// Why: these characters end an invocation in at least one shell Orca launches into.
+function isSeparator(char: string): boolean {
+  return char === ';' || char === '&' || char === '|' || char === '\n' || char === '\r'
 }
 
 // Why: a flag only describes its own invocation, so `fork && plain resume` must not share one exemption.
@@ -148,21 +155,38 @@ function splitShellInvocations(command: string): ShellInvocations {
   const segments: string[] = []
   let current = ''
   let quote: '"' | "'" | null = null
-  let unmodelable = command.includes('$(') || command.includes('`')
+  let unmodelable = false
   for (let index = 0; index < command.length; index++) {
     const char = command[index]!
-    if (quote) {
-      if (char === '\\' && quote === '"' && index + 1 < command.length) {
-        current += char + command[++index]
+    const next = command[index + 1]
+    // Why: substitution runs a hidden command; only single quotes make it literal everywhere.
+    if (quote !== "'" && (char === '`' || (char === '$' && next === '('))) {
+      unmodelable = true
+    }
+    if (quote === '"') {
+      if (char === '\\' && next !== undefined) {
+        // Why: POSIX keeps `\"` inside the string; cmd and PowerShell close the string there.
+        unmodelable ||= next === '"'
+        current += char + next
+        index++
         continue
       }
-      if (char === quote) {
-        quote = null
-      }
+      quote = char === '"' ? null : quote
       current += char
       continue
     }
-    if (char === '\\') {
+    if (quote === "'") {
+      quote = char === "'" ? null : quote
+      current += char
+      continue
+    }
+    // Why: `\` escapes only in POSIX and `^` only in cmd, so before a quote or separator the shells
+    // disagree; before anything else (`C:\Users`) every shell reads it literally.
+    if ((char === '\\' || char === '^') && (next === undefined || QUOTE_OR_SEPARATOR.has(next))) {
+      unmodelable = true
+    }
+    // Why: ANSI-C `$'…'` takes `\'` as a literal quote, and `<(`/`>(` run a hidden command.
+    if ((char === '$' && next === "'") || ((char === '<' || char === '>') && next === '(')) {
       unmodelable = true
     }
     if (char === '"' || char === "'") {
@@ -170,7 +194,7 @@ function splitShellInvocations(command: string): ShellInvocations {
       current += char
       continue
     }
-    if (char === ';' || char === '&' || char === '|' || char === '\n' || char === '\r') {
+    if (isSeparator(char)) {
       segments.push(current)
       current = ''
       continue
@@ -178,15 +202,19 @@ function splitShellInvocations(command: string): ShellInvocations {
     current += char
   }
   segments.push(current)
-  return { segments, unmodelable }
+  // Why: an unterminated quote ends differently per shell.
+  return { segments, unmodelable: unmodelable || quote !== null }
 }
 
 function parseResumeInvocations(command: string): ResumeInvocation[] {
   const { segments, unmodelable } = splitShellInvocations(command)
+  // Why: Orca's own fork is one invocation; a chain can hide a resume (`eval`, `sh -c`, `( … )`).
+  const single = segments.filter((segment) => segment.trim().length > 0).length <= 1
+  const honourForkSession = single && !unmodelable
   // Why: an untrusted split also reads the whole line, with no fork exemption, as before forks existed.
-  const candidates = unmodelable ? [...segments, command] : segments
+  const candidates = honourForkSession ? segments : [...segments, command]
   return candidates.flatMap((segment) => {
-    const invocation = parseResumeInvocation(segment, { honourForkSession: !unmodelable })
+    const invocation = parseResumeInvocation(segment, { honourForkSession })
     return invocation ? [invocation] : []
   })
 }

@@ -153,7 +153,18 @@ describe('structured AI Vault ownership', () => {
     `claude --resume ${PROVIDER_SESSION} --fork-session $(claude --resume ${PROVIDER_SESSION})`,
     `claude --resume ${PROVIDER_SESSION} --fork-session "$(claude --resume ${PROVIDER_SESSION})"`,
     `claude --resume ${PROVIDER_SESSION} --fork-session \`claude --resume ${PROVIDER_SESSION}\``,
-    `claude --resume ${PROVIDER_SESSION} --fork-session "\`claude --resume ${PROVIDER_SESSION}\`"`
+    `claude --resume ${PROVIDER_SESSION} --fork-session "\`claude --resume ${PROVIDER_SESSION}\`"`,
+    // Bash/zsh ANSI-C quoting: `$'\''` is one literal quote, so the `&&` is live.
+    `claude --resume ${PROVIDER_SESSION} --fork-session $'\\'' && claude --resume ${PROVIDER_SESSION} #'`,
+    // cmd caret escape: `^"` opens no quote, so the `&&` is live.
+    `claude --resume ${PROVIDER_SESSION} --fork-session ^" && claude --resume ${PROVIDER_SESSION} ^"`,
+    // cmd and PowerShell close a double quote at `\\"`.
+    `claude --resume ${PROVIDER_SESSION} --fork-session "\\" && claude --resume ${PROVIDER_SESSION} \\""`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session <(claude --resume ${PROVIDER_SESSION})`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session >(claude --resume ${PROVIDER_SESSION})`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session && (claude --resume ${PROVIDER_SESSION})`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session && eval "claude --resume ${PROVIDER_SESSION}"`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session && sh -c 'claude --resume ${PROVIDER_SESSION}'`
   ])('withholds the fork exemption from a command it cannot split: %s', async (command) => {
     installOwnership({ provider: 'claude' })
     await expect(
@@ -163,8 +174,17 @@ describe('structured AI Vault ownership', () => {
 
   it.each([
     `claude '--model' 'sonnet' '--resume' '${PROVIDER_SESSION}' '--fork-session'`,
-    `& 'claude' '--resume' '${PROVIDER_SESSION}' '--fork-session'`
-  ])('still allows a single quoted fork command: %s', async (command) => {
+    `& 'claude' '--resume' '${PROVIDER_SESSION}' '--fork-session'`,
+    // Plain Windows override paths: `\\` is no escape in PowerShell or cmd.
+    `C:\\Users\\me\\.local\\bin\\claude.exe '--resume' '${PROVIDER_SESSION}' '--fork-session'`,
+    `C:\\Users\\me\\.local\\bin\\claude.exe "--resume" "${PROVIDER_SESSION}" "--fork-session"`,
+    `C:\\Program Files\\claude\\claude.exe '--add-dir' 'C:\\Users\\me' '--resume' '${PROVIDER_SESSION}' '--fork-session'`,
+    // Substitution syntax inside single quotes is literal text.
+    `claude '--append-system-prompt' 'use \`code\` spans' '--resume' '${PROVIDER_SESSION}' '--fork-session'`,
+    `claude '--x' 'a$(b)' '--resume' '${PROVIDER_SESSION}' '--fork-session'`,
+    `claude '--x' 'a'"\\\\"'b' '--resume' '${PROVIDER_SESSION}' '--fork-session'`,
+    `claude '--append-system-prompt' 'don'"'"'t stop' '--resume' '${PROVIDER_SESSION}' '--fork-session'`
+  ])('still allows a single Orca-built fork command: %s', async (command) => {
     installOwnership({ provider: 'claude' })
     await expect(
       assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
