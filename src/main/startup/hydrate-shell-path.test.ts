@@ -224,7 +224,7 @@ describe('hydrateShellPath', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'asks nushell to join $env.PATH instead of printing the literal "$PATH"',
+    'reads Nushell PATH while preserving interactive login configuration',
     async () => {
       const proc = createMockShellProcess()
       spawnMock.mockReturnValue(proc)
@@ -235,8 +235,7 @@ describe('hydrateShellPath', () => {
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
 
       expect(spawnMock.mock.calls[0][1]).toEqual([
-        '-l',
-        '-c',
+        '-ilc',
         [
           "print -n '__ORCA_SHELL_PATH__';",
           'print -n ($env.PATH | str join (char esep));',

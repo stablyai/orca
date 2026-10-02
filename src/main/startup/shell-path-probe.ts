@@ -13,7 +13,8 @@ export function shellPathProbe(shell: string): { args: string[]; pathDelimiter: 
         'print -n ($env.PATH | str join (char esep));',
         `print -n '${SHELL_PATH_DELIMITER}'`
       ].join(' ')
-      return { args: ['-l', '-c', command], pathDelimiter: delimiter }
+      // Why: existing interactive login flags preserve $nu.is-interactive configuration.
+      return { args: ['-ilc', command], pathDelimiter: delimiter }
     }
     const command =
       `printf '%s' '${SHELL_PATH_DELIMITER}'; printf '%s' "$PATH"; ` +
