@@ -39,7 +39,7 @@ describe('git remote operations', () => {
   it('pushes to the configured upstream remote and branch', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'review/pr-1738\n', stderr: '' }
+        return { stdout: 'refs/heads/review/pr-1738\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.remote')) {
         return { stdout: 'pr-prateek-orca\n', stderr: '' }
@@ -71,7 +71,7 @@ describe('git remote operations', () => {
   it('does not combine remote.pushDefault with a base-branch merge target', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/feature/fix\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.feature/fix.remote')) {
         return { stdout: 'origin\n', stderr: '' }
@@ -106,7 +106,7 @@ describe('git remote operations', () => {
   it('keeps a fork head target when the contributor branch matches the base branch name', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'review/pr-1\n', stderr: '' }
+        return { stdout: 'refs/heads/review/pr-1\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.review/pr-1.remote')) {
         return { stdout: 'fork\n', stderr: '' }
@@ -134,7 +134,7 @@ describe('git remote operations', () => {
   it('pushes to a URL-valued branch pushRemote when no named remote exists', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'imp/chinese-translation\n', stderr: '' }
+        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.pushRemote')) {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
@@ -173,7 +173,7 @@ describe('git remote operations', () => {
   it('normalizes a URL-valued branch remote to a matching named remote before pushing', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'imp/chinese-translation\n', stderr: '' }
+        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.pushRemote')) {
         throw new Error('missing pushRemote')
@@ -231,7 +231,7 @@ describe('git remote operations', () => {
     ]
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'imp/chinese-translation\n', stderr: '' }
+        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
@@ -425,7 +425,7 @@ describe('git remote operations', () => {
     await gitPull('/repo')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
       [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
       [['pull'], { cwd: '/repo' }]
     ])
@@ -448,10 +448,10 @@ describe('git remote operations', () => {
     await gitPull('/repo')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
       [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
       [['pull'], { cwd: '/repo' }],
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
       [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
       [['pull', '--no-rebase'], { cwd: '/repo' }]
     ])
@@ -525,7 +525,7 @@ describe('git remote operations', () => {
     await gitPull('/repo')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
       [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature'], { cwd: '/repo' }],
       [['pull', 'origin', 'feature'], { cwd: '/repo' }]
@@ -557,7 +557,7 @@ describe('git remote operations', () => {
     await gitFastForward('/repo')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
       [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
       [['pull', '--ff-only'], { cwd: '/repo' }]
     ])

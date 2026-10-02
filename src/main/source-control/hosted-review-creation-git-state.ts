@@ -1,3 +1,4 @@
+import { readBranchNameFromFullRef } from '../../shared/git-abbreviated-ref-repair'
 import {
   isRemoteHeadRef,
   normalizeHostedReviewBaseRef,
@@ -253,6 +254,21 @@ export async function getCurrentBranch(
   executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<string> {
+  try {
+    // Full ref, not --abbrev-ref: git truncates the abbreviated form mid-UTF-8 under a UTF-8 LC_CTYPE.
+    const { stdout } = await runGitForHostedReview(
+      repoPath,
+      ['symbolic-ref', '--quiet', 'HEAD'],
+      executionHostId,
+      options
+    )
+    const branch = readBranchNameFromFullRef(stdout)
+    if (branch) {
+      return stripRefPrefix(branch)
+    }
+  } catch {
+    // Detached HEAD -- fall through to the abbreviated form, which reads `HEAD` there.
+  }
   const { stdout } = await runGitForHostedReview(
     repoPath,
     ['rev-parse', '--abbrev-ref', 'HEAD'],

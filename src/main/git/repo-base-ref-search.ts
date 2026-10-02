@@ -1,5 +1,6 @@
 import type { BaseRefSearchResult } from '../../shared/repo-types'
 import { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
+import { repairAbbreviatedRefName } from '../../shared/git-abbreviated-ref-repair'
 import {
   clampRepoSearchRefsLimit,
   clampRepoSearchRefsScanLimit,
@@ -251,7 +252,8 @@ export function parseAndFilterSearchRefDetails(
     ) {
       return fullRef.slice('refs/remotes/'.length)
     }
-    return gitShortRef
+    // `%(refname)` keeps the full bytes even where git truncated `:short` mid-UTF-8.
+    return repairAbbreviatedRefName(fullRef, gitShortRef)
   }
 
   return stdout

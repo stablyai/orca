@@ -1,3 +1,4 @@
+import { readBranchNameFromFullRef } from './git-abbreviated-ref-repair'
 import type { GitCommandRunner } from './git-effective-upstream'
 import { gitRefTargetsBranchOnRemote } from './git-remote-branch-name'
 import { findGitRemoteNameByFetchUrl } from './git-remote-url-index'
@@ -112,8 +113,9 @@ export async function resolveConfiguredGitPushTarget(
   runGit: GitCommandRunner
 ): Promise<ResolvedGitPushTarget | null> {
   try {
-    const { stdout: branchStdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
-    const branch = branchStdout.trim()
+    // Full ref, not --short: git truncates the abbreviated form mid-UTF-8 under a UTF-8 LC_CTYPE.
+    const { stdout: branchStdout } = await runGit(['symbolic-ref', '--quiet', 'HEAD'])
+    const branch = readBranchNameFromFullRef(branchStdout)
     if (!branch) {
       return null
     }

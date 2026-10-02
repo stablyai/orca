@@ -1,3 +1,4 @@
+import { readBranchNameFromFullRef, repairAbbreviatedRefName } from './git-abbreviated-ref-repair'
 import {
   GIT_HISTORY_COMMIT_FORMAT,
   gitHistoryRefFromFullName,
@@ -97,8 +98,9 @@ async function resolveCurrentRef(
   headOid: string
 ): Promise<{ currentRef: GitHistoryItemRef; branchName: string | null }> {
   try {
-    const { stdout } = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], cwd)
-    const branchName = stdout.trim()
+    // Full ref, not --short: git truncates the abbreviated form mid-UTF-8 under a UTF-8 LC_CTYPE.
+    const { stdout } = await git(['symbolic-ref', '--quiet', 'HEAD'], cwd)
+    const branchName = readBranchNameFromFullRef(stdout)
     if (branchName) {
       return {
         branchName,
@@ -135,7 +137,8 @@ async function resolveUpstreamRef(
     )
     const [fullName, shortName] = stdout.split('\0')
     const upstreamRef = fullName?.trim()
-    const upstreamShortName = shortName?.trim()
+    // `%(upstream)` keeps the full bytes even where git truncated `:short` mid-UTF-8.
+    const upstreamShortName = repairAbbreviatedRefName(upstreamRef ?? '', shortName?.trim() ?? '')
     if (!upstreamRef || !upstreamShortName) {
       return undefined
     }

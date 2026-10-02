@@ -1,3 +1,4 @@
+import { repairAbbreviatedRefName } from '../shared/git-abbreviated-ref-repair'
 import { GitHandlerOperationContext, GIT_BULK_CHUNK_SIZE } from './git-handler-operation-context'
 import { commitChangesRelay } from './git-handler-worktree-ops'
 
@@ -110,7 +111,7 @@ export class GitHandlerWorktreeChangeOperations extends GitHandlerOperationConte
   async localBranches(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const { stdout } = await this.git(
-      ['for-each-ref', '--format=%(HEAD)%09%(refname:short)', 'refs/heads/'],
+      ['for-each-ref', '--format=%(HEAD)%09%(refname)%09%(refname:short)', 'refs/heads/'],
       worktreePath
     )
     let current: string | null = null
@@ -119,7 +120,9 @@ export class GitHandlerWorktreeChangeOperations extends GitHandlerOperationConte
       if (line.length === 0) {
         continue
       }
-      const [marker, name] = line.split('\t')
+      const [marker, fullRef, shortRef] = line.split('\t')
+      // `%(refname)` keeps the full bytes even where git truncated `:short` mid-UTF-8.
+      const name = repairAbbreviatedRefName(fullRef ?? '', shortRef ?? '')
       if (!name) {
         continue
       }
