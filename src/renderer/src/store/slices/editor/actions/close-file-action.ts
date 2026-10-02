@@ -17,17 +17,27 @@ export function createCloseFileAction(
     closeFile: (fileId) => {
       // Why: capture untitled+dirty state before set() mutates the store, so cleanup of throwaway untitled files can decide after removal.
       const preClose = get().openFiles.find((f) => f.id === fileId)
+      // Corrupt sessions may retain legacy and runtime-owned identities for one path. A close
+      // applies to the whole path in its worktree so a sibling cannot resurrect on hydrate.
+      const siblingFiles = preClose
+        ? get().openFiles.filter(
+            (file) => file.worktreeId === preClose.worktreeId && file.filePath === preClose.filePath
+          )
+        : []
+      const fileIdsToClose = new Set(siblingFiles.map((file) => file.id))
       // Why: also check editorDrafts — isDirty is set by a debounced callback, so a draft can exist before isDirty flushes; a draft means the user typed something.
       const hasDraft = !!get().editorDrafts[fileId]
       const shouldDeleteFromDisk = shouldDeleteUntouchedUntitledFile(preClose, hasDraft)
 
       // Why: mirrored tabs are host-owned, so the host must close its copy or its next snapshot re-mirrors the file and the tab reopens.
-      notifyHostOfMirroredEditorClose(get(), preClose?.worktreeId, fileId)
+      for (const sibling of siblingFiles) {
+        notifyHostOfMirroredEditorClose(get(), sibling.worktreeId, sibling.id)
+      }
 
       set((s) => {
         const closedFile = s.openFiles.find((f) => f.id === fileId)
         const idx = s.openFiles.findIndex((f) => f.id === fileId)
-        const newFiles = s.openFiles.filter((f) => f.id !== fileId)
+        const newFiles = s.openFiles.filter((f) => !fileIdsToClose.has(f.id))
         const newEditorDrafts = { ...s.editorDrafts }
         delete newEditorDrafts[fileId]
         const newMarkdownViewMode = { ...s.markdownViewMode }
@@ -36,9 +46,11 @@ export function createCloseFileAction(
         delete newMarkdownRichModeSizeOverride[fileId]
         const newEditorViewMode = { ...s.editorViewMode }
         delete newEditorViewMode[fileId]
-        const markdownVisibilityKeys = new Set([fileId])
-        if (closedFile?.markdownPreviewSourceFileId) {
-          markdownVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
+        const markdownVisibilityKeys = new Set(fileIdsToClose)
+        for (const file of s.openFiles) {
+          if (fileIdsToClose.has(file.id) && file.markdownPreviewSourceFileId) {
+            markdownVisibilityKeys.add(file.markdownPreviewSourceFileId)
+          }
         }
         const visibilityKeysToRemove = [...markdownVisibilityKeys].filter(
           (key) =>
@@ -201,17 +213,17 @@ export function createCloseFileAction(
 
       // Why: route editor/diff closes through the unified close path (MRU + visual-neighbor fallback) so they match terminal/browser tab-close behavior.
       for (const tabs of Object.values(get().unifiedTabsByWorktree ?? {})) {
-        const unifiedTab = tabs.find(
-          (entry) =>
-            entry.entityId === fileId &&
-            (entry.contentType === 'editor' ||
-              entry.contentType === 'diff' ||
-              entry.contentType === 'conflict-review' ||
-              entry.contentType === 'check-details')
-        )
-        if (unifiedTab) {
-          get().closeUnifiedTab(unifiedTab.id)
-          break
+        for (const unifiedTab of tabs) {
+          if (
+            (fileIdsToClose.has(unifiedTab.entityId) ||
+              unifiedTab.entityId === preClose?.filePath) &&
+            (unifiedTab.contentType === 'editor' ||
+              unifiedTab.contentType === 'diff' ||
+              unifiedTab.contentType === 'conflict-review' ||
+              unifiedTab.contentType === 'check-details')
+          ) {
+            get().closeUnifiedTab(unifiedTab.id)
+          }
         }
       }
     }

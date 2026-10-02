@@ -177,6 +177,17 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.browserTabsByWorktree?.['wt-1'][0].loading).toBe(false)
   })
 
+  it('deduplicates persisted editor rows for one path and runtime owner', () => {
+    const original = { ...createSnapshot().openFiles[0], runtimeEnvironmentId: 'runtime-1' }
+    const duplicate = { ...original, id: 'editor:owned:/tmp/demo.ts' }
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({ openFiles: [original, duplicate, createSnapshot().openFiles[1]] })
+    )
+
+    expect(payload.openFilesByWorktree?.['wt-1']).toHaveLength(1)
+    expect(payload.openFilesByWorktree?.['wt-1']?.[0]?.runtimeEnvironmentId).toBe('runtime-1')
+  })
+
   it('persists front-matter hide overrides only for restored editor files', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
