@@ -43,6 +43,8 @@ async function launchNativeForkOnRuntimeHost(args: {
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),
+    // Why: omitted, the host applies its own default view and may open this terminal fork in chat.
+    viewMode: 'terminal',
     activate: true
   })
   if (outcome.status !== 'created') {

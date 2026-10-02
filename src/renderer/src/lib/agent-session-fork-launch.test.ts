@@ -231,6 +231,8 @@ describe('launchNativeAgentSessionFork', () => {
       env: { CLAUDE_CONFIG_DIR: '/acct' },
       launchConfig: expect.objectContaining({ agentArgs: '--model sonnet' }),
       agentArgs: '--model sonnet',
+      // Why: omitted, a host that defaults Claude to chat would open the terminal fork in chat.
+      viewMode: 'terminal',
       activate: true
     })
     const runtimeArgs = mocks.createWebRuntimeSessionTerminal.mock.calls[0]?.[0]
