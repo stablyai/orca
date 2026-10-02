@@ -29,3 +29,9 @@ main/wsl.ts
 # point of the module (#16463). A failed stat drops to the next candidate for
 # that one call and is re-asked on the next, so there is no value to pin.
 main/wsl-interop-spawn-directory.ts
+# gh/glab forge-CLI auth probes for host-side Integrations status (#12028). The
+# swallowed value (an absent/null forge result) is pinned only inside the
+# TTL-bounded local preflight cache (`cachedByWslDistro`, `expiresAt`) and is
+# re-probed after the entry expires -- the bounded form accepted in #17350, not
+# an unbounded gate.
+main/preflight/agent-forge-detection-probes.ts

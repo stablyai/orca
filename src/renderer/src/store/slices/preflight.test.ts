@@ -325,6 +325,97 @@ describe('createPreflightSlice', () => {
     expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
   })
 
+  it('forwards the SSH execution host so the host-side forge probe can run', async () => {
+    resetPreflightMocks()
+    preflightCheck.mockResolvedValueOnce(makeStatus(true))
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        makeRepo({
+          id: 'repo-1',
+          path: '/home/alice/repo',
+          connectionId: 'builder',
+          executionHostId: 'ssh:builder'
+        })
+      ],
+      worktreesByRepo: {},
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null,
+      sshTargetLabels: new Map([['builder', 'Build Box']])
+    } as Partial<AppState>)
+
+    await store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).toHaveBeenCalledWith({
+      sshHost: { connectionId: 'builder', hostLabel: 'Build Box' }
+    })
+  })
+
+  it('keeps preflight request dedupe scoped by SSH execution host', async () => {
+    resetPreflightMocks()
+    const builder = deferred<PreflightStatus>()
+    const staging = deferred<PreflightStatus>()
+    preflightCheck.mockReturnValueOnce(builder.promise).mockReturnValueOnce(staging.promise)
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        makeRepo({
+          id: 'repo-1',
+          path: '/home/alice/repo',
+          connectionId: 'builder',
+          executionHostId: 'ssh:builder'
+        })
+      ],
+      worktreesByRepo: {},
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null,
+      sshTargetLabels: new Map([
+        ['builder', 'Build Box'],
+        ['staging', 'Staging Box']
+      ])
+    } as Partial<AppState>)
+
+    const first = store.getState().refreshPreflightStatus()
+    store.setState({
+      repos: [
+        makeRepo({
+          id: 'repo-1',
+          path: '/home/alice/repo',
+          connectionId: 'staging',
+          executionHostId: 'ssh:staging'
+        })
+      ]
+    } as Partial<AppState>)
+    const second = store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).toHaveBeenNthCalledWith(1, {
+      sshHost: { connectionId: 'builder', hostLabel: 'Build Box' }
+    })
+    expect(preflightCheck).toHaveBeenNthCalledWith(2, {
+      sshHost: { connectionId: 'staging', hostLabel: 'Staging Box' }
+    })
+    builder.resolve(makeStatus(false))
+    staging.resolve(makeStatus(true))
+    await Promise.all([first, second])
+    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
+  it('leaves local preflight args untouched without an SSH repo', async () => {
+    resetPreflightMocks()
+    preflightCheck.mockResolvedValueOnce(makeStatus(true))
+    const store = createTestStore()
+    store.setState({
+      repos: [makeRepo({ id: 'repo-1', path: '/home/alice/repo' })],
+      worktreesByRepo: {},
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    } as Partial<AppState>)
+
+    await store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).toHaveBeenCalledWith(undefined)
+  })
+
   it('checks integrations through the active runtime environment', async () => {
     resetPreflightMocks()
     const firstRuntime = deferred<PreflightStatus>()

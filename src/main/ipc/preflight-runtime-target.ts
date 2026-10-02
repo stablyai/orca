@@ -5,6 +5,11 @@ export type PreflightRuntimeContext = {
   wslDistro?: string | null
   wslDefault?: boolean
   projectRuntime?: ProjectExecutionRuntimeResolution
+  // Why: names the SSH execution host so runPreflightCheck can additionally
+  // probe forge CLIs there — rides the context the same way wslDistro/
+  // wslDefault ride the WSL target, but needs no derivation function since
+  // it is a single flat shape rather than several fallback sources.
+  sshHost?: { connectionId: string; hostLabel: string }
 }
 
 export function getPreflightWslTarget(
