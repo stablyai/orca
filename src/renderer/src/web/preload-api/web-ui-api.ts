@@ -32,6 +32,11 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
     const environmentId = requireActiveEnvironmentOrNull()?.id
     const hostUpdates = omitPairingLocalUiFields(updates)
+    // Synthetic usage is desktop-only; older hosts reject its enum value and migration flag.
+    delete hostUpdates._syntheticStatusBarDefaultAdded
+    if (hostUpdates.statusBarItems) {
+      hostUpdates.statusBarItems = hostUpdates.statusBarItems.filter((id) => id !== 'synthetic')
+    }
     explorerRoots.prepare(environmentId, hostUpdates)
     return { environmentId, hostUpdates }
   }

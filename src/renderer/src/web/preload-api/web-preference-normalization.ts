@@ -79,7 +79,15 @@ export function mergeHostWebUIState(
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
     manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
-  return { ...mergeWebUIState(local, incoming), ...pinned }
+  const next = { ...mergeWebUIState(local, incoming), ...pinned }
+  if (local._syntheticStatusBarDefaultAdded) {
+    next._syntheticStatusBarDefaultAdded = true
+    next.statusBarItems = next.statusBarItems.filter((id) => id !== 'synthetic')
+    if (local.statusBarItems.includes('synthetic')) {
+      next.statusBarItems = [...next.statusBarItems, 'synthetic']
+    }
+  }
+  return next
 }
 
 export function mergeFeatureInteractionState(

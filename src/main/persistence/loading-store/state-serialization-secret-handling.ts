@@ -267,6 +267,10 @@ export class StateSerializationSecretHandlingOperations {
       httpProxyUrl: encrypt(
         PROTECTED_SECRET_SLOT.httpProxyUrl,
         this.runtime.state.settings.httpProxyUrl ?? ''
+      ),
+      syntheticApiKey: encrypt(
+        PROTECTED_SECRET_SLOT.syntheticApiKey,
+        this.runtime.state.settings.syntheticApiKey ?? ''
       )
     }
   }

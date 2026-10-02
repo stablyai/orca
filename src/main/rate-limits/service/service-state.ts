@@ -33,7 +33,8 @@ export abstract class RateLimitServiceState {
     minimax: null,
     grok: null,
     cursor: null,
-    zcode: null
+    zcode: null,
+    synthetic: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Why: the Cursor probe reads the macOS Keychain, so it cannot run synchronously
@@ -54,7 +55,8 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    synthetic: 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -67,7 +69,8 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    synthetic: 0
   }
   protected mainWindow: BrowserWindow | null = null
   protected detachWindowListeners: (() => void) | null = null
@@ -84,6 +87,7 @@ export abstract class RateLimitServiceState {
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
+  protected syntheticFetchGeneration = 0
   protected lastOpencodeConfigHash = ''
   protected lastMiniMaxConfigHash = ''
   protected codexHomePathResolver: CodexHomePathResolver | null = null
@@ -99,6 +103,7 @@ export abstract class RateLimitServiceState {
     wslDistro: null
   }
   protected openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
+  protected syntheticApiKeyResolver: (() => string) | null = null
   protected miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null

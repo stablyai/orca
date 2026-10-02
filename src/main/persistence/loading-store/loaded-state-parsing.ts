@@ -120,6 +120,13 @@ export class LoadedStateParsingOperations {
             isLegacyOpenCodeGoApiKey
           )
         }
+        if (parsed.settings?.syntheticApiKey) {
+          parsed.settings.syntheticApiKey = this.runtime.protectedSecrets.decrypt(
+            PROTECTED_SECRET_SLOT.syntheticApiKey,
+            parsed.settings.syntheticApiKey,
+            () => false
+          )
+        }
         if (parsed.settings?.httpProxyUrl) {
           const decryptedProxy = this.runtime.protectedSecrets.decryptWithStatus(
             PROTECTED_SECRET_SLOT.httpProxyUrl,

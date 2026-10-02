@@ -43,6 +43,13 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
     this.openCodeGoConfigResolver = resolver
   }
+  setSyntheticApiKeyResolver(resolver: () => string): void {
+    this.syntheticApiKeyResolver = resolver
+  }
+  invalidateSyntheticCredentialState(): void {
+    this.syntheticFetchGeneration += 1
+    this.updateState({ ...this.state, synthetic: null })
+  }
 
   setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
     this.miniMaxConfigResolver = resolver

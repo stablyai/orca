@@ -37,6 +37,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
+      syntheticResultPromise,
+      syntheticGeneration,
       antigravityResultPromise
     } = prepared
     if (signal.aborted) {
@@ -189,12 +191,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled, syntheticSettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise,
+        syntheticResultPromise
+      ])
     if (signal.aborted) {
       return
     }
@@ -202,6 +206,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const zcode = settleSiblingProviderResult('zcode', zcodeSettled)
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
+    const synthetic = settleSiblingProviderResult('synthetic', syntheticSettled)
+    const sameSyntheticAccount =
+      synthetic.usageMetadata?.authProvenance !== undefined &&
+      synthetic.usageMetadata.authProvenance ===
+        previousState.synthetic?.usageMetadata?.authProvenance
+    this.trackActiveFailureStreak('synthetic', synthetic)
     // Why: the stale policy keeps a recent snapshot through a failed refresh, but
     // a snapshot belonging to a different Cursor account must not survive the
     // switch — the Accounts pane would name the new account beside the old
@@ -231,7 +241,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         zcode.status === 'error' && !sameZcodeAccount
           ? zcode
           : this.applyStalePolicy(zcode, previousState.zcode),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
+      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
+      synthetic:
+        syntheticGeneration !== this.syntheticFetchGeneration
+          ? this.state.synthetic
+          : sameSyntheticAccount
+            ? this.applyStalePolicy(synthetic, previousState.synthetic)
+            : synthetic
     })
   }
 }

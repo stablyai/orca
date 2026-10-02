@@ -212,6 +212,7 @@ export function buildDefaultSettings(args: {
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
     opencodeGoApiKey: '',
+    syntheticApiKey: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
     minimaxEndpoint: 'overseas',

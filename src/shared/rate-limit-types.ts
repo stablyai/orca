@@ -7,6 +7,10 @@ export type RateLimitWindow = {
   resetsAt: number | null
   /** Human-readable reset description, e.g. "2:30 PM" or "Thu". */
   resetDescription: string | null
+  /** A partial quota refill, not a full window reset. */
+  refillsAt?: number | null
+  /** Estimated full recharge timestamp, assuming no further usage. */
+  rechargesAt?: number | null
 }
 
 export type ProviderRateLimitStatus = 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
@@ -59,6 +63,7 @@ export type ProviderRateLimits = {
     | 'antigravity'
     | 'cursor'
     | 'zcode'
+    | 'synthetic'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -90,6 +95,8 @@ export type ProviderRateLimits = {
   error: string | null
   status: ProviderRateLimitStatus
   usageMetadata?: UsageRateLimitMetadata
+  /** Synthetic's five-hour allowance expressed in weighted requests. */
+  requestQuota?: { requests: number; limit: number; renewsAt: number | null }
 }
 
 export type CodexRateLimitResetOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed'
@@ -141,6 +148,7 @@ export type RateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
+  synthetic?: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the

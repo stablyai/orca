@@ -11,11 +11,15 @@ import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
-import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
+import { barColor, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import {
+  getUsageWindowReplenishmentLabel,
+  getUsageWindowReplenishmentTime
+} from './usage-window-replenishment'
 
 type ProviderId = ProviderRateLimits['provider']
 export type UsageSection = { label: string; window: RateLimitWindow }
@@ -72,15 +76,31 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
   return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
-// The soonest-resetting window summarizes the agent's next reset in one line.
-function soonestResetLabel(sections: UsageSection[], now: number): string | null {
-  const resets = sections
-    .map((s) => s.window.resetsAt)
-    .filter((r): r is number => typeof r === 'number' && Number.isFinite(r))
-  if (resets.length === 0) {
-    return null
+// Full recharge covers every allowance; other providers summarize their next reset.
+function soonestReplenishmentLabel(sections: UsageSection[], now: number): string | null {
+  let lastRecharge: RateLimitWindow | null = null
+  for (const section of sections) {
+    const time = section.window.rechargesAt
+    if (time != null && Number.isFinite(time) && time > (lastRecharge?.rechargesAt ?? -Infinity)) {
+      lastRecharge = section.window
+    }
   }
-  return formatResetCountdown(Math.min(...resets) - now)
+  const rechargeUnknown = sections.some(
+    (section) => section.window.usedPercent > 0 && section.window.rechargesAt == null
+  )
+  if (lastRecharge && !rechargeUnknown) {
+    return getUsageWindowReplenishmentLabel(lastRecharge, now)
+  }
+  let soonest: RateLimitWindow | null = null
+  let soonestTime = Infinity
+  for (const section of sections) {
+    const time = section.window.refillsAt ?? section.window.resetsAt
+    if (time !== null && Number.isFinite(time) && time < soonestTime) {
+      soonest = section.window
+      soonestTime = time
+    }
+  }
+  return soonest ? getUsageWindowReplenishmentLabel({ ...soonest, rechargesAt: null }, now) : null
 }
 
 function UsageMetric({
@@ -132,7 +152,7 @@ export function UsageRow({
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
-  const reset = hasUsage ? soonestResetLabel(sections, now) : null
+  const reset = hasUsage ? soonestReplenishmentLabel(sections, now) : null
   const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
 
   return (
@@ -181,6 +201,19 @@ export function UsageRow({
           ))}
         </div>
       ) : null}
+      {p.requestQuota && mode === 'verbose' ? (
+        <span className="pl-[30px] text-[11px] tabular-nums text-muted-foreground">
+          {translate('settings.synthetic.requests', '{{requests}} / {{limit}} requests used', {
+            requests: p.requestQuota.requests,
+            limit: p.requestQuota.limit
+          })}
+        </span>
+      ) : null}
+      {sections.some((section) => section.window.rechargesAt != null) && mode === 'verbose' ? (
+        <span className="pl-[30px] text-[11px] text-muted-foreground">
+          {translate('settings.synthetic.rechargeEstimate', 'Estimated if no more usage.')}
+        </span>
+      ) : null}
     </div>
   )
 }
@@ -223,7 +256,7 @@ export function UsageRosterPanel({
   // Why: one boundary-scheduled clock keeps every open row current without per-provider timers.
   const now = useResetCountdownClock(
     providers.flatMap((provider) =>
-      usedSections(provider).map((section) => section.window.resetsAt)
+      usedSections(provider).map((section) => getUsageWindowReplenishmentTime(section.window))
     )
   )
   // Worst-first so the agent nearest a limit sits on top.

@@ -6,7 +6,7 @@ import type { AppState } from '../types'
 export type RateLimitSlice = {
   rateLimits: RateLimitState
   fetchRateLimits: () => Promise<void>
-  refreshRateLimits: () => Promise<void>
+  refreshRateLimits: (options?: { throwOnError?: boolean }) => Promise<void>
   refreshGrokRateLimits: () => Promise<void>
   refreshClaudeRateLimitsForTarget: (target: RateLimitRuntimeTarget) => Promise<void>
   refreshCodexRateLimitsForTarget: (target: RateLimitRuntimeTarget) => Promise<void>
@@ -28,12 +28,15 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     }
   },
 
-  refreshRateLimits: async () => {
+  refreshRateLimits: async (options) => {
     try {
       const state = await window.api.rateLimits.refresh()
       set({ rateLimits: state })
     } catch (error) {
       console.error('Failed to refresh rate limits:', error)
+      if (options?.throwOnError) {
+        throw error
+      }
     }
   },
 

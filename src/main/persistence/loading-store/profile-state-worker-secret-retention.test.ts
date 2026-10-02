@@ -27,7 +27,7 @@ beforeEach(() => {
 })
 afterEach(() => setSecretStore(previousSecretStore))
 
-describe.each(['opencodeSessionCookie', 'opencodeGoApiKey'] as const)(
+describe.each(['opencodeSessionCookie', 'opencodeGoApiKey', 'syntheticApiKey'] as const)(
   'Store %s retention across worker acknowledgements',
   (setting) => {
     it('does not restore ciphertext cleared while its commit acknowledgement was pending', async () => {
@@ -94,14 +94,15 @@ describe.each(['opencodeSessionCookie', 'opencodeGoApiKey'] as const)(
 
 describe('worker protected settings serialization', () => {
   it.each(['selective', 'complete'] as const)(
-    'encrypts both protected credentials in a %s write to SQLite',
+    'encrypts protected credentials in a %s write to SQLite',
     async (mode) => {
       const { store, authority, readState } = await fixture()
       const selectiveWrite = vi.spyOn(authority, 'writeSerializedDomains')
       const completeWrite = vi.spyOn(authority, 'writeCompleteSerializedDomains')
       const secrets = {
         opencodeSessionCookie: 'cookie-only-plaintext',
-        opencodeGoApiKey: 'api-key-only-plaintext'
+        opencodeGoApiKey: 'api-key-only-plaintext',
+        syntheticApiKey: 'synthetic-only-plaintext'
       }
       store.updateSettings(secrets)
       if (mode === 'complete') {
@@ -113,7 +114,8 @@ describe('worker protected settings serialization', () => {
       const persisted = readState()
       expect(persisted.settings).toMatchObject({
         opencodeSessionCookie: ciphertext(secrets.opencodeSessionCookie),
-        opencodeGoApiKey: ciphertext(secrets.opencodeGoApiKey)
+        opencodeGoApiKey: ciphertext(secrets.opencodeGoApiKey),
+        syntheticApiKey: ciphertext(secrets.syntheticApiKey)
       })
       for (const plaintext of Object.values(secrets)) {
         expect(JSON.stringify(persisted)).not.toContain(plaintext)

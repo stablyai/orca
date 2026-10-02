@@ -63,6 +63,9 @@ export function updateSettings(
   if ('opencodeGoApiKey' in updates && !updates.opencodeGoApiKey) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeGoApiKey)
   }
+  if ('syntheticApiKey' in updates && !updates.syntheticApiKey) {
+    operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.syntheticApiKey)
+  }
   if ('httpProxyUrl' in updates && !updates.httpProxyUrl) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
   }

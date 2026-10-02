@@ -22,6 +22,7 @@ export type UsageProviderSettings = Pick<
   opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
   cursorAuthConfigured: boolean
+  syntheticApiKey?: string
 }
 
 type UsageProviderSnapshots = {
@@ -35,6 +36,7 @@ type UsageProviderSnapshots = {
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
+  synthetic?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -87,7 +89,8 @@ export function hasUsageProviderSettings(
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
-    settings?.cursorAuthConfigured === true
+    settings?.cursorAuthConfigured === true ||
+    Boolean(settings?.syntheticApiKey?.trim())
   )
 }
 
@@ -127,6 +130,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'cursor') {
     return settings.cursorAuthConfigured === true
+  }
+  if (providerId === 'synthetic') {
+    return Boolean(settings.syntheticApiKey?.trim())
   }
   return false
 }
@@ -187,7 +193,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
-    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode))
+    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
+    (providers.synthetic !== undefined && isProviderSnapshotPending(providers.synthetic))
   ) {
     return false
   }
@@ -202,6 +209,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
-    !isProviderConfigured(providers.zcode)
+    !isProviderConfigured(providers.zcode) &&
+    !isProviderConfigured(providers.synthetic)
   )
 }
