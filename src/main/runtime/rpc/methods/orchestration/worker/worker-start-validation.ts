@@ -1,12 +1,15 @@
 import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { FederationAttachStartInput } from '../federation/federation-start-schema'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createWorkerLaunchReceipt,
-  resolveWorkerLaunchPreferences
+  readRecordedWorkerLaunchSelection,
+  resolveWorkerLaunchPreferences,
+  type OrchestrationWorkerLaunchSelection
 } from './worker-launch-preferences'
 import type { WorkerStartInput } from './worker-start-schema'
 
@@ -52,8 +55,9 @@ export function prepareLocalWorkerStart(args: {
   params: WorkerStartInput
   createsWorktree: boolean
   runtime: OrcaRuntimeService
+  db: OrchestrationDb
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
-  const { params, createsWorktree, runtime } = args
+  const { params, createsWorktree, runtime, db } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
   if (params.terminal && params.agent) {
     throw new OrchestrationError(
@@ -76,14 +80,34 @@ export function prepareLocalWorkerStart(args: {
       'Creation and setup options apply only to new-child or new-top-level worktrees.'
     )
   }
+  // Why: a retry that must recreate a terminal reuses the retried Dispatch's own recorded launch
+  // choice instead of forcing the caller to repeat --agent/--model/--effort; any flag passed wins.
+  const inherited =
+    !params.agent && !params.terminal
+      ? inheritedRetryWorkerLaunchSelection(db, params.retryOf)
+      : null
+  // Why: an effort belongs to its model's ladder, so only a different --model drops the recorded effort.
+  const inheritedEffort =
+    params.model && params.model !== inherited?.model ? undefined : inherited?.effort
   return resolveWorkerStartAgent({
     runtime,
     terminal: params.terminal,
-    agent: params.agent,
-    model: params.model,
-    effort: params.effort,
+    agent: params.agent ?? inherited?.agent ?? undefined,
+    model: params.model ?? inherited?.model ?? undefined,
+    effort: params.effort ?? inheritedEffort ?? undefined,
     missingAgentMessage: 'A configured --agent is required when worker-start creates a terminal.'
   })
+}
+
+function inheritedRetryWorkerLaunchSelection(
+  db: OrchestrationDb,
+  retryOf: string | undefined
+): OrchestrationWorkerLaunchSelection | null {
+  if (!retryOf) {
+    return null
+  }
+  const priorWorker = db.getWorkerDispatch(retryOf)
+  return priorWorker ? readRecordedWorkerLaunchSelection(priorWorker.start_options) : null
 }
 
 export function prepareFederationAttachmentWorkerStart(args: {

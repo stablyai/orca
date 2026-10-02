@@ -5,9 +5,11 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 
-type WorkerStartOptions = { terminal?: string; agent?: TuiAgent }
+type WorkerStartOptions = { terminal?: string; agent?: TuiAgent; model?: string; effort?: string }
 
-function isWorkerStartResult(value: unknown): value is { state: 'ready'; dispatchId: string } {
+export function isWorkerStartResult(
+  value: unknown
+): value is { state: 'ready'; dispatchId: string } {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -165,7 +167,9 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
     const result = await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
-      ...(options.terminal ? { terminal: options.terminal } : { agent: options.agent ?? 'codex' })
+      ...(options.terminal ? { terminal: options.terminal } : { agent: options.agent ?? 'codex' }),
+      ...(options.model ? { model: options.model } : {}),
+      ...(options.effort ? { effort: options.effort } : {})
     })
     if (!isWorkerStartResult(result)) {
       throw new Error('Expected worker-start to return a ready dispatch')

@@ -54,7 +54,7 @@ export async function startLocalWorker(args: {
   const coordinatorPane = coordinator?.paneKey ?? null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+  const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime, db })
 
   const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
     runtime,

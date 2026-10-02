@@ -5,6 +5,7 @@ import {
   assertWorkerLaunchPreferencesCreateTerminal,
   assertWorkerLaunchPreferencesRuntimeSupported,
   createPendingWorkerLaunchReceipt,
+  readRecordedWorkerLaunchSelection,
   resolveFederatedWorkerLaunchReceipt,
   resolveWorkerLaunchPreferences
 } from './worker-launch-preferences'
@@ -272,6 +273,27 @@ describe('orchestration worker launch preferences', () => {
         effort: 'e'.repeat(513)
       }).success
     ).toBe(false)
+  })
+
+  it('reads the requested agent/model/effort back from a recorded start_options JSON string', () => {
+    expect(
+      readRecordedWorkerLaunchSelection(
+        JSON.stringify({
+          launch: { requested: { agent: 'codex', model: 'gpt-5.6-sol', effort: 'high' } }
+        })
+      )
+    ).toEqual({ agent: 'codex', model: 'gpt-5.6-sol', effort: 'high' })
+  })
+
+  it('returns null for start_options with no recognized agent', () => {
+    expect(readRecordedWorkerLaunchSelection(JSON.stringify({}))).toBeNull()
+    expect(
+      readRecordedWorkerLaunchSelection(
+        JSON.stringify({ launch: { requested: { agent: 'not-a-real-agent' } } })
+      )
+    ).toBeNull()
+    expect(readRecordedWorkerLaunchSelection(JSON.stringify({ launch: null }))).toBeNull()
+    expect(readRecordedWorkerLaunchSelection('{not json')).toBeNull()
   })
 
   it('requires exactly one task identity', () => {

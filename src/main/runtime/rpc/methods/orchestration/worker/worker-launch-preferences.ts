@@ -6,6 +6,7 @@ import {
 } from '../../../../../../shared/agent-session-option-catalog'
 import { resolveAgentSessionOptionLaunch } from '../../../../../../shared/agent-session-option-launch'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
@@ -111,6 +112,39 @@ export function resolveWorkerLaunchPreferences(args: {
   return {
     preferences,
     receipt: createWorkerLaunchReceipt({ agent: args.agent, ...preferences })
+  }
+}
+
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function jsonText(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
+
+/** Reads a worker_dispatches.start_options JSON string back to its recorded `launch.requested`
+ *  selection, for a retry that inherits it. Returns null for anything not shaped like a receipt. */
+export function readRecordedWorkerLaunchSelection(
+  startOptions: string
+): OrchestrationWorkerLaunchSelection | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(startOptions)
+  } catch {
+    return null
+  }
+  const launch = isJsonRecord(parsed) ? parsed.launch : undefined
+  const requestedRaw = isJsonRecord(launch) ? launch.requested : undefined
+  const requested = isJsonRecord(requestedRaw) ? requestedRaw : undefined
+  const agent = requested?.agent
+  if (!isTuiAgent(agent)) {
+    return null
+  }
+  return {
+    agent,
+    model: jsonText(requested?.model),
+    effort: jsonText(requested?.effort)
   }
 }
 
