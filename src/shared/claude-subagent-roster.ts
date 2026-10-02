@@ -141,6 +141,24 @@ export function stopClaudeSubagent(roster: ClaudeSubagentRoster, id: string): vo
   tracked.state = 'idle'
 }
 
+/** Claude's `agents_killed` transcript record: every background agent running at `killedAt` was
+ *  killed, and no hook says so. Retire the working rows that started by then with SubagentStop
+ *  semantics (a one-shot leaves, a teammate-shaped id parks idle); a child started after the kill
+ *  survives. Returns the retired ids. */
+export function stopWorkingClaudeSubagentsStartedBy(
+  roster: ClaudeSubagentRoster,
+  killedAt: number
+): string[] {
+  const retired: string[] = []
+  for (const [id, tracked] of roster) {
+    if (tracked.state === 'working' && tracked.startedAt <= killedAt) {
+      stopClaudeSubagent(roster, id)
+      retired.push(id)
+    }
+  }
+  return retired
+}
+
 /** Fold a lead Stop's `background_tasks` into the lifecycle-tracked roster.
  *
  *  The list is authoritative for subagent-typed entries only: a running

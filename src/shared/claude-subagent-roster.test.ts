@@ -9,6 +9,7 @@ import {
   foldClaudeBackgroundTasksIntoRoster,
   idleClaudeTeammateByName,
   reapUnconfirmedRestoredClaudeSubagents,
+  stopWorkingClaudeSubagentsStartedBy,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
@@ -527,5 +528,38 @@ describe('restored-row liveness reap', () => {
     const roster = restored('aprobe1-6d3cb5b5')
     foldClaudeBackgroundTasksIntoRoster(roster, [task({ id: 'other', teammate: true })], 200)
     expect(roster.has('aprobe1-6d3cb5b5')).toBe(false)
+  })
+
+  // Claude's `agents_killed` transcript record names no ids (claude-idle-ctrl-c-bg-agent fixture);
+  // the retirement reuses SubagentStop semantics for every child running at the kill.
+  describe('stopWorkingClaudeSubagentsStartedBy', () => {
+    it('removes working one-shots, parks working teammates idle, and keeps idle rows', () => {
+      const roster: ClaudeSubagentRoster = new Map()
+      upsertWorkingClaudeSubagent(roster, 'a1', { agentType: 'general-purpose' }, 100)
+      upsertWorkingClaudeSubagent(roster, 'aprobe1-6d3cb5b5', { agentType: 'probe1' }, 100)
+      upsertWorkingClaudeSubagent(roster, 'arev-2f00', {}, 100)
+      idleClaudeTeammateByName(roster, 'rev')
+      expect(stopWorkingClaudeSubagentsStartedBy(roster, 100)).toEqual(['a1', 'aprobe1-6d3cb5b5'])
+      expect(roster.has('a1')).toBe(false)
+      expect(roster.get('aprobe1-6d3cb5b5')).toMatchObject({ state: 'idle' })
+      expect(roster.get('arev-2f00')).toMatchObject({ state: 'idle', confirmedTeammate: true })
+      expect(claudeRosterHasWorkingSubagent(roster)).toBe(false)
+    })
+
+    it('keeps a child that started after the kill', () => {
+      const roster: ClaudeSubagentRoster = new Map()
+      upsertWorkingClaudeSubagent(roster, 'a1', {}, 100)
+      upsertWorkingClaudeSubagent(roster, 'a2', {}, 250)
+      expect(stopWorkingClaudeSubagentsStartedBy(roster, 200)).toEqual(['a1'])
+      expect([...roster.keys()]).toEqual(['a2'])
+    })
+
+    it('retires nothing from an all-idle roster', () => {
+      const roster: ClaudeSubagentRoster = new Map()
+      upsertWorkingClaudeSubagent(roster, 'arev-2f00', {}, 100)
+      idleClaudeTeammateByName(roster, 'rev')
+      expect(stopWorkingClaudeSubagentsStartedBy(roster, 200)).toEqual([])
+      expect(roster.get('arev-2f00')).toMatchObject({ state: 'idle' })
+    })
   })
 })

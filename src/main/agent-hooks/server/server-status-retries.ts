@@ -1,12 +1,13 @@
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
+  hookTranscriptPollUpdate,
   shouldPollHookTranscript,
-  transcriptPollUpdate
+  transcriptPollAnchor
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { CodexSubagentPollScheduler } from '../../../shared/codex-subagent-poll-scheduler'
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -20,7 +21,7 @@ import { AgentHookServerStatusUpdate } from './server-status-update'
 type TranscriptPoll = {
   source: AgentHookSource
   body: unknown
-  original: EnrichedAgentHookEventPayload
+  original: AgentHookEventPayload
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
@@ -44,15 +45,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.state.claudeAgentsKilledCursorByPaneKey.delete(paneKey)
   }
 
   protected scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
-    original: EnrichedAgentHookEventPayload
+    original: AgentHookEventPayload
   ): void {
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'muse' && source !== 'claude') {
       return
     }
     this.transcriptPollScheduler.clear(original.paneKey)
@@ -64,21 +66,19 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
     const { source, body, original } = poll
-    // Keep the identity check at callback time: a newer event supersedes this
-    // payload even when its pane still has transcript children.
-    if (
-      paneKey !== original.paneKey ||
-      !this.server ||
-      this.state.lastStatusByPaneKey.get(original.paneKey) !== original
-    ) {
+    const anchor = transcriptPollAnchor(
+      source,
+      this.state.lastStatusByPaneKey.get(original.paneKey),
+      original
+    )
+    if (paneKey !== original.paneKey || !this.server || !anchor) {
       return
     }
-    const normalized = normalizeHookPayload(this.state, source, body, this.env)
-    if (!normalized) {
+    const update = hookTranscriptPollUpdate(this.state, source, body, anchor, this.env)
+    if (update === null) {
       return
     }
-    const update = transcriptPollUpdate(source, original, normalized)
-    const next = update ? this.applyNormalizedStatus(update) : original
+    const next = update ? this.applyNormalizedStatus(update) : anchor
     if (next) {
       this.scheduleTranscriptPoll(source, body, next)
     }

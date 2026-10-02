@@ -1,0 +1,16 @@
+{
+  "source_scenario": "idle-both",
+  "claude_version": "2.1.280 (Claude Code)",
+  "argv": [
+    "claude",
+    "--settings",
+    "/Users/uuuuuuuuuuuuu/orca-qa/idle-ctrlc-capture/settings.json",
+    "--dangerously-skip-permissions"
+  ],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-24",
+  "clock": "t is seconds since the first record; hook records keep the ps snapshot taken inside the hook",
+  "note": "Claude Code driven over a real PTY with every hook logged. A turn starts a background shell (sleep 600), the next turn launches a background Agent-tool subagent (async), and both Stops list them. ONE Ctrl+C at the idle prompt: the CLI kills the subagent's processes at once and paints 'All background agents stopped' (plus the quit hint); the shell survives. NO hook of any kind follows the keypress; the session transcript logs a system/agents_killed record that names no agent ids. The next typed turn's Stop inventory omits the subagent and still lists the shell. Scrubbed: username replaced by a same-length placeholder."
+}

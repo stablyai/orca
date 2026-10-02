@@ -1,0 +1,16 @@
+{
+  "source_scenario": "idle-draft",
+  "claude_version": "2.1.280 (Claude Code)",
+  "argv": [
+    "claude",
+    "--settings",
+    "/tmp/orca-claude-draft-capture/settings.json",
+    "--dangerously-skip-permissions"
+  ],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-24",
+  "clock": "t is seconds since the first record; hook records keep the ps snapshot taken inside the hook",
+  "note": "Real Claude Code 2.1.280 PTY capture with a background shell and background Agent-tool subagent. An unsent draft was typed, then ONE Ctrl+C killed the background agent while the shell survived; no hook fired in the watch window. A SECOND Ctrl+C left the surviving shell unchanged and also fired no hook. The session transcript recorded agents_killed. Process snapshots are retained on both cancel records. Scrubbed: username replaced by a same-length placeholder."
+}
