@@ -24,6 +24,13 @@ export type ClaudeLeadTurnState = {
   >
 }
 
+/** When the main agent's own turn last ended, while it has not started another. */
+export function mainAgentIdleSince(
+  record: Pick<ClaudeLeadTurnState, 'state' | 'stateStartedAt'> | undefined
+): number | undefined {
+  return record?.state === 'done' ? record.stateStartedAt : undefined
+}
+
 /** The Codex root's own record, folded with its roster into the combined `state`. A child's wait
  *  lives on the roster entry, never here, so this record is always the root's own truth. */
 export type CodexLeadTurnState = {

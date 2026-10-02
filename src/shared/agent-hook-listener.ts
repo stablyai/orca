@@ -23,6 +23,7 @@ import {
   resolveOpenCodeSharedServerEnvelope,
   trackOpenCodePaneLaunchToken
 } from './agent-hook-listener/opencode-session-registry'
+import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
@@ -165,6 +166,8 @@ export function normalizeHookPayload(
     if (!payload) {
       return null
     }
+    // Why: the process that would have been woken is gone.
+    state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
     return {
       paneKey,
       source,
@@ -245,9 +248,7 @@ export function normalizeHookPayload(
     toolAgentType: readString(hookPayloadRecord, 'agent_type'),
     ...(source === 'claude'
       ? {
-          claudeRunningNonAgentTask:
-            state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-            state.claudeActiveSessionCronPaneKeys.has(paneKey)
+          claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(state, paneKey)
         }
       : {}),
     ...(providerSession ? { providerSession } : {}),

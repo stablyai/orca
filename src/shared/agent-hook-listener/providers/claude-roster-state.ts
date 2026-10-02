@@ -12,13 +12,13 @@ import {
 } from '../../agent-lead-status-fold'
 import { agentChildWorkLivenessFromEvidence } from '../../agent-status-child-work-liveness'
 import {
-  claudeRosterHasWorkingSubagent,
   reapUnconfirmedRestoredClaudeSubagents,
   type ClaudeSubagentRoster
 } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
+import { claudePaneHoldEvidence } from './claude-pane-hold-evidence'
 
 /** Lead events that may re-anchor a pane's owning session. Allow-list, not a deny-list: a payload we
  *  can't attribute (unknown name, child event missing its agent_id) must void nothing. */
@@ -84,6 +84,8 @@ export function voidClaimsOfReplacedClaudeSession(
     return
   }
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+  // Why: the replaced conversation's notifications will never reach this one.
+  state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   if (!roster) {
     return
@@ -166,18 +168,17 @@ export function resolveClaudePaneStatus(
   paneKey: string,
   lead: Pick<ClaudeLeadTurnState, 'state'>
 ): ClaudePaneStatusResolution {
+  // Why: a task that stopped running is not over until Claude has told the main agent, which
+  // starts another main-agent turn; so an owed notification holds the pane like running work.
+  const held = claudePaneHoldEvidence(state, paneKey, lead)
   return foldAgentLeadStatus({
     leadState: lead.state,
     childWorkLiveness: agentChildWorkLivenessFromEvidence({
       // A child's permission wait displaces the main agent record itself (`waitingAgentId`,
       // `stateBeforeWait`) instead of living on the roster, so the roster never carries one.
       hasWaitingChildWork: false,
-      hasLiveAgentWork: claudeRosterHasWorkingSubagent(
-        state.claudeSubagentRosterByPaneKey.get(paneKey)
-      ),
-      hasLiveNonAgentWork:
-        state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-        state.claudeActiveSessionCronPaneKeys.has(paneKey)
+      hasLiveAgentWork: held.runningAgent || held.owedAgent,
+      hasLiveNonAgentWork: held.runningNonAgent || held.owedShell
     })
   })
 }
