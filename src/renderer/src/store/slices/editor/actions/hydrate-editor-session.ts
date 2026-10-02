@@ -16,6 +16,10 @@ import {
   LegacyHydratedEditorFileIndex,
   shouldHydrateWithOwnedEditorFileId
 } from '../file-ids/hydrated-editor-file-ids'
+import {
+  collectHydratedOrphanEditorFileIds,
+  isOrphanEditorFile
+} from '../file-ids/orphan-editor-file-ids'
 
 export function createHydrateEditorSession(
   set: EditorSet,
@@ -138,21 +142,49 @@ export function createHydrateEditorSession(
         // Why: transient diff/conflict surfaces aren't restored, so clear a stale "editor" marker and fall back to terminal.
         const nextActiveTabType =
           nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
+        const migratedTabsAndGroups = migrateHydratedEditorTabsAndGroups(
+          s,
+          editorFileIdMigrationsByWorktree
+        )
+        // `?? {}` because an editor-only store (tests, partial slices) has no tab map at all.
+        const nextTabsByWorktree =
+          migratedTabsAndGroups.unifiedTabsByWorktree ?? s.unifiedTabsByWorktree ?? {}
+        const orphanFileIdsByWorktree = collectHydratedOrphanEditorFileIds(
+          openFiles,
+          nextTabsByWorktree,
+          filteredActiveFileIdByWorktree,
+          editorDrafts
+        )
+        const survivingFiles =
+          orphanFileIdsByWorktree.size > 0
+            ? openFiles.filter((file) => !isOrphanEditorFile(orphanFileIdsByWorktree, file))
+            : openFiles
+        // Why by surviving id, not by orphan id: drafts and front-matter keys are keyed by id alone,
+        // and an id orphaned in one worktree can still name a live document in another.
+        const survivingFileIds = new Set(survivingFiles.map((file) => file.id))
+        const survivingIds = new Set(
+          [...usedOpenFileIds].filter((fileId) => survivingFileIds.has(fileId))
+        )
         const markdownFrontmatterVisible = resolveHydratedEditorFrontmatter(
           persistedMarkdownFrontmatterVisible,
-          usedOpenFileIds,
+          survivingIds,
           editorFileIdMigrationsByWorktree
         )
 
         return {
-          openFiles,
-          editorDrafts,
+          openFiles: survivingFiles,
+          editorDrafts:
+            survivingFiles.length === openFiles.length
+              ? editorDrafts
+              : Object.fromEntries(
+                  Object.entries(editorDrafts).filter(([fileId]) => survivingFileIds.has(fileId))
+                ),
           markdownFrontmatterVisible,
           activeFileId: nextActiveFileId,
           activeFileIdByWorktree: filteredActiveFileIdByWorktree,
           activeTabType: nextActiveTabType,
           activeTabTypeByWorktree: filteredActiveTabTypeByWorktree,
-          ...migrateHydratedEditorTabsAndGroups(s, editorFileIdMigrationsByWorktree)
+          ...migratedTabsAndGroups
         }
       })
     }
