@@ -633,6 +633,83 @@
       "demotionRule": "Keep experimental until soak; investigate owner and refresh regressions without weakening assertions or adding retries."
     },
     {
+      "id": "settings.repository-section-lifetime",
+      "title": "Repository settings search preserves matching section state",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "renderer-settings",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "Repository settings search",
+        "worktree hooks issue-command draft",
+        "section separators and ordering"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Actual RepositoryPane and RepositoryHooksSection issue-command form with a synthetic runtime-hooks bridge and store; local and ssh execution-host ids simulated. Git-project and folder-project shapes both exercised. No real host, Git binary or file write.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/RepositoryPane.tsx"
+      ],
+      "invariant": "A matching repository section keeps its identity and its uncommitted draft as preceding sections are filtered away, and a search edit never saves that draft behind the user. A section removed from search releases its owner, flushes the draft once and reloads when shown again.",
+      "oracle": "Editing the query while a section stays matched keeps the same textarea node, adds no issue-command read and issues no write. Blur still commits, a genuine hide still flushes the draft exactly once and reloads on reopen, separators and ordering follow the first visible section, and a folder project never mounts the Git hooks section.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/RepositoryPane.section-lifetime.test.tsx"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/settings/RepositoryPane.section-lifetime.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/settings/RepositoryPane.section-lifetime.test.tsx",
+          "assertions": [
+            "preserves a dirty issue-command draft without an incidental save while search matches",
+            "still flushes a dirty issue-command draft when the section really unmounts",
+            "commits a dirty issue-command draft on blur while the section stays matched",
+            "unmounts and reloads hooks after the section actually hides"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/RepositoryPane.section-lifetime.test.tsx",
+          "result": "passed",
+          "durationSeconds": 1.12,
+          "summary": "9 tests/1 suite pass after the shared SettingsSectionStack adoption. Original main remounts the hooks section on every query edit, so the identity, draft-retention and no-incidental-write cases fail while the genuine-hide, blur-commit, separator and folder-project controls pass."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused renderer-unit suite, p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local evidence only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Candidate 9 pass; original main fails the retained-identity, retained-draft and no-incidental-write cases and passes the four controls."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "One issue-command read and zero writes across a matched search, against one read and one draft write per keystroke before. On an SSH or runtime host each of those crossed the execution boundary. Section map now lives in the shared SettingsSectionStack; no poll, cache, listener or subprocess added."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "No real SSH, WSL or runtime host, Git binary or filesystem write exercised; execution-host ids are simulated and the bridge is synthetic.",
+        "Matched search no longer reloads the hooks snapshot; an issue command changed outside Orca while the section stays matched is not reconciled until a genuine hide/reopen, which was also true of any session that never touched the search box.",
+        "No packaged app latency, heap or native focus evidence; hidden Electron visual proof is separate from the gate."
+      ],
+      "promotionCriteria": [
+        "Retain the identity, draft, no-incidental-write, genuine-flush and reload oracles; obtain stable CI history and real host evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate lost drafts, incidental writes or missing flushes without weakening the identity or write-count assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",

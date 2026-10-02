@@ -7,7 +7,6 @@ import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
-import { Separator } from '../ui/separator'
 import { Trash2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -17,6 +16,7 @@ import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
@@ -412,16 +412,11 @@ export function RepositoryPane({
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
       <McpConfigSection key="mcp-configs" repo={repo} />
     ) : null
-  ].filter(Boolean)
+  ]
 
   return (
     <div ref={setRepositoryPaneRootRef} className="space-y-8">
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-8">
-          {index > 0 ? <Separator /> : null}
-          {section}
-        </div>
-      ))}
+      <SettingsSectionStack sections={visibleSections} spacing="group" />
     </div>
   )
 }
