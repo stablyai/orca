@@ -14,6 +14,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'element-index': '--element-index <n>   Element index from get-app-state',
   title: '--title <text>         Custom title for the terminal tab (omit to reset)',
   enter: '--enter                Append Enter after sending text',
+  external: '--external <mode>      Non-Orca worktree visibility: show|hide|inherit',
   force:
     '--force                Force worktree removal when supported; does not force branch deletion',
   focus: '--focus                Reveal the created terminal session in Orca',

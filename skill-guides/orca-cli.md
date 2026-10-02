@@ -74,6 +74,7 @@ ORCA repo list --json
 ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
+ORCA repo set-worktree-visibility --repo id:<repoId> --external show --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ORCA worktree list --repo id:<repoId> --json
 ORCA worktree ps --json
@@ -89,6 +90,11 @@ ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --js
 ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
+
+Use `repo set-worktree-visibility --external show` when plain Git worktrees are hidden by the
+repo's external-worktree policy. `hide` hides them again; `inherit` removes the repo override
+and follows the global default. This uses the running local or selected remote runtime and
+does not import, stop, or delete a worktree. Other visibility rules still apply.
 
 Selectors:
 
