@@ -129,6 +129,10 @@ export class ClaudeAccountService {
     return this.runtimeAuth.getRuntimeConfigDir(target)
   }
 
+  getRuntimeAuth(): ClaudeRuntimeAuthService {
+    return this.runtimeAuth
+  }
+
   private serializeMutation<T>(operation: () => Promise<T>): Promise<T> {
     const next = this.mutationQueue.then(operation, operation)
     this.mutationQueue = next.catch(() => {})

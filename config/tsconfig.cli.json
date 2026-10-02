@@ -3,6 +3,7 @@
   "include": [
     "../src/cli/**/*",
     "../src/shared/**/*",
+    "../src/types/**/*",
     "../src/main/agent-state-file-reader.ts",
     "../src/main/agent-hooks/grok-replay-guard.ts",
     "../src/main/claude/hook-script.ts",

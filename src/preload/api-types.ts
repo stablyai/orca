@@ -12,6 +12,7 @@ import type { AgentAwakeApi, AgentStatusApi } from './api/agent-status-api'
 import type {
   ClaudeUsageApi,
   CodexUsageApi,
+  ConsoleApi,
   MuseUsageApi,
   OpenCodeUsageApi,
   RateLimitsApi
@@ -141,6 +142,7 @@ export type PreloadApi = {
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
+  console: ConsoleApi
   minimaxCredentials: MinimaxCredentialsApi
   grokAccounts: GrokAccountsApi
   cursorAccounts: CursorAccountsApi
