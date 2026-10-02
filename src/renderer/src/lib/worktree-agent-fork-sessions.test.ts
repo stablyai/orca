@@ -203,4 +203,77 @@ describe('listForkableAgentSessions', () => {
       null
     ])
   })
+
+  it("ignores another agent's launch config left on the same pane", () => {
+    const codexConfig = { agentArgs: '', agentEnv: { CODEX_HOME: '/acct/codex' } }
+    const state = emptyState()
+    state.agentStatusByPaneKey = {
+      'tab-1:leaf': liveEntry('tab-1:leaf', { updatedAt: 200 })
+    }
+    state.sleepingAgentSessionsByPaneKey = {
+      'tab-1:leaf': sleepingRecord('tab-1:leaf', {
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'thread-old' },
+        updatedAt: 100,
+        launchConfig: codexConfig
+      })
+    }
+    state.agentLaunchConfigByPaneKey = {
+      'tab-1:leaf': {
+        launchConfig: codexConfig,
+        registeredAt: 1,
+        identity: { agentType: 'codex' }
+      }
+    }
+
+    const sessions = listForkableAgentSessions(state, 'wt-1')
+
+    expect(sessions).toEqual([
+      expect.objectContaining({ agent: 'claude', launchConfig: null }),
+      expect.objectContaining({ agent: 'codex', launchConfig: codexConfig })
+    ])
+  })
+
+  it('ignores a launch config registered for a different provider session', () => {
+    const state = emptyState()
+    state.agentStatusByPaneKey = { 'tab-1:leaf': liveEntry('tab-1:leaf') }
+    state.agentLaunchConfigByPaneKey = {
+      'tab-1:leaf': {
+        launchConfig: launchConfig('--other-session'),
+        registeredAt: 1,
+        identity: { agentType: 'claude', providerSession: { key: 'session_id', id: 'sess-old' } }
+      }
+    }
+
+    const [session] = listForkableAgentSessions(state, 'wt-1')
+
+    expect(session).toMatchObject({ paneKey: 'tab-1:leaf', launchConfig: null })
+  })
+
+  it('skips a sleeping record of another session and uses a matching registry entry', () => {
+    const registryConfig = launchConfig('--registry')
+    const state = emptyState()
+    state.agentStatusByPaneKey = { 'tab-1:leaf': liveEntry('tab-1:leaf') }
+    state.sleepingAgentSessionsByPaneKey = {
+      'tab-1:leaf': sleepingRecord('tab-1:leaf', {
+        worktreeId: 'wt-other',
+        providerSession: { key: 'session_id', id: 'sess-old' },
+        launchConfig: launchConfig('--old-session')
+      })
+    }
+    state.agentLaunchConfigByPaneKey = {
+      'tab-1:leaf': {
+        launchConfig: registryConfig,
+        registeredAt: 1,
+        identity: {
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'sess-tab-1:leaf' }
+        }
+      }
+    }
+
+    const [session] = listForkableAgentSessions(state, 'wt-1')
+
+    expect(session).toMatchObject({ paneKey: 'tab-1:leaf', launchConfig: registryConfig })
+  })
 })

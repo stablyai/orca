@@ -2,10 +2,11 @@ import {
   supportsNativeAgentFork,
   type NativeForkTuiAgent
 } from '../../../shared/agent-session-fork-argv'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig,
-  SleepingAgentSessionRecord
+import {
+  agentProviderSessionsEqual,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig,
+  type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type {
@@ -125,6 +126,35 @@ function isPreferred(candidate: Candidate, existing: Candidate | undefined): boo
   return candidate.lastActiveAt > existing.lastActiveAt
 }
 
+// Why: a pane that ran Claude then Codex keeps the other agent's config; forking with it runs the wrong CLI.
+function launchConfigForCandidate(
+  state: ForkableAgentSessionsState,
+  candidate: Candidate
+): SleepingAgentLaunchConfig | null {
+  const record = state.sleepingAgentSessionsByPaneKey[candidate.paneKey]
+  if (
+    record?.launchConfig &&
+    record.agent === candidate.agent &&
+    agentProviderSessionsEqual(candidate.agent, record.providerSession, candidate.providerSession)
+  ) {
+    return record.launchConfig
+  }
+  const registry = state.agentLaunchConfigByPaneKey[candidate.paneKey]
+  if (
+    registry &&
+    registry.identity.agentType === candidate.agent &&
+    (!registry.identity.providerSession ||
+      agentProviderSessionsEqual(
+        candidate.agent,
+        registry.identity.providerSession,
+        candidate.providerSession
+      ))
+  ) {
+    return registry.launchConfig
+  }
+  return null
+}
+
 export function listForkableAgentSessions(
   state: ForkableAgentSessionsState,
   worktreeId: string
@@ -137,9 +167,6 @@ export function listForkableAgentSessions(
   }
   return Array.from(byId.values(), (candidate) => ({
     ...candidate,
-    launchConfig:
-      state.sleepingAgentSessionsByPaneKey[candidate.paneKey]?.launchConfig ??
-      state.agentLaunchConfigByPaneKey[candidate.paneKey]?.launchConfig ??
-      null
+    launchConfig: launchConfigForCandidate(state, candidate)
   })).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
 }
