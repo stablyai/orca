@@ -19,6 +19,9 @@ export function registerGitHandlers(
   dispatcher.onRequest('git.unstage', (p) => handlers.changes.unstage(p))
   dispatcher.onRequest('git.bulkStage', (p) => handlers.changes.bulkStage(p))
   dispatcher.onRequest('git.bulkUnstage', (p) => handlers.changes.bulkUnstage(p))
+  dispatcher.onRequest('git.carryWorkingTreeChanges', (p) =>
+    handlers.carry.carryWorkingTreeChanges(p)
+  )
   dispatcher.onRequest('git.abortMerge', (p) => handlers.changes.abortMerge(p))
   dispatcher.onRequest('git.abortRebase', (p) => handlers.changes.abortRebase(p))
   dispatcher.onRequest('git.checkout', (p) => handlers.changes.checkout(p))

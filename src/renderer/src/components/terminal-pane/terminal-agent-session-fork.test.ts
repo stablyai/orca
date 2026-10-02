@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
-const mockLaunchAgentInNewTab = vi.fn()
-const mockActivateAndRevealWorktree = vi.fn()
-const mockCreateWorktree = vi.fn()
+const mockOpenModal = vi.fn()
 const mockToast = {
   error: vi.fn(),
   message: vi.fn(),
@@ -13,40 +11,47 @@ const mockToast = {
 const mockWriteClipboardText = vi.fn(async () => undefined)
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
-const store = {
-  activeRepoId: 'repo-1',
-  activeWorktreeId: 'wt-1',
-  projects: [] as {
-    id: string
-    sourceRepoIds: string[]
-    localWindowsRuntimePreference?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
-  }[],
-  repos: [] as { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[],
-  settings: {} as {
-    localWindowsRuntimeDefault?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
-  },
-  worktreesByRepo: {} as Record<
-    string,
-    { id: string; repoId: string; path?: string; projectId?: string }[]
-  >,
-  agentStatusByPaneKey: {} as Record<string, { agentType?: string }>,
-  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string | null }[]>,
-  getKnownWorktreeById: vi.fn(),
-  createWorktree: mockCreateWorktree
+type KnownWorktree = {
+  id: string
+  repoId: string
+  branch?: string
+  isArchived?: boolean
+  isBare?: boolean
+}
+
+type MockAgentStatus = {
+  agentType?: string
+  worktreeId?: string
+  updatedAt?: number
+  providerSession?: { key: 'session_id'; id: string }
+}
+
+type MockStore = {
+  repos: { id: string; kind?: 'git' | 'folder' }[]
+  agentStatusByPaneKey: Record<string, MockAgentStatus>
+  retainedAgentsByPaneKey: Record<string, never>
+  sleepingAgentSessionsByPaneKey: Record<string, never>
+  agentLaunchConfigByPaneKey: Record<string, never>
+  tabsByWorktree: Record<string, { id: string; launchAgent?: string | null }[]>
+  getKnownWorktreeById: ReturnType<typeof vi.fn<(id: string) => KnownWorktree | undefined>>
+  openModal: typeof mockOpenModal
+}
+
+const store: MockStore = {
+  repos: [],
+  agentStatusByPaneKey: {},
+  retainedAgentsByPaneKey: {},
+  sleepingAgentSessionsByPaneKey: {},
+  agentLaunchConfigByPaneKey: {},
+  tabsByWorktree: {},
+  getKnownWorktreeById: vi.fn<(id: string) => KnownWorktree | undefined>(),
+  openModal: mockOpenModal
 }
 
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => store
   }
-}))
-
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: mockLaunchAgentInNewTab
-}))
-
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mockActivateAndRevealWorktree
 }))
 
 vi.mock('sonner', () => ({
@@ -65,473 +70,182 @@ function makePane(capturedText: string): ManagedPane {
   } as unknown as ManagedPane
 }
 
-describe('forkAgentSessionFromPane', () => {
+function menuContext(worktreeId: string) {
+  return {
+    paneCwdRef: { current: new Map() },
+    tabId: 'tab-1',
+    worktreeId,
+    groupId: null,
+    fallbackCwd: '/repo',
+    onAgentSessionContinuationReady: vi.fn()
+  }
+}
+
+async function forkFromMenu(worktreeId: string, pane: ManagedPane | null): Promise<void> {
+  const { forkAgentSessionFromMenuPane } =
+    await import('./terminal-pane-menu-agent-session-actions')
+  forkAgentSessionFromMenuPane(menuContext(worktreeId), pane)
+}
+
+describe('forkAgentSessionFromMenuPane', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    store.activeRepoId = 'repo-1'
-    store.activeWorktreeId = 'wt-1'
-    store.projects = [
-      {
-        id: 'repo-1',
-        sourceRepoIds: ['repo-1']
-      }
-    ]
-    store.repos = [{ id: 'repo-1', kind: 'git' }]
-    store.settings = { localWindowsRuntimeDefault: { kind: 'windows-host' } }
-    store.worktreesByRepo = {
-      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo', projectId: 'repo-1' }]
-    }
+    store.repos = [{ id: 'repo', kind: 'git' }]
     store.agentStatusByPaneKey = {}
-    store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
+    store.tabsByWorktree = { 'repo::wt': [{ id: 'tab-1' }] }
     store.getKnownWorktreeById.mockReturnValue({
-      id: 'wt-1',
-      repoId: 'repo-1',
-      displayName: 'auth-feature',
+      id: 'repo::wt',
+      repoId: 'repo',
       branch: 'feature/auth'
     })
-    mockCreateWorktree.mockResolvedValue({
-      worktree: {
-        id: 'wt-fork'
-      }
-    })
-    mockLaunchAgentInNewTab.mockImplementation((args) => {
-      args.beforeSurfaceOpen?.({ kind: 'local-terminal' })
-      return {
-        surface: { kind: 'local-terminal', tabId: 'tab-2' },
-        startupPlan: {},
-        pasteDraftAfterLaunch: true
-      }
-    })
-    mockWriteClipboardText.mockResolvedValue(undefined)
-    vi.stubGlobal('window', {
-      api: {
-        ui: {
-          writeTerminalClipboardText: mockWriteClipboardText
-        },
-        platform: {
-          get: () => ({ platform: 'win32' })
-        }
+  })
+
+  it('opens the shared fork dialog with the pane session preselected and its transcript', async () => {
+    store.agentStatusByPaneKey = { [`tab-1:${LEAF_ID}`]: { agentType: 'claude' } }
+
+    await forkFromMenu('repo::wt', makePane('User: compare OAuth options'))
+
+    expect(mockOpenModal).toHaveBeenCalledTimes(1)
+    expect(mockOpenModal).toHaveBeenCalledWith('agent-session-fork', {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: `tab-1:${LEAF_ID}`,
+      transcript: {
+        agent: 'claude',
+        prompt: expect.stringContaining('User: compare OAuth options')
       }
     })
   })
 
-  it('creates a top-level workspace fork with a draft agent tab when the source agent is known', async () => {
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
-    }
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+  it('falls back to the tab launch agent for the transcript', async () => {
+    store.tabsByWorktree = { 'repo::wt': [{ id: 'tab-1', launchAgent: 'codex' }] }
 
-    await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: 'group-1'
-    })
+    await forkFromMenu('repo::wt', makePane('User: hi'))
 
-    expect(mockCreateWorktree).toHaveBeenCalledWith(
-      'repo-1',
-      'auth-feature-fork',
-      'feature/auth',
-      'inherit',
-      undefined,
-      'terminal_context_menu',
-      'Fork of auth-feature',
-      undefined,
-      undefined,
-      undefined,
-      'codex'
-    )
-
-    expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'codex',
-        worktreeId: 'wt-fork',
-        prompt: expect.stringContaining('User: compare OAuth options'),
-        promptDelivery: 'draft',
-        launchSource: 'terminal_context_menu'
-      })
-    )
-    expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-      sidebarRevealBehavior: 'auto'
-    })
-    expect(mockToast.success).toHaveBeenCalledWith(
-      'Top-level session fork opened in a new workspace'
+    expect(mockOpenModal).toHaveBeenCalledWith(
+      'agent-session-fork',
+      expect.objectContaining({ transcript: expect.objectContaining({ agent: 'codex' }) })
     )
   })
 
-  it('announces the provisional chat without waiting for structured settlement', async () => {
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
-    }
-    const result = {
-      surface: {
-        kind: 'local-agent-session',
-        tabId: 'structured-agent-session-session-1',
-        sessionId: 'session-1'
-      },
-      startupPlan: {},
-      pasteDraftAfterLaunch: false,
-      structuredSettlement: new Promise(() => {})
-    }
-    mockLaunchAgentInNewTab.mockImplementationOnce(
-      (args: {
-        beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
-      }) => {
-        args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
-        return result
-      }
-    )
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+  it('keeps the context without an agent when the pane agent is unknown', async () => {
+    await forkFromMenu('repo::wt', makePane('Assistant: here is the current plan'))
 
-    await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: 'group-1'
+    expect(mockOpenModal).toHaveBeenCalledWith('agent-session-fork', {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: `tab-1:${LEAF_ID}`,
+      transcript: {
+        agent: null,
+        prompt: expect.stringContaining('Assistant: here is the current plan')
+      }
     })
-    expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-      sidebarRevealBehavior: 'auto',
-      providesInitialSurface: true
+  })
+
+  it('opens the dialog on a native session even without captured context', async () => {
+    store.agentStatusByPaneKey = {
+      [`tab-1:${LEAF_ID}`]: {
+        agentType: 'claude',
+        worktreeId: 'repo::wt',
+        updatedAt: 1,
+        providerSession: { key: 'session_id', id: 'sess-1' }
+      }
+    }
+
+    await forkFromMenu('repo::wt', makePane('\x1b[0m\r\n\x1bc\x07'))
+
+    expect(mockToast.error).not.toHaveBeenCalled()
+    expect(mockOpenModal).toHaveBeenCalledWith('agent-session-fork', {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: `tab-1:${LEAF_ID}`,
+      transcript: null
     })
-    expect(mockToast.success).toHaveBeenCalledWith(
-      'Top-level session fork opened in a new workspace'
+  })
+
+  it('still opens a branch-only dialog when the pane agent cannot fork natively', async () => {
+    store.agentStatusByPaneKey = {
+      [`tab-1:${LEAF_ID}`]: {
+        agentType: 'pi',
+        worktreeId: 'repo::wt',
+        updatedAt: 1,
+        providerSession: { key: 'session_id', id: 'sess-1' }
+      }
+    }
+
+    await forkFromMenu('repo::wt', makePane('\x1b[0m\r\n\x1bc\x07'))
+
+    expect(mockToast.error).not.toHaveBeenCalled()
+    expect(mockOpenModal).toHaveBeenCalledWith(
+      'agent-session-fork',
+      expect.objectContaining({ transcript: null })
     )
+  })
+
+  it('does nothing without a pane', async () => {
+    await forkFromMenu('repo::wt', null)
+
+    expect(mockOpenModal).not.toHaveBeenCalled()
+    expect(mockToast.error).not.toHaveBeenCalled()
+  })
+
+  it('opens a branch-only dialog for an empty terminal', async () => {
+    const pane = makePane('\x1b[0m\r\n\x1bc\x07')
+
+    await forkFromMenu('repo::wt', pane)
+
+    expect(mockToast.error).not.toHaveBeenCalled()
+    expect(mockOpenModal).toHaveBeenCalledWith('agent-session-fork', {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: `tab-1:${LEAF_ID}`,
+      transcript: null
+    })
   })
 
   it.each([
-    ['failed', { kind: 'failed', error: new Error('boom') }, true],
-    ['cancelled', { kind: 'cancelled', sessionId: 'session-1' }, true],
-    ['visibility-unknown', { kind: 'visibility-unknown', sessionId: 'session-1' }, false]
-  ])(
-    'keeps the provisional chat open on a later %s structured settlement',
-    async (_kind, settlement, _keepsOpen) => {
-      store.agentStatusByPaneKey = {
-        [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
-      }
-      const result = {
-        surface: {
-          kind: 'local-agent-session',
-          tabId: 'structured-agent-session-session-1',
-          sessionId: 'session-1'
-        },
-        startupPlan: {},
-        pasteDraftAfterLaunch: false,
-        structuredSettlement: Promise.resolve(settlement)
-      }
-      mockLaunchAgentInNewTab.mockImplementationOnce(
-        (args: {
-          beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
-        }) => {
-          args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
-          return result
-        }
-      )
-      const { startAgentSessionFork, prepareAgentSessionForkFromPane } =
-        await import('./terminal-agent-session-fork')
-
-      const prepared = prepareAgentSessionForkFromPane({
-        pane: makePane('User: compare OAuth options'),
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        groupId: null
-      })
-      // Why: the worktree already exists; a false return would keep the dialog open for a second fork.
-      await expect(startAgentSessionFork(prepared!)).resolves.toBe(true)
-      expect(mockToast.success).toHaveBeenCalledWith(
-        'Top-level session fork opened in a new workspace'
-      )
-      expect(mockWriteClipboardText).not.toHaveBeenCalled()
-      expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-        sidebarRevealBehavior: 'auto',
-        providesInitialSurface: true
-      })
-    }
-  )
-
-  it('uses Linux startup quoting for SSH workspaces', async () => {
-    store.repos = [{ id: 'repo-1', kind: 'git', connectionId: 'ssh-1' }]
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
-    }
-    mockCreateWorktree.mockResolvedValueOnce({
-      worktree: {
-        id: 'wt-fork',
-        path: '/home/u/repo/auth-feature-fork'
-      }
-    })
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'codex',
-        worktreeId: 'wt-fork',
-        launchPlatform: 'linux'
-      })
-    )
-  })
-
-  it('uses Linux startup quoting for WSL workspaces', async () => {
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'pi' }
-    }
-    mockCreateWorktree.mockResolvedValueOnce({
-      worktree: {
-        id: 'wt-fork',
-        path: '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo\\auth-feature-fork'
-      }
-    })
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'pi',
-        worktreeId: 'wt-fork',
-        launchPlatform: 'linux'
-      })
-    )
-  })
-
-  it('uses Linux startup quoting when a Windows-path project is forced to WSL', async () => {
-    store.projects = [
-      {
-        id: 'repo-1',
-        sourceRepoIds: ['repo-1'],
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      }
-    ]
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'pi' }
-    }
-    mockCreateWorktree.mockResolvedValueOnce({
-      worktree: {
-        id: 'wt-fork',
-        path: 'C:\\repo\\auth-feature-fork'
-      }
-    })
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'pi',
-        worktreeId: 'wt-fork',
-        launchPlatform: 'linux'
-      })
-    )
-  })
-
-  it('creates a top-level workspace fork and copies context when the source agent cannot be resolved', async () => {
-    const pane = makePane('Assistant: here is the current plan')
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockCreateWorktree).toHaveBeenCalledWith(
-      'repo-1',
-      'auth-feature-fork',
-      'feature/auth',
-      'inherit',
-      undefined,
-      'terminal_context_menu',
-      'Fork of auth-feature',
-      undefined,
-      undefined,
-      undefined,
-      undefined
-    )
-    expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-      sidebarRevealBehavior: 'auto'
-    })
-    expect(mockWriteClipboardText).toHaveBeenCalledWith(
-      expect.stringContaining('Assistant: here is the current plan')
-    )
-    expect(mockToast.message).toHaveBeenCalledWith(
-      'Fork context copied. Launch an agent and paste it to start the fork.'
-    )
-    expect(pane.terminal.focus).toHaveBeenCalled()
-  })
-
-  it('keeps the fork dialog path open when the source workspace has no git branch', async () => {
+    ['has no branch', { branch: '' }, 'repo::wt'],
+    ['is archived', { isArchived: true }, 'repo::wt'],
+    ['is bare', { isBare: true }, 'repo::wt'],
+    ['is a floating terminal', {}, FLOATING_TERMINAL_WORKTREE_ID]
+  ])('does not open the dialog when the source workspace %s', async (_label, override, id) => {
     store.getKnownWorktreeById.mockReturnValue({
-      id: 'wt-1',
-      repoId: 'repo-1',
-      displayName: 'scratch',
-      branch: ''
-    })
-    const pane = makePane('User: summarize this scratch plan')
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockCreateWorktree).not.toHaveBeenCalled()
-    expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mockWriteClipboardText).not.toHaveBeenCalled()
-    expect(mockToast.error).toHaveBeenCalledWith(
-      'This workspace cannot be forked into a git worktree.'
-    )
-  })
-
-  it.each([
-    ['archived', { isArchived: true }],
-    ['bare', { isBare: true }]
-  ])('does not create a worktree from an %s source workspace', async (_label, override) => {
-    store.getKnownWorktreeById.mockReturnValue({
-      id: 'wt-1',
-      repoId: 'repo-1',
-      displayName: 'auth-feature',
+      id,
+      repoId: 'repo',
       branch: 'feature/auth',
       ...override
     })
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+    const pane = makePane('User: fork this')
 
-    await forkAgentSessionFromPane({
-      pane: makePane('User: fork this blocked workspace'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
+    await forkFromMenu(id, pane)
 
-    expect(mockCreateWorktree).not.toHaveBeenCalled()
-    expect(mockWriteClipboardText).not.toHaveBeenCalled()
+    expect(mockOpenModal).not.toHaveBeenCalled()
     expect(mockToast.error).toHaveBeenCalledWith(
       'This workspace cannot be forked into a git worktree.'
     )
-  })
-
-  it('does not create a worktree from a folder-only source workspace', async () => {
-    store.repos = [{ id: 'repo-1', kind: 'folder' }]
-    store.getKnownWorktreeById.mockReturnValue({
-      id: 'wt-1',
-      repoId: 'repo-1',
-      displayName: 'folder-project',
-      branch: 'feature/auth'
-    })
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane: makePane('User: fork this folder workspace'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockCreateWorktree).not.toHaveBeenCalled()
-    expect(mockWriteClipboardText).not.toHaveBeenCalled()
-    expect(mockToast.error).toHaveBeenCalledWith(
-      'This workspace cannot be forked into a git worktree.'
-    )
-  })
-
-  it('does not create a worktree from a floating terminal workspace', async () => {
-    store.getKnownWorktreeById.mockReturnValue({
-      id: FLOATING_TERMINAL_WORKTREE_ID,
-      repoId: 'repo-1',
-      displayName: 'Floating',
-      branch: 'feature/auth'
-    })
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane: makePane('User: fork this floating terminal'),
-      tabId: 'tab-1',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      groupId: null
-    })
-
-    expect(mockCreateWorktree).not.toHaveBeenCalled()
-    expect(mockWriteClipboardText).not.toHaveBeenCalled()
-    expect(mockToast.error).toHaveBeenCalledWith(
-      'This workspace cannot be forked into a git worktree.'
-    )
-  })
-
-  it('keeps context available when workspace creation fails', async () => {
-    mockCreateWorktree.mockRejectedValueOnce(new Error('path already exists'))
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane: makePane('User: carry this context forward'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mockWriteClipboardText).not.toHaveBeenCalled()
-    expect(mockToast.error).toHaveBeenCalledWith('path already exists')
-  })
-
-  it('copies context when the detected agent cannot queue a startup plan', async () => {
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
-    }
-    mockLaunchAgentInNewTab.mockReturnValueOnce(null)
-    const pane = makePane('Assistant: current implementation notes')
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockCreateWorktree).toHaveBeenCalled()
-    expect(mockLaunchAgentInNewTab).toHaveBeenCalled()
-    expect(mockWriteClipboardText).toHaveBeenCalledWith(
-      expect.stringContaining('Assistant: current implementation notes')
-    )
-    expect(mockToast.message).toHaveBeenCalledWith(
-      'Fork context copied. Launch an agent and paste it to start the fork.'
-    )
-  })
-
-  it('surfaces clipboard failures instead of closing the fallback path silently', async () => {
-    mockWriteClipboardText.mockRejectedValueOnce(new Error('clipboard denied'))
-    const pane = makePane('Assistant: copy fallback context')
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mockToast.error).toHaveBeenCalledWith('clipboard denied')
     expect(pane.terminal.focus).toHaveBeenCalled()
+  })
+
+  it('does not open the dialog for a folder-only source workspace', async () => {
+    store.repos = [{ id: 'repo', kind: 'folder' }]
+
+    await forkFromMenu('repo::wt', makePane('User: fork this'))
+
+    expect(mockOpenModal).not.toHaveBeenCalled()
+    expect(mockToast.error).toHaveBeenCalledWith(
+      'This workspace cannot be forked into a git worktree.'
+    )
+  })
+
+  it('does not open the dialog when the source workspace is unknown', async () => {
+    store.getKnownWorktreeById.mockReturnValue(undefined)
+
+    await forkFromMenu('repo::wt', makePane('User: fork this'))
+
+    expect(mockOpenModal).not.toHaveBeenCalled()
+    expect(mockToast.error).toHaveBeenCalledWith(
+      'Could not find the source workspace for this fork.'
+    )
   })
 })
 

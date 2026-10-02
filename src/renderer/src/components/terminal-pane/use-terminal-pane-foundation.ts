@@ -11,7 +11,6 @@ import type { SearchState } from './keyboard-handlers'
 import type { CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 import type { TerminalLinkActionRequest } from './terminal-link-action-request'
 import { closeTerminalLinkActionRequest } from './terminal-link-action-request'
-import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { useDaemonActions } from '@/components/shared/useDaemonActions'
@@ -131,7 +130,6 @@ export function useTerminalPaneFoundation(
     undefined
   )
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
-  const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
   const [agentSessionContinuation, setAgentSessionContinuation] =
     useState<AgentSessionContinuationRequest | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
@@ -224,8 +222,6 @@ export function useTerminalPaneFoundation(
     setTabWideAgentHintLeafId,
     quickCommandDraft,
     setQuickCommandDraft,
-    agentSessionFork,
-    setAgentSessionFork,
     agentSessionContinuation,
     setAgentSessionContinuation,
     terminalError,

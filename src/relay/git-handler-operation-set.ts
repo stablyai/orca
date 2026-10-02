@@ -1,6 +1,7 @@
 import type { GitHandlerOperationHost } from './git-handler-operation-context'
 import { GitHandlerReadOperations } from './git-handler-read-operations'
 import { GitHandlerWorktreeChangeOperations } from './git-handler-worktree-change-operations'
+import { GitHandlerWorkingTreeCarryOperations } from './git-handler-working-tree-carry'
 import { GitHandlerDiscardOperations } from './git-handler-discard-operations'
 import { GitHandlerComparisonOperations } from './git-handler-comparison-operations'
 import { GitHandlerFetchOperations } from './git-handler-fetch-operations'
@@ -12,6 +13,7 @@ import { GitHandlerWorktreeOperations } from './git-handler-worktree-operations'
 export function createGitHandlerOperationSet(host: GitHandlerOperationHost) {
   const read = new GitHandlerReadOperations(host)
   const changes = new GitHandlerWorktreeChangeOperations(host)
+  const carry = new GitHandlerWorkingTreeCarryOperations(host)
   const discard = new GitHandlerDiscardOperations(host)
   const comparison = new GitHandlerComparisonOperations(host)
   const fetch = new GitHandlerFetchOperations(host)
@@ -23,6 +25,7 @@ export function createGitHandlerOperationSet(host: GitHandlerOperationHost) {
   return {
     read,
     changes,
+    carry,
     discard,
     comparison,
     fetch,

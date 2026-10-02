@@ -4,6 +4,7 @@ import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
   GitBranchCompare,
   GitBulkPaths,
+  GitCarryWorkingTreeChanges,
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
@@ -190,6 +191,12 @@ export const GIT_METHODS = [
     params: GitBulkPaths,
     handler: async (params, { runtime }) =>
       runtime.bulkStageRuntimeGitPaths(params.worktree, params.filePaths)
+  }),
+  defineMethod({
+    name: 'git.carryWorkingTreeChanges',
+    params: GitCarryWorkingTreeChanges,
+    handler: async (params, { runtime }) =>
+      runtime.carryRuntimeWorkingTreeChanges(params.sourceWorktree, params.targetWorktree)
   }),
   defineMethod({
     name: 'git.unstage',

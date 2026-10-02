@@ -3,6 +3,7 @@ import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../share
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { WorkingTreeCarryResult } from '../../shared/working-tree-change-carry'
 import type { PreloadApi } from '../api-types'
 
 export const gitApi = {
@@ -165,6 +166,11 @@ export const gitApi = {
     filePaths: string[]
     connectionId?: string
   }): Promise<void> => ipcRenderer.invoke('git:bulkStage', args),
+  carryWorkingTreeChanges: (args: {
+    sourceWorktreePath: string
+    targetWorktreePath: string
+    connectionId?: string
+  }): Promise<WorkingTreeCarryResult> => ipcRenderer.invoke('git:carryWorkingTreeChanges', args),
   unstage: (args: {
     worktreePath: string
     filePath: string

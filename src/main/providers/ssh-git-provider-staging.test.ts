@@ -1,4 +1,8 @@
 import { describe, expect, it, beforeEach } from 'vitest'
+import {
+  createSshDisposalError,
+  SSH_MUX_REQUEST_TIMEOUT_CODE
+} from '../ssh/ssh-channel-multiplexer'
 import { SshGitProvider } from './ssh-git-provider'
 import { createMockMux, type MockMultiplexer } from './ssh-git-provider-test-harness'
 
@@ -69,6 +73,61 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('git.bulkDiscard', {
       worktreePath: '/home/user/repo',
       filePaths: ['a.ts', 'b.ts']
+    })
+  })
+
+  describe('carryWorkingTreeChanges', () => {
+    it('sends git.carryWorkingTreeChanges with a 120s timeout and normalizes the reply', async () => {
+      mux.request.mockResolvedValue({ ok: true, trackedChanges: true, untrackedCopied: 2 })
+
+      const result = await provider.carryWorkingTreeChanges('/home/user/repo', '/home/user/child')
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'git.carryWorkingTreeChanges',
+        { sourceWorktreePath: '/home/user/repo', targetWorktreePath: '/home/user/child' },
+        { timeoutMs: 120_000 }
+      )
+      expect(result).toEqual({ ok: true, trackedChanges: true, untrackedCopied: 2 })
+    })
+
+    it('reports a possibly-applied carry after a request timeout', async () => {
+      const timeoutError = Object.assign(
+        new Error('Request "git.carryWorkingTreeChanges" timed out'),
+        {
+          code: SSH_MUX_REQUEST_TIMEOUT_CODE
+        }
+      )
+      mux.request.mockRejectedValue(timeoutError)
+
+      const result = await provider.carryWorkingTreeChanges('/home/user/repo', '/home/user/child')
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'partially_applied',
+        detail: timeoutError.message
+      })
+    })
+
+    it('reports a possibly-applied carry after the connection is lost', async () => {
+      const lostError = createSshDisposalError('connection_lost')
+      mux.request.mockRejectedValue(lostError)
+
+      const result = await provider.carryWorkingTreeChanges('/home/user/repo', '/home/user/child')
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'partially_applied',
+        detail: lostError.message
+      })
+    })
+
+    it('rethrows a verifiable error unchanged', async () => {
+      const ordinaryError = new Error('boom')
+      mux.request.mockRejectedValue(ordinaryError)
+
+      await expect(
+        provider.carryWorkingTreeChanges('/home/user/repo', '/home/user/child')
+      ).rejects.toThrow('boom')
     })
   })
 })

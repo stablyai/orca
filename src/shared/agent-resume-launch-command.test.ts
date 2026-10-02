@@ -578,3 +578,53 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
   })
 })
+
+describe('buildAgentResumeStartupPlan fork mode', () => {
+  it('forks Claude with the fork selector appended once', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--resume stale-session --model sonnet',
+      platform: 'linux',
+      mode: 'fork'
+    })
+    expect(plan?.launchCommand).toBe(
+      `claude '--model' 'sonnet' '--resume' '${SESSION_ID}' '--fork-session'`
+    )
+  })
+
+  it('forks Codex with the fork subcommand and shell-ready delivery', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session-1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      mode: 'fork'
+    })
+    expect(plan?.launchCommand).toBe(`codex 'fork' '-c' 'tui.resume_cwd=current' 'codex-session-1'`)
+    expect(plan?.startupCommandDelivery).toBe('shell-ready')
+  })
+
+  it('returns null when the agent has no native fork', () => {
+    expect(
+      buildAgentResumeStartupPlan({
+        agent: 'gemini',
+        providerSession: { key: 'session_id', id: 'g-1' },
+        cmdOverrides: {},
+        platform: 'linux',
+        mode: 'fork'
+      })
+    ).toBeNull()
+  })
+
+  it('keeps resume as the default mode', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+    expect(plan?.launchCommand).not.toContain('--fork-session')
+  })
+})

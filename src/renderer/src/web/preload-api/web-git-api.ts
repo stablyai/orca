@@ -2,6 +2,7 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime-environment-call'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
+import { carryWorkingTreeChangesOverRuntime } from './web-git-carry-api'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
@@ -243,6 +244,8 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
     bulkStage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkStage', worktreePath, filePaths),
+    carryWorkingTreeChanges: async ({ sourceWorktreePath, targetWorktreePath }) =>
+      carryWorkingTreeChangesOverRuntime(sourceWorktreePath, targetWorktreePath),
     unstage: async ({ worktreePath, filePath }) =>
       mutateGitPath('git.unstage', worktreePath, filePath),
     bulkUnstage: async ({ worktreePath, filePaths }) =>

@@ -28,7 +28,7 @@ export type ResumeSleepingAgentSessionsOptions = {
   onSessionLaunched?: (tabId: string) => void
 }
 
-function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
+export function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
@@ -42,7 +42,7 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
   })
 }
 
-function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
+export function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
   const state = useAppStore.getState()
   const termIds = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
   const editorIds = state.openFiles

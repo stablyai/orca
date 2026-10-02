@@ -43,6 +43,7 @@ export function CreateFromPicker({
   triggerClassName,
   compact = false,
   readOnly = false,
+  ariaLabelledBy,
   onValueChange,
   onSetDefault
 }: {
@@ -53,6 +54,8 @@ export function CreateFromPicker({
   triggerClassName?: string
   compact?: boolean
   readOnly?: boolean
+  /** Names the trigger from a visible label, e.g. a form field's own "Start from" label. */
+  ariaLabelledBy?: string
   onValueChange: (baseBranch: string) => void
   onSetDefault?: (baseBranch: string) => void | Promise<void>
 }): React.JSX.Element {
@@ -260,6 +263,7 @@ export function CreateFromPicker({
         role="combobox"
         aria-expanded={open}
         aria-controls={listId}
+        aria-labelledby={ariaLabelledBy}
         aria-label={translate(
           'auto.components.automations.CreateFromPicker.dd3841b442',
           'Branch from'
@@ -280,6 +284,7 @@ export function CreateFromPicker({
       variant="outline"
       role="combobox"
       aria-expanded={open}
+      aria-labelledby={ariaLabelledBy}
       className={cn('h-9 w-full justify-between px-3 text-sm font-normal', triggerClassName)}
     >
       <span className="flex min-w-0 items-center gap-1.5">

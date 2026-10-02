@@ -4,6 +4,7 @@ import type { GitPushTarget } from '../../shared/worktree/types'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import type { SourceControlAiSettings } from '../../shared/source-control-ai-types'
+import type { WorkingTreeCarryResult } from '../../shared/working-tree-change-carry'
 
 export type GitOperationApi = {
   appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>
@@ -102,6 +103,11 @@ export type GitOperationApi = {
     filePaths: string[]
     connectionId?: string
   }) => Promise<void>
+  carryWorkingTreeChanges: (args: {
+    sourceWorktreePath: string
+    targetWorktreePath: string
+    connectionId?: string
+  }) => Promise<WorkingTreeCarryResult>
   unstage: (args: {
     worktreePath: string
     filePath: string

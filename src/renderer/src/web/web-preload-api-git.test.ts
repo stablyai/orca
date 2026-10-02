@@ -219,4 +219,73 @@ describe('web git preload API', () => {
       }
     })
   })
+
+  it('carries changes between two worktrees on the runtime host by selector', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const makeWorktree = (id: string, path: string) => ({
+      id,
+      repoId: 'repo-1',
+      path,
+      head: 'abc123',
+      branch: `refs/heads/${id}`,
+      isBare: false,
+      isMainWorktree: id === 'wt-1',
+      displayName: id,
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      workspaceStatus: 'todo'
+    })
+    const worktrees = [
+      makeWorktree('wt-1', '/workspace/repo'),
+      makeWorktree('wt-2', '/workspace/repo-child')
+    ]
+    const results: Record<string, unknown> = {
+      'status.get': { capabilities: ['git.carry-working-tree-changes.v1'] },
+      'repo.list': { repos: [{ id: 'repo-1' }] },
+      'worktree.detectedList': { repoId: 'repo-1', authoritative: true, worktrees },
+      'git.carryWorkingTreeChanges': { ok: true, trackedChanges: true, untrackedCopied: 3 }
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: results[method],
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.git.carryWorkingTreeChanges({
+        sourceWorktreePath: '/workspace/repo',
+        targetWorktreePath: '/workspace/repo-child'
+      })
+    ).resolves.toEqual({ ok: true, trackedChanges: true, untrackedCopied: 3 })
+    expect(runtimeCalls.filter((call) => call.method === 'git.carryWorkingTreeChanges')).toEqual([
+      {
+        method: 'git.carryWorkingTreeChanges',
+        params: { sourceWorktree: 'id:wt-1', targetWorktree: 'id:wt-2' }
+      }
+    ])
+  })
 })

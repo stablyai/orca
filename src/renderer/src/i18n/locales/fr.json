@@ -3147,15 +3147,6 @@
             "d9f3c6e2a4": "Le clavier de l'ordinateur est en pause. Reprenez ce terminal pour taper ici, reprenez tous les terminaux contrôlés par votre téléphone, ou réduisez pour continuer à observer.",
             "a6b1d8f3e2": "Votre session téléphone est terminée. Restaurez ce terminal à la taille bureau, ou tous les terminaux que votre téléphone a laissés en taille téléphone."
           },
-          "TerminalAgentSessionForkDialog": {
-            "17fc841e59": "Copier le contexte",
-            "0c8a8629b1": "Le fork apparaît comme son propre espace de travail, et non comme un enfant imbriqué. Le nouvel agent reçoit une transcription limitée sous forme de brouillon modifiable.",
-            "620461df22": "Fork de premier niveau",
-            "619b5a35d2": "Créer un fork de espace de travail au premier niveau et démarrer un nouvel onglet d'agent avec le contexte capturé.",
-            "64e292e8e3": "Forker la session d'agent",
-            "9d25de2920": "Créer un fork",
-            "2b10412cfc": "Création..."
-          },
           "TerminalContextMenu": {
             "b4cdd9314e": "Effacer l'écran",
             "resetTerminal": "Réinitialiser le terminal",
@@ -3285,11 +3276,8 @@
               "session": {
                 "fork": {
                   "2317900211": "Échec de la copie du contexte du fork.",
-                  "88e34d00eb": "Fork de session de premier niveau ouvert dans un nouveau espace de travail",
-                  "fd3d12a1e1": "Échec de la création de l'espace de travail fork.",
                   "38e41edc6e": "Cet espace de travail ne peut pas être forké en worktree Git.",
                   "f867385bb5": "Impossible de trouver l'espace de travail source de ce fork.",
-                  "046e8d853c": "Aucun contexte de terminal à forker",
                   "c00421d320": "Contexte du fork copié. Lancez un agent et collez-le pour démarrer le fork.",
                   "f62b40e2c7": "Aucun contexte de terminal à copier",
                   "373a3103e7": "Contexte copié",
@@ -18270,6 +18258,57 @@
     },
     "agentChildRow": {
       "ended": "Terminé"
+    },
+    "agentSessionFork": {
+      "startFromHelpCommit": "Par défaut : le commit actuel ({{commit}}).",
+      "startFromHelp": "Par défaut : le commit actuel de {{branch}}.",
+      "currentCommit": "Commit actuel",
+      "advanced": "Avancé",
+      "startFrom": "Partir de",
+      "useParentCommit": "Partir du commit de {{workspace}}",
+      "stage": {
+        "preparing": "Préparation…",
+        "creating": "Création de l'espace de travail…",
+        "carrying": "Copie des modifications…",
+        "launching": "Démarrage de l'agent…"
+      },
+      "carryOtherBase": "Disponible uniquement en partant du commit actuel de {{workspace}}.",
+      "carryUnsupported": "Cet hôte ne permet pas d'apporter les modifications.",
+      "carryStagingNote": "L'indexation n'est pas conservée.",
+      "title": "Forker la session d'agent",
+      "descriptionNoAgent": "Démarrez une nouvelle branche à partir de {{workspace}}.",
+      "description": "Démarrez une nouvelle branche à partir de {{workspace}} et poursuivez-y la conversation.",
+      "name": "Nom",
+      "asChild": "Créer comme enfant de {{workspace}}",
+      "carryChanges": "Apporter les modifications non validées ({{modified}} modifiées, {{added}} nouvelles)",
+      "transcriptNotice": "Cet agent recevra la transcription sous forme de brouillon au lieu de l'historique de la conversation.",
+      "copyContext": "Copier le contexte",
+      "cancel": "Annuler",
+      "submit": "Créer le fork",
+      "noAgent": "Aucun agent (branche uniquement)",
+      "transcriptOption": "{{agent}} (transcription)",
+      "session": "Session",
+      "carryReason": {
+        "too_large": "Trop de nouveaux fichiers à copier.",
+        "base_mismatch": "La nouvelle branche ne part pas du même commit.",
+        "target_dirty": "Le nouvel espace de travail contenait déjà des modifications.",
+        "partially_applied": "Certaines modifications non validées sont peut-être déjà dans le nouvel espace de travail. Vérifiez ses modifications avant de continuer.",
+        "apply_failed": "Les modifications n'ont pas pu être appliquées."
+      },
+      "changesUncertain": "{{name}} a été créé, mais il n'est pas certain que toutes vos modifications non validées aient été copiées.",
+      "changesNotCarried": "{{name}} a été créé sans vos modifications non validées.",
+      "agentNotStarted": "{{name}} a été créé, mais l'agent n'a pas pu démarrer.",
+      "menuItem": "Forker la session d'agent...",
+      "sourceMissing": "L'espace de travail source n'existe plus.",
+      "disabledReason": {
+        "bare": "Les dépôts bare n'ont pas d'arbre de travail à forker.",
+        "archived": "Désarchivez cet espace de travail pour le forker.",
+        "detached": "Passez d'abord sur une branche ; cet espace de travail est sur un commit détaché.",
+        "repoMissing": "Le projet de cet espace de travail n'est pas disponible."
+      },
+      "descriptionOtherBase": "Démarrez une nouvelle branche et poursuivez-y la conversation.",
+      "descriptionNoAgentOtherBase": "Démarrez une nouvelle branche.",
+      "alreadyRunning": "Un fork de {{workspace}} est déjà en cours de création."
     }
   },
   "dashboardPopout": {

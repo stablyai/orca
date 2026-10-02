@@ -35,6 +35,7 @@ import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
+import { WorktreeForkAgentSessionMenuItem } from './WorktreeForkAgentSessionMenuItem'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
@@ -253,6 +254,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 </>
               ) : null}
               <DropdownMenuSeparator />
+              <WorktreeForkAgentSessionMenuItem worktree={worktree} isDeleting={isDeleting} />
               <DropdownMenuItem
                 onSelect={handleOpenParentPicker}
                 disabled={isWorktreeParentPickerDisabled({ isDeleting, eligibleParentCount })}

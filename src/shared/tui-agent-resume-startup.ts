@@ -3,6 +3,7 @@ import {
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
 } from './agent-session-resume'
+import { getAgentForkArgv } from './agent-session-fork-argv'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
@@ -25,8 +26,13 @@ export function buildAgentResumeStartupPlan(args: {
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
+  /** 'fork' starts a new provider session seeded from providerSession. */
+  mode?: 'resume' | 'fork'
 }): AgentStartupPlan | null {
-  const argv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
+  const argv =
+    args.mode === 'fork'
+      ? getAgentForkArgv(args.agent, args.providerSession)
+      : getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!argv) {
     return null
   }

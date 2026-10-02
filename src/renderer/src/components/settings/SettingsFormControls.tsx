@@ -16,6 +16,7 @@ type SettingsSwitchProps = {
   onChange: () => void
   ariaLabel?: string
   ariaLabelledBy?: string
+  ariaDescribedBy?: string
   disabled?: boolean
 }
 
@@ -24,6 +25,7 @@ export function SettingsSwitch({
   onChange,
   ariaLabel,
   ariaLabelledBy,
+  ariaDescribedBy,
   disabled
 }: SettingsSwitchProps): React.JSX.Element {
   return (
@@ -31,6 +33,7 @@ export function SettingsSwitch({
       checked={checked}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
       disabled={disabled}
       onCheckedChange={onChange}
     />
@@ -44,6 +47,8 @@ type SettingsRowProps = {
   className?: string
   /** Optional id applied to the label so the control can reference it via aria-labelledby. */
   labelId?: string
+  /** Optional id applied to the description so the control can reference it via aria-describedby. */
+  descriptionId?: string
   /** When true, top-align label/description and control. Useful for tall control columns. */
   alignTop?: boolean
 }
@@ -55,6 +60,7 @@ export function SettingsRow({
   control,
   className,
   labelId,
+  descriptionId,
   alignTop
 }: SettingsRowProps): React.JSX.Element {
   return (
@@ -71,7 +77,9 @@ export function SettingsRow({
           {label}
         </Label>
         {description ? (
-          <p className="select-text text-xs text-muted-foreground">{description}</p>
+          <p id={descriptionId} className="select-text text-xs text-muted-foreground">
+            {description}
+          </p>
         ) : null}
       </div>
       <div className="shrink-0">{control}</div>
@@ -87,6 +95,8 @@ type SettingsSwitchRowProps = {
   className?: string
   ariaLabel?: string
   disabled?: boolean
+  /** Links the switch to its description, e.g. when the description explains why it is disabled. */
+  descriptionId?: string
 }
 
 export function SettingsSwitchRow({
@@ -96,18 +106,21 @@ export function SettingsSwitchRow({
   onChange,
   className,
   ariaLabel,
-  disabled
+  disabled,
+  descriptionId
 }: SettingsSwitchRowProps): React.JSX.Element {
   return (
     <SettingsRow
       label={label}
       description={description}
+      descriptionId={descriptionId}
       className={className}
       control={
         <SettingsSwitch
           checked={checked}
           onChange={onChange}
           disabled={disabled}
+          ariaDescribedBy={description ? descriptionId : undefined}
           ariaLabel={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         />
       }

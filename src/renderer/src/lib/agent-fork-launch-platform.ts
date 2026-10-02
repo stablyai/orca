@@ -1,5 +1,5 @@
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import { isWslUncPath } from '../../../shared/wsl-paths'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 
 export function getForkAgentLaunchPlatform(args: {
   repo: { connectionId?: string | null } | null | undefined
