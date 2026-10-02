@@ -2,7 +2,6 @@ import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord,
-  RuntimeWorktreeSetResult,
   RuntimeWorktreeCreateResult,
   RuntimeWorktreeRemoveResult
 } from '../../shared/runtime-types'
@@ -20,7 +19,6 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import {
-  getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
   resolveCurrentWorktreeSelection,
   resolveCurrentWorktreeSelector
@@ -42,7 +40,6 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
 import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
@@ -51,6 +48,7 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../reference-input'
+import { worktreeSetHandler } from './worktree-set'
 
 function getPresentStringFlag(
   flags: Map<string, string | boolean>,
@@ -223,36 +221,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printLineageSummary(result.result, json)
     printResult(result, json, formatWorktreeShow)
   },
-  'worktree set': async ({ flags, client, cwd, json }) => {
-    assertWorktreeParentFlagsCompatible(
-      flags,
-      'Choose either --parent-worktree or --no-parent, not both.'
-    )
-    const isUnread = getOptionalWorktreeUnreadFlag(flags)
-    const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
-      allowNull: true
-    })
-    const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
-    await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
-    const result = await client.call<RuntimeWorktreeSetResult>('worktree.set', {
-      worktree,
-      displayName: getOptionalStringFlag(flags, 'display-name'),
-      ...reviewLinks,
-      ...linearIssueLink,
-      comment: getOptionalStringFlag(flags, 'comment'),
-      workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
-      isUnread,
-      parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
-      noParent: flags.get('no-parent') === true
-    })
-    if (!json) {
-      for (const warning of result.result.warnings ?? []) {
-        console.error(`warning: ${warning.message}`)
-      }
-    }
-    printResult(result, json, formatWorktreeShow)
-  },
+  'worktree set': worktreeSetHandler,
   'worktree rm': async ({ flags, client, cwd, json }) => {
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     const resolved = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {

@@ -43,6 +43,8 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
+vi.mock('@/store/selectors', () => ({ useWorktreeById: () => undefined }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: (_state: unknown, worktreeId: string | null | undefined) => {
     if (worktreeId === 'runtime-repo::/srv/app') {
