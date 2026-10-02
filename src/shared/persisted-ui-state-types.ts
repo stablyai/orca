@@ -122,6 +122,7 @@ export type PersistedUIState = {
   _grokStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Cursor status item. */
   _cursorStatusBarDefaultAdded?: boolean
+  _syntheticStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on ZCode status item. */
   _zcodeStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]

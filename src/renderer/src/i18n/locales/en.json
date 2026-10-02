@@ -218,6 +218,35 @@
         "title": "Warn when a Codex tab shares a server",
         "description": "Shows a notice on a Codex you started yourself when it shares a server with other tabs, because its agent status may be wrong."
       }
+    },
+    "synthetic": {
+      "description": "Read Synthetic subscription usage for the Orca runtime on this device. This does not change agent credentials in local, WSL, or SSH workspaces.",
+      "docs": "Quota docs",
+      "key": "Synthetic API key",
+      "clear": "Clear",
+      "keyHelp": "Stored using Orca’s protected secret storage and sent only to api.synthetic.new. Leave blank to use SYNTHETIC_API_KEY from the Orca runtime’s environment.",
+      "fiveHours": "Five-hour request usage",
+      "requests": "{{requests}} / {{limit}} requests used",
+      "progress": "Synthetic subscription usage",
+      "refill": "Next refill {{date}}",
+      "renews": "Renews {{date}}",
+      "weekly": "Weekly credit usage",
+      "percent": "{{percent}}% used",
+      "refreshError": "Could not refresh usage. Try again.",
+      "empty": "Add an API key, then refresh to read your subscription quota.",
+      "refresh": "Refresh usage",
+      "sectionTitle": "Synthetic",
+      "searchTitle": "Synthetic Account",
+      "searchDescription": "Configure the Synthetic API key and view subscription request usage and renewal.",
+      "statusBarTitle": "Synthetic Usage",
+      "statusBarDescription": "Show Synthetic five-hour request and weekly credit usage in the status bar.",
+      "rechargeNow": "Full recharge now",
+      "rechargeCountdown": "Full recharge in {{duration}}",
+      "rechargeDate": "Full recharge {{date}}",
+      "rechargeEstimate": "Estimated if no more usage.",
+      "refillNow": "Next refill now",
+      "refillCountdown": "Next refill in {{duration}}",
+      "requestUsage": "Request usage"
     }
   },
   "menu": {
@@ -9134,6 +9163,18 @@
                 "rateLimit": "rate limit",
                 "statusBar": "status bar"
               }
+            },
+            "synthetic": {
+              "kw": {
+                "synthetic": "synthetic",
+                "api": "api",
+                "key": "key",
+                "usage": "usage",
+                "quota": "quota",
+                "subscription": "subscription",
+                "requests": "requests",
+                "renewal": "renewal"
+              }
             }
           }
         },
@@ -9410,7 +9451,11 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "synthetic": "synthetic",
+            "syntheticQuota": "quota",
+            "syntheticRequests": "requests",
+            "syntheticCredits": "credits"
           }
         },
         "auto": {

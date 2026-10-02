@@ -6,6 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { SyntheticIcon } from './SyntheticIcon'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
@@ -154,6 +155,16 @@ export function StatusBarVisibilityMenu({
         >
           <AgentIcon agent="cursor" size={14} />
           {translate('auto.components.status.bar.StatusBar.cursorUsageMenu', 'Cursor Usage')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('synthetic')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('synthetic')
+          }}
+        >
+          <SyntheticIcon size={14} />
+          {translate('settings.synthetic.statusBarTitle', 'Synthetic Usage')}
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('ssh')}

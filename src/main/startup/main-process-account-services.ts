@@ -83,6 +83,12 @@ export function initializeMainProcessAccountServices(): void {
     store.getSettings()
   )
   store.onSettingsChanged((updates, settings) => {
+    if ('syntheticApiKey' in updates) {
+      state.rateLimits?.invalidateSyntheticCredentialState()
+      void state.rateLimits?.refresh().catch(() => {
+        console.warn('[rate-limits] Failed to refresh Synthetic usage')
+      })
+    }
     // Why: auto is a live policy; retarget only providers whose settings-derived runtime changed.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)
@@ -118,6 +124,7 @@ export function initializeMainProcessAccountServices(): void {
       apiKey: settings.opencodeGoApiKey
     }
   })
+  state.rateLimits.setSyntheticApiKeyResolver(() => store.getSettings().syntheticApiKey)
   state.rateLimits.setMiniMaxConfigResolver(() => {
     const settings = store.getSettings()
     const apiKey = readMiniMaxApiKey() ?? ''

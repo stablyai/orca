@@ -6,6 +6,7 @@ import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
+import { fetchSyntheticRateLimits } from '../synthetic-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
@@ -47,6 +48,8 @@ export type FetchAllCyclePrepared = {
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
+  syntheticResultPromise: Promise<SettledProviderResult>
+  syntheticGeneration: number
   antigravityResultPromise: Promise<SettledProviderResult>
 }
 
@@ -69,6 +72,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const codexTarget = this.codexFetchTarget
     const previousState = this.state
+    const syntheticGeneration = this.syntheticFetchGeneration
     // Why: a skipped Codex poll must not stop the other providers' cycle, so gate
     // only the Codex slot instead of returning early (#STA-4422).
     const codexHome = this.resolveCodexHome(codexTarget)
@@ -135,7 +139,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
-      zcode: this.withFetchingStatus(previousState.zcode, 'zcode')
+      zcode: this.withFetchingStatus(previousState.zcode, 'zcode'),
+      synthetic: this.withFetchingStatus(previousState.synthetic, 'synthetic')
     })
 
     // Why: the Cursor probe reads the macOS Keychain, so it is awaited inside the
@@ -154,6 +159,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
+    const syntheticResultPromise = Promise.resolve()
+      .then(() => fetchSyntheticRateLimits(this.syntheticApiKeyResolver?.() ?? '', signal))
+      .then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason) => ({ status: 'rejected', reason }) as const
+      )
 
     // Why its own promise: the Antigravity read spawns `agy` and waits ~2.5 s for the CLI to start
     // its language server and refresh the quota. Inside the awaited tuple that latency would be
@@ -250,6 +261,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
+      syntheticResultPromise,
+      syntheticGeneration,
       antigravityResultPromise
     }
   }

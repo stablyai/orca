@@ -250,6 +250,7 @@ export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
 ])
 
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  ...getAccountsSyntheticSearchEntries(),
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
@@ -258,4 +259,42 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsMiniMaxSearchEntries(),
   ...getAccountsGrokSearchEntries(),
   ...getAccountsCursorSearchEntries()
+])
+
+export const getAccountsSyntheticSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.synthetic.searchTitle', 'Synthetic Account'),
+    description: translate(
+      'settings.synthetic.searchDescription',
+      'Configure the Synthetic API key and view subscription request usage and renewal.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.synthetic.kw.synthetic',
+        'synthetic'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.synthetic.kw.api', 'api'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.synthetic.kw.key', 'key'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.synthetic.kw.usage',
+        'usage'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.synthetic.kw.quota',
+        'quota'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.synthetic.kw.subscription',
+        'subscription'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.synthetic.kw.requests',
+        'requests'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.synthetic.kw.renewal',
+        'renewal'
+      )
+    ]
+  }
 ])

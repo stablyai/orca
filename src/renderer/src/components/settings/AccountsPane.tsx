@@ -24,6 +24,7 @@ import {
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
+  getAccountsSyntheticSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
@@ -39,6 +40,7 @@ import {
 } from './provider-account-visibility'
 import { GrokAccountsSection } from './GrokAccountsSection'
 import { CursorAccountsSection } from './CursorAccountsSection'
+import { SyntheticAccountsSection } from './SyntheticAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -395,6 +397,14 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
+    ) : null,
+    !isWebClientLocation() &&
+    matchesSettingsSearch(searchQuery, getAccountsSyntheticSearchEntries()) ? (
+      <SyntheticAccountsSection
+        key="synthetic"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
     ) : null
   ]
 

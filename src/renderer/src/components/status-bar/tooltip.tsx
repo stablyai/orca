@@ -4,6 +4,7 @@ import {
   formatResetDuration
 } from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/lib/agent-catalog'
+import { SyntheticIcon } from './SyntheticIcon'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import {
@@ -18,6 +19,10 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import {
+  getUsageWindowReplenishmentLabel,
+  getUsageWindowReplenishmentTime
+} from './usage-window-replenishment'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -103,6 +108,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'cursor') {
     return <AgentIcon agent="cursor" size={13} />
   }
+  if (provider === 'synthetic') {
+    return <SyntheticIcon size={14} />
+  }
   return <ClaudeIcon size={13} />
 }
 
@@ -173,11 +181,17 @@ export function getWindowSections(
   }
   const sections: { label: string; window: RateLimitWindow | null }[] = [
     {
-      label: translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session'),
+      label:
+        p.provider === 'synthetic'
+          ? translate('settings.synthetic.requestUsage', 'Request usage')
+          : translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session'),
       window: p.session
     },
     {
-      label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
+      label:
+        p.provider === 'synthetic'
+          ? translate('settings.synthetic.weekly', 'Weekly credit usage')
+          : translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
       window: p.weekly
     }
   ]
@@ -230,7 +244,8 @@ function ProviderRateLimitWindowSection({
   mutedClass,
   emptyBarClass,
   usagePercentageDisplay,
-  now
+  now,
+  detail
 }: {
   window: RateLimitWindow | null
   label: string
@@ -239,17 +254,19 @@ function ProviderRateLimitWindowSection({
   emptyBarClass: string
   usagePercentageDisplay: UsagePercentageDisplay
   now: number
+  detail?: string
 }): React.JSX.Element | null {
   if (!window) {
     return null
   }
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
+  const resetLabel = getUsageWindowReplenishmentLabel(window, now)
 
   return (
     <div className="space-y-1">
       <div className={`font-medium ${textClass}`}>{label}</div>
+      {detail && <div className={mutedClass}>{detail}</div>}
       <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
         {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
         <div
@@ -261,6 +278,11 @@ function ProviderRateLimitWindowSection({
         <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
         {resetLabel && <span>{resetLabel}</span>}
       </div>
+      {window.rechargesAt != null && window.refillsAt != null && (
+        <div className={mutedClass}>
+          {getUsageWindowReplenishmentLabel({ ...window, rechargesAt: null }, now)}
+        </div>
+      )}
     </div>
   )
 }
@@ -279,7 +301,15 @@ export function ProviderPanel({
   usagePercentageDisplay?: UsagePercentageDisplay
 }): React.JSX.Element {
   const windowSections = p ? getWindowSections(p) : []
-  const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
+  const now = useResetCountdownClock(
+    windowSections.flatMap((section) =>
+      section.window
+        ? section.window.rechargesAt != null
+          ? [getUsageWindowReplenishmentTime(section.window), section.window.refillsAt]
+          : [getUsageWindowReplenishmentTime(section.window)]
+        : [null]
+    )
+  )
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
@@ -375,8 +405,21 @@ export function ProviderPanel({
           emptyBarClass={emptyBarClass}
           usagePercentageDisplay={usagePercentageDisplay}
           now={now}
+          detail={
+            p.requestQuota && s.window === p.session
+              ? translate('settings.synthetic.requests', '{{requests}} / {{limit}} requests used', {
+                  requests: p.requestQuota.requests,
+                  limit: p.requestQuota.limit
+                })
+              : undefined
+          }
         />
       ))}
+      {windowSections.some((section) => section.window?.rechargesAt != null) && (
+        <div className={mutedClass}>
+          {translate('settings.synthetic.rechargeEstimate', 'Estimated if no more usage.')}
+        </div>
+      )}
 
       {p.error ? (
         <ErrorMessage
