@@ -526,6 +526,46 @@ describe('openCodexAppServerConnection', () => {
     await expect(connection.close()).resolves.toBe(true)
   })
 
+  it('reports an exit seen after a close gave up, exactly once', async () => {
+    vi.useFakeTimers()
+    const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
+    answerInitialize(child)
+    const reports: string[] = []
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      { onExit: () => reports.push('exit') },
+      spawnImpl
+    )
+
+    const first = connection.close()
+    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 3_500)
+    await expect(first).resolves.toBe(false)
+    expect(reports).toEqual([])
+    child.emit('exit', 0, null)
+    child.emit('close', 0, null)
+
+    expect(reports).toEqual(['exit'])
+    await expect(connection.close()).resolves.toBe(true)
+    expect(reports).toEqual(['exit'])
+  })
+
+  it('never reports an exit a running close sees and proves', async () => {
+    const { child, spawnImpl } = stubChild()
+    answerInitialize(child)
+    const reports: string[] = []
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      { onExit: () => reports.push('exit') },
+      spawnImpl
+    )
+
+    await expect(connection.close()).resolves.toBe(true)
+    // Stdio 'close' can land after the proof settled; the close still proved the exit.
+    child.emit('close', 0, null)
+
+    expect(reports).toEqual([])
+  })
+
   it.each([1_090_188, 2_900_090])(
     'accepts a realistic %i-byte escaped command completion and keeps processing',
     async (frameBytes) => {

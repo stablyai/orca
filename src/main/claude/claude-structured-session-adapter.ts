@@ -31,8 +31,10 @@ import { claudeStoppedRequestEndWait } from './claude-request-end-wait'
 import {
   drainClaudeObservedExits,
   observeClaudeSessionExit,
+  rejectClaudeDetachedDispatch,
   settleClaudeUnexpectedExit,
-  type ClaudeExitLifecycle
+  type ClaudeExitLifecycle,
+  type ClaudeSettledExit
 } from './claude-structured-session-exit-lifecycle'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
@@ -60,7 +62,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   private readonly sessions = new Map<string, ClaudeSession>()
   private readonly acquisitions = new ClaudeAcquisitionRegistry()
   private readonly exits = new Map<string, ClaudeSessionExit>()
-  private readonly settledExitErrors = new Map<string, Error>()
+  private readonly settledExits = new Map<string, ClaudeSettledExit>()
   private readonly exitLifecycle: ClaudeExitLifecycle
 
   constructor(private readonly deps: ClaudeStructuredSessionAdapterDeps) {
@@ -68,7 +70,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     this.exitLifecycle = {
       sessions: this.sessions,
       exits: this.exits,
-      settledExitErrors: this.settledExitErrors,
+      settledExits: this.settledExits,
       deps,
       emit: (session, event) => this.emit(session, event)
     }
@@ -83,7 +85,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   })
 
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> => {
-    this.settledExitErrors.delete(input.identity.sessionId)
+    this.settledExits.delete(input.identity.sessionId)
     return acquireClaudeSession({
       input,
       deps: this.deps,
@@ -178,11 +180,19 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, promptKey)
   }
 
-  dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
-    dispatchClaudeTurn(this.session(input.sessionId), input, input.beforeDispatch)
+  dispatch: StructuredAgentSessionAdapter['dispatch'] = async (input) => {
+    const session = this.sessions.get(input.sessionId)
+    return session
+      ? dispatchClaudeTurn(session, input, input.beforeDispatch)
+      : rejectClaudeDetachedDispatch(this.exitLifecycle, input.sessionId)
+  }
 
-  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
-    dispatchClaudeCommand(this.session(input.sessionId), input.command)
+  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) => {
+    const session = this.sessions.get(input.sessionId)
+    return session
+      ? dispatchClaudeCommand(session, input.command)
+      : rejectClaudeDetachedDispatch(this.exitLifecycle, input.sessionId)
+  }
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (request) =>
     cancelClaudeStructuredTurn({
@@ -288,7 +298,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
 
   closeSession = (sessionId: string): Promise<boolean> =>
     // After the close, not before: releasing an exit still settling settles it on the way.
-    this.closeSessionProcess(sessionId).finally(() => this.settledExitErrors.delete(sessionId))
+    this.closeSessionProcess(sessionId).finally(() => this.settledExits.delete(sessionId))
 
   private closeSessionProcess(sessionId: string): Promise<boolean> {
     // An exit seen first settles as that exit, whoever asked for the close after it.
@@ -322,7 +332,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       // A child that just exited is named by its own diagnostic, not by its absence.
       throw (
         this.exits.get(sessionId)?.error ??
-        this.settledExitErrors.get(sessionId) ??
+        this.settledExits.get(sessionId)?.error ??
         new Error(`no live claude stream-json session for ${sessionId}`)
       )
     }

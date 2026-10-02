@@ -18,6 +18,7 @@ import {
 } from './structured-agent-session-dead-generation-settlement'
 import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { structuredAgentSessionOwedStopAwaitsExit } from './structured-agent-session-unproven-end'
 
 type UnexpectedExitLifecycleEvent = StructuredAgentSessionEndedEvent & {
   cause: 'unexpected-exit'
@@ -25,7 +26,7 @@ type UnexpectedExitLifecycleEvent = StructuredAgentSessionEndedEvent & {
 
 export type StructuredAgentSessionUnexpectedExitSession = Pick<
   StructuredAgentSessionHostSession,
-  'child' | 'lastEndedChild'
+  'child' | 'lastEndedChild' | 'owesProviderChildWindDown'
 > & { journal: DeadGenerationJournal & Pick<AgentSessionJournal, 'cursor' | 'itemBody'> }
 
 export type StructuredAgentSessionUnexpectedExitContext<
@@ -39,6 +40,8 @@ export type StructuredAgentSessionUnexpectedExitContext<
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   logger: StructuredAgentSessionLogger
+  /** Retries the stop owed for the session's child; for a caller inside its serialize. */
+  finishOwedWindDown?: (sessionId: string) => Promise<boolean>
 }
 
 export async function settleUnexpectedStructuredAgentSessionExit<
@@ -50,20 +53,27 @@ export async function settleUnexpectedStructuredAgentSessionExit<
   if (event.cause !== 'unexpected-exit') {
     return
   }
-  const unexpectedEvent = event as UnexpectedExitLifecycleEvent
   // Receipt of the exit is the one end time the host may record for a running turn.
   const observedAt = event.observedAt ?? context.now()
-  return context.serialize(unexpectedEvent.sessionId, async () => {
-    const session = context.sessions.get(unexpectedEvent.sessionId)
+  return context.serialize(event.sessionId, async () => {
+    const session = context.sessions.get(event.sessionId)
     const child = session?.child
     if (
       !session ||
       !child ||
-      child.fence !== unexpectedEvent.fence ||
-      child.generation !== unexpectedEvent.acquisitionGeneration
+      child.fence !== event.fence ||
+      child.generation !== event.acquisitionGeneration
     ) {
       return
     }
+    // The exit a stop that could not prove it was waiting on: that stop lands now, as its retry
+    // would, keeping its own cause and settlement.
+    const finishOwed = context.finishOwedWindDown
+    if (finishOwed && structuredAgentSessionOwedStopAwaitsExit(session, child)) {
+      await finishOwed(event.sessionId)
+      return
+    }
+    const unexpectedEvent: UnexpectedExitLifecycleEvent = { ...event, cause: 'unexpected-exit' }
     // The host's own phase decides, so a provider that omits the flag still gets a start that
     // failed told as one: the row says so.
     const exitedDuringStartup =

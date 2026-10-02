@@ -136,4 +136,38 @@ describe('a Claude start that Orca fails while the CLI is still running', () => 
     )
     expect(await failureRows(host)).toEqual([{ text: STOPPED_TEXT, kind: 'providerStartFailed' }])
   })
+
+  it('rejects every message held on a start Orca failed with that start, even when its close could not prove the CLI gone', async () => {
+    claude.behave(SESSION, { initHangs: true, initNamesForeignSession: true, closeUnproven: true })
+    const host = await claude.install()
+    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+      ok: true
+    })
+    const first = await send(host, 'hello')
+    const second = await send(host, 'and this')
+
+    claude.child(SESSION).answerInit()
+    await waitForStructuredAgentSessionRecovery()
+    // The CLI may still run, so the chat waits on it; once it exits, the start that failed decides.
+    await vi.waitFor(() =>
+      expect(host['sessions'].get(SESSION)?.owesProviderChildWindDown).toBeDefined()
+    )
+    claude.child(SESSION).exit(scriptedClaudeExitError(DIAGNOSTIC))
+    await released(host)
+
+    for (const held of [first, second]) {
+      await vi.waitFor(async () =>
+        expect(await submission(host, held)).toMatchObject({
+          dispatchState: 'rejected',
+          reason: expect.stringMatching(/^Claude couldn't start\./),
+          rejection: { kind: 'startFailed' }
+        })
+      )
+    }
+    expect(claude.child(SESSION).calls).not.toContain('send')
+    expect(host['sessions'].get(SESSION)?.lastEndedChild).toMatchObject({
+      cause: 'exit',
+      failure: { kind: 'startFailed' }
+    })
+  })
 })

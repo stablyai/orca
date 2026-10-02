@@ -222,7 +222,9 @@ export async function openClaudeStreamJsonConnection(
       faultReported = true
       handlers.onFault?.(terminalError)
     }
-    if (!closing && exited && !exitReported) {
+    // Once, whenever it happens: a close in flight answers for an exit it sees, and one that gave
+    // up has stopped watching, so a later exit must reach the owner on its own.
+    if (exited && !exitReported && closePromise === null) {
       exitReported = true
       handlers.onExit?.(terminalError)
     }
@@ -328,6 +330,8 @@ export async function openClaudeStreamJsonConnection(
           })
         }
         closePromise = null
+        // A root exit this close saw is answered by its verdict; only a later one is reported.
+        exitReported ||= exited
         return false
       }
       await readerDone

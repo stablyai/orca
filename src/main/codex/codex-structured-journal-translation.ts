@@ -140,6 +140,10 @@ export function createCodexJournalTranslator(
       })
     },
     handle: (event) => {
+      // Host lifecycle only: the journal records this child's end once its exit is seen.
+      if (event.type === 'end-unproven') {
+        return CODEX_JOURNAL_ADMITTED
+      }
       if (event.type === 'ended') {
         const streamAdmission = flushStreams()
         if (!streamAdmission.accepted) {

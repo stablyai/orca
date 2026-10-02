@@ -45,6 +45,17 @@ export type StructuredAgentSessionOwedWindDown = StructuredAgentSessionProviderC
   readonly requestedAt: AgentJournalCursor
   /** Where it stood once the newest pass failed: a message accepted by then waited through a retry. */
   readonly failedAt?: AgentJournalCursor
+  /** Set only when nobody asked for this stop: the child ended (a fault, an exit) and its close
+   *  could not prove it gone. The stop that lands settles it as that end. In memory only. */
+  readonly ended?: StructuredAgentSessionReportedEnd
+}
+
+/** An end the adapter reported but could not prove, kept until its stop lands. */
+export type StructuredAgentSessionReportedEnd = {
+  reason: string
+  failure?: SubmissionRejectionFact
+  /** Work was in flight when the end was reported, so its settlement shows why it stopped. */
+  interruptedWork: boolean
 }
 
 /** The provider process behind a conversation. Written only in

@@ -44,7 +44,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
 export function structuredClaudeLifecycleEvent(
   event: ClaudeStructuredSessionEvent
 ): StructuredAgentSessionLifecycleEvent | null {
-  if (event.type === 'started') {
+  if (event.type === 'started' || event.type === 'end-unproven') {
     return event
   }
   if (

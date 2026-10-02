@@ -248,4 +248,86 @@ describe('Claude stream-json close ordering', () => {
     await expect(closing).resolves.toBe(true)
     expect(child.stdin.writableEnded).toBe(true)
   })
+
+  describe('reports the root exit exactly once, whenever it happens', () => {
+    async function open(child: ChildProcessWithoutNullStreams, reports: string[]) {
+      mocks.refresh.mockReset()
+      mocks.refresh.mockResolvedValue(undefined)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This injected query exercises only the async iterator used by the connection.
+      const queryImpl = ((params: Parameters<typeof query>[0]) => {
+        params.options?.spawnClaudeCodeProcess?.({
+          command: 'claude',
+          args: [],
+          env: {},
+          signal: new AbortController().signal
+        })
+        return {
+          [Symbol.asyncIterator]: () => ({
+            next: async (): Promise<IteratorResult<Record<string, unknown>>> => ({
+              value: undefined,
+              done: true
+            })
+          })
+        }
+      }) as unknown as typeof query
+      return openClaudeStreamJsonConnection(
+        { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
+        { onExit: () => reports.push('exit'), onFault: () => reports.push('fault') },
+        () => child,
+        queryImpl
+      )
+    }
+
+    it('after a close that gave up with the root still running', async () => {
+      mocks.proveClaudeChildExit.mockReset()
+      mocks.proveClaudeChildExit.mockResolvedValueOnce(false)
+      const child = fakeChild()
+      const reports: string[] = []
+      const connection = await open(child, reports)
+
+      await expect(connection.close()).resolves.toBe(false)
+      expect(reports).toEqual([])
+      child.emit('exit', 0, null)
+      child.emit('close', 0, null)
+
+      expect(reports).toEqual(['exit'])
+    })
+
+    it('never for an exit a running close sees and proves', async () => {
+      mocks.proveClaudeChildExit.mockReset()
+      const proof = Promise.withResolvers<boolean>()
+      mocks.proveClaudeChildExit.mockReturnValueOnce(proof.promise)
+      const child = fakeChild()
+      const reports: string[] = []
+      const closing = (await open(child, reports)).close()
+      await vi.waitFor(() => expect(mocks.proveClaudeChildExit).toHaveBeenCalledTimes(1))
+
+      child.emit('exit', 0, null)
+      proof.resolve(true)
+      await expect(closing).resolves.toBe(true)
+      child.emit('close', 0, null)
+
+      expect(reports).toEqual([])
+    })
+
+    it('never for a root exit the close that gave up already answered for', async () => {
+      mocks.proveClaudeChildExit.mockReset()
+      const proof = Promise.withResolvers<boolean>()
+      mocks.proveClaudeChildExit.mockReturnValueOnce(proof.promise)
+      const child = fakeChild()
+      const reports: string[] = []
+      const connection = await open(child, reports)
+      const closing = connection.close()
+      await vi.waitFor(() => expect(mocks.proveClaudeChildExit).toHaveBeenCalledTimes(1))
+
+      // The root went; a descendant could not be proven gone, so the close gives up on its tree.
+      child.emit('exit', 0, null)
+      proof.resolve(false)
+      await expect(closing).resolves.toBe(false)
+      child.emit('close', 0, null)
+
+      expect(connection.exitVerdict.root).toBe('exited')
+      expect(reports).toEqual([])
+    })
+  })
 })

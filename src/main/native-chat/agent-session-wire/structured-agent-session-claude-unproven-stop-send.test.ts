@@ -20,6 +20,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import type * as EvictionDeadline from './structured-agent-session-eviction-deadline'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import {
@@ -30,6 +31,18 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+
+// Shortened only by the tests of a stop that proves the exit after its deadline.
+const stepDeadline = vi.hoisted((): { ms: number | undefined } => ({ ms: undefined }))
+vi.mock('./structured-agent-session-eviction-deadline', async (importOriginal) => {
+  const actual = await importOriginal<typeof EvictionDeadline>()
+  return {
+    ...actual,
+    withStructuredAgentSessionEvictionDeadline: (
+      ...[steps, timeoutMs]: Parameters<typeof actual.withStructuredAgentSessionEvictionDeadline>
+    ) => actual.withStructuredAgentSessionEvictionDeadline(steps, stepDeadline.ms ?? timeoutMs)
+  }
+})
 
 const CALLER = { callerKey: 'client-1' }
 const CAPABILITIES = ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1', 'msg_lifecycle_v1']
@@ -94,6 +107,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  stepDeadline.ms = undefined
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
   await rm(root, { recursive: true, force: true })
@@ -309,18 +323,20 @@ it('holds the message with its reason while the exit stays unverifiable, and sen
   expect(await waitRows()).toHaveLength(1)
 })
 
-it('lets a held message be withdrawn with Stop, and the owed stop still ends on the next retry', async () => {
-  const connection = await stopWithUnprovenClose(2)
+it('lets a held message be withdrawn with Stop, which retries the kill, and the owed stop still ends on the next retry', async () => {
+  const connection = await stopWithUnprovenClose(3)
   const next = await send('Carry on.')
   await eventually(async () => expect(await waitRows()).toHaveLength(1))
   await laneDrained()
 
   await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
   expect(await submission(next)).toMatchObject({ dispatchState: 'rejected' })
+  // Stop at rest re-runs the kill a child it could not prove gone may still need.
+  expect(connection.closeCount).toBe(3)
   expect(owedWindDown()).toBeDefined()
 
   await host['lifetime'].idleSweep.tick()
-  expect(connection.closeCount).toBe(3)
+  expect(connection.closeCount).toBe(4)
   expect(owedWindDown()).toBeUndefined()
   expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
   // Nothing was waiting, so no child starts.
@@ -566,4 +582,133 @@ it('keeps an option change at rest when the Stop proved the exit and only its bo
   expect(store.getRecord(SESSION)?.options).toMatchObject({ model: 'claude-opus-5' })
   expect(connection.closeCount).toBe(1)
   expect(claude.connections).toHaveLength(1)
+})
+
+/** The old child's own exit, as the connection reports it once no close is watching. */
+function exits(connection: FakeConnection): void {
+  connection.exitVerdict = { root: 'exited', tree: 'exited' }
+  connection.handlers.onExit?.(new Error('claude stream-json exited (code 0)'))
+}
+
+it('sends a held message as soon as the old child exits after its retry gave up, with no sweep tick', async () => {
+  const connection = await heldAfterStop()
+
+  exits(connection)
+  const resumed = await resumedWith(connection, 'Carry on.')
+
+  // The exit path's own close proves it; the owed stop it lands closes nothing more.
+  expect(connection.closeCount).toBe(3)
+  expect(resumed.closed).toBe(false)
+  expect(owedWindDown()).toBeUndefined()
+})
+
+it('finishes an owed stop as soon as the old child exits with nothing waiting, starting no agent', async () => {
+  const connection = await stopWithUnprovenClose(1)
+
+  exits(connection)
+  await eventually(() => expect(owedWindDown()).toBeUndefined())
+  await commitSettled()
+
+  expect(connection.closeCount).toBe(2)
+  expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+  expect(claude.connections).toHaveLength(1)
+})
+
+/** Every close of the old child waits on its exit, which comes after the stop passes gave up. */
+function closesAfterExit(connection: FakeConnection): () => void {
+  const exited = Promise.withResolvers<void>()
+  const close = connection.close
+  connection.close = async () => {
+    await exited.promise
+    return close()
+  }
+  return () => exited.resolve()
+}
+
+it('sends a held message as soon as a stop that ran past its deadline proves the exit late', async () => {
+  const connection = claude.connections[0]!
+  await openTurn(connection)
+  stepDeadline.ms = 200
+  const exit = closesAfterExit(connection)
+  await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  frame(connection, INTERRUPTED_RESULT)
+  await send('Carry on.')
+  await eventually(async () => expect(await waitRows()).toHaveLength(1))
+  await laneDrained()
+  expect(owedWindDown()).toBeDefined()
+  expect(claude.connections).toHaveLength(1)
+
+  // Both passes already gave up; the retry the late proof wakes gets the full deadline.
+  stepDeadline.ms = undefined
+  exit()
+  const resumed = await resumedWith(connection, 'Carry on.')
+
+  expect(resumed.closed).toBe(false)
+  expect(owedWindDown()).toBeUndefined()
+})
+
+it('retries an owed stop once when several passes gave up on one hung close and its exit lands', async () => {
+  const connection = claude.connections[0]!
+  await openTurn(connection)
+  stepDeadline.ms = 200
+  const exit = closesAfterExit(connection)
+  // The Stop, the held send's retry and two sweep ticks each give up on the same close.
+  await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  frame(connection, INTERRUPTED_RESULT)
+  await send('Carry on.')
+  await eventually(async () => expect(await waitRows()).toHaveLength(1))
+  await laneDrained()
+  await host['lifetime'].idleSweep.tick()
+  await host['lifetime'].idleSweep.tick()
+  await laneDrained()
+  const releases = vi
+    .spyOn(store, 'transitionHandoff')
+    .mockRejectedValueOnce(new Error('record store busy'))
+
+  stepDeadline.ms = undefined
+  exit()
+  await eventually(() => expect(releases).toHaveBeenCalled())
+  await laneDrained()
+  await laneDrained()
+
+  // The one retry failed; the sweep or the next action retries it, not every pass that gave up.
+  expect(releases).toHaveBeenCalledOnce()
+  expect(owedWindDown()).toBeDefined()
+  expect(claude.connections).toHaveLength(1)
+})
+
+it('ignores an exit naming another child than the one whose stop is owed', async () => {
+  const connection = await heldAfterStop()
+  const session = host['sessions'].get(SESSION)!
+
+  await host.handleAdapterEvent({
+    type: 'ended',
+    sessionId: SESSION,
+    reason: 'claude stream-json exited',
+    cause: 'unexpected-exit',
+    fence: session.child!.fence,
+    acquisitionGeneration: 'an-earlier-child'
+  })
+  await laneDrained()
+
+  expect(connection.closeCount).toBe(2)
+  expect(owedWindDown()).toBeDefined()
+  expect(claude.connections).toHaveLength(1)
+})
+
+it("never lets an old child's late exit retry a newer child's owed stop", async () => {
+  const old = await heldAfterStop()
+  exits(old)
+  const resumed = await resumedWith(old, 'Carry on.')
+  closeUnprovenFor(resumed, 1)
+  await expect(host.close(SESSION, 'user-close')).rejects.toThrow()
+  expect(resumed.closeCount).toBe(1)
+  expect(owedWindDown()).toBeDefined()
+
+  // The first child's connection reports its exit again: it names no child whose stop is owed.
+  old.handlers.onExit?.(new Error('claude stream-json exited (code 0)'))
+  await laneDrained()
+
+  expect(resumed.closeCount).toBe(1)
+  expect(owedWindDown()).toBeDefined()
 })

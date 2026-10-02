@@ -30,6 +30,7 @@ import {
   type StructuredAgentSessionStopWindDown
 } from './structured-agent-session-turns-cancel'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { pendingProviderChildWindDown } from './structured-agent-session-provider-child'
 
 type ChatStopOutcome = TurnOutcome<AgentSessionCancelResult>
 
@@ -84,10 +85,12 @@ export function mutateWithChatStop<TValue>(
         const inFlight = turnId !== undefined || (await isMainAgentWorkingOnceFlushed(ctx))
         const record = context.deps.store.getRecord(ctx.sessionId)
         if (!child || !inFlight) {
-          if (withdrawn.length > 0) {
+          // A child whose stop could not prove it gone may still run: Stop tries to end it again.
+          const ended = await stopOwedChild(context, ctx.sessionId)
+          if (withdrawn.length > 0 || ended) {
             await tookEffect()
           }
-          return { ok: true, value: { ...named, cancelled: withdrawn.length > 0 } }
+          return { ok: true, value: { ...named, cancelled: withdrawn.length > 0 || ended } }
         }
         // Awaited until journal appends are synchronous; then issued here, and a `finally` awaits it.
         if (withdrawn.length > 0 || (await stopReachesUnrecordedWork(ctx, turnId))) {
@@ -143,4 +146,18 @@ export function mutateWithChatStop<TValue>(
     }
   })
   return result
+}
+
+/** Re-runs the owed stop's kill for a child it could not prove gone; whether that child is gone. */
+async function stopOwedChild(
+  context: StructuredAgentSessionMutationContext,
+  sessionId: string
+): Promise<boolean> {
+  const session = context.sessions.get(sessionId)
+  const owed = session && pendingProviderChildWindDown(session)
+  if (!owed || !session.child) {
+    return false
+  }
+  await context.finishOwedStop(sessionId)
+  return context.sessions.get(sessionId)?.child === null
 }

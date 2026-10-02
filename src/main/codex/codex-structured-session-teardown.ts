@@ -4,6 +4,7 @@
 // session owns are cleared exactly once, and only when the child was actually
 // proven stopped — a refused close leaves the session indexed for a retry.
 
+import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import {
   closeAllCodexSessions,
   closeCodexPublishedSession,
@@ -68,7 +69,20 @@ export class CodexStructuredSessionTeardown {
       expectedFence: fence,
       expectedAcquisitionGeneration: acquisitionGeneration,
       unexpectedReason: reason
-    }).then((closed) => this.settled(sessionId, closed))
+    }).then((closed) => {
+      // Never silence: the host keeps the child and owes its stop until the exit is seen.
+      if (!closed && this.deps.sessions.get(sessionId) === session && !session.ended) {
+        this.deps.onEvent?.({
+          type: 'end-unproven',
+          sessionId,
+          reason: reason.message,
+          failure: agentSessionFailureFact('hostFault'),
+          fence,
+          acquisitionGeneration
+        })
+      }
+      return this.settled(sessionId, closed)
+    })
   }
 
   closeAll = (): Promise<void> =>

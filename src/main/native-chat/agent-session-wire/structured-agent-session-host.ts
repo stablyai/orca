@@ -158,7 +158,7 @@ export class StructuredAgentSessionHost {
         ),
       publishStatus: this.clientDelivery.publishStatusAndSettlement,
       serialize: (sessionId, task) => this.tasks.trackAttach(this.serialize(sessionId, task)),
-      now: () => this.now()
+      lifetime: () => this.lifetimeContext()
     })
     this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
       ...structuredAgentSessionRestartResumeSurfaces(this, this.now),

@@ -5,7 +5,10 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionStartedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionEndUnprovenEvent,
+  StructuredAgentSessionStartedEvent
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
@@ -66,6 +69,7 @@ export type ClaudeStructuredSessionEvent =
   | { type: 'auth-diagnostic'; sessionId: string; diagnostic: ClaudeAuthDiagnostic }
   /** Startup facts applied and saved options restored; held prompts are about to be written. */
   | StructuredAgentSessionStartedEvent
+  | StructuredAgentSessionEndUnprovenEvent
   | {
       type: 'ended'
       sessionId: string

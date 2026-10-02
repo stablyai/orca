@@ -78,6 +78,7 @@ export async function openCodexAppServerConnection(
   let exited = false
   let exitObserved = false
   let closing = false
+  let closeInFlight = false
   let exitReported = false
   const exitProof = new RetryableProcessExitProof()
   /** First terminal cause, or null while the transport is still usable. Set once:
@@ -126,9 +127,15 @@ export async function openCodexAppServerConnection(
     // Transport/protocol failures make the connection unusable immediately so
     // callers do not hang, but recovery must not treat that as a child exit
     // until the execution host has observed `exit`/`close`.
-    if (exitObserved && !closing && !exitReported) {
+    reportExit()
+  }
+
+  /** Once, whenever it happens: a close in flight answers for an exit it sees, and one that gave
+   *  up has stopped watching, so a later exit must reach the owner on its own. */
+  function reportExit(): void {
+    if (exitObserved && !closeInFlight && !exitReported) {
       exitReported = true
-      handlers.onExit?.(terminalError)
+      handlers.onExit?.(terminalError ?? buildExitError())
     }
   }
 
@@ -243,7 +250,8 @@ export async function openCodexAppServerConnection(
       return Promise.resolve(true)
     }
     closing = true
-    return exitProof.run(async () => {
+    closeInFlight = true
+    const proof = exitProof.run(async () => {
       try {
         child.stdin.end()
       } catch {
@@ -267,6 +275,22 @@ export async function openCodexAppServerConnection(
       dispatcher.failPending(new Error('codex app-server connection closed'))
       return exitObserved
     })
+    const settle = (proven: boolean): void => {
+      closeInFlight = false
+      // A proven close answers for the exit; one that gave up re-checks for an exit it raced.
+      exitReported ||= proven
+      reportExit()
+    }
+    return proof.then(
+      (proven) => {
+        settle(proven)
+        return proven
+      },
+      (error: unknown) => {
+        settle(false)
+        throw error
+      }
+    )
   }
 
   const connection: CodexAppServerConnection = {

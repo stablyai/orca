@@ -52,6 +52,7 @@ import { createStructuredAgentEnvironmentResolvers } from './structured-agent-sh
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
+import { structuredCodexLifecycleEvent } from './structured-codex-lifecycle-event'
 import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
@@ -271,8 +272,9 @@ async function installOnJournal(
     onDispatchSettledLate,
     onPrimaryThreadStoppedRunning: releaseUnansweredDispatches,
     onEvent: (event) => {
-      if (event.type === 'ended' && 'cause' in event && event.cause === 'unexpected-exit') {
-        lifecycle.deliver(event)
+      const lifecycleEvent = structuredCodexLifecycleEvent(event)
+      if (lifecycleEvent) {
+        lifecycle.deliver(lifecycleEvent)
       }
     }
   })

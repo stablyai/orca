@@ -15,7 +15,7 @@ export function handleCodexSessionExit(input: {
   connection: CodexAppServerConnection | null
   error: Error
   /** Set by Orca's own close. Absent only from the connection's onExit, which the connection
-   *  withholds while Orca is closing the child. */
+   *  withholds while a close is running. */
   closedByOrca?: true
   prompts?: CodexSession['prompts']
   allowFailedSettlement?: boolean
@@ -37,7 +37,9 @@ export function handleCodexSessionExit(input: {
     failure: input.closedByOrca
       ? agentSessionFailureFact('hostFault')
       : agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(input.error) }),
-    cause: session.requestedClose ? 'requested-close' : 'unexpected-exit',
+    // An exit no close of Orca's saw, even one after a requested close gave up, is the owner's
+    // only word that the child is gone: it lands any stop the host still owes.
+    cause: session.requestedClose && input.closedByOrca ? 'requested-close' : 'unexpected-exit',
     fence: session.fence,
     acquisitionGeneration: session.acquisitionGeneration,
     observedAt: session.exitObservedAt
