@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron'
+import { normalizeWorkspaceSidebarPosition } from '../../shared/workspace-sidebar-position'
 import { ensureMainI18n, setMainUiLanguage } from '../i18n/main-i18n'
 import {
   registerAppMenu,
@@ -94,6 +95,8 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
         statusBarVisible: ui.statusBarVisible !== false
       }
     },
+    getWorkspaceSidebarPosition: () =>
+      normalizeWorkspaceSidebarPosition(store.getSettings().workspaceSidebarPosition),
     getKeybindings: () => state.keybindings?.getOverrides()
   })
 }

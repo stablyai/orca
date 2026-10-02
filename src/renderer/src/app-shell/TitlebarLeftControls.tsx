@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, MoreHorizontal, PanelLeft } from 'lucide-react'
+import { ArrowLeft, ArrowRight, MoreHorizontal, PanelLeft, PanelRight } from 'lucide-react'
 import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,7 +16,39 @@ import {
 import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
 import { hasCustomTitleBar, isMac } from './app-window-chrome'
+import { RightSidebarToggle } from './TitlebarMainStrip'
 import type { AppChromeLayout } from './use-app-chrome-layout'
+
+export function WorkspaceSidebarToggle({ edge }: { edge: 'left' | 'right' }): React.JSX.Element {
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar)
+  const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          className="sidebar-toggle"
+          onClick={toggleSidebar}
+          aria-label={
+            edge === 'right'
+              ? translate('auto.App.9e0b441a91', 'Toggle right sidebar')
+              : translate('auto.App.e4b9e7dff7', 'Toggle sidebar')
+          }
+        >
+          {edge === 'left' ? <PanelLeft size={16} /> : <PanelRight size={16} />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {edge === 'right'
+          ? translate('auto.App.c184e056de', 'Toggle right sidebar ({{value0}})', {
+              value0: leftSidebarShortcutLabel
+            })
+          : translate('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
+              value0: leftSidebarShortcutLabel
+            })}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
 
 /**
  * The titlebar's left cluster: window chrome padding, app name, sidebar toggle, and the
@@ -24,11 +56,9 @@ import type { AppChromeLayout } from './use-app-chrome-layout'
  * header so the agent badge popover isn't duplicated.
  */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
-  const toggleSidebar = useAppStore((s) => s.toggleSidebar)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
-  const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
 
@@ -38,7 +68,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
     <div
       ref={layout.titlebarLeftControlsRef}
       className={`flex h-full shrink-0 items-center${
-        layout.leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
+        layout.leftColumnHeaderFloating ? ' w-max' : ' w-full'
       }`}
     >
       <div className="flex h-full items-center">
@@ -89,24 +119,16 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
             </ContextMenuContent>
           </ContextMenu>
         )}
-        {layout.showSidebar && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="sidebar-toggle"
-                onClick={toggleSidebar}
-                aria-label={translate('auto.App.e4b9e7dff7', 'Toggle sidebar')}
-              >
-                <PanelLeft size={16} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
-                value0: leftSidebarShortcutLabel
-              })}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        {layout.showSidebar && layout.workspaceSidebarOnLeft ? (
+          <WorkspaceSidebarToggle edge="left" />
+        ) : null}
+        {/* Why: a left-mounted activity sidebar collapses its body to zero width, but this header persists —
+            so its re-expand toggle belongs here, clear of the tab strip, rather than floating over the tabs. */}
+        {layout.showRightSidebarControls &&
+        layout.activitySidebarEdge === 'left' &&
+        !layout.rightSidebarOpen ? (
+          <RightSidebarToggle edge="left" />
+        ) : null}
       </div>
       {/* Why: Back/Forward span worktree + page history, so show the cluster wherever the shortcut is live (hidden in Settings/non-stack views). */}
       {shouldShowWorktreeHistoryControls(layout.activeView) && (

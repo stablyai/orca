@@ -260,7 +260,12 @@ export function registerSettingsHandlers(
       void prepareLocalWorktreeRootsForRepos(store)
       scheduleCurrentWorktreeBaseDirectoryWatcherSync()
     }
-    if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
+    if (
+      APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs) ||
+      // Why: the sidebar toggle entries are named by edge, so a swap must relabel them.
+      ('workspaceSidebarPosition' in sanitizedArgs &&
+        before.workspaceSidebarPosition !== result.workspaceSidebarPosition)
+    ) {
       rebuildAppMenu()
     }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {

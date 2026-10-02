@@ -6,8 +6,10 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
+import type { WorkspaceSidebarPosition } from '../../shared/ui-chrome-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
+import { buildSidebarToggleMenuItems } from './sidebar-toggle-menu-items'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -38,6 +40,8 @@ type RegisterAppMenuOptions = {
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined
+  /** Edge holding the workspace list; the menu names each sidebar toggle by the edge its panel sits on. */
+  getWorkspaceSidebarPosition?: () => WorkspaceSidebarPosition
   // Why: the macOS app-menu title. Passed the per-branch dev label since
   // app.name is now pinned to a stable value for Keychain-key stability.
   appMenuLabel?: string
@@ -54,8 +58,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onZoomIn,
     onZoomOut,
     onZoomReset,
-    onToggleLeftSidebar,
-    onToggleRightSidebar,
     onToggleAppearance,
     getAppearanceState,
     getKeybindings
@@ -218,6 +220,8 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
+  const sidebarToggleItems = buildSidebarToggleMenuItems(options, shortcutLabel)
+
   // Why: mirror VS Code's View > Appearance submenu so users can toggle
   // sidebar/status-bar/tasks-button/titlebar-activity from the menu bar as
   // well as from the settings pane. Electron doesn't reactively update
@@ -228,21 +232,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const appearanceSubmenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.appearance', 'Appearance'),
     submenu: [
-      {
-        // Why: display-only shortcut hint — not a real accelerator. Cmd/Ctrl+B
-        // is intercepted in createMainWindow.ts's before-input-event handler
-        // with a TipTap-bold carve-out for markdown editors. Binding the
-        // accelerator here would steal the chord before that carve-out can
-        // fire. Sidebar open/closed lives in the renderer store (non-persisted),
-        // so we forward a toggle request rather than mirroring state in main.
-        label: `${translateMain('menu.toggleLeftSidebar', 'Toggle Left Sidebar')}\t${shortcutLabel('sidebar.left.toggle')}`,
-        click: () => onToggleLeftSidebar()
-      },
-      {
-        // Why: display-only shortcut hint for the same reason as above.
-        label: `${translateMain('menu.toggleRightSidebar', 'Toggle Right Sidebar')}\t${shortcutLabel('sidebar.right.toggle')}`,
-        click: () => onToggleRightSidebar()
-      },
+      ...sidebarToggleItems,
       {
         label: translateMain('menu.showStatusBar', 'Show Status Bar'),
         type: 'checkbox',

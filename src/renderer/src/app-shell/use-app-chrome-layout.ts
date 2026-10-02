@@ -3,11 +3,19 @@ import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import {
+  resolveSidebarSlotChrome,
+  resolveSidebarSlotLayout,
+  type WindowEdge
+} from '@/lib/sidebar-slot-layout'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { useAppStore } from '../store'
 import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
 import { useSystemPrefersDark } from '../components/terminal-pane/use-system-prefers-dark'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { normalizeWorkspaceSidebarPosition } from '../../../shared/workspace-sidebar-position'
+import { shortcutPlatform } from './app-window-chrome'
 import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
@@ -75,15 +83,35 @@ export function useAppChromeLayout() {
   // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
   const showSidebar =
     activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
-  // Tasks/Landing show the full titlebar only when the sidebar is collapsed; open, they mirror workspace view (creation suppresses it).
+  const sidebarSlots = resolveSidebarSlotLayout({
+    workspaceSidebarPosition: normalizeWorkspaceSidebarPosition(settings?.workspaceSidebarPosition),
+    platform: shortcutPlatform,
+    isWebClient: isPairedWebClientWindow()
+  })
+  const activitySidebarEdge: WindowEdge =
+    sidebarSlots.leftOccupant === 'activity' ? 'left' : 'right'
+  const workspaceSidebarOnLeft = sidebarSlots.leftOccupant === 'workspace'
+  // Full-page navigation surfaces and worktree creation own the whole content area, so the activity sidebar renders nothing there.
+  const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
+  // Why: slot occupancy must track the sidebar actually drawn, or an unmounted one still reserves its column.
+  const activitySidebarOpen = rightSidebarOpen && showRightSidebarControls
+  const leftOccupantOpen = workspaceSidebarOnLeft ? sidebarOpen : activitySidebarOpen
+  // Tasks/Landing show the full titlebar only when the left sidebar is collapsed; open, they mirror workspace view (creation suppresses it).
   const stackedSidebarOpen =
-    !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
+    !workspaceChromeActive && !creationLayoutActive && showSidebar && leftOccupantOpen
   // Visible creation keeps only the top-left window chrome; tabs and right-sidebar chrome stay gated by workspaceChromeActive.
   const leftTitlebarChromeLayout = resolveLeftTitlebarChromeLayout({
     workspaceChromeActive,
     stackedSidebarOpen,
     creationLayoutActive,
-    sidebarOpen
+    sidebarOpen: leftOccupantOpen
+  })
+  const { leftSlotOpen, trailingSlotOpen, leftColumnHeaderFloating } = resolveSidebarSlotChrome({
+    leftOccupant: sidebarSlots.leftOccupant,
+    workspaceSidebarOpen: sidebarOpen,
+    activitySidebarOpen,
+    leftTitlebarChromeMounted: leftTitlebarChromeLayout.shouldMount,
+    stackedSidebarOpen
   })
 
   // Why: useLayoutEffect fires before paint, so dispatching SYNC_FIT_PANES_EVENT reflows the terminal in the same frame as the width change — no wrongly-sized transient.
@@ -113,12 +141,13 @@ export function useAppChromeLayout() {
     isFullScreen,
     settings?.showTitlebarAppName,
     showSidebar,
-    leftTitlebarChromeLayout.isFloating,
-    sidebarOpen
+    leftColumnHeaderFloating,
+    leftSlotOpen
   ])
 
   return {
     activeView,
+    activitySidebarEdge,
     activeWorktreeId,
     activePendingCreationId,
     activeTabCanExpand,
@@ -126,22 +155,26 @@ export function useAppChromeLayout() {
     collapsedSidebarHeaderWidth,
     creationLayoutActive,
     isFullScreen,
+    leftColumnHeaderFloating,
     leftSidebarStyle,
+    leftSlotOpen,
     leftTitlebarChromeLayout,
     rightSidebarExplorerView,
     rightSidebarOpen,
     rightSidebarTab,
     shouldMountTerminalWorkbench,
     showSidebar,
-    // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.
-    showRightSidebarControls: !creationLayoutActive && canShowRightSidebarForView(activeView),
+    showRightSidebarControls,
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
     showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
     sidebarOpen,
+    sidebarSlots,
     stackedSidebarOpen,
     // Why: the workbench stays mounted while hidden, so visibility tracks the same condition separately.
     terminalWorkbenchVisible: workspaceChromeActive,
     titlebarLeftControlsRef,
-    workspaceChromeActive
+    trailingSlotOpen,
+    workspaceChromeActive,
+    workspaceSidebarOnLeft
   }
 }

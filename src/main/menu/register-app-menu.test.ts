@@ -566,4 +566,44 @@ describe('registerAppMenu', () => {
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
+
+  it('names each sidebar toggle by its edge once the workspace list moves right', () => {
+    const options = { ...buildMenuOptions(), getWorkspaceSidebarPosition: () => 'right' as const }
+    registerAppMenu(options)
+
+    const viewSubmenu = getSubmenu(getTemplate(), 'View')
+    const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
+      []) as Electron.MenuItemConstructorOptions[]
+
+    // Why: Mod+B still toggles the workspace list, which now sits on the right; Mod+L toggles the activity sidebar on the left.
+    const activityLabel = `Toggle Left Sidebar\t${isMac ? '⌘L' : 'Ctrl+L'}`
+    const workspaceLabel = `Toggle Right Sidebar\t${isMac ? '⌘B' : 'Ctrl+B'}`
+    const labels = appearanceSubmenu.map((item) => item.label)
+    expect(labels.indexOf(activityLabel)).toBeLessThan(labels.indexOf(workspaceLabel))
+    expect(labels.indexOf(activityLabel)).toBeGreaterThanOrEqual(0)
+
+    appearanceSubmenu
+      .find((item) => item.label === activityLabel)
+      ?.click?.({} as never, {} as never, {} as never)
+    appearanceSubmenu
+      .find((item) => item.label === workspaceLabel)
+      ?.click?.({} as never, {} as never, {} as never)
+    expect(options.onToggleRightSidebar).toHaveBeenCalledTimes(1)
+    expect(options.onToggleLeftSidebar).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats an unknown saved position as the left default', () => {
+    const options = {
+      ...buildMenuOptions(),
+      getWorkspaceSidebarPosition: () => 'sideways' as never
+    }
+    registerAppMenu(options)
+
+    const viewSubmenu = getSubmenu(getTemplate(), 'View')
+    const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
+      []) as Electron.MenuItemConstructorOptions[]
+    expect(appearanceSubmenu.map((item) => item.label)).toContain(
+      `Toggle Left Sidebar\t${isMac ? '⌘B' : 'Ctrl+B'}`
+    )
+  })
 })

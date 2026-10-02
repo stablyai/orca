@@ -34,7 +34,8 @@ import type {
   OpenInApplication,
   SourceControlGroupOrder,
   SourceControlViewMode,
-  TaskViewPresetId
+  TaskViewPresetId,
+  WorkspaceSidebarPosition
 } from './ui-chrome-types'
 import type { SetupScriptLaunchMode } from './worktree/launch-types'
 import type {
@@ -82,6 +83,8 @@ export type GlobalSettings = {
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
+  /** Swaps the workspace list and activity/explorer sidebars for editor-style (files on the left) layouts. */
+  workspaceSidebarPosition: WorkspaceSidebarPosition
   uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
