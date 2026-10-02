@@ -90,6 +90,22 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     return { handle, reset: true }
   }
 
+  async requestTerminalRedraw(
+    handle: string,
+    viewport: { cols: number; rows: number }
+  ): Promise<boolean> {
+    // Re-resolve after the viewport await: a replacement or mobile takeover invalidates the kick.
+    const leaf = this.resolveLiveLeafForHandle(handle)
+    if (!leaf?.ptyId || this.getDriver(leaf.ptyId).kind === 'mobile') {
+      return false
+    }
+    const size = this.getTerminalSize(leaf.ptyId)
+    if (size?.cols !== viewport.cols || size.rows !== viewport.rows) {
+      return false
+    }
+    return (await this.ptyController?.requestRedraw?.(leaf.ptyId)) ?? false
+  }
+
   getTerminalSize(ptyId: string): { cols: number; rows: number } | null {
     return this.ptyController?.getSize?.(ptyId) ?? null
   }

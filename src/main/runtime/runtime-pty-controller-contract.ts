@@ -126,6 +126,7 @@ export type RuntimePtyController = {
   clearBuffer?(ptyId: string): Promise<void>
   resetInputModes?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
+  requestRedraw?(ptyId: string): Promise<boolean>
   // Why: exact-id mobile polls should not enumerate every local and SSH PTY.
   hasPty?(ptyId: string): boolean | null
   listProcesses?(

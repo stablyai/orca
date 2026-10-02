@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { Terminal } from '@xterm/headless'
+import { NORMAL_BUFFER_PROLOGUE } from './pty-connection-test-constants'
 import { flushAsyncTicks, createDeferred, writeHeadlessTerminal } from './pty-connection-test-async'
 import { createRect } from './pty-connection-test-dom'
 import {
@@ -770,7 +771,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(8)
     replayCallback.current?.('blocking replay')
     await flushAsyncTicks(12)
-    expect(writes).toEqual(['\x1b[?2026l\x1b[2J\x1b[3J\x1b[H'])
+    expect(writes).toEqual([NORMAL_BUFFER_PROLOGUE])
     reattachResult.resolve({ id: 'tab-pty', snapshot: 'stale authoritative snapshot' })
     await flushAsyncTicks(12)
     const resizeCallsBeforeReplacement = transport.resize.mock.calls.length

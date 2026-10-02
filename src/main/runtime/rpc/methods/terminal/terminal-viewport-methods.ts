@@ -62,6 +62,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
+      const previousSize = params.redraw ? runtime.getTerminalSize(leaf.ptyId) : null
       const viewportUpdate = await updateViewportForClient(
         runtime,
         leaf.ptyId,
@@ -73,6 +74,15 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
         'refresh',
         params.claim === true
       )
+      if (
+        params.redraw === true &&
+        params.client.type === 'desktop' &&
+        viewportUpdate.applied &&
+        previousSize?.cols === params.viewport.cols &&
+        previousSize.rows === params.viewport.rows
+      ) {
+        await runtime.requestTerminalRedraw(params.terminal, params.viewport)
+      }
       return { ...viewportUpdate, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   })

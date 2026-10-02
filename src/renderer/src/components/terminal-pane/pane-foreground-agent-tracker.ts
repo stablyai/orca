@@ -1,52 +1,18 @@
 import {
   isAgentForegroundWrapperProcess,
-  recognizeAgentProcess,
-  type RecognizedAgentProcess
+  recognizeAgentProcess
 } from '../../../../shared/agent-process-recognition'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import type {
+  PaneForegroundAgentTracker,
+  PaneForegroundAgentTrackerDeps
+} from './pane-foreground-agent-tracker-contract'
 import { createPaneForegroundProcessReader } from './pane-foreground-process-reader'
 import { FOREGROUND_COMMAND_READS } from '../../../../shared/foreground-command-settle'
 
 const VISIBLE_PTY_SETTLE_MS = 350
 type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished'
-
-type PaneForegroundAgentTrackerDeps = {
-  getPtyId: () => string | null
-  /** Local panes only — remote/SSH foreground reads are expensive RPCs and
-   *  their replayed OSC streams must not produce process evidence. */
-  isTrackablePtyId: (ptyId: string) => boolean
-  readForegroundProcess: (
-    ptyId: string,
-    options?: { expectedIncarnationId?: string }
-  ) => Promise<string | null | RuntimeTerminalProcessInspection>
-  /** Fresh, provider-owned evidence used only when input routing may change. */
-  confirmForegroundProcess?: (
-    ptyId: string,
-    options?: { expectedIncarnationId?: string }
-  ) => Promise<string | null | RuntimeTerminalProcessInspection>
-  /** Remote authorities must provide fenced evidence; local panes retain the string path. */
-  isRemotePtyId?: (ptyId: string) => boolean
-  getExpectedIncarnationId?: () => string | null
-  publish: (entry: PaneForegroundAgentEntry) => void
-  /** The entry currently published for this pane, whoever wrote it. */
-  getPublishedEntry?: () => PaneForegroundAgentEntry | undefined
-  /** A local read recognized an agent; lets the pane's process monitor watch for its exit. */
-  onAgentProcessRead?: (process: RecognizedAgentProcess) => void
-  /** True when the pane is otherwise known to run an agent (launchAgent, live
-   *  hook status). Lets a restored agent pane confirm — rather than trust — a
-   *  133;D before any command-start read has recorded its own evidence. */
-  hasKnownAgentIdentity?: () => boolean
-  /** Fired when a confirming read proves the foreground genuinely returned to a
-   *  shell (agent exited). Lets callers clear a stale agent-named tab title that
-   *  the shell never repaints. */
-  onConfirmedShellForeground?: (reason: 'visible-pty' | 'command-finished' | 'process-exit') => void
-  onCommandFinishedUnavailable?: () => void
-  onVisibleForegroundSettled?: (outcome: 'agent' | 'shell' | 'inconclusive') => void
-}
 
 /**
  * Publishes process-table identity for a pane at OSC 133 command boundaries:
@@ -56,17 +22,9 @@ type PaneForegroundAgentTrackerDeps = {
  * foreground read first, because a full-screen agent's nested command shells
  * leak their own 133;D onto the main PTY.
  */
-export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTrackerDeps): {
-  /** True while any read is scheduled or running, whatever its authority. */
-  hasReadInFlight: () => boolean
-  onVisiblePtyBound: (expectsAgent?: boolean) => boolean
-  onCommandStarted: (expectedAgent?: TuiAgent | null) => void
-  /** True when pane identity must remain visible until an async shell confirmation. */
-  onCommandFinished: () => boolean
-  /** The process monitor confirmed this agent exited (no agent, no children, settled). */
-  onProcessExitConfirmed: (process: RecognizedAgentProcess) => void
-  dispose: () => void
-} {
+export function createPaneForegroundAgentTracker(
+  deps: PaneForegroundAgentTrackerDeps
+): PaneForegroundAgentTracker {
   let disposed = false
   let readTimer: ReturnType<typeof setTimeout> | null = null
   let scheduledReadReason: ForegroundReadReason | null = null
@@ -273,6 +231,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   }
 
   return {
+    resetForPtyReplacement() {
+      cancelPendingRead()
+      clearAgentEvidence()
+    },
     // Why: onVisiblePtyBound refuses to schedule while a higher-authority
     // command read owns the pane, so "it scheduled nothing" must not be read
     // as "nothing will confirm this pane".

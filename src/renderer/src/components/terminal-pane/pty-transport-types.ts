@@ -206,6 +206,8 @@ export type PtyTransport = {
       cellW?: number
       cellH?: number
       claim?: boolean
+      /** Reattach repaint when the host's grid is unchanged; never claims control. */
+      redraw?: boolean
     }
   ) => boolean
   isConnected: () => boolean

@@ -28,6 +28,7 @@ import {
   writePtyFromRuntimeController
 } from './operations'
 import { recordUnconfirmedExplicitSshStop } from './undelivered-ssh-kill'
+import { requestPtyRedrawFromRuntimeController } from './pty-redraw'
 import { supportsForegroundProcessEvidenceFromRuntimeController } from './foreground-process-evidence-capability'
 import {
   listProcessesFromRuntimeController,
@@ -91,6 +92,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     waitForRendererSerializer: (ptyId, afterGeneration, timeoutMs, signal) =>
       waitForRendererSerializerFromRuntimeController(ptyId, afterGeneration, timeoutMs, signal),
     getSize: (ptyId) => getSizeFromRuntimeController(ptyId),
-    resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows)
+    resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows),
+    requestRedraw: requestPtyRedrawFromRuntimeController
   })
 }

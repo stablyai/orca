@@ -1,4 +1,8 @@
-import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../shared/terminal-mode-reset-profiles'
+import {
+  ABORT_TRUNCATED_CONTROL_STRING,
+  buildSnapshotReplayPrologue,
+  POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET
+} from '../../../../../shared/terminal-mode-reset-profiles'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -76,11 +80,13 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
   let replayedAtSourceGrid = false
   const drainReplayDataQueue = async (
     expectedPtyId: string | null,
-    expectedStreamGeneration: number
+    expectedStreamGeneration: number,
+    expectedIncarnationId: string | null | undefined
   ): Promise<boolean> => {
     let appliedCurrentPayload = false
     while (session.pendingReplayData !== null) {
       if (
+        session.remotePtyIncarnationId !== expectedIncarnationId ||
         session.pendingReplayData.ptyId !== expectedPtyId ||
         session.pendingReplayData.streamGeneration !== expectedStreamGeneration
       ) {
@@ -118,12 +124,16 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       // Why ahead of the source-grid resize: the clear is grid-independent, so
       // dropping the scrollback first spares a reflow of history the very next
       // sequence discards (see use-terminal-container-fit-sync.ts on its cost).
+      const replacementReplay = session.replacementReplayPending === true
       if (clearBeforeReplay) {
-        // RELEASE_SYNCHRONIZED_OUTPUT: a reconnect is exactly the event that severs a
-        // frame mid-flight, so this xterm may hold an open 2026 latch — and \x1b[2J does
-        // not clear it, so the pane would stay frozen on its last painted frame and the
-        // whole replay would go unseen until xterm's 1s timeout.
-        await session.writeReplayDataAsync(`${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H`)
+        const paneOnAlternateScreen = session.pane.terminal.buffer.active.type === 'alternate'
+        await session.writeReplayDataAsync(
+          ABORT_TRUNCATED_CONTROL_STRING +
+            buildSnapshotReplayPrologue({
+              targetAlternateScreen: alternateScreen ?? paneOnAlternateScreen,
+              paneOnAlternateScreen
+            })
+        )
         if (!isCurrentPayload()) {
           continue
         }
@@ -164,7 +174,9 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       }
       if (clearBeforeReplay || data.length > 0) {
         await session.writeReplayEpilogue(
-          session.chooseReattachReplayReset(data, false, alternateScreen, terminalOwner),
+          replacementReplay && terminalOwner !== 'shell'
+            ? POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET
+            : session.chooseReattachReplayReset(data, false, alternateScreen, terminalOwner),
           session.writeReplayDataAsync
         )
         if (!isCurrentPayload()) {
@@ -187,6 +199,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       // empty buffer; rebuilding after replay parses seeds the glyph atlas
       // from the now-populated xterm state.
       session.manager.rebuildPaneWebgl(session.pane.id)
+      session.replacementReplayPending = false
       appliedCurrentPayload = true
     }
     return appliedCurrentPayload
@@ -239,6 +252,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       return
     }
     const scheduledPtyId = session.pendingReplayData?.ptyId ?? null
+    const scheduledIncarnationId = session.remotePtyIncarnationId
     replayDrainQueued = true
     // Why reset here: a transaction whose restore was skipped never ran its
     // afterRestore, and a stale flag would fit a later drain that never left
@@ -255,12 +269,17 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       .then(() =>
         session.structuralReplayCoordinator.run(
           async () => {
-            replayCompleted = await drainReplayDataQueue(scheduledPtyId, scheduledStreamGeneration)
+            replayCompleted = await drainReplayDataQueue(
+              scheduledPtyId,
+              scheduledStreamGeneration,
+              scheduledIncarnationId
+            )
           },
           {
             shouldRestore: () =>
               !session.disposed &&
               session.transport.getPtyId() === scheduledPtyId &&
+              session.remotePtyIncarnationId === scheduledIncarnationId &&
               session.transportStreamGeneration === scheduledStreamGeneration,
             afterRestore: () => fitAfterSourceGridReplay(scheduledPtyId, scheduledStreamGeneration)
           }
@@ -276,7 +295,11 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
           // re-reading it here could retag stale bytes for a replacement PTY.
           session.scheduleReplayDataDrain()
         }
-        session.finishReattachLiveDataDeferral(replayCompleted, scheduledStreamGeneration)
+        // A superseded image must not fail the successor's deferred live-output owner.
+        session.finishReattachLiveDataDeferral(
+          replayCompleted || session.remotePtyIncarnationId !== scheduledIncarnationId,
+          scheduledStreamGeneration
+        )
       })
   }
 }

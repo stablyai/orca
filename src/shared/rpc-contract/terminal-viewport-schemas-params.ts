@@ -44,7 +44,9 @@ export const TerminalUpdateViewport = TerminalHandle.extend({
     cols: z.number().int().min(20).max(240),
     rows: z.number().int().min(8).max(120)
   }),
-  claim: z.boolean().optional()
+  claim: z.boolean().optional(),
+  // Older hosts strip this field and retain their existing viewport behavior.
+  redraw: z.boolean().optional()
 })
 
 // Why: phone-fit auto-restore preference (docs/mobile-fit-hold.md); `null` = Indefinite, finite ms clamped to [5_000, 60min] server-side.

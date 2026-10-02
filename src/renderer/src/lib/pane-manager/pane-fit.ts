@@ -63,7 +63,7 @@ export function readProposedPaneFitDimensions(
   const ptyId = pane.container?.dataset?.ptyId
   const override = ptyId ? getFitOverrideForPty(ptyId) : null
   const measurable = canMeasurePaneForFit(pane)
-  if (!measurable && !override) {
+  if (!measurable && !(override && hasKnownFitOverrideDimensions(override))) {
     return null
   }
   // Re-check after the metric flush: larger cells can push a narrow pane below
@@ -71,10 +71,19 @@ export function readProposedPaneFitDimensions(
   if (measurable && flushDeferredPaneMetricOptions(pane) && !canMeasurePaneForFit(pane)) {
     return null
   }
-  if (override) {
+  if (override && hasKnownFitOverrideDimensions(override)) {
     return { cols: override.cols, rows: override.rows }
   }
   return getProposedPaneDimensions(pane)
+}
+
+function hasKnownFitOverrideDimensions(dimensions: { cols: number; rows: number }): boolean {
+  return (
+    Number.isFinite(dimensions.cols) &&
+    Number.isFinite(dimensions.rows) &&
+    dimensions.cols > 0 &&
+    dimensions.rows > 0
+  )
 }
 
 function canPreserveScrollIntentForFit(pane: ManagedPane): boolean {
@@ -108,10 +117,10 @@ function performSafeFit(pane: ManagedPane): boolean {
     shouldRestoreScroll = true
   }
   try {
-    // Why: a mobile-owned PTY must stay at its phone grid on passive desktop panes.
+    // Why: an unknown host size retains the hold but cannot size the renderer to zero.
     const ptyId = pane.container?.dataset?.ptyId
     const override = ptyId ? getFitOverrideForPty(ptyId) : null
-    if (override) {
+    if (override && hasKnownFitOverrideDimensions(override)) {
       if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
         if (canPreserveScrollIntentForFit(pane)) {
           captureScrollForFit()
