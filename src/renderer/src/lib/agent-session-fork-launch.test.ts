@@ -52,7 +52,6 @@ const state: MockState = {
 }
 
 const mocks = vi.hoisted(() => ({
-  preflightAgentTrust: vi.fn(async (_args: unknown) => undefined),
   getForkAgentLaunchTarget: vi.fn(
     (
       _state: unknown,
@@ -84,7 +83,6 @@ vi.mock('./agent-session-fork-launch-target', () => ({
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: mocks.createWebRuntimeSessionTerminal
 }))
-vi.mock('@/lib/agent-trust-preflight', () => ({ preflightAgentTrust: mocks.preflightAgentTrust }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
 vi.mock('@/lib/agent-session-launch-plan', () => ({
   planAgentSessionLaunch: mocks.planAgentSessionLaunch
@@ -128,8 +126,6 @@ describe('launchNativeAgentSessionFork', () => {
     const ok = await launchNativeAgentSessionFork({
       session: makeSession(),
       worktreeId: 'repo::child',
-      worktreePath: '/r/child',
-      connectionId: null,
       launchSource: 'sidebar'
     })
 
@@ -148,11 +144,9 @@ describe('launchNativeAgentSessionFork', () => {
       request_kind: 'resume'
     })
     expect(mocks.getForkAgentLaunchTarget).toHaveBeenCalledWith(state, 'repo::child')
-    expect(mocks.preflightAgentTrust).toHaveBeenCalledWith({
-      agent: 'claude',
-      workspacePath: '/r/child',
-      connectionId: undefined
-    })
+    // Why: the declared launchAgent is what the PTY spawn hook pre-trusts the child worktree for.
+    expect(options?.launchAgent).toBe('claude')
+    expect(options?.pendingStartup?.launchAgent).toBe('claude')
     expect(state.setActiveTabType).toHaveBeenCalledWith('terminal', 'repo::child')
     expect(mocks.appendTabToWorktreeOrder).toHaveBeenCalledWith('repo::child', 'tab-fork')
   })
@@ -165,8 +159,6 @@ describe('launchNativeAgentSessionFork', () => {
         launchConfig: { agentArgs: '', agentEnv: { CODEX_HOME: '/acct/codex' } }
       }),
       worktreeId: 'repo::child',
-      worktreePath: '/r/child',
-      connectionId: 'ssh-1',
       launchSource: 'terminal_context_menu'
     })
 
@@ -179,11 +171,7 @@ describe('launchNativeAgentSessionFork', () => {
     expect(options?.pendingStartup?.telemetry).toMatchObject({
       launch_source: 'terminal_context_menu'
     })
-    expect(mocks.preflightAgentTrust).toHaveBeenCalledWith({
-      agent: 'codex',
-      workspacePath: '/r/child',
-      connectionId: 'ssh-1'
-    })
+    expect(options?.pendingStartup?.launchAgent).toBe('codex')
   })
 
   it("falls back to the user's default args and env without a source launch config", async () => {
@@ -193,8 +181,6 @@ describe('launchNativeAgentSessionFork', () => {
     await launchNativeAgentSessionFork({
       session: makeSession({ launchConfig: null }),
       worktreeId: 'repo::child',
-      worktreePath: '/r/child',
-      connectionId: null,
       launchSource: 'sidebar'
     })
 
@@ -214,16 +200,12 @@ describe('launchNativeAgentSessionFork', () => {
     const ok = await launchNativeAgentSessionFork({
       session: makeSession(),
       worktreeId: 'repo::child',
-      worktreePath: '/r/child',
-      connectionId: null,
       launchSource: 'sidebar'
     })
 
     expect(ok).toBe(true)
     expect(createTab).not.toHaveBeenCalled()
     expect(mocks.appendTabToWorktreeOrder).not.toHaveBeenCalled()
-    // Why: a local trust write would describe the client's disk, not the host running the agent.
-    expect(mocks.preflightAgentTrust).not.toHaveBeenCalled()
     expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledExactlyOnceWith({
       worktreeId: 'repo::child',
       environmentId: 'env-1',
@@ -257,8 +239,6 @@ describe('launchNativeAgentSessionFork', () => {
     const ok = await launchNativeAgentSessionFork({
       session: makeSession(),
       worktreeId: 'repo::child',
-      worktreePath: '/r/child',
-      connectionId: null,
       launchSource: 'sidebar'
     })
 
@@ -279,14 +259,11 @@ describe('launchNativeAgentSessionFork', () => {
         providerSession: { key: 'session_id', id: '' }
       }),
       worktreeId: 'repo::child',
-      worktreePath: '/r/child',
-      connectionId: null,
       launchSource: 'sidebar'
     })
 
     expect(ok).toBe(false)
     expect(createTab).not.toHaveBeenCalled()
-    expect(mocks.preflightAgentTrust).not.toHaveBeenCalled()
   })
 })
 
@@ -321,11 +298,6 @@ describe('launchTranscriptAgentSessionFork', () => {
         launchSource: 'terminal_context_menu'
       })
     )
-    expect(mocks.preflightAgentTrust).toHaveBeenCalledWith({
-      agent: 'gemini',
-      workspacePath: '/r/child',
-      connectionId: null
-    })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo::child', {
       sidebarRevealBehavior: 'auto'
     })
@@ -346,12 +318,9 @@ describe('launchTranscriptAgentSessionFork', () => {
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
       expect.objectContaining({ launchPlatform: 'linux', launchSource: 'sidebar' })
     )
-    expect(mocks.preflightAgentTrust).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'ssh-1' })
-    )
   })
 
-  it('skips the trust preflight for a structured native chat launch', async () => {
+  it('lets a structured native chat launch provide the initial surface', async () => {
     mocks.planAgentSessionLaunch.mockReturnValueOnce({ route: 'structured-native-chat' })
     mockLaunchResult({ kind: 'local-agent-session', tabId: 't' })
 
@@ -363,7 +332,6 @@ describe('launchTranscriptAgentSessionFork', () => {
       launchSource: 'sidebar'
     })
 
-    expect(mocks.preflightAgentTrust).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo::child', {
       sidebarRevealBehavior: 'auto',
       providesInitialSurface: true

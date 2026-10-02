@@ -216,7 +216,7 @@ describe('runAgentSessionFork', () => {
     expect(carryOrder).toBeLessThan(launchOrder ?? 0)
   })
 
-  it("routes the carry and launch through the repo on the source's own host", async () => {
+  it("routes the carry through the repo on the source's own host", async () => {
     state.repos = [
       { id: 'repo', connectionId: 'ssh-1' },
       { id: 'repo', connectionId: 'ssh-2' }
@@ -236,18 +236,13 @@ describe('runAgentSessionFork', () => {
     expect(mocks.carryRuntimeWorkingTreeChanges).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-2' })
     )
-    expect(mocks.launchNativeAgentSessionFork).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'ssh-2' })
-    )
   })
 
-  it('launches the native fork in the child with the repo connection', async () => {
+  it('launches the native fork in the child', async () => {
     await runAgentSessionFork(request(), onStage)
     expect(mocks.launchNativeAgentSessionFork).toHaveBeenCalledWith({
       session: claudeSession,
       worktreeId: 'repo::feedback-fork',
-      worktreePath: '/r/feedback-fork',
-      connectionId: 'ssh-1',
       launchSource: 'sidebar'
     })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledExactlyOnceWith('repo::feedback-fork', {

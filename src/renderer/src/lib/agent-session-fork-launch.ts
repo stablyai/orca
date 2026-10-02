@@ -4,7 +4,6 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { appendTabToWorktreeOrder } from '@/lib/sleeping-agent-session-launch'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
@@ -58,8 +57,6 @@ async function launchNativeForkOnRuntimeHost(args: {
 export async function launchNativeAgentSessionFork(args: {
   session: ForkableAgentSession
   worktreeId: string
-  worktreePath: string
-  connectionId: string | null
   launchSource: AgentForkLaunchSource
 }): Promise<boolean> {
   const state = useAppStore.getState()
@@ -86,7 +83,6 @@ export async function launchNativeAgentSessionFork(args: {
     return false
   }
   if (target.runtimeEnvironmentId) {
-    // Why: no local trust preflight — it writes the client's agent config, which the host never reads.
     return launchNativeForkOnRuntimeHost({
       session,
       worktreeId: args.worktreeId,
@@ -94,13 +90,8 @@ export async function launchNativeAgentSessionFork(args: {
       startupPlan
     })
   }
-  // Why: a brand-new worktree path is untrusted until the agent's trust preflight runs there.
-  await preflightAgentTrust({
-    agent: session.agent,
-    workspacePath: args.worktreePath,
-    connectionId: args.connectionId ?? undefined
-  })
   // Why: no resume claim — the fork gets a new session id and the source keeps its owner.
+  // launchAgent also lets the PTY spawn hook pre-trust the new child worktree.
   const tab = state.createTab(args.worktreeId, undefined, undefined, {
     launchAgent: session.agent,
     pendingStartup: {
@@ -140,13 +131,6 @@ export async function launchTranscriptAgentSessionFork(args: {
     prompt: args.prompt,
     promptDelivery: 'draft'
   })
-  if (agentSessionLaunchPlan.route !== 'structured-native-chat') {
-    await preflightAgentTrust({
-      agent: args.agent,
-      workspacePath: args.worktreePath,
-      connectionId: repo?.connectionId
-    })
-  }
   const launchPlatform = getForkAgentLaunchPlatform({
     repo,
     worktreePath: args.worktreePath,

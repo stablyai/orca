@@ -120,15 +120,12 @@ export async function copyTranscriptPrompt(prompt: string): Promise<boolean> {
 async function launchForkAgentSurface(
   source: Exclude<AgentSessionForkSource, { kind: 'none' }>,
   child: ForkTarget,
-  connectionId: string | null,
   launchSource: AgentForkLaunchSource
 ): Promise<boolean> {
   if (source.kind === 'native') {
     return launchNativeAgentSessionFork({
       session: source.session,
       worktreeId: child.id,
-      worktreePath: child.path,
-      connectionId,
       launchSource
     })
   }
@@ -144,7 +141,6 @@ async function launchForkAgentSurface(
 async function launchForkAgent(
   source: AgentSessionForkSource,
   child: ForkTarget,
-  connectionId: string | null,
   launchSource: AgentForkLaunchSource
 ): Promise<boolean> {
   if (source.kind === 'none') {
@@ -152,7 +148,7 @@ async function launchForkAgent(
   }
   let launched: boolean
   try {
-    launched = await launchForkAgentSurface(source, child, connectionId, launchSource)
+    launched = await launchForkAgentSurface(source, child, launchSource)
   } catch (error) {
     // Why: the child already exists; reporting a failed fork would invite a retry that makes a second one.
     console.warn('[agent-session-fork] agent launch failed', error)
@@ -270,7 +266,7 @@ export async function runAgentSessionFork(
       : {}),
     ...(agentOpensSurface ? { providesInitialSurface: true } : {})
   })
-  const launched = await launchForkAgent(request.source, child, connectionId, request.launchSource)
+  const launched = await launchForkAgent(request.source, child, request.launchSource)
   if (!launched) {
     warnings.push({ kind: 'agent-not-started' })
     // Why: the first activation left the surface to the agent tab, so reseed a shell in its place.
