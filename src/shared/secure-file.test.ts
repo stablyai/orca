@@ -1,4 +1,13 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -13,6 +22,7 @@ import {
   isUnreadableError,
   writeSecureFile
 } from './secure-file'
+import { writeSecureJsonFileAsync } from './secure-file-async-write'
 
 const posixModeIt = process.platform === 'win32' ? it.skip : it
 
@@ -580,6 +590,63 @@ describe('hardenSecurePath', () => {
     expect(syncTargets.filter((entry) => entry === targetPath)).toHaveLength(2)
     // No directory should be hardened via the synchronous path.
     expect(syncTargets.filter((entry) => entry === userDataPath)).toHaveLength(0)
+  })
+
+  it('async writes restrict the staged file before publishing it, without a sync icacls spawn', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    tempDirs.push(userDataPath)
+    const targetPath = join(userDataPath, 'dismissals.json')
+
+    await expect(writeSecureJsonFileAsync(targetPath, ['entry'])).resolves.toBe(true)
+
+    expect(getSyncHardenAclCalls()).toHaveLength(0)
+    const [dirTarget, stagedTarget, publishedTarget] = getHardenAclCalls().map(getAclTarget)
+    expect(dirTarget).toBe(userDataPath)
+    expect(stagedTarget).toMatch(/dismissals\.json\.\d+\.\d+\.[0-9a-f]+\.tmp$/)
+    expect(publishedTarget).toBe(targetPath)
+    expect(JSON.parse(readFileSync(targetPath, 'utf8'))).toEqual(['entry'])
+    expect(readdirSync(userDataPath)).toEqual(['dismissals.json'])
+  })
+
+  it('async writes report a failed ACL apply instead of claiming the file is hardened', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    tempDirs.push(userDataPath)
+    const targetPath = join(userDataPath, 'dismissals.json')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(runProcess).mockImplementation((spec) =>
+      Promise.resolve(spec.args?.includes('/grant:r') ? { ...OK, code: 5 } : fakeIcacls(spec))
+    )
+
+    await expect(writeSecureJsonFileAsync(targetPath, [])).resolves.toBe(false)
+    expect(readdirSync(userDataPath)).toEqual(['dismissals.json'])
+    expect(warn).toHaveBeenCalledWith(
+      '[secure-path.windows-acl] failed to restrict path',
+      expect.objectContaining({ targetPath, stage: 'grant' })
+    )
+    warn.mockRestore()
+  })
+
+  it('async writes remove the staged file when publishing fails', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    tempDirs.push(userDataPath)
+    // A non-empty directory at the target makes the rename fail on every platform.
+    const targetPath = join(userDataPath, 'dismissals.json')
+    mkdirSync(targetPath)
+    writeFileSync(join(targetPath, 'occupied'), '')
+
+    await expect(writeSecureJsonFileAsync(targetPath, [])).rejects.toThrow()
+    expect(readdirSync(userDataPath)).toEqual(['dismissals.json'])
+  })
+
+  posixModeIt('async writes publish owner-only files on POSIX', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    tempDirs.push(userDataPath)
+    const targetPath = join(userDataPath, 'dismissals.json')
+
+    await expect(writeSecureJsonFileAsync(targetPath, [])).resolves.toBe(true)
+    expect(statSync(targetPath).mode & 0o777).toBe(0o600)
   })
 
   // Regression test: #4901 — env-store reads at ~2×/s caused an ACL-spawn storm because the

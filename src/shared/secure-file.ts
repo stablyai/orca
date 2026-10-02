@@ -66,7 +66,7 @@ function hardenSecureDirectoryOnce(dirPath: string): void {
   })
 }
 
-function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean {
+export function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean {
   if (isDirectory && process.platform === 'win32') {
     hardenSecureDirectoryOnce(targetPath)
     return true
@@ -291,7 +291,7 @@ function applySecurePathRestriction(
 }
 
 /** Caches the current metadata snapshot for a just-hardened path, or clears it if the path is gone. */
-function rememberHardenedPath(targetPath: string, isDirectory: boolean): void {
+export function rememberHardenedPath(targetPath: string, isDirectory: boolean): void {
   const entry = getHardenedPathCacheEntry(targetPath, isDirectory)
   if (entry) {
     hardenedPathsThisProcess.set(targetPath, entry)

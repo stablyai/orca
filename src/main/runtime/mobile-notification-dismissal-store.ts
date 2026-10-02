@@ -1,10 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  writeSecureJsonFile,
-  hardenExistingSecureFile,
-  isUnreadableError
-} from '../../shared/secure-file'
+import { hardenExistingSecureFile, isUnreadableError } from '../../shared/secure-file'
+import { writeSecureJsonFileAsync } from '../../shared/secure-file-async-write'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
 
 export type DeliveredNotificationIdentity = {
@@ -20,6 +17,8 @@ export class MobileNotificationDismissalStore {
   private readonly path: string
   private entries: RecordEntry[] = []
   private unreadable = false
+  private persisting: Promise<void> | null = null
+  private persistAgain = false
   constructor(userDataPath: string) {
     this.path = join(userDataPath, 'mobile-notification-dismissals.json')
     try {
@@ -74,10 +73,41 @@ export class MobileNotificationDismissalStore {
       })
     }
     next = next.slice(-LIMIT)
-    if (!this.unreadable) {
-      writeSecureJsonFile(this.path, next)
-    }
     this.entries = next
+    if (!this.unreadable) {
+      this.schedulePersist()
+    }
+  }
+
+  /** Resolves once every recorded change has been written or has failed to write. */
+  flush(): Promise<void> {
+    return this.persisting ?? Promise.resolve()
+  }
+
+  // Why async: record() runs on every notification, and a sync secure write blocks the main thread on icacls (#20497).
+  private schedulePersist(): void {
+    if (this.persisting) {
+      this.persistAgain = true
+      return
+    }
+    this.persisting = this.persistLatest()
+  }
+
+  private async persistLatest(): Promise<void> {
+    try {
+      do {
+        this.persistAgain = false
+        try {
+          await writeSecureJsonFileAsync(this.path, this.entries)
+        } catch {
+          // Best-effort recovery state: the next record() rewrites the latest entries.
+          console.warn('[notifications] Could not persist dismissal recovery state')
+        }
+      } while (this.persistAgain)
+    } finally {
+      // Cleared in the same turn as the last check, so a record() can never slip between them.
+      this.persisting = null
+    }
   }
 
   reconcile(delivered: readonly DeliveredNotificationIdentity[]): DeliveredNotificationIdentity[] {
