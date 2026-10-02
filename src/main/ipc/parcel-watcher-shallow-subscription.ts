@@ -1,7 +1,8 @@
-import { statSync, watch, type FSWatcher } from 'node:fs'
+import { statSync, watch } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
+import { createShallowWatcherBinding, type ShallowWatcherBinding } from './shallow-watcher-binding'
 
 export type ShallowWatcherSubscription = {
   unsubscribe: () => Promise<void>
@@ -13,17 +14,6 @@ export type ShallowWatcherSubscription = {
 // re-clone replaces the common dir itself, so the binding is re-checked on a
 // bounded cadence. Two stats per interval is the whole steady-state cost.
 const REBIND_CHECK_INTERVAL_MS = 30_000
-
-function closeFileSystemWatcher(watcher: FSWatcher): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>()
-  watcher.once('close', resolve)
-  try {
-    watcher.close()
-  } catch {
-    resolve()
-  }
-  return promise
-}
 
 export function startShallowWatcher(
   rootPath: string,
@@ -44,8 +34,9 @@ export function startShallowWatcher(
     pathsByDirectory.set(parent, fileNames)
   }
 
-  const watchers = new Map<string, FSWatcher>()
-  const boundIdentities = new Map<string, string>()
+  const watchers = new Map<string, ShallowWatcherBinding>()
+  const ownedBindings = new Set<ShallowWatcherBinding>()
+  let unsubscribePromise: Promise<void> | undefined
   let disposed = false
   let reportedError = false
 
@@ -73,13 +64,15 @@ export function startShallowWatcher(
         return
       }
       watchers.delete(parent)
-      boundIdentities.delete(parent)
-      void closeFileSystemWatcher(existing)
+      void existing.close().catch(reportError)
     }
     const directoryPath = join(rootPath, parent)
+    // Read before watch so a replacement in the gap is detected by the next sweep.
+    const identity = directoryIdentitySync(parent)
     try {
+      let binding: ShallowWatcherBinding
       const watcher = watch(directoryPath, { persistent: false }, (eventType, fileName) => {
-        if (disposed) {
+        if (disposed || watchers.get(parent) !== binding) {
           return
         }
         const name = fileName?.toString()
@@ -100,8 +93,19 @@ export function startShallowWatcher(
           emitUpdates(parent, [name])
         }
       })
-      watcher.on('error', reportError)
-      watchers.set(parent, watcher)
+      binding = createShallowWatcherBinding(
+        watcher,
+        identity,
+        () => {
+          ownedBindings.delete(binding)
+          if (watchers.get(parent) === binding) {
+            watchers.delete(parent)
+          }
+        },
+        reportError
+      )
+      ownedBindings.add(binding)
+      watchers.set(parent, binding)
     } catch (error) {
       // Nested metadata directories may not exist until Git creates them.
       if (parent === '') {
@@ -129,18 +133,18 @@ export function startShallowWatcher(
   }
 
   const refreshBinding = async (parent: string, fileNames: Set<string>): Promise<void> => {
+    const existing = watchers.get(parent)
     const identity = await directoryIdentity(parent)
-    if (disposed || identity === null) {
+    if (disposed || identity === null || watchers.get(parent) !== existing) {
       return
     }
-    const bound = boundIdentities.get(parent)
+    const bound = existing?.identity
     if (bound === identity) {
       return
     }
     // Either the directory appeared after we started, or it was replaced while
     // watched. Both leave the old binding deaf, so rebind and resync.
     watchDirectory(parent, fileNames, true)
-    boundIdentities.set(parent, identity)
     if (bound !== undefined) {
       emitUpdates(parent, fileNames)
     }
@@ -157,22 +161,19 @@ export function startShallowWatcher(
   rebindTimer.unref?.()
 
   for (const [parent, fileNames] of pathsByDirectory) {
-    // Why: read identity BEFORE binding. If the directory is replaced in the gap,
-    // the recorded identity is stale and the first sweep rebinds — the harmless
-    // direction. Reading after would pin the dead inode's watcher to the new
-    // identity, and the sweep would then never rebind it.
-    const identityBeforeBind = directoryIdentitySync(parent)
     watchDirectory(parent, fileNames)
-    if (watchers.has(parent) && identityBeforeBind !== null) {
-      boundIdentities.set(parent, identityBeforeBind)
-    }
   }
 
   return {
-    unsubscribe: async () => {
-      disposed = true
-      clearInterval(rebindTimer)
-      await Promise.all([...watchers.values()].map(closeFileSystemWatcher))
+    unsubscribe: () => {
+      if (!unsubscribePromise) {
+        disposed = true
+        clearInterval(rebindTimer)
+        unsubscribePromise = Promise.all([...ownedBindings].map((binding) => binding.close())).then(
+          () => undefined
+        )
+      }
+      return unsubscribePromise
     }
   }
 }
