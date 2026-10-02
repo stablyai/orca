@@ -1,5 +1,6 @@
 import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { isManagedPaneDisplayNone } from './pane-display-visibility'
+import { PaneReparentFrameTracker } from './pane-reparent-frame-tracker'
 import {
   forceFullViewportPresent,
   requestFullViewportPresent
@@ -11,8 +12,18 @@ import {
 
 const DISPLAYED_PRESENT_RETRY_FRAMES = 16
 type ViewportPresentMode = 'preserve-synchronized-output' | 'force-current-buffer'
-type DisplayedPresentRetry = { frames: number; mode: ViewportPresentMode }
+type DisplayedPresentRetry = {
+  frames: number
+  mode: ViewportPresentMode
+  frameTracker: PaneReparentFrameTracker
+}
 const pendingDisplayedPresentRetries = new WeakMap<ManagedPaneInternal, DisplayedPresentRetry>()
+
+export function cancelPendingViewportPresent(pane: ManagedPaneInternal): void {
+  const pending = pendingDisplayedPresentRetries.get(pane)
+  pendingDisplayedPresentRetries.delete(pane)
+  pending?.frameTracker.cancelPending()
+}
 
 function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportPresentMode): void {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
@@ -25,29 +36,37 @@ function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportP
     }
     return
   }
-  pendingDisplayedPresentRetries.set(pane, {
+  const retry: DisplayedPresentRetry = {
     frames: DISPLAYED_PRESENT_RETRY_FRAMES,
-    mode
-  })
+    mode,
+    frameTracker: new PaneReparentFrameTracker(
+      () => pendingDisplayedPresentRetries.get(pane) !== retry
+    )
+  }
+  pendingDisplayedPresentRetries.set(pane, retry)
   const tick = (): void => {
     const retry = pendingDisplayedPresentRetries.get(pane)
     if (!retry || retry.frames <= 0 || !pane.terminal) {
       pendingDisplayedPresentRetries.delete(pane)
       return
     }
-    if (isManagedPaneDisplayNone(pane)) {
+    const displayNone = isManagedPaneDisplayNone(pane)
+    if (pendingDisplayedPresentRetries.get(pane) !== retry) {
+      return
+    }
+    if (displayNone) {
       if (retry.frames === 1) {
         pendingDisplayedPresentRetries.delete(pane)
         return
       }
       retry.frames -= 1
-      globalThis.requestAnimationFrame(tick)
+      retry.frameTracker.request(tick)
       return
     }
     pendingDisplayedPresentRetries.delete(pane)
     presentPaneViewportWithMode(pane, retry.mode)
   }
-  globalThis.requestAnimationFrame(tick)
+  retry.frameTracker.request(tick)
 }
 
 function presentPaneViewportWithMode(pane: ManagedPane, mode: ViewportPresentMode): void {
