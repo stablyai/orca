@@ -56,9 +56,9 @@ export function sendStructuredAgentSessionTurn(
     delivery?: 'queue-if-active'
     /** Host-local, set only by the client-facing `agentSession.send` RPC (the
      *  renderer's launch prompt included): recorded as the submission's `client`
-     *  origin, whose started turn ends a Stop's or a restart's queue pause.
-     *  Orchestration mail, a restart continuation and `agent.launch`'s host-sent
-     *  prompt never set it. */
+     *  origin, whose started turn ends a Stop's or a restart's queue pause, and the
+     *  only send that may become a queued card. Orchestration mail, a restart
+     *  continuation and `agent.launch`'s host-sent prompt never set it. */
     userSend?: true
     beforeRun?: () => void
   }

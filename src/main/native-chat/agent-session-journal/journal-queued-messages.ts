@@ -247,7 +247,7 @@ export class JournalQueuedMessages {
     if (input.yieldsToPause) {
       // Judged again here, by the drain's own rule. Today a Stop cannot land between the drain's
       // pick and this claim (both run on the session's serialized lane, held across the send), so
-      // this guards any pause-relevant row written off that lane from overtaking a held card.
+      // this guards any pause-relevant row written off that lane from sending a card now held.
       const cards = listQueuedMessages(db, this.deps.sessionId)
       const pauses = this.derivePauses(cards, input.yieldsToPause.hostInstance)
       if (nextSendableQueuedCard(pauses, cards)?.messageId !== input.messageId) {

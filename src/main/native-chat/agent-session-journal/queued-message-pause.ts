@@ -7,8 +7,9 @@
 //     Resume has happened here since.
 //   - 'restarted': a waiting card was written by another host process, and no person's turn has
 //     started since this conversation opened.
-// A person's turn is an accepted submission of origin `client`. Orchestration mail, a restart
-// continuation, a launch prompt and the queue's own drain are `host` and never lift it.
+// A person's turn is an accepted submission of origin `client`: their send, or a card of theirs
+// sent now or by the queue. Orchestration mail, a restart continuation and a launch prompt are
+// `host` and never lift it.
 
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
@@ -148,8 +149,9 @@ function queuedBeforePause(pause: DerivedQueuePause, card: QueueCard): boolean {
 }
 
 // Product decision: a card queued AFTER a Stop is a new instruction and is not held; only cards
-// queued before it, and a steer it withdrew, wait. It still never jumps ahead of a held card: the
-// drain stops at the first one. true instead holds every waiting card, whenever it was queued.
+// queued before it, and a steer it withdrew, wait. The drain skips held cards, so it sends ahead of
+// them, and that send is the person's turn, so the held cards follow it. true instead holds every
+// waiting card, whenever it was queued.
 const PAUSE_HOLDS_CARDS_QUEUED_AFTER_IT = false
 
 /** THE rule for which cards are held: by ANY pause in force, named by the first that holds it, so
@@ -165,18 +167,18 @@ export function queuePauseHolding(
   return pauses.find((pause) => PAUSE_HOLDS_CARDS_QUEUED_AFTER_IT || queuedBeforePause(pause, card))
 }
 
-/** The card the queue sends next: the oldest waiting one with no hold of its own, unless a
- *  returned card or a held one comes first. The queue never reorders, so a newer card never
- *  overtakes a held one. The drain's pick and its consume both read this. */
+/** The card the queue sends next: the oldest waiting one that nothing holds, unless a returned
+ *  card comes first. Held cards are skipped, not waited on; a returned card blocks what follows it.
+ *  The drain's pick, its consume, and send admission all read this. */
 export function nextSendableQueuedCard<T extends QueueCard>(
   pauses: readonly DerivedQueuePause[],
   cards: readonly T[]
 ): T | null {
   for (const card of cards) {
-    if (card.state === 'returned' || queuePauseHolding(pauses, card)) {
+    if (card.state === 'returned') {
       return null
     }
-    if (card.state === 'waiting' && card.holdReason === null) {
+    if (card.state === 'waiting' && card.holdReason === null && !queuePauseHolding(pauses, card)) {
       return card
     }
   }
@@ -184,8 +186,8 @@ export function nextSendableQueuedCard<T extends QueueCard>(
 }
 
 /** The pause to PUBLISH: the one holding the first card Resume would send, not behind a returned
- *  card, which blocks everything after it until the user acts. None otherwise, so its header
- *  never offers a Resume that sends nothing. */
+ *  card, which blocks everything after it until the user acts. None otherwise, so a client that
+ *  still shows a paused header (mobile, older desktops) never offers a Resume that sends nothing. */
 export function resumableQueuePause(
   pauses: readonly DerivedQueuePause[],
   cards: readonly QueueCard[]

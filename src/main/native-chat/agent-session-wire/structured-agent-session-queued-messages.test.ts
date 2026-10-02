@@ -79,7 +79,8 @@ describe('accept', () => {
         clientOperationId
       ),
       body,
-      delivery: 'queue-if-active' as const
+      delivery: 'queue-if-active' as const,
+      userSend: true as const
     }
     expect(await host.send(CALLER, params)).toMatchObject({
       ok: true,
@@ -109,7 +110,8 @@ describe('accept', () => {
         clientOperationId
       ),
       body,
-      delivery: 'queue-if-active'
+      delivery: 'queue-if-active',
+      userSend: true
     })
     expect(result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
     expect(await drafts()).toHaveLength(0)
@@ -475,6 +477,13 @@ describe('Stop and Delete', () => {
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect(await rig.handoff(draftId)).toBeUndefined()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+  })
+
+  it('a host-internal send never becomes a card, even asking to queue: only a person writes cards', async () => {
+    await workingSend()
+    const mail = send('coordinator mail', 'queue-if-active', { internal: true })
+    expect(await mail.result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
+    expect(await drafts()).toHaveLength(0)
   })
 
   it("a user send lifts nothing from a 'send_failed' hold — that card waits for its explicit Send", async () => {

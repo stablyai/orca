@@ -15205,12 +15205,7 @@
         "turnOffQueueing": "Desactivar la cola",
         "withdrawnHold": "Detenido antes de enviarse",
         "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
-        "paused": "En pausa",
-        "queuePausedStopped": "Cola en pausa porque interrumpiste",
-        "queuePausedRestarted": "Cola en pausa porque Orca se reinició",
-        "queuePausedCleared": "Cola en pausa después de que borraste la conversación",
-        "queuePaused": "Cola en pausa",
-        "resume": "Reanudar"
+        "paused": "En pausa"
       }
     },
     "tab": {

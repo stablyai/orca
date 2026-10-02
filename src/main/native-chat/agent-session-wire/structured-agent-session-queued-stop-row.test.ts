@@ -1,6 +1,6 @@
 // Stop writes one event row before it interrupts, and the queue's pause is derived from it:
-// through the real host, the cards queued before a Stop wait, a card queued after it sends
-// normally but never ahead of them, a withdrawn card comes back under it, a crash keeps it, it
+// through the real host, the cards queued before a Stop wait, a card queued after it sends past
+// them and they follow it, a withdrawn card comes back under it, a crash keeps it, it
 // never hides a restart's pause, and no stored pause is ever written.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -105,26 +105,26 @@ describe("Stop's event", () => {
     await eventually(async () => expect(await rig.handoff(typed)).toBeDefined())
   })
 
-  it('a card queued after the Stop waits behind the cards it holds, then all send in order', async () => {
+  it('a card queued after the Stop sends past the cards it holds, which then follow it in order', async () => {
     const working = await rig.workingSend()
-    const held = await queuedDraft('queued before the stop')
+    const first = await queuedDraft('queued before the stop')
+    const second = await queuedDraft('also queued before the stop')
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
     const mail = await mailTurn()
     const later = await queuedDraft('queued during the mail turn')
     await rig.settleAccepted(mail, 'mail')
-    // The queue never reorders: the newer card waits behind the held one, with no caption of its own.
-    await expectHeld('stopped', held, later)
-    expect(await rig.drafts()).toEqual([
-      { messageId: held, state: 'waiting' },
-      { messageId: later, state: 'waiting' }
-    ])
-    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
-    await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
-    expect(await rig.handoff(later)).toBeUndefined()
-    await eventually(async () => expect((await rig.handoff(held))?.handedOverAt).toBeDefined())
-    await rig.settleAccepted(await rig.handoffId(held), 'held')
+    // Held cards are skipped, not waited on: the newer card goes; the held ones wait.
     await eventually(async () => expect(await rig.handoff(later)).toBeDefined())
+    await expectHeld('stopped', first, second)
+    // The card is the person's, so its send is their turn: once it starts, the Stop is over.
+    expect(await rig.handoff(later)).toMatchObject({ origin: 'client' })
+    await rig.settleAccepted(await rig.handoffId(later), 'later')
+    expect(await rig.queuePause()).toBeNull()
+    await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
+    expect(await rig.handoff(second)).toBeUndefined()
+    await rig.settleAccepted(await rig.handoffId(first), 'first')
+    await eventually(async () => expect(await rig.handoff(second)).toBeDefined())
   })
 
   it("a person's accepted turn lifts it; a host turn and a later Stop do not", async () => {
@@ -166,7 +166,9 @@ describe("Stop's event", () => {
       ['client', 'rejected']
     ])
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
-    await eventually(async () => expect((await rig.handoff(sentId))?.origin).toBe('host'))
+    // Resume's drain sends it again under a fresh id, still the person's turn.
+    await eventually(async () => expect(await rig.handoffId(sentId)).not.toBe(handoffId))
+    expect((await rig.handoff(sentId))?.origin).toBe('client')
   })
 
   it('survives a host crash: the next open marks the hand-off unknown, the pause stays, Resume sends', async () => {
@@ -209,7 +211,6 @@ describe("a Stop never hides a restart's pause", () => {
     await rig.stop()
     const correction = await queuedDraft('typed while the interrupt lands')
     await rig.settleAccepted(working, 'stopped')
-    // The queue's own send is not a person's turn: the Stop stays in force, holding nothing.
     await eventually(async () =>
       expect((await rig.handoff(correction))?.handedOverAt).toBeDefined()
     )
@@ -217,10 +218,9 @@ describe("a Stop never hides a restart's pause", () => {
     rig.crashRestartHostProcess()
     await rig.settleAccepted(await rig.handoffId(correction), 'correction')
     await rig.queuePause()
-    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual([
-      'stopped',
-      'restarted'
-    ])
+    // That send was the person's turn, so it ended the Stop; it started before the restart, so
+    // the restart's pause stands.
+    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual(['restarted'])
     await expectHeld('restarted', typed)
   })
 })

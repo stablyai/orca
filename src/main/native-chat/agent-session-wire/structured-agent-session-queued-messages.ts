@@ -59,9 +59,8 @@ export function pendingPromptExists(journal: Pick<AgentSessionJournal, 'visitIte
   return pending
 }
 
-/** Waiting, not held on its own, and not positioned behind a returned card or a
- *  card the queue's pause holds: the queue never reorders. The admission rule
- *  (§accept) and the drain's selection both read it. */
+/** Waiting, held by nothing, and not positioned behind a returned card; held cards
+ *  are skipped. The admission rule (§accept) and the drain's selection both read it. */
 function oldestActionableQueuedMessage(
   journal: Pick<AgentSessionJournal, 'queuedMessages'>
 ): QueuedMessageRow | null {
@@ -194,6 +193,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    userSend?: true
   }
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
@@ -201,7 +201,12 @@ export async function maybeQueueStructuredAgentSessionSend(
   | null
 > {
   const clientMessageId = params.envelope.clientOperationId
-  if (params.delivery !== 'queue-if-active' || !queuedMessageBodyIsTextOnly(params.body)) {
+  // Only a person's send becomes a card, so the drain's send of it is their turn too.
+  if (
+    params.delivery !== 'queue-if-active' ||
+    !params.userSend ||
+    !queuedMessageBodyIsTextOnly(params.body)
+  ) {
     return null
   }
   // Asked again with no ledger answer: a send this host queued answers as its replay would —
@@ -348,8 +353,9 @@ export class StructuredAgentSessionQueuedMessageDrain {
       await journal.appendSubmission(
         {
           clientMessageId: submissionId,
-          // The queue's own automatic send: it never ends a pause.
-          origin: 'host',
+          // A card is only ever a person's send (§accept): sending it is their turn, which ends a
+          // Stop's pause so the cards it held follow.
+          origin: 'client',
           payloadFingerprint: next.fingerprint,
           body: next.body,
           fence,

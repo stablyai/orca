@@ -174,6 +174,7 @@ export function useStructuredAgentSession(args: {
     queuePause: transportState.queuePause,
     submissions: transportState.submissions,
     hasPendingPrompt: prompts.length > 0,
+    isWorking,
     composerScopeKey,
     mutate
   })

@@ -4,14 +4,13 @@
 // text the card already shows into the composer, locally, before deleting the
 // draft, so no RPC outcome can lose it.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,
-  AgentSessionQueuedMessagesResumeResult,
   AgentSessionQueuePause,
   AgentSessionSendResult
 } from '../../../../shared/agent-session-wire'
@@ -25,13 +24,8 @@ import type { StructuredAgentSessionMutate } from './use-structured-agent-sessio
 
 export type StructuredAgentSessionQueuedMessagesController = {
   cards: QueuedMessageCard[]
-  /** Why the whole queue sends nothing on its own; null when it drains. Shown only with cards.
-   *  A string reason: a newer host may name one this build does not know. */
-  pause: { reason: string } | null
-  /** Lift the queue's pause; a failure is a toast, and the Resume button is the retry. */
-  resume: () => Promise<void>
-  /** A Resume is in flight. */
-  resuming: boolean
+  /** A turn is running, so Send-now steers into it rather than starting one. */
+  turnRunning: boolean
   /** Send-now into the running turn; the transcript shows it at delivery position. */
   steer: (messageId: string) => Promise<void>
   remove: (messageId: string) => Promise<void>
@@ -54,19 +48,18 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   queuePause: AgentSessionQueuePause | null
   submissions: readonly AgentJournalSubmission[]
   hasPendingPrompt: boolean
+  /** The main agent is working: a turn is running, whoever started it. */
+  isWorking: boolean
   composerScopeKey: string | undefined
   mutate: StructuredAgentSessionMutate
 }): StructuredAgentSessionQueuedMessagesController {
   const { composerScopeKey, enabled, hasPendingPrompt, mutate, queuedMessages, submissions } = args
-  const pause = args.queuePause
+  // Held cards carry no caption; each card's Send or Steer, or any new message, releases them.
+  const queuePaused = args.queuePause !== null
 
   const cards = useMemo(
-    () =>
-      projectQueuedMessageCards(queuedMessages, submissions, {
-        hasPendingPrompt,
-        queuePaused: pause !== null
-      }),
-    [hasPendingPrompt, pause, queuedMessages, submissions]
+    () => projectQueuedMessageCards(queuedMessages, submissions, { hasPendingPrompt, queuePaused }),
+    [hasPendingPrompt, queuePaused, queuedMessages, submissions]
   )
   const cardsRef = useRef(cards)
   useEffect(() => {
@@ -146,26 +139,6 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [actOnce, composerScopeKey, mutate]
   )
 
-  const resumingRef = useRef(false)
-  const [resuming, setResuming] = useState(false)
-  const resume = useCallback(async (): Promise<void> => {
-    if (resumingRef.current) {
-      return
-    }
-    resumingRef.current = true
-    setResuming(true)
-    try {
-      await mutate<AgentSessionQueuedMessagesResumeResult>(
-        'agentSession.queuedMessagesResume',
-        'agentSession.queuedMessagesResume',
-        {}
-      )
-    } finally {
-      resumingRef.current = false
-      setResuming(false)
-    }
-  }, [mutate])
-
   const steerNewest = useCallback((): boolean => {
     if (!enabled) {
       return false
@@ -178,5 +151,5 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     return true
   }, [enabled, steer])
 
-  return { cards, pause, resume, resuming, steer, remove, edit, steerNewest }
+  return { cards, turnRunning: args.isWorking, steer, remove, edit, steerNewest }
 }

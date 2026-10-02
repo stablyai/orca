@@ -1,5 +1,5 @@
-// A Stop pauses the whole queue, derived from the journal: it lasts until a turn
-// a person asked for (a send over the client RPC, or a card they sent now)
+// A Stop pauses the cards queued before it, derived from the journal: it lasts until a turn a
+// person asked for (a send over the client RPC, or a card of theirs, sent now or by the queue)
 // starts — the provider accepts it, never merely the host — or they Resume.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -105,17 +105,16 @@ describe("a Stop's queue pause", () => {
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
 
-  it("a draft typed while the stopped turn winds down waits with the rest: the pause is the queue's", async () => {
+  it('a draft typed while the stopped turn winds down sends once it ends; the older one follows once that turn starts', async () => {
     const working = await rig.workingSend()
     const olderId = await queuedDraft('paused by the stop')
     await rig.stop()
     const typedId = await queuedDraft('typed while stopping')
     await rig.settleAccepted(working, 'stopped')
-    await expectPaused(olderId, typedId)
-    expect(await rig.drafts()).toEqual([
-      { messageId: olderId, state: 'waiting' },
-      { messageId: typedId, state: 'waiting' }
-    ])
+    await eventually(async () => expect(await rig.handoff(typedId)).toBeDefined())
+    await expectPaused(olderId)
+    await rig.settleAccepted(await rig.handoffId(typedId), 'typed')
+    await eventually(async () => expect(await rig.handoff(olderId)).toBeDefined())
   })
 
   it('Send-now sends only its own card; the rest stay paused until that turn starts, then drain after it', async () => {

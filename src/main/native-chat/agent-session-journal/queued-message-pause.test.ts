@@ -447,31 +447,33 @@ describe('which cards a pause holds', () => {
     ])
   })
 
-  it("the queue's own consume refuses a newer card while an older one is held: nothing overtakes", async () => {
+  it("the queue's own consume takes a newer card past a held one, and refuses the held one", async () => {
     const journal = await open()
     await queueDraft(journal, 'held')
     await userStop(journal)
     await queueDraft(journal, 'newer')
-    await expect(
+    const drain = (messageId: string) =>
       journal.appendSubmission(
         {
-          clientMessageId: 'drain-newer',
-          origin: 'host',
-          payloadFingerprint: 'fp-newer',
-          body: message('newer'),
+          clientMessageId: `drain-${messageId}`,
+          origin: 'client',
+          payloadFingerprint: `fp-${messageId}`,
+          body: message(messageId),
           fence: 0,
           handoverRecorded: true
         },
         {
-          messageId: 'newer',
+          messageId,
           expect: 'waiting',
           settledByOp: null,
           hostInstance: HOST,
           yieldsToPause: { hostInstance: HOST }
         }
       )
-    ).rejects.toBeInstanceOf(QueuedMessageNotConsumableError)
-    expect(journal.queuedMessages.get('newer')?.state).toBe('waiting')
+    await expect(drain('held')).rejects.toBeInstanceOf(QueuedMessageNotConsumableError)
+    await drain('newer')
+    expect(journal.queuedMessages.get('newer')?.state).toBe('dispatched')
+    expect(journal.queuedMessages.get('held')?.state).toBe('waiting')
   })
 
   it("'cleared' holds the carried cards, not one typed after them", async () => {
@@ -579,6 +581,16 @@ describe('which cards the pauses in force hold', () => {
     // Written by this process, nothing holds it: a card queued after a Stop sends normally.
     const live = card('after', 5)
     expect(nextSendableQueuedCard(pausesOver([live]), [live])).toBe(live)
+  })
+
+  it('the next card skips held ones, but never a returned card', () => {
+    const held = card('held', 3)
+    const after = card('after', 5)
+    expect(nextSendableQueuedCard(pausesOver([held, after]), [held, after])).toBe(after)
+    const returned = card('returned', 5, { state: 'returned' })
+    const behind = card('behind', 6)
+    const cards = [held, returned, behind]
+    expect(nextSendableQueuedCard(pausesOver(cards), cards)).toBeNull()
   })
 
   it("a card names the first pause holding it, and the header names the first held card's", () => {

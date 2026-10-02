@@ -17788,12 +17788,7 @@
         "turnOffQueueing": "关闭排队",
         "withdrawnHold": "在发送前已停止",
         "pausedSendFailed": "无法发送。点按发送以重试。",
-        "paused": "已暂停",
-        "queuePausedStopped": "因你中断了操作，队列已暂停",
-        "queuePausedRestarted": "因 Orca 重新启动，队列已暂停",
-        "queuePausedCleared": "清除对话后，队列已暂停",
-        "queuePaused": "队列已暂停",
-        "resume": "继续"
+        "paused": "已暂停"
       }
     },
     "tab": {

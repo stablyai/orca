@@ -476,7 +476,8 @@ it('queues a follow-up as a draft by default while a message waits, and Steer re
   const queued = await host.send(CALLER, {
     envelope: envelope('agentSession.send', { body, delivery }),
     body,
-    delivery
+    delivery,
+    userSend: true
   })
   expect(queued).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
   await commitSettled()

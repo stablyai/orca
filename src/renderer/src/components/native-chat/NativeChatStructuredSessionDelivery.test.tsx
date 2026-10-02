@@ -92,6 +92,7 @@ vi.mock('./use-structured-agent-session', async () => {
         cancel: vi.fn(),
         queuedMessages: {
           cards: [],
+          turnRunning: false,
           steer: vi.fn(async () => {}),
           remove: vi.fn(async () => {}),
           edit: vi.fn(async () => {}),

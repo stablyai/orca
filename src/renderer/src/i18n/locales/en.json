@@ -17989,12 +17989,7 @@
         "editAlreadySent": "Already sent — your text is still in the composer.",
         "withdrawnHold": "Stopped before it was sent",
         "pausedSendFailed": "Couldn't send — press Send to retry.",
-        "paused": "Paused",
-        "queuePausedStopped": "Queue paused because you interrupted",
-        "queuePausedRestarted": "Queue paused because Orca restarted",
-        "queuePausedCleared": "Queue paused after you cleared the conversation",
-        "queuePaused": "Queue paused",
-        "resume": "Resume"
+        "paused": "Paused"
       }
     },
     "tab": {

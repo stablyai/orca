@@ -18,8 +18,8 @@ import {
 /** Why a card is not on its way right now; decides the caption under the text. */
 export type QueuedMessageCardHold =
   | 'turn'
-  /** The whole queue is paused: the header row says why and offers Resume, so the card makes
-   *  no promise about when it sends — not even after an answer, which does not drain it. */
+  /** Held since a Stop, restart or /clear: no caption and no promise of when it sends — not even
+   *  after an answer. Its own Send or Steer, or any new message, releases it. */
   | 'queue-paused'
   | 'awaiting-answer'
   | 'paused'
