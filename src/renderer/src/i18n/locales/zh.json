@@ -17544,7 +17544,8 @@
         "imagePreviewUnavailable": "预览不可用",
         "workspaceAttachmentMismatch": "文件只能附加到其源工作区。",
         "attachmentOwnerChanged": "此工作区在附加时更改了主机 - 再次删除文件。",
-        "attachmentUnreadable": "无法读取删除的文件。"
+        "attachmentUnreadable": "无法读取删除的文件。",
+        "tooManyAttachments": "每次最多附加 {{value0}} 个文件。"
       },
       "tool": {
         "running": "正在运行…",

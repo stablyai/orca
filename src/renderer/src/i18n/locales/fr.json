@@ -17590,7 +17590,8 @@
         "imagePreviewUnavailable": "Aperçu indisponible",
         "workspaceAttachmentMismatch": "Les fichiers ne peuvent être joints qu'à leur espace de travail source.",
         "attachmentOwnerChanged": "Cet espace de travail a changé d'hôte lors de la connexion : supprimez à nouveau les fichiers.",
-        "attachmentUnreadable": "Impossible de lire les fichiers supprimés."
+        "attachmentUnreadable": "Impossible de lire les fichiers supprimés.",
+        "tooManyAttachments": "Joignez {{value0}} fichiers maximum à la fois."
       },
       "tool": {
         "running": "En cours…",

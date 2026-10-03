@@ -222,7 +222,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     })
 
-    const { pickAttachment } = useNativeChatFileAttachmentActions(paneKey, attachExternalPaths)
+    const { pickAttachments } = useNativeChatFileAttachmentActions(paneKey, attachExternalPaths)
     const { toggleDictation, startHoldDictation, stopHoldDictation } =
       useNativeChatDictationActions({ textareaRef, setDictationPressed })
     const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
@@ -408,7 +408,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
           requestAnimationFrame(() => textarea?.setSelectionRange(result.caret, result.caret))
         }}
         onRemoveImageAttachment={(id) => removeImageAttachment(id)}
-        onAttach={pickAttachment}
+        onAttach={pickAttachments}
         onDictationToggle={toggleDictation}
         onDictationHoldStart={startHoldDictation}
         onDictationHoldEnd={stopHoldDictation}

@@ -15113,7 +15113,8 @@
         "skillScopeBuiltIn": "Integrado",
         "skillScopePlugin": "Plugin",
         "skillsLoaded": "Habilidades cargadas",
-        "noCommands": "No hay comandos coincidentes"
+        "noCommands": "No hay comandos coincidentes",
+        "tooManyAttachments": "Adjunta {{value0}} archivos o menos a la vez."
       },
       "tool": {
         "running": "Ejecutando…",

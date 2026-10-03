@@ -17527,7 +17527,8 @@
         "imagePreviewUnavailable": "プレビューは利用できません",
         "workspaceAttachmentMismatch": "ファイルはソースワークスペースにのみ添付できます。",
         "attachmentOwnerChanged": "このワークスペースは接続中にホストを変更しました。ファイルを再度ドロップしてください。",
-        "attachmentUnreadable": "ドロップされたファイルを読み取れませんでした。"
+        "attachmentUnreadable": "ドロップされたファイルを読み取れませんでした。",
+        "tooManyAttachments": "一度に添付できるファイルは {{value0}} 個以下です。"
       },
       "tool": {
         "running": "実行中…",
