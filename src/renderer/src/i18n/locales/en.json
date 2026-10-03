@@ -9999,7 +9999,27 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "editorThemeDark": "Editor Theme (Dark Mode)",
+            "editorThemeDarkDesc": "Theme used by file editors and diff viewers when Orca is in dark mode.",
+            "themeKw": "theme",
+            "darkKw": "dark",
+            "monacoKw": "monaco",
+            "editorThemeLight": "Editor Theme (Light Mode)",
+            "editorThemeLightDesc": "Theme used by file editors and diff viewers when Orca is in light mode.",
+            "lightKw": "light",
+            "syntaxKw": "syntax",
+            "draculaKw": "dracula",
+            "oneDarkKw": "one dark",
+            "nordKw": "nord",
+            "tokyoNightKw": "tokyo night",
+            "catppuccinKw": "catppuccin",
+            "monokaiKw": "monokai",
+            "solarizedKw": "solarized",
+            "githubDarkKw": "github dark",
+            "oneLightKw": "one light",
+            "githubLightKw": "github light",
+            "solarizedLightKw": "solarized light"
           }
         },
         "git": {
@@ -12262,6 +12282,12 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+        },
+        "EditorThemeSetting": {
+          "darkTitle": "Editor Theme (Dark Mode)",
+          "darkDescription": "Theme used by file editors and diff viewers when Orca is in dark mode.",
+          "lightTitle": "Editor Theme (Light Mode)",
+          "lightDescription": "Theme used by file editors and diff viewers when Orca is in light mode."
         },
         "CursorAccountsSection": {
           "source": {
