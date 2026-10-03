@@ -108,6 +108,9 @@ export const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: 4
   },
+  usageRowFiller: {
+    flex: 1
+  },
   errorText: {
     fontSize: typography.metaSize,
     color: colors.statusRed

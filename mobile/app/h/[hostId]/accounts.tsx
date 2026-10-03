@@ -34,6 +34,8 @@ import {
 } from '../../../src/components/codex-reset-credit'
 import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
+import { getExtraProviderUsage } from '../../../src/components/extra-provider-usage'
+import { ProviderUsageSection } from '../../../src/accounts/ProviderUsageSection'
 
 export default function AccountsScreen() {
   const router = useRouter()
@@ -381,6 +383,9 @@ export default function AccountsScreen() {
           <>
             {renderProviderSection('claude', 'Claude')}
             {renderProviderSection('codex', 'Codex')}
+            {getExtraProviderUsage(snapshot).map((usage) => (
+              <ProviderUsageSection key={usage.key} usage={usage} now={now} />
+            ))}
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>
