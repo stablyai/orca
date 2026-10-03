@@ -17761,7 +17761,8 @@
       "notices": {
         "compaction": "Contexte compacté",
         "details": "Détails",
-        "plan": "Plan"
+        "plan": "Plan",
+        "stoppedBeforeStart": "Arrêté avant le démarrage de l'agent"
       },
       "providerFrame": {
         "byteLength": "{{value0}} octets"

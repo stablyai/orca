@@ -25,6 +25,8 @@ import type { AgentJournalSubmission } from '../../shared/agent-session-journal-
 import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
 import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../shared/native-chat-stopped-before-start'
+import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
@@ -646,9 +648,14 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
 
     expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
     expect(await statusRows()).toEqual([])
-    expect(turnRow((await host.journalSnapshot(SESSION)).items)).toMatchObject({
-      state: 'completed'
-    })
+    const snapshot = await host.journalSnapshot(SESSION)
+    expect(turnRow(snapshot.items)).toMatchObject({ state: 'completed' })
+    // Every client draws the send where it was sent, then the one row saying it never started.
+    const drawn = projectStructuredAgentSessionMessages(snapshot.items, [], snapshot.submissions)
+    expect(drawn.slice(-2).map((message) => [message.role, message.blocks])).toEqual([
+      ['user', [{ type: 'text', text: 'look around' }]],
+      ['system', [expect.objectContaining({ text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT })]]
+    ])
   })
 
   it('withdraws it too when the child end fails and a later retry lands it', async () => {

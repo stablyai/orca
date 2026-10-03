@@ -17697,7 +17697,8 @@
       "notices": {
         "compaction": "컨텍스트가 압축됨",
         "details": "세부",
-        "plan": "계획"
+        "plan": "계획",
+        "stoppedBeforeStart": "에이전트가 시작되기 전에 중지됨"
       },
       "providerFrame": {
         "byteLength": "{{value0}}바이트"

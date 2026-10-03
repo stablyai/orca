@@ -61,7 +61,7 @@ export function useStructuredAgentSessionOutbox(args: {
   target: RuntimeClientTarget
   fence: number | null
   submissions: readonly AgentJournalSubmission[]
-  /** The composer that gets back what a Stop withdrew from this client's outbox. */
+  /** The composer that gets back, when empty, what a Stop took from this client's outbox. */
   composerScopeKey?: string
   /** The host's queued-messages capability and the user's setting; a send stamped
    *  `delivery: 'queue-if-active'` is held as a draft only while the agent is working. */
@@ -86,7 +86,7 @@ export function useStructuredAgentSessionOutbox(args: {
   const { capability: queueCapability, enabled: queueEnabled } = queueDelivery
   // What resends and drops a send in flight besides a Retry or a new send; see the hook.
   const owner = useStructuredAgentSessionOutboxOwnerChange(target, fence)
-  const restoreWithdrawn = useStructuredAgentSessionWithdrawnRestore(sessionId, composerScopeKey)
+  const restoreWithdrawn = useStructuredAgentSessionWithdrawnRestore(composerScopeKey)
   // The outbox lives in the session's store, shared with every other writer; this view holds it
   // open and drains it. Loading maps what a previous owner left mid-send.
   const load = useCallback(
@@ -155,7 +155,6 @@ export function useStructuredAgentSessionOutbox(args: {
       next.some((entry, index) => entry !== current[index]) ||
       next.length !== current.length
     ) {
-      restoreWithdrawn.byHost(current, submissions)
       commitStructuredAgentSessionOutbox(sessionId, next)
     }
     // Keyed on the entry actually in flight, which is no longer always the head: the journal
@@ -175,7 +174,7 @@ export function useStructuredAgentSessionOutbox(args: {
     ) {
       setError(null)
     }
-  }, [restoreWithdrawn, sessionId, submissions])
+  }, [sessionId, submissions])
 
   // The one place that owns the refs, the React state and the storage write.
   const applyDisposition = useCallback(

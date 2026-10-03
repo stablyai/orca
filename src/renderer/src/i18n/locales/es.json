@@ -15054,6 +15054,9 @@
         "startNewChat": "Inicie un chat nuevo para continuar.",
         "tryAgain": "Vuelva a intentarlo."
       },
+      "notices": {
+        "stoppedBeforeStart": "Detenido antes de que el agente empezara"
+      },
       "composer": {
         "imageUnsupported": "Este agente no admite pegar imágenes.",
         "send": "Enviar",

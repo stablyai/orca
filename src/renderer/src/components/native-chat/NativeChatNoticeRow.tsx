@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
+import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../shared/native-chat-stopped-before-start'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 
 export function NativeChatNoticeRow({
@@ -29,6 +30,17 @@ export function NativeChatNoticeRow({
         <span>{label}</span>
         <span className="h-px flex-1 bg-border" />
       </div>
+    )
+  }
+  if (block.presentation === NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION) {
+    // The line a Stop's own row draws, in this client's words.
+    return (
+      <p className="text-xs text-muted-foreground">
+        {translate(
+          'components.native-chat.notices.stoppedBeforeStart',
+          'Stopped before the agent started'
+        )}
+      </p>
     )
   }
   if (block.presentation === 'plan-document') {

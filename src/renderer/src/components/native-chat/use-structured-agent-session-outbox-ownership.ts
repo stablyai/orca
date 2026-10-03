@@ -1,5 +1,5 @@
 // Who owns an outbox entry's text when it leaves this client's queue without a
-// send answer. A Stop hands unsent text back to the composer — a local move; no
+// send answer. A Stop hands unsent text back to an empty composer — a local move; no
 // text crosses a wire. A host that visibly holds the entry as a queued draft
 // (same id) owns it: those entries retire with no local restore, so the same
 // words can never come back twice.

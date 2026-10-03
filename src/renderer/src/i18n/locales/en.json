@@ -17654,7 +17654,8 @@
       "notices": {
         "compaction": "Context compacted",
         "details": "Details",
-        "plan": "Plan"
+        "plan": "Plan",
+        "stoppedBeforeStart": "Stopped before the agent started"
       },
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",

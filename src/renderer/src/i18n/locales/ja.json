@@ -17697,7 +17697,8 @@
       "notices": {
         "compaction": "圧縮されたコンテキスト",
         "details": "詳細",
-        "plan": "プラン"
+        "plan": "プラン",
+        "stoppedBeforeStart": "Agent の開始前に停止しました"
       },
       "providerFrame": {
         "byteLength": "{{value0}}バイト"

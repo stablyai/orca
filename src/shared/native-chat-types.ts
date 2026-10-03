@@ -217,6 +217,9 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   unsent?: true
   /** This client's send, made while the chat read Stopping, that the host has not recorded yet. */
   sentWhileStopping?: true
+  /** A send a Stop took back before the agent started it, or the row saying so after it: drawn
+   *  where it was sent, with no turn of its own to time. */
+  stoppedBeforeStart?: true
   /** Set only by the structured projection, on rows the journal holds, and ranks
    *  them ahead of time. Terminal-backed messages never carry it, and worker reads strip it. */
   journalPosition?: AgentJournalPosition

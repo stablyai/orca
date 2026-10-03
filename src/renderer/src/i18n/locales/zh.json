@@ -17662,7 +17662,8 @@
       "notices": {
         "compaction": "上下文压缩",
         "details": "细节",
-        "plan": "计划"
+        "plan": "计划",
+        "stoppedBeforeStart": "在智能体开始前已停止"
       },
       "providerFrame": {
         "byteLength": "{{value0}} 字节"
