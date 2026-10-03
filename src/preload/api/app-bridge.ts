@@ -4,6 +4,12 @@ import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../../shared/terminal-render-desync-evidence'
+import type { DashboardRevealAgentArgs } from '../../shared/dashboard-snapshot'
+import {
+  DOCK_AGENT_MENU_UPDATE,
+  DOCK_AGENT_OPEN,
+  type DockAgentMenuPayload
+} from '../../shared/dock-agent-menu'
 import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
   type KeyboardLayoutChangeEvent
@@ -13,6 +19,19 @@ import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../prelo
 import type { PreloadApi } from '../api-types'
 
 export const appApi = {
+  setDockAgentMenu: (payload: DockAgentMenuPayload): Promise<void> =>
+    process.platform === 'darwin'
+      ? ipcRenderer.invoke(DOCK_AGENT_MENU_UPDATE, payload)
+      : Promise.resolve(),
+  onOpenDockAgent: (callback: (args: DashboardRevealAgentArgs) => void): (() => void) => {
+    if (process.platform !== 'darwin') {
+      return () => undefined
+    }
+    const listener = (_event: Electron.IpcRendererEvent, args: DashboardRevealAgentArgs): void =>
+      callback(args)
+    ipcRenderer.on(DOCK_AGENT_OPEN, listener)
+    return () => ipcRenderer.removeListener(DOCK_AGENT_OPEN, listener)
+  },
   getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
   getFeatureWallAssetBaseUrl: (): Promise<string> =>
     ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
