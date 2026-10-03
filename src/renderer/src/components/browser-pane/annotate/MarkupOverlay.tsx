@@ -66,6 +66,8 @@ export function MarkupOverlay({
         onPointerMove={editor.onPointerMove}
         onPointerUp={editor.onPointerUp}
         onPointerCancel={editor.onPointerUp}
+        // Why: ends the gesture however the pointer was lost, so one can never be left open.
+        onLostPointerCapture={editor.onPointerUp}
       />
 
       {pendingText ? (
@@ -120,7 +122,8 @@ export function MarkupOverlay({
       ) : null}
 
       <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
-        <div className="pointer-events-auto">
+        {/* Why: cap at the overlay width so the toolbar wraps in a narrow viewport instead of clipping. */}
+        <div className="pointer-events-auto max-w-full">
           <MarkupToolbar
             tool={editor.tool}
             onToolChange={editor.setTool}
