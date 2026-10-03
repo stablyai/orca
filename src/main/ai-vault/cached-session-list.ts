@@ -61,11 +61,11 @@ export async function localAiVaultScanRoots(): Promise<
   Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
     Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders' | 'claudeProfileProjectsDirs'>
 > {
-  const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
+  const [additionalCodexHomes, wslHomeDirs, claudeProfileProjectsDirs] = await Promise.all([
     filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths()),
-    getAiVaultWslHomeDirs()
+    getAiVaultWslHomeDirs(),
+    filterPathsToRunningWslDistrosAsync(claudeProfileSurfaceRoots('projects'))
   ])
-  const claudeProfileProjectsDirs = claudeProfileSurfaceRoots('projects')
   return {
     additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
     wslHomeDirs,

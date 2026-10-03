@@ -195,6 +195,14 @@ describe('scripts', () => {
     expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBe(script)
   })
 
+  it('writes a program payload to its stdin with WSL_UTF8 set', async () => {
+    await runWslProcess({ loginPath: 'none', program: '/usr/bin/env', args: ['node'], input: '{}' })
+    const spec = runProcessMock.mock.calls.at(-1)?.[0]
+    expect(spec.input).toBe('{}')
+    expect(spec.env.WSL_UTF8).toBe('1')
+    expect(lastArgv()).toEqual(['--exec', '/usr/bin/env', 'node'])
+  })
+
   it('keeps an ordinary-sized script in argv', async () => {
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     const script = `echo ${'x'.repeat(100)}`

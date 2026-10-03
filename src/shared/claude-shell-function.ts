@@ -17,14 +17,16 @@ export function getPosixClaudeShellFunction(): string {
   return `__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
 if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
   function claude {
-    local __orca_claude_home
+    local __orca_claude_home __orca_claude_pointer="\${ORCA_CLAUDE_PROFILE_POINTER:-}"
+    # Why: a WSL pane's pointer is guest-relative, since the host cannot know the guest home.
+    case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="\${HOME:-}/\${__orca_claude_pointer#??}" ;; esac
     if [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "\${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
       command claude "$@"; return
     fi
-    if [ ! -f "\${ORCA_CLAUDE_PROFILE_POINTER:-}" ] || [ ! -r "$ORCA_CLAUDE_PROFILE_POINTER" ]; then
+    if [ ! -f "$__orca_claude_pointer" ] || [ ! -r "$__orca_claude_pointer" ]; then
       printf '%s\\n' 'Claude account selection is unreadable; choose an account again.' >&2; return 1
     fi
-    __orca_claude_home="$(LC_ALL=C tr '\\000' '\\n' < "$ORCA_CLAUDE_PROFILE_POINTER" && printf '.')" || { printf '%s\\n' 'Claude account selection is unreadable.' >&2; return 1; }
+    __orca_claude_home="$(LC_ALL=C tr '\\000' '\\n' < "$__orca_claude_pointer" && printf '.')" || { printf '%s\\n' 'Claude account selection is unreadable.' >&2; return 1; }
     __orca_claude_home="\${__orca_claude_home%.}"
     case "$__orca_claude_home" in *$'\\n'*|*$'\\r'*) printf '%s\\n' 'Invalid Claude account selection.' >&2; return 1 ;; esac
     if [ -n "$__orca_claude_home" ]; then
@@ -54,12 +56,17 @@ if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
       command claude $argv
       return $status
     end
-    if not test -f "$ORCA_CLAUDE_PROFILE_POINTER"; or not test -r "$ORCA_CLAUDE_PROFILE_POINTER"
+    set -l pointer "$ORCA_CLAUDE_PROFILE_POINTER"
+    # Why: a WSL pane's pointer is guest-relative, since the host cannot know the guest home.
+    if string match -q '~/*' -- "$pointer"
+      set pointer "$HOME/"(string sub -s 3 -- "$pointer")
+    end
+    if not test -f "$pointer"; or not test -r "$pointer"
       echo 'Claude account selection is unreadable; choose an account again.' >&2; return 1
     end
     # Why read -z: it keeps newlines for the check below and exists before fish 3.4's collect flags.
     set -l profile ''
-    if test -s "$ORCA_CLAUDE_PROFILE_POINTER"; and not read -lz profile < "$ORCA_CLAUDE_PROFILE_POINTER"
+    if test -s "$pointer"; and not read -lz profile < "$pointer"
       echo 'Claude account selection is unreadable.' >&2; return 1
     end
     if string match -qr '[\\r\\n]' -- "$profile"

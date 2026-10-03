@@ -251,6 +251,21 @@ describe('native Claude profile authority', () => {
     await expect(launch).rejects.toThrow('exited')
     expect(readClaudeProfilePointer(f.routing.pointerPath())).toBe(f.profiles[1].home)
   })
+  it('lets a launch and a select of the same account share one publish instead of failing', async () => {
+    const f = fixture()
+    const setup = Promise.withResolvers<ClaudeProfileSetupReport>()
+    f.worker.prepare.mockImplementationOnce(() => setup.promise)
+    const startup = f.routing.startup()
+    const launch = f.routing.prepare()
+    setup.resolve({ outcome: 'prepared', warnings: [], surfaces: {} })
+    await expect(Promise.all([startup, launch])).resolves.toBeDefined()
+    f.settings.activeClaudeManagedAccountId = 'b'
+    const select = f.routing.publish()
+    const overlapping = f.routing.prepare()
+    await expect(select).resolves.toMatchObject({ configHome: f.profiles[1].home })
+    await expect(overlapping).resolves.toMatchObject({ provenance: 'profile:b' })
+    expect(readClaudeProfilePointer(f.routing.pointerPath())).toBe(f.profiles[1].home)
+  })
   it('skill roots never fail for other providers when Claude cannot resolve', async () => {
     const f = fixture()
     const host = {

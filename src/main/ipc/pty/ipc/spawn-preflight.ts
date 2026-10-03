@@ -228,8 +228,9 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     ctx.cwd,
     ctx.expectedWslDistro
   )
-  if (!args.connectionId && initialSelectionTarget.runtime !== 'wsl') {
-    const profileEnv = getClaudeProfileRoutingAuthority()?.terminalEnv()
+  if (!args.connectionId) {
+    // Why: a WSL pane opens even when its distro is stopped; terminalEnv never waits on a guest.
+    const profileEnv = getClaudeProfileRoutingAuthority()?.terminalEnv(initialSelectionTarget)
     if (profileEnv) {
       args.env = { ...args.env, ...profileEnv }
     }

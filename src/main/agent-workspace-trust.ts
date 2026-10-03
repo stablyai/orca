@@ -1,5 +1,7 @@
+import { getClaudeProfileRoutingAuthority } from './claude-accounts/claude-profile-routing-authority'
 import { homedir } from 'node:os'
 import {
+  awaitAgentTrustWriteWithinDeadline,
   AGENT_TRUST_WRITE_DEADLINE_MS,
   SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
 } from './agent-trust-write-deadline'
@@ -60,6 +62,22 @@ export async function applyAgentWorkspaceTrust(
   }
   // Why: the other writers target this host's home, which a WSL guest agent never reads.
   if (preset !== 'claude' && isWslLaunch(workspacePath, context)) {
+    return {}
+  }
+  const profile = context.claudeAuth?.profileLaunch
+  if (preset === 'claude' && profile?.profile && profile.target.runtime === 'wsl') {
+    const workspace = parseWslUncPath(workspacePath)
+    if (workspace && workspace.distro.toLowerCase() === profile.target.wslDistro?.toLowerCase()) {
+      try {
+        await awaitAgentTrustWriteWithinDeadline(
+          getClaudeProfileRoutingAuthority()?.trust(profile, workspace.linuxPath) ??
+            Promise.resolve(),
+          { preset, workspacePath, deadlineMs: SHORT_AGENT_TRUST_WRITE_DEADLINE_MS }
+        )
+      } catch (error) {
+        console.warn('[claude-profile] Guest pre-trust unavailable:', error)
+      }
+    }
     return {}
   }
   await applyWorkspaceTrustOnThisHost(preset, workspacePath, () => {

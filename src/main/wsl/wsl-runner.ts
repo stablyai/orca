@@ -41,6 +41,8 @@ export type WslCommand =
   | {
       program: string
       args?: readonly string[]
+      /** Written to the program's stdin; a script may need stdin for its own delivery. */
+      input?: string
       script?: never
       shell?: never
     }
@@ -48,6 +50,7 @@ export type WslCommand =
       script: string
       args?: readonly string[]
       program?: never
+      input?: never
       /**
        * Interpreter for `script`. Defaults to `sh`, which on Debian and Ubuntu
        * is dash.
@@ -245,7 +248,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     // (#16463). Never the guest cwd -- withGuestCwd still cds inside.
     cwd: resolveWslInteropSpawnCwd(),
     env: buildHostEnv(spec.env),
-    input: delivery === 'stdin' ? spec.script : undefined,
+    input: delivery === 'stdin' ? spec.script : spec.input,
     timeoutMs: remainingMs,
     maxOutputBytes: spec.maxOutputBytes
   })

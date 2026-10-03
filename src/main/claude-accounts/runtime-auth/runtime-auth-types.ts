@@ -1,4 +1,4 @@
-import type { ClaudeProfileLaunchDescriptor } from '../claude-profile-routing-service'
+import type { ClaudeProfileLaunchDescriptor } from '../claude-profile-routing-owner'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import type { ClaudeEnvPatch } from '../environment'
 

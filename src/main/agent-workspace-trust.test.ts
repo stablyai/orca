@@ -21,7 +21,12 @@ const mocks = vi.hoisted(() => ({
   antigravity: vi.fn<(path: string, home: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
   codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
-  claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
+  claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>(),
+  profileTrust: vi.fn<(profile: unknown, workspace: string) => Promise<void>>(async () => {})
+}))
+
+vi.mock('./claude-accounts/claude-profile-routing-authority', () => ({
+  getClaudeProfileRoutingAuthority: () => ({ trust: mocks.profileTrust })
 }))
 
 vi.mock('./agent-trust-presets', () => ({
@@ -229,6 +234,70 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
       await applyAgentWorkspaceTrust('claude', '\\\\wsl.localhost\\Ubuntu\\home\\u\\wt', wsl)
       expect(mocks.claudeGrant).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+describe('applyAgentWorkspaceTrust for a WSL Claude profile launch', () => {
+  const profileLaunch = {
+    profile: {
+      version: 1,
+      accountId: 'a',
+      target: { executionHostId: 'local', runtime: 'wsl', distro: 'Ubuntu' },
+      home: '/home/u/.local/share/orca/claude-profiles/a/home'
+    },
+    configHome: '/home/u/.local/share/orca/claude-profiles/a/home',
+    readHome: '\\\\wsl.localhost\\Ubuntu\\home\\u\\.local\\share\\orca\\claude-profiles\\a\\home',
+    defaultHome: '/home/u/.claude',
+    pointerPath: '/home/u/.local/share/orca/claude-profiles/selected-wsl',
+    target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
+  } as const
+  const context: AgentTrustLaunchContext = {
+    ...local,
+    wslDistro: 'Ubuntu',
+    claudeAuth: {
+      configDir: profileLaunch.readHome,
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      wslLinuxConfigDir: profileLaunch.configHome,
+      envPatch: {},
+      stripAuthEnv: true,
+      provenance: 'profile:a',
+      profileLaunch
+    }
+  }
+
+  it('trusts the guest path through the profile owner for the same distro only', async () => {
+    await expect(
+      applyAgentWorkspaceTrust('claude', '\\\\wsl$\\ubuntu\\home\\u\\wt', context)
+    ).resolves.toEqual({})
+    expect(mocks.profileTrust).toHaveBeenCalledWith(profileLaunch, '/home/u/wt')
+    await applyAgentWorkspaceTrust('claude', '\\\\wsl.localhost\\Debian\\home\\u\\wt', context)
+    expect(mocks.profileTrust).toHaveBeenCalledTimes(1)
+    expect(mocks.claudeGrant).not.toHaveBeenCalled()
+  })
+
+  it('never throws or waits past the short deadline for the guest', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.profileTrust.mockRejectedValueOnce(new Error('WSL distro Ubuntu is not running'))
+    await expect(
+      applyAgentWorkspaceTrust('claude', '\\\\wsl.localhost\\Ubuntu\\home\\u\\wt', context)
+    ).resolves.toEqual({})
+    const guest = pending()
+    mocks.profileTrust.mockReturnValueOnce(guest.promise)
+    let settled = false
+    const trust = applyAgentWorkspaceTrust(
+      'claude',
+      '\\\\wsl.localhost\\Ubuntu\\home\\u\\wt',
+      context
+    ).then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(SHORT_AGENT_TRUST_WRITE_DEADLINE_MS + 1)
+    await trust
+    expect(settled).toBe(true)
+    guest.release()
+    warn.mockRestore()
   })
 })
 

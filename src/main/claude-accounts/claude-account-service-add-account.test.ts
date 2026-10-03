@@ -211,7 +211,9 @@ describe('ClaudeAccountService credential capture', () => {
       'managed auth write failed'
     )
 
-    expect(runtimeAuth.forceMaterializeCurrentSelectionForRollback).toHaveBeenCalled()
+    expect(runtimeAuth.forceMaterializeCurrentSelectionForRollback).toHaveBeenCalledWith({
+      runtime: 'host'
+    })
     expect(settings.claudeManagedAccounts).toHaveLength(1)
     // Why: the throwaway account directory must be gone even though rollback threw.
     expect(readdirSync(join(tempDir, 'claude-accounts'))).toEqual(['host-account'])

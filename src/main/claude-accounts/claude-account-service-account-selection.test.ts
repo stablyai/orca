@@ -184,7 +184,7 @@ describe('ClaudeAccountService credential capture', () => {
       host: 'account-2',
       wsl: {}
     })
-    expect(runtimeAuth.syncForCurrentSelection).toHaveBeenCalledWith({ runtime: 'host' })
+    expect(runtimeAuth.syncForCurrentSelection).toHaveBeenCalledWith({ runtime: 'host' }, 'boot')
     expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith('account-1', {
       runtime: 'host'
     })
@@ -343,10 +343,10 @@ describe('ClaudeAccountService credential capture', () => {
       host: 'host-account',
       wsl: { Ubuntu: 'wsl-account' }
     })
-    expect(runtimeAuth.syncForCurrentSelection).toHaveBeenCalledWith({
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu'
-    })
+    expect(runtimeAuth.syncForCurrentSelection).toHaveBeenCalledWith(
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      'boot'
+    )
     expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith(null, {
       runtime: 'wsl',
       wslDistro: 'Ubuntu'

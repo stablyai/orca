@@ -1,4 +1,5 @@
 import { getClaudeProfileRoutingAuthority } from './claude-profile-routing-authority'
+import { ClaudeProfileHostMissingError } from './claude-profile-routing-owner'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
@@ -46,7 +47,9 @@ export class ClaudeAccountSelection {
     const target = getClaudeSelectionTargetForAccount(account)
     const wasSelected = getSelectedClaudeAccountIdForTarget(settings, target) === accountId
     try {
-      if (wasSelected) {
+      // Why one write with profiles: the outgoing-token read-back needing the account is legacy only,
+      // and a distro losing its last account must already be unrouted when it syncs.
+      if (wasSelected && !getClaudeProfileRoutingAuthority()) {
         this.store.updateSettings({
           activeClaudeManagedAccountId: nextActiveId,
           activeClaudeManagedAccountIdsByRuntime: nextSelection
@@ -59,7 +62,7 @@ export class ClaudeAccountSelection {
           activeClaudeManagedAccountId: nextActiveId,
           activeClaudeManagedAccountIdsByRuntime: nextSelection
         })
-        await this.syncRuntimeAuth(target)
+        await this.syncRuntimeAuthAfterRemoval(target)
       }
       await this.removeManagedAuth(accountId, account.managedAuthPath)
       this.rateLimits.evictInactiveClaudeCache(accountId)
@@ -70,7 +73,7 @@ export class ClaudeAccountSelection {
       return this.snapshot()
     } catch (error) {
       this.restoreSettings(settings)
-      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      await this.rollBackRuntimeAuth(target)
       throw error
     }
   }
@@ -112,8 +115,37 @@ export class ClaudeAccountSelection {
       return this.snapshot()
     } catch (error) {
       this.restoreSettings(previousSettings)
-      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      await this.rollBackRuntimeAuth(effectiveTarget ?? { runtime: 'host' })
       throw error
+    }
+  }
+
+  // Why: a distro that no longer exists has no pointer anyone can launch, so its bookkeeping must
+  // not block removing its accounts. Only the profile transport reports a missing distro.
+  private async syncRuntimeAuthAfterRemoval(target: ClaudeAccountSelectionTarget): Promise<void> {
+    try {
+      await this.syncRuntimeAuth(target)
+    } catch (error) {
+      if (!(error instanceof ClaudeProfileHostMissingError)) {
+        throw error
+      }
+      console.warn(
+        '[claude-accounts] Removed an account of a WSL distro that no longer exists:',
+        error
+      )
+    }
+  }
+
+  // Why caught with profiles: a rollback failure must not replace the error that caused it.
+  async rollBackRuntimeAuth(target: ClaudeAccountSelectionTarget): Promise<void> {
+    if (!getClaudeProfileRoutingAuthority()) {
+      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback(target)
+      return
+    }
+    try {
+      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback(target)
+    } catch (rollbackError) {
+      console.warn('[claude-accounts] Rollback rematerialization failed:', rollbackError)
     }
   }
 
@@ -152,7 +184,7 @@ export class ClaudeAccountSelection {
   ): Promise<void> {
     beginClaudeAuthSwitch()
     try {
-      await (operation ? operation() : this.runtimeAuth.syncForCurrentSelection(target))
+      await (operation ? operation() : this.runtimeAuth.syncForCurrentSelection(target, 'boot'))
     } finally {
       endClaudeAuthSwitch()
     }

@@ -28,6 +28,11 @@ vi.mock('../codex-cli/command', () => ({
   resolveClaudeCommand: commandMocks.resolveClaudeCommand
 }))
 
+const profiles = vi.hoisted(() => ({ installed: false }))
+vi.mock('./claude-profile-routing-authority', () => ({
+  getClaudeProfileRoutingAuthority: () => (profiles.installed ? {} : undefined)
+}))
+
 vi.mock('./keychain', () => ({
   deleteActiveClaudeKeychainCredentialsStrict: vi.fn(async () => {}),
   deleteManagedClaudeKeychainCredentials: vi.fn(async () => {}),
@@ -121,7 +126,24 @@ describe('ClaudeAccountService credential capture', () => {
       '{"oldOauth":true}\n'
     )
     expect(store.getSettings().claudeManagedAccounts[0].email).toBe('old@example.com')
-    expect(runtimeAuth.forceMaterializeCurrentSelectionForRollback).toHaveBeenCalled()
+    expect(runtimeAuth.forceMaterializeCurrentSelectionForRollback).toHaveBeenCalledWith({
+      runtime: 'host'
+    })
+    runtimeAuth.forceMaterializeCurrentSelectionForRollback.mockRejectedValue(
+      new Error('rollback failed')
+    )
+    await expect(service.reauthenticateAccount('account-1')).rejects.toThrow('rollback failed')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    profiles.installed = true
+    try {
+      await expect(service.reauthenticateAccount('account-1')).rejects.toThrow('materialize failed')
+    } finally {
+      profiles.installed = false
+    }
+    expect(warn).toHaveBeenCalledWith(
+      '[claude-accounts] Rollback rematerialization failed:',
+      expect.objectContaining({ message: 'rollback failed' })
+    )
   })
 
   it('restores settings without rematerializing when managed-auth rollback write fails', async () => {
@@ -416,5 +438,62 @@ describe('ClaudeAccountService credential capture', () => {
       runtime: 'host'
     })
     expect(settings.claudeManagedAccounts[0].email).toBe('new@example.com')
+  })
+
+  it('keeps the selection error when the rollback republish fails, and republishes only that target', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    profiles.installed = true
+    const account = (id: string, wslDistro?: string) => ({
+      id,
+      email: `${id}@example.com`,
+      managedAuthPath: `/unused/${id}`,
+      ...(wslDistro ? { managedAuthRuntime: 'wsl', wslDistro } : {}),
+      authMethod: 'subscription-oauth',
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1
+    })
+    let settings = {
+      claudeManagedAccounts: [account('host-a'), account('wsl-b', 'Ubuntu')],
+      activeClaudeManagedAccountId: null
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {
+        throw new Error('WSL distro Debian is not running')
+      }),
+      syncForCurrentSelection: vi.fn(async () => {
+        throw new Error('select failed')
+      })
+    }
+    const rateLimits = { evictInactiveClaudeCache: vi.fn(), refreshForClaudeAccountChange: vi.fn() }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+
+    await expect(service.selectAccount('host-a')).rejects.toThrow('select failed')
+    await expect(service.selectAccount('wsl-b')).rejects.toThrow('select failed')
+
+    expect(runtimeAuth.forceMaterializeCurrentSelectionForRollback.mock.calls).toEqual([
+      [{ runtime: 'host' }],
+      [{ runtime: 'wsl', wslDistro: 'Ubuntu' }]
+    ])
+    expect(warn).toHaveBeenCalledWith(
+      '[claude-accounts] Rollback rematerialization failed:',
+      expect.objectContaining({ message: 'WSL distro Debian is not running' })
+    )
+    profiles.installed = false
+    await expect(service.selectAccount('host-a')).rejects.toThrow(
+      'WSL distro Debian is not running'
+    )
   })
 })

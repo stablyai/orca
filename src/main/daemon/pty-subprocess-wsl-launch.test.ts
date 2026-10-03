@@ -78,6 +78,7 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
+import { WSL_CLAUDE_PROFILE_POINTER } from '../../shared/claude-profile-routing'
 import {
   mockPtyProcess,
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
@@ -413,6 +414,40 @@ describe('createPtySubprocess', () => {
         POWERLEVEL10K_WIZARD_DISABLE_ENV
       ])
     )
+  })
+
+  it('imports the guest-relative Claude pointer and profile home verbatim into daemon WSL terminals', async () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const home = '/home/jin/.local/share/orca/claude-profiles/a/home'
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        env: {
+          CLAUDE_CONFIG_DIR: home,
+          ORCA_CLAUDE_INJECTED_CONFIG_DIR: home,
+          ORCA_CLAUDE_PROFILE_POINTER: WSL_CLAUDE_PROFILE_POINTER
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    // Why no flag: /p or /u would translate a guest path as if it were a Windows one.
+    expect(env.WSLENV.split(':')).toEqual(
+      expect.arrayContaining([
+        'CLAUDE_CONFIG_DIR',
+        'ORCA_CLAUDE_PROFILE_POINTER',
+        'ORCA_CLAUDE_INJECTED_CONFIG_DIR'
+      ])
+    )
+    expect(env.ORCA_CLAUDE_PROFILE_POINTER).toBe(WSL_CLAUDE_PROFILE_POINTER)
   })
 
   it('does not mark deleted Powerlevel10k wizard env for daemon WSL import', async () => {

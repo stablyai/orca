@@ -13,6 +13,8 @@ import {
 } from './claude-profile-paths'
 import { getSelectedClaudeAccountIdForTarget } from './runtime-selection'
 import { publishClaudeProfilePointer, withdrawClaudeProfilePointer } from './claude-profile-pointer'
+import type { ClaudeProfileRoutingOwner } from './claude-profile-routing-owner'
+import { withWslClaudeProfileOwner } from './claude-profile-wsl-owner'
 import { ClaudeProfileRoutingService } from './claude-profile-routing-service'
 import { ClaudeProfileSetupWorker } from './claude-profile-worker'
 
@@ -41,6 +43,7 @@ export function createNativeClaudeProfileRouting(args: {
   /** System Default's home: the inherited CLAUDE_CONFIG_DIR when set, as the legacy resolver reads it. */
   defaultHome: () => string
   claudeVersion: () => Promise<string | null>
+  wsl?: ClaudeProfileRoutingOwner
   worker?: Pick<ClaudeProfileSetupWorker, 'prepare'>
 }): ClaudeProfileRoutingService {
   const worker = args.worker ?? new ClaudeProfileSetupWorker()
@@ -68,7 +71,7 @@ export function createNativeClaudeProfileRouting(args: {
   }
   const accountFor = (id: string) =>
     args.store.getSettings().claudeManagedAccounts.find((entry) => entry.id === id)
-  return new ClaudeProfileRoutingService({
+  const native: ClaudeProfileRoutingOwner = {
     resolve(target = { runtime: 'host' }) {
       if (target.runtime === 'wsl') {
         throw new Error(
@@ -149,5 +152,8 @@ export function createNativeClaudeProfileRouting(args: {
     publish: async (descriptor) =>
       publishClaudeProfilePointer(descriptor.pointerPath, descriptor.profile?.home ?? null),
     withdraw: () => withdrawClaudeProfilePointer(pointerPath)
-  })
+  }
+  return new ClaudeProfileRoutingService(
+    args.wsl ? withWslClaudeProfileOwner(native, args.wsl, () => args.store.getSettings()) : native
+  )
 }

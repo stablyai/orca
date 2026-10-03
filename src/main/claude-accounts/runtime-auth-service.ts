@@ -1,3 +1,4 @@
+import { createWslClaudeProfileOwner } from './claude-profile-wsl-owner'
 import { homedir } from 'node:os'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -16,6 +17,7 @@ import {
   getSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
+import type { ClaudeProfileHostAccess } from './claude-profile-routing-owner'
 import { ClaudeRuntimeAuthSync } from './runtime-auth/runtime-auth-sync'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
@@ -28,6 +30,10 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
       installClaudeProfileRoutingAuthority(
         createNativeClaudeProfileRouting({
           store,
+          wsl:
+            process.platform === 'win32'
+              ? createWslClaudeProfileOwner(() => store.getSettings())
+              : undefined,
           dataRoot: getAppEnvironment().getPath('userData'),
           userHome: homedir(),
           defaultHome: () => systemDefaultClaudeHome(process.env, homedir()),
@@ -45,7 +51,10 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
     const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
     const profiles = getClaudeProfileRoutingAuthority()
     if (profiles) {
-      return profiles.prepare(effectiveTarget)
+      // Why: an unrouted WSL distro launches System Default with no guest call, as before profiles.
+      return profiles.routes(effectiveTarget)
+        ? profiles.prepare(effectiveTarget)
+        : this.getPreparation(effectiveTarget)
     }
     await this.syncForCurrentSelection(effectiveTarget)
     return this.getPreparation(effectiveTarget)
@@ -63,21 +72,37 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
     return this.getPreparation(effectiveTarget)
   }
 
-  async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
+  /** `access: 'boot'` marks a user's select or remove, which may start a stopped WSL distro. */
+  async syncForCurrentSelection(
+    target?: ClaudeAccountSelectionTarget,
+    access: ClaudeProfileHostAccess = 'if-running'
+  ): Promise<void> {
     await this.serializeMutation(async () => {
       const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
       const profiles = getClaudeProfileRoutingAuthority()
-      await (profiles
-        ? profiles.publish(effectiveTarget)
-        : this.doSyncForCurrentSelection(effectiveTarget))
+      if (!profiles) {
+        await this.doSyncForCurrentSelection(effectiveTarget)
+      } else if (profiles.routes(effectiveTarget)) {
+        await profiles.publish(effectiveTarget, 'always', access)
+      } else {
+        await profiles.retire(effectiveTarget, access)
+      }
     })
   }
 
-  async forceMaterializeCurrentSelectionForRollback(): Promise<void> {
+  /** With profiles, `target` limits the republish to the target whose change failed. */
+  async forceMaterializeCurrentSelectionForRollback(
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<void> {
     await this.serializeMutation(async () => {
       const profiles = getClaudeProfileRoutingAuthority()
       if (profiles) {
-        await profiles.startup()
+        if (!target) {
+          await profiles.startup()
+        } else if (profiles.routes(target)) {
+          // Why boot: this undoes a user's failed select or remove.
+          await profiles.publish(target, 'always', 'boot')
+        }
         return
       }
       const settings = this.store.getSettings()

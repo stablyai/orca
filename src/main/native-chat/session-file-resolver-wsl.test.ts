@@ -1,5 +1,7 @@
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
+import type * as ReaderRoots from '../claude-accounts/claude-profile-reader-roots'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 const WSL_MANAGED_SESSIONS_DIR = `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`
@@ -53,9 +55,18 @@ vi.mock('../ai-vault/session-scanner-discovery', () => ({
   }
 }))
 
+const profileRoots = vi.hoisted(() => {
+  const state: { unc: string[] } = { unc: [] }
+  return state
+})
+vi.mock('../claude-accounts/claude-profile-reader-roots', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReaderRoots>()),
+  claudeProfileReaderRoots: (legacy: string[]) => [...legacy, ...profileRoots.unc]
+}))
+
 import { resetHostReadableTranscriptPathCacheForTests } from './host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
+import { getWslHomeAsync, listRunningWslDistrosAsync, listWslDistrosAsync } from '../wsl'
 
 const realPlatform = process.platform
 
@@ -69,6 +80,7 @@ beforeEach(() => {
   vi.mocked(listWslDistrosAsync).mockClear()
   scanned.dirs = []
   scanned.hostRootHasRollout = false
+  profileRoots.unc = []
   READABLE_WSL_UNC_PATHS.clear()
   READABLE_WSL_UNC_PATHS.add(ROLLOUT_UNC)
   setPlatform('win32')
@@ -183,5 +195,39 @@ describe('resolveSessionFilePath on a Windows host with WSL', () => {
       codexSessionsDirs: []
     })
     expect(resolved).toBeNull()
+  })
+
+  it('reads WSL Claude profile roots only after host roots miss, and only in running distros', async () => {
+    const running = `${UBUNTU_HOME}\\.local\\share\\orca\\claude-profiles\\a\\home\\projects`
+    const stopped = running.replace('Ubuntu', 'Arch')
+    profileRoots.unc = [running, stopped]
+    vi.mocked(listRunningWslDistrosAsync).mockClear()
+    scanned.hostRootHasRollout = true
+    await expect(resolveSessionFilePath('claude', 'rollout-wsl-sess')).resolves.toBe(HOST_ROLLOUT)
+    expect(scanned.dirs.some((dir) => dir.startsWith('\\\\wsl.localhost\\'))).toBe(false)
+    expect(vi.mocked(listRunningWslDistrosAsync)).not.toHaveBeenCalled()
+    scanned.hostRootHasRollout = false
+    scanned.dirs = []
+    await resolveSessionFilePath('claude', 'missing-sess')
+    expect(scanned.dirs).toContain(running)
+    expect(scanned.dirs).not.toContain(stopped)
+  })
+
+  it('keeps a host CLAUDE_CONFIG_DIR on a WSL share first and unfiltered, as before profiles', async () => {
+    const previous = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = `${UBUNTU_HOME}\\.claude`
+    vi.mocked(listRunningWslDistrosAsync).mockClear()
+    try {
+      await resolveSessionFilePath('claude', 'missing-sess')
+    } finally {
+      if (previous === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = previous
+      }
+    }
+    expect(scanned.dirs[0]).toBe(join(`${UBUNTU_HOME}\\.claude`, 'projects'))
+    expect(scanned.dirs).toHaveLength(2)
+    expect(vi.mocked(listRunningWslDistrosAsync)).not.toHaveBeenCalled()
   })
 })

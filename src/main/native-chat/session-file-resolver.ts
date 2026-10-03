@@ -7,6 +7,7 @@ import {
   type NativeChatTranscriptAgent
 } from '../../shared/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
@@ -36,15 +37,13 @@ import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcr
 // Why both roots and not just that one: adopting the variable would otherwise hide every
 // transcript written before it was set. Same managed-then-default shape as
 // codexSessionsDirs below, de-duped so the usual case still scans once.
-function claudeProjectsDirs(): string[] {
+function claudeProjectsDirs(): { legacy: string[]; all: string[] } {
   const candidates = [
     join(process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude'), 'projects'),
     join(homedir(), '.claude', 'projects')
   ]
-  return claudeProfileReaderRoots(
-    candidates.filter((dir, index) => candidates.indexOf(dir) === index),
-    'projects'
-  )
+  const legacy = candidates.filter((dir, index) => candidates.indexOf(dir) === index)
+  return { legacy, all: claudeProfileReaderRoots(legacy, 'projects') }
 }
 
 // Why: Orca launches Codex with ORCA_CODEX_HOME pointing at its own managed
@@ -172,10 +171,24 @@ async function resolveSessionFileById(
   if (transcriptAgent === 'claude') {
     // An explicit root is the caller naming the exact account tree its session pinned;
     // adding a fallback there could resolve a different account's transcript.
-    return resolveClaudeSessionFile(
-      trimmedId,
-      options.claudeProjectsDir ? [options.claudeProjectsDir] : claudeProjectsDirs(),
-      signal
+    if (options.claudeProjectsDir) {
+      return resolveClaudeSessionFile(trimmedId, [options.claudeProjectsDir], signal)
+    }
+    // Why a second tier: WSL profile roots are read only after the others miss, and only in
+    // running distros, like Codex's WSL homes. Legacy roots keep their order, unfiltered.
+    const { legacy, all } = claudeProjectsDirs()
+    const guestProfile = (dir: string) => !legacy.includes(dir) && isWslUncPath(dir)
+    return (
+      (await resolveClaudeSessionFile(
+        trimmedId,
+        all.filter((dir) => !guestProfile(dir)),
+        signal
+      )) ??
+      resolveClaudeSessionFile(
+        trimmedId,
+        await filterPathsToRunningWslDistrosAsync(all.filter(guestProfile)),
+        signal
+      )
     )
   }
   if (transcriptAgent === 'codex') {

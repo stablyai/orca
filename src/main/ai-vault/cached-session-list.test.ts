@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import type * as ClaudeProfileReaderRoots from '../claude-accounts/claude-profile-reader-roots'
 
 const {
   filterPathsToRunningWslDistrosAsync,
   getCachedWslDistros,
   hasCachedWslDistros,
   listRunningWslHomeDirsAsync,
-  scanAiVaultSessionsInService
+  scanAiVaultSessionsInService,
+  claudeProfileSurfaceRoots
 } = vi.hoisted(() => ({
+  claudeProfileSurfaceRoots: vi.fn((): string[] => []),
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths]),
   getCachedWslDistros: vi.fn((): string[] | null => null),
   hasCachedWslDistros: vi.fn(() => false),
@@ -25,11 +28,16 @@ vi.mock('../wsl', () => ({
   listRunningWslHomeDirsAsync
 }))
 vi.mock('../wsl-running-path-filter', () => ({ filterPathsToRunningWslDistrosAsync }))
+vi.mock('../claude-accounts/claude-profile-reader-roots', async (importOriginal) => ({
+  ...(await importOriginal<typeof ClaudeProfileReaderRoots>()),
+  claudeProfileSurfaceRoots
+}))
 
 import {
   getAiVaultWslHomeDirs,
   invalidateAiVaultSessionListCache,
   listAiVaultSessions,
+  localAiVaultScanRoots,
   resetAiVaultSessionListCacheForTests
 } from './cached-session-list'
 
@@ -98,6 +106,19 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     expect(cached.scannedAt).toBe('scan-A')
     expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
     expect(listRunningWslHomeDirsAsync).toHaveBeenCalledTimes(1)
+  })
+
+  it('scans WSL Claude profile roots only in distros that are running now', async () => {
+    const running = '\\\\wsl.localhost\\Ubuntu\\home\\u\\.claude\\projects'
+    const stopped = '\\\\wsl.localhost\\Debian\\home\\u\\.claude\\projects'
+    claudeProfileSurfaceRoots.mockReturnValueOnce([running, stopped])
+    filterPathsToRunningWslDistrosAsync.mockImplementation(async (paths) =>
+      paths.filter((path) => !path.includes('Debian'))
+    )
+    await expect(localAiVaultScanRoots()).resolves.toMatchObject({
+      claudeProfileProjectsDirs: [running]
+    })
+    filterPathsToRunningWslDistrosAsync.mockImplementation(async (paths) => [...paths])
   })
 
   it('skips running-distro discovery once a probe has reported no installed WSL distro', async () => {

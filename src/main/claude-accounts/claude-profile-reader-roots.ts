@@ -7,7 +7,7 @@ import { getClaudeProfileRoutingAuthority } from './claude-profile-routing-autho
 export function claudeProfileSurfaceRoots(surface: 'projects' | 'transcripts'): string[] {
   return (
     getClaudeProfileRoutingAuthority()
-      ?.historyRoots()
+      ?.historyRoots(undefined, surface)
       .map((home) => join(home, surface)) ?? []
   )
 }
@@ -23,6 +23,9 @@ export function mergeClaudeProfileReaderRoots(
   }
   const allowed = new Set(
     candidates.map((path) => {
+      if (isWslUncPath(path)) {
+        return path
+      }
       try {
         return join(realpathSync.native(dirname(path)), basename(path))
       } catch {
