@@ -1,8 +1,18 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   selectRefreshedNetworkAddress,
   type MobileNetworkInterface
 } from './mobile-network-interface-selection'
+
+beforeEach(() => {
+  vi.stubGlobal('window', {
+    api: { platform: { get: () => ({ platform: 'linux' as const }) } }
+  })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 const LAN: MobileNetworkInterface = { name: 'en0', address: '192.168.1.24' }
 const TAILNET: MobileNetworkInterface = { name: 'tailscale0', address: '100.64.1.20' }
@@ -117,4 +127,63 @@ describe('selectRefreshedNetworkAddress', () => {
       ).toBe(networkInterface.address)
     }
   )
+
+  it('replaces an auto-selected Thunderbolt address when Ethernet appears', () => {
+    expect(
+      selectRefreshedNetworkAddress(
+        '10.99.88.1',
+        [
+          { name: 'bridge0', address: '10.99.88.1' },
+          { name: 'en0', address: '192.168.4.191' }
+        ],
+        false,
+        false,
+        'darwin'
+      )
+    ).toBe('192.168.4.191')
+  })
+
+  it('keeps a Thunderbolt address the user picked when Ethernet appears', () => {
+    expect(
+      selectRefreshedNetworkAddress(
+        '10.99.88.1',
+        [
+          { name: 'bridge0', address: '10.99.88.1' },
+          { name: 'en0', address: '192.168.4.191' }
+        ],
+        false,
+        true,
+        'darwin'
+      )
+    ).toBe('10.99.88.1')
+  })
+
+  it('prefers Ethernet over Thunderbolt Bridge when the renderer has no process', () => {
+    const priorProcess = globalThis.process
+    const priorWindow = globalThis.window
+    delete (globalThis as { process?: NodeJS.Process }).process
+    vi.stubGlobal('window', {
+      api: { platform: { get: () => ({ platform: 'darwin' as const }) } }
+    })
+    let selectedWithLan: string | undefined
+    let selectedBridgeOnly: string | undefined
+    try {
+      selectedWithLan = selectRefreshedNetworkAddress(undefined, [
+        { name: 'bridge0', address: '10.99.88.1' },
+        { name: 'en0', address: '192.168.4.191' }
+      ])
+      selectedBridgeOnly = selectRefreshedNetworkAddress(undefined, [
+        { name: 'bridge0', address: '10.99.88.1' }
+      ])
+    } finally {
+      globalThis.process = priorProcess
+      if (priorWindow === undefined) {
+        vi.unstubAllGlobals()
+      } else {
+        vi.stubGlobal('window', priorWindow)
+      }
+    }
+    expect(selectedWithLan).toBe('192.168.4.191')
+    expect(selectedBridgeOnly).toBe('10.99.88.1')
+  })
 })

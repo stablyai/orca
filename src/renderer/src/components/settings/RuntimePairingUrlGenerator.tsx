@@ -6,13 +6,13 @@ import { Label } from '../ui/label'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 import { translate } from '@/i18n/i18n'
 import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
+import { useRuntimePairingAdvertisedAddress } from './use-runtime-pairing-advertised-address'
 import {
   RUNTIME_PAIRING_LOOPBACK_ADDRESS,
   cacheGeneratedRuntimePairingLink,
   clearGeneratedRuntimePairingLink,
   runtimePairingLinkCache,
   runtimePairingReachForIntent,
-  selectRuntimePairingIntent,
   type RuntimePairingIntent,
   type RuntimePairingUrlGeneratorProps
 } from './runtime-pairing-link-state'
@@ -49,6 +49,14 @@ export function RuntimePairingUrlGenerator({
   const accessGrantLoadIdRef = useRef(0)
   const copiedTargetResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
+  const { preferredInterfaceName, updateSelectedAddress, updateIntent } =
+    useRuntimePairingAdvertisedAddress({
+      intent,
+      setIntent,
+      networkInterfaces,
+      selectedAddress,
+      setSelectedAddress
+    })
 
   const clearCopiedTargetResetTimer = useCallback((): void => {
     if (copiedTargetResetTimerRef.current === null) {
@@ -145,20 +153,6 @@ export function RuntimePairingUrlGenerator({
       networkInterfaceLoadIdRef.current += 1
     }
   }, [loadNetworkInterfaces])
-
-  useEffect(() => {
-    if (intent !== 'another' || networkInterfaces.length === 0) {
-      return
-    }
-    const addressStillAvailable = networkInterfaces.some(
-      (networkInterface) => networkInterface.address === selectedAddress
-    )
-    if (!addressStillAvailable) {
-      const nextAddress = networkInterfaces[0]?.address ?? ''
-      runtimePairingLinkCache.selectedAddress = nextAddress
-      setSelectedAddress(nextAddress)
-    }
-  }, [intent, networkInterfaces, selectedAddress])
 
   useEffect(() => {
     void loadRuntimeAccessGrants()
@@ -345,32 +339,6 @@ export function RuntimePairingUrlGenerator({
     : 'space-y-4'
   const sharedAccessClassName = showGeneratorForm ? 'border-t border-border/40 pt-3' : ''
 
-  const updateSelectedAddress = (address: string): void => {
-    runtimePairingLinkCache.selectedAddress = address
-    setSelectedAddress(address)
-    if (
-      intent === 'another' &&
-      !networkInterfaces.some((networkInterface) => networkInterface.address === address)
-    ) {
-      runtimePairingLinkCache.customAddress = address
-      runtimePairingLinkCache.intent = 'custom'
-      setIntent('custom')
-    } else if (intent === 'custom') {
-      runtimePairingLinkCache.customAddress = address
-    }
-  }
-
-  const updateIntent = (nextIntent: RuntimePairingIntent): void => {
-    setIntent(nextIntent)
-    setSelectedAddress(
-      selectRuntimePairingIntent(
-        nextIntent,
-        networkInterfaces,
-        runtimePairingLinkCache.customAddress
-      )
-    )
-  }
-
   return (
     <div ref={setContainerNode} className={containerClassName}>
       {showHeader ? (
@@ -394,6 +362,7 @@ export function RuntimePairingUrlGenerator({
           intent={intent}
           loopbackAddress={RUNTIME_PAIRING_LOOPBACK_ADDRESS}
           networkInterfaces={networkInterfaces}
+          retainedInterfaceName={preferredInterfaceName}
           selectedAddress={selectedAddress}
           refreshingNetworkInterfaces={refreshingNetworkInterfaces}
           isGeneratingPairing={isGeneratingPairing}

@@ -15,6 +15,7 @@ type RuntimePairingGeneratorFormProps = {
   intent: RuntimePairingIntent
   loopbackAddress: string
   networkInterfaces: { name: string; address: string }[]
+  retainedInterfaceName?: string | null
   selectedAddress: string
   refreshingNetworkInterfaces: boolean
   isGeneratingPairing: boolean
@@ -33,6 +34,7 @@ export function RuntimePairingGeneratorForm({
   intent,
   loopbackAddress,
   networkInterfaces,
+  retainedInterfaceName = null,
   selectedAddress,
   refreshingNetworkInterfaces,
   isGeneratingPairing,
@@ -50,6 +52,17 @@ export function RuntimePairingGeneratorForm({
     value: networkInterface.address,
     label: `${networkInterface.name} (${networkInterface.address})`
   }))
+  if (
+    intent === 'another' &&
+    retainedInterfaceName &&
+    selectedAddress &&
+    !networkInterfaces.some((networkInterface) => networkInterface.address === selectedAddress)
+  ) {
+    options.push({
+      value: selectedAddress,
+      label: `${retainedInterfaceName} (${selectedAddress})`
+    })
+  }
   const generatedIsCurrent = generatedAddress === selectedAddress
   const staleGeneratedLink = generatedAddress !== null && !generatedIsCurrent
   const customAddressResult =
