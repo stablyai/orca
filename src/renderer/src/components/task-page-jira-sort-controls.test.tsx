@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { TaskPageJiraSortControls } from './task-page-jira-sort-controls'
+import { defaultJiraListColumnIds, visibleJiraListColumns } from './jira-list-columns'
 
 afterEach(cleanup)
 
@@ -18,7 +19,12 @@ function renderControls(
 ): ReturnType<typeof render> {
   return render(
     <TooltipProvider>
-      <TaskPageJiraSortControls direction={direction} onSort={onSort} orderBy={orderBy} />
+      <TaskPageJiraSortControls
+        columns={visibleJiraListColumns(defaultJiraListColumnIds())}
+        direction={direction}
+        onSort={onSort}
+        orderBy={orderBy}
+      />
     </TooltipProvider>
   )
 }
@@ -33,8 +39,8 @@ describe('TaskPage Jira sort controls', () => {
       'aria-pressed',
       'true'
     )
-    expect(screen.getByRole('button', { name: 'Assignee' })).toHaveClass('flex', 'max-lg:!hidden')
-    expect(screen.getByRole('button', { name: 'Assignee' })).not.toHaveClass('block')
+    expect(screen.getByRole('button', { name: 'Assignee' })).toHaveClass('flex')
+    expect(screen.queryByRole('button', { name: 'Sprint' })).toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'Key' }))
     expect(onSort).toHaveBeenCalledWith('key')

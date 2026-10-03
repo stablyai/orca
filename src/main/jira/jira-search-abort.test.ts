@@ -10,6 +10,11 @@ const { acquireMock, clearTokenMock, getClientsMock, isAuthErrorMock, jiraReques
     jiraRequestMock: vi.fn()
   }))
 
+// Field discovery is covered by jira-agile-fields.test.ts; keep search call sequences exact here.
+vi.mock('./jira-agile-fields', () => ({
+  getAgileFieldIds: async () => ({}),
+  agileFieldIdList: () => []
+}))
 vi.mock('./request-queue', () => ({
   acquire: (...args: unknown[]) => acquireMock(...args),
   release: vi.fn()

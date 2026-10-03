@@ -9,6 +9,18 @@ import type {
   JiraPrioritiesBySite
 } from './jira-issue-sorter'
 import { jiraListPriorities } from '@/runtime/runtime-jira-client'
+import {
+  jiraListGridTemplate,
+  loadJiraListColumnIds,
+  saveJiraListColumnIds,
+  visibleJiraListColumns,
+  type JiraListColumnId
+} from './jira-list-columns'
+
+function fallbackJiraSortColumn(columnIds: ReadonlySet<JiraListColumnId>): JiraIssueSortColumn {
+  return columnIds.has('updated') ? 'updated' : 'key'
+}
+
 export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   const { settings, jiraConnected, selectedJiraSiteId, taskSource, jiraTaskSourceContext } = model
   // Jira tab state
@@ -24,10 +36,35 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     order: JiraProjectStatusOrder
     scopeKey: string
   } | null>(null)
-  const [jiraOrderBy, setJiraOrderBy] = useState<JiraIssueSortColumn>('updated')
+  const [jiraColumnIds, setJiraColumnIds] =
+    useState<ReadonlySet<JiraListColumnId>>(loadJiraListColumnIds)
+  // Why: the sort column must stay visible, and a saved selection may hide "updated".
+  const [jiraOrderBy, setJiraOrderBy] = useState<JiraIssueSortColumn>(() =>
+    fallbackJiraSortColumn(jiraColumnIds)
+  )
   const [jiraOrderDirection, setJiraOrderDirection] = useState<JiraIssueSortDirection>('desc')
   const [jiraPrioritiesBySite, setJiraPrioritiesBySite] = useState<JiraPrioritiesBySite>(
     () => new Map()
+  )
+  const jiraColumns = useMemo(() => visibleJiraListColumns(jiraColumnIds), [jiraColumnIds])
+  const jiraGridTemplate = useMemo(() => jiraListGridTemplate(jiraColumns), [jiraColumns])
+  const toggleJiraColumn = useCallback(
+    (column: JiraListColumnId) => {
+      const next = new Set(jiraColumnIds)
+      if (next.has(column)) {
+        next.delete(column)
+        if (jiraOrderBy === column) {
+          const fallback = fallbackJiraSortColumn(next)
+          setJiraOrderBy(fallback)
+          setJiraOrderDirection(fallback === 'updated' ? 'desc' : 'asc')
+        }
+      } else {
+        next.add(column)
+      }
+      saveJiraListColumnIds(next)
+      setJiraColumnIds(next)
+    },
+    [jiraColumnIds, jiraOrderBy]
   )
   const jiraPrioritySiteIdsKey = useMemo(() => {
     const siteIds =
@@ -82,6 +119,7 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     },
     [jiraOrderBy]
   )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model is widened in place with every field assigned right below, matching the other task-page state hooks.
   const nextModel = model as typeof model & {
     jiraIssues: typeof jiraIssues
     setJiraIssues: typeof setJiraIssues
@@ -109,6 +147,10 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     setJiraPrioritiesBySite: typeof setJiraPrioritiesBySite
     jiraPrioritySiteIdsKey: typeof jiraPrioritySiteIdsKey
     handleJiraSort: typeof handleJiraSort
+    jiraColumnIds: typeof jiraColumnIds
+    jiraColumns: typeof jiraColumns
+    jiraGridTemplate: typeof jiraGridTemplate
+    toggleJiraColumn: typeof toggleJiraColumn
   }
   nextModel.jiraIssues = jiraIssues
   nextModel.setJiraIssues = setJiraIssues
@@ -136,6 +178,10 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   nextModel.setJiraPrioritiesBySite = setJiraPrioritiesBySite
   nextModel.jiraPrioritySiteIdsKey = jiraPrioritySiteIdsKey
   nextModel.handleJiraSort = handleJiraSort
+  nextModel.jiraColumnIds = jiraColumnIds
+  nextModel.jiraColumns = jiraColumns
+  nextModel.jiraGridTemplate = jiraGridTemplate
+  nextModel.toggleJiraColumn = toggleJiraColumn
   return nextModel
 }
 export type TaskPageJiraListStateModel = ReturnType<typeof useTaskPageJiraListState>

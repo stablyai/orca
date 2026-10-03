@@ -1,7 +1,8 @@
 import type { JiraIssue, JiraPriority } from '../../../shared/jira-types'
 import { compareNumericLocaleText } from '@/lib/locale-text-collators'
+import type { JiraListColumnId } from './jira-list-columns'
 
-export type JiraIssueSortColumn = 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated'
+export type JiraIssueSortColumn = JiraListColumnId
 
 export type JiraIssueSortDirection = 'asc' | 'desc'
 export type JiraPrioritiesBySite = ReadonlyMap<string, readonly JiraPriority[]>
@@ -56,18 +57,9 @@ export function sortJiraIssues(
   jiraPrioritiesBySite: JiraPrioritiesBySite = new Map()
 ): JiraIssue[] {
   const numericKeys = new Map<JiraIssue, number>()
-  if (issues.length > 1 && (orderBy === 'priority' || orderBy === 'updated')) {
+  if (issues.length > 1 && orderBy in NUMERIC_SORT_KEYS) {
     for (const issue of issues) {
-      numericKeys.set(
-        issue,
-        orderBy === 'updated'
-          ? new Date(issue.updatedAt).getTime()
-          : getJiraPriorityWeight(
-              issue.priority?.name,
-              issue.priority?.id,
-              jiraPrioritiesBySite.get(issue.siteId ?? '')
-            )
-      )
+      numericKeys.set(issue, NUMERIC_SORT_KEYS[orderBy]!(issue, jiraPrioritiesBySite))
     }
   }
   return [...issues].sort((a, b) => {
@@ -76,17 +68,32 @@ export function sortJiraIssues(
       comparison = compareNumericLocaleText(a.key, b.key)
     } else if (orderBy === 'title') {
       comparison = a.title.localeCompare(b.title)
-    } else if (orderBy === 'status') {
-      comparison = 0
-    } else if (orderBy === 'priority') {
-      comparison = numericKeys.get(a)! - numericKeys.get(b)!
     } else if (orderBy === 'assignee') {
-      const userA = a.assignee?.displayName ?? ''
-      const userB = b.assignee?.displayName ?? ''
-      comparison = userA.localeCompare(userB)
-    } else if (orderBy === 'updated') {
+      comparison = (a.assignee?.displayName ?? '').localeCompare(b.assignee?.displayName ?? '')
+    } else if (orderBy === 'parent') {
+      comparison = (a.parent?.title ?? '').localeCompare(b.parent?.title ?? '')
+    } else if (orderBy === 'sprint') {
+      comparison = compareNumericLocaleText(a.sprint ?? '', b.sprint ?? '')
+    } else if (orderBy in NUMERIC_SORT_KEYS) {
       comparison = numericKeys.get(a)! - numericKeys.get(b)!
     }
+    // Status ordering is handled by the grouped sections, so `status` compares equal here.
     return orderDirection === 'asc' ? comparison : -comparison
   })
+}
+
+// Why: issues without a value sort below every real value in ascending order.
+const NUMERIC_SORT_KEYS: Partial<
+  Record<JiraIssueSortColumn, (issue: JiraIssue, priorities: JiraPrioritiesBySite) => number>
+> = {
+  updated: (issue) => new Date(issue.updatedAt).getTime(),
+  priority: (issue, priorities) =>
+    getJiraPriorityWeight(
+      issue.priority?.name,
+      issue.priority?.id,
+      priorities.get(issue.siteId ?? '')
+    ),
+  storyPoints: (issue) => issue.storyPoints ?? -1,
+  originalEstimate: (issue) => issue.originalEstimateSeconds ?? -1,
+  remainingEstimate: (issue) => issue.remainingEstimateSeconds ?? -1
 }
