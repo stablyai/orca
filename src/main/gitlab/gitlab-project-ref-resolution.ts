@@ -7,6 +7,10 @@ import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import {
+  listRepoRemoteNames,
+  resolveProjectRefPreferringRemotes
+} from './gitlab-project-ref-remote-preference'
+import {
   _resetGlabUnauthenticatedHosts,
   isGlabHostKnownUnauthenticated,
   parseGlabAuthStatusHosts,
@@ -166,6 +170,23 @@ async function resolveProjectRefForRemote(
   return null
 }
 
+async function getProjectRefPreferring(
+  repoPath: string,
+  preferredRemoteNames: readonly string[],
+  knownHosts?: readonly string[],
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {},
+  excludedRemoteNames: readonly string[] = []
+): Promise<ProjectRef | null> {
+  return resolveProjectRefPreferringRemotes(
+    preferredRemoteNames,
+    (remoteName) =>
+      getProjectRefForRemote(repoPath, remoteName, knownHosts, connectionId, localGitOptions),
+    () => listRepoRemoteNames(repoPath, connectionId, localGitOptions),
+    excludedRemoteNames
+  )
+}
+
 export async function getProjectRef(
   repoPath: string,
   knownHosts?: readonly string[],
@@ -200,7 +221,18 @@ export async function getIssueProjectRef(
       return upstream
     }
   }
-  return originPromise
+  const origin = await originPromise
+  if (origin) {
+    return origin
+  }
+  return getProjectRefPreferring(
+    repoPath,
+    [],
+    knownHosts,
+    connectionId,
+    localGitOptions,
+    ['origin', 'upstream']
+  )
 }
 
 export type ResolvedIssueSource = {
@@ -227,20 +259,21 @@ export async function resolveIssueSource(
     if (upstream) {
       return { source: upstream, fellBack: false }
     }
-    const origin = await getProjectRefForRemote(
+    const fallback = await getProjectRefPreferring(
       repoPath,
-      'origin',
+      ['origin'],
       knownHosts,
       connectionId,
-      localGitOptions
+      localGitOptions,
+      ['upstream']
     )
-    return { source: origin, fellBack: origin !== null }
+    return { source: fallback, fellBack: fallback !== null }
   }
   if (preference === 'origin') {
     return {
-      source: await getProjectRefForRemote(
+      source: await getProjectRefPreferring(
         repoPath,
-        'origin',
+        ['origin'],
         knownHosts,
         connectionId,
         localGitOptions
