@@ -1,5 +1,4 @@
 import { AutomationService } from '../automations/service'
-import { createHeadlessAutomationOutputSnapshotBuffer } from '../automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from '../automations/headless-workspace-create'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
 import { mainProcessState as state } from './main-process-state'
@@ -21,8 +20,11 @@ export function initializeMainProcessAutomations(): AutomationService {
     allowRemoteHostScheduling: state.isServeMode,
     headlessDispatcher: state.isServeMode
       ? async ({ automation, run, target }) => {
-          const terminalSnapshotLimit = 2_000
-          let terminalHandle: string
+          if (automation.reuseSession) {
+            throw new Error(
+              'Headless automations do not support session reuse. No terminal was launched.'
+            )
+          }
           let terminalSessionId: string | null = null
           let terminalPaneKey: string | null = null
           let terminalPtyId: string | null = null
@@ -32,7 +34,7 @@ export function initializeMainProcessAutomations(): AutomationService {
             const created = await runtime.createManagedWorktree(
               buildHeadlessAutomationWorktreeCreateArgs({ automation, run, repo: target.repo })
             )
-            terminalHandle = created.startupTerminal?.handle ?? ''
+            const terminalHandle = created.startupTerminal?.handle ?? ''
             terminalSessionId = created.startupTerminal?.tabId ?? null
             terminalPaneKey = created.startupTerminal?.paneKey ?? null
             terminalPtyId = created.startupTerminal?.ptyId ?? null
@@ -53,7 +55,6 @@ export function initializeMainProcessAutomations(): AutomationService {
               prompt: automation.prompt,
               title: run.title
             })
-            terminalHandle = terminal.handle
             terminalSessionId = terminal.tabId ?? null
             terminalPaneKey = terminal.paneKey ?? null
             terminalPtyId = terminal.ptyId ?? null
@@ -61,35 +62,12 @@ export function initializeMainProcessAutomations(): AutomationService {
             const worktree = await runtime.showManagedWorktree(`id:${workspaceId}`)
             workspaceDisplayName = worktree.displayName ?? null
           }
-          const completion = (async () => {
-            const wait = await runtime.waitForTerminal(terminalHandle, { condition: 'tui-idle' })
-            const read = await runtime.readTerminal(terminalHandle, {
-              limit: terminalSnapshotLimit
-            })
-            const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
-            snapshotBuffer.append(read.tail.join('\n'))
-            if (wait.satisfied) {
-              return {
-                status: 'completed' as const,
-                outputSnapshot: snapshotBuffer.snapshot(),
-                error: null
-              }
-            }
-            return {
-              status: 'dispatch_failed' as const,
-              outputSnapshot: snapshotBuffer.snapshot(),
-              error: wait.blockedReason
-                ? `Automation agent is blocked: ${wait.blockedReason}.`
-                : 'Automation agent did not report completion.'
-            }
-          })()
           return {
             workspaceId,
             workspaceDisplayName,
             terminalSessionId,
             terminalPaneKey,
-            terminalPtyId,
-            completion
+            terminalPtyId
           }
         }
       : undefined
