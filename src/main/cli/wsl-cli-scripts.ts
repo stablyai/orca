@@ -55,6 +55,9 @@ ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
   cd /
 }
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
+# Why: PowerShell AuthorizationManager rejects noninteractive -File on \\\\wsl.localhost\\
+# script paths. \\\\wsl$\\ is the same share. The cwd UNC is only -WslCwd, so leave it.
+ORCA_BRIDGE_PS1_WIN=\${ORCA_BRIDGE_PS1_WIN/#\\\\\\\\wsl.localhost\\\\/\\\\\\\\wsl\\$\\\\}
 ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
 if [ -n "\${WSL_DISTRO_NAME:-}" ]; then
   set -- -WslDistro "$WSL_DISTRO_NAME" "$@"
