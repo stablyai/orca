@@ -1,5 +1,7 @@
 import type { AgentType } from './agent-status-types'
 import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
+import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
+import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from './native-chat-session-options'
 
 export type ResolvedSessionOptionLaunch = {
@@ -7,12 +9,18 @@ export type ResolvedSessionOptionLaunch = {
   appliedValues: Record<string, SessionOptionValue>
 }
 
+export function getAgentSessionOptionLaunchCatalog(
+  agent: AgentType
+): AgentSessionOptionCatalog | null {
+  return agent === 'opencode' ? OPENCODE_LAUNCH_OPTION_CATALOG : getAgentSessionOptionCatalog(agent)
+}
+
 export function removeOverriddenAgentSessionArgs(
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined,
   tokens: readonly string[]
 ): string[] {
-  const catalog = getAgentSessionOptionCatalog(agent)
+  const catalog = getAgentSessionOptionLaunchCatalog(agent)
   const modelId = typeof values?.model === 'string' ? values.model : null
   if (!catalog || !values || !modelId) {
     return [...tokens]
@@ -34,7 +42,7 @@ export function resolveAgentSessionOptionLaunch(
   trailingAgentArgs: readonly string[] = [],
   includeCatalogDefaults = true
 ): ResolvedSessionOptionLaunch {
-  const catalog = getAgentSessionOptionCatalog(agent)
+  const catalog = getAgentSessionOptionLaunchCatalog(agent)
   const modelId = typeof values?.model === 'string' ? values.model : null
   if (!catalog || !values || !modelId) {
     return { args: [], appliedValues: {} }

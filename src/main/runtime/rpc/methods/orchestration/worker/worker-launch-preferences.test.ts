@@ -117,10 +117,37 @@ describe('orchestration worker launch preferences', () => {
     ).toThrow('does not support effort turbo')
   })
 
-  it('refuses an opencode model because the opencode 2 TUI rejects --model', () => {
+  it('refuses an opencode model until the execution host verifies legacy TUI support', () => {
     expect(() =>
       resolveWorkerLaunchPreferences({ agent: 'opencode', model: 'meta/muse-spark-1.3' })
-    ).toThrow('does not support launch-time model selection')
+    ).toThrow('cannot verify launch-time model selection')
+  })
+
+  it('supports an opaque OpenCode model on a verified legacy host', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'opencode',
+        model: 'zai-coding-plan/glm-5.3-flash',
+        openCodeModelLaunchSupported: true
+      })
+    ).toEqual({
+      preferences: { model: 'zai-coding-plan/glm-5.3-flash' },
+      receipt: {
+        requested: { agent: 'opencode', model: 'zai-coding-plan/glm-5.3-flash', effort: null },
+        effective: { agent: 'opencode', model: 'zai-coding-plan/glm-5.3-flash', effort: null }
+      }
+    })
+  })
+
+  it('refuses an unverified OpenCode effort on a legacy host', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'opencode',
+        model: 'opencode/fledge-alpha-free',
+        effort: 'high',
+        openCodeModelLaunchSupported: true
+      })
+    ).toThrow('does not support effort high')
   })
 
   it('does not invent an effort when only a model is requested', () => {
