@@ -36,18 +36,22 @@ export async function runClaudeLoginSession(
 ): Promise<CapturedClaudeAuth> {
   const tempConfig = await createTemporaryClaudeConfigDir(location)
   const controller = new AbortController()
-  dependencies.setCancel(() => {
-    if (controller.signal.aborted) {
-      return false
-    }
-    controller.abort()
-    return true
-  })
-  const previousLegacyKeychain = await readActiveClaudeKeychainCredentials()
+  let previousLegacyKeychain: string | null = null
+  let previousLegacyKeychainRead = false
   let captured: CapturedClaudeAuth | null = null
   let captureError: unknown = null
   let cleanupError: unknown = null
   try {
+    dependencies.setCancel(() => {
+      if (controller.signal.aborted) {
+        return false
+      }
+      controller.abort()
+      return true
+    })
+    // An initial Keychain read failure must still release the temporary directory.
+    previousLegacyKeychain = await readActiveClaudeKeychainCredentials()
+    previousLegacyKeychainRead = true
     if (controller.signal.aborted) {
       throw new Error('Claude sign-in was cancelled.')
     }
@@ -73,9 +77,11 @@ export async function runClaudeLoginSession(
         console.warn('[claude-accounts] Failed to clean temporary Claude Keychain item:', error)
       }
       try {
-        await (previousLegacyKeychain
-          ? writeActiveClaudeKeychainCredentials(previousLegacyKeychain)
-          : deleteActiveClaudeKeychainCredentialsStrict())
+        if (previousLegacyKeychainRead) {
+          await (previousLegacyKeychain
+            ? writeActiveClaudeKeychainCredentials(previousLegacyKeychain)
+            : deleteActiveClaudeKeychainCredentialsStrict())
+        }
       } catch (error) {
         cleanupError = error
       }
@@ -120,7 +126,16 @@ async function createTemporaryClaudeConfigDir(
     timeoutMs: 5000
   })
   const linuxPath = created.stdout.replaceAll(String.fromCharCode(0), '').trim()
-  if (created.code !== 0 || created.timedOut || !linuxPath.startsWith('/')) {
+  const hasSafeTemporaryPath = isTemporaryClaudeLoginPath(linuxPath)
+  if (created.code !== 0 || created.timedOut || !hasSafeTemporaryPath) {
+    // A failed mktemp wrapper can still return the path it allocated.
+    if (hasSafeTemporaryPath) {
+      await removeTemporaryClaudeConfigDir({
+        windowsPath: toWindowsWslPath(linuxPath, location.wslDistro),
+        linuxPath,
+        wslDistro: location.wslDistro
+      })
+    }
     throw new Error('Could not create a temporary WSL Claude login directory.')
   }
   return {
@@ -128,6 +143,10 @@ async function createTemporaryClaudeConfigDir(
     linuxPath,
     wslDistro: location.wslDistro
   }
+}
+
+function isTemporaryClaudeLoginPath(value: string): boolean {
+  return /^\/+(?:[^/\0\r\n]+\/+)*orca-claude-login\.[^/\0\r\n]+$/.test(value)
 }
 
 async function removeTemporaryClaudeConfigDir(config: ClaudeCommandConfig): Promise<void> {
@@ -145,5 +164,10 @@ async function removeTemporaryClaudeConfigDir(config: ClaudeCommandConfig): Prom
     }
     return
   }
-  rmSync(config.windowsPath, { recursive: true, force: true })
+  try {
+    rmSync(config.windowsPath, { recursive: true, force: true })
+  } catch (error) {
+    // Cleanup cannot mask the login result.
+    console.warn('[claude-accounts] Failed to clean temporary Claude config:', error)
+  }
 }
