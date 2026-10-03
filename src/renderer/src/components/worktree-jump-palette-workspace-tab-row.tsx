@@ -1,5 +1,5 @@
 import type React from 'react'
-import { FileText, SquareTerminal } from 'lucide-react'
+import { FileText, Pin, PinOff, SquareTerminal } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { CommandItem } from '@/components/ui/command'
 import { PaletteRecentTabStatusDot } from '@/components/cmd-j/palette-live-status'
@@ -54,6 +54,21 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
       <FileText className="size-3.5" aria-hidden="true" />
     )
   const sessionAge = formatPaletteSessionAge(result.lastActiveAt ?? null, controller.paletteNowMs)
+  const pinToggleLabel = result.isPinned
+    ? translate('worktreeJumpPalette.pin.unpinTab', 'Unpin tab')
+    : translate('worktreeJumpPalette.pin.pinTab', 'Pin tab')
+  const stopRowSelect = (event: React.SyntheticEvent): void => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  // Stop only the activation keys from reaching cmdk's root Enter handler (which
+  // would otherwise select this row regardless of DOM focus); arrow/Home/End keys
+  // must still bubble so palette keyboard navigation keeps working from this button.
+  const stopActivationKeyPropagation = (event: React.KeyboardEvent): void => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.stopPropagation()
+    }
+  }
 
   return (
     <CommandItem
@@ -115,6 +130,33 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
               index={controller.recentTabShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}
             />
+            <button
+              type="button"
+              data-palette-pin-toggle="true"
+              aria-label={pinToggleLabel}
+              aria-pressed={result.isPinned}
+              className={cn(
+                'flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 outline-none transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 group-hover:opacity-100 group-focus-within:opacity-100',
+                result.isPinned && 'opacity-100 text-foreground'
+              )}
+              onPointerDown={stopRowSelect}
+              onKeyDown={stopActivationKeyPropagation}
+              onClick={(event) => {
+                stopRowSelect(event)
+                controller.handleToggleWorkspaceTabPinned(
+                  result.tabId,
+                  result.isPinned,
+                  result.entityId,
+                  result.contentType
+                )
+              }}
+            >
+              {result.isPinned ? (
+                <PinOff className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Pin className="size-3.5" aria-hidden="true" />
+              )}
+            </button>
           </div>
         </div>
       </div>

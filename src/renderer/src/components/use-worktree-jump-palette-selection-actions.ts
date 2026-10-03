@@ -21,6 +21,8 @@ import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-
 import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
 import type { WorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import type { WorkspaceTabContentType } from '@/lib/workspace-tab-palette-search'
 
 function getSettingsTargetFromSectionId(sectionId: string): {
   pane: SettingsNavTarget
@@ -259,7 +261,40 @@ export function useWorktreeJumpPaletteSelectionActions({
       handleSelectWorktree
     ]
   )
-  return { handleSelectItem }
+  // Pin toggles are a second entry point into the same pinTab/unpinTab/pinFile/
+  // setWorktreesPinnedAndReveal store actions the tab-strip menu and sidebar already
+  // use (TabBar.tsx togglePinned, use-worktree-context-menu-commands.ts handleTogglePin).
+  const pinTab = useAppStore((s) => s.pinTab)
+  const unpinTab = useAppStore((s) => s.unpinTab)
+  const pinFile = useAppStore((s) => s.pinFile)
+  const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
+  const handleToggleWorkspaceTabPinned = useCallback(
+    (tabId: string, isPinned: boolean, entityId: string, contentType: WorkspaceTabContentType) => {
+      if (isPinned) {
+        unpinTab(tabId)
+        return
+      }
+      // Editor/diff/conflict-review/check-details tabs track their own preview state on
+      // openFiles[], separate from Tab.isPreview. pinTab alone clears only the latter,
+      // so a "pinned" preview editor tab can still be silently replaced later
+      // (getReplaceablePreviewFileId's no-targetGroupId branch reads openFiles[].isPreview
+      // directly). pinFile() clears both (makePreviewFilePermanent + pinTab), matching
+      // exactly what TabBar.tsx's togglePinned already does for editor-type tabs.
+      if (isEditorTabContentType(contentType)) {
+        pinFile(entityId, tabId)
+        return
+      }
+      pinTab(tabId)
+    },
+    [pinFile, pinTab, unpinTab]
+  )
+  const handleToggleWorktreePinned = useCallback(
+    (worktreeId: string, isPinned: boolean) => {
+      setWorktreesPinnedAndReveal([worktreeId], !isPinned)
+    },
+    [setWorktreesPinnedAndReveal]
+  )
+  return { handleSelectItem, handleToggleWorkspaceTabPinned, handleToggleWorktreePinned }
 }
 
 export type WorktreeJumpPaletteSelectionActions = ReturnType<
