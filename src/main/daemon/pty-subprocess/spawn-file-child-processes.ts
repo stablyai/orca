@@ -7,7 +7,10 @@ import {
   collectDescendantsFromIndex,
   getProcessTableIndex
 } from '../../../shared/process-table-index'
-import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
+import {
+  hasControllingTerminal,
+  type ProcessTableRow
+} from '../../../shared/process-table-snapshot'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal-process-inspection'
 import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
 
@@ -22,7 +25,7 @@ export function inspectSpawnFileChildProcessesFromRows(
 ): PtyChildProcessVerdict {
   const index = getProcessTableIndex(rows)
   const root = index.byPid.get(rootPid)
-  if (!root || !shellName || !root.tty || root.tty === '?') {
+  if (!root || !shellName || !hasControllingTerminal(root.tty)) {
     return 'unverifiable'
   }
   const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, rootPid)]

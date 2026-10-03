@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import type * as SnapshotReader from '../../shared/process-table-snapshot-reader'
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
+import { inspectSpawnFileChildProcessesFromRows } from './pty-subprocess/spawn-file-child-processes'
 import { resolveSpawnFileForegroundFromRows } from './pty-subprocess/spawn-file-foreground-process'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
 import { Session } from './session'
@@ -223,6 +224,39 @@ it('ignores stopped/background children and another terminal beneath the same ro
   expect(resolveSpawnFileForegroundFromRows(rows, 999)).toEqual({
     available: false,
     processName: null
+  })
+})
+
+/**
+ * `ps` writes "no controlling terminal" as `??` on macOS and `-` on some builds, which is not
+ * the `?` these readers used to compare against. A root spelled that way is on no terminal at
+ * all, so a terminal-less descendant that shares its group is not this pane's foreground.
+ */
+describe.each(['??', '?', '-'] as const)('root on no controlling terminal (tty=%s)', (tty) => {
+  const detachedRoot: ProcessTableRow = {
+    pid: 100,
+    ppid: 1,
+    pgid: 100,
+    tpgid: 100,
+    tty,
+    startTime: 'Sat Sep 26 13:44:29 2026',
+    stat: 'S',
+    command: '/bin/zsh'
+  }
+  const detachedTree: ProcessTableRow[] = [
+    detachedRoot,
+    { ...detachedRoot, pid: 101, ppid: 100, pgid: 100, command: 'claude' }
+  ]
+
+  it('declines to name the descendant that shares the group but holds no terminal', () => {
+    expect(resolveSpawnFileForegroundFromRows(detachedTree, 100)).toEqual({
+      available: false,
+      processName: null
+    })
+  })
+
+  it('reports child evidence as unverifiable rather than reading an unfenceable table', () => {
+    expect(inspectSpawnFileChildProcessesFromRows(detachedTree, 100, 'zsh')).toBe('unverifiable')
   })
 })
 
