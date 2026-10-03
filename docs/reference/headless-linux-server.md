@@ -251,6 +251,13 @@ lingering once:
 sudo loginctl enable-linger orca
 ```
 
+An open login as `orca` is not a substitute: without lingering, its user
+manager stops a few seconds after the last login session closes and takes any
+scope it owns with it. Orca therefore uses the scope only when lingering is on,
+or when `orca serve` itself runs under that user manager (a `systemctl --user`
+unit), and otherwise logs one line saying why (normally a `loginctl enable-linger`
+hint).
+
 Without it — or on a host without systemd as PID 1, or without `systemd-run`
 on `PATH` — the daemon falls back to launching directly inside
 `orca-serve.service`'s cgroup, and is then killed when the stop completes:
