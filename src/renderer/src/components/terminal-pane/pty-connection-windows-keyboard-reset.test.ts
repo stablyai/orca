@@ -162,25 +162,87 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
+    const cursorModes = { cursorStyle: 'bar', cursorBlink: false }
+    const refresh = vi.fn()
+    Object.assign(pane.terminal, {
+      _core: { coreService: { decPrivateModes: cursorModes } },
+      refresh,
+      write: vi.fn((_data: string | Uint8Array, callback?: () => void) => callback?.())
+    })
     const manager = createManager(1)
     const deps = createDeps()
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
-      | ((title: string) => void)
-      | undefined
-    if (!idleHandler) {
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle
+    if (typeof idleHandler !== 'function') {
       throw new Error('Expected onAgentBecameIdle to be registered')
     }
 
     idleHandler('* Codex done')
 
-    expect(pane.terminal.write).toHaveBeenCalledWith(
-      RESET_TERMINAL_CURSOR_STYLE,
-      expect.any(Function)
+    expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
+    expect(cursorModes.cursorStyle).toBeUndefined()
+    expect(cursorModes.cursorBlink).toBeUndefined()
+    expect(refresh).toHaveBeenCalledWith(
+      pane.terminal.buffer.active.cursorY,
+      pane.terminal.buffer.active.cursorY
     )
   })
+
+  it.each(['dispose', 'PTY rebind'] as const)(
+    'cancels a deferred idle cursor reset after %s',
+    async (transition) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('original-pty')
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      const cursorModes = { cursorStyle: 'bar', cursorBlink: false }
+      const refresh = vi.fn()
+      Object.assign(pane.terminal, {
+        _core: { coreService: { decPrivateModes: cursorModes } },
+        refresh
+      })
+      const manager = createManager(1)
+      const deps = createDeps()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Partial fixtures provide all dependencies exercised by cursor reset and disposal.
+      const binding = connectPanePty(pane as never, manager as never, deps as never)
+      const callbacks: (() => void)[] = []
+      Object.assign(pane.terminal, {
+        write: vi.fn((data: string | Uint8Array, callback?: () => void) => {
+          if (data instanceof Uint8Array && data.length === 0 && callback) {
+            callbacks.push(callback)
+          }
+        })
+      })
+      const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle
+      if (typeof idleHandler !== 'function') {
+        throw new Error('Expected onAgentBecameIdle to be registered')
+      }
+      idleHandler('* Codex done')
+      expect(callbacks).toHaveLength(1)
+      expect(cursorModes).toEqual({ cursorStyle: 'bar', cursorBlink: false })
+      expect(refresh).not.toHaveBeenCalled()
+
+      if (transition === 'dispose') {
+        binding.dispose()
+      } else {
+        const attach: unknown = transport.attach
+        if (typeof attach !== 'function') {
+          throw new Error('Expected the PTY attach callback to be registered')
+        }
+        attach({ existingPtyId: 'replacement-pty' })
+      }
+      callbacks[0]()
+
+      expect(cursorModes).toEqual({ cursorStyle: 'bar', cursorBlink: false })
+      expect(refresh).not.toHaveBeenCalled()
+      if (transition !== 'dispose') {
+        binding.dispose()
+      }
+    }
+  )
 
   it('keeps kitty keyboard state when a native Windows agent becomes idle', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
@@ -207,10 +269,7 @@ describe('connectPanePty', () => {
       idleHandler('* Codex done')
 
       // Why: a finished turn is not a dead app; its kitty flags stay until the host sees it exit.
-      expect(pane.terminal.write).toHaveBeenCalledWith(
-        RESET_TERMINAL_CURSOR_STYLE,
-        expect.any(Function)
-      )
+      expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
@@ -249,10 +308,7 @@ describe('connectPanePty', () => {
 
       idleHandler('* Codex done')
 
-      expect(pane.terminal.write).toHaveBeenCalledWith(
-        RESET_TERMINAL_CURSOR_STYLE,
-        expect.any(Function)
-      )
+      expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
@@ -310,10 +366,7 @@ describe('connectPanePty', () => {
         }
         idleHandler('* Codex done')
 
-        expect(pane.terminal.write).toHaveBeenCalledWith(
-          RESET_TERMINAL_CURSOR_STYLE,
-          expect.any(Function)
-        )
+        expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
         transport.sendInput.mockClear()
         sendTerminalInputThroughPane(pane, '\x1b[I')
         expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
@@ -363,10 +416,7 @@ describe('connectPanePty', () => {
       mockStoreState.agentStatusByPaneKey[paneKey] = doneStatus
       notifyStoreSubscribers()
 
-      expect(pane.terminal.write).toHaveBeenCalledWith(
-        RESET_TERMINAL_CURSOR_STYLE,
-        expect.any(Function)
-      )
+      expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
     } finally {
       restoreUserAgent()
     }
@@ -417,10 +467,7 @@ describe('connectPanePty', () => {
       }
       notifyStoreSubscribers()
 
-      expect(pane.terminal.write).toHaveBeenCalledWith(
-        RESET_TERMINAL_CURSOR_STYLE,
-        expect.any(Function)
-      )
+      expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
     } finally {
       restoreUserAgent()
     }
@@ -468,10 +515,7 @@ describe('connectPanePty', () => {
       }
       notifyStoreSubscribers()
 
-      expect(pane.terminal.write).toHaveBeenCalledWith(
-        RESET_TERMINAL_CURSOR_STYLE,
-        expect.any(Function)
-      )
+      expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
     } finally {
       restoreUserAgent()
     }
