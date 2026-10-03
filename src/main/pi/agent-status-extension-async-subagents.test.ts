@@ -60,6 +60,32 @@ describe('Pi async subagent roster', () => {
     vi.useRealTimers()
   })
 
+  it('settles again when an async child starts after the turn settled', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    await harness.callHook('agent_start')
+    await endTurn(harness)
+    startChild(harness, 'late-child', 'tool-call-1')
+    complete(harness, 'late-child')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(agentEndCount(harness)).toBe(2)
+  })
+
+  it("does not spend a run's done on a child that starts before it is posted", async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    let idle = false
+    const context = { isIdle: () => idle }
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end', {}, context)
+    startChild(harness, 'quick-child', 'tool-call-1')
+    complete(harness, 'quick-child')
+    await harness.callHook('tool_execution_start', { toolName: 'bash' }, context)
+    idle = true
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(postedHookNames(harness).at(-1)).toBe('agent_end')
+  })
+
   it('settles after an async workflow whose awaited children never report completion', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
     await harness.callHook('agent_start')

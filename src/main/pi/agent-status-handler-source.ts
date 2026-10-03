@@ -136,7 +136,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...getPiSubagentRosterSetupSourceLines(),
     ...(kind !== 'pi'
       ? [
-          "  pi.on('session_shutdown', () => { lifecycleState.active.clear(); lifecycleState.exited?.clear(); lifecycleState.waiting = false; resetPostQueue(); clearPendingAgentEndCheck() })"
+          "  pi.on('session_shutdown', () => { lifecycleState.active.clear(); lifecycleState.exited?.clear(); lifecycleState.waiting = false; lifecycleState.rootRunInFlight = false; resetPostQueue(); clearPendingAgentEndCheck() })"
         ]
       : []),
     ...(kind !== 'prime-agent'
@@ -146,6 +146,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           '    lifecycleState.active.clear()',
           '    lifecycleState.exited?.clear()',
           '    lifecycleState.waiting = false',
+          '    lifecycleState.rootRunInFlight = false',
           '    resetPostQueue()',
           '    clearPendingAgentEndCheck()',
           '    updateRuntimeOmpSessionMetadata(ctx)',
@@ -165,6 +166,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...captureSessionMetadata,
     '    clearPendingAgentEndCheck()',
     '    lifecycleState.waiting = false',
+    '    lifecycleState.rootRunInFlight = true',
     '    runGeneration += 1',
     // Why: a turn cannot begin under a dialog holding input focus, so this is the one
     // boundary that can recover a modal whose close never arrived.
@@ -287,6 +289,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '      clearPendingAgentEndCheck()',
     '      return',
     '    }',
+    '    lifecycleState.rootRunInFlight = false',
     '    endedRunGeneration = runGeneration',
     '    if (isOmpRuntime()) {',
     '      postAgentEndOnce()',
