@@ -7,6 +7,7 @@ import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
 import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 import {
   installEditorAddReviewNoteShortcut,
+  installEditorCopyPathShortcuts,
   installEditorSaveShortcut,
   installMonacoEditorFindShortcut
 } from './editor-shortcuts'
@@ -20,6 +21,7 @@ import type { MonacoEditorPropsRef } from './monaco-editor-mount-params'
 
 type MonacoEditorInputBindingsParams = {
   editorInstance: editor.IStandaloneCodeEditor
+  filePath: string
   worktreeId: string | undefined
   editorContainerRef: MutableRefObject<HTMLDivElement | null>
   propsRef: MonacoEditorPropsRef
@@ -34,12 +36,13 @@ type MonacoEditorInputBindingsParams = {
   >
 }
 
-// Why: save/find/review-note chords, the context-menu action, and the large-paste capture share one teardown so onDidDispose keeps their original order.
+// Why: save/find/copy-path/review-note chords, the context-menu action, and the large-paste capture share one teardown so onDidDispose keeps their original order.
 export function installMonacoEditorInputBindings(params: MonacoEditorInputBindingsParams): {
   disposeInputBindings: () => void
 } {
   const {
     editorInstance,
+    filePath,
     worktreeId,
     editorContainerRef,
     propsRef,
@@ -58,6 +61,10 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     propsRef.current.onSave(value)
   })
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+  const cleanupCopyPathShortcuts = installEditorCopyPathShortcuts(editorDomNode, () => ({
+    filePath,
+    relativePath: propsRef.current.relativePath
+  }))
   // Opens the same composer as the selection "+" button.
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
     // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
@@ -132,6 +139,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     disposeInputBindings: () => {
       cleanupSaveShortcut()
       cleanupFindShortcut()
+      cleanupCopyPathShortcuts()
       cleanupAddReviewNoteShortcut()
       editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()
