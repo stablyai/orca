@@ -10,10 +10,11 @@ import type { ChecksPanelComposerState } from './use-checks-panel-composer-state
 
 type ChecksPanelReviewDataInput = Pick<
   ChecksPanelContextState,
-  'activeGitLabReview' | 'pr' | 'prCacheKey' | 'prNumber'
+  'activeGitLabReview' | 'activeReview' | 'pr' | 'prCacheKey' | 'prNumber'
 > &
   Pick<
     ChecksPanelControllerState,
+    | 'activeWorktree'
     | 'branch'
     | 'fetchPRCheckDetails'
     | 'fetchPRComments'
@@ -29,6 +30,8 @@ type ChecksPanelReviewDataInput = Pick<
 export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
   const {
     activeGitLabReview,
+    activeReview,
+    activeWorktree,
     branch,
     fetchPRCheckDetails,
     fetchPRComments,
@@ -54,6 +57,33 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       prNumberOverride?: number | null
       prRepoOverride?: PRInfo['prRepo'] | null
     } = {}) => {
+      if (activeReview?.provider === 'bitbucket') {
+        const targetPRNumber = prNumberOverride ?? activeReview.number
+        if (!repo || !targetPRNumber) {
+          return
+        }
+        setCommentsLoading(true)
+        try {
+          const result = await window.api.bitbucket.getPRComments({
+            repoPath: repo.path,
+            prNumber: targetPRNumber,
+            executionHostId: activeWorktree?.hostId
+          })
+          if (activeReview?.provider === 'bitbucket' && activeReview.number === targetPRNumber) {
+            setComments(result)
+          }
+        } catch (err) {
+          console.warn('Failed to fetch Bitbucket PR comments:', err)
+          if (activeReview?.provider === 'bitbucket' && activeReview.number === targetPRNumber) {
+            setComments([])
+          }
+        } finally {
+          if (activeReview?.provider === 'bitbucket' && activeReview.number === targetPRNumber) {
+            setCommentsLoading(false)
+          }
+        }
+        return
+      }
       const targetPRNumber = prNumberOverride ?? prNumber
       const targetPRRepo = prRepoOverride ?? pr?.prRepo
       if (!repo || !targetPRNumber) {
@@ -98,6 +128,9 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       }
     },
     [
+      activeReview?.number,
+      activeReview?.provider,
+      activeWorktree?.hostId,
       repo,
       prNumber,
       pr?.headSha,
@@ -149,6 +182,37 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     if (activeGitLabReview) {
       return
     }
+    if (activeReview?.provider === 'bitbucket') {
+      if (!repo || !activeReview.number || !isPanelVisible) {
+        setComments([])
+        return
+      }
+      let cancelled = false
+      setCommentsLoading(true)
+      void window.api.bitbucket
+        .getPRComments({
+          repoPath: repo.path,
+          prNumber: activeReview.number,
+          executionHostId: activeWorktree?.hostId
+        })
+        .then(
+          (result) => {
+            if (!cancelled) {
+              setComments(result)
+              setCommentsLoading(false)
+            }
+          },
+          () => {
+            if (!cancelled) {
+              setComments([])
+              setCommentsLoading(false)
+            }
+          }
+        )
+      return () => {
+        cancelled = true
+      }
+    }
     if (!repo || !prNumber || !isPanelVisible) {
       setComments([])
       return
@@ -181,6 +245,9 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     }
   }, [
     activeGitLabReview,
+    activeReview?.number,
+    activeReview?.provider,
+    activeWorktree?.hostId,
     repo,
     prNumber,
     pr?.headSha,
@@ -195,7 +262,13 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
   ])
 
   useEffect(() => {
-    if (activeGitLabReview || !repo || !prNumber || !isPanelVisible) {
+    if (
+      activeGitLabReview ||
+      activeReview?.provider === 'bitbucket' ||
+      !repo ||
+      !prNumber ||
+      !isPanelVisible
+    ) {
       return undefined
     }
     return window.api.gh.onWorkItemMutated((payload) => {
@@ -206,7 +279,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       }
       void fetchComments({ force: true })
     })
-  }, [activeGitLabReview, fetchComments, isPanelVisible, prNumber, repo])
+  }, [activeGitLabReview, activeReview?.provider, fetchComments, isPanelVisible, prNumber, repo])
   return { fetchComments, handleLoadCheckDetails, getGitLabProjectRef }
 }
 
