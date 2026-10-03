@@ -125,4 +125,43 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
       buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)[0]?.text
     ).toBe(fullUrl)
   })
+
+  it('reconstructs framed URL rows when an overlay modal leaves varying text in the left gutter', () => {
+    const rowTexts = [
+      '        │  https://dash.cloudflare.com/oauth2/auth?response_type=code  │',
+      '        │  lhost%3A8976%2Foauth%2Fcallback&scope=account%3Aread%20user │',
+      '   todo │  ite%20workers_routes%3Awrite%20workers_scripts%3Awrite%20pa │',
+      '   Final│  mail_sending%3Awrite%20browser%3Awrite%20offline_access&sa  │'
+    ]
+    const rows = rowTexts.map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      'https://dash.cloudflare.com/oauth2/auth?response_type=code' +
+        'lhost%3A8976%2Foauth%2Fcallback&scope=account%3Aread%20user' +
+        'ite%20workers_routes%3Awrite%20workers_scripts%3Awrite%20pa' +
+        'mail_sending%3Awrite%20browser%3Awrite%20offline_access&sa'
+    )
+  })
+
+  it('rejects continuation rows when the layout frame does not align', () => {
+    const rowTexts = [
+      '        │  https://dash.cloudflare.com/oauth2/auth?response_type=code │',
+      '        │  lhost%3A8976%2Foauth%2Fcallback&scope=account%3Aread%20user │',
+      '   todo │  ite%20workers_routes%3Awrite%20workers_scripts%3Awrite%20p │',
+      '         Final  mail_sending%3Awrite%20browser%3Awrite%20offline_access │'
+    ]
+    const rows = rowTexts.map(bufferLineWithCellColumns)
+
+    const row4Candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      4
+    )
+    expect(row4Candidates).toEqual([])
+  })
 })
+

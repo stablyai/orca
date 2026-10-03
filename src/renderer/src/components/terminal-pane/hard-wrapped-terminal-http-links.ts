@@ -16,6 +16,15 @@ const MIN_HARD_WRAP_FILL_RATIO = 0.8
 
 type TranslatedLine = ReturnType<typeof translateLineWithColumns>
 
+function findLastLayoutFrameIndex(text: string, beforeIndex: number): number {
+  for (let i = beforeIndex - 1; i >= 0; i--) {
+    if (VERTICAL_LAYOUT_FRAME_PATTERN.test(text[i]!)) {
+      return i
+    }
+  }
+  return -1
+}
+
 function buildCandidateFromStart(
   buffer: { getLine(y: number): IBufferLine | undefined },
   startY: number,
@@ -29,17 +38,25 @@ function buildCandidateFromStart(
   const cachedStart = translatedLines.get(startY)
   const startText = cachedStart?.text ?? startLine.translateToString(false)
   const schemeIndex = startText.search(HTTP_SCHEME_PATTERN)
-  if (schemeIndex === -1 || !VERTICAL_LAYOUT_FRAME_PATTERN.test(startText.slice(0, schemeIndex))) {
+  const leftFrameIndex =
+    schemeIndex === -1 ? -1 : findLastLayoutFrameIndex(startText, schemeIndex)
+  if (leftFrameIndex === -1) {
     return null
   }
   const translatedStart = cachedStart ?? translateLineWithColumns(startLine)
   translatedLines.set(startY, translatedStart)
   const schemeColumn = translatedStart.columns[schemeIndex]
-  if (schemeColumn === undefined) {
+  const leftFrameColumn = translatedStart.columns[leftFrameIndex]
+  if (
+    schemeColumn === undefined ||
+    leftFrameColumn === undefined ||
+    leftFrameColumn >= schemeColumn
+  ) {
     return null
   }
 
-  const continuationPrefix = translatedStart.text.slice(0, schemeIndex)
+  // Why: anchor on the frame border and inner padding so varying left gutters outside overlays do not break alignment.
+  const framePrefix = startText.slice(leftFrameIndex, schemeIndex)
   let text = ''
   let rightFrameColumn: number | null = null
   let previousRowCanContinue = true
@@ -59,15 +76,26 @@ function buildCandidateFromStart(
         ? translatedStart
         : (translatedLines.get(rowY) ?? translateLineWithColumns(line))
     translatedLines.set(rowY, translated)
-    if (rowY > startY && translated.text.slice(0, schemeIndex) !== continuationPrefix) {
+    const rowStartIndex =
+      rowY === startY ? schemeIndex : translated.columns.indexOf(schemeColumn)
+    if (rowStartIndex === -1) {
       break
     }
+    if (rowY > startY) {
+      const rowLeftFrameIndex = translated.columns.indexOf(leftFrameColumn)
+      if (
+        rowLeftFrameIndex === -1 ||
+        translated.text.slice(rowLeftFrameIndex, rowStartIndex) !== framePrefix
+      ) {
+        break
+      }
+    }
 
-    const fragment = translated.text.slice(schemeIndex).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
+    const fragment = translated.text.slice(rowStartIndex).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
     if (!fragment || (rowY > startY && HTTP_SCHEME_START_PATTERN.test(fragment))) {
       break
     }
-    const fragmentEnd = schemeIndex + fragment.length
+    const fragmentEnd = rowStartIndex + fragment.length
     const layoutSuffix = translated.text.slice(fragmentEnd)
     const rightFrameOffset = layoutSuffix.search(VERTICAL_LAYOUT_FRAME_PATTERN)
     const currentRightFrameIndex = rightFrameOffset === -1 ? -1 : fragmentEnd + rightFrameOffset
@@ -90,7 +118,7 @@ function buildCandidateFromStart(
       y: rowY,
       text: fragment,
       sourceText: translated.text,
-      columns: translated.columns.slice(schemeIndex, fragmentEnd + 1),
+      columns: translated.columns.slice(rowStartIndex, fragmentEnd + 1),
       startIndex: text.length,
       isWrapped: line.isWrapped,
       lineLength: line.length
