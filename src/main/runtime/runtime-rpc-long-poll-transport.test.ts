@@ -63,6 +63,34 @@ describe('OrcaRuntimeRpcServer', () => {
     ).toBeNull()
   })
 
+  it.each(['browser.snapshot', 'browser.screenshot', 'browser.wait'])(
+    'keeps %s alive while browser automation is pending',
+    (method) => {
+      expect(
+        classifyRuntimeLongPoll({
+          id: `req_${method.replaceAll('.', '_')}`,
+          authToken: 'token',
+          method,
+          params: {}
+        })
+      ).toBe('wait')
+    }
+  )
+
+  it.each(['browser.eval', 'browser.click', 'browser.tabSwitch'])(
+    'keeps %s on the short RPC path',
+    (method) => {
+      expect(
+        classifyRuntimeLongPoll({
+          id: `req_${method.replaceAll('.', '_')}`,
+          authToken: 'token',
+          method,
+          params: {}
+        })
+      ).toBeNull()
+    }
+  )
+
   it('rejects oversized RPC frames instead of buffering them indefinitely', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -131,6 +159,45 @@ describe('OrcaRuntimeRpcServer', () => {
           authToken: metadata!.authToken,
           method: 'orchestration.workerStart',
           params: { task: 'task_1', timeoutMs: 60_000 }
+        })
+        await session.done
+
+        expect(
+          session.frames.filter((frame) => frame._keepalive === true).length
+        ).toBeGreaterThanOrEqual(2)
+        expect(session.frames.filter((frame) => frame.ok !== undefined)).toHaveLength(1)
+      } finally {
+        await server.stop()
+      }
+    })
+
+    it('emits keepalives while a browser snapshot helper blocks', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 30
+      })
+      const dispatch = server['dispatcher']
+      vi.spyOn(dispatch, 'dispatch').mockImplementation(async (request) => {
+        await sleep(120)
+        return {
+          id: request.id,
+          ok: true,
+          result: { browserPageId: 'page-1', snapshot: 'tree' },
+          _meta: { runtimeId: runtime.getRuntimeId() }
+        }
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_browser_snapshot',
+          authToken: metadata!.authToken,
+          method: 'browser.snapshot',
+          params: { worktree: 'id:wt-1' }
         })
         await session.done
 

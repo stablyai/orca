@@ -29,6 +29,16 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'browser.clientHost.attach') {
     return 'browser-host'
   }
+  // Browser automation can spend longer than the socket idle budget starting
+  // the helper, painting a frame, or waiting on a page condition. Keep the
+  // local socket (including Windows named pipes used by the WSL CLI) alive.
+  if (
+    request.method === 'browser.snapshot' ||
+    request.method === 'browser.screenshot' ||
+    request.method === 'browser.wait'
+  ) {
+    return 'wait'
+  }
   if (request.method === 'terminal.wait') {
     return 'wait'
   }
