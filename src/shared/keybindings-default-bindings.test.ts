@@ -11,6 +11,7 @@ import {
   keybindingMatchesAction
 } from './keybindings'
 import type { KeybindingActionId } from './keybindings'
+import type { KeybindingPlatform } from './keybindings/types'
 import { ALL_TUI_AGENTS } from './tui-agent-display-names'
 
 describe('keybindings', () => {
@@ -415,6 +416,39 @@ describe('keybindings', () => {
         'darwin'
       )
     ).toBe(true)
+  })
+
+  it('binds move-tab-to-split-right to the Cursor/VS Code split chord on every platform', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction('tab.moveToSplitRight', platform)).toEqual([
+        'Mod+Backslash'
+      ])
+    }
+
+    const definition = getKeybindingDefinition('tab.moveToSplitRight')
+    expect(definition?.group).toBe('Tabs')
+    expect(definition?.scope).toBe('tabs')
+    expect(definition?.title).toBe('Move active tab to split right')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['shortcut', 'tab', 'split', 'pane', 'editor'])
+    )
+
+    expect(
+      keybindingMatchesAction(
+        'tab.moveToSplitRight',
+        { key: '\\', code: 'Backslash', meta: true, control: false, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+  })
+
+  // Why: the two split actions live in different conflict buckets (tabs vs terminal), so a terminal.splitRight rebind must not evict the default.
+  it('does not report a conflict when terminal.splitRight is rebound onto the same chord', () => {
+    expect(findKeybindingConflicts('darwin', { 'terminal.splitRight': ['Mod+Backslash'] })).toEqual(
+      []
+    )
   })
 
   it('defines an unassigned per-agent tab action for every TUI agent', () => {

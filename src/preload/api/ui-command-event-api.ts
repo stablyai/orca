@@ -41,6 +41,10 @@ import type {
 } from '../../shared/session-tab-close'
 
 export type CloseActiveTabPayload = { sourceId: string }
+export type MoveTabToSplitPayload = {
+  direction: 'left' | 'right' | 'up' | 'down'
+  sourceId: string
+}
 
 export type UiCommandEventApi = {
   get: () => Promise<PersistedUIState>
@@ -127,6 +131,7 @@ export type UiCommandEventApi = {
   onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
+  onMoveTabToSplit?: (callback: (payload: MoveTabToSplitPayload) => void) => () => void
   onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
   onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void

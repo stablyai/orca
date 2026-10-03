@@ -96,6 +96,7 @@ vi.mock('@/i18n/i18n', () => ({
 // Why: the menu reads live shortcut bindings; stub them to fixed labels so
 // the test asserts each assigned action surfaces its own shortcut chip.
 vi.mock('@/hooks/useShortcutLabel', () => ({
+  formatOptionalShortcutLabel: shortcutLabelMock,
   useOptionalShortcutLabel: shortcutLabelMock
 }))
 
