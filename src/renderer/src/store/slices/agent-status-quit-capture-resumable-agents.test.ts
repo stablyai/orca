@@ -39,4 +39,32 @@ describe('quit-time capture for newly resumable agents', () => {
       origin: 'live'
     })
   })
+
+  it('checkpoints a live Kiro provider session before quit-time capture', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      { state: 'working', prompt: 'finish the task', agentType: 'kiro' },
+      'Kiro',
+      { updatedAt: 10, stateStartedAt: 10 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      {
+        providerSession: { key: 'session_id', id: 'sess_dc17e658-cf15-4822-80df-0f356f21879a' }
+      }
+    )
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'kiro',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      providerSession: { key: 'session_id', id: 'sess_dc17e658-cf15-4822-80df-0f356f21879a' },
+      origin: 'live'
+    })
+  })
 })

@@ -24,6 +24,7 @@ import { getGrokManagedCommand } from '../grok/grok-hook-script'
 import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook-settings'
 import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-settings'
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
+import { getKiroManagedCommand, getKiroRemoteManagedCommand } from '../kiro/hook-settings'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -188,6 +189,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getZCodeManagedCommand(path)],
       remote: (path) => [getZCodeRemoteManagedCommand(path)]
+    }
+  ],
+  [
+    'kiro',
+    {
+      local: (path) => [getKiroManagedCommand(path)],
+      remote: (path) => [getKiroRemoteManagedCommand(path)]
     }
   ]
 ])

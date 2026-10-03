@@ -16,6 +16,7 @@ import { geminiHookService } from '../gemini/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { kiroHookService } from '../kiro/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
@@ -60,7 +61,8 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['kimi', () => kimiHookService.install()],
   ['muse', () => museHookService.install()],
   ['zcode', () => zcodeHookService.install()],
-  ['dsh', () => dshHookService.install()]
+  ['dsh', () => dshHookService.install()],
+  ['kiro', () => kiroHookService.install()]
 ]
 
 // Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
@@ -86,7 +88,8 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['kimi', () => kimiHookService.refreshManagedScripts()],
   ['muse', () => museHookService.refreshManagedScripts()],
   ['zcode', () => zcodeHookService.refreshManagedScripts()],
-  ['dsh', () => dshHookService.refreshManagedScripts()]
+  ['dsh', () => dshHookService.refreshManagedScripts()],
+  ['kiro', () => kiroHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -108,7 +111,8 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['kimi', () => kimiHookService.remove()],
   ['muse', () => museHookService.remove()],
   ['zcode', () => zcodeHookService.remove()],
-  ['dsh', () => dshHookService.remove()]
+  ['dsh', () => dshHookService.remove()],
+  ['kiro', () => kiroHookService.remove()]
 ]
 
 export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
@@ -134,5 +138,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['kimi', () => kimiHookService.getStatus()],
   ['muse', () => museHookService.getStatus()],
   ['zcode', () => zcodeHookService.getStatus()],
-  ['dsh', () => dshHookService.getStatus()]
+  ['dsh', () => dshHookService.getStatus()],
+  ['kiro', () => kiroHookService.getStatus()]
 ]

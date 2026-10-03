@@ -56,6 +56,7 @@ export function normalizeProviderEvent(input: {
 
   switch (source) {
     case 'codebuddy':
+    case 'kiro':
       payload = normalizeCompatibleLifecycleEvent(
         source,
         state,

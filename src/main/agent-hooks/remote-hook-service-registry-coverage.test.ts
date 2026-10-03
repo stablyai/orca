@@ -20,6 +20,7 @@ import { geminiHookService } from '../gemini/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { kiroHookService } from '../kiro/hook-service'
 import { dshHookService } from '../dsh/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
@@ -56,7 +57,8 @@ describe('remote hook service registry coverage', () => {
       ['qoder', qoderHookService],
       ['codebuddy', codebuddyHookService],
       ['zcode', zcodeHookService],
-      ['dsh', dshHookService]
+      ['dsh', dshHookService],
+      ['kiro', kiroHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.

@@ -48,7 +48,7 @@ function readCompatibleState(
 }
 
 export function normalizeCompatibleLifecycleEvent(
-  source: 'qoder' | 'codebuddy',
+  source: 'qoder' | 'codebuddy' | 'kiro',
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
@@ -59,7 +59,9 @@ export function normalizeCompatibleLifecycleEvent(
     return null
   }
   // CodeBuddy emits SessionStart after UserPromptSubmit, so it cannot settle a turn.
-  if (source === 'codebuddy' && eventName === 'SessionStart') {
+  // Kiro creates its session on the first prompt, so its SessionStart opens a turn rather than
+  // marking an idle pane.
+  if ((source === 'codebuddy' || source === 'kiro') && eventName === 'SessionStart') {
     return null
   }
   const stateName =

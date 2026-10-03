@@ -24,7 +24,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'kimi',
   'muse',
   'zcode',
-  'dsh'
+  'dsh',
+  'kiro'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -269,6 +270,11 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['conversation_id'])
       return id ? { key: 'conversation_id', id } : null
     }
+    // Why: Kiro's hook `session_id` (`sess_<uuid>`) is the id `--resume-id` takes.
+    case 'kiro': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? { key: 'session_id', id } : null
+    }
     case 'amp':
     case 'command-code':
     case 'hermes':
@@ -343,5 +349,10 @@ export function getAgentResumeArgv(
     // workspace. DSH keys sessions by workspace path, so callers must keep the cwd.
     case 'dsh':
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
+    // Why only `--resume-id`: the launch command (`kiro-cli chat --tui ...`) already carries the
+    // subcommand, and kiro-cli 2.27 reopens a session with the engine and agent it was created
+    // under (a V3 `work` session came back on V3 with its standalone hooks loaded).
+    case 'kiro':
+      return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
   }
 }

@@ -34,6 +34,10 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'kimi':
       // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
       return eventName === 'UserPromptSubmit'
+    case 'kiro':
+      // Why: Kiro creates its session lazily, so SessionStart fires just before the first
+      // UserPromptSubmit; only UserPromptSubmit marks a new turn.
+      return eventName === 'UserPromptSubmit'
     case 'muse':
       // Muse uses Claude-compatible lifecycle events.
       return eventName === 'UserPromptSubmit'
@@ -155,6 +159,9 @@ export function extractToolFields(
     // Why: ZCode's hook runner writes Claude's `tool_name`/`tool_input`/`tool_response` aliases.
     // falls through
     case 'zcode':
+    // Why: Kiro CLI V3 hooks pass Claude's `tool_name`/`tool_input`/`tool_response` fields.
+    // falls through
+    case 'kiro':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
