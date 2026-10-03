@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws'
 import type {
+  PairingGetDirectEndpointsParams,
   PairingGetEndpointsParams,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
@@ -113,6 +114,15 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
         ? {
             getEndpoints: (params: PairingGetEndpointsParams) =>
               pairingProvider.getEndpoints(
+                {
+                  deviceId: authenticatedSocket.device.deviceId,
+                  connectionId: authenticatedSocket.connectionId,
+                  transport: authenticatedSocket.transport
+                },
+                params
+              ),
+            getDirectEndpoints: (params: PairingGetDirectEndpointsParams) =>
+              pairingProvider.getDirectEndpoints(
                 {
                   deviceId: authenticatedSocket.device.deviceId,
                   connectionId: authenticatedSocket.connectionId,

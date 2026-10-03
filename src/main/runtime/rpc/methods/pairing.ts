@@ -1,5 +1,6 @@
 import { defineMethod } from '../core'
 import {
+  PairingGetDirectEndpointsParamsSchema,
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../../../../shared/mobile-relay-credential-contract'
@@ -13,6 +14,16 @@ export const PAIRING_METHODS = [
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.getEndpoints(params)
+    }
+  }),
+  defineMethod({
+    name: 'pairing.getDirectEndpoints',
+    params: PairingGetDirectEndpointsParamsSchema,
+    handler: async (params, ctx) => {
+      if (!ctx.pairing) {
+        throw new Error('pairing_context_unavailable')
+      }
+      return await ctx.pairing.getDirectEndpoints(params)
     }
   }),
   defineMethod({

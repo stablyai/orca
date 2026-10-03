@@ -268,6 +268,8 @@ async function launchDesktopMode(
         onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
         onDemandStateChanged: () => relayService.demandStateChanged(),
         getEndpoints: (context, params) => relayService.getEndpoints(context, params),
+        getDirectEndpoints: (context, params) =>
+          relayService.getDirectEndpoints(context, params),
         provisionRelay: (context, params) => relayService.provisionRelay(context, params)
       })
       relayService.start()

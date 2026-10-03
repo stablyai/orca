@@ -42,6 +42,7 @@ describe('OrcaRuntimeRpcServer', () => {
       createPairingRelay,
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -101,6 +102,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }),
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -151,6 +153,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }),
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -206,6 +209,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }),
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -264,6 +268,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }),
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -319,6 +324,7 @@ describe('OrcaRuntimeRpcServer', () => {
         registryPresence.push(server.getDeviceRegistry()?.getDevice(item.relayDeviceId) !== null)
       },
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
@@ -355,6 +361,7 @@ describe('OrcaRuntimeRpcServer', () => {
       wsPort: 0
     })
     const getEndpoints = vi.fn().mockResolvedValue({ v: 1, relay: null })
+    const getDirectEndpoints = vi.fn().mockResolvedValue({ v: 1, selected: null, endpoints: [] })
     const provisionRelay = vi.fn().mockResolvedValue({
       v: 1,
       reqId: 'install-1',
@@ -366,6 +373,7 @@ describe('OrcaRuntimeRpcServer', () => {
       createPairingRelay: vi.fn(),
       onDeviceRevokeQueued: vi.fn(),
       getEndpoints,
+      getDirectEndpoints,
       provisionRelay
     })
 

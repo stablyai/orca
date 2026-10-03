@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 
 const storage = vi.hoisted(() => new Map<string, string>())
@@ -240,5 +240,110 @@ describe('mobile endpoint lifecycle host edits', () => {
     })
 
     await expectEditKept(relay)
+  })
+})
+
+const refreshedLan = 'ws://192.168.1.50:6768'
+const refreshedTailscale = 'ws://100.64.0.2:6768'
+
+function advertised(url: string, kind: 'lan' | 'tailscale') {
+  return {
+    id: 'rpc-1',
+    ok: true as const,
+    result: {
+      v: 1 as const,
+      selected: { kind, url },
+      endpoints: [{ kind, url }]
+    },
+    _meta: { runtimeId: 'runtime-1' }
+  }
+}
+
+describe('mobile endpoint lifecycle direct refresh', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-13T12:00:00Z'))
+    vi.clearAllMocks()
+    storage.clear()
+    resetHostStoreForTests()
+    resetMobileRelayHostOverlayStoreForTests()
+    const { id, name, endpoint, publicKeyB64, lastConnected } = host
+    storage.set('orca:hosts', JSON.stringify([{ id, name, endpoint, publicKeyB64, lastConnected }]))
+    storage.set(
+      OVERLAY_KEY,
+      JSON.stringify([
+        {
+          v: 2,
+          hostId: id,
+          endpoints: [
+            {
+              id: 'relay-primary',
+              kind: 'relay',
+              url: 'wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9'
+            }
+          ],
+          relayHostId: relay.relayHostId,
+          relay
+        }
+      ])
+    )
+    asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
+      storage.set(key, value)
+    })
+    openRelayMock.mockReset()
+    connectMock.mockReset()
+    readBundleMock.mockResolvedValue(bundle)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps dialing the stored endpoint when the refresh save fails', async () => {
+    const relaySession = new FakeRelaySession('connected')
+    relaySession.sendRequest.mockResolvedValue(advertised(refreshedLan, 'lan'))
+    openRelayMock.mockReturnValue(relaySession)
+    connectMock.mockImplementation(() => new FakeSession('connected'))
+    asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
+      if (key === 'orca:hosts' && value.includes(refreshedLan)) {
+        throw new Error('disk full')
+      }
+      storage.set(key, value)
+    })
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    logical.sendRequest.mockResolvedValue(advertised(refreshedLan, 'lan'))
+
+    const lifecycle = startMobileEndpointLifecycle(logical, host, () => {})
+    await vi.advanceTimersByTimeAsync(20_000)
+
+    expect(connectMock).toHaveBeenCalled()
+    expect(connectMock.mock.calls.map(([endpoint]) => endpoint)).toEqual([host.endpoint])
+    const saved = JSON.parse(storage.get('orca:hosts')!) as { id: string; endpoint: string }[]
+    expect(saved.find((row) => row.id === host.id)?.endpoint).toBe(host.endpoint)
+    lifecycle.stop()
+  })
+
+  it('migrates the refreshed tailscale dial on the tailscale path', async () => {
+    const relaySession = new FakeRelaySession('connected')
+    relaySession.sendRequest.mockResolvedValue(advertised(refreshedTailscale, 'tailscale'))
+    openRelayMock.mockReturnValue(relaySession)
+    connectMock.mockImplementation(() => new FakeSession('connected'))
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    logical.sendRequest.mockResolvedValue(advertised(refreshedTailscale, 'tailscale'))
+
+    const lifecycle = startMobileEndpointLifecycle(logical, host, () => {})
+    await vi.advanceTimersByTimeAsync(90_000)
+
+    expect(connectMock.mock.calls.map(([endpoint]) => endpoint)).toEqual(
+      expect.arrayContaining([refreshedTailscale])
+    )
+    expect(connectMock.mock.calls.every(([endpoint]) => endpoint === refreshedTailscale)).toBe(true)
+    expect(logical.migrateTo).toHaveBeenCalledWith(
+      expect.any(FakeSession),
+      'tailscale',
+      undefined,
+      expect.any(Function)
+    )
+    lifecycle.stop()
   })
 })

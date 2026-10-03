@@ -30,7 +30,7 @@ describe('pairing RPC methods', () => {
       currentVersion: 1,
       resumeExpiresAt: Date.now() + 60_000
     })
-    const pairing = { getEndpoints: vi.fn(), provisionRelay }
+    const pairing = { getEndpoints: vi.fn(), getDirectEndpoints: vi.fn(), provisionRelay }
 
     await expect(
       dispatchPairing(
@@ -46,7 +46,7 @@ describe('pairing RPC methods', () => {
   })
 
   it('rejects caller-selected identity and authorization metadata', async () => {
-    const pairing = { getEndpoints: vi.fn(), provisionRelay: vi.fn() }
+    const pairing = { getEndpoints: vi.fn(), getDirectEndpoints: vi.fn(), provisionRelay: vi.fn() }
 
     for (const injected of [
       { relayDeviceId: 'attacker-device' },
@@ -73,3 +73,37 @@ describe('pairing RPC methods', () => {
     expect(pairing.getEndpoints).not.toHaveBeenCalled()
   })
 })
+
+  it('rejects extra keys on pairing.getDirectEndpoints and dispatches an empty object', async () => {
+    const getDirectEndpoints = vi.fn().mockResolvedValue({ v: 1, selected: null, endpoints: [] })
+    const pairing = { getEndpoints: vi.fn(), getDirectEndpoints, provisionRelay: vi.fn() }
+
+    await expect(
+      dispatchPairing('pairing.getDirectEndpoints', { injected: true }, pairing)
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(getDirectEndpoints).not.toHaveBeenCalled()
+
+    await expect(dispatchPairing('pairing.getDirectEndpoints', {}, pairing)).resolves.toMatchObject({
+      ok: true,
+      result: { v: 1, selected: null, endpoints: [] }
+    })
+    expect(getDirectEndpoints).toHaveBeenCalledWith({})
+  })
+
+  it('returns method_not_found on an old desktop that never registered the RPC', async () => {
+    const pairing = { getEndpoints: vi.fn(), getDirectEndpoints: vi.fn(), provisionRelay: vi.fn() }
+    const result = await new Promise<Record<string, unknown>>((resolve) => {
+      const dispatcher = new RpcDispatcher({
+        runtime: new OrcaRuntimeService(),
+        methods: PAIRING_METHODS.filter((method) => method.name !== 'pairing.getDirectEndpoints')
+      })
+      void dispatcher.dispatchStreaming(
+        { id: 'request-1', authToken: '', method: 'pairing.getDirectEndpoints', params: {} },
+        (response) => resolve(JSON.parse(response) as Record<string, unknown>),
+        { pairing }
+      )
+    })
+    expect(result).toMatchObject({ ok: false, error: { code: 'method_not_found' } })
+    expect(pairing.getDirectEndpoints).not.toHaveBeenCalled()
+  })
+
