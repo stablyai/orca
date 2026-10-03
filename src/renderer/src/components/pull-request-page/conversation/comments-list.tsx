@@ -34,7 +34,8 @@ export function ConversationCommentsList({
   resolvedReplyingTo,
   onFilterChange,
   onToggleReply,
-  onSubmitReply
+  onSubmitReply,
+  onJumpToFile
 }: {
   itemType: 'issue' | 'pr'
   comments: PRComment[]
@@ -56,6 +57,7 @@ export function ConversationCommentsList({
   onFilterChange: (value: PRCommentAudienceFilter) => void
   onToggleReply: (commentId: number) => void
   onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
+  onJumpToFile?: (path: string) => void
 }): React.JSX.Element {
   return (
     <>
@@ -121,6 +123,7 @@ export function ConversationCommentsList({
               resolvedReplyingTo={resolvedReplyingTo}
               onToggleReply={onToggleReply}
               onSubmitReply={onSubmitReply}
+              onJumpToFile={onJumpToFile}
             />
           ))}
         </div>
