@@ -114,7 +114,7 @@ export function createAgentModelCatalogService(
       const probe = deps.probes?.[params.agent]
       if (probe && accountHomePath && deps.store.shouldRefresh(fingerprint)) {
         const home = accountHomePath
-        void deps.store.refresh(fingerprint, params.agent, () => probe(home))
+        void deps.store.refresh(fingerprint, params.agent, probe, () => probe(home))
       }
       if (!entry) {
         return { origin: 'unknown' }

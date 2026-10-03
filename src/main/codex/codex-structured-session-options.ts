@@ -52,7 +52,7 @@ async function fetchCodexListingThroughStore(
   if (!access) {
     return fetchCodexModelCatalogListing({ connection: session.connection, timeoutMs })
   }
-  const entry = await access.store.refresh(access.fingerprint, 'codex', async () => {
+  const entry = await access.store.refresh(access.fingerprint, 'codex', access, async () => {
     const listing = await fetchCodexModelCatalogListing({
       connection: session.connection,
       timeoutMs

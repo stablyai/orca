@@ -38,7 +38,12 @@ export type AgentModelCatalogSuccess = {
 
 export type AgentModelCatalogProbe = (accountHomePath: string) => Promise<AgentModelCatalogSuccess>
 
+/** Who lists, by identity: a live session's per-spawn handle, or the session-less probe. */
+export type AgentModelCatalogLister = AgentModelCatalogSessionAccess | AgentModelCatalogProbe
+
 type CatalogFailure = { detail: string; failedAt: number }
+
+type InFlightListings = Map<AgentModelCatalogLister, Promise<AgentModelCatalogEntry | null>>
 
 /** A live session's handle into the store, pinned at spawn to the account home
  *  THAT child launched under — an account switched afterwards must never
@@ -81,7 +86,7 @@ function listingKey(entry: AgentModelCatalogEntry): string {
 export class AgentModelCatalogStore {
   private readonly entries = new Map<string, AgentModelCatalogEntry>()
   private readonly failures = new Map<string, CatalogFailure>()
-  private readonly refreshes = new Map<string, Promise<AgentModelCatalogEntry | null>>()
+  private readonly refreshes = new Map<string, InFlightListings>()
   private persistence: AgentModelCatalogPersistence | null = null
   private readonly now: () => number
 
@@ -176,29 +181,39 @@ export class AgentModelCatalogStore {
     this.failures.set(fingerprint, { detail, failedAt: this.now() })
   }
 
-  /** Joins an in-flight refresh for the key rather than starting a second.
-   *  Resolves with the entry on success and null on failure — never rejects. */
+  /** Joins an in-flight refresh by the same lister rather than starting a second. Never
+   *  joins another lister's: a probe or another chat's Codex that hangs must not decide
+   *  whether this chat starts. Resolves with the entry on success, null on failure. */
   refresh(
     fingerprint: string,
     agent: 'claude' | 'codex',
+    lister: AgentModelCatalogLister,
     listModels: () => Promise<AgentModelCatalogSuccess>
   ): Promise<AgentModelCatalogEntry | null> {
-    const inFlight = this.refreshes.get(fingerprint)
+    const listers: InFlightListings = this.refreshes.get(fingerprint) ?? new Map()
+    const inFlight = listers.get(lister)
     if (inFlight) {
       return inFlight
     }
+    const settle = (): void => {
+      listers.delete(lister)
+      if (listers.size === 0 && this.refreshes.get(fingerprint) === listers) {
+        this.refreshes.delete(fingerprint)
+      }
+    }
     const run = listModels().then(
       (success) => {
-        this.refreshes.delete(fingerprint)
+        settle()
         return this.recordSuccess(fingerprint, agent, success)
       },
       (error: unknown) => {
-        this.refreshes.delete(fingerprint)
+        settle()
         this.recordFailure(fingerprint, error instanceof Error ? error.message : String(error))
         return null
       }
     )
-    this.refreshes.set(fingerprint, run)
+    listers.set(lister, run)
+    this.refreshes.set(fingerprint, listers)
     return run
   }
 
