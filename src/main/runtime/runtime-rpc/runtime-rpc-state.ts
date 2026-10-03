@@ -40,6 +40,10 @@ export class RuntimeRpcState {
   protected readonly preferPinnedWsPort: boolean
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
+  protected readonly strictWsPort: boolean
+  protected readonly webSocketConfigError: Error | null
+  // Why: with strictWsPort the listener stays down on bind failure; this is the reason, for the caller to surface.
+  protected webSocketStartFailure: unknown = null
   protected readonly webClientRoot: string | undefined
   // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
   protected wsBoundHost: string | null = null
@@ -102,6 +106,8 @@ export class RuntimeRpcState {
     preferPinnedWsPort = false,
     exposeNetworkByDefault = false,
     pinnedBindHost,
+    strictWsPort = false,
+    webSocketConfigError,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
@@ -118,6 +124,8 @@ export class RuntimeRpcState {
     this.preferPinnedWsPort = preferPinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
+    this.strictWsPort = strictWsPort
+    this.webSocketConfigError = webSocketConfigError ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap

@@ -41,6 +41,9 @@ export type WebSocketTransportOptions = {
   fallbackPort?: number
   // Why: serve --port clients dial the pinned port; prefer it first so a stale fallback can't steal the pin (issue #8535). Default keeps fallback-first (STA-1511).
   preferPinnedPort?: boolean
+  // Why: false drops the OS-assigned port 0 last resort, so an occupied port fails instead of relocating
+  // (operator-pinned desktop bind). Default true, which is what a first unpinned bind wants.
+  allowOsAssignedPortFallback?: boolean
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -53,6 +56,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
+  private readonly allowOsAssignedPortFallback: boolean
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
@@ -74,7 +78,8 @@ export class WebSocketTransport implements RpcTransport {
     preAuthTimeoutMs,
     staticRoot,
     fallbackPort,
-    preferPinnedPort
+    preferPinnedPort,
+    allowOsAssignedPortFallback
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -89,6 +94,7 @@ export class WebSocketTransport implements RpcTransport {
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
     this.preferPinnedPort = preferPinnedPort === true
+    this.allowOsAssignedPortFallback = allowOsAssignedPortFallback !== false
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -149,15 +155,17 @@ export class WebSocketTransport implements RpcTransport {
         : this.preferPinnedPort
           ? [this.port, persistedFallbackPort]
           : [persistedFallbackPort, this.port]
-    for (const port of candidatePorts) {
+    for (const [index, port] of candidatePorts.entries()) {
       try {
         await this.tryListen(port)
         return
       } catch (error: unknown) {
         // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
+        // Without the OS-assigned last resort, the last candidate's failure is final.
         if (
-          port !== persistedFallbackPort &&
-          (!isPortListenFallbackError(error, port) || port === 0)
+          (port !== persistedFallbackPort &&
+            (!isPortListenFallbackError(error, port) || port === 0)) ||
+          (!this.allowOsAssignedPortFallback && index === candidatePorts.length - 1)
         ) {
           throw error
         }

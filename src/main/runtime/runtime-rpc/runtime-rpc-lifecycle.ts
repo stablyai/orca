@@ -74,6 +74,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     if (this.enableWebSocket) {
       // Why: land any deferred lastSeen write before a replacement registry reads the same file.
       this.deviceRegistry?.flushPendingLastSeen()
+      this.webSocketStartFailure = null
       const pairingIdentity = this.initializePairingIdentity()
       if (!pairingIdentity.ok) {
         this.deviceRegistry = null
@@ -84,23 +85,39 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
         try {
+          if (this.webSocketConfigError) {
+            throw this.webSocketConfigError
+          }
           const host = this.resolveInitialWebSocketBindHost()
           const { transport, endpoint } = await this.startWebSocketTransport({
             host,
             port: this.wsPort,
             preferPinnedPort: this.preferPinnedWsPort,
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
-            ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
+            // A strict pin skips it: the operator's forwarder dials only the pinned port.
+            ...(this.wsPort !== 0 && !this.strictWsPort
+              ? { fallbackPort: readWsFallbackPort(this.userDataPath) }
+              : {}),
+            ...(this.strictWsPort ? { allowOsAssignedPortFallback: false } : {})
           })
           if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
             writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
           }
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
+          if (this.strictWsPort) {
+            // Why: the operator's only confirmation that the pin took; the endpoint carries no credential.
+            console.log(
+              `[runtime] WebSocket listener pinned to ${endpoint} (no fallback port or rebind)`
+            )
+          }
         } catch (error) {
           // Why: WebSocket transport is supplementary; on failure (e.g. port in use) continue with Unix socket only.
           console.error('[runtime] Failed to start WebSocket transport:', error)
           this.mobileSocketWiring = null
+          if (this.strictWsPort || this.webSocketConfigError) {
+            this.webSocketStartFailure = error
+          }
         }
       }
     }
@@ -164,6 +181,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     port: number
     preferPinnedPort: boolean
     fallbackPort?: number
+    allowOsAssignedPortFallback?: boolean
   }): Promise<{ transport: WebSocketTransport; endpoint: string }> {
     const deviceRegistry = this.deviceRegistry
     const e2eeKeypair = this.e2eeKeypair
@@ -175,7 +193,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       port: options.port,
       staticRoot: this.webClientRoot,
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
-      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {})
+      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {}),
+      ...(options.allowOsAssignedPortFallback === false
+        ? { allowOsAssignedPortFallback: false }
+        : {})
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
     this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)

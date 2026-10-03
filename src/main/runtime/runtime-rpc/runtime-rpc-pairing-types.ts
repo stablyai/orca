@@ -49,6 +49,17 @@ export type OrcaRuntimeRpcServerOptions = {
    * has to outrank both, and `ensureNetworkExposure()` has to refuse rather than widen.
    */
   pinnedBindHost?: string
+  /**
+   * Bind exactly `wsPort` or leave the WebSocket listener down: no STA-1511 fallback port is read or
+   * written, and no OS-assigned port is taken. The failure is kept for getWebSocketStartFailure().
+   *
+   * Why: an operator-pinned endpoint (desktop runtime-ws-bind.json) is dialled by a fixed forwarder,
+   * so a listener that relocated would look healthy while nothing reaches it.
+   */
+  strictWsPort?: boolean
+  // Why: an unusable operator pin must still load the pairing identity (relay/push read it) but never bind;
+  // start() records this as the strict bind failure instead of listening anywhere.
+  webSocketConfigError?: Error
   webClientRoot?: string
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number

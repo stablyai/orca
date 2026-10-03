@@ -33,6 +33,7 @@ vi.mock('../telemetry/client', () => ({
 import {
   classifyRuntimeRpcStartFailure,
   recordRuntimeRpcStartFailure,
+  showPinnedWebSocketBindFailureDialog,
   showRuntimeRpcStartupFailureDialog
 } from './runtime-rpc-startup-failure'
 
@@ -157,6 +158,26 @@ describe('runtime RPC startup failure reporting', () => {
         message: "Orca couldn't start its local command transport.",
         detail: expect.stringMatching(
           /orca status.*orca terminal.*orchestration.*Cause: metadata write failed/s
+        )
+      })
+    )
+  })
+
+  it('tells the operator a failed pin blocks remote clients and names the file and cause', async () => {
+    const parentWindow = createParentWindow()
+    const error = Object.assign(new Error('listen EADDRINUSE: 127.0.0.1:6768'), {
+      code: 'EADDRINUSE'
+    })
+
+    await showPinnedWebSocketBindFailureDialog(parentWindow, error, 'runtime-ws-bind.json')
+
+    expect(showMessageBoxMock).toHaveBeenCalledWith(
+      parentWindow,
+      expect.objectContaining({
+        type: 'error',
+        title: 'Orca remote access unavailable',
+        detail: expect.stringMatching(
+          /Paired devices and remote clients can't connect.*Fix runtime-ws-bind\.json.*Cause: listen EADDRINUSE: 127\.0\.0\.1:6768/s
         )
       })
     )
