@@ -11,6 +11,8 @@ export class RuntimeRpcShutdown extends RuntimeRpcMobilePairing {
     // transport arrays before snapshotting them, so a racing rebind can't strand a wide 0.0.0.0 listener
     // by writing it back into a cleared array after shutdown (see widenWebSocketBind).
     this.stopping = true
+    await this.workerReportRecovery?.stop()
+    this.workerReportRecovery = null
     const pendingExposure = this.networkExposurePromise
     if (pendingExposure) {
       await pendingExposure.catch(() => {
