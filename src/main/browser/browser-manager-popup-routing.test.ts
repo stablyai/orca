@@ -590,73 +590,90 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    const captureObserver = { onPopupOpened: vi.fn(), onPopupClosed: vi.fn() }
+    browserManager.setPopupCaptureObserver(captureObserver)
+    try {
+      const popupContents = {
+        id: 151,
+        isDestroyed: vi.fn(() => false),
+        getType: vi.fn(() => 'window'),
+        setBackgroundThrottling: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        on: vi.fn(),
+        once: vi.fn(),
+        off: vi.fn()
+      }
+      const popupCloseMock = vi.fn()
+      const popupOnClosedMock = vi.fn()
+      openPopupWithOriginBarMock.mockReturnValue({
+        contentWebContents: popupContents,
+        close: popupCloseMock,
+        onClosed: popupOnClosedMock
+      })
 
-    const popupContents = {
-      id: 151,
-      isDestroyed: vi.fn(() => false),
-      getType: vi.fn(() => 'window'),
-      setBackgroundThrottling: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      on: vi.fn(),
-      once: vi.fn(),
-      off: vi.fn()
+      const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+        url: string
+      }) => {
+        action: string
+        createWindow: (options: Record<string, unknown>) => unknown
+      }
+      const response = handler({ url: 'https://sso.example.com/auth?code=SECRET' })
+      const preCreatedContents = { id: 152 }
+      const options = { webContents: preCreatedContents, width: 500, height: 600 }
+      const returned = response.createWindow(options)
+
+      expect(openPopupWithOriginBarMock).toHaveBeenCalledWith(
+        options,
+        'https://sso.example.com/auth?code=SECRET',
+        expect.any(Function)
+      )
+      expect(returned).toBe(popupContents)
+      // did-create-window does not fire for createWindow-created children, so
+      // the popup must get guest policies (nav guards, recursive popup handling)
+      // attached directly here.
+      expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
+      expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
+      expect(popupContents.on.mock.calls.some(([event]) => event === 'dom-ready')).toBe(false)
+      // The renderer notice carries only the sanitized origin, never the URL.
+      expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+        browserPageId: 'browser-1',
+        origin: 'https://sso.example.com',
+        action: 'opened-in-orca'
+      })
+
+      // Opener-lifecycle parity: destroying the owning guest closes the popup.
+      const destroyedCall = guestOnceMock.mock.calls.find(([event]) => event === 'destroyed')
+      expect(destroyedCall).toBeDefined()
+      ;(destroyedCall as [string, () => void])[1]()
+      expect(popupCloseMock).toHaveBeenCalledTimes(1)
+
+      // Popup windows opened by the popup itself keep the owner context, so the
+      // recursive handler still routes to the owning browser tab.
+      const popupHandler = popupContents.setWindowOpenHandler.mock.calls[0][0] as (details: {
+        url: string
+      }) => { action: string }
+      openPopupWithOriginBarMock.mockReturnValue({
+        contentWebContents: { ...popupContents, id: 153 },
+        close: vi.fn(),
+        onClosed: vi.fn()
+      })
+      expect(popupHandler({ url: 'https://sso.example.com/step2' })).toMatchObject({
+        action: 'allow'
+      })
+
+      // The prepareContent hook is the pre-first-navigation attach point: invoking
+      // it must notify the capture observer without destroying the popup, and the
+      // policy attach after createWindow must notify once more for the same opener.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: openPopupWithOriginBarMock is untyped so index 2 is any, and the toHaveBeenCalledWith assertion above pins prepareContent as the third argument.
+      const prepareContent = openPopupWithOriginBarMock.mock.calls[0][2] as (
+        contents: unknown
+      ) => boolean
+      expect(prepareContent(preCreatedContents)).toBe(true)
+      expect(captureObserver.onPopupOpened).toHaveBeenCalledWith('browser-1', preCreatedContents)
+      expect(captureObserver.onPopupOpened).toHaveBeenCalledWith('browser-1', popupContents)
+    } finally {
+      browserManager.setPopupCaptureObserver(null)
     }
-    const popupCloseMock = vi.fn()
-    const popupOnClosedMock = vi.fn()
-    openPopupWithOriginBarMock.mockReturnValue({
-      contentWebContents: popupContents,
-      close: popupCloseMock,
-      onClosed: popupOnClosedMock
-    })
-
-    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
-      url: string
-    }) => {
-      action: string
-      createWindow: (options: Record<string, unknown>) => unknown
-    }
-    const response = handler({ url: 'https://sso.example.com/auth?code=SECRET' })
-    const preCreatedContents = { id: 152 }
-    const options = { webContents: preCreatedContents, width: 500, height: 600 }
-    const returned = response.createWindow(options)
-
-    expect(openPopupWithOriginBarMock).toHaveBeenCalledWith(
-      options,
-      'https://sso.example.com/auth?code=SECRET'
-    )
-    expect(returned).toBe(popupContents)
-    // did-create-window does not fire for createWindow-created children, so
-    // the popup must get guest policies (nav guards, recursive popup handling)
-    // attached directly here.
-    expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
-    expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
-    expect(popupContents.on.mock.calls.some(([event]) => event === 'dom-ready')).toBe(false)
-    // The renderer notice carries only the sanitized origin, never the URL.
-    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
-      browserPageId: 'browser-1',
-      origin: 'https://sso.example.com',
-      action: 'opened-in-orca'
-    })
-
-    // Opener-lifecycle parity: destroying the owning guest closes the popup.
-    const destroyedCall = guestOnceMock.mock.calls.find(([event]) => event === 'destroyed')
-    expect(destroyedCall).toBeDefined()
-    ;(destroyedCall as [string, () => void])[1]()
-    expect(popupCloseMock).toHaveBeenCalledTimes(1)
-
-    // Popup windows opened by the popup itself keep the owner context, so the
-    // recursive handler still routes to the owning browser tab.
-    const popupHandler = popupContents.setWindowOpenHandler.mock.calls[0][0] as (details: {
-      url: string
-    }) => { action: string }
-    openPopupWithOriginBarMock.mockReturnValue({
-      contentWebContents: { ...popupContents, id: 153 },
-      close: vi.fn(),
-      onClosed: vi.fn()
-    })
-    expect(popupHandler({ url: 'https://sso.example.com/step2' })).toMatchObject({
-      action: 'allow'
-    })
   })
 
   it('blocks unsafe popup URLs for registered guests', () => {

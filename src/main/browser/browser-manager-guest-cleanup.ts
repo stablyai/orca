@@ -7,6 +7,18 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
   }
 
   protected cleanupGuestPolicyAttachment(guestWebContentsId: number): void {
+    const retiredPopupOwnerContext = this.popupOwnerContextByGuestId.get(guestWebContentsId) ?? null
+    // Why: snapshot before the deletes below — an owner retiring takes its owned
+    // popups' capture with it even when the popup windows outlive the tab.
+    const retiredOwnedPopupIds: number[] = []
+    const retiringTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
+    if (retiringTabId !== undefined) {
+      for (const [popupGuestId, owner] of this.popupOwnerContextByGuestId) {
+        if (owner.rootGuestWebContentsId === guestWebContentsId) {
+          retiredOwnedPopupIds.push(popupGuestId)
+        }
+      }
+    }
     const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
     const isPrimaryGuest = browserTabId !== undefined
     if (browserTabId && this.webContentsIdByTabId.get(browserTabId) === guestWebContentsId) {
@@ -39,5 +51,11 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
     this.pendingPermissionEventsByGuestId.delete(guestWebContentsId)
     this.pendingPopupEventsByGuestId.delete(guestWebContentsId)
     this.cancelPendingDownloadsForGuest(guestWebContentsId)
+    if (retiredPopupOwnerContext) {
+      this.notifyPopupCaptureClosed(guestWebContentsId)
+    }
+    for (const popupGuestId of retiredOwnedPopupIds) {
+      this.notifyPopupCaptureClosed(popupGuestId)
+    }
   }
 }

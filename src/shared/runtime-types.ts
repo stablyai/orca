@@ -47,6 +47,7 @@ export type {
   BrowserKeypressResult,
   BrowserNetworkEntry,
   BrowserNetworkLogResult,
+  BrowserNetworkRequestItem,
   BrowserPdfResult,
   BrowserProfileClearDefaultCookiesResult,
   BrowserProfileCreateResult,
