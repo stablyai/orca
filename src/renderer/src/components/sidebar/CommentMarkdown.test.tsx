@@ -31,6 +31,110 @@ describe('CommentMarkdown', () => {
     )
   })
 
+  it('renders inline math without a display wrapper', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        renderMath
+        content={String.raw`Inline $x^2$ and $\text{Thành công}$.`}
+      />
+    )
+
+    expect(markup).toContain('class="katex"')
+    expect(markup).toContain('Thành công')
+    expect(markup).not.toContain('class="katex-display"')
+    expect(markup).not.toContain('language-math')
+  })
+
+  it('renders block math', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        renderMath
+        content={String.raw`$$
+\frac{a}{b}
+$$`}
+      />
+    )
+
+    expect(markup).toContain('class="katex-display"')
+  })
+
+  it('keeps inline and fenced code dollar signs unchanged', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        renderMath
+        content={['Inline `$100`.', '```sh\necho $1\n```', '~~~sh\necho $2\n~~~'].join('\n\n')}
+      />
+    )
+
+    expect(markup).toContain('>$100</code>')
+    expect(markup).toContain('echo $1')
+    expect(markup).toContain('echo $2')
+    expect(markup).not.toContain('\\$100')
+    expect(markup).not.toContain('echo \\$1')
+    expect(markup).not.toContain('echo \\$2')
+  })
+
+  it('keeps currency dollar signs when math rendering is enabled', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        renderMath
+        content="Monthly cost $148+ → $19; additional savings ~$1,550 and $15.4/month."
+      />
+    )
+
+    expect(markup).toContain('$148+ → $19')
+    expect(markup).toContain('~$1,550')
+    expect(markup).toContain('$15.4/month')
+    expect(markup).not.toContain('class="katex"')
+  })
+
+  it('renders inline math that starts with a number', () => {
+    const markup = renderToStaticMarkup(<CommentMarkdown renderMath content="$2 + 2 = 4$" />)
+
+    expect(markup).toContain('class="katex"')
+    expect(markup).not.toContain('language-math')
+  })
+
+  it('keeps operator-containing currency prose literal beside real math', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown renderMath content="It costs $5 + tax, or $7 total. Math: $2 + 2 = 4$." />
+    )
+    expect(markup).toContain('It costs $5 + tax, or $7 total.')
+    expect(markup).not.toContain('katex-error')
+    expect(markup).toContain('class="katex"')
+    expect(markup).toContain('encoding="application/x-tex">2 + 2 = 4</annotation>')
+  })
+
+  it('keeps currency prose literal before non-numeric math using the whitespace boundary', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown renderMath content="It costs $5 and takes $x$ hours." />
+    )
+    expect(markup).toContain('It costs $5 and takes')
+    expect(markup).not.toContain('katex-error')
+    expect(markup).toContain('class="katex"')
+    expect(markup).toContain('encoding="application/x-tex">x</annotation>')
+  })
+
+  it('preserves parser-recognized unclosed and indented code', () => {
+    for (const content of ['```sh\necho $1\n', '~~~sh\necho $1\n', '    echo $1\n']) {
+      const markup = renderToStaticMarkup(<CommentMarkdown renderMath content={content} />)
+      expect(markup).toContain('echo $1')
+      expect(markup).not.toContain('echo \\$1')
+      expect(markup).not.toContain('katex')
+    }
+  })
+
+  it('renders numeric literals and double-dollar math without operator guessing', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown renderMath content={'$2$ and $2x$.\n\n$$2 + 2 = 4$$'} />
+    )
+    expect(markup).toContain('encoding="application/x-tex">2</annotation>')
+    expect(markup).toContain('encoding="application/x-tex">2x</annotation>')
+    expect(markup).toContain('encoding="application/x-tex">2 + 2 = 4</annotation>')
+  })
+
   it('autolinks same-repo GitHub issue references when repo context is provided', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown
