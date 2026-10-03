@@ -120,7 +120,8 @@ function persistStructuredLaunchState(state: StructuredLaunchState): void {
     clientOperationId: envelope.clientOperationId,
     payloadFingerprint: envelope.payloadFingerprint,
     expectedRuntimeFence: envelope.expectedRuntimeFence,
-    ...(resumeFrom ? { resumeFrom } : {})
+    ...(resumeFrom ? { resumeFrom } : {}),
+    ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
   }
   writeStructuredAgentLaunchRecord(record)
 }

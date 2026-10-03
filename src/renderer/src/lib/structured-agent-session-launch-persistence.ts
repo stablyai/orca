@@ -11,6 +11,8 @@ export type StructuredAgentLaunchPersistedRecord = {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** When a failed launch failed; records written by older builds lack it. */
+  failedAt?: number
 }
 
 const LAUNCH_STORAGE_KEY = 'orca:structuredAgentLaunches:v1'
@@ -42,6 +44,7 @@ function validRecord(value: unknown): value is StructuredAgentLaunchPersistedRec
     expectedRuntimeFence
   } = value
   const resumeFrom = 'resumeFrom' in value ? value.resumeFrom : undefined
+  const failedAt = 'failedAt' in value ? value.failedAt : undefined
   return (
     typeof sessionId === 'string' &&
     sessionId.length > 0 &&
@@ -50,6 +53,7 @@ function validRecord(value: unknown): value is StructuredAgentLaunchPersistedRec
     typeof clientOperationId === 'string' &&
     typeof payloadFingerprint === 'string' &&
     (expectedRuntimeFence === null || typeof expectedRuntimeFence === 'number') &&
+    (failedAt === undefined || Number.isFinite(failedAt)) &&
     (resumeFrom === undefined ||
       (typeof resumeFrom === 'object' &&
         resumeFrom !== null &&

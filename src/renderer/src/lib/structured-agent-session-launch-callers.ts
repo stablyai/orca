@@ -18,6 +18,8 @@ export type StructuredLaunchCaller = {
 
 export type StructuredLaunchCallerGroup = {
   outcome: 'pending' | 'published' | 'failed' | 'unknown' | 'cancelled'
+  /** When this attempt failed; a retry starts a new group, so it never outlives the failure. */
+  failedAt?: number
   entries: Set<StructuredLaunchCaller>
   promptDeliveryResults: Set<Promise<StructuredPromptDeliveryResult>>
   onSettled: () => void
@@ -72,6 +74,9 @@ export function settleStructuredLaunchCallers(
   outcome: 'published' | 'failed' | 'cancelled'
 ): void {
   group.outcome = outcome
+  if (outcome === 'failed') {
+    group.failedAt = Date.now()
+  }
   group.onSettled()
 }
 
