@@ -69,7 +69,10 @@ const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
 const NODE_BUILTINS = new Set([
   ...builtinModules,
-  ...builtinModules.map((moduleName) => `node:${moduleName}`)
+  ...builtinModules.map((moduleName) => `node:${moduleName}`),
+  // builtinModules omits prefix-only modules, so the browser-cookie imports of
+  // node:sqlite would otherwise read as a package the packager failed to copy.
+  'node:sqlite'
 ])
 
 function packageNameFromSpecifier(specifier) {
