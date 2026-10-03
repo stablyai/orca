@@ -196,6 +196,12 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
   if (agent === 'rovo') {
     return 'acli'
   }
+  // Why launchCmd here: the opencode2 default launch carries `--standalone`,
+  // and the vault resume must preserve that default mode — a command override
+  // replaces this base wholesale, which is what opts into shared service.
+  if (agent === 'opencode2') {
+    return TUI_AGENT_CONFIG.opencode2.launchCmd
+  }
   return TUI_AGENT_CONFIG[agent].detectCmd
 }
 
@@ -209,8 +215,10 @@ function buildAgentResumeInvocation(
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':
       return `${baseCommand} rovodev run --restore ${sessionArg}`
+    // Why the launch command, not the bare binary: the vault base for opencode2
+    // must carry the default `--standalone` mode (see defaultAiVaultResumeCommandBase),
+    // so the resume argv stays mode-free and a command override owns the mode.
     case 'opencode2':
-      return `${baseCommand} --standalone --session ${sessionArg}`
     case 'opencode':
     case 'pi':
     // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions

@@ -6,6 +6,29 @@ import {
 } from './ai-vault-resume-command'
 
 describe('buildAiVaultResumeCommand', () => {
+  it('keeps the default opencode2 standalone mode on vault resume', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'opencode2',
+        sessionId: 'ses_abc123',
+        cwd: '/repo/app',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/repo/app' && opencode2 --standalone --session 'ses_abc123'")
+  })
+
+  it('lets an opencode2 command override own the standalone mode', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'opencode2',
+        sessionId: 'ses_abc123',
+        cwd: '/repo/app',
+        platform: 'darwin',
+        commandOverride: 'opencode2'
+      })
+    ).toBe("cd '/repo/app' && opencode2 --session 'ses_abc123'")
+  })
+
   it('uses Antigravity conversation ids instead of Gemini resume flags', () => {
     expect(
       buildAiVaultResumeCommand({

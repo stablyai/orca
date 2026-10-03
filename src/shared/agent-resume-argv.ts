@@ -31,9 +31,11 @@ export function getAgentResumeArgv(
     case 'opencode':
       return providerSession.key === 'session_id' ? ['opencode', '--session', id] : null
     case 'opencode2':
-      return providerSession.key === 'session_id'
-        ? ['opencode2', '--standalone', '--session', id]
-        : null
+      // Why no --standalone here: the mode rides on the launch command
+      // (`opencode2 --standalone` by default), so the resume argv must not
+      // inject it again — that duplicated the flag by default and defeated a
+      // bare-`opencode2` command override on every resume.
+      return providerSession.key === 'session_id' ? ['opencode2', '--session', id] : null
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
