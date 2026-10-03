@@ -8,6 +8,7 @@ import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'
 import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { isRendererUnavailableRefusal } from '../transport/renderer-unavailable-refusal'
 
 export type FileTapSessionTab = {
   id: string
@@ -178,6 +179,20 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     { worktree: resolvedWorktree, relativePath: openedPath },
     { timeoutMs: 15_000 }
   )
+  // Why: a host with no renderer cannot open a desktop tab; preview the file on the device (#22186).
+  if (isRendererUnavailableRefusal(openResponse)) {
+    options.pushPreviewRoute(
+      createMobileFilePreviewHref({
+        hostId: options.hostId,
+        worktreeId: resolvedWorktreeId,
+        source: 'worktree',
+        relativePath: openedPath,
+        name: displayNameFromPath(openedPath),
+        ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
+      })
+    )
+    return
+  }
   const opened = fileTapOpenRun.interpret(openResponse)
   if (!opened.accepted) {
     reportOpenFailure(options)
