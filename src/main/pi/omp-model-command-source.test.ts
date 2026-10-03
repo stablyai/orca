@@ -22,6 +22,43 @@ describe('OMP model command', () => {
     })
   })
 
+  it('selects a model that appears once background discovery settles', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const discovered = { provider: 'opencode-zen', id: 'grok-4.7' }
+    let available: { provider: string; id: string }[] = []
+    const context = {
+      modelRegistry: {
+        getAvailable: () => available,
+        awaitBackgroundRefresh: vi.fn(async () => {
+          available = [discovered]
+        })
+      },
+      ui: { notify: vi.fn() }
+    }
+    await harness.commands['orca-model'].handler('opencode-zen/grok-4.7', context)
+    expect(context.modelRegistry.awaitBackgroundRefresh).toHaveBeenCalledOnce()
+    expect(harness.setModelMock).toHaveBeenCalledWith(discovered)
+    expect(context.ui.notify).not.toHaveBeenCalled()
+  })
+
+  it('still reports a model missing after discovery settles', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const context = {
+      modelRegistry: {
+        getAvailable: () => [model],
+        awaitBackgroundRefresh: vi.fn(async () => undefined)
+      },
+      ui: { notify: vi.fn() }
+    }
+    await harness.commands['orca-model'].handler('opencode-zen/grok-4.7', context)
+    expect(context.modelRegistry.awaitBackgroundRefresh).toHaveBeenCalledOnce()
+    expect(harness.setModelMock).not.toHaveBeenCalled()
+    expect(context.ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('no longer available'),
+      'error'
+    )
+  })
+
   it('does not claim a switch for an unavailable model or rejected API call', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
     const context = commandContext()
