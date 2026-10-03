@@ -40,10 +40,17 @@ import type {
   PendingCreationRef,
   PinnedWorktreeDisplayPolicy,
   Row,
-  WorktreeGroupBy
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
 } from './row-types'
 import { getRenderedNaturalAnchorRepoIds, withRepoSectionDisplayLabels } from './section-order'
 import { buildOrderedGroups } from './worktree-grouping'
+import { appendNestedGroups } from './nested-groups'
+
+export type BuildRowsNestedGroupingOptions = {
+  secondary?: WorktreeGroupBySecondary
+  emptySecondaryStatusSourceGroupKey?: string | null
+}
 
 export function buildRows(
   groupBy: WorktreeGroupBy,
@@ -70,8 +77,12 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  nestedGrouping: BuildRowsNestedGroupingOptions = {}
 ): Row[] {
+  const groupBySecondary = nestedGrouping.secondary ?? 'none'
+  const emptySecondaryStatusSourceGroupKey =
+    nestedGrouping.emptySecondaryStatusSourceGroupKey ?? null
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   // Membership is decided once, above the groupBy switch: every mode renders the
@@ -133,7 +144,9 @@ export function buildRows(
     collapsedGroups,
     workspaceStatuses,
     settings,
-    projectGrouping
+    projectGroups,
+    projectGrouping,
+    groupBySecondary
   })
   emitPinnedGroup(
     pinnedSectionWorktrees,
@@ -157,6 +170,7 @@ export function buildRows(
     if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
       result.push({
         type: 'header',
+        groupKind: 'all',
         key: ALL_GROUP_KEY,
         label: ALL_GROUP_META.label,
         count: naturalWorktrees.length + renderableFolderWorkspaces.length,
@@ -215,6 +229,7 @@ export function buildRows(
   const sectionContext: SectionAppendContext = {
     result,
     groupBy,
+    projectGroupingActive: groupBy === 'repo' || groupBySecondary === 'repo',
     collapsedGroups,
     workspaceStatuses,
     repoMap,
@@ -230,6 +245,20 @@ export function buildRows(
     worktreeMap,
     nestLineage,
     cyclicLineageIds
+  }
+
+  if (groupBySecondary !== 'none' && groupBySecondary !== groupBy) {
+    appendNestedGroups(sectionContext, orderedGroups, groupBySecondary, {
+      repoMap,
+      prCache,
+      settings,
+      repoOrder,
+      projectOrderBy,
+      projectGroups,
+      folderWorkspaces: renderableFolderWorkspaces,
+      emptySecondaryStatusSourceGroupKey
+    })
+    return result
   }
 
   if (groupBy !== 'repo' || projectGroups.length === 0) {

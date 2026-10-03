@@ -9,51 +9,28 @@ describe('resolveRepoHeaderColor', () => {
 })
 
 describe('resolveProjectGroupHeaderColor', () => {
-  it('returns the repo color for project group headers', () => {
+  it('returns the repo color for a known Project header', () => {
     expect(
       resolveProjectGroupHeaderColor({
-        groupBy: 'repo',
-        headerKey: 'repo:repo-1',
+        isProjectHeader: true,
         badgeColor: REPO_COLORS[5]
       })
     ).toBe(REPO_COLORS[5])
   })
 
-  it('returns the repo color for provider-backed project headers', () => {
+  it('falls back to gray for a Project header without a configured color', () => {
     expect(
       resolveProjectGroupHeaderColor({
-        groupBy: 'repo',
-        headerKey: 'project:github:stablyai/orca',
-        badgeColor: REPO_COLORS[6]
-      })
-    ).toBe(REPO_COLORS[6])
-  })
-
-  it('falls back to gray for unknown project group headers', () => {
-    expect(
-      resolveProjectGroupHeaderColor({
-        groupBy: 'repo',
-        headerKey: 'repo:missing-repo',
+        isProjectHeader: true,
         badgeColor: undefined
       })
     ).toBe(DEFAULT_REPO_BADGE_COLOR)
   })
 
-  it('does not color pinned headers while grouped by repo', () => {
+  it('does not color a nested Status or PR header beneath a Project', () => {
     expect(
       resolveProjectGroupHeaderColor({
-        groupBy: 'repo',
-        headerKey: 'pinned',
-        badgeColor: undefined
-      })
-    ).toBeUndefined()
-  })
-
-  it('does not color repo-looking keys in other grouping modes', () => {
-    expect(
-      resolveProjectGroupHeaderColor({
-        groupBy: 'workspace-status',
-        headerKey: 'repo:repo-1',
+        isProjectHeader: false,
         badgeColor: REPO_COLORS[2]
       })
     ).toBeUndefined()

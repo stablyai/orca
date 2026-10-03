@@ -7,7 +7,12 @@ import {
 import { resolveWorkspaceKanbanCardDropCommitTarget } from '../../workspace-kanban-card-pointer-drag-dom'
 import { getFullDropIndexForWorktreeDragUnit } from '../../worktree-drag-units'
 import { resolveWorktreeSidebarStatusDropCommitTarget } from '../../worktree-sidebar-drop-preview'
-import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
+import { getWorkspaceStatusGroupKey } from '../../workspace-status'
+import {
+  getPointerDropStatusTarget,
+  getWorkspaceStatusTargetGroupKey,
+  shouldPreferSidebarStatusDropTarget
+} from './status-target'
 import type {
   WorktreeDropCommitContext,
   WorktreeStatusDropAtIndexArgs
@@ -43,6 +48,13 @@ function commitStatusOrPinDrop(
   ctx.onMoveWorktreesToStatusAtIndex({
     worktreeIds: drag.reorderDraggedIds,
     status: target.status,
+    targetGroupKey:
+      target.groupKey ??
+      getWorkspaceStatusTargetGroupKey({
+        sourceGroupKey: drag.sourceGroupKey,
+        status: target.status,
+        workspaceStatuses: ctx.workspaceStatuses
+      }),
     dropIndex,
     groups: ctx.worktreeDragGroups
   })
@@ -71,6 +83,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
     args.onDropWorktreesOnWorkspaceBoard({
       worktreeIds: drag.reorderDraggedIds,
       status: boardDropTarget.status,
+      targetGroupKey: getWorkspaceStatusGroupKey(boardDropTarget.status),
       // Why: the target counts rendered cards, but the groups are the full
       // lane. Board search can make those two differ.
       dropIndex: resolveWorkspaceKanbanSidebarFullLaneDropIndex(
@@ -106,6 +119,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
             status: preferredStatusTarget.status,
+            groupKey: preferredStatusTarget.groupKey,
             draggedIds: drag.reorderDraggedIds
           })
         : null
@@ -134,6 +148,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
             status: preferredStatusTarget.status,
+            groupKey: preferredStatusTarget.groupKey,
             draggedIds: drag.reorderDraggedIds
           })
         : null

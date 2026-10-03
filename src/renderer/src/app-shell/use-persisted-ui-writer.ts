@@ -152,6 +152,7 @@ export function usePersistedUIWriter(): void {
       markdownTocPanelWidth: s.markdownTocPanelWidth,
       combinedDiffFileTreeWidth: s.combinedDiffFileTreeWidth,
       groupBy: s.groupBy,
+      groupBySecondary: s.groupBySecondary,
       sortBy: s.sortBy,
       projectOrderBy: s.projectOrderBy,
       showSleepingWorkspaces: s.showSleepingWorkspaces,

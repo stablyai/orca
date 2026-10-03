@@ -17,6 +17,7 @@ function makeBaseline(overrides: Partial<PersistedUIWriteBaseline> = {}): Persis
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
+    groupBySecondary: 'none',
     sortBy: 'recent',
     projectOrderBy: 'manual',
     showSleepingWorkspaces: true,

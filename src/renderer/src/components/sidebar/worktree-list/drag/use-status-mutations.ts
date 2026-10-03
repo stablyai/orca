@@ -7,7 +7,7 @@ import type {
 } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktree-helpers'
-import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../../workspace-status'
+import { getWorkspaceStatus } from '../../workspace-status'
 import {
   buildManualOrderUpdatesForGroupDrop,
   buildManualOrderUpdatesForVisibleGroups,
@@ -72,7 +72,7 @@ export function useWorktreeStatusMutations(args: {
     (dropArgs: WorktreeStatusDropAtIndexArgs) => {
       const order = buildManualOrderUpdatesForGroupDrop({
         groups: dropArgs.groups,
-        targetGroupKey: getWorkspaceStatusGroupKey(dropArgs.status),
+        targetGroupKey: dropArgs.targetGroupKey,
         draggedIds: dropArgs.worktreeIds,
         dropIndex: dropArgs.dropIndex,
         now: Date.now(),

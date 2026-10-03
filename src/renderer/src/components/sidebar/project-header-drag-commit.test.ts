@@ -18,11 +18,12 @@ function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
 
 function makeSession(
   repoId: string,
-  sidebarRepoHeaderIds: readonly string[]
+  sidebarRepoHeaderIds: readonly string[],
+  bucketKey = 'ungrouped'
 ): ProjectHeaderDragSession {
   return {
     repoId,
-    bucketKey: 'ungrouped',
+    bucketKey,
     sidebarRepoHeaderIds,
     pointerId: 1,
     headerRects: [],
@@ -89,25 +90,28 @@ describe('commitProjectHeaderDragDrop', () => {
     expect(onCommitRepoOrder).not.toHaveBeenCalled()
   })
 
-  it('commits projectGroupOrder when project groups are present', () => {
-    const onCommitProjectGroupOrder = vi.fn()
-    const repos = [
-      makeRepo('a', { projectGroupId: 'group-1' }),
-      makeRepo('b', { projectGroupId: 'group-1' }),
-      makeRepo('c', { projectGroupId: 'group-1' })
-    ]
-    const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+  it.each(['ungrouped', 'workspace-status:todo/project-group:group-1'])(
+    'commits one global projectGroupOrder from bucket %s',
+    (bucketKey) => {
+      const onCommitProjectGroupOrder = vi.fn()
+      const repos = [
+        makeRepo('a', { projectGroupId: 'group-1' }),
+        makeRepo('b', { projectGroupId: 'group-1' }),
+        makeRepo('c', { projectGroupId: 'group-1' })
+      ]
+      const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
-    commitProjectHeaderDragDrop({
-      session: makeSession('c', ['a', 'b', 'c']),
-      sidebarDropIndex: 0,
-      orderedRepoIds: ['a', 'b', 'c'],
-      repoById,
-      usesProjectGroupOrdering: true,
-      onCommitRepoOrder: vi.fn(),
-      onCommitProjectGroupOrder
-    })
+      commitProjectHeaderDragDrop({
+        session: makeSession('c', ['a', 'b', 'c'], bucketKey),
+        sidebarDropIndex: 0,
+        orderedRepoIds: ['a', 'b', 'c'],
+        repoById,
+        usesProjectGroupOrdering: true,
+        onCommitRepoOrder: vi.fn(),
+        onCommitProjectGroupOrder
+      })
 
-    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-1', -1)
-  })
+      expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-1', -1)
+    }
+  )
 })

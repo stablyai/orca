@@ -14,6 +14,8 @@ export const NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK = (): void => {}
 export type WorktreeStatusDropAtIndexArgs = {
   worktreeIds: readonly string[]
   status: WorkspaceStatus
+  /** Exact rendered Status lane used to compute dropIndex. */
+  targetGroupKey: string
   dropIndex: number
   groups: readonly WorktreeDragGroup[]
 }

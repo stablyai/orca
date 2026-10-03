@@ -7,9 +7,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushWorktreePointerDragFrame, type WorktreePointerDragFrameArgs } from './pointer-flush'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET, WORKTREE_ROW_DRAG_INITIAL_STATE } from './row-state'
 
+const workspaceBoardMocks = vi.hoisted(() => ({
+  hasBoard: vi.fn(() => true)
+}))
+
 vi.mock('../../workspace-kanban-sidebar-drop', () => ({
   clearWorkspaceKanbanSidebarDropTargetVisual: vi.fn(),
-  hasWorkspaceKanbanSidebarDropBoard: () => true,
+  hasWorkspaceKanbanSidebarDropBoard: workspaceBoardMocks.hasBoard,
   isWorkspaceKanbanSidebarDropPointInBoard: () => false,
   updateWorkspaceKanbanSidebarDropTargetVisual: () => ({ status: null, isPinDrop: false })
 }))
@@ -19,6 +23,8 @@ vi.mock('./pointer-commit', () => ({ commitWorktreePointerDrop: vi.fn() }))
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  workspaceBoardMocks.hasBoard.mockReset()
+  workspaceBoardMocks.hasBoard.mockReturnValue(true)
 })
 
 function setup() {
@@ -79,10 +85,12 @@ function setup() {
       onPinWorktrees: vi.fn()
     },
     workspaceBoardOpen: false,
+    preferSidebarStatusDropTargetsOnDrag: false,
     onWorkspaceBoardDragPreviewStart: vi.fn(),
     onWorkspaceBoardDragPreviewCommit: vi.fn(),
     shouldShowWorkspaceBoardDropIndicator: () => false,
     setDragOverStatus: vi.fn(),
+    setDragOverStatusGroupKey: vi.fn(),
     setPinDragOver: vi.fn(),
     setWorktreeDragState: (update) => {
       state = typeof update === 'function' ? update(state) : update
@@ -94,6 +102,9 @@ function setup() {
     state: () => state,
     nest: (id: string | null) => {
       target = { ...NO_WORKTREE_SIDEBAR_DROP_TARGET, lineageParentId: id }
+    },
+    status: (status: string | null, groupKey?: string) => {
+      target = { ...NO_WORKTREE_SIDEBAR_DROP_TARGET, status, groupKey }
     },
     tick: (ms: number) => {
       time += ms
@@ -157,6 +168,137 @@ describe('combined nesting and animated reordering', () => {
     const frames = vi.mocked(window.requestAnimationFrame).mock.calls.length
     t.tick(1000)
     expect(vi.mocked(window.requestAnimationFrame).mock.calls).toHaveLength(frames)
+  })
+})
+
+describe('nested Status targeting', () => {
+  it('keeps drag targets in the sidebar instead of opening the full board', () => {
+    workspaceBoardMocks.hasBoard.mockReturnValue(false)
+    const t = setup()
+    t.args.preferSidebarStatusDropTargetsOnDrag = true
+
+    flushWorktreePointerDragFrame(t.args)
+
+    expect(t.args.onWorkspaceBoardDragPreviewStart).not.toHaveBeenCalled()
+    expect(t.args.drag.workspaceBoardDragPreviewRequested).toBe(false)
+  })
+
+  it('prefers an adjacent secondary Status lane over reordering in the source lane', () => {
+    const t = setup()
+    t.args.drag.sourceGroupKey = 'repo:git:git.example.com/org/orca/workspace-status:todo'
+    t.args.ctx.workspaceStatuses = [
+      { id: 'todo', label: 'To do' },
+      { id: 'in-progress', label: 'In progress' }
+    ]
+    t.args.ctx.scrollRef.current = document.createElement('div')
+    t.status('in-progress', 'repo:git:git.example.com/org/orca/workspace-status:in-progress')
+    const statusDrop = {
+      dropIndex: 0,
+      dropIndicatorY: 240,
+      dropAnchorId: null,
+      previewOffsetsByWorktreeId: new Map<string, number>()
+    }
+    const computeStatusDrop = vi.fn(() => statusDrop)
+    const computeSourceDrop = vi.fn(t.args.ctx.computeWorktreeDrop)
+    t.args.ctx.computeWorktreeStatusDrop = computeStatusDrop
+    t.args.ctx.computeWorktreeDrop = computeSourceDrop
+
+    flushWorktreePointerDragFrame(t.args)
+
+    expect(computeStatusDrop).toHaveBeenCalledWith({
+      pointerY: 300,
+      status: 'in-progress',
+      groupKey: 'repo:git:git.example.com/org/orca/workspace-status:in-progress',
+      draggedIds: ['child']
+    })
+    expect(computeSourceDrop).not.toHaveBeenCalled()
+    expect(t.state()).toMatchObject({
+      sourceGroupKey: null,
+      dropIndex: 0,
+      dropIndicatorY: 240
+    })
+    expect(t.args.drag.latestStatusDropTarget?.target).toMatchObject({
+      status: 'in-progress',
+      groupKey: 'repo:git:git.example.com/org/orca/workspace-status:in-progress'
+    })
+  })
+
+  it('uses the nested Status lane under the pointer for a Pinned source', () => {
+    const t = setup()
+    t.args.drag.sourceGroupKey = 'pinned'
+    t.args.ctx.scrollRef.current = document.createElement('div')
+    const targetGroupKey = 'repo:repo-1/workspace-status:completed'
+    t.status('completed', targetGroupKey)
+    const computeStatusDrop = vi.fn(() => ({
+      dropIndex: 0,
+      dropIndicatorY: 240,
+      dropAnchorId: null,
+      previewOffsetsByWorktreeId: new Map<string, number>()
+    }))
+    const computeSourceDrop = vi.fn(t.args.ctx.computeWorktreeDrop)
+    t.args.ctx.computeWorktreeStatusDrop = computeStatusDrop
+    t.args.ctx.computeWorktreeDrop = computeSourceDrop
+
+    flushWorktreePointerDragFrame(t.args)
+
+    expect(computeStatusDrop).toHaveBeenCalledWith({
+      pointerY: 300,
+      status: 'completed',
+      groupKey: targetGroupKey,
+      draggedIds: ['child']
+    })
+    expect(computeSourceDrop).not.toHaveBeenCalled()
+  })
+
+  it('carries every selected worktree into a nested Status drop', () => {
+    const t = setup()
+    t.args.drag.sourceGroupKey = 'repo:repo-1/workspace-status:todo'
+    t.args.drag.draggedIds = ['child', 'selected-sibling']
+    t.args.drag.reorderDraggedIds = ['child', 'selected-sibling']
+    t.args.ctx.workspaceStatuses = [
+      { id: 'todo', label: 'To do' },
+      { id: 'in-progress', label: 'In progress' }
+    ]
+    t.args.ctx.scrollRef.current = document.createElement('div')
+    t.status('in-progress', 'repo:repo-1/workspace-status:in-progress')
+    const computeStatusDrop = vi.fn(() => ({
+      dropIndex: 0,
+      dropIndicatorY: 240,
+      dropAnchorId: null,
+      previewOffsetsByWorktreeId: new Map<string, number>()
+    }))
+    t.args.ctx.computeWorktreeStatusDrop = computeStatusDrop
+
+    flushWorktreePointerDragFrame(t.args)
+
+    expect(computeStatusDrop).toHaveBeenCalledWith({
+      pointerY: 300,
+      status: 'in-progress',
+      groupKey: 'repo:repo-1/workspace-status:in-progress',
+      draggedIds: ['child', 'selected-sibling']
+    })
+    expect(t.args.drag.latestStatusDropTarget?.target).toMatchObject({
+      status: 'in-progress',
+      groupKey: 'repo:repo-1/workspace-status:in-progress'
+    })
+  })
+
+  it('scopes an empty-lane hover to the exact nested Status header', () => {
+    const t = setup()
+    const targetGroupKey = 'repo:repo-1/workspace-status:completed'
+    t.args.drag.sourceGroupKey = 'repo:repo-1/workspace-status:todo'
+    t.args.ctx.workspaceStatuses = [
+      { id: 'todo', label: 'To do' },
+      { id: 'completed', label: 'Done' }
+    ]
+    t.args.ctx.scrollRef.current = document.createElement('div')
+    t.status('completed', targetGroupKey)
+
+    flushWorktreePointerDragFrame(t.args)
+
+    expect(t.args.setDragOverStatus).toHaveBeenLastCalledWith('completed')
+    expect(t.args.setDragOverStatusGroupKey).toHaveBeenLastCalledWith(targetGroupKey)
+    expect(t.state().dropIndicatorY).toBeNull()
   })
 })
 

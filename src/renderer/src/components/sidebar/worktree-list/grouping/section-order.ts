@@ -1,3 +1,4 @@
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
@@ -9,8 +10,8 @@ import type {
   ProjectGroupingModel,
   WorktreeGroupEntry
 } from './project-grouping'
-import type { WorktreeGroupBy } from './row-types'
-import { getGroupKeyForWorktree } from './worktree-group-keys'
+import type { WorktreeGroupBy, WorktreeGroupBySecondary } from './row-types'
+import { getGroupKeysForWorktree } from './worktree-group-keys'
 
 export function getRenderedNaturalAnchorRepoIds({
   groupBy,
@@ -20,7 +21,9 @@ export function getRenderedNaturalAnchorRepoIds({
   collapsedGroups,
   workspaceStatuses,
   settings,
-  projectGrouping
+  projectGroups,
+  projectGrouping,
+  groupBySecondary = 'none'
 }: {
   groupBy: WorktreeGroupBy
   worktrees: readonly Worktree[]
@@ -29,7 +32,9 @@ export function getRenderedNaturalAnchorRepoIds({
   collapsedGroups: ReadonlySet<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   settings?: AppState['settings']
+  projectGroups: readonly ProjectGroup[]
   projectGrouping?: ProjectGroupingModel
+  groupBySecondary?: WorktreeGroupBySecondary
 }): Set<string> {
   const renderedRepoIds = new Set<string>()
   if (groupBy === 'none') {
@@ -47,16 +52,18 @@ export function getRenderedNaturalAnchorRepoIds({
     return renderedRepoIds
   }
   for (const worktree of worktrees) {
-    const groupKey = getGroupKeyForWorktree(
+    const groupKeys = getGroupKeysForWorktree(
       groupBy,
       worktree,
       repoMap,
       prCache,
       workspaceStatuses,
       settings,
-      projectGrouping
+      projectGroups,
+      projectGrouping,
+      groupBySecondary
     )
-    if (groupKey && !collapsedGroups.has(groupKey)) {
+    if (groupKeys.length > 0 && groupKeys.every((key) => !collapsedGroups.has(key))) {
       renderedRepoIds.add(worktree.repoId)
     }
   }

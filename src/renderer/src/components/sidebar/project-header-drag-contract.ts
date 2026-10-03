@@ -27,7 +27,11 @@ export type UseRepoHeaderDragArgs = {
 
 export type RepoHeaderDragController = {
   state: RepoDragState
-  onHandlePointerDown: (event: PointerEvent<HTMLElement>, repoId: string) => void
+  onHandlePointerDown: (
+    event: PointerEvent<HTMLElement>,
+    repoId: string,
+    bucketKey?: ProjectHeaderDragBucketKey
+  ) => void
 }
 
 export type ProjectHeaderDragSession = {

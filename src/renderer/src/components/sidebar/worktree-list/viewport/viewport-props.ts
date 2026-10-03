@@ -22,7 +22,11 @@ import type { NewExternalWorktreesInboxActionState } from '../../new-external-wo
 import type { WorktreeDragGroup } from '../../worktree-manual-order'
 import type { WorktreeStatusDropAtIndexArgs } from '../drag/drop-commit-context'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
-import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
+import type {
+  PinnedWorktreeDisplayPolicy,
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
+} from '../grouping/row-types'
 
 export const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
 export type VirtualizedWorktreeViewportProps = {
@@ -31,6 +35,7 @@ export type VirtualizedWorktreeViewportProps = {
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   currentWorktreeId: string | null
   groupBy: WorktreeGroupBy
+  groupBySecondary: WorktreeGroupBySecondary
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   projectOrderBy: ProjectOrderBy
   toggleGroup: (key: string) => void
@@ -75,6 +80,10 @@ export type VirtualizedWorktreeViewportProps = {
   allRepoIds: string[]
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void
   onHostDragActiveChange: (active: boolean) => void
+  onWorktreeDragSourceChange: (
+    sourceGroupKey: string | null,
+    draggingWorktreeId: string | null
+  ) => void
   prCache: AppState['prCache'] | null
   hostedReviewCache: AppState['hostedReviewCache'] | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]

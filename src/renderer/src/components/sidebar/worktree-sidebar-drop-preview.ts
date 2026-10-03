@@ -24,6 +24,8 @@ export type WorktreeSidebarDropPreview = {
 export type WorktreeSidebarStatusDropTarget = {
   status: string | null
   isPinDrop: boolean
+  /** Exact nested lane under the pointer; absent for board and legacy targets. */
+  groupKey?: string | null
 }
 
 export type WorktreeSidebarTrackedStatusDropTarget = {

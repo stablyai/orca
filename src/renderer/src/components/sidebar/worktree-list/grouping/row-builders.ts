@@ -71,6 +71,7 @@ function buildWorktreeRow(
     sectionKey: string
     depth: number
     groupDepth: number
+    projectGrouped?: boolean
     lineageTrail: boolean[]
     isLastLineageChild: boolean
     lineageChildCount: number
@@ -86,6 +87,7 @@ function buildWorktreeRow(
     repo: repoMap.get(worktree.repoId),
     depth: options.depth,
     groupDepth: options.groupDepth,
+    ...(options.projectGrouped ? { projectGrouped: true } : {}),
     lineageTrail: options.lineageTrail,
     isLastLineageChild: options.isLastLineageChild,
     lineageChildCount: options.lineageChildCount,
@@ -107,6 +109,7 @@ export function appendWorktreeRows(
     nestLineage: boolean
     collapsedGroups: Set<string>
     groupDepth: number
+    projectGrouped?: boolean
     sectionKey: string
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
@@ -117,6 +120,7 @@ export function appendWorktreeRows(
     nestLineage,
     collapsedGroups,
     groupDepth,
+    projectGrouped,
     sectionKey,
     hostContextLabelByRepoId,
     hostContextLabelByWorktreeIdentity,
@@ -130,6 +134,7 @@ export function appendWorktreeRows(
           sectionKey,
           depth: 0,
           groupDepth,
+          projectGrouped,
           lineageTrail: [],
           isLastLineageChild: false,
           lineageChildCount: 0,
@@ -200,6 +205,7 @@ export function appendWorktreeRows(
           sectionKey,
           depth,
           groupDepth,
+          projectGrouped,
           lineageTrail,
           isLastLineageChild: isLastChild,
           lineageChildCount: children.length,
@@ -256,7 +262,8 @@ export function appendWorktreeRows(
  *  grouped-lane and flat emitters so their rows cannot diverge. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  projectGrouped = false
 ): FolderWorkspaceRow {
   return {
     type: 'folder-workspace',
@@ -264,6 +271,7 @@ export function buildFolderWorkspaceRow(
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: 0,
-    groupDepth
+    groupDepth,
+    ...(projectGrouped ? { projectGrouped: true } : {})
   }
 }

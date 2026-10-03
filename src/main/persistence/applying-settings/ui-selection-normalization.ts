@@ -17,6 +17,19 @@ export function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupB
   return getDefaultUIState().groupBy
 }
 
+export function normalizeGroupBySecondary(
+  groupBySecondary: unknown,
+  groupBy?: PersistedState['ui']['groupBy']
+): PersistedState['ui']['groupBySecondary'] {
+  const normalized =
+    groupBySecondary === 'workspace-status' ||
+    groupBySecondary === 'repo' ||
+    groupBySecondary === 'pr-status'
+      ? groupBySecondary
+      : 'none'
+  return normalized === groupBy ? 'none' : normalized
+}
+
 export function normalizeShowDotfilesByWorktree(value: unknown): Record<string, boolean> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}

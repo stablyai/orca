@@ -20,7 +20,7 @@ import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
 import { PROJECT_ORDER_OPTIONS, SORT_OPTIONS } from './sidebar-workspace-option-items'
 import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection'
 import { translate } from '@/i18n/i18n'
-import { SidebarGroupByToggle } from './SidebarGroupByToggle'
+import { SidebarGroupByToggle, SidebarSecondaryGroupByToggle } from './SidebarGroupByToggle'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean
@@ -96,6 +96,8 @@ export function WorkspaceOptionsMenuItems({
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const groupBySecondary = useAppStore((s) => s.groupBySecondary)
+  const setGroupBySecondary = useAppStore((s) => s.setGroupBySecondary)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
   const { hostOptions } = useSidebarHostScopeOptions()
@@ -143,6 +145,21 @@ export function WorkspaceOptionsMenuItems({
         <SidebarGroupByToggle groupBy={groupBy} setGroupBy={setGroupBy} />
       </div>
 
+      {groupBy !== 'none' && (
+        <>
+          <DropdownMenuLabel>
+            {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.thenBy', 'Then by')}
+          </DropdownMenuLabel>
+          <div className="px-2 pt-0.5 pb-1">
+            <SidebarSecondaryGroupByToggle
+              primaryGroupBy={groupBy}
+              groupBy={groupBySecondary}
+              setGroupBy={setGroupBySecondary}
+            />
+          </div>
+        </>
+      )}
+
       <DropdownMenuSeparator />
       <DropdownMenuSub>
         <DropdownMenuSubTrigger>
@@ -189,9 +206,8 @@ export function WorkspaceOptionsMenuItems({
         </DropdownMenuSubContent>
       </DropdownMenuSub>
 
-      {/* Why: project order only has a visible effect when grouping by
-          project; hide it in none/status/PR modes to avoid a dead control. */}
-      {groupBy === 'repo' && (
+      {/* Project order applies whenever Project participates in either hierarchy level. */}
+      {(groupBy === 'repo' || (groupBy !== 'none' && groupBySecondary === 'repo')) && (
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">

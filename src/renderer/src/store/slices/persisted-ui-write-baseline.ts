@@ -17,6 +17,7 @@ export type PersistedUIWriteBaseline = {
   markdownTocPanelWidth: number
   combinedDiffFileTreeWidth: number
   groupBy: PersistedUIState['groupBy']
+  groupBySecondary: PersistedUIState['groupBySecondary']
   sortBy: PersistedUIState['sortBy']
   projectOrderBy: PersistedUIState['projectOrderBy']
   showSleepingWorkspaces: boolean
@@ -47,6 +48,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   markdownTocPanelWidth: true,
   combinedDiffFileTreeWidth: true,
   groupBy: true,
+  groupBySecondary: true,
   sortBy: true,
   projectOrderBy: true,
   showSleepingWorkspaces: true,

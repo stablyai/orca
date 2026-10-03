@@ -129,6 +129,12 @@ describe('buildWorkspaceViewSettingsUpdate', () => {
     ).toBe(false)
   })
 
+  it('does not clear the desktop secondary grouping when mobile updates a sibling setting', () => {
+    const update = buildWorkspaceViewSettingsUpdate({ hideSleeping: true }, next)
+
+    expect('groupBySecondary' in update).toBe(false)
+  })
+
   it('returns an empty update for an empty patch', () => {
     expect(buildWorkspaceViewSettingsUpdate({}, next)).toEqual({})
   })

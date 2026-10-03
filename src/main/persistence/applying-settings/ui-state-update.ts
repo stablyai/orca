@@ -31,6 +31,7 @@ import {
 } from '../../protected-secret-persistence'
 import {
   normalizeGroupBy,
+  normalizeGroupBySecondary,
   normalizeProjectOrderBy,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
@@ -99,6 +100,15 @@ export function updatePersistedUI(
             operations.state.ui?.rightSidebarExplorerView,
             nextRightSidebarTab
           )
+  const nextGroupBy = durableUpdates.groupBy
+    ? normalizeGroupBy(durableUpdates.groupBy)
+    : normalizeGroupBy(operations.state.ui?.groupBy)
+  const nextGroupBySecondary = normalizeGroupBySecondary(
+    durableUpdates.groupBySecondary !== undefined
+      ? durableUpdates.groupBySecondary
+      : operations.state.ui?.groupBySecondary,
+    nextGroupBy
+  )
   const nextUI = {
     ...currentUI,
     ...durableUpdates,
@@ -106,9 +116,8 @@ export function updatePersistedUI(
       currentUI.workspaceCleanup,
       durableUpdates.workspaceCleanup
     ),
-    groupBy: durableUpdates.groupBy
-      ? normalizeGroupBy(durableUpdates.groupBy)
-      : normalizeGroupBy(operations.state.ui?.groupBy),
+    groupBy: nextGroupBy,
+    groupBySecondary: nextGroupBySecondary,
     sortBy: durableUpdates.sortBy
       ? normalizeSortBy(durableUpdates.sortBy)
       : normalizeSortBy(operations.state.ui?.sortBy),

@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type React from 'react'
 import { getFullDropIndexForWorktreeDragUnit } from '../../worktree-drag-units'
 import type { WorktreeSidebarDragSession } from '../../worktree-sidebar-drag-autoscroll'
-import { getPointerDropStatusTarget } from './status-target'
+import { getPointerDropStatusTarget, getWorkspaceStatusTargetGroupKey } from './status-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET } from './row-state'
 
@@ -49,6 +49,7 @@ export function useWorktreeDocumentDrop(args: {
           ? ctx.computeWorktreeStatusDrop({
               pointerY: event.clientY,
               status: target.status,
+              groupKey: target.groupKey,
               draggedIds: session.reorderDraggedIds
             })
           : null
@@ -58,6 +59,13 @@ export function useWorktreeDocumentDrop(args: {
           ctx.onMoveWorktreesToStatusAtIndex({
             worktreeIds: session.reorderDraggedIds,
             status: target.status,
+            targetGroupKey:
+              target.groupKey ??
+              getWorkspaceStatusTargetGroupKey({
+                sourceGroupKey: session.sourceGroupKey,
+                status: target.status,
+                workspaceStatuses: ctx.workspaceStatuses
+              }),
             dropIndex: statusDrop.dropIndex,
             groups: ctx.worktreeDragGroups
           })

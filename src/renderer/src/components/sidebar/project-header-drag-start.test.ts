@@ -106,6 +106,38 @@ describe('createProjectHeaderDragSession', () => {
     expect(session?.repoId).toBe('repo-a')
   })
 
+  it('uses the rendered parent-lane bucket for a secondary Project header', () => {
+    const header = document.createElement('div')
+    header.setAttribute('data-repo-header-drag-handle', '')
+    const scrollContainer = document.createElement('div')
+    document.body.append(scrollContainer, header)
+    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
+    const bucketKey = 'parent:workspace-status%3Atodo:ungrouped'
+    const sidebarRepoHeaderIdsByBucket = new Map([
+      [bucketKey, ['repo-a', 'repo-b']],
+      ['parent:workspace-status%3Ain-progress:ungrouped', ['repo-a']]
+    ])
+
+    const session = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: header,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      repoId: 'repo-a',
+      bucketKey,
+      repoById,
+      sidebarRepoHeaderIdsByBucket,
+      getScrollContainer: () => scrollContainer
+    })
+
+    expect(session?.bucketKey).toBe(bucketKey)
+    expect(session?.sidebarRepoHeaderIds).toEqual(['repo-a', 'repo-b'])
+  })
+
   it('does not arm a drag session when pressing an svg icon inside an action button', () => {
     // Why: the row is still the drag handle for hit-testing; action targets must
     // be filtered even though closest(drag-handle) would match the row.

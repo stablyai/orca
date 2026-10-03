@@ -2,28 +2,68 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getProjectGroupHeaderSectionEndByGroupId,
+  getRepoHeaderSectionEndByHeaderKey,
   getRepoHeaderSectionEndByRepoId
 } from './worktree-header-section-boundaries'
+import type { GroupHeaderRow } from './worktree-list/grouping/row-types'
 import type { RenderRow } from './worktree-list/listing/render-row'
+import { repo } from './worktree-list-groups-test-fixtures'
 
-const repoHeader = (id: string): RenderRow =>
-  ({ type: 'header', key: `repo:${id}`, label: id, count: 1, tone: '', repo: { id } }) as RenderRow
-const groupHeader = (id: string): RenderRow =>
-  ({
-    type: 'header',
-    key: `group:${id}`,
-    label: id,
-    count: 1,
-    tone: '',
-    projectGroup: { id },
-    projectGroupDepth: 0
-  }) as RenderRow
+const repoHeader = (id: string): GroupHeaderRow => ({
+  type: 'header',
+  key: `repo:${id}`,
+  label: id,
+  count: 1,
+  tone: '',
+  repo: { ...repo, id }
+})
+const groupHeader = (id: string): GroupHeaderRow => ({
+  type: 'header',
+  key: `group:${id}`,
+  label: id,
+  count: 1,
+  tone: '',
+  projectGroup: {
+    id,
+    name: id,
+    parentPath: null,
+    parentGroupId: null,
+    createdFrom: 'manual',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 0,
+    updatedAt: 0
+  },
+  projectGroupDepth: 0
+})
 const item = { type: 'item' } as RenderRow
 
 // Estimated starts: first header 28, later headers 32, items 116.
 const rows = [repoHeader('a'), item, repoHeader('b'), item, repoHeader('c'), item]
 const startOfB = 28 + 116
 const startOfC = startOfB + 32 + 116
+
+describe('getRepoHeaderSectionEndByHeaderKey', () => {
+  it('keeps repeated secondary Project headers scoped to their own primary lane', () => {
+    const nestedRows: RenderRow[] = [
+      { ...repoHeader('a'), key: 'workspace-status:todo/repo:a' },
+      item,
+      { ...repoHeader('b'), key: 'workspace-status:todo/repo:b' },
+      item,
+      { ...repoHeader('a'), key: 'workspace-status:in-progress/repo:a' },
+      item
+    ]
+
+    const ends = getRepoHeaderSectionEndByHeaderKey({
+      rows: nestedRows,
+      firstHeaderIndex: 0
+    })
+
+    expect(ends.get('workspace-status:todo/repo:a')).toBe(startOfB)
+    expect(ends.get('workspace-status:todo/repo:b')).toBe(startOfC)
+  })
+})
 
 describe('getRepoHeaderSectionEndByRepoId', () => {
   it('ends a section at the successor from the header’s own bucket', () => {
