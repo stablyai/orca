@@ -27,6 +27,13 @@ import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import { runtimeFileRouteForTarget, type RuntimeFileRoute } from './runtime-file-command-target'
 
+function isRuntimePreviewablePdfPath(relativePath: string): boolean {
+  const basename = basenameFromRelativePath(relativePath)
+  const dotIndex = basename.lastIndexOf('.')
+  // Why: `.pdf` is already a desktop preview (PdfViewer). A leading dot is not an extension.
+  return dotIndex > 0 && basename.slice(dotIndex).toLowerCase() === '.pdf'
+}
+
 export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithActiveRuntimeTextSearches {
   constructor(private readonly host: RuntimeFileCommandHost) {
     super()
@@ -157,23 +164,31 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
   async openMobileFile(
     worktreeSelector: string,
     relativePath: string,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    // Why: the RPC layer passes false for a negotiated client that still activates a file tab
+    // when opened is true. In-process callers and clients that advertise the capability omit it.
+    pdfDesktopOpen = true
   ): Promise<RuntimeFileOpenResult> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
-    // Previewable images open like text (mobile renders via files.readPreview); other binaries stay unavailable on mobile.
+    // Previewable images open like text (mobile renders via files.readPreview).
+    // PDFs open the same desktop viewer the file explorer uses. Other binaries stay unavailable.
     const kind = isMobilePreviewableImagePath(relativePath)
       ? 'image'
-      : isMobileBinaryPath(relativePath)
-        ? 'binary'
-        : isMobileMarkdownPath(relativePath)
-          ? 'markdown'
-          : 'text'
-    if (kind === 'binary') {
-      return { worktree: worktree.id, relativePath, kind, opened: false }
+      : isRuntimePreviewablePdfPath(relativePath)
+        ? 'pdf'
+        : isMobileBinaryPath(relativePath)
+          ? 'binary'
+          : isMobileMarkdownPath(relativePath)
+            ? 'markdown'
+            : 'text'
+    // A client that predates the desktop PDF open classified .pdf as binary and did not open it.
+    // Sending opened:true would make that client files.read the new tab.
+    if (kind === 'binary' || (kind === 'pdf' && !pdfDesktopOpen)) {
+      return { worktree: worktree.id, relativePath, kind: 'binary', opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Why: CLI/agents treat opened:true as success; stat first so missing paths fail the RPC instead of opening a ghost tab.
@@ -187,10 +202,12 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     filePath: string,
     route: RuntimeFileRoute
   ): Promise<void> {
+    let stats: { isDirectory: () => boolean }
     try {
-      await (route.kind === 'ssh'
-        ? this.statRemoteTerminalPath(filePath, route.connectionId)
-        : stat(await resolveAuthorizedPath(filePath, this.host.requireStore())))
+      stats =
+        route.kind === 'ssh'
+          ? await this.statRemoteTerminalPath(filePath, route.connectionId)
+          : await stat(await resolveAuthorizedPath(filePath, this.host.requireStore()))
     } catch (error) {
       if (
         isENOENT(error) ||
@@ -199,6 +216,11 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         throw new Error(`ENOENT: no such file or directory, open '${filePath}'`)
       }
       throw error
+    }
+    // Why: a directory named `notes.pdf` still exists, so an existence check would report
+    // opened:true and leave a PDF tab that cannot load it. Open is for a file.
+    if (stats.isDirectory()) {
+      throw new Error(`EISDIR: illegal operation on a directory, open '${filePath}'`)
     }
   }
 

@@ -140,6 +140,56 @@ describe('openMobileFileTap', () => {
     expect(switchSessionTab).toHaveBeenCalledWith(openedTab)
   })
 
+  it('does not activate the synced tab after the desktop opens a PDF', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-1',
+        relativePath: 'docs/example.pdf',
+        absolutePath: '/repo/docs/example.pdf',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'docs/example.pdf',
+          absolutePath: '/repo/docs/example.pdf'
+        }
+      }),
+      ok({ opened: true, kind: 'pdf', relativePath: 'docs/example.pdf' })
+    ])
+    const switchSessionTab = vi.fn()
+    const scheduleDelayedAction = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: 'docs/example.pdf',
+      line: null,
+      column: null,
+      pushPreviewRoute: vi.fn(),
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [{ id: 'tab-pdf', relativePath: 'docs/example.pdf' }],
+      getActiveSessionTabId: () => 'terminal-tab',
+      getActivationState: activeTerminalState,
+      switchSessionTab,
+      scheduleDelayedAction
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'files.open',
+      { worktree: 'id:wt-1', relativePath: 'docs/example.pdf' },
+      { timeoutMs: 15_000 }
+    )
+    expect(scheduleDelayedAction).not.toHaveBeenCalled()
+    expect(switchSessionTab).not.toHaveBeenCalled()
+  })
+
   it('opens a sibling terminal path through the resolved owning worktree', async () => {
     const client = createClient([
       ok({

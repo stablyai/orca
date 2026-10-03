@@ -88,6 +88,52 @@ describe('orca file CLI handlers', () => {
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
   })
 
+  it('rejects a direct open the runtime declines', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'dist/bundle.zip',
+        kind: 'binary',
+        opened: false
+      })
+    )
+
+    await main(['file', 'open', 'dist/bundle.zip'], '/tmp/repo')
+
+    expect(vi.mocked(console.log)).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toBe(
+      'Did not open dist/bundle.zip: binary file.'
+    )
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('reports a declined direct open as unsupported-type in json', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'dist/bundle.zip',
+        kind: 'binary',
+        opened: false
+      })
+    )
+
+    await main(['file', 'open', 'dist/bundle.zip', '--json'], '/tmp/repo')
+
+    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
+    expect(output).toMatchObject({
+      ok: false,
+      error: {
+        code: 'unsupported-type',
+        message: 'Did not open dist/bundle.zip: binary file.'
+      }
+    })
+    expect(process.exitCode).toBe(1)
+  })
+
   it('opens a staged diff for an explicit worktree without cwd inference', async () => {
     queueFixtures(
       callMock,
@@ -135,6 +181,7 @@ describe('orca file CLI handlers', () => {
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe(
       'Did not open diff for assets/logo.png: binary file.'
     )
+    expect(process.exitCode).toBeUndefined()
   })
 
   it('rejects --worktree without a value before cwd inference or RPC calls', async () => {
@@ -225,6 +272,8 @@ describe('orca file CLI handlers', () => {
     await main(['file', 'open-changed', '--worktree', 'id:wt-1', '--json'], '/tmp/elsewhere')
 
     const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
+    expect(output.ok).toBe(true)
+    expect(process.exitCode).toBeUndefined()
     expect(output.result.opened).toEqual([])
     expect(output.result.skipped).toEqual([
       {

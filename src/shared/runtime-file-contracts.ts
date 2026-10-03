@@ -18,7 +18,7 @@ export type RuntimeFileListResult = {
 export type RuntimeFileOpenResult = {
   worktree: string
   relativePath: string
-  kind: 'markdown' | 'text' | 'binary' | 'image'
+  kind: 'markdown' | 'text' | 'binary' | 'image' | 'pdf'
   opened: boolean
 }
 

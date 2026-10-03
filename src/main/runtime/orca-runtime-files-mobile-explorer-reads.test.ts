@@ -140,6 +140,45 @@ describe('RuntimeFileCommands', () => {
     )
   })
 
+  it('opens a PDF through the same renderer host as the desktop viewer', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/docs/example.pdf')
+    statMock.mockResolvedValue({ isDirectory: () => false })
+
+    const result = await commands.openMobileFile('id:wt-1', 'docs/example.pdf')
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/example.pdf',
+      'docs/example.pdf',
+      undefined,
+      undefined
+    )
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'docs/example.pdf',
+      kind: 'pdf',
+      opened: true
+    })
+  })
+
+  it('answers a PDF as an unopened binary when the caller would activate the file tab', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'docs/example.pdf', undefined, false)
+
+    expect(openFile).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'docs/example.pdf',
+      kind: 'binary',
+      opened: false
+    })
+  })
+
   it('leaves non-previewable binaries unavailable on mobile', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
@@ -154,6 +193,44 @@ describe('RuntimeFileCommands', () => {
       kind: 'binary',
       opened: false
     })
+  })
+
+  it('rejects a directory named like a PDF without creating an editor tab', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/docs/notes.pdf')
+    statMock.mockResolvedValue({ isDirectory: () => true })
+
+    await expect(commands.openMobileFile('id:wt-1', 'docs/notes.pdf')).rejects.toThrow(
+      "EISDIR: illegal operation on a directory, open '/repo/docs/notes.pdf'"
+    )
+    expect(openFile).not.toHaveBeenCalled()
+  })
+
+  it('rejects a remote directory named like a PDF without creating an editor tab', async () => {
+    const openFile = vi.fn()
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: '/remote/repo'
+      },
+      executionHostId: 'ssh:ssh-1'
+    }))
+    const { commands } = createRuntimeFileCommands({
+      openFile,
+      path: '/remote/repo',
+      resolveRuntimeFileTarget
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command only reads `stat`.
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({
+      stat: vi.fn().mockResolvedValue({ type: 'directory', size: 0, mtime: 0 })
+    } as never)
+
+    await expect(commands.openMobileFile('id:wt-1', 'docs/notes.pdf')).rejects.toThrow(
+      "EISDIR: illegal operation on a directory, open '/remote/repo/docs/notes.pdf'"
+    )
+    expect(openFile).not.toHaveBeenCalled()
   })
 
   it('rejects missing local files without creating an editor tab', async () => {

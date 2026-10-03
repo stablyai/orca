@@ -187,6 +187,11 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     reportOpenFailure(options)
     return
   }
+  // The desktop PDF viewer is already open. Activating the synced tab would
+  // files.read the PDF and fail with binary_file.
+  if (opened.value.kind === 'pdf') {
+    return
+  }
   scheduleOpenedWorktreeTabActivation(options, openedPath)
 }
 

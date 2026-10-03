@@ -245,6 +245,24 @@ The cross-version suite derives the old client's list by removing this capabilit
 baseline's own list, per the rule above, so the downgrade stays exercised after a release ships
 it.
 
+## Worked example: `files.open` of a PDF
+
+`files.open` used to classify `.pdf` as `binary` and return `opened: false` without opening a
+tab. The desktop viewer now opens that file and the reply is `kind: 'pdf', opened: true`. The
+frame shape is unchanged, but an already-installed mobile client treats `opened: true` as
+"activate the synced file tab" and then `files.read`s it, which rejects the PDF. That is Rule 3.
+
+The reply stays behind `files.open.pdf-desktop.v1`
+(`FILES_PDF_DESKTOP_OPEN_RUNTIME_CAPABILITY`). The check is
+`supportsFilesPdfDesktopOpen` in
+`src/main/runtime/rpc/methods/files-open-pdf-desktop-capability.ts`, applied only to
+`files.open`. A client that advertises it, and any in-process caller, gets the desktop viewer.
+A negotiated client that does not gets the previous answer: `kind: 'binary'`, `opened: false`,
+and no tab. CLI and mobile advertise it from `remoteRuntimeClientCapabilities`. The phone
+build that advertises it also skips activating a `kind: 'pdf'` tab
+(`mobile/src/session/mobile-file-tap-open.ts`). Delete the gate once no supported release
+lacks the capability.
+
 ## Known debt: JSON-RPC errors drop Node's string code
 
 An error raised on an SSH host crosses the relay as JSON-RPC, and

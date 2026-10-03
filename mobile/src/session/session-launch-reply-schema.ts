@@ -16,7 +16,12 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  * that declined the open. An incompatible reply reaches the same `reportOpenFailure` through
  * openMobileFileTap's own catch.
  */
-export const fileTapOpenedSchema = z.looseObject({ opened: z.boolean() })
+export const fileTapOpenedSchema = z.looseObject({
+  opened: z.boolean(),
+  // Optional so an older host that only sends `opened` still activates the tab.
+  // `pdf` is the desktop viewer; the phone must not load that tab through files.read.
+  kind: z.string().optional()
+})
 
 /**
  * The browser tab a user opens from the tab strip.

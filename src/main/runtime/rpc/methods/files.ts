@@ -1,4 +1,5 @@
 import { defineMethod, defineStreamingMethod } from '../core'
+import { supportsFilesPdfDesktopOpen } from './files-open-pdf-desktop-capability'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
 import { remoteFileContentBudget } from './files-remote-content-budget'
@@ -58,8 +59,17 @@ export const FILE_METHODS = [
   defineMethod({
     name: 'files.open',
     params: FileOpenTab,
-    handler: async (params, { runtime }) =>
-      runtime.openMobileFile(params.worktree, params.relativePath, params.navigation)
+    handler: async (params, context) => {
+      const pdfDesktopOpen = supportsFilesPdfDesktopOpen(context)
+      return pdfDesktopOpen
+        ? context.runtime.openMobileFile(params.worktree, params.relativePath, params.navigation)
+        : context.runtime.openMobileFile(
+            params.worktree,
+            params.relativePath,
+            params.navigation,
+            false
+          )
+    }
   }),
   defineMethod({
     name: 'files.openDiff',

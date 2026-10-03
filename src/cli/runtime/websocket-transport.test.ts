@@ -33,6 +33,7 @@ import {
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shared/agent-session-background-task-child-views-capability'
+import { FILES_PDF_DESKTOP_OPEN_RUNTIME_CAPABILITY } from '../../shared/files-pdf-desktop-open-capability'
 
 vi.mock('./launch', () => ({
   launchOrcaApp: vi.fn()
@@ -85,7 +86,8 @@ describe('CLI remote WebSocket transport', () => {
           WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
           WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
           WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
-          AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY
+          AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+          FILES_PDF_DESKTOP_OPEN_RUNTIME_CAPABILITY
         ]
       })
     )

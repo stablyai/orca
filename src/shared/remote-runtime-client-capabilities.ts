@@ -12,6 +12,7 @@ import {
   type RuntimeCapability
 } from './protocol-version'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
+import { FILES_PDF_DESKTOP_OPEN_RUNTIME_CAPABILITY } from './files-pdf-desktop-open-capability'
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 
 // Keep every remote request transport on the same mixed-version capability contract.
@@ -32,6 +33,9 @@ export function remoteRuntimeClientCapabilities(
       WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
       WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
       AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+      // CLI and mobile both call files.open. Without this, a new host still answers a PDF
+      // the way the previous release did: opened false, no desktop viewer.
+      FILES_PDF_DESKTOP_OPEN_RUNTIME_CAPABILITY,
       ...additionalCapabilities
     ])
   )

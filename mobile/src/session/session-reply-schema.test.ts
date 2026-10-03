@@ -203,6 +203,7 @@ describe('required members', () => {
 
   it('requires the open verdict the tap routes on', () => {
     expect(reads(fileTapOpenedSchema, { opened: true }).opened).toBe(true)
+    expect(reads(fileTapOpenedSchema, { opened: true, kind: 'pdf' }).kind).toBe('pdf')
     expect(refuses(fileTapOpenedSchema, {})).toBe(true)
     expect(refuses(fileTapOpenedSchema, { opened: 1 })).toBe(true)
   })
