@@ -84,18 +84,12 @@ export function countUnsupportedSessionState(
     !(sourceHostPartition && scope.repoIds.has(session.activeRepoId))
       ? 1
       : 0
+  // Why not in the source partition: there focus is a copy of the client-wide focus. An in-scope
+  // copy is carried; one aimed at another host's workspace is not host state and is never carried.
   count +=
-    session.activeWorktreeId &&
-    matches(session.activeWorktreeId) &&
-    !(sourceHostPartition && orcadMigrationOwnerMatchesScope(session.activeWorktreeId, scope))
-      ? 1
-      : 0
+    !sourceHostPartition && session.activeWorktreeId && owns(session.activeWorktreeId) ? 1 : 0
   count +=
-    session.activeWorkspaceKey &&
-    matches(session.activeWorkspaceKey) &&
-    !(sourceHostPartition && orcadMigrationOwnerMatchesScope(session.activeWorkspaceKey, scope))
-      ? 1
-      : 0
+    !sourceHostPartition && session.activeWorkspaceKey && owns(session.activeWorkspaceKey) ? 1 : 0
   count += session.activeWorkspaceExecutionHostId === scope.hostId && !sourceHostPartition ? 1 : 0
   // activeConnectionIdsAtShutdown is not counted: it is the renderer's live "connected now" hint, and
   // the remote work it can stand for (tab PTYs, remote session ids, leases) is counted on its own.

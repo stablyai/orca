@@ -62,9 +62,12 @@ export function windowsOrcadCellShell(id: WindowsOrcadCellId): WindowsSshDefault
   return id === 'orcad-cmd' ? 'cmd' : 'powershell'
 }
 
+/** The app connects a relay-era host and converts it to managed orcad (tests/e2e). */
+export const WINDOWS_CONVERT_CELL_ID = 'orcad-convert'
+
 /** Written by config/ci/windows-ssh-provider/invoke-pinned-relay-cells.ps1, one per run. */
 export type WindowsHostCellDescriptor = {
-  cell: WindowsHostCellId | WindowsOrcadCellId
+  cell: WindowsHostCellId | WindowsOrcadCellId | typeof WINDOWS_CONVERT_CELL_ID
   target: WindowsServerTarget
   host: string
   port: number
@@ -92,7 +95,8 @@ export function parseWindowsHostCellDescriptor(text: string): WindowsHostCellDes
   const record = Object.fromEntries(Object.entries(parsed))
   const cell =
     WINDOWS_HOST_CELL_IDS.find((id) => id === record.cell) ??
-    WINDOWS_ORCAD_CELL_IDS.find((id) => id === record.cell)
+    WINDOWS_ORCAD_CELL_IDS.find((id) => id === record.cell) ??
+    (record.cell === WINDOWS_CONVERT_CELL_ID ? WINDOWS_CONVERT_CELL_ID : undefined)
   if (!cell) {
     throw new Error(`Unknown Windows host cell: ${String(record.cell)}`)
   }

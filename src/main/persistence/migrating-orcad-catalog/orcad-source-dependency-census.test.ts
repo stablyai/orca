@@ -67,6 +67,26 @@ const MANIFEST: OrcadMigrationManifest = {
 }
 
 describe('orcad migration source dependency census', () => {
+  it('ignores client focus on another host copied into the source host partition', () => {
+    const state = getDefaultPersistedState('/home/test')
+    state.sshTargets = [TARGET]
+    state.repos = [REPO]
+    state.folderWorkspaces = [FOLDER]
+    const localWorktreeId = 'local-repo::/home/test/local'
+    state.workspaceSession = { ...state.workspaceSession, activeWorktreeId: localWorktreeId }
+    state.workspaceSessionsByHostId = {
+      [`ssh:${TARGET.id}`]: {
+        ...state.workspaceSession,
+        activeWorktreeId: localWorktreeId,
+        activeWorkspaceKey: worktreeWorkspaceKey(localWorktreeId)
+      }
+    }
+
+    expect(collectOrcadMigrationSourceDependencyCensus(state, MANIFEST)).toMatchObject({
+      totalCount: 0
+    })
+  })
+
   it('allows a static catalog with no unrepresented dependent state', () => {
     const state = getDefaultPersistedState('/home/test')
     state.sshTargets = [TARGET]

@@ -35,6 +35,11 @@ on:
       - '!src/**/*.test.ts'
       - 'src/main/ssh/ssh-relay-windows-host-lane.test.ts'
       - 'src/main/ssh/orcad-windows-host-lane.test.ts'
+      - 'src/main/ipc/ssh-host-server-*'
+      - 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
+      - 'tests/e2e/helpers/orcad-convert-host.ts'
+      - 'tests/e2e/helpers/orcad-convert-flow.ts'
+      - 'tests/e2e/helpers/orcad-upgrade-profile.ts'
       - 'config/ci/windows-ssh-provider/**'
       - '.github/workflows/ssh-windows-hosts.yml'
       - '.github/actions/prepare-orcad-prebuilds/**'
@@ -150,6 +155,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path $receipts | Out-Null
           $cells=@($env:CELLS -split ',' | ForEach-Object {$_.Trim()} | Where-Object {$_})
           if(-not $cells.Count){$cells=@('pinned-cmd','pinned-powershell','legacy-opt-out','orcad-cmd','orcad-powershell')}
+          # One Windows host runs the app-level conversion; it is last because it switches native modules.
+          if(-not $env:CELLS -and '${{ matrix.arch }}' -eq 'x64' -and '${{ matrix.server }}' -eq 'inbox'){$cells+='orcad-convert'}
+          # The managed server is reached through an SSH local forward, so only the convert cell's account may open one.
+          $forwarding=if($cells[-1] -eq 'orcad-convert'){1}else{0}
           $archive=''
           $preparation=''
           if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64'){$preparation=Join-Path $receipts 'inbox-capability-preparation.json'}
@@ -162,7 +171,7 @@ jobs:
           $callback={param($context)
             & (Join-Path $tools 'invoke-pinned-relay-cells.ps1') -SourceRoot $sourceRoot -Context $context -Target 'win32-${{ matrix.arch }}' -ReceiptRoot $receipts -Cells $cells
           }.GetNewClosure()
-          & (Join-Path $tools 'preview-ssh/prove-preview-openssh.ps1') -Archive $archive -Arch '${{ matrix.arch }}' -Server '${{ matrix.server }}' -Receipt (Join-Path $receipts 'provider-server.json') -InboxPreparationReceipt $preparation -Accounts $cells.Count -HiddenTools @('npm','npx','node-gyp','gcc','g++','cc','c++','make','cl','clang','clang++','msbuild','cmake') -HostCellProbe $callback 2>&1 | Tee-Object (Join-Path $receipts 'provision.log')
+          & (Join-Path $tools 'preview-ssh/prove-preview-openssh.ps1') -Archive $archive -Arch '${{ matrix.arch }}' -Server '${{ matrix.server }}' -Receipt (Join-Path $receipts 'provider-server.json') -InboxPreparationReceipt $preparation -Accounts $cells.Count -ForwardingAccounts $forwarding -HiddenTools @('npm','npx','node-gyp','gcc','g++','cc','c++','make','cl','clang','clang++','msbuild','cmake') -HostCellProbe $callback 2>&1 | Tee-Object (Join-Path $receipts 'provision.log')
       - uses: actions/upload-artifact@v7
         if: always()
         with:

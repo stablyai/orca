@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../shared/app-environment', () => ({
-  getAppEnvironment: () => ({ getVersion: () => '1.5.0' })
+  hasAppEnvironment: () => true,
+  getAppEnvironment: () => ({ getVersion: () => '1.5.0', isPackaged: () => true })
 }))
 
 import { recordRolloutConfig, resetRolloutConfigForTests } from '../updater/rollout-flags'

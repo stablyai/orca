@@ -1,9 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import {
   BAKED_ROLLOUT_FLAGS,
   ROLLOUT_FLAG_NAMES,
   isRolloutFlagActive,
   parseRolloutConfig,
+  readE2ERolloutConfigOverride,
   recordRolloutConfig,
   resetRolloutConfigForTests,
   resolveRolloutFlag,
@@ -113,5 +118,56 @@ describe('rollout flags', () => {
     expect(isRolloutFlagActive('pinned-relay-default', install)).toBe(true)
     recordRolloutConfig(parseRolloutConfig({ id: 'campaign-2', minVersion: '1.0.0' }))
     expect(isRolloutFlagActive('pinned-relay-default', install)).toBe(false)
+  })
+})
+
+describe('e2e rollout override', () => {
+  const dirs: string[] = []
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    for (const dir of dirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  function flagsFile(flags: unknown): string {
+    const dir = mkdtempSync(join(tmpdir(), 'rollout-e2e-'))
+    dirs.push(dir)
+    const file = join(dir, 'flags.json')
+    writeFileSync(file, JSON.stringify(flags))
+    return file
+  }
+
+  it('reads the flags file only in an unpackaged e2e launch', () => {
+    const file = flagsFile({ 'orcad-source-retirement': { state: 'on' } })
+    const env = { ORCA_E2E_USER_DATA_DIR: '/e2e', ORCA_E2E_ROLLOUT_FLAGS_FILE: file }
+    expect(readE2ERolloutConfigOverride(env, false)).toEqual({
+      'orcad-source-retirement': { state: 'on' }
+    })
+    expect(readE2ERolloutConfigOverride({ ORCA_E2E_ROLLOUT_FLAGS_FILE: file }, false)).toBeNull()
+  })
+
+  it('never reads the flags file in a packaged release', () => {
+    const file = flagsFile({ 'orcad-source-retirement': { state: 'on' } })
+    const env = { ORCA_E2E_USER_DATA_DIR: '/e2e', ORCA_E2E_ROLLOUT_FLAGS_FILE: file }
+    expect(readE2ERolloutConfigOverride(env, true)).toBeNull()
+    vi.stubEnv('ORCA_E2E_USER_DATA_DIR', env.ORCA_E2E_USER_DATA_DIR)
+    vi.stubEnv('ORCA_E2E_ROLLOUT_FLAGS_FILE', file)
+    const context = { appVersion: '1.4.218', installId: null }
+    installFakeAppEnvironment({ isPackaged: () => true })
+    expect(isRolloutFlagActive('orcad-source-retirement', context)).toBe(false)
+    installFakeAppEnvironment({ isPackaged: () => false })
+    expect(isRolloutFlagActive('orcad-source-retirement', context)).toBe(true)
+  })
+
+  it('treats a missing or unreadable file as no override', () => {
+    const env = { ORCA_E2E_USER_DATA_DIR: '/e2e' }
+    expect(readE2ERolloutConfigOverride(env, false)).toBeNull()
+    expect(
+      readE2ERolloutConfigOverride(
+        { ...env, ORCA_E2E_ROLLOUT_FLAGS_FILE: '/missing/flags.json' },
+        false
+      )
+    ).toBeNull()
   })
 })

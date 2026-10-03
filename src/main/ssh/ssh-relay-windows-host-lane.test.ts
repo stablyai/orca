@@ -32,6 +32,7 @@ import {
 } from './ssh-session-command-audit'
 import {
   isWindowsOrcadCellId,
+  WINDOWS_CONVERT_CELL_ID,
   readWindowsHostCellDescriptor,
   windowsHostCell,
   windowsHostSshTarget
@@ -55,8 +56,8 @@ describe.runIf(RUN)('SSH relay on a Windows OpenSSH host', () => {
     'lands the cell the descriptor names',
     async () => {
       const descriptor = readWindowsHostCellDescriptor(process.env.ORCA_SSH_WINDOWS_HOST_CELL ?? '')
-      if (isWindowsOrcadCellId(descriptor.cell)) {
-        throw new Error(`${descriptor.cell} runs in orcad-windows-host-lane.test.ts`)
+      if (isWindowsOrcadCellId(descriptor.cell) || descriptor.cell === WINDOWS_CONVERT_CELL_ID) {
+        throw new Error(`${descriptor.cell} does not run in the relay lane`)
       }
       const cell = windowsHostCell(descriptor.cell, descriptor.target)
       const observer = localHostObserver(descriptor.forbiddenToolLog)

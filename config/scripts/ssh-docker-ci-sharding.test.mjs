@@ -36,6 +36,7 @@ it('gives every removed SSH spec a dedicated owner even for test-only edits', ()
     'tests/e2e/orcad-serve-mode-switch.spec.ts',
     'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts',
     'tests/e2e/ssh-localhost.spec.ts',
+    'tests/e2e/ssh-orcad-auto-convert.spec.ts',
     'tests/e2e/terminal-ibus-hangul-native.spec.ts'
   ])
 })

@@ -3,8 +3,6 @@ import { evaluateOrcadActivation, type OrcadActivationExpectation } from './orca
 import {
   orcadLivenessProbeCommand,
   parseOrcadLiveness,
-  parseOrcadReadinessOutput,
-  readOrcadReadinessCommand,
   type OrcadLaunchSpec,
   type OrcadReadinessParse
 } from './orcad-remote-launch'
@@ -13,6 +11,10 @@ import {
   launchOrcadAndAwaitReadiness,
   type OrcadRemoteExecTarget
 } from './orcad-remote-runtime-control'
+import {
+  parseOrcadReadinessWaitOutput,
+  readOrcadReadinessNowCommand
+} from './orcad-remote-readiness-wait'
 import type { ServeReadiness } from '../server/serve-readiness'
 
 /** `exited` is proven absence; `unverifiable` means the host could not say, which is not death. */
@@ -94,8 +96,12 @@ export async function probeActiveOrcadReadiness(
       `orcad ${expectation.fullVersion} process state is unverifiable.`
     )
   }
-  const parsed = parseOrcadReadinessOutput(
-    await execOrcadRemote(target, readOrcadReadinessCommand(target.host, target.remoteInstallDir))
+  const parsed = parseOrcadReadinessWaitOutput(
+    target.host,
+    await execOrcadRemote(
+      target,
+      readOrcadReadinessNowCommand(target.host, target.remoteInstallDir)
+    )
   )
   return gatedReadiness(parsed, expectation, 'The active orcad')
 }

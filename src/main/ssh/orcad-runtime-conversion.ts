@@ -173,9 +173,23 @@ async function fenceOrResume(
       signal: args.signal
     })
   )
-  return result.outcome === 'fenced'
-    ? result.cutover
-    : refuse(result.verdict, result.code, result.reason)
+  if (result.outcome === 'fenced') {
+    return result.cutover
+  }
+  if (result.blockers?.length) {
+    // Why logged: the connect surfaces only the reason, and support needs which state blocked.
+    console.warn(
+      '[ssh] Conversion refused by:',
+      JSON.stringify(
+        result.blockers.map((blocker) =>
+          'dependencies' in blocker
+            ? { code: blocker.code, dependencies: blocker.dependencies }
+            : { code: blocker.code }
+        )
+      )
+    )
+  }
+  return refuse(result.verdict, result.code, result.reason)
 }
 
 function refuse(

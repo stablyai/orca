@@ -11,6 +11,7 @@ const EXPECTED_MATRIX = {
   '.github/workflows/e2e.yml#build': { contents: 'read' },
   '.github/workflows/e2e.yml#changed-e2e': { contents: 'read' },
   '.github/workflows/e2e.yml#e2e': { contents: 'read' },
+  '.github/workflows/e2e.yml#orcad-auto-convert-docker': { contents: 'read' },
   '.github/workflows/e2e.yml#orcad-serve-mode-switch': { contents: 'read' },
   '.github/workflows/e2e.yml#prepare-native-cache': { contents: 'read' },
   '.github/workflows/e2e.yml#ssh-browser-network-route': { contents: 'read' },

@@ -12,6 +12,7 @@ import {
   ORCAD_READINESS_FILENAME,
   ORCAD_READINESS_MAX_BYTES,
   parseOrcadReadinessOutput,
+  readOrcadReadinessCommand,
   type OrcadReadinessParse
 } from './orcad-remote-launch'
 import {
@@ -77,4 +78,15 @@ export function parseOrcadReadinessWaitOutput(
       ? (readOrcadWindowsEncodedAnswer(output, ORCAD_WINDOWS_READINESS_MARKER) ?? '')
       : output
   )
+}
+
+/** Reads the readiness line as it stands; parse with `parseOrcadReadinessWaitOutput`. */
+export function readOrcadReadinessNowCommand(
+  host: RemoteHostPlatform,
+  remoteInstallDir: string
+): string {
+  // Why: Windows has no `head`; its host script's wait op with no wait reads the same bytes.
+  return isWindowsRemoteHost(host)
+    ? orcadReadinessWaitCommand(host, remoteInstallDir, 0)
+    : readOrcadReadinessCommand(host, remoteInstallDir)
 }

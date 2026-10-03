@@ -25,6 +25,7 @@ import {
   writeAtomicOrcadRemoteRecord
 } from './orcad-remote-record-file'
 import { launchOrcadAndAwaitReadiness } from './orcad-remote-runtime-control'
+import { probeActiveOrcadReadiness } from './orcad-active-readiness'
 import { completeRemoteOrcadManagedStop } from './orcad-managed-remote-stop'
 import {
   installOrcadWindowsHostScript,
@@ -131,6 +132,31 @@ describe('Windows orcad commands run node.exe directly', () => {
     expect(mockExec).toHaveBeenCalledTimes(3)
     expect(String(mockExec.mock.calls[1]?.[1]).startsWith(`${SLOT_NODE} `)).toBe(true)
     expect(sleep).not.toHaveBeenCalled()
+  })
+})
+
+describe('the active-slot readiness probe on Windows', () => {
+  it('reads readiness through the host script instead of the POSIX head command', async () => {
+    mockExec
+      .mockResolvedValueOnce('LIVE\r\n')
+      .mockResolvedValueOnce(
+        encoded(
+          '__ORCAD_READINESS__',
+          `${JSON.stringify({ type: 'orca_server_ready', runtimeId: 'r1' })}\n`
+        )
+      )
+    const probe = probeActiveOrcadReadiness(
+      { conn: Object.create(null), host, remoteInstallDir: slot },
+      { buildHash: 'bb01', fullVersion: '0.2.0+bb01' }
+    )
+
+    // The identity gate may still refuse this payload; the point is that the host is asked.
+    await probe.catch((error: unknown) => {
+      expect(error).not.toMatchObject({ name: 'OrcadRemoteLaunchUnsupportedError' })
+    })
+    expect(mockExec.mock.calls[1]?.[1]).toBe(
+      `${NODE} ${SCRIPT} readiness-wait ${slot}/.orcad-readiness "262144" "0"`
+    )
   })
 })
 
