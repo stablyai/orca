@@ -7,6 +7,7 @@ import { getSshProviderAuthority, rotateSshProviderAuthority } from '../ssh/ssh-
 import { listWorktreesMock, getSshGitProviderMock } from './worktrees-test-module-mocks'
 import { handlers, ipcEvent, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta } from './worktrees-test-fixtures'
+import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 
 vi.mock('electron', async () =>
@@ -233,6 +234,105 @@ describe('registerWorktreeHandlers', () => {
       }
     })
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+  })
+
+  describe('project-scoped cross-host lineage (#23290)', () => {
+    const remoteChild = 'shared::/remote/child'
+    const localParent = 'shared::/local/parent'
+    const localChild = 'shared::/local/child'
+    const worktreeLineage = {
+      [remoteChild]: {
+        worktreeId: remoteChild,
+        worktreeInstanceId: 'remote-child',
+        parentWorktreeId: localParent,
+        parentWorktreeInstanceId: 'local-parent',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      },
+      [localChild]: {
+        worktreeId: localChild,
+        worktreeInstanceId: 'local-child',
+        parentWorktreeId: localParent,
+        parentWorktreeInstanceId: 'local-parent',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 2
+      }
+    }
+    const workspaceLineage = {
+      [worktreeWorkspaceKey(remoteChild)]: {
+        childWorkspaceKey: worktreeWorkspaceKey(remoteChild),
+        childInstanceId: 'remote-child',
+        parentWorkspaceKey: worktreeWorkspaceKey(localParent),
+        parentInstanceId: 'local-parent',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+
+    function seedSharedRepoOnTwoHosts(remoteChildProjectId: string | undefined): void {
+      store.getRepos.mockReturnValue([
+        { id: 'shared', path: '/local', displayName: 'local', badgeColor: '#000', addedAt: 0 },
+        {
+          id: 'shared',
+          path: '/remote',
+          displayName: 'remote',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'target-a'
+        }
+      ])
+      store.getWorktreeMeta.mockImplementation((id: string) => ({
+        hostId: id === remoteChild ? 'ssh:target-a' : 'local',
+        projectId: id === remoteChild ? remoteChildProjectId : 'project-1'
+      }))
+      store.getAllWorktreeLineage.mockReturnValue(worktreeLineage)
+      store.getAllWorkspaceLineage.mockReturnValue(workspaceLineage)
+    }
+
+    it('keeps same-host rows and files the cross-host row under its child host', async () => {
+      seedSharedRepoOnTwoHosts('project-1')
+      const provider = { listWorktrees: vi.fn() }
+      getSshGitProviderMock.mockImplementation((targetId: string) =>
+        targetId === 'target-a' ? provider : undefined
+      )
+
+      await expect(
+        handlers['worktrees:listLineageForHost'](ipcEvent, { executionHostId: 'local' })
+      ).resolves.toEqual({
+        authoritative: true,
+        authority: { kind: 'local', executionHostId: 'local' },
+        worktreeLineageById: { [localChild]: worktreeLineage[localChild] },
+        workspaceLineageByChildKey: {}
+      })
+      await expect(
+        handlers['worktrees:listLineageForHost'](ipcEvent, {
+          executionHostId: toSshExecutionHostId('target-a'),
+          expectedAuthority: getSshProviderAuthority('target-a')
+        })
+      ).resolves.toEqual({
+        authoritative: true,
+        authority: expect.objectContaining({ kind: 'direct-ssh', executionHostId: 'ssh:target-a' }),
+        worktreeLineageById: { [remoteChild]: worktreeLineage[remoteChild] },
+        workspaceLineageByChildKey: workspaceLineage
+      })
+      expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    })
+
+    it('still rejects the host for a cross-host row without a shared project', async () => {
+      seedSharedRepoOnTwoHosts(undefined)
+
+      await expect(
+        handlers['worktrees:listLineageForHost'](ipcEvent, { executionHostId: 'local' })
+      ).resolves.toEqual({
+        authoritative: false,
+        executionHostId: 'local',
+        reason: 'ambiguous-owner'
+      })
+      expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    })
   })
 
   it('snapshots lineage catalogs once and memoizes repeated owner resolution', async () => {

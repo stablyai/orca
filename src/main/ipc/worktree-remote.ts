@@ -352,8 +352,9 @@ export function recordWorkspaceLineageForCreatedWorktree(
   }
 
   // Why: persisting a workspace row for an out-of-boundary worktree parent poisons the whole host —
-  // `filterLineageForHost` returns null for any owned row whose child and parent hosts differ, so
-  // every nesting on that host stops hydrating, and the row survives restarts.
+  // `filterLineageForHost` returns null for any owned cross-host row that is not project-scoped
+  // (same repo and same defined projectId, #23290), so every nesting on that host stops hydrating,
+  // and the row survives restarts. In-boundary cross-host rows are accepted there.
   if (parentOutsideLineageBoundary) {
     return NO_CREATED_WORKTREE_LINEAGE
   }

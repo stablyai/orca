@@ -241,10 +241,10 @@ describe('OrcaRuntimeService', () => {
       }),
       // The stale child path was reused by a replacement checkout.
       [staleChildId]: makeWorktreeMeta({ instanceId: 'replacement-instance' }),
+      // No shared project, so the host mismatch stays outside the lineage boundary (#23290).
       [crossHostChildId]: makeWorktreeMeta({
         instanceId: 'cross-host-child-instance',
-        hostId: 'runtime:other-host',
-        projectId: 'project-a'
+        hostId: 'runtime:other-host'
       })
     }
     const makeLineage = (childId: string, worktreeInstanceId: string): WorktreeLineage => ({

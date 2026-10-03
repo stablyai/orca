@@ -138,11 +138,29 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
     expect(result.workspaceLineage).toBeNull()
   })
 
+  it('writes both lineage rows for a cross-host parent in the same project (#23290)', () => {
+    const store = createStore({
+      metaById: { [PARENT_ID]: parentMeta({ hostId: 'ssh:other-host' }) }
+    })
+
+    const result = record(store, { parentWorkspace: worktreeWorkspaceKey(PARENT_ID) })
+
+    expect(store.setWorktreeLineage).toHaveBeenCalledWith(
+      CHILD_ID,
+      expect.objectContaining({ parentWorktreeId: PARENT_ID })
+    )
+    expect(result.lineage).toMatchObject({ parentWorktreeId: PARENT_ID })
+    expect(result.workspaceLineage).toMatchObject({
+      childWorkspaceKey: worktreeWorkspaceKey(CHILD_ID),
+      parentWorkspaceKey: worktreeWorkspaceKey(PARENT_ID)
+    })
+  })
+
   it.each([
-    ['host', parentMeta({ hostId: 'ssh:other-host' })],
+    ['host (no shared project)', parentMeta({ hostId: 'ssh:other-host', projectId: undefined })],
     ['project', parentMeta({ projectId: 'project-2' })]
   ])(
-    'skips both lineage records when the parent %s conflicts, so no cross-host row is persisted',
+    'skips both lineage records when the parent %s conflicts, so no invalid row is persisted',
     (_label, meta) => {
       const store = createStore({ metaById: { [PARENT_ID]: meta } })
 
@@ -150,7 +168,7 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
 
       expect(store.setWorktreeLineage).not.toHaveBeenCalled()
       expect(result.lineage).toBeNull()
-      // A persisted cross-host row makes filterLineageForHost return null for the entire host.
+      // A persisted out-of-boundary cross-host row makes filterLineageForHost null the whole host.
       expect(store.setWorkspaceLineage).not.toHaveBeenCalled()
       expect(result.workspaceLineage).toBeNull()
     }

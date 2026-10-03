@@ -83,6 +83,7 @@ export class RuntimeWorktreeLineageController {
     }
   }
 
+  /** Rejects self-parenting, edges outside `sharesResolvedWorktreeLineageBoundary`, and cycles. */
   validateParent(child: ResolvedWorktree, parent: ResolvedWorktree): void {
     if (child.id === parent.id) {
       throw new RuntimeLineageError('LINEAGE_PARENT_CYCLE', 'A worktree cannot parent itself.')
@@ -90,7 +91,7 @@ export class RuntimeWorktreeLineageController {
     if (!sharesResolvedWorktreeLineageBoundary(child, parent)) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'Parent worktree must belong to the same repository, execution host, and project.'
+        'Parent worktree must belong to the same repository and project; a different execution host is allowed only when both worktrees share the same project.'
       )
     }
     const instanceById = new Map(

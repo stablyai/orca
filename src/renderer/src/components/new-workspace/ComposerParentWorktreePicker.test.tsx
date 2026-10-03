@@ -323,15 +323,16 @@ describe('ComposerParentWorktreePicker', () => {
     expect(candidateLabels().join(' ')).not.toContain('Other repo')
   })
 
-  it('excludes candidates on another execution host or project', () => {
+  it('excludes candidates on another host without a shared project, or in another project', () => {
     seed([
       makeWorktree({ id: 'same', displayName: 'Same host', hostId: 'local', projectId: 'proj1' }),
       makeWorktree({
-        id: 'otherHost',
-        displayName: 'Other host',
+        id: 'remoteInProject',
+        displayName: 'Remote in project',
         hostId: 'ssh:box',
         projectId: 'proj1'
       }),
+      makeWorktree({ id: 'otherHost', displayName: 'Other host', hostId: 'ssh:box' }),
       makeWorktree({
         id: 'otherProject',
         displayName: 'Other project',
@@ -352,6 +353,8 @@ describe('ComposerParentWorktreePicker', () => {
     fireEvent.click(trigger())
 
     expect(candidateLabels().join(' ')).toContain('Same host')
+    // #23290: a same-project worktree on another host is a valid parent.
+    expect(candidateLabels().join(' ')).toContain('Remote in project')
     expect(candidateLabels().join(' ')).not.toContain('Other host')
     expect(candidateLabels().join(' ')).not.toContain('Other project')
   })
