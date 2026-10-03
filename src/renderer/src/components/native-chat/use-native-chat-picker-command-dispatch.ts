@@ -17,9 +17,13 @@ import {
 } from './native-chat-composer-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import { clearNativeChatDraftForSend } from './native-chat-draft-cache'
+import { saveNativeChatDraftAfterPtyWrite } from './native-chat-draft-save-after-send'
 
 export function useNativeChatPickerCommandDispatch(args: {
   agent: AgentType
+  /** The chat's draft (`nativeChatDraftKey`); its clear is saved once the terminal has the command. */
+  draftKey: string
   disabled: boolean
   isDispatchingSessionOption: boolean
   resolveTarget: () => NativeChatResolvedTarget | null
@@ -36,6 +40,7 @@ export function useNativeChatPickerCommandDispatch(args: {
 }): (command: Extract<NativeChatPickerItem, { kind: 'command' }>) => void {
   const {
     agent,
+    draftKey,
     disabled,
     isDispatchingSessionOption,
     resolveTarget,
@@ -57,11 +62,11 @@ export function useNativeChatPickerCommandDispatch(args: {
       if (!target || disabled || isDispatchingSessionOption) {
         return
       }
-      trackPendingSend(
+      const handle =
         agent === 'codex'
           ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
           : sendNativeChatMessage(target.settings, target.ptyId, text)
-      )
+      trackPendingSend(handle)
       emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
       // Why: picker dispatch is a catalog-verified command send; it must leave
       // the same telemetry and composer state as the typed path — including
@@ -74,18 +79,22 @@ export function useNativeChatPickerCommandDispatch(args: {
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
       })
       setHistory((previous) => pushHistory(previous, text))
-      setDraft('')
-      setCaret(0)
-      setActiveSuggestion(0)
-      clearSkillOrigin()
-      clearImageAttachments()
-      setNotice(null)
+      const saveDraft = clearNativeChatDraftForSend(draftKey, () => {
+        setDraft('')
+        setCaret(0)
+        setActiveSuggestion(0)
+        clearSkillOrigin()
+        clearImageAttachments()
+        setNotice(null)
+      })
+      saveNativeChatDraftAfterPtyWrite(handle, saveDraft)
     },
     [
       agent,
       clearImageAttachments,
       clearSkillOrigin,
       disabled,
+      draftKey,
       isDispatchingSessionOption,
       onSlashCommand,
       resolveTarget,

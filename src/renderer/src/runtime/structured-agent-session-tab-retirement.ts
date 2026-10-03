@@ -4,6 +4,7 @@ import {
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/structured-agent-session-launch-registry'
 import { discardStructuredAgentSessionLaunchOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { discardNativeChatDrafts } from '@/components/native-chat/native-chat-draft-cache'
 import { closeStructuredAgentSession } from './structured-agent-session-close'
 import { withLocalSessionTabCloseOwner } from './local-session-tab-close-owner'
 import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
@@ -67,6 +68,7 @@ export function beginStructuredAgentSessionTabClose(args: {
     markStructuredAgentSessionLaunchCancelled(args.worktreeId, args.sessionId)
   }
   discardStructuredAgentSessionLaunchOutbox(args.sessionId)
+  discardNativeChatDrafts({ sessionIds: [args.sessionId] })
   retireStructuredAgentSessionTab(args)
 }
 

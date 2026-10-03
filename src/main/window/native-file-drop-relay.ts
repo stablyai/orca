@@ -16,6 +16,10 @@ import {
   type DragTempCopyEnvironment
 } from './dragged-temp-file-copy'
 import { getDarwinUserTempDir } from './darwin-user-temp-dir'
+import {
+  ensureNativeChatAttachmentRoot,
+  getNativeChatAttachmentRoot
+} from './native-chat-attachment-store'
 
 // Why: copies run one at a time, so a hung copy must not hold every later copy forever.
 const DRAG_TEMP_COPY_TIMEOUT_MS = 2 * 60 * 1000
@@ -29,7 +33,9 @@ type RendererLifetime = { signal: AbortSignal; dispose: () => void }
 type NativeFileDropQueueDeps = {
   forward: (payload: NativeFileDropPayload) => void
   platform: NodeJS.Platform
-  getCopyEnvironment: () => Promise<DragTempCopyEnvironment>
+  getCopyEnvironment: (
+    target: AcceptedNativeFileDropPayload['target']
+  ) => Promise<DragTempCopyEnvironment>
   watchRenderer: () => RendererLifetime
   copyTimeoutMs?: number
 }
@@ -47,10 +53,17 @@ export function registerFileDropRelay(mainWindow: BrowserWindow): void {
       }
     },
     platform: process.platform,
-    getCopyEnvironment: async () => ({
+    getCopyEnvironment: async (target) => ({
       platform: process.platform,
       sourceTempRoot: await getDarwinUserTempDir(),
-      copyRoot: getDragTempCopyRoot(app.getPath('temp'))
+      // Why: a chat draft can hold a dropped image across a reboot, so it is kept with pastes,
+      // under the same folder rule.
+      ...(target === NATIVE_FILE_DROP_TARGET.composer
+        ? {
+            copyRoot: getNativeChatAttachmentRoot(),
+            prepareCopyRoot: ensureNativeChatAttachmentRoot
+          }
+        : { copyRoot: getDragTempCopyRoot(app.getPath('temp')) })
     }),
     watchRenderer: () => abortWhenRendererGone(mainWebContents)
   })
@@ -205,7 +218,9 @@ async function copyAndForward(
   try {
     // Why: race the signal too, since a hung fs call never reaches the copy's abort checks.
     prepared = await rejectOnAbort(
-      deps.getCopyEnvironment().then((env) => prepareNativeFileDrop(payload, env, signal)),
+      deps
+        .getCopyEnvironment(payload.target)
+        .then((env) => prepareNativeFileDrop(payload, env, signal)),
       signal
     )
   } catch {

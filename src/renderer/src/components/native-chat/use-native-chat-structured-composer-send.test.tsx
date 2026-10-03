@@ -40,6 +40,7 @@ function harness(
   }
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
+      draftKey: 'session:session-test',
       agent,
       draft: '',
       imageAttachments: [ATTACHMENT],

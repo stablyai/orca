@@ -7,9 +7,11 @@ import {
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'
+import { createWebNativeChatDrafts } from './web-native-chat-drafts'
 
 export function createWebNativeChatApi(): NativeChatApi {
   return {
+    drafts: createWebNativeChatDrafts(),
     readSession: async (agent, sessionId, limit, transcriptPath) =>
       parseRuntimeNativeChatReadSessionResult(
         await callRuntimeResult<unknown>('nativeChat.readSession', {

@@ -47,7 +47,18 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
-import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
+import {
+  createTestStore,
+  seedStore,
+  makeWorktree,
+  makeTab,
+  makeUnifiedTab
+} from './store-test-helpers'
+import {
+  appendNativeChatDraftNow,
+  nativeChatDraftKey,
+  readNativeChatDraftCache
+} from '@/components/native-chat/native-chat-draft-cache'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import type { SshProviderEpoch } from '../../../../shared/ssh-types'
 import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery'
@@ -214,6 +225,44 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingCodexPaneRestartIds[PTY2]).toBe(true)
     expect(s.directSshLivePtyBindingByTabId[TAB2]).toBeDefined()
     expect(s.directSshPaneRetryHistoryByTabId[TAB2]).toBeDefined()
+  })
+
+  it("drops the chat drafts of the removed worktree's panes and sessions, not the survivors'", () => {
+    const store = createTestStore()
+    seedMaps(store)
+    store.setState({
+      unifiedTabsByWorktree: {
+        [WT1]: [
+          makeUnifiedTab({
+            id: 'agent-session:s1',
+            entityId: 's1',
+            contentType: 'agent-session',
+            worktreeId: WT1,
+            groupId: 'g1'
+          })
+        ],
+        [WT2]: [
+          makeUnifiedTab({
+            id: 'agent-session:s2',
+            entityId: 's2',
+            contentType: 'agent-session',
+            worktreeId: WT2,
+            groupId: 'g2'
+          })
+        ]
+      }
+    })
+    const drafts = [
+      nativeChatDraftKey({ paneKey: `${TAB1}:leaf-1` }),
+      nativeChatDraftKey({ sessionId: 's1', paneKey: '' }),
+      nativeChatDraftKey({ paneKey: `${TAB2}:leaf-1` }),
+      nativeChatDraftKey({ sessionId: 's2', paneKey: '' })
+    ]
+    drafts.forEach((draftKey) => appendNativeChatDraftNow(draftKey, { text: 'unsent' }))
+
+    store.getState().purgeWorktreeTerminalState([WT1])
+
+    expect(drafts.map(readNativeChatDraftCache)).toEqual(['', '', 'unsent', 'unsent'])
   })
 
   it('keeps environment-scoped remote guard identities independent', () => {

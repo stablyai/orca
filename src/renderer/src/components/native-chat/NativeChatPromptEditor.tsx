@@ -1,7 +1,7 @@
 import {
   readNativeChatDraftDocument,
   writeNativeChatDraftDocument
-} from './native-chat-draft-cache'
+} from './native-chat-draft-document-cache'
 import { closeHistory } from '@tiptap/pm/history'
 import { Slice } from '@tiptap/pm/model'
 import {

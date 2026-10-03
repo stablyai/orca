@@ -4,6 +4,8 @@ import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 export type NativeChatResolvedPathOptions = {
   /** Revalidates internal path ownership when an IME-delayed attachment is applied. */
   targetOwnerIsCurrent?: () => boolean
+  /** The paths live on the workspace's runtime server, not on this machine. */
+  onRuntimeHost?: boolean
 }
 
 export function nativeChatWorkspaceAttachmentMismatchNotice(): string {

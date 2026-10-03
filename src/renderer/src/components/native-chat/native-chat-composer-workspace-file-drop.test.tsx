@@ -14,6 +14,10 @@ import type * as AttachmentUploadModule from './native-chat-attachment-upload'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
+import {
+  clearNativeChatDraftCacheForTests,
+  readNativeChatDraftAttachments
+} from './native-chat-draft-cache'
 import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
@@ -261,6 +265,7 @@ describe('native chat workspace file drops', () => {
 
   afterEach(() => {
     cleanup()
+    clearNativeChatDraftCacheForTests()
   })
 
   it('consumes a nested editor drop once and inserts top-level paths at the caret', () => {
@@ -369,6 +374,24 @@ describe('native chat workspace file drops', () => {
     )
     expect(screen.getByTestId('draft').textContent).toBe('')
     expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
+  })
+
+  // The image lives on the runtime server; after a relaunch this machine cannot check it.
+  it("records that a runtime workspace's dropped image lives on the runtime server", () => {
+    testState.executionHostId = 'runtime:env-1'
+    testState.ownerKind = 'runtime'
+    testState.targetIsRemoteRuntime = true
+    render(<ComposerProbe structured={false} />)
+
+    dispatchDragEvent(
+      'drop',
+      editor(),
+      internalTransfer(['/env/shot.png'], { executionHostId: 'runtime:env-1' })
+    )
+
+    expect(readNativeChatDraftAttachments('pane:worktree-1')).toEqual([
+      { id: expect.any(String), path: '/env/shot.png', location: 'runtime' }
+    ])
   })
 
   it('queues an internal reference until composition settles without stealing focus', () => {

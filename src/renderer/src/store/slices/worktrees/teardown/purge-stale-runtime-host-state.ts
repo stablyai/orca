@@ -225,7 +225,12 @@ export function createPurgeStaleRuntimeHostState(
         const targets = removedWorktreeTargets.filter((target) => target.id === worktreeId)
         return targets.length > 0 ? targets : [{ id: worktreeId }]
       })
-      const purgeState = purgeTargets.length > 0 ? buildWorktreePurgeState(s, purgeTargets) : {}
+      // Why keep drafts: a removed or re-paired environment's sessions live on its host and can be
+      // published again; losing contact with a host is not proof its chats ended.
+      const purgeState =
+        purgeTargets.length > 0
+          ? buildWorktreePurgeState(s, purgeTargets, { keepChatDrafts: true })
+          : {}
       const visitPurgeTargets = [
         ...removedWorktreeTargets,
         ...purgeTargets.filter(

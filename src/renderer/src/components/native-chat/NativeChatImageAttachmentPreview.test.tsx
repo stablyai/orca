@@ -52,4 +52,16 @@ describe('NativeChatImageAttachmentPreview', () => {
 
     expect(mocks.useLocalImageSrc).toHaveBeenCalledWith(undefined, '', undefined)
   })
+
+  // Read before its grant comes back, a restored image would stay blank.
+  it('reads a restored image only once its check is done', () => {
+    mocks.useLocalImageSrc.mockReturnValue(undefined)
+    renderPreview({ id: 'a1', path: '/Users/me/shot.png', checking: true })
+
+    expect(mocks.useLocalImageSrc).toHaveBeenLastCalledWith(
+      undefined,
+      '/Users/me/shot.png',
+      undefined
+    )
+  })
 })

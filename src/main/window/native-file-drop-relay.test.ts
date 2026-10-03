@@ -36,6 +36,11 @@ vi.mock('./darwin-user-temp-dir', () => ({
   getDarwinUserTempDir: async () => '/private/var/folders/ab/xyz/T'
 }))
 
+vi.mock('./native-chat-attachment-store', () => ({
+  getNativeChatAttachmentRoot: () => '/user-data/native-chat-attachments',
+  ensureNativeChatAttachmentRoot: vi.fn()
+}))
+
 import {
   createNativeFileDropQueue,
   MAX_PENDING_DRAG_TEMP_COPIES,
@@ -471,6 +476,32 @@ describe('registerFileDropRelay', () => {
         sourceTempRoot: '/private/var/folders/ab/xyz/T'
       })
       expect(webContents.send).not.toHaveBeenCalled()
+    }
+  )
+
+  // A chat draft can hold the image across a reboot; terminal drops keep their temp copies.
+  it.skipIf(process.platform !== 'darwin')(
+    "copies a composer drop into the chat's attachment storage",
+    async () => {
+      materializeMock.mockResolvedValue([copied(DRAG_TEMP, COPY)])
+      const { window, webContents } = createWindow()
+      registerFileDropRelay(window)
+
+      relay()({ sender: webContents }, { paths: [DRAG_TEMP], target: 'composer' })
+      await settle()
+      relay()({ sender: webContents }, { paths: [DRAG_TEMP], target: 'terminal' })
+      await settle()
+
+      expect(materializeMock.mock.calls.map((call) => call[1].copyRoot)).toEqual([
+        '/user-data/native-chat-attachments',
+        expect.stringContaining('orca-drops')
+      ])
+      // The chat folder has one rule for pastes and drops; the shared temp root keeps its own.
+      const { ensureNativeChatAttachmentRoot } = await import('./native-chat-attachment-store')
+      expect(materializeMock.mock.calls.map((call) => call[1].prepareCopyRoot)).toEqual([
+        ensureNativeChatAttachmentRoot,
+        undefined
+      ])
     }
   )
 })

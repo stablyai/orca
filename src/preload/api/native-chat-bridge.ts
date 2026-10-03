@@ -37,5 +37,10 @@ export const nativeChatApi = {
       ipcRenderer.removeListener('nativeChat:appended', listener)
       ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })
     }
+  },
+  drafts: {
+    load: () => ipcRenderer.invoke('nativeChat:drafts:load'),
+    loadSync: () => ipcRenderer.sendSync('nativeChat:drafts:loadSync'),
+    write: (scopeKey, draft) => ipcRenderer.invoke('nativeChat:drafts:write', { scopeKey, draft })
   }
 } satisfies PreloadApi['nativeChat']

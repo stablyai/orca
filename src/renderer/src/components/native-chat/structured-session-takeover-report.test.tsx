@@ -49,6 +49,7 @@ function transport(): NativeChatStructuredComposerTransport {
 function send(structuredTransport: NativeChatStructuredComposerTransport): (text: string) => void {
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
+      draftKey: 'session:session-test',
       agent: 'claude',
       imageAttachments: [],
       structuredTransport,

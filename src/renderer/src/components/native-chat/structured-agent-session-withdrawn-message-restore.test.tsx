@@ -15,6 +15,9 @@ import {
 } from '../../../../shared/structured-agent-session-dispatch-rejection'
 
 type SendParams = { envelope?: { clientOperationId: string } }
+import type * as AttachmentUploadModule from './native-chat-attachment-upload'
+import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
+
 type ReadState = { submissions: AgentJournalSubmission[]; items: AgentJournalRenderItem[] }
 
 const mocks = vi.hoisted(() => {
@@ -22,9 +25,17 @@ const mocks = vi.hoisted(() => {
   return {
     call: vi.fn<(target: unknown, method: string, params: SendParams) => Promise<unknown>>(),
     toastError: vi.fn(),
+    resolveOwner: vi.fn<(...args: unknown[]) => NativeChatAttachmentOwner>(() => ({
+      kind: 'local'
+    })),
     read
   }
 })
+
+vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
+  ...(await importOriginal<typeof AttachmentUploadModule>()),
+  resolveNativeChatAttachmentOwnerForWorktree: mocks.resolveOwner
+}))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
@@ -54,19 +65,16 @@ import {
 } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
-  appendNativeChatDraftCache,
+  appendNativeChatDraftNow,
   clearNativeChatDraftCacheForTests,
+  readNativeChatDraftAttachments,
   readNativeChatDraftCache,
   subscribeToNativeChatDraftAppend,
   writeNativeChatDraftCache
 } from './native-chat-draft-cache'
-import {
-  appendNativeChatAttachmentCache,
-  clearNativeChatAttachmentCacheForTests,
-  readNativeChatAttachmentCache,
-  useNativeChatComposerAttachments
-} from './use-native-chat-composer-attachments'
+import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatDraft } from './use-native-chat-draft'
+import { installLocalStorageNativeChatDrafts } from './native-chat-draft-store.test-support'
 import {
   enqueueStructuredAgentSessionLaunchPrompt,
   readOutbox,
@@ -135,7 +143,7 @@ function renderOutbox(composerScopeKey: string | null = PANE) {
         target,
         fence: 1,
         submissions: props.submissions,
-        ...(composerScopeKey ? { composerScopeKey } : {})
+        ...(composerScopeKey ? { composerScopeKey, composerWorktreeId: 'wt-1' } : {})
       }),
     { initialProps: { submissions: NONE } }
   )
@@ -163,8 +171,8 @@ afterEach(() => {
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
+  installLocalStorageNativeChatDrafts()
   clearNativeChatDraftCacheForTests()
-  clearNativeChatAttachmentCacheForTests()
   mocks.read.submissions = []
   mocks.read.items = []
   let uuid = 0
@@ -182,8 +190,11 @@ describe('a message the host withdrew at a Stop', () => {
     'comes back to the composer with its images, after the draft, when %s',
     async (_case, handover) => {
       answerSendsPending()
-      writeNativeChatDraftCache(PANE, 'already typed')
-      appendNativeChatAttachmentCache(PANE, [{ id: 'typed', path: '/tmp/typed.png' }])
+      writeNativeChatDraftCache(PANE, 'already typed', 'after-pause')
+      appendNativeChatDraftNow(PANE, {
+        text: '',
+        attachments: [{ id: 'typed', path: '/tmp/typed.png' }]
+      })
       const { result, rerender } = renderOutbox()
       const id = await sendToHost(result, 'hello', [
         { path: '/tmp/shot.png', previewUri: '/tmp/shot.png' }
@@ -194,12 +205,78 @@ describe('a message the host withdrew at a Stop', () => {
 
       await waitFor(() => expect(result.current.outbox).toEqual([]))
       expect(readNativeChatDraftCache(PANE)).toBe('already typed\n\nhello')
-      expect(readNativeChatAttachmentCache(PANE)).toEqual([
+      expect(readNativeChatDraftAttachments(PANE)).toEqual([
         { id: 'typed', path: '/tmp/typed.png' },
-        { id: expect.any(String), path: '/tmp/shot.png' }
+        { id: expect.any(String), path: '/tmp/shot.png', location: 'local' }
       ])
     }
   )
+
+  // The outbox keeps only the path; where the file lives comes from the chat's owner, as for a
+  // new image, so a deleted local one is still caught and an SSH one is still asked there.
+  it('gives a returned image the location its chat attaches images in', async () => {
+    answerSendsPending()
+    const pathsExist = vi.fn(async ({ filePaths }: { filePaths: string[] }) =>
+      filePaths.map(() => ({ exists: false }))
+    )
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { fs: { authorizeExternalPath: vi.fn(async () => {}), pathsExist } }
+    })
+    const { result, rerender } = renderOutbox()
+    const id = await sendToHost(result, 'hello', [
+      { path: '/tmp/shot.png', previewUri: '/tmp/shot.png' }
+    ])
+    rerender({ submissions: [withdrawn(id, {})] })
+    await waitFor(() => expect(readNativeChatDraftAttachments(PANE)).toHaveLength(1))
+
+    const view = renderHook(() =>
+      useNativeChatComposerAttachments({
+        attachmentScopeKey: PANE,
+        allowWithoutTarget: true,
+        caret: 0,
+        disabled: false,
+        isComposing: () => false,
+        resolveTarget: () => null,
+        textareaRef: { current: null },
+        setCaret: () => {},
+        setDraft: () => {},
+        setNotice: () => {}
+      })
+    )
+    await waitFor(() => expect(view.result.current.imageAttachments[0]?.missing).toBe(true))
+    expect(pathsExist).toHaveBeenCalledWith({ filePaths: ['/tmp/shot.png'] })
+  })
+
+  it('keeps an SSH chat connection on a returned image', async () => {
+    answerSendsPending()
+    mocks.resolveOwner.mockReturnValueOnce({
+      kind: 'ssh',
+      connectionId: 'ssh-1',
+      worktreePath: '/remote/wt',
+      expectedExecutionHostId: 'ssh:target-1',
+      expectedSshTargetId: 'target-1',
+      expectedSshConnectionGeneration: 1
+    })
+    const { result, rerender } = renderOutbox()
+    const id = await sendToHost(result, 'hello', [
+      { path: '/remote/tmp/shot.png', previewUri: '/remote/tmp/shot.png' }
+    ])
+
+    rerender({ submissions: [withdrawn(id, {})] })
+
+    await waitFor(() =>
+      expect(readNativeChatDraftAttachments(PANE)).toEqual([
+        {
+          id: expect.any(String),
+          path: '/remote/tmp/shot.png',
+          connectionId: 'ssh-1',
+          location: 'ssh'
+        }
+      ])
+    )
+    expect(mocks.resolveOwner).toHaveBeenCalledWith(expect.anything(), 'wt-1')
+  })
 
   it('comes back when the host wrote the withdrawal as a typed fact in a sentence', async () => {
     answerSendsPending()
@@ -433,19 +510,20 @@ describe('an open composer', () => {
     const { result } = renderHook(() => useNativeChatDraft(PANE, notComposing))
     act(() => result.current.setDraft('typed'))
 
-    act(() => appendNativeChatDraftCache(PANE, 'hello'))
+    act(() => void appendNativeChatDraftNow(PANE, { text: 'hello' }))
 
     expect(result.current.draft).toBe('typed\n\nhello')
   })
 
+  // An unsettled composition reaches the chat only when it settles; the put-back is saved already.
   it('keeps text put back mid-composition through the composed writes, even if it unmounts', () => {
     const { result, unmount } = renderHook(() => useNativeChatDraft(PANE, () => true))
-    act(() => appendNativeChatDraftCache(PANE, 'hello'))
+    act(() => void appendNativeChatDraftNow(PANE, { text: 'hello' }))
     act(() => result.current.setDraft('typed'))
 
     expect(result.current.draft).toBe('typed')
     unmount()
-    expect(readNativeChatDraftCache(PANE)).toBe('typed\n\nhello')
+    expect(readNativeChatDraftCache(PANE)).toBe('hello')
   })
 
   it('shows images put back while it is open, beside the ones attached', () => {
@@ -465,7 +543,13 @@ describe('an open composer', () => {
     )
     act(() => result.current.attachResolvedPaths(['/tmp/typed.png']))
 
-    act(() => appendNativeChatAttachmentCache(PANE, [{ id: 'restored', path: '/tmp/shot.png' }]))
+    act(
+      () =>
+        void appendNativeChatDraftNow(PANE, {
+          text: '',
+          attachments: [{ id: 'restored', path: '/tmp/shot.png' }]
+        })
+    )
 
     expect(result.current.imageAttachments.map((attachment) => attachment.path)).toEqual([
       '/tmp/typed.png',

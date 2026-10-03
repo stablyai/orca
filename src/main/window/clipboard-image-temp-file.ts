@@ -7,10 +7,13 @@ import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispat
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
 import { authorizeExternalPath } from '../ipc/filesystem-auth'
+import { saveNativeChatAttachmentFile } from './native-chat-attachment-store'
 
 export type SaveClipboardImageAsTempFileArgs = {
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
+  /** A chat attachment can sit in a saved draft across a reboot, so it is kept out of OS temp. */
+  chatAttachment?: boolean
 }
 
 const REMOTE_CLIPBOARD_IMAGE_TEMP_DIR = '/tmp'
@@ -38,6 +41,10 @@ export async function saveClipboardImageBufferAsTempFile(
     // name a remote file. The provider's base64 path writes binary bytes via SFTP.
     await provider.writeFileBase64(remotePath, buffer.toString('base64'))
     return remotePath
+  }
+
+  if (args?.chatAttachment) {
+    return saveNativeChatAttachmentFile(fileName, buffer)
   }
 
   const tempPath = path.join(getAppEnvironment().getPath('temp'), fileName)

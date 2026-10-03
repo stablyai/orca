@@ -14,10 +14,10 @@ import { useComposerDropListener } from '../../hooks/composer-state/composer-dro
 import type { NativeFileDropPayload } from '../../../../shared/native-file-drop'
 import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attachment-actions'
 import {
-  clearNativeChatAttachmentCacheForTests,
-  readNativeChatAttachmentCache,
-  useNativeChatComposerAttachments
-} from './use-native-chat-composer-attachments'
+  clearNativeChatDraftCacheForTests,
+  readNativeChatDraftAttachments
+} from './native-chat-draft-cache'
+import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 
 const electron = vi.hoisted(() => ({
   on: vi.fn(),
@@ -163,7 +163,7 @@ describe('native chat composer drop scoping', () => {
     cleanup()
     resetLocalImageSrcStateForTests()
     vi.unstubAllGlobals()
-    clearNativeChatAttachmentCacheForTests()
+    clearNativeChatDraftCacheForTests()
     electron.send.mockClear()
   })
 
@@ -181,7 +181,7 @@ describe('native chat composer drop scoping', () => {
       reason: 'unresolved-paths',
       target: 'rejected'
     })
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-a')).toEqual([])
   })
 
   it('notices an OS drop whose every path fails authorization', async () => {
@@ -194,7 +194,7 @@ describe('native chat composer drop scoping', () => {
     expect(view.container.querySelector('[data-notice="chat-a"]')?.textContent).toBe(
       "Couldn't read the dropped files."
     )
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-a')).toEqual([])
   })
 
   it('notices an OS drop whose owner changes during authorization', async () => {
@@ -209,7 +209,7 @@ describe('native chat composer drop scoping', () => {
     expect(view.container.querySelector('[data-notice="chat-a"]')?.textContent).toBe(
       'This workspace changed hosts while attaching — drop the files again.'
     )
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-a')).toEqual([])
   })
 
   it('attaches only to the dropped pane and leaves a hidden pane clean on remount', async () => {
@@ -219,8 +219,8 @@ describe('native chat composer drop scoping', () => {
         <ComposerProbe pane="chat-b" hidden />
       </>
     )
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-a')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-b')).toEqual([])
 
     const target = view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!
     await dropTwoImages(target)
@@ -230,11 +230,11 @@ describe('native chat composer drop scoping', () => {
       scopeKey: 'chat-a',
       paths: ['/repro/first.png', '/repro/second.png']
     })
-    expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
+    expect(readNativeChatDraftAttachments('chat-a').map(({ path }) => path)).toEqual([
       '/repro/first.png',
       '/repro/second.png'
     ])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-b')).toEqual([])
     expect(target.textContent).toBe('untouched draft')
 
     view.unmount()
@@ -255,8 +255,8 @@ describe('native chat composer drop scoping', () => {
       target: 'composer',
       paths: ['/repro/first.png', '/repro/second.png']
     })
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-a')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-b')).toEqual([])
   })
 
   it('isolates native chat drops from the workspace composer while preserving workspace drops', async () => {
@@ -271,8 +271,8 @@ describe('native chat composer drop scoping', () => {
 
     await dropTwoImages(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
     expect(workspaceDrop).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-    expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
+    expect(readNativeChatDraftAttachments('chat-b')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-a').map(({ path }) => path)).toEqual([
       '/repro/first.png',
       '/repro/second.png'
     ])
@@ -282,11 +282,11 @@ describe('native chat composer drop scoping', () => {
       ['/repro/first.png', '/repro/second.png'],
       expect.any(Function)
     )
-    expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
+    expect(readNativeChatDraftAttachments('chat-a').map(({ path }) => path)).toEqual([
       '/repro/first.png',
       '/repro/second.png'
     ])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-b')).toEqual([])
   })
 
   it('authorizes only dropped files before preview reads and leaves the other pane untouched', async () => {
@@ -323,8 +323,8 @@ describe('native chat composer drop scoping', () => {
     ])
     expect(intake.readFile).toHaveBeenCalledTimes(2)
     expect(intake.upload).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('chat-a')).toHaveLength(2)
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-a')).toHaveLength(2)
+    expect(readNativeChatDraftAttachments('chat-b')).toEqual([])
     await expect(intake.readFile({ filePath: '/repro/sibling.png' })).rejects.toThrow(
       'Access denied'
     )
@@ -345,11 +345,11 @@ describe('native chat composer drop scoping', () => {
       intake.owner
     )
     expect(intake.authorizeExternalPath).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
+    expect(readNativeChatDraftAttachments('chat-a').map(({ path }) => path)).toEqual([
       '/remote/first.png',
       '/remote/second.png'
     ])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-b')).toEqual([])
   })
 
   // Mirrors the terminal target, whose leaf id sits inside its drop-target marker.
@@ -382,7 +382,7 @@ describe('native chat composer drop scoping', () => {
       target: 'editor',
       paths: ['/repro/first.png', '/repro/second.png']
     })
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-a')).toEqual([])
+    expect(readNativeChatDraftAttachments('chat-b')).toEqual([])
   })
 })

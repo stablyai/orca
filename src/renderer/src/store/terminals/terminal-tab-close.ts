@@ -7,6 +7,7 @@ import {
 } from '../slices/recently-closed-tabs'
 // Why: use the store-free registry (not terminal-parked-tab-watchers, which imports @/store) to avoid re-entering store creation during this slice's eval.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import { discardNativeChatDrafts } from '@/components/native-chat/native-chat-draft-cache'
 import {
   buildTerminalTabRetirementPlan,
   removeSleepingAgentSessionsForTab
@@ -35,6 +36,8 @@ export function createTerminalTabCloseActions(
       let closingWorktreeId: string | null = null
       // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
       retireParkedTerminalTab(tabId)
+      // Why: a reopened tab gets a new id, so its panes' chat drafts are unreachable.
+      discardNativeChatDrafts({ terminalTabIds: [tabId] })
       if (retiresSession) {
         startTerminalTabProviderRetirement({
           localPtyTeardownOwnedExternally: opts?.localPtyTeardownOwnedExternally === true,

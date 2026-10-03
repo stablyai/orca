@@ -32,6 +32,7 @@ import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
 import { getCanonicalUserDataPath } from '../persistence'
+import { drainNativeChatDrafts } from '../ipc/native-chat-drafts'
 
 // Why: will-quit fires twice — first pass preventDefaults and runs teardown; second pass exits.
 let daemonDisconnectDone = false
@@ -270,6 +271,7 @@ function installWillQuitHandler(): void {
       { name: 'structured-agent-session', promise: structuredAgentSessionShutdown },
       { name: 'usage-cache', promise: usageCacheFlush },
       { name: 'stats', promise: statsFlush },
+      { name: 'native-chat-drafts', promise: drainNativeChatDrafts() },
       { name: 'state', promise: storeFlush }
     ])
       .then((pendingTeardowns) => {

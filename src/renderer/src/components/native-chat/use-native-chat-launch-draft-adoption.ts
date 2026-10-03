@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../store'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatLaunchSeed } from './native-chat-composer-types'
+import {
+  readNativeChatDraftTuiInputSeed,
+  writeNativeChatDraftTuiInputSeed
+} from './native-chat-draft-cache'
 import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
@@ -74,31 +79,37 @@ export function useNativeChatLaunchDraftSignal(args: {
  * - unadopted + composer in use     → mark adopted without copying (never stomp)
  * - resolved by transcript          → clear the composer copy while it is still
  *                                     the untouched seed text, and drop the seed
+ *
+ * A chat over a terminal agent saves the seed with its draft when adopting it, because the
+ * agent's input line still holds it after a relaunch while the seed record does not survive;
+ * the record is re-seeded from there so a send still replaces the line.
  */
 export function useNativeChatLaunchDraftAdoption(args: {
   terminalTabId: string
   agent: string
-  launchDraft: NativeChatLaunchDraft | null | undefined
-  launchDraftResolved: boolean
+  launchSeed: NativeChatLaunchSeed | undefined
+  /** The chat's draft when its agent has a terminal input line; a structured chat has none. */
+  tuiDraftKey: string | undefined
   draft: string
   setDraft: (next: string) => void
   setCaret: (next: number) => void
-  /** This pane is the tab-wide evidence's owner (`nativeChatLeafOwnsTabWideEvidence`).
-   *  Splitting drops it for every pane, so it gates pickup, never cleanup. */
-  ownsTabWideLaunchDraft: boolean
 }): void {
-  const {
-    terminalTabId,
-    agent,
-    launchDraft,
-    launchDraftResolved,
-    draft,
-    setDraft,
-    setCaret,
-    ownsTabWideLaunchDraft
-  } = args
+  const { terminalTabId, agent, launchSeed, tuiDraftKey, draft, setDraft, setCaret } = args
+  const launchDraft = launchSeed?.launchDraft
+  const launchDraftResolved = launchSeed?.launchDraftResolved === true
+  // Splitting drops tab-wide ownership for every pane, so it gates pickup, never cleanup.
+  const ownsTabWideLaunchDraft = launchSeed?.ownsTabWideLaunchDraft === true
   useEffect(() => {
-    if (!launchDraft || launchDraft.agent !== agent) {
+    if (!launchDraft) {
+      const seed = tuiDraftKey ? readNativeChatDraftTuiInputSeed(tuiDraftKey) : undefined
+      if (seed?.agent === agent) {
+        useAppStore
+          .getState()
+          .seedNativeChatLaunchDraft({ tabId: terminalTabId, ...seed, adopted: true })
+      }
+      return
+    }
+    if (launchDraft.agent !== agent) {
       return
     }
     if (launchDraftResolved) {
@@ -127,6 +138,10 @@ export function useNativeChatLaunchDraftAdoption(args: {
     // Mark adopted before copying so a composer that already holds user text
     // declines the seed permanently instead of resurrecting it on a later clear.
     useAppStore.getState().markNativeChatLaunchDraftAdopted(terminalTabId)
+    if (tuiDraftKey) {
+      const { agent: seedAgent, text, createdAt } = launchDraft
+      writeNativeChatDraftTuiInputSeed(tuiDraftKey, { agent: seedAgent, text, createdAt })
+    }
     if (draft === '') {
       setDraft(launchDraft.text)
       setCaret(launchDraft.text.length)
@@ -139,6 +154,7 @@ export function useNativeChatLaunchDraftAdoption(args: {
     ownsTabWideLaunchDraft,
     setCaret,
     setDraft,
-    terminalTabId
+    terminalTabId,
+    tuiDraftKey
   ])
 }

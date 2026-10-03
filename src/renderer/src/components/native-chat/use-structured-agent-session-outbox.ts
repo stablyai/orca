@@ -63,6 +63,7 @@ export function useStructuredAgentSessionOutbox(args: {
   submissions: readonly AgentJournalSubmission[]
   /** The composer that gets back what a Stop withdrew from this client's outbox. */
   composerScopeKey?: string
+  composerWorktreeId?: string
   /** The host's queued-messages capability and the user's setting; a send stamped
    *  `delivery: 'queue-if-active'` is held as a draft only while the agent is working. */
   queueDelivery?: StructuredAgentSessionQueueDelivery
@@ -73,6 +74,7 @@ export function useStructuredAgentSessionOutbox(args: {
 }) {
   const {
     composerScopeKey,
+    composerWorktreeId,
     fence,
     queueDelivery = NO_QUEUE_DELIVERY,
     queuedMessageIds,
@@ -83,7 +85,11 @@ export function useStructuredAgentSessionOutbox(args: {
   const { capability: queueCapability, enabled: queueEnabled } = queueDelivery
   // What resends and drops a send in flight besides a Retry or a new send; see the hook.
   const owner = useStructuredAgentSessionOutboxOwnerChange(target, fence)
-  const restoreWithdrawn = useStructuredAgentSessionWithdrawnRestore(sessionId, composerScopeKey)
+  const restoreWithdrawn = useStructuredAgentSessionWithdrawnRestore(
+    sessionId,
+    composerScopeKey,
+    composerWorktreeId
+  )
   // The outbox lives in the session's store, shared with every other writer; this view holds it
   // open and drains it. Loading maps what a previous owner left mid-send.
   const load = useCallback(

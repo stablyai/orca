@@ -171,6 +171,7 @@ export type {
   NativeChatApi,
   NativeChatAppendedMessages,
   NativeChatAppendedPayload,
+  NativeChatDraftsApi,
   NativeChatReadSessionResult,
   NativeChatSubscribeArgs,
   NativeChatSubscriptionFrame

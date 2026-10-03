@@ -1,8 +1,13 @@
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EMPTY_HISTORY } from './native-chat-composer-state'
+import {
+  clearNativeChatDraftCacheForTests,
+  writeNativeChatDraftCache
+} from './native-chat-draft-cache'
+import { installNativeChatDrafts } from './native-chat-draft-store.test-support'
 
 const sendNativeChatMessage = vi.fn()
 const sendNativeChatTypedCommand = vi.fn()
@@ -28,17 +33,21 @@ const COMMAND = {
   skillCollision: false
 }
 
+const DRAFT_KEY = 'pane:tab-1:leaf-1'
+
 function renderDispatch(agent: 'codex' | 'claude' | 'openclaude') {
   return renderHook(() =>
     useNativeChatPickerCommandDispatch({
       agent,
+      draftKey: DRAFT_KEY,
       disabled: false,
       isDispatchingSessionOption: false,
       resolveTarget: () => ({ settings: {}, ptyId: 'pty-1' }),
       sessionOptionsSurface: null,
       trackPendingSend: vi.fn(),
       setHistory: vi.fn((update) => update(EMPTY_HISTORY)),
-      setDraft: vi.fn(),
+      // As the composer's draft hook does: a clear is saved at once.
+      setDraft: (value: string) => writeNativeChatDraftCache(DRAFT_KEY, value, 'now'),
       setCaret: vi.fn(),
       setActiveSuggestion: vi.fn(),
       clearSkillOrigin: vi.fn(),
@@ -56,6 +65,12 @@ describe('useNativeChatPickerCommandDispatch', () => {
     sendNativeChatTypedCommand.mockReturnValue(handle)
   })
 
+  afterEach(async () => {
+    // Lets each send's draft save land in its own test.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    clearNativeChatDraftCacheForTests()
+  })
+
   it('types Codex autocomplete commands', () => {
     const hook = renderDispatch('codex')
     act(() => hook.result.current(COMMAND))
@@ -70,5 +85,45 @@ describe('useNativeChatPickerCommandDispatch', () => {
 
     expect(sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/status')
     expect(sendNativeChatTypedCommand).not.toHaveBeenCalled()
+  })
+})
+
+// A command picked from the menu goes out like a typed one: its clear is saved once the
+// terminal write ran, so a crash before then restores it unsent.
+describe('a command picked from the menu', () => {
+  afterEach(async () => {
+    // Lets each send's draft save land in its own test.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    clearNativeChatDraftCacheForTests()
+  })
+
+  it('keeps its text saved until the terminal write ran', async () => {
+    const saved: unknown[] = []
+    installNativeChatDrafts({
+      load: async () => [],
+      loadSync: () => [],
+      write: async (_scopeKey, draft) => {
+        saved.push(draft?.text ?? null)
+        return 'persisted'
+      }
+    })
+    let finish = () => {}
+    sendNativeChatTypedCommand.mockReturnValue({
+      cancel: vi.fn(),
+      settleAfterMs: 0,
+      settled: new Promise<void>((resolve) => {
+        finish = resolve
+      })
+    })
+    writeNativeChatDraftCache(DRAFT_KEY, '/sta', 'now')
+    const hook = renderDispatch('codex')
+
+    act(() => hook.result.current(COMMAND))
+    await Promise.resolve()
+    expect(sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    expect(saved).toEqual(['/sta'])
+
+    finish()
+    await vi.waitFor(() => expect(saved).toEqual(['/sta', null]))
   })
 })

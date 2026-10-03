@@ -1,12 +1,15 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, createElement, useEffect, useRef, useState } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, createElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { renderHook } from '@testing-library/react'
 import {
-  clearNativeChatAttachmentCacheForTests,
-  readNativeChatAttachmentCache,
-  useNativeChatComposerAttachments
-} from './use-native-chat-composer-attachments'
+  addNativeChatDraftAttachments,
+  clearNativeChatDraftCacheForTests,
+  readNativeChatDraftAttachments
+} from './native-chat-draft-cache'
+import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
+import { installLocalStorageNativeChatDrafts } from './native-chat-draft-store.test-support'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 
@@ -129,9 +132,10 @@ async function renderProbe(
 }
 
 describe('useNativeChatComposerAttachments', () => {
+  beforeEach(() => installLocalStorageNativeChatDrafts())
   afterEach(() => {
     runtimeTarget.remote = false
-    clearNativeChatAttachmentCacheForTests()
+    clearNativeChatDraftCacheForTests()
     document.body.replaceChildren()
   })
 
@@ -147,7 +151,7 @@ describe('useNativeChatComposerAttachments', () => {
     expect(first.latest().imageAttachments).toMatchObject([
       { path: '/tmp/orca-native-chat-attach-test.png' }
     ])
-    expect(readNativeChatAttachmentCache('pty-1')).toMatchObject([
+    expect(readNativeChatDraftAttachments('pty-1')).toMatchObject([
       { path: '/tmp/orca-native-chat-attach-test.png' }
     ])
 
@@ -305,6 +309,126 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
+  it('shows every chip in every view of the chat, a pending one included', async () => {
+    const first = await renderProbe('session:chat-1', true)
+    const second = await renderProbe('session:chat-1', true)
+
+    await act(async () => {
+      first.latest().attachResolvedPaths(['/tmp/shared.png'])
+    })
+    act(() => {
+      first.latest().beginPendingImageAttachment('blob:preview-1')
+    })
+    expect(second.latest().imageAttachments).toMatchObject([
+      { path: '/tmp/shared.png' },
+      { pending: true }
+    ])
+
+    const id = second.latest().imageAttachments[0]?.id ?? ''
+    act(() => second.latest().removeImageAttachment(id))
+
+    expect(first.latest().imageAttachments).toMatchObject([{ pending: true }])
+    act(() => first.root.unmount())
+    act(() => second.root.unmount())
+  })
+
+  it("shows chips written between a view's render and its subscription", () => {
+    const { result, unmount } = renderHook(() => {
+      const view = useNativeChatComposerAttachments({
+        attachmentScopeKey: 'session:chat-gap',
+        allowWithoutTarget: true,
+        caret: 0,
+        disabled: false,
+        isComposing: () => false,
+        resolveTarget: () => null,
+        textareaRef: { current: null },
+        setCaret: () => {},
+        setDraft: () => {},
+        setNotice: () => {}
+      })
+      useLayoutEffect(
+        () =>
+          addNativeChatDraftAttachments('session:chat-gap', [{ id: 'late', path: '/late.png' }]),
+        []
+      )
+      return view
+    })
+
+    expect(result.current.imageAttachments).toMatchObject([{ path: '/late.png' }])
+    unmount()
+  })
+
+  it('keeps chips in the order they were added while a paste is still saving', async () => {
+    const probe = await renderProbe('session:chat-order', true)
+    let pastedId: string | null = null
+    act(() => {
+      pastedId = probe.latest().beginPendingImageAttachment('blob:pasted')
+    })
+    await act(async () => {
+      probe.latest().attachResolvedPaths(['/tmp/dropped.png'])
+    })
+    act(() => probe.latest().resolvePendingImageAttachment(pastedId ?? '', '/tmp/pasted.png'))
+
+    expect(probe.latest().imageAttachments.map(({ path }) => path)).toEqual([
+      '/tmp/pasted.png',
+      '/tmp/dropped.png'
+    ])
+    act(() => probe.root.unmount())
+  })
+
+  it('keeps one chip order in every pane and on disk while a paste saves and chips come and go', async () => {
+    const first = await renderProbe('session:chat-race', true)
+    const second = await renderProbe('session:chat-race', true)
+    let pastedId: string | null = null
+    act(() => {
+      pastedId = first.latest().beginPendingImageAttachment('blob:pasted')
+    })
+    await act(async () => {
+      first.latest().attachResolvedPaths(['/tmp/first.png'])
+    })
+    await act(async () => {
+      second.latest().attachResolvedPaths(['/tmp/second.png'])
+    })
+    act(() => first.latest().resolvePendingImageAttachment(pastedId ?? '', '/tmp/pasted.png'))
+    const order = () => ({
+      first: first.latest().imageAttachments.map(({ path }) => path),
+      second: second.latest().imageAttachments.map(({ path }) => path),
+      saved: JSON.parse(
+        localStorage.getItem(
+          `orca:nativeChatComposerDraft:v1:${encodeURIComponent('session:chat-race')}`
+        ) ?? 'null'
+      ).attachments.map(({ path }: { path: string }) => path)
+    })
+
+    const all = ['/tmp/pasted.png', '/tmp/first.png', '/tmp/second.png']
+    expect(order()).toEqual({ first: all, second: all, saved: all })
+    act(() => second.latest().removeImageAttachment(first.latest().imageAttachments[1]!.id))
+    const rest = ['/tmp/pasted.png', '/tmp/second.png']
+    expect(order()).toEqual({ first: rest, second: rest, saved: rest })
+    act(() => first.root.unmount())
+    act(() => second.root.unmount())
+  })
+
+  it('keeps both chips when two views attach in the same millisecond', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const first = await renderProbe('session:chat-same-ms', true)
+    const second = await renderProbe('session:chat-same-ms', true)
+    await act(async () => {
+      first.latest().attachResolvedPaths(['/tmp/first.png'])
+    })
+    await act(async () => {
+      second.latest().attachResolvedPaths(['/tmp/second.png'])
+    })
+    now.mockRestore()
+
+    expect(first.latest().imageAttachments.map(({ path }) => path)).toEqual([
+      '/tmp/first.png',
+      '/tmp/second.png'
+    ])
+    act(() => first.root.unmount())
+    act(() => second.root.unmount())
+  })
+
   it('removes an attached image chip cleanly', async () => {
     const probe = await renderProbe('pty-1')
     await act(async () => {
@@ -316,7 +440,7 @@ describe('useNativeChatComposerAttachments', () => {
       probe.latest().removeImageAttachment(id as string)
     })
     expect(probe.latest().imageAttachments).toMatchObject([])
-    expect(readNativeChatAttachmentCache('pty-1')).toMatchObject([])
+    expect(readNativeChatDraftAttachments('pty-1')).toMatchObject([])
     act(() => probe.root.unmount())
   })
 
@@ -440,8 +564,9 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  it('excludes a pending chip from the scope cache while a settled chip persists', async () => {
+  it('keeps a pending chip off disk and its preview in the pane that pasted it', async () => {
     const probe = await renderProbe('pty-1')
+    const other = await renderProbe('pty-1')
     let pendingId: string | null = null
     act(() => {
       pendingId = probe.latest().beginPendingImageAttachment('blob:preview-1')
@@ -449,12 +574,40 @@ describe('useNativeChatComposerAttachments', () => {
     await act(async () => {
       probe.latest().attachResolvedPaths(['/tmp/settled.png'])
     })
+    act(() => window.dispatchEvent(new Event('pagehide')))
 
-    const cached = readNativeChatAttachmentCache('pty-1')
-    expect(cached.some((attachment) => attachment.id === pendingId)).toBe(false)
-    expect(cached).toMatchObject([{ path: '/tmp/settled.png' }])
-    expect(cached[0]?.previewUrl).toBeUndefined()
+    const saved = JSON.parse(
+      localStorage.getItem(`orca:nativeChatComposerDraft:v1:${encodeURIComponent('pty-1')}`) ??
+        'null'
+    )
+    expect(saved?.attachments).toEqual([
+      { id: expect.any(String), path: '/tmp/settled.png', location: 'local' }
+    ])
+    expect(probe.latest().imageAttachments).toContainEqual(
+      expect.objectContaining({ id: pendingId, previewUrl: 'blob:preview-1', pending: true })
+    )
+    expect(other.latest().imageAttachments[0]).not.toHaveProperty('previewUrl')
     act(() => probe.root.unmount())
+    act(() => other.root.unmount())
+  })
+
+  // Once the pasting pane is gone nothing else holds the URL, so a later remove could not free it.
+  it("revokes a pane's blob previews when it unmounts, though its chips stay in the chat", async () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL')
+    const pasting = await renderProbe('session:chat-unmount', true)
+    let id: string | null = null
+    act(() => {
+      id = pasting.latest().beginPendingImageAttachment('blob:pasted')
+    })
+    act(() => pasting.latest().resolvePendingImageAttachment(id ?? '', '/tmp/pasted.png'))
+
+    act(() => pasting.root.unmount())
+
+    expect(revoke).toHaveBeenCalledWith('blob:pasted')
+    expect(readNativeChatDraftAttachments('session:chat-unmount')).toMatchObject([
+      { path: '/tmp/pasted.png' }
+    ])
+    revoke.mockRestore()
   })
 
   it('revokes a blob: preview URL on removal but not a data: preview URL', async () => {
@@ -479,6 +632,95 @@ describe('useNativeChatComposerAttachments', () => {
       probe.latest().clearImageAttachments()
     })
     expect(revoke).not.toHaveBeenCalled()
+    act(() => probe.root.unmount())
+  })
+})
+
+describe('a restored draft whose image is gone', () => {
+  afterEach(() => {
+    clearNativeChatDraftCacheForTests()
+    document.body.replaceChildren()
+  })
+
+  it('marks only a chip whose file is proven gone, checking each restored chip once', async () => {
+    const pathsExist = vi.fn(
+      async ({ filePaths, connectionId }: { filePaths: string[]; connectionId?: string }) =>
+        // An unreachable host cannot say; that is not proof the file is gone.
+        filePaths.map((path) =>
+          connectionId ? { error: 'offline' } : { exists: path !== '/gone.png' }
+        )
+    )
+    Object.defineProperty(window, 'api', { configurable: true, value: { fs: { pathsExist } } })
+    addNativeChatDraftAttachments('session:restored', [
+      { id: 'gone', path: '/gone.png', location: 'local' },
+      { id: 'here', path: '/here.png', location: 'local' },
+      { id: 'remote', path: '/remote.png', connectionId: 'ssh-1', location: 'ssh' },
+      // A runtime server's path, or one saved before locations were recorded, means nothing here.
+      { id: 'runtime', path: '/srv/gone.png', location: 'runtime' },
+      { id: 'unknown', path: '/old/gone.png' }
+    ])
+
+    const probe = await renderProbe('session:restored', true)
+    await act(async () => {})
+    await act(async () => {
+      probe.latest().attachResolvedPaths(['/new.png'])
+    })
+
+    expect(
+      probe.latest().imageAttachments.map(({ path, missing }) => [path, missing === true])
+    ).toEqual([
+      ['/gone.png', true],
+      ['/here.png', false],
+      ['/remote.png', false],
+      ['/srv/gone.png', false],
+      ['/old/gone.png', false],
+      ['/new.png', false]
+    ])
+    expect(pathsExist).toHaveBeenCalledTimes(2)
+    expect(pathsExist).toHaveBeenCalledWith({ filePaths: ['/gone.png', '/here.png'] })
+    expect(pathsExist).toHaveBeenCalledWith({ filePaths: ['/remote.png'], connectionId: 'ssh-1' })
+    expect(readNativeChatDraftAttachments('session:restored')[0]).toEqual({
+      id: 'gone',
+      path: '/gone.png',
+      location: 'local'
+    })
+    act(() => probe.root.unmount())
+  })
+
+  // The read grant made at attach lived in memory; without it a restored preview is blank and a
+  // deleted original can never be shown missing.
+  it('grants each restored local image before checking it, and holds its preview until then', async () => {
+    const calls: string[] = []
+    const answer = Promise.withResolvers<void>()
+    const authorizeExternalPath = vi.fn(async ({ targetPath }: { targetPath: string }) => {
+      calls.push(`grant ${targetPath}`)
+    })
+    const pathsExist = vi.fn(async ({ filePaths }: { filePaths: string[] }) => {
+      calls.push(`check ${filePaths.join(',')}`)
+      await answer.promise
+      return filePaths.map(() => ({ exists: true }))
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { fs: { authorizeExternalPath, pathsExist } }
+    })
+    addNativeChatDraftAttachments('session:granted', [
+      { id: 'local', path: '/Users/me/Desktop/shot.png', location: 'local' },
+      { id: 'remote', path: '/remote.png', connectionId: 'ssh-1' }
+    ])
+
+    const probe = await renderProbe('session:granted', true)
+    const checking = () => probe.latest().imageAttachments.map((chip) => chip.checking === true)
+    expect(checking()).toEqual([true, true])
+    await act(async () => answer.resolve())
+
+    expect(authorizeExternalPath.mock.calls).toEqual([
+      [{ targetPath: '/Users/me/Desktop/shot.png' }]
+    ])
+    expect(calls.indexOf('grant /Users/me/Desktop/shot.png')).toBeLessThan(
+      calls.indexOf('check /Users/me/Desktop/shot.png')
+    )
+    expect(checking()).toEqual([false, false])
     act(() => probe.root.unmount())
   })
 })

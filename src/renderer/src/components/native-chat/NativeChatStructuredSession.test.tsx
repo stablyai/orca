@@ -35,7 +35,7 @@ describe('NativeChatStructuredSession', () => {
     resetStructuredSessionMocks()
   })
 
-  it('gives what a Stop withdrew back to the composer this pane shows', () => {
+  it('gives what a Stop withdrew back to the chat draft every pane on it shows', () => {
     render(
       <NativeChatStructuredSession
         isVisible
@@ -48,7 +48,7 @@ describe('NativeChatStructuredSession', () => {
     )
     const paneKey = structuredAgentSessionPaneKey('structured-tab-1', 'session-1')
     expect(mocks.composerProps).toMatchObject({ paneKey })
-    expect(mocks.controllerProps).toMatchObject({ composerScopeKey: paneKey })
+    expect(mocks.controllerProps).toMatchObject({ composerScopeKey: 'session:session-1' })
   })
 
   it('routes the launch draft and app-menu paste to the structured composer', () => {

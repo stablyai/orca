@@ -26,6 +26,11 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 globalThis.window = { api: {} }
 
 import { createTestStore, seedStore, makeWorktree, makeTab, TEST_REPO } from './store-test-helpers'
+import {
+  appendNativeChatDraftNow,
+  nativeChatDraftKey,
+  readNativeChatDraftCache
+} from '@/components/native-chat/native-chat-draft-cache'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')
 const RUNTIME_NEVER_SAVED = toRuntimeExecutionHostId('env-serving-client')
@@ -115,6 +120,9 @@ describe('purgeStaleRuntimeHostState', () => {
       tabsByWorktree: { [WT_A]: [makeTab({ id: TAB_A, worktreeId: WT_A })] }
     })
     const epochBefore = store.getState().sortEpoch
+    // The host still has the chat; a re-pair or re-add publishes it again.
+    const paneDraft = nativeChatDraftKey({ paneKey: `${TAB_A}:leaf-1` })
+    appendNativeChatDraftNow(paneDraft, { text: 'unsent' })
 
     store.getState().purgeStaleRuntimeHostState(['env-a'])
 
@@ -130,6 +138,7 @@ describe('purgeStaleRuntimeHostState', () => {
     expect(s.worktreesByRepo.repoServing).toHaveLength(1)
     // sortEpoch bumped because rows changed.
     expect(s.sortEpoch).toBe(epochBefore + 1)
+    expect(readNativeChatDraftCache(paneDraft)).toBe('unsent')
   })
 
   it('keeps a still-saved sibling runtime env when another runtime env is removed', () => {

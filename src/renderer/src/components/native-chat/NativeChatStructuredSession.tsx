@@ -31,6 +31,7 @@ import { structuredAgentSessionReadFailureNotice } from './structured-agent-sess
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import { nativeChatDraftKey } from './native-chat-draft-cache'
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
@@ -53,7 +54,8 @@ export function NativeChatStructuredSession(
   const queueFollowUps = useAppStore((store) => store.settings?.nativeChatQueueFollowUps !== false)
   const controller = useStructuredAgentSession({
     ...props,
-    composerScopeKey: paneKey,
+    composerScopeKey: nativeChatDraftKey({ sessionId: props.sessionId, paneKey }),
+    composerWorktreeId: fileLinkContext?.worktreeId,
     queueFollowUps,
     providerStarting: hostExecution.phase === 'starting',
     transportEnabled: provisionalLaunch.transportEnabled,

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { installLocalStorageNativeChatDrafts } from './native-chat-draft-store.test-support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -12,6 +13,7 @@ import {
 const mocks = vi.hoisted(() => ({
   markNativeChatLaunchDraftAdopted: vi.fn(),
   clearNativeChatLaunchDraft: vi.fn(),
+  seedNativeChatLaunchDraft: vi.fn(),
   storeState: { nativeChatLaunchDraftByTabId: {} as Record<string, NativeChatLaunchDraft> }
 }))
 
@@ -24,7 +26,8 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => ({
     ...mocks.storeState,
     markNativeChatLaunchDraftAdopted: mocks.markNativeChatLaunchDraftAdopted,
-    clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft
+    clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft,
+    seedNativeChatLaunchDraft: mocks.seedNativeChatLaunchDraft
   })
   return { useAppStore }
 })
@@ -54,12 +57,15 @@ function setup(args: {
     useNativeChatLaunchDraftAdoption({
       terminalTabId: 'tab-1',
       agent: args.agent ?? 'claude',
-      launchDraft: args.launchDraft,
-      launchDraftResolved: args.launchDraftResolved ?? false,
+      launchSeed: {
+        launchDraft: args.launchDraft,
+        launchDraftResolved: args.launchDraftResolved ?? false,
+        ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft ?? true
+      },
+      tuiDraftKey: undefined,
       draft: args.draft ?? '',
       setDraft,
-      setCaret,
-      ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft ?? true
+      setCaret
     })
   )
   return { setDraft, setCaret }
@@ -322,12 +328,11 @@ describe('launch draft adoption across a split', () => {
       useNativeChatLaunchDraftAdoption({
         terminalTabId: 'tab-1',
         agent: 'claude',
-        launchDraft: signal.launchDraft,
-        launchDraftResolved: signal.launchDraftResolved,
+        launchSeed: { ...signal, ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft },
+        tuiDraftKey: undefined,
         draft: args.draft ?? '',
         setDraft,
-        setCaret,
-        ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft
+        setCaret
       })
     })
     return { setDraft, setCaret }
@@ -373,5 +378,92 @@ describe('launch draft adoption across a split', () => {
     expect(setDraft).toHaveBeenCalledWith('')
     expect(setCaret).toHaveBeenCalledWith(0)
     expect(mocks.clearNativeChatLaunchDraft).toHaveBeenCalledWith('tab-1')
+  })
+})
+
+describe('a launch draft saved with its chat', () => {
+  /** A fresh renderer: module memory is gone, only localStorage remains. */
+  async function relaunch() {
+    cleanup()
+    vi.resetModules()
+    return {
+      draft: await import('./use-native-chat-draft'),
+      adoption: await import('./use-native-chat-launch-draft-adoption'),
+      cache: await import('./native-chat-draft-cache')
+    }
+  }
+
+  function renderComposer(
+    modules: Awaited<ReturnType<typeof relaunch>>,
+    draftKey: string,
+    seed: NativeChatLaunchDraft | null,
+    tuiDraftKey: string | undefined
+  ) {
+    return renderHook(() => {
+      const view = modules.draft.useNativeChatDraft(draftKey, () => false)
+      modules.adoption.useNativeChatLaunchDraftAdoption({
+        terminalTabId: 'tab-1',
+        agent: 'claude',
+        launchSeed: { launchDraft: seed, launchDraftResolved: false, ownsTabWideLaunchDraft: true },
+        tuiDraftKey,
+        draft: view.draft,
+        setDraft: view.setDraft,
+        setCaret: () => {}
+      })
+      return view
+    })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    installLocalStorageNativeChatDrafts()
+    mocks.storeState.nativeChatLaunchDraftByTabId = {}
+  })
+
+  // A structured chat has no input line holding the prompt, so the draft is its only copy.
+  it("keeps a structured chat's launch prompt across a relaunch", async () => {
+    const before = await relaunch()
+    renderComposer(before, 'session:s1', launchDraft(), undefined)
+    act(() => window.dispatchEvent(new Event('pagehide')))
+
+    const after = await relaunch()
+
+    expect(after.cache.readNativeChatDraftCache('session:s1')).toBe(SEED_TEXT)
+    expect(after.cache.readNativeChatDraftTuiInputSeed('session:s1')).toBeUndefined()
+  })
+
+  // The agent's input line still holds the seed after a relaunch; the send must replace it.
+  it('re-seeds an edited multi-line terminal seed after a relaunch, so the send replaces it', async () => {
+    const seeded = 'line one\nline two\nline three'
+    const before = await relaunch()
+    const { result } = renderComposer(
+      before,
+      'pane:tab-1:leaf',
+      launchDraft({ text: seeded, createdAt: SEEDED_AT }),
+      'pane:tab-1:leaf'
+    )
+    act(() => result.current.setDraft(`${seeded} edited`))
+    act(() => window.dispatchEvent(new Event('pagehide')))
+
+    const after = await relaunch()
+    renderComposer(after, 'pane:tab-1:leaf', null, 'pane:tab-1:leaf')
+
+    expect(after.cache.readNativeChatDraftCache('pane:tab-1:leaf')).toBe(`${seeded} edited`)
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      agent: 'claude',
+      text: seeded,
+      createdAt: SEEDED_AT,
+      adopted: true
+    })
+    const { resolveNativeChatLaunchDraftSend } = await import('./native-chat-launch-draft-send')
+    const { plan } = resolveNativeChatLaunchDraftSend({
+      launchDraft: mocks.seedNativeChatLaunchDraft.mock.calls[0]?.[0],
+      launchDraftResolved: false,
+      agent: 'claude',
+      readScreen: () => null
+    })
+    expect(plan).toMatchObject({ kind: 'replace-draft', seededText: seeded })
   })
 })

@@ -281,7 +281,10 @@ describe('useNativeChatComposerPaste', () => {
     await act(async () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
-    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ connectionId: 'conn-1' })
+    // The remote host keeps it; the chat storage flag is for local pastes only.
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledExactlyOnceWith({
+      connectionId: 'conn-1'
+    })
     expect(store.chips).toEqual([
       {
         id: 'chip-1',
@@ -393,6 +396,8 @@ describe('useNativeChatComposerPaste', () => {
     })
     expect(store.chips).toHaveLength(0)
     expect(attachResolvedPaths).toHaveBeenCalledWith(['C:\\Temp\\orca-paste-3.png'], null)
+    // A draft can hold a local paste across a reboot, so it goes to Orca's own storage.
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ chatAttachment: true })
   })
 
   it('inserts text independently of a failed image save', async () => {

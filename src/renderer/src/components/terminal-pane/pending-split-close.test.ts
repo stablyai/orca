@@ -206,3 +206,17 @@ it('commits the explicit split close in main by its leaf without waiting for its
   expect(p.state.terminalLayoutsByTabId[p.tabId].ptyIdsByLeafId?.[p.leafId]).toBeUndefined()
   expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith('pty-restored')
 })
+
+it("explicit split close deletes the closed pane's chat draft and keeps its sibling's", async () => {
+  const p = await preparePendingSplitClose()
+  const drafts = await import('../native-chat/native-chat-draft-cache')
+  const closed = drafts.nativeChatDraftKey({ paneKey: `${p.tabId}:${p.leafId}` })
+  const sibling = drafts.nativeChatDraftKey({ paneKey: `${p.tabId}:${p.siblingLeafId}` })
+  drafts.appendNativeChatDraftNow(closed, { text: 'unsent' })
+  drafts.appendNativeChatDraftNow(sibling, { text: 'unsent' })
+
+  p.actions.executeClosePane(1)
+
+  expect(drafts.readNativeChatDraftCache(closed)).toBe('')
+  expect(drafts.readNativeChatDraftCache(sibling)).toBe('unsent')
+})

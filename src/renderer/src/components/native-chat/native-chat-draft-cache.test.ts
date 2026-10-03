@@ -16,26 +16,26 @@ describe('native-chat draft cache', () => {
   })
 
   it('round-trips a draft per scope key', () => {
-    writeNativeChatDraftCache('pty-1', 'hello')
-    writeNativeChatDraftCache('pty-2', 'world')
+    writeNativeChatDraftCache('pty-1', 'hello', 'after-pause')
+    writeNativeChatDraftCache('pty-2', 'world', 'after-pause')
     expect(readNativeChatDraftCache('pty-1')).toBe('hello')
     expect(readNativeChatDraftCache('pty-2')).toBe('world')
   })
 
   it('drops the entry when the draft is cleared so stale text never resurfaces', () => {
-    writeNativeChatDraftCache('pty-1', 'hello')
-    writeNativeChatDraftCache('pty-1', '')
+    writeNativeChatDraftCache('pty-1', 'hello', 'after-pause')
+    writeNativeChatDraftCache('pty-1', '', 'now')
     expect(readNativeChatDraftCache('pty-1')).toBe('')
   })
 
   it('bounds the cache so unsent drafts for removed panes cannot accumulate', () => {
-    writeNativeChatDraftCache('keep', 'hot')
+    writeNativeChatDraftCache('keep', 'hot', 'after-pause')
 
     const total = NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX + 40
     for (let i = 0; i < total; i += 1) {
-      writeNativeChatDraftCache(`scope-${i}`, `draft-${i}`)
+      writeNativeChatDraftCache(`scope-${i}`, `draft-${i}`, 'after-pause')
       if (i % 20 === 0) {
-        writeNativeChatDraftCache('keep', 'hot')
+        writeNativeChatDraftCache('keep', 'hot', 'after-pause')
       }
     }
 

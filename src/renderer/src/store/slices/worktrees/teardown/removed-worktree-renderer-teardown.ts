@@ -6,6 +6,7 @@ import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
+import { discardNativeChatDrafts } from '@/components/native-chat/native-chat-draft-cache'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../components/terminal-pane/terminal-parked-watcher-registry'
 import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
@@ -79,6 +80,8 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
   forgetForegroundTerminalTabs(tabIds)
   forgetAgentStartupDeliveriesForTabs(tabIds)
+  // The worktree is deleted, so its terminal-agent chats ended with it.
+  discardNativeChatDrafts({ terminalTabIds: tabIds })
 
   // Why: snapshot the sidebar top-row anchor in the same tick we remove the row; recording at click time goes stale across the await.
   requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Image as ImageIcon, Loader2, X } from 'lucide-react'
+import { Image as ImageIcon, ImageOff, Loader2, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
+import { cn } from '@/lib/utils'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 
@@ -42,8 +43,11 @@ export function NativeChatImageAttachmentPreview({
     return () => observer.disconnect()
   }, [])
   const isPending = attachment.pending === true
+  const isMissing = attachment.missing === true
   const localSrc = useLocalImageSrc(
-    !isPending && (isNearViewport || isOpen) ? attachment.path : undefined,
+    !isPending && !isMissing && !attachment.checking && (isNearViewport || isOpen)
+      ? attachment.path
+      : undefined,
     attachment.path,
     attachment.connectionId
   )
@@ -58,7 +62,11 @@ export function NativeChatImageAttachmentPreview({
     'components.native-chat.composer.imageSaving',
     'Saving pasted image…'
   )
-  const label = isPending ? pendingLabel : filename
+  const missingLabel = `${filename}: ${translate(
+    'components.native-chat.composer.imageMissing',
+    'Image no longer available. Remove it to send.'
+  )}`
+  const label = isPending ? pendingLabel : isMissing ? missingLabel : filename
 
   return (
     <>
@@ -73,9 +81,14 @@ export function NativeChatImageAttachmentPreview({
           aria-busy={isPending}
           title={label}
           onClick={() => setIsOpen(true)}
-          className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            'flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            isMissing && 'border-destructive'
+          )}
         >
-          {thumbnailSrc ? (
+          {isMissing ? (
+            <ImageOff className="size-5 text-destructive" />
+          ) : thumbnailSrc ? (
             <img
               src={thumbnailSrc}
               alt={label}
@@ -121,6 +134,11 @@ export function NativeChatImageAttachmentPreview({
                   <>
                     <Loader2 className="size-4 animate-spin" />
                     {pendingLabel}
+                  </>
+                ) : isMissing ? (
+                  <>
+                    <ImageOff className="size-4 text-destructive" />
+                    {missingLabel}
                   </>
                 ) : (
                   <>

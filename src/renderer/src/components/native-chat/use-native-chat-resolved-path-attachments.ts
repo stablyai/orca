@@ -13,10 +13,13 @@ type ResolvedAttachmentPath = {
   path: string
   connectionId?: string | null
   targetOwnerIsCurrent?: () => boolean
+  onRuntimeHost?: boolean
 }
 
 type Args = {
-  appendImageAttachments: (paths: { path: string; connectionId?: string | null }[]) => void
+  appendImageAttachments: (
+    paths: { path: string; connectionId?: string | null; onRuntimeHost?: boolean }[]
+  ) => void
   attachmentTargetBlocked: (targetOwned?: boolean) => boolean
   caret: number
   disabled: boolean
@@ -112,7 +115,13 @@ export function useNativeChatResolvedPathAttachments({
         .filter(({ path }) => !isNativeChatImageAttachmentPath(path))
         .map(({ path }) => path)
       // Images ride along on submit so chips and the TUI input cannot diverge.
-      appendImageAttachments(imagePaths.map(({ path, connectionId }) => ({ path, connectionId })))
+      appendImageAttachments(
+        imagePaths.map(({ path, connectionId, onRuntimeHost }) => ({
+          path,
+          connectionId,
+          onRuntimeHost
+        }))
+      )
       insertFileReferences(filePaths)
       if (ownedBlocked || clientLocalBlocked) {
         noteAttachmentTargetBlocked()
@@ -167,7 +176,8 @@ export function useNativeChatResolvedPathAttachments({
           ...paths.map((path) => ({
             path,
             connectionId,
-            targetOwnerIsCurrent: options.targetOwnerIsCurrent
+            targetOwnerIsCurrent: options.targetOwnerIsCurrent,
+            onRuntimeHost: options.onRuntimeHost
           }))
         )
         return
@@ -176,7 +186,8 @@ export function useNativeChatResolvedPathAttachments({
         paths.map((path) => ({
           path,
           connectionId,
-          targetOwnerIsCurrent: options.targetOwnerIsCurrent
+          targetOwnerIsCurrent: options.targetOwnerIsCurrent,
+          onRuntimeHost: options.onRuntimeHost
         })),
         true
       )

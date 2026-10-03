@@ -1,4 +1,4 @@
-import { readNativeChatDraftDocument } from './native-chat-draft-cache'
+import { readNativeChatDraftDocument } from './native-chat-draft-document-cache'
 // @vitest-environment happy-dom
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'

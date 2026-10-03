@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { ImageOff } from 'lucide-react'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
+import type { NativeChatDraftAttachmentLocation } from './native-chat-draft-storage'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
 import { NativeChatMentionHint, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
@@ -68,11 +69,16 @@ export type NativeChatComposerImageAttachment = {
   /** Empty while `pending`: the clipboard image has no agent-readable path yet. */
   path: string
   connectionId?: string
+  location?: NativeChatDraftAttachmentLocation
   /** Clipboard thumbnail (blob/data URL) rendered before — and after — the file
    *  lands, so the chip never waits on a disk round-trip to show something. */
   previewUrl?: string
   /** True while the pasted image is still being written to disk or uploaded. */
   pending?: boolean
+  /** The file is gone (a restored draft outlived it); Send waits until the chip is removed. */
+  missing?: boolean
+  /** A restored chip being granted and checked; its preview waits so the read is not refused. */
+  checking?: boolean
 }
 
 /**
@@ -220,6 +226,15 @@ export function NativeChatComposerField({
                   />
                 ))}
               </div>
+            ) : null}
+            {/* Why visible: Send stays disabled while a chip is missing, and a tooltip alone hides the reason. */}
+            {imageAttachments.some((attachment) => attachment.missing) ? (
+              <p className="mb-2 px-1 text-xs text-destructive">
+                {translate(
+                  'components.native-chat.composer.imageMissing',
+                  'Image no longer available. Remove it to send.'
+                )}
+              </p>
             ) : null}
             <NativeChatPromptEditor
               key={composerScopeKey}

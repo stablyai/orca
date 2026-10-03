@@ -162,7 +162,8 @@ export function useNativeChatWorkspaceFileDrop({
       }
 
       attachResolvedPaths(dragPaths.paths, owner.kind === 'ssh' ? owner.connectionId : undefined, {
-        targetOwnerIsCurrent
+        targetOwnerIsCurrent,
+        onRuntimeHost: owner.kind === 'runtime'
       })
     },
     [attachResolvedPaths, disabled, setNotice, structuredWorktreeId, terminalTabId]

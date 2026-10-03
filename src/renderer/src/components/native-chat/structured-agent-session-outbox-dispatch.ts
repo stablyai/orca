@@ -25,6 +25,11 @@ import {
   getStructuredAgentSessionOutbox
 } from './structured-agent-session-outbox-storage'
 import {
+  keepStructuredAgentSessionMessageDraft,
+  noteStructuredAgentSessionMessagesDelivered,
+  structuredAgentSessionHostHoldsMessage
+} from './structured-agent-session-message-delivery'
+import {
   getStructuredAgentLaunchPromptDispatch,
   shareStructuredAgentLaunchPromptDispatch
 } from '@/lib/structured-agent-session-launch-prompt'
@@ -123,14 +128,14 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
       if (args.dispatchGenerationRef.current !== args.dispatchGeneration) {
         return false
       }
-      args.applyDisposition(
-        disposeStructuredAgentSessionSendResult({
-          entries: getStructuredAgentSessionOutbox(args.sessionId),
-          entry: args.next,
-          result,
-          createOperationId: args.createOperationId
-        })
-      )
+      const disposition = disposeStructuredAgentSessionSendResult({
+        entries: getStructuredAgentSessionOutbox(args.sessionId),
+        entry: args.next,
+        result,
+        createOperationId: args.createOperationId
+      })
+      noteSendReply(args.sessionId, args.next.clientMessageId, result, disposition.entries)
+      args.applyDisposition(disposition)
       if (!result.ok) {
         return false
       }
@@ -173,4 +178,28 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
         start
       )
     : { promise: start(), started: true }
+}
+
+// Before the reply's outbox write, so the composer's saved draft follows the host's answer.
+function noteSendReply(
+  sessionId: string,
+  clientMessageId: string,
+  result: AgentSessionMutationResult<AgentSessionSendResult>,
+  entries: readonly StructuredAgentSessionOutboxEntry[]
+): void {
+  if (!result.ok) {
+    // Refused: the entry stays, perhaps under a new id, for the user's Retry.
+    return
+  }
+  const reply = result.value
+  const host =
+    'queued' in reply
+      ? { submissions: [], cards: [reply.queued] }
+      : { submissions: [reply.submission], cards: [] }
+  if (structuredAgentSessionHostHoldsMessage(host, clientMessageId)) {
+    noteStructuredAgentSessionMessagesDelivered(sessionId, [clientMessageId])
+  } else if (!entries.some((entry) => entry.clientMessageId === clientMessageId)) {
+    // Dropped with delivery unconfirmed: the draft's copy is all that is left.
+    keepStructuredAgentSessionMessageDraft(sessionId, clientMessageId)
+  }
 }

@@ -19,9 +19,13 @@ import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
 import type { NativeChatOptimisticSendOutcome } from './native-chat-composer-types'
+import { clearNativeChatDraftForSend } from './native-chat-draft-cache'
+import { saveNativeChatDraftAfterPtyWrite } from './native-chat-draft-save-after-send'
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
+  /** The chat's draft (`nativeChatDraftKey`); its clear is saved once the terminal has the message. */
+  draftKey: string
   draft: string
   imageAttachments: readonly { path: string }[]
   disabled: boolean
@@ -66,11 +70,13 @@ export function useNativeChatPtyComposerSend(args: {
       readScreen: () => args.readTerminalScreen?.()
     })
     let pendingId: string | undefined
+    let writeRejected = false
     const sendOptions =
       args.agent === 'claude' && classification === 'chat'
         ? {
             ...launchSendOptions,
             onWriteRejected: () => {
+              writeRejected = true
               if (pendingId) {
                 args.optimisticSendOutcome?.reject(pendingId)
               }
@@ -122,11 +128,20 @@ export function useNativeChatPtyComposerSend(args: {
       runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
     })
     args.setHistory((previous) => pushHistory(previous, text))
-    args.setDraft('')
-    args.setCaret(0)
-    args.clearSkillOrigin()
-    args.clearImageAttachments()
-    args.setNotice(null)
-    useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)
+    // The box empties now; its saved draft keeps the message until the terminal has it.
+    const saveDraft = clearNativeChatDraftForSend(args.draftKey, () => {
+      args.setDraft('')
+      args.setCaret(0)
+      args.clearSkillOrigin()
+      args.clearImageAttachments()
+      args.setNotice(null)
+      useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)
+    })
+    // A rejected write delivered nothing: the saved draft keeps the message.
+    saveNativeChatDraftAfterPtyWrite(pendingHandle, () => {
+      if (!writeRejected) {
+        saveDraft()
+      }
+    })
   }, [args])
 }

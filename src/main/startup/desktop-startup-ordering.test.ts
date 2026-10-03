@@ -50,6 +50,23 @@ describe('startup ordering', () => {
     expect(willQuit.slice(barrierStart)).toContain("{ name: 'browser', promise: browserShutdown }")
   })
 
+  // A chat's clear at send, still being written as Orca quits, must land before it exits.
+  it('waits for native chat draft writes before the committed quit exits', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-quit.ts'),
+      'utf8'
+    )
+    const willQuitStart = source.indexOf("app.on('will-quit'")
+    const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const willQuit = source.slice(willQuitStart, windowAllClosedStart)
+    const barrierStart = willQuit.indexOf('settleTeardownWithinDeadline([')
+
+    expect(barrierStart).toBeGreaterThanOrEqual(0)
+    expect(willQuit.slice(barrierStart)).toContain(
+      "{ name: 'native-chat-drafts', promise: drainNativeChatDrafts() }"
+    )
+  })
+
   it('registers repeatable serve signal handling before headless startup completes', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),

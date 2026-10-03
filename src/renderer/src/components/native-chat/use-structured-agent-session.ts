@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import * as structuredConversationCommands from './structured-conversation-command-send'
 import type { AgentSessionPromptResult } from '../../../../shared/agent-session-wire'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+import { useNativeChatHeldSends } from './use-native-chat-held-sends'
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
@@ -55,12 +56,15 @@ export function useStructuredAgentSession(args: {
   launch?: StructuredAgentSessionLaunchView
   /** The composer Edit copies a card's text into, and that gets back unsent outbox text. */
   composerScopeKey?: string
+  /** The composer's worktree, whose owner says where an image given back by a Stop lives. */
+  composerWorktreeId?: string
   /** The chat-wide "queue follow-ups" setting; off keeps mid-turn sends immediate. */
   queueFollowUps?: boolean
 }) {
   const {
     agent,
     composerScopeKey,
+    composerWorktreeId,
     isVisible,
     launch,
     providerStarting = false,
@@ -121,8 +125,14 @@ export function useStructuredAgentSession(args: {
     fence: transportState.fence,
     submissions: transportState.submissions,
     composerScopeKey,
+    composerWorktreeId,
     queueDelivery: { capability: queueCapability, enabled: queueFollowUps },
     queuedMessageIds
+  })
+  useNativeChatHeldSends(composerScopeKey, {
+    status: transportEnabled ? state.status : 'idle',
+    submissions: transportState.submissions,
+    queuedMessages: transportState.queuedMessages
   })
 
   const threadGoal = useStructuredAgentSessionThreadGoal({

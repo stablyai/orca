@@ -15,7 +15,7 @@ import type {
   AgentSessionQueuePause,
   AgentSessionSendResult
 } from '../../../../shared/agent-session-wire'
-import { appendNativeChatDraftCache } from './native-chat-draft-cache'
+import { appendNativeChatDraftNow, awaitNativeChatDraftWritten } from './native-chat-draft-cache'
 import {
   newestSteerableQueuedMessageCard,
   projectQueuedMessageCards,
@@ -121,13 +121,15 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     (messageId: string): Promise<void> =>
       actOnce(messageId, async () => {
         // The text is copied FIRST, from the card this pane already shows — a local move,
-        // never a wire payload. Without a composer to hold it, deleting would destroy it,
-        // so the draft then stays a card.
+        // never a wire payload — and the copy is written (bounded wait) before the host's copy is
+        // deleted, so a crash between them leaves the text somewhere. Without a composer to hold
+        // it, deleting would destroy it, so the draft then stays a card.
         const card = cardsRef.current.find((entry) => entry.messageId === messageId)
         if (!card || !composerScopeKey) {
           return
         }
-        appendNativeChatDraftCache(composerScopeKey, card.text)
+        void appendNativeChatDraftNow(composerScopeKey, { text: card.text })
+        await awaitNativeChatDraftWritten(composerScopeKey)
         const result = await mutate<AgentSessionQueuedMessageDeleteResult>(
           'agentSession.queuedMessageDelete',
           'agentSession.queuedMessageDelete',

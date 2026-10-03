@@ -39,6 +39,13 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
+import {
+  appendNativeChatDraftNow,
+  nativeChatDraftKey,
+  readNativeChatDraftCache,
+  readNativeChatDraftTuiInputSeed,
+  writeNativeChatDraftTuiInputSeed
+} from '@/components/native-chat/native-chat-draft-cache'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
@@ -106,6 +113,25 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
     const s = store.getState()
     expect(s.nativeChatLaunchDraftByTabId[TAB1]).toBeUndefined()
     expect(s.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
+  })
+
+  // Deleting a worktree drops its terminal tabs wholesale, never through closeTab.
+  it("single removeWorktree drops its terminal-agent chats' saved drafts and seeds only", async () => {
+    const store = createTestStore()
+    seedDrafts(store)
+    const removed = nativeChatDraftKey({ paneKey: `${TAB1}:leaf-1` })
+    const kept = nativeChatDraftKey({ paneKey: `${TAB2}:leaf-1` })
+    for (const key of [removed, kept]) {
+      appendNativeChatDraftNow(key, { text: 'unsent' })
+      writeNativeChatDraftTuiInputSeed(key, { agent: 'claude', text: 'issue', createdAt: 1 })
+    }
+
+    await store.getState().removeWorktree({ id: WT1, executionHostId: null })
+
+    expect(readNativeChatDraftCache(removed)).toBe('')
+    expect(readNativeChatDraftTuiInputSeed(removed)).toBeUndefined()
+    expect(readNativeChatDraftCache(kept)).toBe('unsent')
+    expect(readNativeChatDraftTuiInputSeed(kept)).toBeDefined()
   })
 
   it('persists the adopted flag, idempotently, and clears the whole entry', () => {

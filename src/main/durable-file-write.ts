@@ -4,7 +4,7 @@
 // hour's loss; fsync stops it from happening.
 
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
-import { copyFile, open, readdir, rm, stat } from 'node:fs/promises'
+import { copyFile, open, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import {
   publishFileWithoutOverwrite,
@@ -158,6 +158,26 @@ export async function writeFileDurableIfCurrent(
     renamed = true
     await syncDirectory(dirname(finalPath))
     return true
+  } finally {
+    if (!renamed) {
+      await rm(tmpPath, { force: true }).catch(() => {})
+    }
+  }
+}
+
+/**
+ * Write to a temp file and rename it over `finalPath`, with no fsync. Survives the process being
+ * killed once it returns, since the rename sits in the page cache; a power loss can still revert it.
+ */
+export async function writeFileProcessDurable(
+  tmpPath: string,
+  finalPath: string,
+  payload: string
+): Promise<void> {
+  let renamed = false
+  try {
+    await writeFile(tmpPath, payload, { mode: 0o600 })
+    renamed = await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
   } finally {
     if (!renamed) {
       await rm(tmpPath, { force: true }).catch(() => {})

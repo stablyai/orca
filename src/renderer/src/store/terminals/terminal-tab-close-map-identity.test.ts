@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeTab, makeWorktree, seedStore } from '../slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
+import {
+  appendNativeChatDraftNow,
+  nativeChatDraftKey,
+  readNativeChatDraftCache,
+  readNativeChatDraftTuiInputSeed,
+  writeNativeChatDraftTuiInputSeed
+} from '@/components/native-chat/native-chat-draft-cache'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -106,5 +113,33 @@ describe('closeTab map identity', () => {
     expect(after.pendingStartupByTabId).toEqual({})
     expect(after.cacheTimerByKey).toEqual({ 'tab-b:leaf': 2 })
     expect(after.unreadTerminalPanes).toEqual({})
+  })
+})
+
+describe('closeTab and chat drafts', () => {
+  it("deletes the chat drafts of the closing tab's panes only", () => {
+    const store = storeWithTwoTabs()
+    const closing = nativeChatDraftKey({ paneKey: 'tab-a:leaf-1' })
+    const kept = nativeChatDraftKey({ paneKey: 'tab-b:leaf-1' })
+    appendNativeChatDraftNow(closing, { text: 'unsent' })
+    appendNativeChatDraftNow(kept, { text: 'unsent' })
+
+    store.getState().closeTab('tab-a')
+
+    expect(readNativeChatDraftCache(closing)).toBe('')
+    expect(readNativeChatDraftCache(kept)).toBe('unsent')
+  })
+})
+
+describe('clearing a tab launch draft', () => {
+  // Sent, resolved or closed: the input line no longer holds it, so a relaunch must not seed it.
+  it("forgets the seed its panes' drafts saved", () => {
+    const store = storeWithTwoTabs()
+    const pane = nativeChatDraftKey({ paneKey: 'tab-a:leaf-1' })
+    writeNativeChatDraftTuiInputSeed(pane, { agent: 'claude', text: 'issue', createdAt: 1 })
+
+    store.getState().clearNativeChatLaunchDraft('tab-a')
+
+    expect(readNativeChatDraftTuiInputSeed(pane)).toBeUndefined()
   })
 })

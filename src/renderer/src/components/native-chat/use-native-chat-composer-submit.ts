@@ -108,7 +108,7 @@ export function useNativeChatComposerSubmit(args: {
   ])
 
   const send = useCallback(() => {
-    if (imageAttachments.some((attachment) => attachment.pending)) {
+    if (imageAttachments.some((attachment) => attachment.pending || attachment.missing)) {
       return
     }
     if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {

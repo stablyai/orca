@@ -10,6 +10,7 @@ import {
   type HistoryState
 } from './native-chat-composer-state'
 import { useNativeChatDraft } from './use-native-chat-draft'
+import { nativeChatDraftKey } from './native-chat-draft-cache'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
@@ -71,22 +72,21 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     },
     ref
   ): React.JSX.Element {
-    // Scope key shared with image attachments so an unsent draft + its attached
-    // images survive both TUI/GUI toggles and PTY replacement on reconnect.
-    // Why: local, SSH, and runtime reconnects can replace or temporarily clear
-    // the PTY id. Pane identity is the stable ownership key for unsent input.
+    // The unsent text and images belong to the chat, shared by every view of it; the pane key
+    // stays the identity of this editor and its drop target. Why not the PTY id: local, SSH,
+    // and runtime reconnects can replace or temporarily clear it.
+    const draftKey = nativeChatDraftKey({ sessionId: structuredTransport?.sessionId, paneKey })
     const imeEnterGesture = useImeEnterGestureOwnership()
     const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(
-      paneKey,
+      draftKey,
       imeEnterGesture.isComposing
     )
     const [caret, setCaret] = useState(draft.length)
     useNativeChatLaunchDraftAdoption({
       terminalTabId,
       agent,
-      launchDraft: launchSeed?.launchDraft,
-      launchDraftResolved: launchSeed?.launchDraftResolved === true,
-      ownsTabWideLaunchDraft: launchSeed?.ownsTabWideLaunchDraft === true,
+      launchSeed,
+      tuiDraftKey: structuredTransport ? undefined : draftKey,
       draft,
       setDraft,
       setCaret
@@ -154,7 +154,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     }, [])
 
     const attachments = useNativeChatComposerAttachments({
-      attachmentScopeKey: paneKey,
+      attachmentScopeKey: draftKey,
       allowWithoutTarget: Boolean(structuredTransport),
       caret,
       disabled,
@@ -182,12 +182,12 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       attachResolvedPaths,
       setNotice
     })
-    // A pasted image has no agent-readable path until its save lands; sending
-    // mid-save would ship the message without the image the chip promises.
-    const hasPendingAttachment = imageAttachments.some((attachment) => attachment.pending)
+    // A pasted image has no agent-readable path until its save lands, and a missing one never
+    // will; sending would ship the message without the image the chip promises.
+    const hasBlockedAttachment = imageAttachments.some((chip) => chip.pending || chip.missing)
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
-      : disabled || hasPendingAttachment || (draft.trim() === '' && imageAttachments.length === 0)
+      : disabled || hasBlockedAttachment || (draft.trim() === '' && imageAttachments.length === 0)
 
     const { attachExternalPaths, resolveAttachmentOwner } = useNativeChatExternalAttachments({
       terminalTabId,
@@ -250,6 +250,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
+      draftKey,
       draft,
       imageAttachments,
       structuredTransport,
@@ -262,6 +263,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const sendPty = useNativeChatPtyComposerSend({
       agent,
+      draftKey,
       draft,
       imageAttachments,
       disabled,
@@ -306,6 +308,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const dispatchPtyPickerCommand = useNativeChatPickerCommandDispatch({
       agent,
+      draftKey,
       disabled,
       isDispatchingSessionOption,
       resolveTarget,

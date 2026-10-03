@@ -6,11 +6,15 @@ import { join } from 'node:path'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,
-  writeFileDurable
+  writeFileDurable,
+  writeFileProcessDurable
 } from './durable-file-write'
+import { removeFileWithWindowsRetryAsync } from './codex-accounts/fs-utils'
 
 const queues = new Map<string, Promise<unknown>>()
 const staleTempCleanups = new Map<string, Promise<void>>()
+// Why once per run: only a crashed run leaves temp files, so sweeping again finds nothing.
+const sweptFiles = new Set<string>()
 const STALE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 export function sidecarSnapshotFile(snapshotDirectory: string, fileName: string): string {
@@ -43,19 +47,36 @@ export async function readSidecarSnapshot(file: string): Promise<unknown> {
   }
 }
 
-export async function writeSidecarSnapshot(file: string, payload: unknown): Promise<void> {
-  let cleanup = staleTempCleanups.get(file)
-  if (!cleanup) {
-    cleanup = removeStaleDurableWriteTempFiles(file, { minimumAgeMs: STALE_TEMP_AGE_MS })
-    staleTempCleanups.set(file, cleanup)
-    void cleanup.then(() => {
-      if (staleTempCleanups.get(file) === cleanup) {
-        staleTempCleanups.delete(file)
-      }
-    })
+/**
+ * `durability: 'process'` skips fsync: the write survives the app being killed but not a power
+ * loss, for sidecars written on a latency-sensitive path.
+ */
+export async function writeSidecarSnapshot(
+  file: string,
+  payload: unknown,
+  options: { durability?: 'power-loss' | 'process' } = {}
+): Promise<void> {
+  if (!sweptFiles.has(file)) {
+    let cleanup = staleTempCleanups.get(file)
+    if (!cleanup) {
+      cleanup = removeStaleDurableWriteTempFiles(file, { minimumAgeMs: STALE_TEMP_AGE_MS })
+      staleTempCleanups.set(file, cleanup)
+      void cleanup.then(() => {
+        sweptFiles.add(file)
+        if (staleTempCleanups.get(file) === cleanup) {
+          staleTempCleanups.delete(file)
+        }
+      })
+    }
+    await cleanup
   }
-  await cleanup
-  await writeFileDurable(durableWriteTempPath(file), file, JSON.stringify(payload))
+  const write = options.durability === 'process' ? writeFileProcessDurable : writeFileDurable
+  await write(durableWriteTempPath(file), file, JSON.stringify(payload))
+}
+
+/** Delete a sidecar; a missing one is already removed. Run it inside the file's queue. */
+export async function removeSidecarSnapshot(file: string): Promise<void> {
+  await removeFileWithWindowsRetryAsync(file)
 }
 
 export function _getSidecarSnapshotPendingFileCountForTests(): number {

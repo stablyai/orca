@@ -17484,6 +17484,7 @@
         "viewAttachment": "查看图片",
         "imagePreview": "全尺寸图像预览",
         "imagePreviewUnavailable": "预览不可用",
+        "imageMissing": "图片已不可用。请移除后再发送。",
         "workspaceAttachmentMismatch": "文件只能附加到其源工作区。",
         "attachmentOwnerChanged": "此工作区在附加时更改了主机 - 再次删除文件。",
         "attachmentUnreadable": "无法读取删除的文件。"

@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/structured-agent-session-outbox'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { observeStructuredAgentSessionOutboxWrite } from './structured-agent-session-message-delivery'
 
 const OUTBOX_PREFIX = 'orca:desktopStructuredAgentSessionOutbox:v1:'
 
@@ -86,6 +87,7 @@ export function writeOutbox(
   sessionId: string,
   entries: readonly StructuredAgentSessionOutboxEntry[]
 ): boolean {
+  observeStructuredAgentSessionOutboxWrite(sessionId, entries)
   try {
     if (entries.length === 0) {
       localStorage.removeItem(storageKey(sessionId))

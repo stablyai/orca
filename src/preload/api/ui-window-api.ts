@@ -12,6 +12,8 @@ export type UiWindowApi = {
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
+    /** Keep a local image in Orca's chat attachment storage instead of OS temp. */
+    chatAttachment?: boolean
   }) => Promise<string | null>
   clipboardHasImage: () => Promise<boolean | null>
   /** Paths of files a file manager copied; empty when there are none or the host cannot list them. */

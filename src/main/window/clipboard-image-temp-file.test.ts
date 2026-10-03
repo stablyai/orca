@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { authorizeExternalPathMock, writeFileMock, getPathMock, writeFileBase64Mock } = vi.hoisted(
-  () => ({
-    authorizeExternalPathMock: vi.fn(),
-    writeFileMock: vi.fn(),
-    getPathMock: vi.fn(() => '/var/folders/ab/T'),
-    writeFileBase64Mock: vi.fn()
-  })
-)
+const {
+  authorizeExternalPathMock,
+  writeFileMock,
+  getPathMock,
+  writeFileBase64Mock,
+  saveNativeChatAttachmentFileMock
+} = vi.hoisted(() => ({
+  authorizeExternalPathMock: vi.fn(),
+  writeFileMock: vi.fn(),
+  getPathMock: vi.fn(() => '/var/folders/ab/T'),
+  writeFileBase64Mock: vi.fn(),
+  saveNativeChatAttachmentFileMock: vi.fn(async (fileName: string) => `/user-data/chat/${fileName}`)
+}))
 
 vi.mock('node:fs/promises', () => ({ default: { writeFile: writeFileMock } }))
 vi.mock('node:crypto', () => ({ randomUUID: () => 'uuid-1' }))
@@ -21,6 +26,9 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   })
 }))
 vi.mock('../ipc/filesystem-auth', () => ({ authorizeExternalPath: authorizeExternalPathMock }))
+vi.mock('./native-chat-attachment-store', () => ({
+  saveNativeChatAttachmentFile: saveNativeChatAttachmentFileMock
+}))
 
 import { saveClipboardImageBufferAsTempFile } from './clipboard-image-temp-file'
 
@@ -46,5 +54,19 @@ describe('saveClipboardImageBufferAsTempFile', () => {
     expect(savedPath.startsWith('/remote/tmp/')).toBe(true)
     expect(writeFileBase64Mock).toHaveBeenCalled()
     expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+  })
+
+  // A chat draft can hold the image across a reboot, which OS temp does not survive.
+  it("keeps a chat attachment in Orca's attachment storage, not OS temp", async () => {
+    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from([1]), {
+      chatAttachment: true
+    })
+
+    expect(savedPath.startsWith('/user-data/chat/orca-paste-')).toBe(true)
+    expect(saveNativeChatAttachmentFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^orca-paste-.+\.png$/),
+      Buffer.from([1])
+    )
+    expect(writeFileMock).not.toHaveBeenCalled()
   })
 })

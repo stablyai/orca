@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import type { Store } from '../persistence'
 import { getAllowedRoots } from './filesystem-allowed-roots'
+import { getNativeChatAttachmentAllowedRoots } from '../window/native-chat-attachment-store'
 import { isDescendantOrEqual, isENOENT, normalizeExistingPath } from './filesystem-path-containment'
 import {
   ensureAuthorizedRootsCache,
@@ -54,7 +55,12 @@ type AllowedRootsSnapshot = { get: () => readonly string[] }
 
 function createAllowedRootsSnapshot(store: Store): AllowedRootsSnapshot {
   let roots: readonly string[] | undefined
-  return { get: () => (roots ??= getAllowedRoots(store)) }
+  return { get: () => (roots ??= getAuthorizedRoots(store)) }
+}
+
+/** Workspace roots, plus Orca's own storage for chat draft images so a relaunch can read them. */
+function getAuthorizedRoots(store: Store): string[] {
+  return [...getAllowedRoots(store), ...getNativeChatAttachmentAllowedRoots()]
 }
 
 export function isPathAllowed(
@@ -71,7 +77,7 @@ export function isPathAllowed(
       return true
     }
   }
-  return (allowedRoots?.get() ?? getAllowedRoots(store)).some((root) =>
+  return (allowedRoots?.get() ?? getAuthorizedRoots(store)).some((root) =>
     isDescendantOrEqual(resolvedTarget, root)
   )
 }
@@ -223,7 +229,7 @@ async function isPathAllowedByCanonicalAllowedRoot(
   if (!sourcePath) {
     return false
   }
-  for (const root of allowedRoots?.get() ?? getAllowedRoots(store)) {
+  for (const root of allowedRoots?.get() ?? getAuthorizedRoots(store)) {
     const resolvedRoot = resolve(root)
     if (!isDescendantOrEqual(sourcePath, resolvedRoot)) {
       continue

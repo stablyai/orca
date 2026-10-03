@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { copyFileSync, existsSync, linkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { rename } from 'node:fs/promises'
+import { rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
@@ -215,6 +215,21 @@ export async function renameFileWithWindowsRetryAsync(
     try {
       await rename(source, target)
       return true
+    } catch (error) {
+      if (!shouldRetryFileOperation(error, attempt)) {
+        throw error
+      }
+      await setTimeout(attempt * 50)
+    }
+  }
+}
+
+/** Deletes `target`, treating a missing file as deleted; retries like the rename above (#1507). */
+export async function removeFileWithWindowsRetryAsync(target: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await rm(target, { force: true })
+      return
     } catch (error) {
       if (!shouldRetryFileOperation(error, attempt)) {
         throw error

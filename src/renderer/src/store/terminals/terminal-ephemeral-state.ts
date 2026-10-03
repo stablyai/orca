@@ -1,6 +1,7 @@
 import { isClaudeAgent } from '@/lib/agent-status'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { forgetNativeChatTuiInputSeeds } from '@/components/native-chat/native-chat-draft-cache'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalEphemeralActions(
@@ -132,6 +133,8 @@ export function createTerminalEphemeralActions(
       })
     },
     clearNativeChatLaunchDraft: (tabId) => {
+      // The draft's saved copy of the seed goes with it, or a relaunch would seed it again.
+      forgetNativeChatTuiInputSeeds(tabId)
       set((s) => {
         if (!s.nativeChatLaunchDraftByTabId[tabId]) {
           return s

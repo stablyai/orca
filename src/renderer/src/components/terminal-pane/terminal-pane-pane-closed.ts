@@ -15,6 +15,7 @@ import {
   discardDeferredSplitPaneHandoffForKey
 } from './deferred-split-pane-handoff'
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
+import { discardNativeChatDrafts } from '@/components/native-chat/native-chat-draft-cache'
 
 export function createTerminalPaneClosedHandler(
   context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
@@ -112,6 +113,8 @@ export function createTerminalPaneClosedHandler(
       })
     } else if (leafId && !isDetachedToTab) {
       useAppStore.getState().retireAgentPaneAuthority(makePaneKey(tabId, leafId))
+      // A closed leaf is never reused, so its chat draft is unreachable.
+      discardNativeChatDrafts({ paneKeys: [makePaneKey(tabId, leafId)] })
     }
     if (transport && !isRetiredSurface) {
       if (isDetachedToTab) {

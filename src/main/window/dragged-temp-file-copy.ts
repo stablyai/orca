@@ -23,7 +23,7 @@ const TEMPORARY_ITEMS_SEGMENT = 'TemporaryItems'
 const DRAG_PROVIDER_DIR_PREFIX = 'NSIRD_'
 const COPY_ROOT_NAME = 'orca-drops'
 const COPY_DIR_PREFIX = 'orca-drop-'
-const COPY_DIR_PATTERN = /^orca-drop-[A-Za-z0-9]{6}$/
+export const DRAG_TEMP_COPY_DIR_PATTERN = /^orca-drop-[A-Za-z0-9]{6}$/
 // Why: open drafts and startup prompts read the copy lazily, often days later, so
 // keep it well past the drop; the TTL still bounds what the copy budget holds.
 export const DRAG_TEMP_COPY_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -36,6 +36,8 @@ export type DragTempCopyEnvironment = {
   sourceTempRoot: string
   /** Orca-owned directory that holds one `orca-drop-*` directory per copy. */
   copyRoot: string
+  /** Creates or accepts `copyRoot`; the default demands a private root, as a shared temp dir needs. */
+  prepareCopyRoot?: (copyRoot: string) => Promise<boolean>
 }
 
 export type DragTempCopyItemResult =
@@ -158,7 +160,7 @@ export async function materializeDragTempPath(
       }
       signal?.throwIfAborted()
 
-      copyDir = await createCopyDirectory(env.copyRoot)
+      copyDir = await createCopyDirectory(env)
       const destPath = join(copyDir, basename(canonicalSource))
       // Why: stream from the checked handle, capped at the inspected size, so a
       // swapped or growing source cannot slip through; unlike cp, ditto or
@@ -211,7 +213,7 @@ export async function sweepExpiredDragTempCopies(
   await sweepExpiredOwnedDirectories(copyRoot, {
     nowMs,
     ttlMs: DRAG_TEMP_COPY_TTL_MS,
-    ownsEntry: (name) => COPY_DIR_PATTERN.test(name)
+    ownsEntry: (name) => DRAG_TEMP_COPY_DIR_PATTERN.test(name)
   })
 }
 
@@ -226,7 +228,7 @@ async function measureRetainedCopyBytes(copyRoot: string): Promise<number> {
   }
   try {
     for await (const entry of rootDir) {
-      if (!entry.isDirectory() || !COPY_DIR_PATTERN.test(entry.name)) {
+      if (!entry.isDirectory() || !DRAG_TEMP_COPY_DIR_PATTERN.test(entry.name)) {
         continue
       }
       const copyDir = join(copyRoot, entry.name)
@@ -293,12 +295,12 @@ function isPathWithin(root: string, candidate: string): boolean {
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
 }
 
-async function createCopyDirectory(copyRoot: string): Promise<string> {
+async function createCopyDirectory(env: DragTempCopyEnvironment): Promise<string> {
   try {
-    if (!(await ensureOwnedTempStagingRoot(copyRoot))) {
+    if (!(await (env.prepareCopyRoot ?? ensureOwnedTempStagingRoot)(env.copyRoot))) {
       throw new DropCopyError('storage-not-private')
     }
-    return await mkdtemp(join(copyRoot, COPY_DIR_PREFIX))
+    return await mkdtemp(join(env.copyRoot, COPY_DIR_PREFIX))
   } catch (error) {
     if (error instanceof DropCopyError) {
       throw error

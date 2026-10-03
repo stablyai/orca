@@ -43,6 +43,7 @@ import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
+import { scheduleNativeChatAttachmentSweep } from './native-chat-attachment-store'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
@@ -103,6 +104,7 @@ export function registerClipboardHandlers(store: Store): void {
 
   void cleanupExpiredRemoteClipboardFiles()
   scheduleLegacyRemoteClipboardFileCleanup()
+  scheduleNativeChatAttachmentSweep()
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)

@@ -16,6 +16,10 @@ import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache
 } from './native-chat-draft-cache'
+import {
+  installHeldNativeChatDrafts,
+  installNativeChatDrafts
+} from './native-chat-draft-store.test-support'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 
@@ -61,6 +65,11 @@ function createHarness(
 
 beforeEach(() => {
   clearNativeChatDraftCacheForTests()
+  installNativeChatDrafts({
+    load: async () => [],
+    loadSync: () => [],
+    write: async () => 'persisted'
+  })
 })
 
 afterEach(() => {
@@ -124,6 +133,44 @@ describe('queued message actions', () => {
     // Copy-first: the composer already held the text when the RPC was issued.
     expect(draftWhenDeleteArrived).toBe('text of draft-1')
     expect(readNativeChatDraftCache(SCOPE)).toBe('text of draft-1')
+  })
+
+  // A crash between the host's delete and the copy reaching its file would lose the text.
+  it('Edit deletes the host copy only once the composer copy is written', async () => {
+    const writes = installHeldNativeChatDrafts()
+    const harness = createHarness()
+    let edited: Promise<void> = Promise.resolve()
+    act(() => {
+      edited = harness.result.current.edit('draft-1')
+    })
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(harness.mutate).not.toHaveBeenCalled()
+
+    writes[0]?.settle('persisted')
+    await act(() => edited)
+    expect(harness.mutate).toHaveBeenCalledWith(
+      'agentSession.queuedMessageDelete',
+      'agentSession.queuedMessageDelete',
+      { messageId: 'draft-1' }
+    )
+  })
+
+  it('Edit still deletes the host copy when writing the composer copy fails or stalls', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const writes = installHeldNativeChatDrafts()
+    const failing = createHarness()
+    let edited: Promise<void> = Promise.resolve()
+    act(() => {
+      edited = failing.result.current.edit('draft-1')
+    })
+    await waitFor(() => expect(writes).toHaveLength(1))
+    writes[0]?.settle('failed')
+    await act(() => edited)
+    expect(failing.mutate).toHaveBeenCalledOnce()
+
+    const stalled = createHarness()
+    await act(() => stalled.result.current.edit('draft-2'))
+    expect(stalled.mutate).toHaveBeenCalledOnce()
   })
 
   it('the text survives a failed Delete: the card stays and the composer keeps the copy', async () => {
