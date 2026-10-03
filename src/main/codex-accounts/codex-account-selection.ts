@@ -9,6 +9,7 @@ import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { CodexConfigMirror } from './codex-config-mirror'
 import type { CodexAccountServiceLifecycle } from './codex-account-service-types'
 import { toCodexManagedAccountSummary } from './codex-account-service-types'
+import { canSkipCodexRemovalRuntimeSync } from './inactive-removal-runtime-sync'
 import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
@@ -71,13 +72,20 @@ export class CodexAccountSelection {
     )
     const nextActiveId =
       settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
+    const skipRuntimeSync =
+      account.managedHomeRuntime !== 'wsl' &&
+      canSkipCodexRemovalRuntimeSync(settings, nextAccounts, nextSelection, () =>
+        this.dependencies.runtimeHome.getSelectedHostAccountCodexHomePath()
+      )
 
     this.dependencies.store.updateSettings({
       codexManagedAccounts: nextAccounts,
       activeCodexManagedAccountId: nextActiveId,
       activeCodexManagedAccountIdsByRuntime: nextSelection
     })
-    this.dependencies.runtimeHome.syncForCurrentSelection()
+    if (!skipRuntimeSync) {
+      this.dependencies.runtimeHome.syncForCurrentSelection()
+    }
     if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }
@@ -91,12 +99,14 @@ export class CodexAccountSelection {
       console.warn('[codex-accounts] Removed account, but credit ledger cleanup failed:', error)
     }
     const accountTarget = getCodexSelectionTargetForAccount(account)
-    this.startQuotaRefresh(
-      getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
-        ? accountId
-        : undefined,
-      accountTarget
-    )
+    if (!skipRuntimeSync) {
+      this.startQuotaRefresh(
+        getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
+          ? accountId
+          : undefined,
+        accountTarget
+      )
+    }
     return this.snapshot()
   }
 
