@@ -4,6 +4,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalProducerLinkage,
   AgentJournalRowAttribution,
+  AgentJournalSubmissionSource,
   AgentJournalTurnScope,
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
@@ -110,6 +111,9 @@ export function journalDispatchRowBuilder(
     providerItemId,
     reason: boundedDispatchReason(input),
     ...(input.state === 'rejected' ? { rejection: input.rejection } : {}),
+    ...(input.state === 'rejected' && input.keptAsQueuedMessageId !== undefined
+      ? { keptAsQueuedMessageId: input.keptAsQueuedMessageId }
+      : {}),
     ...journalRowBase(state().epoch, seq, input.fence, ts),
     ...(input.recovered ? { recovered: input.recovered } : {}),
     ...(input.state === 'pending' ? { turnScope: input.turnScope } : {})
@@ -308,6 +312,7 @@ export function buildJournalSubmissionRow(input: {
   handoverRecorded?: true
   queuedMessageId?: string
   origin?: 'client' | 'host'
+  source?: AgentJournalSubmissionSource
 }): JournalSubmissionRow {
   return {
     kind: 'submission',
@@ -318,6 +323,7 @@ export function buildJournalSubmissionRow(input: {
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
     ...(input.handoverRecorded ? { handoverRecorded: true } : {}),
     ...(input.queuedMessageId !== undefined ? { queuedMessageId: input.queuedMessageId } : {}),
-    ...(input.origin !== undefined ? { origin: input.origin } : {})
+    ...(input.origin !== undefined ? { origin: input.origin } : {}),
+    ...(input.source !== undefined ? { source: input.source } : {})
   }
 }

@@ -222,6 +222,13 @@ export function reconcileStructuredAgentSessionOutbox(
     ) {
       return []
     }
+    // The host kept it as a card, which carries the text from here, edited or deleted included.
+    if (
+      submission?.dispatchState === 'rejected' &&
+      submission.keptAsQueuedMessageId !== undefined
+    ) {
+      return []
+    }
     if (submission?.dispatchState === 'pending') {
       if (entry.state === 'dispatching') {
         return [entry]

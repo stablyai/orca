@@ -17829,6 +17829,7 @@
         "turnOffQueueing": "キューへの追加をオフにする",
         "withdrawnHold": "送信前に停止されました",
         "pausedSendFailed": "送信できませんでした。「送信」を押して再試行してください。",
+        "pausedKept": "まだ送信されていません。「送信」を押すと送信されます。",
         "paused": "一時停止中",
         "queuePausedStopped": "中断したため、キューを一時停止しました",
         "queuePausedRestarted": "Orca が再起動したため、キューを一時停止しました",

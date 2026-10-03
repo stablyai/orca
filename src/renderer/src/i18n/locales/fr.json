@@ -17892,6 +17892,7 @@
         "turnOffQueueing": "Désactiver la file d'attente",
         "withdrawnHold": "Arrêté avant l'envoi",
         "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
+        "pausedKept": "Pas encore envoyé. Appuyez sur Envoyer pour l'envoyer.",
         "paused": "En pause",
         "queuePausedStopped": "File d'attente en pause, car vous avez interrompu",
         "queuePausedRestarted": "File d'attente en pause, car Orca a redémarré",

@@ -17846,6 +17846,7 @@
         "turnOffQueueing": "关闭排队",
         "withdrawnHold": "在发送前已停止",
         "pausedSendFailed": "无法发送。点按发送以重试。",
+        "pausedKept": "尚未发送。点按发送即可发送。",
         "paused": "已暂停",
         "queuePausedStopped": "因你中断了操作，队列已暂停",
         "queuePausedRestarted": "因 Orca 重新启动，队列已暂停",

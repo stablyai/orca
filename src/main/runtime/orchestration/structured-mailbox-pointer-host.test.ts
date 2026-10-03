@@ -108,6 +108,8 @@ describe('structured mailbox pointer host', () => {
     // Per-dispatch, so one worker's nudges cannot exhaust the shared operation-ledger budget.
     expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
     expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
+    // The mailbox sends mail again after a restart, so a restart never keeps it as a card.
+    expect(send.mock.calls[0]![1]).toMatchObject({ source: 'mail' })
   })
 
   it('consumes mail once an accepted nudge is delivered while the worker starts (W10)', async () => {

@@ -239,7 +239,8 @@ export async function sendStructuredWorkerPreamble(args: {
         expectedRuntimeFence: fence,
         payloadFingerprint: structuredPointerPayloadFingerprint(args.sessionId, body)
       },
-      body
+      body,
+      source: 'dispatch'
     }
   )
   if (!result.ok) {

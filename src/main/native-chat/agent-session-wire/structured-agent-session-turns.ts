@@ -13,7 +13,8 @@ import {
 } from '../../../shared/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalSubmissionSource
 } from '../../../shared/agent-session-journal-types'
 import {
   refuse,
@@ -124,6 +125,7 @@ export async function performSend(
     body: AgentJournalMessageItem
     /** Who asked for the turn; absent on callers that predate it. */
     origin?: 'client' | 'host'
+    source?: AgentJournalSubmissionSource
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal

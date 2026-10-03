@@ -20,6 +20,7 @@ import {
   type AgentJournalItemBody,
   type AgentJournalMessageItem,
   type AgentJournalProducerLinkage,
+  type AgentJournalSubmissionSource,
   type AgentJournalTurnScope,
   type AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
@@ -134,6 +135,9 @@ export type JournalSubmissionRow = JournalRowBase & {
    *  continuation, a launch prompt, the queue's automatic drain. Absent on rows from before it
    *  was recorded. Older readers keep the key and ignore it. */
   origin?: JournalSubmissionOrigin
+  /** Which path sent it (`AgentJournalSubmissionSource`). Absent on rows from before it was
+   *  recorded. Older readers keep the key and ignore it. */
+  source?: AgentJournalSubmissionSource
 }
 
 export type JournalSubmissionOrigin = 'client' | 'host'
@@ -150,6 +154,9 @@ export type JournalDispatchRow = JournalRowBase & {
   /** On `rejected`: why, typed. Older readers keep the key and ignore it; a malformed one is
    *  dropped when read, never the row. */
   rejection?: AgentSessionFailureFact
+  /** On `rejected`: the card the host kept this send as (`AgentJournalSubmission`). Older readers
+   *  keep the key and ignore it. */
+  keptAsQueuedMessageId?: string
 }
 
 /** An item mutation may name its own producer, because one batch can CREATE

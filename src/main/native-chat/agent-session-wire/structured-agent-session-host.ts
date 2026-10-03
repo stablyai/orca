@@ -257,6 +257,7 @@ export class StructuredAgentSessionHost {
   // type, and this file has no line budget left for the import.
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
     this.conversationDelivery.dispose()
+    this.queued.drain.dispose()
     await flushStructuredAgentSessionHost({
       ...this.lifetimeContext(),
       idleSweep: this.lifetime,

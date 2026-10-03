@@ -512,7 +512,7 @@ it('rejects as closed a message a second tab close closed, though that close cou
 
   // The second close's own rejection of what is queued fails; its stop is a new ask all the same.
   const session = host['sessions'].get(SESSION)!
-  vi.spyOn(session.journal, 'rejectQueuedSubmissions').mockRejectedValueOnce(new Error('disk full'))
+  vi.spyOn(session.journal, 'resolveDispatch').mockRejectedValueOnce(new Error('disk full'))
   await expect(host.close(SESSION, 'user-close')).rejects.toThrow()
   expect(connection.closeCount).toBe(3)
   expect(await submission(next)).toMatchObject({ dispatchState: 'pending' })

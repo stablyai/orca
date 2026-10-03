@@ -107,8 +107,7 @@ export function useStructuredAgentSession(args: {
     mutate,
     ...(launch ? { launch } : {})
   })
-  // Only a capable host may see `delivery` or the queuedMessage RPCs; against
-  // anything older this client must look exactly like today's.
+  // Only a capable host may see `delivery`; a card any host publishes shows, with its actions.
   const queueCapability = useStructuredAgentSessionHostQueuesMessagesState(target)
   const queueCapable = queueCapability === 'supported'
   const queuedMessageIds = useMemo(

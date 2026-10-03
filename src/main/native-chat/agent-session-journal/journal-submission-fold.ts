@@ -30,7 +30,9 @@ export function applyJournalSubmission(
     ...(typeof row.queuedMessageId === 'string' && row.queuedMessageId.length > 0
       ? { queuedMessageId: row.queuedMessageId }
       : {}),
-    ...(row.origin === 'client' || row.origin === 'host' ? { origin: row.origin } : {})
+    ...(row.origin === 'client' || row.origin === 'host' ? { origin: row.origin } : {}),
+    // Kept as written, a newer build's too: an unknown source must never read as a row without one.
+    ...(typeof row.source === 'string' ? { source: row.source } : {})
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
   // A message handed over later belongs to no turn until its handover names one.

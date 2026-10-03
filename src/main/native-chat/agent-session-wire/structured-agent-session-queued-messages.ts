@@ -264,8 +264,16 @@ export type QueuedMessageDrainDeps = {
  */
 export class StructuredAgentSessionQueuedMessageDrain {
   private readonly scheduled = new Set<string>()
+  private disposed = false
 
   constructor(private readonly deps: QueuedMessageDrainDeps) {}
+
+  /** Quit, with delivery: a hand-off made now could only be settled by the next process, so a
+   *  quit leaves the cards exactly as a crash does. Read by the step at its start, and again
+   *  right before it appends, since quit can land while it awaits. */
+  dispose(): void {
+    this.disposed = true
+  }
 
   schedule(sessionId: string): void {
     const journal = this.deps.sessions.get(sessionId)?.journal
@@ -312,7 +320,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
 
   private async step(sessionId: string): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
-    if (!session || session.journal.isReadOnly) {
+    if (this.disposed || !session || session.journal.isReadOnly) {
       return
     }
     const journal = session.journal
@@ -335,7 +343,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
     // Live facts only, through the one gate; the backlog is never a gate, so a
     // lone draft drains. Whatever clears a hold publishes or commits, which
     // re-derives this step.
-    if (structuredQueueHold({ journal, record, fence }) !== null) {
+    if (this.disposed || structuredQueueHold({ journal, record, fence }) !== null) {
       return
     }
     // Always a fresh id: the submission names its draft by `queuedMessageId`, never by id equality.
@@ -346,6 +354,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
           clientMessageId: submissionId,
           // The queue's own automatic send: it never ends a pause.
           origin: 'host',
+          source: 'queue',
           payloadFingerprint: next.fingerprint,
           body: next.body,
           fence,

@@ -54,10 +54,10 @@ export async function commitStructuredAgentSessionLaunchPrompt(args: {
     queuedAt: Date.now()
   })
   try {
-    const result = await args.host.send(
-      args.caller,
-      structuredAgentSessionSendMutation(entry, args.fence)
-    )
+    const result = await args.host.send(args.caller, {
+      ...structuredAgentSessionSendMutation(entry, args.fence),
+      source: 'launch'
+    })
     return result.ok ? result.value.clientMessageId : null
   } catch (error) {
     // Settlement can fail after the journal append. Re-read the authoritative row before asking

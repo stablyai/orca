@@ -273,6 +273,15 @@ describe('structured worker dispatch preamble', () => {
   const send = (host: PreambleHost) =>
     sendStructuredWorkerPreamble({ host, sessionId: 's1', dispatchId: 'd1', preamble: 'spec' })
 
+  // Recorded so a restart or a close knows it is the dispatch's, which orchestration re-derives.
+  it('sends the preamble as the dispatch’s, never a person’s', async () => {
+    const host = hostWithSubmission({ dispatchState: 'accepted', reason: null })
+    const sent = vi.spyOn(host, 'send')
+    await send(host)
+    expect(sent.mock.calls[0]?.[1]).toMatchObject({ source: 'dispatch' })
+    expect(sent.mock.calls[0]?.[1]).not.toHaveProperty('userSend')
+  })
+
   it('reports the preamble delivered only on an accepted submission', async () => {
     await expect(
       send(hostWithSubmission({ dispatchState: 'accepted', reason: null }))

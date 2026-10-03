@@ -17829,6 +17829,7 @@
         "turnOffQueueing": "대기열 사용 안 함",
         "withdrawnHold": "전송 전에 중지됨",
         "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
+        "pausedKept": "아직 보내지 않았습니다. 보내기를 눌러 보내세요.",
         "paused": "일시 중지됨",
         "queuePausedStopped": "중단했기 때문에 대기열이 일시 중지되었습니다",
         "queuePausedRestarted": "Orca가 다시 시작되어 대기열이 일시 중지되었습니다",

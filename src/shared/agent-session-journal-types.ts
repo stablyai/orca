@@ -427,7 +427,32 @@ export type AgentJournalSubmission = {
   /** Host-only: who asked for this turn — a person over the client send RPC, or Orca itself.
    *  A person's turn is what ends a Stop's queue pause. */
   origin?: 'client' | 'host'
+  /** Which path sent it, so a restart or a close knows which unsent sends to keep as cards.
+   *  Typed values in `AgentJournalSubmissionSource`; a newer build's value stays as it was written,
+   *  never read as absent. Published with the submission; clients ignore it. */
+  source?: string
+  /** On a rejected send the host kept as a card: that card's message id. The text lives on the
+   *  card, so no surface draws this send, before or after the card is sent, edited or deleted.
+   *  Recorded in the rejection's own transaction (`journal-unsent-send-hold.ts`). */
+  keptAsQueuedMessageId?: string
 }
+
+/** Which path sent a submission: a person's send (typed, or `/compact`), `agent.launch`'s first
+ *  prompt, orchestration mail, a worker's dispatch preamble, a restart continuation, or the queue
+ *  handing off a card. */
+export type AgentJournalSubmissionSource =
+  | 'person'
+  | 'launch'
+  | 'mail'
+  | 'dispatch'
+  | 'continuation'
+  | 'queue'
+
+/** The sources a host-internal send names; a person's is `person`, the queue's `queue`. */
+export type AgentJournalHostSendSource = Extract<
+  AgentJournalSubmissionSource,
+  'launch' | 'mail' | 'dispatch' | 'continuation'
+>
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an
  *  `accepted` dispatch mints one, and it outlives the journal tail. */

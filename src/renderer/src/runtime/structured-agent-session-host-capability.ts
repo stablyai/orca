@@ -93,8 +93,8 @@ export function useStructuredAgentSessionHostStopsConversation(
   )
 }
 
-/** Whether the host holds mid-turn sends as drafts: only then may a client send `delivery`
- *  or call the queuedMessage RPCs. */
+/** Whether the host holds mid-turn sends as drafts: only then may a client send `delivery`. The
+ *  published cards and their queuedMessage actions are not gated on it. */
 export function useStructuredAgentSessionHostQueuesMessages(target: RuntimeClientTarget): boolean {
   return useStructuredAgentSessionHostQueuesMessagesState(target) === 'supported'
 }

@@ -106,7 +106,8 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             expectedRuntimeFence: input.expectedRuntimeFence,
             payloadFingerprint: input.payloadFingerprint
           },
-          body: input.body
+          body: input.body,
+          source: 'mail'
         }
       )
       if (!result.ok) {

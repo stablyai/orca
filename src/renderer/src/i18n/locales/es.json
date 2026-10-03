@@ -15207,6 +15207,7 @@
         "turnOffQueueing": "Desactivar la cola",
         "withdrawnHold": "Detenido antes de enviarse",
         "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
+        "pausedKept": "Aún no se ha enviado. Pulsa Enviar para enviarlo.",
         "paused": "En pausa",
         "queuePausedStopped": "Cola en pausa porque interrumpiste",
         "queuePausedRestarted": "Cola en pausa porque Orca se reinició",

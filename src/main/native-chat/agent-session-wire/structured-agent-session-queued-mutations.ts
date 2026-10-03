@@ -7,12 +7,13 @@
 
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
-  AgentSessionQueuedMessageDeleteResult,
-  AgentSessionQueuedMessagesResumeResult,
-  AgentSessionSendResult
+import {
+  QUEUED_MESSAGE_PAUSED_KEPT,
+  type AgentSessionMutationEnvelope,
+  type AgentSessionMutationResult,
+  type AgentSessionQueuedMessageDeleteResult,
+  type AgentSessionQueuedMessagesResumeResult,
+  type AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/journal-queued-messages'
@@ -117,7 +118,11 @@ export async function carryQueuedMessagesToClearReplacement(
         body: row.body,
         fingerprint: queuedMessageFingerprint(input.replacementSessionId, row.body),
         hostInstance: structuredAgentSessionHostInstance(),
-        carriedFrom: ctx.sessionId
+        carriedFrom: ctx.sessionId,
+        // A kept send stays held there too: no later message may release it.
+        ...(row.holdReason === QUEUED_MESSAGE_PAUSED_KEPT
+          ? { holdReason: QUEUED_MESSAGE_PAUSED_KEPT }
+          : {})
       })
     }
     await withdrawQueuedMessagesForOperation(ctx.journal, {
@@ -223,6 +228,7 @@ export function sendQueuedStructuredAgentMessage(
             clientMessageId: submissionId,
             // The person asked for this turn, so it ends a Stop's pause once it starts.
             origin: 'client',
+            source: 'queue',
             payloadFingerprint: row.fingerprint,
             body: row.body,
             fence: ctx.fence,
@@ -313,7 +319,7 @@ export function deleteQueuedStructuredAgentMessage(
 
 /** Resume: ends the queue's pause — a Stop's, or a restart's — so the cards send
  *  again, oldest first, as the session goes idle. A no-op when nothing is paused,
- *  and a per-card `send_failed` hold stays for its own Send. */
+ *  and a per-card hold (`send_failed`, `kept`) stays for its own Send. */
 export function resumeStructuredAgentQueue(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,

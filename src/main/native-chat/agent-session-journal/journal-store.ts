@@ -63,7 +63,7 @@ import {
   journalStopEventRowBuilder
 } from './journal-stop-and-resume-rows'
 import type { AgentJournalEpochReason, JournalStopEvent } from './journal-row-schema'
-import type { JournalRowWriter } from './journal-row-writer'
+import type { JournalRowTransactionHook, JournalRowWriter } from './journal-row-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
@@ -354,9 +354,11 @@ export class AgentSessionJournal {
    * Accepting REQUIRES the provider identity rather than a free-form id: the
    * adopted key is what the provider's echo will upsert into, so a mismatched
    * string here would silently give the user a second copy of their own message.
+   * `hook` runs in the row's transaction: it commits with the row, or rolls it back by throwing.
    */
-  resolveDispatch(input: ResolveDispatchInput): Promise<AgentJournalCursor> {
-    return this.rowWriter.append(journalDispatchRowBuilder(() => this.state, input))
+  resolveDispatch(input: ResolveDispatchInput, hook?: JournalRowTransactionHook) {
+    const build = journalDispatchRowBuilder(() => this.state, input)
+    return this.rowWriter.append(build, hook)
   }
 
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */

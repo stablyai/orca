@@ -292,6 +292,12 @@ export async function createQueuedMessageTestRig(
     host = makeHost()
   }
 
+  /** The app quits — the host's own teardown runs — and a new host opens the same state. */
+  async function quitRestartHostProcess(): Promise<void> {
+    await host.flushAllStreamedEvents()
+    crashRestartHostProcess()
+  }
+
   /** The queue's published pause: null when it sends on its own. */
   async function queuePause(sessionId = SESSION): Promise<AgentSessionQueuePause | null> {
     const page = await host.history({ sessionId, direction: 'tail' })
@@ -339,6 +345,7 @@ export async function createQueuedMessageTestRig(
     settleRejected,
     restartHostProcess,
     crashRestartHostProcess,
+    quitRestartHostProcess,
     queuePause,
     resume,
     dispose
