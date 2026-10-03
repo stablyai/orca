@@ -81,8 +81,16 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
   })
 
-  it('keeps an active host visible before a hook report is available', async () => {
+  it('keeps an active host visible while hook detection is pending', async () => {
     vi.stubEnv('ORCA_FEATURE_REMOTE_AGENT_HOOKS', '1')
+    let resolveDetection!: (value: { agents: string[] }) => void
+    const detection = new Promise<{ agents: string[] }>((resolve) => {
+      resolveDetection = resolve
+    })
+    const defaultRequest = mockMux.request.getMockImplementation()
+    mockMux.request.mockImplementation((method: string) =>
+      method === 'preflight.detectAgents' ? detection : defaultRequest?.(method)
+    )
     try {
       mockSshStore.getTarget.mockReturnValue({
         id: 'ssh-1',
@@ -105,11 +113,12 @@ describe('SSH IPC handlers', () => {
           targetId: 'ssh-1',
           remoteHome: null,
           state: 'unavailable',
-          detail: 'SSH hook installation status is not available yet',
+          detail: 'remote hook installation check is in progress',
           statuses: []
         }
       ])
     } finally {
+      resolveDetection({ agents: [] })
       vi.unstubAllEnvs()
     }
   })

@@ -1221,7 +1221,15 @@ export class SshRelaySession {
     this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
-    void this.installManagedHooksOnRemote(mux, shouldContinue)
+    // The install can finish after reconnect() releases its attempt token.
+    void this.installManagedHooksOnRemote(
+      mux,
+      () =>
+        this.mux === mux &&
+        this.activePtyProviderGeneration === providerGeneration &&
+        !mux.isDisposed() &&
+        !this.isDisposed()
+    )
     return true
   }
 
@@ -1399,6 +1407,14 @@ export class SshRelaySession {
       return
     }
 
+    this.recordAgentHookInstallReport(
+      this.remoteCliBridgeEnv?.remoteHome ?? null,
+      'unavailable',
+      'remote hook installation check is in progress',
+      [],
+      shouldContinue
+    )
+
     try {
       const store = this.store as { getSettings?: Store['getSettings'] }
       const detected = readManagedHookDetectionResult(
@@ -1407,7 +1423,17 @@ export class SshRelaySession {
         })
       )
       const agents = detected.agents
-      if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
+      if (shouldContinue && !shouldContinue()) {
+        return
+      }
+      if (agents.length === 0) {
+        this.recordAgentHookInstallReport(
+          this.remoteCliBridgeEnv?.remoteHome ?? null,
+          'skipped',
+          'no supported agents detected on the remote host',
+          [],
+          shouldContinue
+        )
         return
       }
       const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()

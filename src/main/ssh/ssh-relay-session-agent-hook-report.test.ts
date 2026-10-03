@@ -179,6 +179,67 @@ describe('SshRelaySession agent hook install report', () => {
     })
   })
 
+  it('records a skipped report when the remote detects no agents', async () => {
+    muxRequestMock.mockImplementation(async (method: string) =>
+      method === 'preflight.detectAgents' ? { agents: [] } : { resolvedPath: '/home/orca' }
+    )
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    expect(session.getAgentHookInstallReport()).toMatchObject({
+      targetId: 'target-1',
+      state: 'skipped',
+      detail: 'no supported agents detected on the remote host',
+      statuses: []
+    })
+    expect(muxRequestMock).not.toHaveBeenCalledWith(
+      'agent_hook.installManagedHooks',
+      expect.anything()
+    )
+  })
+
+  it('replaces the previous report while reconnect detection is pending and then finds no agents', async () => {
+    let resolveDetection!: (result: { agents: string[] }) => void
+    const pendingDetection = new Promise<{ agents: string[] }>((resolve) => {
+      resolveDetection = resolve
+    })
+    let detectionCalls = 0
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return ++detectionCalls === 1 ? { agents: ['codex'] } : pendingDetection
+      }
+      if (method === 'agent_hook.installManagedHooks') {
+        return {
+          home: '/home/orca',
+          statuses: [{ agent: 'codex', state: 'installed', managedHooksPresent: true }]
+        }
+      }
+      return { resolvedPath: '/home/orca' }
+    })
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+    await vi.waitFor(() => expect(session.getAgentHookInstallReport()?.state).toBe('installed'))
+
+    await session.reconnect(mockConn)
+
+    expect(session.getAgentHookInstallReport()).toMatchObject({
+      state: 'unavailable',
+      detail: 'remote hook installation check is in progress',
+      statuses: []
+    })
+    resolveDetection({ agents: [] })
+    await vi.waitFor(() =>
+      expect(session.getAgentHookInstallReport()).toMatchObject({
+        state: 'skipped',
+        detail: 'no supported agents detected on the remote host',
+        statuses: []
+      })
+    )
+  })
+
   it('records an error report when the remote hook install throws', async () => {
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     muxRequestMock.mockImplementation(async (method: string) => {
