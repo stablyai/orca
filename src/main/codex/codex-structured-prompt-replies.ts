@@ -21,6 +21,7 @@ export {
   CODEX_MCP_ELICITATION_METHOD,
   CODEX_USER_INPUT_METHOD,
   CodexPromptRegistry,
+  codexMcpToolApprovalDecisions,
   isCodexMcpToolApproval,
   isCodexPromptMethod,
   type CodexPendingPrompt,
@@ -73,6 +74,9 @@ export function prepareCodexPromptAnswer(
   if (prompt.method !== CODEX_USER_INPUT_METHOD) {
     if (response.kind !== 'option' || !isCodexApprovalDecision(response.optionId)) {
       throw new Error(`Codex item ${prompt.codexItemId} takes an approval decision`)
+    }
+    if (prompt.offeredDecisions && !prompt.offeredDecisions.some((d) => d === response.optionId)) {
+      throw new Error(`Codex item ${prompt.codexItemId} did not offer ${response.optionId}`)
     }
     return { kind: 'decision', decision: response.optionId }
   }

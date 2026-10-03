@@ -325,14 +325,64 @@ const MCP_TOOL_APPROVAL = {
 }
 
 describe('MCP tool-call approvals', () => {
-  it('registers each tool-call approval under its own request id', () => {
+  it('registers each tool-call approval under its own turn and request id', () => {
     const registry = new CodexPromptRegistry()
     const first = registered(registry.register(mcpElicitationRequest(7, MCP_TOOL_APPROVAL)))
     const second = registered(registry.register(mcpElicitationRequest(8, MCP_TOOL_APPROVAL)))
 
-    expect(first.promptKey).toBe('mcp-elicitation:7')
-    expect(second.promptKey).toBe('mcp-elicitation:8')
+    expect(first.promptKey).toBe('mcp-elicitation:turn-1:7')
+    expect(second.promptKey).toBe('mcp-elicitation:turn-1:8')
     expect(first.turnId).toBe('turn-1')
+  })
+
+  it('keeps approvals apart when a respawned app-server reuses a request id', () => {
+    const registry = new CodexPromptRegistry()
+    const before = registered(registry.register(mcpElicitationRequest(0, MCP_TOOL_APPROVAL)))
+    const after = registered(
+      registry.register(mcpElicitationRequest(0, { ...MCP_TOOL_APPROVAL, turnId: 'turn-2' }))
+    )
+
+    expect(after.promptKey).not.toBe(before.promptKey)
+    expect(registry.sizes.prompts).toBe(2)
+  })
+
+  it('ignores an approvalId so two tool calls cannot share a prompt key', () => {
+    const registry = new CodexPromptRegistry()
+    registry.register(mcpElicitationRequest(12, { ...MCP_TOOL_APPROVAL, approvalId: 'shared' }))
+    registry.register(mcpElicitationRequest(13, { ...MCP_TOOL_APPROVAL, approvalId: 'shared' }))
+
+    expect(registry.sizes.prompts).toBe(2)
+  })
+
+  it('refuses a tool-call approval without a turn id', () => {
+    const registry = new CodexPromptRegistry()
+
+    expect(
+      registry.register({
+        id: 14,
+        method: 'mcpServer/elicitation/request',
+        params: { threadId: 'thread-1', ...MCP_TOOL_APPROVAL }
+      })
+    ).toBeNull()
+  })
+
+  it('refuses session reuse and Deny when the request did not offer them', () => {
+    const registry = new CodexPromptRegistry()
+    const prompt = registered(
+      registry.register(
+        mcpElicitationRequest(15, {
+          ...MCP_TOOL_APPROVAL,
+          _meta: { codex_approval_kind: 'mcp_tool_call' }
+        })
+      )
+    )
+
+    expect(() =>
+      prepareCodexPromptAnswer(prompt, { kind: 'option', optionId: 'acceptForSession' })
+    ).toThrow('did not offer acceptForSession')
+    expect(() => prepareCodexPromptAnswer(prompt, { kind: 'option', optionId: 'decline' })).toThrow(
+      'did not offer decline'
+    )
   })
 
   it('leaves elicitations that ask for form input to the safe decline', () => {

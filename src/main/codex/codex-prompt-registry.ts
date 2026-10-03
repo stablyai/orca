@@ -30,6 +30,8 @@ export type CodexPendingPrompt = {
   questionIdAliases: ReadonlyMap<string, string>
   optionAnswers: ReadonlyMap<string, { questionId: string; answer: string }>
   answers: Map<string, string>
+  /** Set when the request limits the decisions, so an unoffered one is refused. */
+  offeredDecisions?: readonly CodexMcpToolApprovalDecision[]
 }
 
 export type CodexAbandonedCommand = { threadId: string; itemId: string }
@@ -72,10 +74,27 @@ export function isCodexMcpToolApproval(params: unknown): boolean {
   )
 }
 
-/** MCP elicitations carry no item id; the request id is unique for the connection's lifetime. */
+export type CodexMcpToolApprovalDecision = 'accept' | 'acceptForSession' | 'cancel'
+
+/** Codex's TUI offers no Deny for a tool call, and session reuse only when the request allows it. */
+export function codexMcpToolApprovalDecisions(params: unknown): CodexMcpToolApprovalDecision[] {
+  const persist = readRecord(readRecord(params)._meta).persist
+  const persistsSession = Array.isArray(persist)
+    ? persist.includes('session')
+    : persist === 'session'
+  return persistsSession ? ['accept', 'acceptForSession', 'cancel'] : ['accept', 'cancel']
+}
+
+/**
+ * MCP elicitations carry no item id. The request id restarts with each app-server process, but a
+ * turn never outlives its process, so the turn id makes the key unique for the thread's journal.
+ */
 function readPromptItemId(request: { id: number | string; method: string; params: unknown }) {
   if (request.method === CODEX_MCP_ELICITATION_METHOD) {
-    return isCodexMcpToolApproval(request.params) ? `mcp-elicitation:${request.id}` : null
+    const turnId = readString(request.params, 'turnId')
+    return turnId && isCodexMcpToolApproval(request.params)
+      ? `mcp-elicitation:${turnId}:${request.id}`
+      : null
   }
   return readString(request.params, 'itemId')
 }
@@ -123,13 +142,19 @@ export class CodexPromptRegistry {
     if (turnId && turnIdentity.turnId === null) {
       return null
     }
+    const isMcpElicitation = request.method === CODEX_MCP_ELICITATION_METHOD
     const prompt: CodexPendingPrompt = {
       requestId: request.id,
       method: request.method,
       threadId,
       ...turnIdentity,
       codexItemId,
-      promptKey: readString(request.params, 'approvalId') ?? codexItemId,
+      promptKey: isMcpElicitation
+        ? codexItemId
+        : (readString(request.params, 'approvalId') ?? codexItemId),
+      ...(isMcpElicitation
+        ? { offeredDecisions: codexMcpToolApprovalDecisions(request.params) }
+        : {}),
       questionIds,
       questionIdAliases:
         request.method === CODEX_USER_INPUT_METHOD

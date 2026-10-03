@@ -14,6 +14,7 @@ import {
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
   CODEX_MCP_ELICITATION_METHOD,
   codexJournalPromptIdPart,
+  codexMcpToolApprovalDecisions,
   encodeCodexJournalQuestionOptionId,
   type CodexApprovalDecision
 } from './codex-structured-prompt-replies'
@@ -102,22 +103,13 @@ export function codexApprovalItem(input: {
   }
 }
 
-/** Codex's TUI offers no Deny for a tool call, and session reuse only when the request allows it. */
 function codexMcpToolApprovalItem(params: Record<string, unknown>): AgentJournalApprovalItem {
-  const meta = readParams(params._meta)
-  const persist = meta.persist
-  const persistsSession = Array.isArray(persist)
-    ? persist.includes('session')
-    : persist === 'session'
-  const decisions: CodexApprovalDecision[] = persistsSession
-    ? ['accept', 'acceptForSession', 'cancel']
-    : ['accept', 'cancel']
-  const toolParams = meta.tool_params
+  const toolParams = readParams(params._meta).tool_params
   return {
     kind: 'approval',
     title: boundPromptText(readString(params, 'message') ?? 'Allow this tool call?'),
     detail: toolParams === undefined ? null : boundPromptText(JSON.stringify(toolParams)),
-    options: decisions.map((decision) => ({
+    options: codexMcpToolApprovalDecisions(params).map((decision) => ({
       id: decision,
       label: APPROVAL_DECISION_LABELS[decision]
     })),
