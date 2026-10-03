@@ -41,6 +41,7 @@ import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upl
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
+import { registerClipboardImagePreviewHandlers } from './clipboard-image-preview-ipc'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 
@@ -65,7 +66,8 @@ async function saveClipboardImageBufferForTarget(
       app.getPath('userData'),
       runtimeEnvironmentId,
       buffer,
-      args?.connectionId ?? null
+      args?.connectionId ?? null,
+      args?.discardable ?? false
     )
   }
   return saveClipboardImageBufferAsTempFile(buffer, args)
@@ -96,6 +98,8 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeSelectionText')
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
+  ipcMain.removeHandler('clipboard:saveImagePreview')
+  ipcMain.removeHandler('clipboard:imageLease')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
   ipcMain.removeHandler('clipboard:hasImage')
@@ -158,6 +162,10 @@ export function registerClipboardHandlers(store: Store): void {
       return saveClipboardImageBufferForTarget(image.toPNG(), args)
     }
   )
+  registerClipboardImagePreviewHandlers({
+    assertTrustedSender: assertTrustedClipboardSender,
+    saveBuffer: saveClipboardImageBufferForTarget
+  })
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer
   // drops the file itself, not its path as text.
   ipcMain.handle(

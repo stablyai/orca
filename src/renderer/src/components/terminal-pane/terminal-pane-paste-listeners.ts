@@ -54,7 +54,9 @@ export function registerTerminalPanePasteListeners({
   const onKeyPaste = (event: KeyboardEvent): void => {
     const target = event.target
     if (
-      (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
+      (target instanceof Element &&
+        (target.closest('[data-terminal-search-root]') ||
+          target.closest('[data-terminal-image-attachments]'))) ||
       isInsideNativeChatCover(target)
     ) {
       return
@@ -106,7 +108,9 @@ export function registerTerminalPanePasteListeners({
   const onPaste = (event: ClipboardEvent): void => {
     const target = event.target
     if (
-      (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
+      (target instanceof Element &&
+        (target.closest('[data-terminal-search-root]') ||
+          target.closest('[data-terminal-image-attachments]'))) ||
       isInsideNativeChatCover(target)
     ) {
       return
@@ -150,6 +154,7 @@ export function registerTerminalPanePasteListeners({
       !(activeElementAtDispatch instanceof Element) ||
       !container.contains(activeElementAtDispatch) ||
       activeElementAtDispatch.closest('[data-terminal-search-root]') ||
+      activeElementAtDispatch.closest('[data-terminal-image-attachments]') ||
       isInsideNativeChatCover(activeElementAtDispatch)
     ) {
       return

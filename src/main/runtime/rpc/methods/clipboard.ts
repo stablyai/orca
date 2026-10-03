@@ -1,9 +1,15 @@
 import { defineMethod, type RpcContext } from '../core'
-import { saveClipboardImageBufferAsTempFile } from '../../../window/clipboard-image-temp-file'
+import {
+  discardClipboardImageTempFile,
+  retainClipboardImageTempFile,
+  saveClipboardImageBufferAsTempFile
+} from '../../../window/clipboard-image-temp-file'
 import { randomUUID } from 'node:crypto'
 import { recordMobileClipboardImagePath } from '../mobile-clipboard-image-provenance'
 import {
   AbortImageUpload,
+  ClipboardImageLease,
+  ClipboardImageLeaseAvailability,
   AppendImageUploadChunk,
   CommitImageUpload,
   SaveImageAsTempFile,
@@ -17,6 +23,7 @@ const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000
 type ClipboardImageUpload = {
   expectedBase64Length: number
   connectionId?: string | null
+  discardable?: boolean
   mobileClientId?: string
   chunks: string[]
   receivedBase64Length: number
@@ -91,14 +98,38 @@ function assertMobileUploadOwner(
 
 export const CLIPBOARD_METHODS = [
   defineMethod({
+    name: 'clipboard.imageLease',
+    params: ClipboardImageLease,
+    handler: async (params, ctx) => {
+      if (ctx.clientKind === 'mobile') {
+        throw new Error('Clipboard preview requires a desktop client')
+      }
+      if (params.retain) {
+        retainClipboardImageTempFile(params.path, params.connectionId ?? null, params.release)
+      } else {
+        await discardClipboardImageTempFile(params.path, params.connectionId ?? null)
+      }
+      return { ok: true }
+    }
+  }),
+  defineMethod({
+    name: 'clipboard.imageLeaseAvailable',
+    params: ClipboardImageLeaseAvailability,
+    handler: () => ({ supported: true })
+  }),
+  defineMethod({
     name: 'clipboard.saveImageAsTempFile',
     params: SaveImageAsTempFile,
     handler: async (params, ctx) => {
       const clientId = mobileClientId(ctx)
+      if (clientId && params.discardable) {
+        throw new Error('Clipboard preview requires a desktop client')
+      }
       const path = await saveClipboardImageBufferAsTempFile(
         Buffer.from(params.contentBase64, 'base64'),
         {
-          connectionId: params.connectionId
+          connectionId: params.connectionId,
+          ...(params.discardable ? { discardable: true } : {})
         }
       )
       if (clientId && !params.connectionId) {
@@ -111,6 +142,9 @@ export const CLIPBOARD_METHODS = [
     name: 'clipboard.startImageUpload',
     params: StartImageUpload,
     handler: (params, ctx) => {
+      if (ctx.clientKind === 'mobile' && params.discardable) {
+        throw new Error('Clipboard preview requires a desktop client')
+      }
       pruneExpiredUploads()
       if (clipboardImageUploads.size >= CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT) {
         throw new Error('Too many clipboard image uploads are in progress')
@@ -119,6 +153,7 @@ export const CLIPBOARD_METHODS = [
       clipboardImageUploads.set(uploadId, {
         expectedBase64Length: params.expectedBase64Length,
         connectionId: params.connectionId,
+        discardable: params.discardable,
         mobileClientId: mobileClientId(ctx),
         chunks: [],
         receivedBase64Length: 0,
@@ -160,7 +195,8 @@ export const CLIPBOARD_METHODS = [
         const path = await saveClipboardImageBufferAsTempFile(
           decodeClipboardImageUpload(upload.chunks),
           {
-            connectionId: upload.connectionId
+            connectionId: upload.connectionId,
+            ...(upload.discardable ? { discardable: true } : {})
           }
         )
         if (clientId && !upload.connectionId) {

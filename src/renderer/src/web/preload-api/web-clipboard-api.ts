@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/clipboard-image'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import { copyClipboardTextViaExecCommand } from '../web-clipboard-copy-fallback'
-import { callRuntimeEnvelope, callRuntimeResult } from './web-runtime-calls'
+import { callEnvironmentEnvelope, callRuntimeEnvelope } from './web-runtime-calls'
 
 export const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
 
@@ -162,15 +162,39 @@ export async function writeWebClipboardText(text: string): Promise<void> {
 
 export async function saveClipboardImageAsTempFileInRuntime(
   contentBase64: string,
-  args?: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
+  args?: {
+    connectionId?: string | null
+    runtimeEnvironmentId?: string | null
+    discardable?: boolean
+  }
 ): Promise<string> {
   if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
     throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
   }
+  function callOwnerEnvelope<TResult>(method: string, params?: unknown, timeoutMs?: number) {
+    return args?.runtimeEnvironmentId
+      ? callEnvironmentEnvelope<TResult>(args.runtimeEnvironmentId, method, params, timeoutMs)
+      : callRuntimeEnvelope<TResult>(method, params, timeoutMs)
+  }
+  async function callOwnerResult<TResult>(
+    method: string,
+    params?: unknown,
+    timeoutMs?: number
+  ): Promise<TResult> {
+    const response = await callOwnerEnvelope<TResult>(method, params, timeoutMs)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    return response.result
+  }
   const connectionId = args?.connectionId ?? null
-  const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
+  const startResponse = await callOwnerEnvelope<{ uploadId: string }>(
     'clipboard.startImageUpload',
-    { expectedBase64Length: contentBase64.length, connectionId },
+    {
+      expectedBase64Length: contentBase64.length,
+      connectionId,
+      ...(args?.discardable ? { discardable: true } : {})
+    },
     CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
   )
   if (!startResponse.ok) {
@@ -178,9 +202,9 @@ export async function saveClipboardImageAsTempFileInRuntime(
       startResponse.error.code === 'method_not_found' &&
       contentBase64.length <= CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
-      return callRuntimeResult<string>(
+      return callOwnerResult<string>(
         'clipboard.saveImageAsTempFile',
-        { contentBase64, connectionId },
+        { contentBase64, connectionId, ...(args?.discardable ? { discardable: true } : {}) },
         CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
       )
     }
@@ -194,7 +218,7 @@ export async function saveClipboardImageAsTempFileInRuntime(
       offset < contentBase64.length;
       offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
     ) {
-      await callRuntimeResult(
+      await callOwnerResult(
         'clipboard.appendImageUploadChunk',
         {
           uploadId,
@@ -207,14 +231,14 @@ export async function saveClipboardImageAsTempFileInRuntime(
         CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
       )
     }
-    return await callRuntimeResult<string>(
+    return await callOwnerResult<string>(
       'clipboard.commitImageUpload',
       { uploadId },
       CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
     )
   } catch (error) {
     // Why: after chunked paste holds server-side state, release the bounded slot on failure rather than wait for TTL cleanup.
-    await callRuntimeResult(
+    await callOwnerResult(
       'clipboard.abortImageUpload',
       { uploadId },
       CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS

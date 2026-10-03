@@ -11,13 +11,15 @@ type Props = {
   attachment: NativeChatComposerImageAttachment
   onRemove: (id: string) => void
   removeDisabled?: boolean
+  fullSizePreviewUrl?: string
 }
 
 /** Thumbnail for a pending image, with an in-app full-size preview on click. */
 export function NativeChatImageAttachmentPreview({
   attachment,
   onRemove,
-  removeDisabled = false
+  removeDisabled = false,
+  fullSizePreviewUrl
 }: Props): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false)
   const [isNearViewport, setIsNearViewport] = useState(false)
@@ -45,14 +47,14 @@ export function NativeChatImageAttachmentPreview({
   }, [])
   const isPending = attachment.pending === true
   const localSrc = useLocalImageSrc(
-    !isPending && (isNearViewport || isOpen) ? attachment.path : undefined,
+    !fullSizePreviewUrl && !isPending && (isNearViewport || isOpen) ? attachment.path : undefined,
     attachment.path,
     attachment.connectionId
   )
   // The clipboard thumbnail is already in this process, so it renders with no
   // round-trip; the on-disk file only wins for the full-size dialog.
-  const thumbnailSrc = attachment.previewUrl ?? localSrc
-  const fullSizeSrc = localSrc ?? attachment.previewUrl
+  const thumbnailSrc = fullSizePreviewUrl ?? attachment.previewUrl ?? localSrc
+  const fullSizeSrc = fullSizePreviewUrl ?? localSrc ?? attachment.previewUrl
   const filename = isNativeChatPastedImagePath(attachment.path)
     ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
     : basename(attachment.path)

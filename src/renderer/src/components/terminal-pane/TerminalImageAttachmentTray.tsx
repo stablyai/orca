@@ -77,10 +77,11 @@ export function TerminalImageAttachmentTray({ container }: { container: HTMLElem
         )}
       </p>
       <div className="mb-3 flex flex-wrap gap-2" aria-busy={busy}>
-        {requests.map(({ attachment }) => (
+        {requests.map(({ attachment, fullSizePreviewUrl }) => (
           <NativeChatImageAttachmentPreview
             key={attachment.id}
             attachment={attachment}
+            fullSizePreviewUrl={fullSizePreviewUrl}
             removeDisabled={busy}
             onRemove={(id) => {
               if (busy) {

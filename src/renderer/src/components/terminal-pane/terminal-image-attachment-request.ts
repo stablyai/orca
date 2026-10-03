@@ -4,6 +4,7 @@ export const TERMINAL_IMAGE_ATTACHMENT_EVENT = 'orca-terminal-image-attachment'
 
 export type TerminalImageAttachmentRequest = {
   attachment: NativeChatComposerImageAttachment
+  fullSizePreviewUrl?: string
   cancel: () => void
   isCurrent: () => boolean
   attach: () => Promise<boolean>

@@ -37,7 +37,8 @@ export const SaveImageAsTempFile = z.object({
     MAX_CLIPBOARD_IMAGE_BASE64_CHARS,
     CLIPBOARD_IMAGE_TOO_LARGE_ERROR
   ),
-  connectionId: z.string().min(1).nullable().optional()
+  connectionId: z.string().min(1).nullable().optional(),
+  discardable: z.boolean().optional()
 })
 
 export const StartImageUpload = z.object({
@@ -46,7 +47,8 @@ export const StartImageUpload = z.object({
     .int()
     .nonnegative()
     .max(MAX_CLIPBOARD_IMAGE_BASE64_CHARS, CLIPBOARD_IMAGE_TOO_LARGE_ERROR),
-  connectionId: z.string().min(1).nullable().optional()
+  connectionId: z.string().min(1).nullable().optional(),
+  discardable: z.boolean().optional()
 })
 
 export const AppendImageUploadChunk = z.object({
@@ -60,6 +62,15 @@ export const AppendImageUploadChunk = z.object({
 
 export const CommitImageUpload = z.object({
   uploadId: z.string().min(1)
+})
+
+export const ClipboardImageLeaseAvailability = z.object({})
+
+export const ClipboardImageLease = z.object({
+  path: z.string().min(1),
+  connectionId: z.string().min(1).nullable().optional(),
+  retain: z.boolean().optional(),
+  release: z.boolean().optional()
 })
 
 export const AbortImageUpload = z.object({

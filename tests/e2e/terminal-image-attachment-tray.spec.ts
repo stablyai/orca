@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -68,12 +68,22 @@ test('stages, previews, removes, cancels and explicitly adds clipboard images', 
   )
   await sendToTerminal(page, ptyId, `node ${JSON.stringify(script)}\r`)
   await waitForTerminalOutput(page, 'READY_IMAGE_TRAY', 10_000)
-  await electronApp.evaluate(({ ipcMain }, png) => {
-    ipcMain.removeHandler('clipboard:readText')
-    ipcMain.handle('clipboard:readText', () => '')
-    ipcMain.removeHandler('clipboard:saveImageAsTempFile')
-    ipcMain.handle('clipboard:saveImageAsTempFile', () => png)
-  }, png)
+  const dataUrl = `data:image/png;base64,${readFileSync(png).toString('base64')}`
+  await electronApp.evaluate(
+    ({ ipcMain }, { png, dataUrl }) => {
+      ipcMain.removeHandler('clipboard:readText')
+      ipcMain.handle('clipboard:readText', () => '')
+      ipcMain.removeHandler('clipboard:saveImagePreview')
+      ipcMain.handle('clipboard:saveImagePreview', () => ({ path: png, dataUrl }))
+      ipcMain.removeHandler('clipboard:imageLease')
+      const settlements: unknown[] = []
+      Reflect.set(globalThis, 'orcaImagePreviewTestSettlements', settlements)
+      ipcMain.handle('clipboard:imageLease', (_event, args) => {
+        settlements.push(args)
+      })
+    },
+    { png, dataUrl }
+  )
   await setCodexAuthority(page, true)
   const tray = page.locator('[data-terminal-image-attachments]')
   const paste = async () => {
@@ -84,6 +94,15 @@ test('stages, previews, removes, cancels and explicitly adds clipboard images', 
   await paste()
   await expect(tray.locator('img')).toBeVisible()
   await tray.screenshot({ path: testInfo.outputPath('image-tray-preview.png') })
+  await tray.getByRole('button', { name: 'Cancel', exact: true }).focus()
+  const menuIgnored = await page.evaluate(() => {
+    const event = new CustomEvent('orca-app-menu-paste', { cancelable: true, bubbles: true })
+    window.dispatchEvent(event)
+    return !event.defaultPrevented
+  })
+  expect(menuIgnored).toBe(true)
+  await expect(tray).toBeVisible()
+
   await tray.getByRole('button', { name: 'View image: test-image.png' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page
@@ -115,10 +134,21 @@ test('stages, previews, removes, cancels and explicitly adds clipboard images', 
   await paste()
   await tray.getByRole('button', { name: 'Add to Codex', exact: true }).click()
   await waitForTerminalOutput(page, 'IMAGE_INPUT_COUNT=2', 10_000)
+  const settlements = await electronApp.evaluate(() =>
+    Reflect.get(globalThis, 'orcaImagePreviewTestSettlements')
+  )
+  expect(settlements).toEqual([
+    ...Array.from({ length: 4 }, () => expect.objectContaining({ retain: false, release: false })),
+    expect.objectContaining({ retain: true, release: false }),
+    expect.objectContaining({ retain: true, release: true }),
+    expect.objectContaining({ retain: true, release: false }),
+    expect.objectContaining({ retain: true, release: true })
+  ])
+
   // Saving failures must not stage or silently inject anything.
   await electronApp.evaluate(({ ipcMain }) => {
-    ipcMain.removeHandler('clipboard:saveImageAsTempFile')
-    ipcMain.handle('clipboard:saveImageAsTempFile', () => {
+    ipcMain.removeHandler('clipboard:saveImagePreview')
+    ipcMain.handle('clipboard:saveImagePreview', () => {
       throw new Error('fixture save failed')
     })
   })

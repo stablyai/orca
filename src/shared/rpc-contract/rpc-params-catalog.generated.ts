@@ -124,6 +124,8 @@ import { FeatureInteractionIdParam, UiUpdate } from './client-ui-params'
 import {
   AbortImageUpload,
   AppendImageUploadChunk,
+  ClipboardImageLease,
+  ClipboardImageLeaseAvailability,
   CommitImageUpload,
   SaveImageAsTempFile,
   StartImageUpload
@@ -733,6 +735,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'clipboard.abortImageUpload': AbortImageUpload,
   'clipboard.appendImageUploadChunk': AppendImageUploadChunk,
   'clipboard.commitImageUpload': CommitImageUpload,
+  'clipboard.imageLease': ClipboardImageLease,
+  'clipboard.imageLeaseAvailable': ClipboardImageLeaseAvailability,
   'clipboard.saveImageAsTempFile': SaveImageAsTempFile,
   'clipboard.startImageUpload': StartImageUpload,
   'computer.capabilities': ComputerCapabilitiesParams,
