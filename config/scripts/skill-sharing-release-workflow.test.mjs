@@ -120,6 +120,8 @@ describe('skill-sharing release workflow', () => {
       const archive = stepNamed(job, 'Archive bounded skill-sharing results')
 
       expect(test.run).toContain('--reporter=json')
+      // The JSON reporter never prints errors raised outside a test; a printing reporter must.
+      expect(test.run).toContain('--reporter=default')
       expect(test.run).toContain('--outputFile=skill-sharing-release-results.json')
       expect(archive.if).toBe('always()')
       expect(archive.with['retention-days']).toBe(14)

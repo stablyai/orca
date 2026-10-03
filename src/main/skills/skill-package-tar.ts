@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { once } from 'node:events'
-import type { Readable, Writable } from 'node:stream'
+import type { Writable } from 'node:stream'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip } from 'node:zlib'
@@ -149,8 +149,8 @@ export class TarByteReader {
   private currentOffset = 0
   private consumed = 0
 
-  constructor(stream: Readable) {
-    this.iterator = stream[Symbol.asyncIterator]() as AsyncIterator<Buffer>
+  constructor(chunks: AsyncIterable<Buffer>) {
+    this.iterator = chunks[Symbol.asyncIterator]()
   }
 
   async readExact(length: number): Promise<Buffer> {
@@ -242,14 +242,13 @@ export function parseSkillTarHeader(header: Buffer): SkillTarReadEntry | null {
   return { path, size: readOctal(header, 124, 12), executable: (mode & 0o111) !== 0 }
 }
 
-export async function openSkillTarGzip(archivePath: string): Promise<{
-  reader: TarByteReader
-  archiveIdentity: Promise<{ archiveSha256: string; compressedBytes: number }>
-  abort: (error: Error) => void
-}> {
+// The consumer is the pipeline's last stage so the pipeline tears down every stream on any failure.
+export async function readSkillTarGzip<T>(
+  archivePath: string,
+  consume: (reader: TarByteReader) => Promise<T>
+): Promise<{ value: T; archiveSha256: string; compressedBytes: number }> {
   const archiveHash = createHash('sha256')
   let compressedBytes = 0
-  const source = createReadStream(archivePath)
   const verifier = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       compressedBytes += chunk.length
@@ -261,21 +260,13 @@ export async function openSkillTarGzip(archivePath: string): Promise<{
       callback(null, chunk)
     }
   })
-  const gunzip = createGunzip()
-  const completion = pipeline(source, verifier, gunzip)
-  const archiveIdentity = completion.then(() => ({
-    archiveSha256: archiveHash.digest('hex'),
-    compressedBytes
-  }))
-  return {
-    reader: new TarByteReader(gunzip),
-    archiveIdentity,
-    abort: (error) => {
-      source.destroy(error)
-      verifier.destroy(error)
-      gunzip.destroy(error)
-    }
-  }
+  const value = await pipeline(
+    createReadStream(archivePath),
+    verifier,
+    createGunzip(),
+    (inflated) => consume(new TarByteReader(inflated))
+  )
+  return { value, archiveSha256: archiveHash.digest('hex'), compressedBytes }
 }
 
 export const SKILL_TAR_BLOCK_BYTES = TAR_BLOCK_BYTES
