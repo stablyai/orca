@@ -23,6 +23,7 @@ import {
   uniquePathEntries
 } from './cli-install-path-format'
 import { runMacPrivilegedCommand, writeWindowsUserPath } from './cli-privileged-processes'
+import { shouldManageWindowsPowerShellCliShim } from './windows-powershell-cli-shim'
 import {
   invalidateWindowsUserPathRegistryCache,
   readFreshWindowsUserPathRegistry,
@@ -54,6 +55,9 @@ export abstract class CliInstallLocation {
   protected readonly userPathWriter: (value: string) => Promise<void>
   protected readonly userPathCacheInvalidator: () => void
   protected readonly windowsEnvironment: NodeJS.ProcessEnv
+  protected readonly syncWindowsPowerShellProfile: boolean
+  protected readonly windowsDocumentsPath: string | null
+  protected readonly windowsPowerShellShimPath: string | null
   protected readonly appImagePath: string | null
   protected readonly hasUnverifiedAppImageRuntime: boolean
   protected readonly appImageCacheRootPath: string
@@ -96,6 +100,9 @@ export abstract class CliInstallLocation {
     this.userPathCacheInvalidator =
       options.userPathCacheInvalidator ?? invalidateWindowsUserPathRegistryCache
     this.windowsEnvironment = options.windowsEnvironment ?? process.env
+    this.syncWindowsPowerShellProfile = shouldManageWindowsPowerShellCliShim(options)
+    this.windowsDocumentsPath = options.windowsDocumentsPath ?? null
+    this.windowsPowerShellShimPath = options.windowsPowerShellShimPath ?? null
     const hasExplicitAppImagePath = Object.hasOwn(options, 'appImagePath')
     const runtimeAppImageIdentity = resolveAppImageRuntimeIdentity({
       platform: this.platform,
