@@ -50,7 +50,9 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         status: string
         assignee_handle?: string | null
         dispatch_id?: string | null
+        result?: string | null
         spec_truncated?: boolean
+        result_truncated?: boolean
       }[]
       count: number
       runId?: string
@@ -62,9 +64,9 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       run,
       callerTerminalHandle
     })
-    // Why: only older runtimes (no spec_truncated) skip server-side abbreviation and need this client-side fallback.
+    // Why: only older runtimes (no result_truncated) skip server-side abbreviation of some fields and need this client-side fallback.
     const needsClientAbbreviation =
-      brief && result.result.tasks.some((task) => task.spec_truncated === undefined)
+      brief && result.result.tasks.some((task) => task.result_truncated === undefined)
     const output = needsClientAbbreviation
       ? {
           ...result,

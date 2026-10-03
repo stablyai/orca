@@ -14,9 +14,10 @@ ORCA orchestration task-create --spec "<dependent work>" --deps <json_array> --j
 ORCA orchestration task-list --ready --brief --json
 ```
 
-`--brief` collapses whitespace and caps echoed specs at 160 characters;
-`spec_truncated` identifies shortened rows. Omit it when full specs are needed or
-when an older CLI rejects the flag. A nested worker must respect
+`--brief` collapses whitespace and caps echoed specs and results at 160
+characters; `spec_truncated` and `result_truncated` identify shortened fields.
+Omit it when full specs or results are needed or when an older CLI rejects the
+flag. A nested worker must respect
 `nested_worker_depth_exceeded`; creating another Run does not reset depth.
 
 ## Launch preferences
