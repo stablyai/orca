@@ -235,7 +235,7 @@ function writeNativeChatAttachmentCache(
     .filter((attachment) => !attachment.pending)
     // Preview URLs can retain the full clipboard Blob (or a large data URL) for
     // the lifetime of the scope cache. Settled attachments reload from their
-    // authorized path after a remount, so never retain the transient preview.
+    // on-disk path after a remount, so never retain the transient preview.
     .map(({ previewUrl: _previewUrl, ...attachment }) => attachment)
   if (attachments.length === 0) {
     attachmentCache.delete(scopeKey)

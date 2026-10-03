@@ -23,6 +23,7 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: vi.fn(() => ({
       settings: { activeRuntimeEnvironmentId: null },
+      openFiles: [],
       folderWorkspaces: [],
       worktreesByRepo: { repo1: [{ id: 'wt-1', path: '/repo' }] }
     }))

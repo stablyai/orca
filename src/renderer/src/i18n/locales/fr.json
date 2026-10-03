@@ -13315,7 +13315,8 @@
             "fca915a67a": "Les éléments distants sont définitivement supprimés, sans retour arrière. Les éléments locaux sont déplacés dans {{value0}}."
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "Impossible d'ouvrir la cible du symlink"
+            "32cd9fd991": "Impossible d'ouvrir la cible du symlink",
+            "folderLinksOutsideProject": "Ce dossier pointe en dehors du projet ; il ne peut pas être ouvert ici."
           },
           "useFileExplorerImport": {
             "25919b2050": "Ignoré : {{value0}} {{value1}}.",
@@ -13583,7 +13584,6 @@
           },
           "aiVaultSessionLogOpen": {
             "workspaceGone": "Impossible d'ouvrir le log — l'espace de travail n'est plus disponible.",
-            "notAuthorized": "Impossible d'ouvrir le log — chemin non autorisé.",
             "alreadyEditable": "Le log est déjà ouvert en édition."
           },
           "github": {

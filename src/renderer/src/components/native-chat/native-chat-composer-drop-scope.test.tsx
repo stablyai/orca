@@ -28,7 +28,7 @@ const electron = vi.hoisted(() => ({
 
 const intake = vi.hoisted(() => ({
   owner: { kind: 'local' } as { kind: string; connectionId?: string },
-  authorizeExternalPath: vi.fn(),
+  stat: vi.fn(),
   readFile: vi.fn(),
   upload: vi.fn()
 }))
@@ -153,7 +153,7 @@ describe('native chat composer drop scoping', () => {
   beforeEach(() => {
     intake.owner = { kind: 'local' }
     electron.getPathForFile.mockReset().mockImplementation((file: File) => `/repro/${file.name}`)
-    intake.authorizeExternalPath.mockReset().mockResolvedValue(undefined)
+    intake.stat.mockReset().mockResolvedValue(undefined)
     intake.readFile.mockReset().mockResolvedValue({ content: '', isBinary: false })
     intake.upload.mockReset()
     vi.stubGlobal('IntersectionObserver', undefined)
@@ -184,8 +184,8 @@ describe('native chat composer drop scoping', () => {
     expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
   })
 
-  it('notices an OS drop whose every path fails authorization', async () => {
-    intake.authorizeExternalPath.mockRejectedValue(new Error('denied'))
+  it('notices an OS drop whose every path is unreadable', async () => {
+    intake.stat.mockRejectedValue(new Error('denied'))
     const view = render(<ComposerProbe pane="chat-a" />)
 
     await dropTwoImages(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
@@ -197,8 +197,8 @@ describe('native chat composer drop scoping', () => {
     expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
   })
 
-  it('notices an OS drop whose owner changes during authorization', async () => {
-    intake.authorizeExternalPath.mockImplementation(async () => {
+  it('notices an OS drop whose owner changes while checking the files', async () => {
+    intake.stat.mockImplementation(async () => {
       intake.owner = { kind: 'ssh', connectionId: 'conn-1' }
     })
     const view = render(<ComposerProbe pane="chat-a" />)
@@ -289,15 +289,9 @@ describe('native chat composer drop scoping', () => {
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
   })
 
-  it('authorizes only dropped files before preview reads and leaves the other pane untouched', async () => {
-    const authorized = new Set<string>()
-    intake.authorizeExternalPath.mockImplementation(
-      async ({ targetPath }: { targetPath: string }) => {
-        authorized.add(targetPath)
-      }
-    )
-    intake.readFile.mockImplementation(async ({ filePath }: { filePath: string }) => {
-      if (!authorized.has(filePath)) {
+  it('previews dropped files as chat images and leaves the other pane untouched', async () => {
+    intake.readFile.mockImplementation(async ({ access }: { access?: { kind: string } }) => {
+      if (access?.kind !== 'chat-image') {
         throw new Error('Access denied: path resolves outside allowed directories')
       }
       return { content: 'AA==', isBinary: true, mimeType: 'image/png' }
@@ -317,9 +311,9 @@ describe('native chat composer drop scoping', () => {
     )
     expect(await screen.findByRole('img', { name: 'first.png' })).toBeTruthy()
     expect(await screen.findByRole('img', { name: 'second.png' })).toBeTruthy()
-    expect(intake.authorizeExternalPath.mock.calls).toEqual([
-      [{ targetPath: '/repro/first.png' }],
-      [{ targetPath: '/repro/second.png' }]
+    expect(intake.stat.mock.calls).toEqual([
+      [{ filePath: '/repro/first.png', access: { kind: 'user-file' } }],
+      [{ filePath: '/repro/second.png', access: { kind: 'user-file' } }]
     ])
     expect(intake.readFile).toHaveBeenCalledTimes(2)
     expect(intake.upload).not.toHaveBeenCalled()
@@ -330,7 +324,7 @@ describe('native chat composer drop scoping', () => {
     )
   })
 
-  it('uploads once for the SSH drop owner without authorizing remote paths locally', async () => {
+  it('uploads once for the SSH drop owner without checking remote paths locally', async () => {
     intake.owner = { kind: 'ssh', connectionId: 'conn-1' }
     intake.upload.mockResolvedValue(['/remote/first.png', '/remote/second.png'])
     const view = render(
@@ -344,7 +338,7 @@ describe('native chat composer drop scoping', () => {
       ['/repro/first.png', '/repro/second.png'],
       intake.owner
     )
-    expect(intake.authorizeExternalPath).not.toHaveBeenCalled()
+    expect(intake.stat).not.toHaveBeenCalled()
     expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
       '/remote/first.png',
       '/remote/second.png'

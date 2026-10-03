@@ -2,7 +2,6 @@ import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useRef, useState } from 'react'
 import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
-import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {
   getFileExplorerOperationOwner,
@@ -22,6 +21,7 @@ import {
   markFileExplorerDirsLoading,
   withPendingFileExplorerDirCacheEntries
 } from './file-explorer-dir-load-state'
+import { statUserOpenedPath, type UserOpenedPathStat } from '@/lib/user-opened-local-path'
 
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
@@ -37,7 +37,7 @@ type UseFileExplorerTreeResult = {
     depth: number,
     options?: { force?: boolean; failOnError?: boolean }
   ) => Promise<boolean>
-  statPath: (path: string) => Promise<{ isDirectory: boolean }>
+  statPath: (path: string) => Promise<UserOpenedPathStat>
   markPathAsDirectory: (path: string) => void
   refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
   refreshDir: (dirPath: string) => Promise<void>
@@ -182,7 +182,7 @@ export function useFileExplorerTree(
       if (!route) {
         throw new Error(getFileExplorerOwnerUnresolvedMessage())
       }
-      return statRuntimePath(
+      return statUserOpenedPath(
         {
           settings: route.settings,
           worktreeId: activeWorktreeId,

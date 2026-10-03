@@ -9,7 +9,8 @@ import {
 import { spawn } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
-import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem-auth'
+import { resolveDesktopAuthorizedPath } from '../ipc/local-file-access-resolution'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
@@ -170,7 +171,7 @@ export function registerClipboardHandlers(store: Store): void {
       }
       const deps = makeClipboardFileDeps(async (path) => {
         try {
-          const authorizedPath = await resolveAuthorizedPath(path, store)
+          const authorizedPath = await resolveDesktopAuthorizedPath(path, store)
           await stat(authorizedPath)
           return { ok: true, path: authorizedPath }
         } catch (error) {

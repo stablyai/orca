@@ -13212,7 +13212,8 @@
             "fca915a67a": "원격 항목은 영구적으로 삭제되며 되돌릴 수 없습니다. 로컬 항목은 {{value0}}(으)로 이동합니다."
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "심볼릭 링크 대상을 열 수 없습니다"
+            "32cd9fd991": "심볼릭 링크 대상을 열 수 없습니다",
+            "folderLinksOutsideProject": "이 폴더는 프로젝트 외부로 연결되어 있어 여기에서 열 수 없습니다."
           },
           "useFileExplorerImport": {
             "25919b2050": "{{value0}} {{value1}}을(를) 건너뛰었습니다.",
@@ -13480,7 +13481,6 @@
           },
           "aiVaultSessionLogOpen": {
             "workspaceGone": "로그를 열 수 없습니다 — 워크스페이스를 더 이상 사용할 수 없습니다.",
-            "notAuthorized": "로그를 열 수 없습니다 — 경로가 승인되지 않았습니다.",
             "alreadyEditable": "로그가 이미 편집용으로 열려 있습니다."
           },
           "github": {

@@ -32,6 +32,7 @@ import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 
 export default function EditorFileTab({
   file,
@@ -162,7 +163,9 @@ export default function EditorFileTab({
       oldPath: file.filePath,
       newName,
       worktreeId: file.worktreeId,
-      worktreePath
+      worktreePath,
+      // Why: a file opened outside every project may be renamed to any path, wherever it lives.
+      documentScoped: editorTabDocumentFolderAccess(useAppStore.getState(), file) !== undefined
     })
   }
 

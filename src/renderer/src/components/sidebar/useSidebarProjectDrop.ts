@@ -12,6 +12,7 @@ import {
   resolveSidebarProjectDropPath
 } from './sidebar-project-drop'
 import { translate } from '@/i18n/i18n'
+import { userNamedFileAccess } from '@/lib/local-file-access'
 
 type SidebarProjectDropHandlers = {
   onDragEnter: (event: React.DragEvent<HTMLElement>) => void
@@ -79,8 +80,10 @@ export function useSidebarProjectDrop(): {
 
       setIsHandlingDrop(true)
       try {
-        await window.api.fs.authorizeExternalPath({ targetPath: pathResolution.path })
-        const stat = await window.api.fs.stat({ filePath: pathResolution.path })
+        const stat = await window.api.fs.stat({
+          filePath: pathResolution.path,
+          access: userNamedFileAccess()
+        })
         if (!mountedRef.current) {
           return
         }

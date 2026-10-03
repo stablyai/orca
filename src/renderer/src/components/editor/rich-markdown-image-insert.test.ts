@@ -7,13 +7,15 @@ import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 
 vi.mock('@/runtime/runtime-file-client', () => ({
   importExternalPathsToRuntime: vi.fn()
 }))
 
 vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: vi.fn(() => null)
+  getConnectionId: vi.fn(() => null),
+  getConnectionIdForFile: vi.fn(() => null)
 }))
 
 vi.mock('@/store', () => ({
@@ -56,17 +58,24 @@ function editorWithRunResult(runResult: boolean, markdown = 'hello world') {
   return { editor: { chain, schema, state }, chain, focus, insertContentAt, run }
 }
 
+async function stubStoreState(state: Record<string, unknown>): Promise<void> {
+  const { useAppStore } = await import('@/store')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the insert path reads only these store members.
+  vi.mocked(useAppStore.getState).mockReturnValue(state as never)
+}
+
 describe('insertRichMarkdownImageFromPath', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { useAppStore } = await import('@/store')
-    vi.mocked(useAppStore.getState).mockReturnValue({
+    vi.mocked(getConnectionIdForFile).mockReturnValue(null)
+    await stubStoreState({
       settings: { activeRuntimeEnvironmentId: null },
+      openFiles: [],
       folderWorkspaces: [],
       worktreesByRepo: {
         repo1: [{ id: 'wt-1', path: '/repo' }]
       }
-    } as never)
+    })
     vi.mocked(importExternalPathsToRuntime).mockResolvedValue({
       results: [{ status: 'imported', destPath: '/repo/image.png' }]
     } as never)
@@ -93,12 +102,12 @@ describe('insertRichMarkdownImageFromPath', () => {
   })
 
   it('uses folder workspace paths for runtime-owned imports', async () => {
-    const { useAppStore } = await import('@/store')
-    vi.mocked(useAppStore.getState).mockReturnValue({
+    await stubStoreState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
+      openFiles: [],
       folderWorkspaces: [{ id: 'folder-1', folderPath: '/folder-workspace' }],
       worktreesByRepo: {}
-    } as never)
+    })
     const { editor } = editorWithRunResult(true)
 
     await insertRichMarkdownImageFromPath({
@@ -116,7 +125,8 @@ describe('insertRichMarkdownImageFromPath', () => {
         worktreePath: '/folder-workspace'
       }),
       ['/tmp/image.png'],
-      '/folder-workspace'
+      '/folder-workspace',
+      { access: undefined }
     )
   })
 
@@ -146,6 +156,40 @@ describe('insertRichMarkdownImageFromPath', () => {
       }
     })
   })
+
+  it.each<[string, string, string | null, unknown]>([
+    [
+      'a local file opened outside every project',
+      '/Users/me/notes/note.md',
+      null,
+      { kind: 'document-folder', documentPath: '/Users/me/notes/note.md' }
+    ],
+    ['a project file', 'note.md', null, undefined],
+    ['an outside file on an SSH host', '/Users/me/notes/note.md', 'ssh-1', undefined]
+  ])(
+    'declares document-folder access only for %s',
+    async (_label, relativePath, connectionId, access) => {
+      const filePath = relativePath === 'note.md' ? '/repo/note.md' : '/Users/me/notes/note.md'
+      await stubStoreState({
+        settings: { activeRuntimeEnvironmentId: null },
+        openFiles: [{ filePath, relativePath, worktreeId: 'wt-1' }],
+        folderWorkspaces: [],
+        worktreesByRepo: { repo1: [{ id: 'wt-1', path: '/repo' }] }
+      })
+      vi.mocked(getConnectionIdForFile).mockReturnValue(connectionId)
+      const { editor } = editorWithRunResult(true)
+
+      await insertRichMarkdownImageFromPath({
+        editor: editor as never,
+        filePath,
+        sourcePath: '/tmp/image.png',
+        worktreeId: 'wt-1',
+        insertPos: 4
+      })
+
+      expect(vi.mocked(importExternalPathsToRuntime).mock.calls[0]?.[3]).toEqual({ access })
+    }
+  )
 
   it('skips editor mutation when the caller rejects the stale target after import', async () => {
     const { editor, chain } = editorWithRunResult(true)

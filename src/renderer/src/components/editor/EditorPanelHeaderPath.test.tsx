@@ -134,7 +134,8 @@ describe('EditorPanelHeaderPath inline rename', () => {
       oldPath: '/repo/notes.md',
       newName: 'renamed.mdx',
       worktreeId: 'wt-1',
-      worktreePath: '/repo'
+      worktreePath: '/repo',
+      documentScoped: false
     })
   })
 

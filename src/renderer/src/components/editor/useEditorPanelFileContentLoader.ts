@@ -19,6 +19,7 @@ import {
 } from './editor-panel-content-types'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
 import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
+import { editorTabFileAccess } from '@/lib/local-file-access'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
 
@@ -120,7 +121,6 @@ export function useEditorPanelFileContentLoader({
             ? undefined
             : readSettings?.activeRuntimeEnvironmentId?.trim()
           if (isLiveTailLogTab) {
-            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
             readConnectionId = undefined
           } else {
             const currentState = useAppStore.getState()
@@ -155,17 +155,18 @@ export function useEditorPanelFileContentLoader({
               throw new Error('External local files are not available for remote workspaces.')
             }
             if (!externalSshOwnerId) {
-              // Why: client-local external tabs need their main-process path grant
-              // refreshed because that authorization is only held in memory.
-              await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-              // Why: that grant covers the client path, so this read must stay off the
-              // worktree's SSH host.
+              // Why: a client-local external tab names a client path, so this read must stay off
+              // the worktree's SSH host.
               readConnectionId = undefined
             }
           }
         }
         const readScope = getRuntimeFileReadScope(readSettings, readConnectionId)
-        const key = inFlightReadKey(readScope, filePath)
+        const access = restoredOpenFile
+          ? editorTabFileAccess(useAppStore.getState(), restoredOpenFile)
+          : undefined
+        // Why the access kind in the key: a contained tab must not share a read made as a user-named one.
+        const key = `${inFlightReadKey(readScope, filePath)}::${access?.kind ?? ''}`
         const registeredRead = inFlightFileReads.get(key)
         if (
           options?.force &&
@@ -178,15 +179,16 @@ export function useEditorPanelFileContentLoader({
         }
         let pending = inFlightFileReads.get(key)
         if (!pending) {
-          const promise = readRuntimeFileContent({
+          const promise: Promise<FileContent> = readRuntimeFileContent({
             settings: readSettings,
             filePath,
             relativePath: readRelativePath,
             worktreeId: readWorktreeId,
             connectionId: readConnectionId,
             expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
-            includeLocalLogMetadata: isLiveTailLogTab
-          }) as Promise<FileContent>
+            includeLocalLogMetadata: isLiveTailLogTab,
+            access
+          })
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightFileReads.set(key, pending)
           queueMicrotask(() => {

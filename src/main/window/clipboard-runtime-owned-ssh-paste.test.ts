@@ -43,8 +43,7 @@ vi.mock('node:fs/promises', () => ({
 }))
 vi.mock('../ipc/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE: 'denied',
-  resolveAuthorizedPath: vi.fn(),
-  authorizeExternalPath: vi.fn()
+  resolveAuthorizedPath: vi.fn()
 }))
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock

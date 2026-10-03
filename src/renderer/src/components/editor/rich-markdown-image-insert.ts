@@ -5,6 +5,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { translate } from '@/i18n/i18n'
@@ -68,10 +69,15 @@ export async function insertRichMarkdownImageFromPath({
 
     // Why: image bytes should live beside the note instead of inside markdown;
     // this keeps rich-mode size checks based on document text, not binary data.
+    // Why: a document opened outside every project still gets its image beside it.
+    const openDocument = state.openFiles.find(
+      (file) => file.filePath === filePath && file.worktreeId === worktreeId
+    )
     const { results } = await importExternalPathsToRuntime(
       fileContext,
       [sourcePath],
-      dirname(filePath)
+      dirname(filePath),
+      { access: openDocument ? editorTabDocumentFolderAccess(state, openDocument) : undefined }
     )
     const imported = results.find((result) => result.status === 'imported')
     if (!imported) {

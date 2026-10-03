@@ -16,7 +16,7 @@ const markdownPreviewSanitizeSchema = {
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'kbd', 'sub', 'sup', 'ins'],
   protocols: {
     ...defaultSchema.protocols,
-    // Why: keep file:// through sanitize so the click handler can authorize and open the target.
+    // Why: keep file:// through sanitize so the click handler can open the target.
     href: [...(defaultSchema.protocols?.href ?? []), 'file'],
     src: [...(defaultSchema.protocols?.src ?? []), 'file']
   },

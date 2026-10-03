@@ -13264,7 +13264,8 @@
             "fca915a67a": "远程项目将永久删除且无法撤销。本地项目将移至 {{value0}}。"
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "无法打开符号链接目标"
+            "32cd9fd991": "无法打开符号链接目标",
+            "folderLinksOutsideProject": "此文件夹链接到项目之外，无法在此打开。"
           },
           "useFileExplorerImport": {
             "25919b2050": "跳过 {{value0}} {{value1}}。",
@@ -13532,7 +13533,6 @@
           },
           "aiVaultSessionLogOpen": {
             "workspaceGone": "无法打开日志 — 工作区已不可用。",
-            "notAuthorized": "无法打开日志 — 路径未授权。",
             "alreadyEditable": "日志已处于编辑状态。"
           },
           "github": {
