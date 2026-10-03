@@ -1,3 +1,4 @@
+import { dshHomeFromSessionPath } from '../../../shared/dsh-session-paths'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
@@ -196,6 +197,8 @@ function buildAiVaultResumeForWorktree(
               })
             : buildAiVaultResumeShellCommand({
                 resumeCommand: startupPlan.launchCommand,
+                dshHome:
+                  args.session.agent === 'dsh' ? dshHomeFromSessionPath(resumeFilePath) : null,
                 cwd,
                 platform,
                 codexHome,
@@ -203,6 +206,9 @@ function buildAiVaultResumeForWorktree(
                 clearEnvNames
               }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
+        ...(args.session.agent === 'dsh' && dshHomeFromSessionPath(resumeFilePath)
+          ? { env: { ...startupPlan.env, DSH_HOME: dshHomeFromSessionPath(resumeFilePath) ?? '' } }
+          : {}),
         ...realHomeCodexResumeEnvDeletion(args.session),
         ...startupCwd,
         launchConfig: startupPlan.launchConfig,

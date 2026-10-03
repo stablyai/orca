@@ -82,6 +82,7 @@ function resumableStateFactoryFor(
     case 'cline':
     case 'kimi':
     case 'muse':
+    case 'dsh':
     case 'opencode':
     case 'opencode2':
     case 'zcode':

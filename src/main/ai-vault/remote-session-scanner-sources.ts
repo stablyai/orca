@@ -1,3 +1,4 @@
+import { remoteDshSource } from './remote-session-scanner-dsh-source'
 import { remoteSessionDocumentParsers } from './remote-session-document-parsers'
 import type { RemoteSessionContent } from './remote-session-content-lines'
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
@@ -47,10 +48,12 @@ type RemoteContentParser<T = string> = (
 
 export function remoteSessionSources(
   remoteHome: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  dshSessionsDir?: string
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
+    remoteDshSource(remoteHome, hostPlatform, dshSessionsDir),
     {
       ...jsonlSource(
         'claude',

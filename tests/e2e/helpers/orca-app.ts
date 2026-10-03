@@ -24,6 +24,7 @@ import {
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
@@ -58,6 +59,7 @@ type OrcaTestFixtures = {
   // leaks into other specs when a worker reloads files without replaying the
   // first spec's afterAll; per-test launch env cannot leak.
   orcaAppExtraEnv: Record<string, string>
+  orcaAppInitialSettings: Partial<GlobalSettings>
   // Why: spec-scoped Chromium switches (e.g. --enable-precise-memory-info for
   // memory benchmarks). Prepended before the main entry so Electron forwards
   // them to Chromium without affecting other specs' launches.
@@ -175,6 +177,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       dismissOnboarding,
       launchEnv,
       orcaAppExtraEnv,
+      orcaAppInitialSettings,
       orcaAppExtraArgs,
       registerPostElectronShutdownCleanup
     },
@@ -195,7 +198,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // existing-user upgrade cohort and mount the telemetry notice overlay.
       writeFileSync(
         path.join(userDataDir, 'orca-data.json'),
-        `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
+        `${JSON.stringify(getE2ECompletedOnboardingProfile(orcaAppInitialSettings), null, 2)}\n`
       )
     }
     const headful = shouldLaunchHeadful(testInfo)
@@ -283,6 +286,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   minimumSeededWorktreeCount: [2, { option: true }],
   launchEnv: [{}, { option: true }],
   orcaAppExtraEnv: [{}, { option: true }],
+  orcaAppInitialSettings: [{}, { option: true }],
   orcaAppExtraArgs: [[], { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait

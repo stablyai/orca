@@ -27,7 +27,11 @@ export type RemoteSessionFilesystemProvider = Pick<
   'readDir' | 'readFile' | 'stat'
 > & {
   /** Available only beside the execution host's disk; never opens a client path. */
-  readTranscriptBytes?: (path: string, signal?: AbortSignal) => AsyncIterable<Buffer>
+  readTranscriptBytes?: (
+    path: string,
+    signal?: AbortSignal,
+    format?: 'dsh-zstd'
+  ) => AsyncIterable<Buffer>
   /** Execution-host database access; absent from remote filesystem RPC providers. */
   openCode?: RemoteOpenCodeSessionReader
 }
@@ -48,6 +52,11 @@ export type RemoteSessionSource = {
   // Codex sources only: the CODEX_HOME the root belongs to, so bridged or
   // backfilled rollout aliases across remote roots collapse to one canonical row.
   codexHome?: string
+  selectFilePaths?: (
+    paths: readonly string[],
+    reportInvalid?: (path: string, message: string) => void
+  ) => string[]
+  readAsBytes?: boolean
   extensions: readonly string[]
   filePredicate?: (path: string) => boolean
   contentDependencyPath?: (path: string) => string

@@ -20,7 +20,11 @@ export function limitRemoteScanFilesystemConcurrency(
     stat: (filePath) => gate(() => provider.stat(filePath)),
     ...(provider.readTranscriptBytes
       ? {
-          readTranscriptBytes: async function* (path: string, signal?: AbortSignal) {
+          readTranscriptBytes: async function* (
+            path: string,
+            signal?: AbortSignal,
+            format?: 'dsh-zstd'
+          ) {
             let enter!: () => void
             let release!: () => void
             const entered = new Promise<void>((resolve) => {
@@ -35,7 +39,7 @@ export function limitRemoteScanFilesystemConcurrency(
             })
             await entered
             try {
-              yield* provider.readTranscriptBytes!(path, signal)
+              yield* provider.readTranscriptBytes!(path, signal, format)
             } finally {
               release()
               await held

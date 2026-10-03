@@ -181,23 +181,26 @@ describe('registerFilesystemHandlers', () => {
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
   })
 
-  it('rejects readFile when the real path escapes allowed roots', async () => {
-    const linkPath = path.resolve('/workspace/repo/link.txt')
-    realpathMock.mockImplementation(async (targetPath: string) => {
-      if (targetPath === linkPath) {
-        return path.resolve('/private/secret.txt')
-      }
-      return targetPath
-    })
+  it.each([false, true])(
+    'rejects readFile when the real path escapes allowed roots (decode DSH: %s)',
+    async (decodeDshHistory) => {
+      const linkPath = path.resolve('/workspace/repo/link.txt')
+      realpathMock.mockImplementation(async (targetPath: string) => {
+        if (targetPath === linkPath) {
+          return path.resolve('/private/secret.txt')
+        }
+        return targetPath
+      })
 
-    registerFilesystemHandlers(store as never)
+      registerFilesystemHandlers(store as never)
 
-    await expect(handlers.get('fs:readFile')!(null, { filePath: linkPath })).rejects.toThrow(
-      'Access denied: path resolves outside allowed directories'
-    )
+      await expect(
+        handlers.get('fs:readFile')!(null, { filePath: linkPath, decodeDshHistory })
+      ).rejects.toThrow('Access denied: path resolves outside allowed directories')
 
-    expect(readFileMock).not.toHaveBeenCalled()
-  })
+      expect(readFileMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('allows readDir when a registered worktree resolves to a macOS canonical alias', async () => {
     const aliasWorktreePath = path.resolve('/var/folders/orca/worktrees/feature')

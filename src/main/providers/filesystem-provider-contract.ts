@@ -18,6 +18,7 @@ export type FileStat = {
 }
 
 export type FileReadResult = {
+  decodedDshHistory?: boolean
   content: string
   isBinary: boolean
   isImage?: boolean
@@ -25,6 +26,7 @@ export type FileReadResult = {
 }
 
 export type FileReadLimits = {
+  decodeDshHistory?: boolean
   maxBinaryBytes?: number
   maxTextBytes?: number
 }

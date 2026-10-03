@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { scanRemoteAiVaultSessions } from '../main/ai-vault/remote-session-scanner'
 import { readAiVaultSessionTitlesFromFiles } from '../main/ai-vault/session-title-file-reader'
@@ -50,6 +51,7 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
       provider,
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       remoteHome: init.remoteHome,
+      dshSessionsDir: process.env.DSH_HOME ? join(process.env.DSH_HOME, 'sessions') : undefined,
       hostPlatform: init.hostPlatform,
       limit: request.params.limit,
       unlimited: request.params.unlimited,

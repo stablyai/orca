@@ -1,10 +1,14 @@
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchResponseSchema,
   AiVaultSearchStatusRequestSchema,
   AiVaultSearchStatusSchema
 } from '../../shared/ai-vault-search-contract'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+import {
+  emptySessionSearchResults,
+  unavailableSessionSearchStatus
+} from '../../shared/ai-vault-search-client'
 import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
 import { resolveSessionSearchScope } from './session-search-scope-resolution'
 import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
@@ -34,7 +38,25 @@ export async function searchSessionService(
   // The choke point every entry point funnels through, so every host kind
   // resolves alike; the verdict goes to the service, which answers off and
   // not-ready first.
-  const { within, ...request } = parsed
+  const { within, includeDshHistory, ...input } = parsed
+  const request =
+    transport === 'relay' && !includeDshHistory
+      ? {
+          ...input,
+          filters: {
+            ...input.filters,
+            agents: (input.filters?.agents ?? AI_VAULT_AGENTS).filter((agent) => agent !== 'dsh')
+          }
+        }
+      : input
+  if (
+    transport === 'relay' &&
+    !includeDshHistory &&
+    input.filters?.agents?.length &&
+    !request.filters?.agents?.length
+  ) {
+    return emptySessionSearchResults((await current.status()).generation)
+  }
   const hostScope = within
     ? resolveSessionSearchScope(within, sessionSearchScopeCatalog())
     : undefined
@@ -61,9 +83,12 @@ export async function sessionSearchServiceStatus(
 ): Promise<AiVaultSearchStatus> {
   AiVaultSearchStatusRequestSchema.parse(raw)
   return redactStatusForTransport(
-    AiVaultSearchStatusSchema.parse(
-      service ? await service.status() : unavailableSessionSearchStatus()
-    ),
+    {
+      ...AiVaultSearchStatusSchema.parse(
+        service ? await service.status() : unavailableSessionSearchStatus()
+      ),
+      dshHistory: true
+    },
     transport
   )
 }

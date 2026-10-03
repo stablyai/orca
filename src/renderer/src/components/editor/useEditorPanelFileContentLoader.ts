@@ -1,3 +1,4 @@
+import { dshHomeFromSessionPath } from '../../../../shared/dsh-session-paths'
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
@@ -165,7 +166,9 @@ export function useEditorPanelFileContentLoader({
           }
         }
         const readScope = getRuntimeFileReadScope(readSettings, readConnectionId)
-        const key = inFlightReadKey(readScope, filePath)
+        const decodeDshHistory =
+          restoredOpenFile?.readOnly === true && Boolean(dshHomeFromSessionPath(filePath))
+        const key = inFlightReadKey(readScope, filePath) + (decodeDshHistory ? ':decoded-dsh' : '')
         const registeredRead = inFlightFileReads.get(key)
         if (
           options?.force &&
@@ -178,15 +181,16 @@ export function useEditorPanelFileContentLoader({
         }
         let pending = inFlightFileReads.get(key)
         if (!pending) {
-          const promise = readRuntimeFileContent({
+          const promise: Promise<FileContent> = readRuntimeFileContent({
             settings: readSettings,
             filePath,
             relativePath: readRelativePath,
             worktreeId: readWorktreeId,
             connectionId: readConnectionId,
             expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
-            includeLocalLogMetadata: isLiveTailLogTab
-          }) as Promise<FileContent>
+            includeLocalLogMetadata: isLiveTailLogTab,
+            ...(decodeDshHistory ? { decodeDshHistory } : {})
+          })
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightFileReads.set(key, pending)
           queueMicrotask(() => {

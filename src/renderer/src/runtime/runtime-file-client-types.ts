@@ -5,6 +5,7 @@ export type RuntimeReadableFileContent = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
+  decodedDshHistory?: boolean
   fileIdentity?: string
 }
 
@@ -15,6 +16,7 @@ export type RuntimeFileReadArgs = {
   worktreeId?: string
   connectionId?: string
   expectedExternalSshTargetId?: string
+  decodeDshHistory?: boolean
   includeLocalLogMetadata?: boolean
 }
 

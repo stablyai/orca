@@ -28,6 +28,17 @@ export function unavailableSessionSearchStatus(): AiVaultSearchStatus {
   }
 }
 
+export function emptySessionSearchResults(generation: number): AiVaultSearchResponse {
+  return {
+    kind: 'results',
+    hits: [],
+    page: { cursor: null, hasMore: false },
+    generation,
+    truncated: { candidates: false, snippets: 0, query: false, freshness: false },
+    durationMs: 0
+  }
+}
+
 // Only an explicit unknown-method refusal proves the old host lacks this surface.
 export function isUnknownSessionSearchMethod(error: unknown): boolean {
   if (!error || typeof error !== 'object' || !('code' in error)) {
@@ -48,7 +59,22 @@ export function createSessionSearchClient(
       const parsed = AiVaultSearchRequestSchema.parse(request)
       let raw: unknown
       try {
-        raw = await call('aiVault.searchSessions', parsed)
+        let filters = parsed.filters
+        if (filters?.agents?.includes('dsh')) {
+          const status = AiVaultSearchStatusSchema.parse(await call('aiVault.searchStatus', {}))
+          if (!status.dshHistory) {
+            const agents = filters.agents.filter((agent) => agent !== 'dsh')
+            if (!agents.length) {
+              return emptySessionSearchResults(status.generation)
+            }
+            filters = { ...filters, agents }
+          }
+        }
+        raw = await call('aiVault.searchSessions', {
+          ...parsed,
+          ...(filters ? { filters } : {}),
+          includeDshHistory: true
+        })
       } catch (error) {
         if (isUnknownSessionSearchMethod(error)) {
           return { kind: 'unavailable', reason: 'no-service' }

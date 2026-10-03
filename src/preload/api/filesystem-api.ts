@@ -41,12 +41,14 @@ export type FilesystemApi = {
     readFile: (args: {
       filePath: string
       connectionId?: string
+      decodeDshHistory?: boolean
       includeLocalLogMetadata?: boolean
     }) => Promise<{
       content: string
       isBinary: boolean
       isImage?: boolean
       mimeType?: string
+      decodedDshHistory?: boolean
       fileIdentity?: string
     }>
     readLocalLogTail: (args: LocalLogTailReadArgs) => Promise<LocalLogTailReadResult>

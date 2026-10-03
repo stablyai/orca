@@ -31,7 +31,26 @@ export async function discoverRemoteSourceCandidates(args: {
     ? await listRemoteFixedChildFiles(args.source, args.context, args.issues)
     : await walkRemoteSessionFiles(args.source, args.context, args.issues)
   const partition = args.source.partitionSubagentTranscripts?.(walked) ?? null
-  const paths = partition ? partition.sessionFilePaths : walked
+  const partitioned = partition ? partition.sessionFilePaths : walked
+  const paths =
+    args.source.selectFilePaths?.(partitioned, (path, message) =>
+      recordSessionScanIssue(args.issues, {
+        agent: args.source.agent,
+        path,
+        message,
+        executionHostId: args.context.executionHostId
+      })
+    ) ?? partitioned
+  if (paths.length && args.source.readAsBytes && !args.context.provider.readTranscriptBytes) {
+    recordSessionScanIssue(args.issues, {
+      agent: args.source.agent,
+      path: args.source.rootDir,
+      message:
+        'DSH history requires streaming reads on the transcript-owning host; update the remote Orca host.',
+      executionHostId: args.context.executionHostId
+    })
+    return []
+  }
   const files = await mapRemoteScanBatches(
     paths,
     REMOTE_DISCOVERY_CONCURRENCY,

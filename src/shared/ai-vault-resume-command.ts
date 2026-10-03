@@ -1,6 +1,7 @@
 // Resume-command construction for Agent Session History rows: turns a scanned
 // session into the shell line that re-enters it, quoted for the target platform
 // and (when known) the live tab's shell.
+import { dshHomeFromSessionPath } from './dsh-session-paths'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   clearEnvCommand,
@@ -48,6 +49,7 @@ export function buildAiVaultResumeCommand(args: {
     cwd,
     platform,
     codexHome,
+    dshHome: agent === 'dsh' ? dshHomeFromSessionPath(resumeFilePath) : null,
     shell,
     clearEnvNames: args.clearEnvNames
   })
@@ -55,6 +57,7 @@ export function buildAiVaultResumeCommand(args: {
 
 export function buildAiVaultResumeShellCommand(args: {
   resumeCommand: string
+  dshHome?: string | null
   cwd: string | null
   platform: NodeJS.Platform
   codexHome?: string | null
@@ -67,7 +70,9 @@ export function buildAiVaultResumeShellCommand(args: {
   // legacy self-contained `cmd /d /s /c` wrapper.
   shell?: AgentStartupShell
 }): string {
-  const { cwd, platform, codexHome, shell, clearEnvNames } = args
+  const { cwd, platform, shell, clearEnvNames } = args
+  const codexHome = args.dshHome ?? args.codexHome
+  const homeEnvName = args.dshHome ? 'DSH_HOME' : 'CODEX_HOME'
 
   // Why: shell-aware commands are parsed by a known running shell, while
   // shell-less persisted commands keep the legacy self-contained cmd wrapper.
@@ -79,7 +84,8 @@ export function buildAiVaultResumeShellCommand(args: {
       cwd,
       codexHome: codexHome?.trim() || null,
       shell,
-      clearEnvNames
+      clearEnvNames,
+      homeEnvName
     })
   }
 
@@ -89,7 +95,7 @@ export function buildAiVaultResumeShellCommand(args: {
   // resume against the real home. Keeping the assignment authoritative matches
   // the old `clear…; CODEX_HOME=x agent` ordering.
   const clearNames = resolvedCodexHome
-    ? clearEnvNames?.filter((name) => name !== 'CODEX_HOME')
+    ? clearEnvNames?.filter((name) => name !== homeEnvName)
     : clearEnvNames
   // Why the two placements differ: `set -u` aborts on the unbound `$fish_pid`
   // the POSIX clear statement has to test, so there it must not precede the
@@ -99,7 +105,7 @@ export function buildAiVaultResumeShellCommand(args: {
   // Keyed on the shell, not the platform: the shell is what picks the grammar.
   const dialect = shell ?? (platform === 'win32' ? 'cmd' : 'posix')
   const clearsOnAgent = clearNames?.length && isPosixStartupShell(dialect)
-  const resumeCommand = `${codexHomeEnvPrefix(resolvedCodexHome, platform, shell)}${
+  const resumeCommand = `${codexHomeEnvPrefix(resolvedCodexHome, platform, shell, homeEnvName)}${
     clearsOnAgent ? withoutEnvCommand(clearNames, args.resumeCommand, dialect) : args.resumeCommand
   }`
   const clearPrefix =
@@ -125,20 +131,22 @@ export function buildAiVaultResumeShellCommand(args: {
 
 function buildResumeShellCommandForShell(args: {
   resumeCommand: string
+  dshHome?: string | null
   cwd: string | null
   codexHome: string | null
   shell: Exclude<AgentStartupShell, 'cmd'>
   clearEnvNames?: readonly string[]
+  homeEnvName: string
 }): string {
-  const { cwd, codexHome, shell, clearEnvNames } = args
+  const { cwd, codexHome, shell, clearEnvNames, homeEnvName } = args
   if (isPosixStartupShell(shell)) {
     // Why: git-bash on a Windows host runs a POSIX shell, so reuse the same
     // inline-env + `cd '<cwd>'` prefix as the non-Windows path.
-    const envPrefix = codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''
+    const envPrefix = codexHome ? `${homeEnvName}=${quoteStartupArg(codexHome, shell)} ` : ''
     // Why filter: see the twin in buildAiVaultResumeShellCommand — `env -u`
     // would strip the home the prefix just set.
     const clearNames = codexHome
-      ? clearEnvNames?.filter((name) => name !== 'CODEX_HOME')
+      ? clearEnvNames?.filter((name) => name !== homeEnvName)
       : clearEnvNames
     const command = `${envPrefix}${
       clearNames?.length
@@ -159,7 +167,7 @@ function buildResumeShellCommandForShell(args: {
     segments.push(`Set-Location -LiteralPath ${quoteStartupArg(cwd, shell)}`)
   }
   if (codexHome) {
-    segments.push(`$env:CODEX_HOME=${quoteStartupArg(codexHome, shell)}`)
+    segments.push(`$env:${homeEnvName}=${quoteStartupArg(codexHome, shell)}`)
   }
   segments.push(args.resumeCommand)
   return segments.join(separator)
@@ -228,6 +236,7 @@ function buildAgentResumeInvocation(
     case 'devin':
     case 'openclaw':
     case 'droid':
+    case 'dsh':
     // Why: OMP and Prime Agent resume by absolute transcript path (see
     // buildAiVaultResumeCommand), but the `--resume <arg>` invocation form is
     // identical to the others here.
@@ -243,16 +252,17 @@ function buildAgentResumeInvocation(
 function codexHomeEnvPrefix(
   codexHome: string | null,
   platform: NodeJS.Platform,
-  shell?: AgentStartupShell
+  shell?: AgentStartupShell,
+  homeEnvName = 'CODEX_HOME'
 ): string {
   if (!codexHome) {
     return ''
   }
   if (platform === 'win32') {
-    return `set ${quoteWindowsCmdArg(`CODEX_HOME=${codexHome}`)} && `
+    return `set ${quoteWindowsCmdArg(`${homeEnvName}=${codexHome}`)} && `
   }
   // fish accepts the `NAME=value cmd` prefix (3.1+), but not sh's quoting.
-  return `CODEX_HOME=${quoteResumeArg(codexHome, platform, shell)} `
+  return `${homeEnvName}=${quoteResumeArg(codexHome, platform, shell)} `
 }
 
 /** Quotes for the live shell when one is known, else for the platform's default. */

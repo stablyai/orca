@@ -1,3 +1,6 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
+import { dshHomeFromSessionPath } from '../../../../shared/dsh-session-paths'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -41,16 +44,10 @@ function focusEditorContent(): void {
   })
 }
 
-/**
- * Open a local AI Vault session log inside Orca as a permanent, read-only editor
- * tab (or activate an existing tab without reducing its authority). Reuses
- * Orca's external-file authorize + `openFile` pipeline; it never grants write
- * capability by itself and never redirects the open to a remote host.
- */
+// Local logs use exact-path grants; SSH DSH logs retain their explicit host owner.
 export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): Promise<void> {
   const filePath = session.filePath?.trim()
-  // Defensive: UI availability should already withhold blank/remote/synthetic
-  // paths. Bail silently rather than toast — there is no user-actionable error.
+  // Defensive: UI availability already withholds unsupported source identities.
   if (!filePath || !canOpenAiVaultSessionLogInOrca(session)) {
     return
   }
@@ -72,6 +69,17 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
       )
       return
     }
+    const host = parseExecutionHostId(session.executionHostId ?? 'local')
+    const sshTargetId = host?.kind === 'ssh' ? host.targetId : undefined
+    if (sshTargetId && getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId) !== host?.id) {
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.aiVaultSessionLogOpen.openTranscriptHost',
+          'Open a workspace on the transcript-owning SSH host to view this log.'
+        )
+      )
+      return
+    }
     const targetGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? undefined
     // Why: an already-open *writable* tab must keep its edit authority — View Log
     // only activates it and notifies. Local ownership only (runtimeEnvironmentId
@@ -82,13 +90,16 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
         file.mode === 'edit' &&
         file.worktreeId === worktreeId &&
         (file.runtimeEnvironmentId ?? null) === null &&
+        (file.externalSshTargetId ?? undefined) === sshTargetId &&
         file.readOnly !== true
     )
 
     try {
       // The exact scanned path is the authorization oracle; the user click is the
       // trust gesture. Reuses Orca's existing external R/W open grant.
-      await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+      if (!sshTargetId) {
+        await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+      }
     } catch {
       toast.error(
         translate(
@@ -100,7 +111,11 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
     }
 
     const stateAfterAuth = useAppStore.getState()
-    if (!worktreeStillExists(stateAfterAuth, worktreeId)) {
+    if (
+      !worktreeStillExists(stateAfterAuth, worktreeId) ||
+      (sshTargetId &&
+        getAiVaultResumeWorkspaceExecutionHostId(stateAfterAuth, worktreeId) !== host?.id)
+    ) {
       toast.error(
         translate(
           'auto.components.right.sidebar.aiVaultSessionLogOpen.workspaceGone',
@@ -120,10 +135,11 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
         // Why: the path was discovered on the client-local host — pin local
         // ownership so an active runtime can't reinterpret it as a remote path.
         runtimeEnvironmentId: null,
-        language: detectLanguage(filePath),
+        ...(sshTargetId ? { externalSshTargetId: sshTargetId } : {}),
+        language: dshHomeFromSessionPath(filePath) ? 'json' : detectLanguage(filePath),
         mode: 'edit',
         readOnly: true,
-        liveTail: true
+        liveTail: !sshTargetId
       },
       {
         preview: false,

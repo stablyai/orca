@@ -1,3 +1,5 @@
+import type { Dirent } from 'node:fs'
+import { DSH_AGENT_SOURCE } from './session-scanner-dsh-source'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
@@ -81,6 +83,10 @@ export type AiVaultAgentSource = {
   // module-scope call binds across chunks at init time and breaks on bundle
   // ordering. Returns the local host root plus one per WSL distro home.
   rootDirs: (options: AiVaultScanOptions, wslHomeDirs: readonly string[]) => string[]
+  selectDirectoryEntries?: (
+    entries: Dirent[],
+    reportInvalid?: (message: string) => void
+  ) => Dirent[]
   extensions: readonly string[]
   filePredicate?: (filePath: string) => boolean
   // A sibling whose stat participates in candidate freshness and recency; async
@@ -297,6 +303,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     filePredicate: (filePath) =>
       basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_')
   },
+  dsh: DSH_AGENT_SOURCE,
   muse: {
     rootDirs: (options, wslHomeDirs) =>
       sessionRootDirs(resolveMuseSessionsDir(options.museSessionsDir), wslHomeDirs, [

@@ -1,6 +1,8 @@
+import { dshHomeFromSessionPath } from '../../../../shared/dsh-session-paths'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -18,12 +20,7 @@ export function canUseLocalAiVaultSessionPathActions(
   return normalizeExecutionHostId(executionHostId) === LOCAL_EXECUTION_HOST_ID
 }
 
-/**
- * Whether AI Vault `View Log` / `Open Log` can open this session's log inside
- * Orca as a read-only tab: a non-blank, local, single-file (non-synthetic)
- * path. Remote/runtime and synthetic identities are withheld until AI Vault has
- * a provider-owned log-resource contract.
- */
+// Canonical DSH logs can also use the SSH host-owned file reader.
 export function canOpenAiVaultSessionLogInOrca(
   session: Pick<AiVaultSession, 'filePath' | 'executionHostId'>
 ): boolean {
@@ -32,7 +29,10 @@ export function canOpenAiVaultSessionLogInOrca(
     return false
   }
   if (!canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
-    return false
+    return (
+      parseExecutionHostId(session.executionHostId)?.kind === 'ssh' &&
+      Boolean(dshHomeFromSessionPath(filePath))
+    )
   }
   return !isAiVaultSyntheticSessionPath(filePath)
 }

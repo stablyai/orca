@@ -40,6 +40,7 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   'CLINE_SESSION_DATA_DIR',
   'COPILOT_HOME',
   'DEVIN_HOME',
+  'DSH_HOME',
   'GROK_HOME',
   'KIMI_CODE_HOME',
   'OMP_CODING_AGENT_DIR',
@@ -103,7 +104,7 @@ export function buildRelayAiVaultServiceEnv(
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
   return pickAllowedEnv(
-    [...RUNTIME_ENV_ALLOWLIST, 'XDG_DATA_HOME', 'OPENCODE_DB'],
+    [...RUNTIME_ENV_ALLOWLIST, 'XDG_DATA_HOME', 'OPENCODE_DB', 'DSH_HOME'],
     baseEnv,
     platform
   )
