@@ -6,6 +6,7 @@ import {
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
   mobileTerminalThemesEqual,
+  renameTerminalSessionTabTitle,
   type MobileTerminalSessionTab,
   type TerminalRecord
 } from './mobile-terminal-records'
@@ -260,5 +261,35 @@ describe('mobile terminal records', () => {
         (terminal) => terminal.handle
       )
     ).toEqual(['pty-1', 'pty-2'])
+  })
+})
+
+describe('renameTerminalSessionTabTitle', () => {
+  const tabs: MobileTerminalSessionTab[] = [
+    {
+      type: 'terminal',
+      id: 'tab-1',
+      title: 'Codex working',
+      terminal: 'pty-1',
+      isActive: true
+    },
+    {
+      type: 'terminal',
+      id: 'tab-2',
+      title: 'Logs',
+      terminal: 'pty-2',
+      isActive: false
+    }
+  ]
+
+  it('renames only the session tab for that handle', () => {
+    expect(renameTerminalSessionTabTitle(tabs, 'pty-1', 'Ship notes')).toEqual([
+      { ...tabs[0], title: 'Ship notes' },
+      tabs[1]
+    ])
+  })
+
+  it('returns the same array when the title is already current', () => {
+    expect(renameTerminalSessionTabTitle(tabs, 'pty-1', 'Codex working')).toBe(tabs)
   })
 })

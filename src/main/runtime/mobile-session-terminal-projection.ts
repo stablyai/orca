@@ -23,12 +23,18 @@ export function buildHeadlessMobileSessionTerminalTabs(
       }
       return leafIds.flatMap((leafId) => {
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
-        const title =
-          tab.customTitle?.trim() ||
-          tab.generatedTitle?.trim() ||
-          tab.title?.trim() ||
-          tab.defaultTitle?.trim() ||
-          `Terminal ${index + 1}`
+        // Why: the renderer omits a tab-wide custom title on every split leaf.
+        // Copying the parent name here makes a headless rebuild rename them all.
+        const singleLeaf = leafIds.length === 1
+        const customTitle = singleLeaf ? tab.customTitle?.trim() || '' : ''
+        const leafTitle = layout?.titlesByLeafId?.[leafId]?.trim() || ''
+        const title = singleLeaf
+          ? customTitle ||
+            tab.generatedTitle?.trim() ||
+            tab.title?.trim() ||
+            tab.defaultTitle?.trim() ||
+            `Terminal ${index + 1}`
+          : leafTitle || 'Terminal'
         return [
           {
             type: 'terminal' as const,
@@ -36,6 +42,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
             parentTabId: tab.id,
             leafId,
             title,
+            ...(customTitle ? { customTitle } : {}),
             ...(ptyId ? { ptyId } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
             ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),

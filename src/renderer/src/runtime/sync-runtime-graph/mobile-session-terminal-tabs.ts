@@ -101,10 +101,15 @@ export function buildMobileTerminalSurfaceTabs(
       launchDraft && launchDraft.agent === launchAgent && launchDraft.text.trim()
         ? launchDraft
         : null
+    const customTitle =
+      tabWideFallbackSafe && terminal.customTitle?.trim() ? terminal.customTitle.trim() : ''
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
       title,
+      // Why: main republishes live OSC titles over `title`. The custom title has
+      // to travel separately or an iOS rename snaps back to the agent title.
+      ...(customTitle ? { customTitle } : {}),
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),

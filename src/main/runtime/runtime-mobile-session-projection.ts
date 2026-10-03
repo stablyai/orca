@@ -1,6 +1,5 @@
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
-  normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
@@ -16,11 +15,14 @@ import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
+import {
+  projectedLeafOscTitle,
+  projectedPtyOscTitle,
+  projectStickyMobileTerminalTitle
+} from './mobile-session-custom-title'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import {
-  getLatestAgentCandidateTitle,
-  getLeafDisplayRecord,
   getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
@@ -148,22 +150,10 @@ export function projectRuntimeMobileSessionTabs(
     // null, because persisted ids can collide with an unrelated pane after restart — reading
     // that pane's tracker would publish its title here, ahead of every other source.
     const trackerOnlyTitle = host.getTrackedTitle(liveLeafPtyId ?? pty?.ptyId ?? null)
-    const displayLeaf = leaf
-      ? getLeafDisplayRecord(leaf, host.getTitleDisplayClear(leaf.ptyId))
+    const leafTitle = leaf
+      ? projectedLeafOscTitle(leaf, host.getTitleDisplayClear(leaf.ptyId))
       : null
-    const displayPty = pty ? getPtyDisplayRecord(pty, host.getTitleDisplayClear(pty.ptyId)) : null
-    const leafTitle = displayLeaf
-      ? getLatestAgentCandidateTitle(
-          { title: displayLeaf.paneTitle, updatedAt: displayLeaf.paneTitleUpdatedAt },
-          { title: displayLeaf.lastOscTitle, updatedAt: displayLeaf.lastOscTitleAt }
-        )
-      : null
-    const ptyTitle = displayPty
-      ? getLatestAgentCandidateTitle(
-          { title: displayPty.title, updatedAt: displayPty.titleUpdatedAt },
-          { title: displayPty.lastOscTitle, updatedAt: displayPty.lastOscTitleAt }
-        )
-      : null
+    const ptyTitle = pty ? projectedPtyOscTitle(pty, host.getTitleDisplayClear(pty.ptyId)) : null
     // Renderer omission is authoritative: PTY launch provenance outlives agent exit.
     const launchAgent = tab.launchAgent ?? null
     const launchOwnerAgent = launchAgent ?? liveLeafPty?.launchAgent ?? pty?.launchAgent ?? null
@@ -179,11 +169,18 @@ export function projectRuntimeMobileSessionTabs(
     const ownerAgent =
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
-    const title = normalizeCompatibleAgentTitleForOwner(
-      trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
+    // Why: the desktop draws `customTitle` directly, so a rename survives OSC.
+    // Mobile only sees this projection. A user rename has to outrank the live
+    // leaf title or the next agent frame puts the old name back.
+    const title = projectStickyMobileTerminalTitle({
+      tab,
+      pty: liveLeafPty ?? pty,
+      trackerOnlyTitle,
+      oscTitle: leafTitle ?? ptyTitle,
+      syncedTitle: syncedTab?.title,
       ownerAgent,
       ownerOptions
-    )
+    })
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
     const rendererStatusAgent =

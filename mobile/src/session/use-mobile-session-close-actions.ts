@@ -1,3 +1,4 @@
+import { renameTerminalSessionTabTitle } from './mobile-terminal-records'
 import { pendingSelectionTabId, withoutPendingHandle } from './pending-session-selection'
 import {
   sessionTabClose,
@@ -50,15 +51,25 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         await sessionTerminalRename.request(client, { terminal: target.handle, title })
       )
       if (response.accepted) {
+        const nextTitle = title || 'Terminal'
         setTerminals((prev) => {
           const next = prev.map((terminal) =>
-            terminal.handle === target.handle
-              ? { ...terminal, title: title || 'Terminal' }
-              : terminal
+            terminal.handle === target.handle ? { ...terminal, title: nextTitle } : terminal
           )
           terminalsRef.current = next
           return next
         })
+        // Why: the tab strip reads session tabs, not `terminals`. Leaving the
+        // strip stale made a successful rename look like it did nothing.
+        const nextTabs = renameTerminalSessionTabTitle(
+          sessionTabsRef.current,
+          target.handle,
+          nextTitle
+        )
+        if (nextTabs !== sessionTabsRef.current) {
+          sessionTabsRef.current = nextTabs
+          setSessionTabs(nextTabs)
+        }
         scheduleDelayedAction(() => void fetchTerminals(), 300)
       }
     } catch {

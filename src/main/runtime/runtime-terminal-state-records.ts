@@ -96,6 +96,14 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   controllerTitle: string | null
   title: string | null
   titleUpdatedAt: number | null
+  /** Pending `terminal.rename`. A string outranks OSC until the renderer snapshot
+   *  echoes it, or a later desktop custom title replaces `manualTitleBaseline`.
+   *  `null` is an explicit clear. Absent means no pending rename. */
+  manualTitle?: string | null
+  /** Snapshot custom title at the moment `manualTitle` was set. Empty means the
+   *  snapshot had none, which is what a split leaf publishes. Absent means the
+   *  tab was not in a snapshot yet. */
+  manualTitleBaseline?: string
   lastOutputAt: number | null
   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
   commandPaint?: TerminalCommandPaint

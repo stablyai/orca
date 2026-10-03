@@ -448,9 +448,45 @@ describe('buildMobileSessionTabSnapshots', () => {
     expect(tab).toMatchObject({
       type: 'terminal',
       id: `term-1::${leafId}`,
-      title: 'Pinned'
+      title: 'Pinned',
+      customTitle: 'Pinned'
     })
     expect(tab).not.toHaveProperty('agentStatus')
+  })
+
+  it('does not copy a tab custom title onto split sibling leaves', () => {
+    const leftLeafId = '11111111-1111-4111-8111-111111111111'
+    const rightLeafId = '22222222-2222-4222-8222-222222222222'
+    const state = makeState({
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Pinned', customTitle: 'Pinned', ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: leftLeafId },
+            second: { type: 'leaf', leafId: rightLeafId }
+          },
+          activeLeafId: leftLeafId,
+          expandedLeafId: null,
+          titlesByLeafId: {
+            [leftLeafId]: 'Codex working',
+            [rightLeafId]: 'zsh'
+          }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+
+    const tabs = buildMobileSessionTabSnapshots(state)[0]?.tabs ?? []
+
+    expect(tabs).toEqual([
+      expect.objectContaining({ title: 'Codex working' }),
+      expect.objectContaining({ title: 'zsh' })
+    ])
+    expect(tabs.every((tab) => !('customTitle' in tab))).toBe(true)
   })
 
   it('publishes generated terminal titles to mobile snapshots only when enabled', () => {
