@@ -813,7 +813,8 @@
 .rich-markdown-editor th,
 .rich-markdown-editor td {
   padding: 8px 14px;
-  border: 1px solid var(--border);
+  /* Why: dark --border (7% white) vanishes on grid lines; --input matches it in light mode. */
+  border: 1px solid var(--input);
   text-align: left;
   vertical-align: top;
   overflow-wrap: break-word;
