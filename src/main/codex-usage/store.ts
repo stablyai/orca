@@ -83,7 +83,12 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
   CodexUsagePersistedState,
   'hasAnyCodexData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(
+    store: Pick<
+      Store,
+      'getRepos' | 'getAllWorktreeMeta' | 'getFolderWorkspaces' | 'getProjectGroups'
+    >
+  ) {
     super(store, {
       tokenUsage: {
         provider: 'codex',
