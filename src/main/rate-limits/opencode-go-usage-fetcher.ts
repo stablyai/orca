@@ -7,11 +7,18 @@ import {
   createOpenCodeRequestSession,
   OPENCODE_BASE_URL
 } from './opencode-go-request-session'
-import { parseOpenCodeGoStatusPayload } from './opencode-go-status-parsing'
+import {
+  isOpenCodeGoExplicitNoAccessPayload,
+  makeOpenCodeGoZenBalance,
+  parseOpenCodeGoBillingStatusPayload,
+  parseOpenCodeGoStatusPayload
+} from './opencode-go-status-parsing'
 
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
 const OPENCODE_GO_STATUS_URL = `${OPENCODE_BASE_URL}/console/api/go/status`
+const OPENCODE_BILLING_STATUS_URL = `${OPENCODE_BASE_URL}/console/api/billing/status`
 const API_TIMEOUT_MS = 15_000
+const OPTIONAL_BILLING_TIMEOUT_MS = 5_000
 
 // Server-function hash for the workspaces endpoint — stable identifier used by
 // the opencode.ai SST/TanStack router server-fn protocol.
@@ -126,6 +133,34 @@ export async function fetchOpenCodeGoRateLimits(
   }
 }
 
+function startOptionalBillingFetch(openCodeSession: Session, workspaceId: string) {
+  const abortController = new AbortController()
+  const promise = (async (): Promise<number | null> => {
+    const timeout = setTimeout(() => abortController.abort(), OPTIONAL_BILLING_TIMEOUT_MS)
+    try {
+      const response = await openCodeSession.fetch(OPENCODE_BILLING_STATUS_URL, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Origin: OPENCODE_BASE_URL,
+          Referer: `${OPENCODE_BASE_URL}/console/${workspaceId}/billing`,
+          'x-org-id': workspaceId
+        },
+        signal: abortController.signal
+      })
+      if (!response.ok) {
+        return null
+      }
+      return parseOpenCodeGoBillingStatusPayload(await response.text())
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timeout)
+    }
+  })()
+  return { promise, abort: () => abortController.abort() }
+}
+
 function makeOpenCodeError(error: unknown): ProviderRateLimits {
   return {
     provider: 'opencode-go',
@@ -221,9 +256,11 @@ async function fetchOpenCodeGoRateLimitsWithSession(
   // Why: /workspace/<id>/go now 302s to console login. Usage is JSON at
   // /console/api/go/status, scoped by x-org-id and authed by the console session.
   let lastError = ''
+  let balanceOnlyResult: ProviderRateLimits | null = null
   for (const candidateId of ids) {
+    let billingTask: ReturnType<typeof startOptionalBillingFetch> | null = null
     try {
-      const statusRes = await openCodeSession.fetch(OPENCODE_GO_STATUS_URL, {
+      const statusPromise = openCodeSession.fetch(OPENCODE_GO_STATUS_URL, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -233,8 +270,11 @@ async function fetchOpenCodeGoRateLimitsWithSession(
         },
         signal: AbortSignal.timeout(API_TIMEOUT_MS)
       })
-
+      billingTask = startOptionalBillingFetch(openCodeSession, candidateId)
+      const statusRes = await statusPromise
       if (!statusRes.ok) {
+        billingTask.abort()
+        await billingTask.promise
         lastError =
           statusRes.status === 401
             ? 'Usage fetch failed (401) — paste the full Cookie header including __Host-console_session (auth alone is not enough)'
@@ -242,25 +282,56 @@ async function fetchOpenCodeGoRateLimitsWithSession(
         continue
       }
 
-      const parsed = parseOpenCodeGoStatusPayload(await statusRes.text())
+      const statusText = await statusRes.text()
+      const parsed = parseOpenCodeGoStatusPayload(statusText)
+      const explicitNoAccess = isOpenCodeGoExplicitNoAccessPayload(statusText)
+      if (!parsed && !explicitNoAccess) {
+        billingTask.abort()
+        await billingTask.promise
+        lastError = 'Could not parse usage data'
+        continue
+      }
+
+      const balance = await billingTask.promise
       if (parsed) {
         return {
           provider: 'opencode-go',
           session: parsed.session,
           weekly: parsed.weekly,
           monthly: parsed.monthly,
+          ...(balance === null ? {} : { extraUsage: makeOpenCodeGoZenBalance(balance) }),
           updatedAt: Date.now(),
           error: null,
           status: 'ok'
         }
       }
-      lastError = 'Could not parse usage data'
+      if (balance !== null) {
+        balanceOnlyResult ??= {
+          provider: 'opencode-go',
+          session: null,
+          weekly: null,
+          monthly: null,
+          extraUsage: makeOpenCodeGoZenBalance(balance),
+          updatedAt: Date.now(),
+          error: null,
+          status: 'ok'
+        }
+      } else {
+        lastError = 'Could not parse usage data'
+      }
     } catch (err) {
+      if (billingTask) {
+        billingTask.abort()
+        await billingTask.promise
+      }
       const message = err instanceof Error ? err.message : 'Unknown error'
       lastError = message
     }
   }
 
+  if (balanceOnlyResult) {
+    return balanceOnlyResult
+  }
   return {
     provider: 'opencode-go',
     session: null,
