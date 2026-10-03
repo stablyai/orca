@@ -6,7 +6,7 @@ import {
   setSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from '../runtime-selection'
-import { hasLiveClaudePtys } from '../live-pty-gate'
+import { hasLiveClaudePtys, hasLiveClaudePtysHoldingAccount } from '../live-pty-gate'
 import { isOauthTokenExpiring } from '../oauth-refresh'
 import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
@@ -237,22 +237,28 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
       }
     }
 
-    if (this.lastSyncedAccountId !== activeAccount.id) {
+    const isSwitchingIn = this.lastSyncedAccountId !== activeAccount.id
+    if (isSwitchingIn) {
       this.skipNextReadBackForAccountId = null
     }
 
     // Why: rotate+persist the single-use token to managed storage before materializing (else runtime gets a stale token that fails invalid_grant); skip while a live PTY owns the creds since refreshing would double-rotate it (invalidating one copy) — read-back preserves its refresh instead.
-    const liveClaudePtys = hasLiveClaudePtys()
-    if (liveClaudePtys && isOauthTokenExpiring(credentialsJson)) {
+    // Why switch-in differs: this account is not in the shared slot yet, so only a live Claude launched under it can hold its refresh token; gating on every session would write its unrefreshed token over all of them.
+    const refreshDeferredByLivePty = isSwitchingIn
+      ? hasLiveClaudePtysHoldingAccount(activeAccount.id)
+      : hasLiveClaudePtys()
+    if (refreshDeferredByLivePty && isOauthTokenExpiring(credentialsJson)) {
       this.managedRefreshDeferredByLivePtyAccountId = activeAccount.id
     }
-    if (!liveClaudePtys) {
-      const refreshed = await this.refreshManagedAccountTokenIfNeeded(
-        activeAccount,
-        credentialsJson
-      )
-      if (refreshed) {
-        credentialsJson = refreshed
+    if (!refreshDeferredByLivePty) {
+      const refresh = await this.refreshManagedAccountTokenIfNeeded(activeAccount, credentialsJson)
+      if (refresh.kind === 'refreshed') {
+        credentialsJson = refresh.credentialsJson
+      } else if (refresh.kind === 'rejected' && isSwitchingIn) {
+        // Why: throwing before the runtime write lets the caller roll back to the previous account instead of logging out every running Claude.
+        throw new Error(
+          `The Claude sign-in for ${activeAccount.email} has expired. Re-authenticate it in Settings > Accounts, then switch again.`
+        )
       }
     }
 

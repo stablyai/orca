@@ -8,7 +8,7 @@ import {
   resolveOwnedClaudeManagedAuthPath,
   writeClaudeManagedAuthFile
 } from '../managed-auth-path'
-import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from '../oauth-refresh'
+import { isOauthTokenExpiring, refreshClaudeOauthCredentialsWithOutcome } from '../oauth-refresh'
 import {
   readManagedClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
@@ -16,6 +16,11 @@ import {
 import { ClaudeRuntimeAuthCredentialIdentity } from './runtime-auth-credential-identity'
 
 const OWNERSHIP_PROBE_TIMEOUT = 'orca-wsl-ownership-probe-timeout'
+
+type ManagedAccountTokenRefresh =
+  | { kind: 'refreshed'; credentialsJson: string }
+  | { kind: 'rejected' }
+  | { kind: 'unchanged' }
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
@@ -50,30 +55,37 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
 
   /**
    * Proactively refresh an account's OAuth token and persist the rotation to
-   * managed storage. Returns the refreshed credentials JSON, or null when no
-   * refresh happened (token valid, no refresh token, or network failure).
+   * managed storage. `unchanged` covers a still-valid token, a missing refresh
+   * token, a network failure, and a failed persist; `rejected` means the stored
+   * refresh token is dead.
    *
-   * Caller guarantees this account isn't the live/active one and runs inside the
+   * Caller guarantees no live Claude holds this account's refresh token and runs inside the
    * serialized mutation queue, so the single-use refresh token can't rotate concurrently.
    */
   protected async refreshManagedAccountTokenIfNeeded(
     account: ClaudeManagedAccount,
     credentialsJson: string
-  ): Promise<string | null> {
+  ): Promise<ManagedAccountTokenRefresh> {
     if (!isOauthTokenExpiring(credentialsJson)) {
-      return null
+      return { kind: 'unchanged' }
     }
-    const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
-    if (!refreshed || !this.isValidCredentialsJsonObject(refreshed)) {
-      return null
+    const outcome = await refreshClaudeOauthCredentialsWithOutcome(credentialsJson)
+    if (outcome.kind === 'rejected') {
+      return { kind: 'rejected' }
+    }
+    if (
+      outcome.kind !== 'refreshed' ||
+      !this.isValidCredentialsJsonObject(outcome.credentialsJson)
+    ) {
+      return { kind: 'unchanged' }
     }
     try {
-      await this.writeManagedCredentials(account, refreshed)
+      await this.writeManagedCredentials(account, outcome.credentialsJson)
     } catch (error) {
       console.warn('[claude-runtime-auth] Failed to persist refreshed Claude token:', error)
-      return null
+      return { kind: 'unchanged' }
     }
-    return refreshed
+    return { kind: 'refreshed', credentialsJson: outcome.credentialsJson }
   }
 
   protected async readManagedOauthAccount(account: ClaudeManagedAccount): Promise<unknown> {

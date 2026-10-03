@@ -1,4 +1,6 @@
-const liveClaudePtyIds = new Set<string>()
+// Value is the managed account whose refresh token the live Claude holds, or
+// null when that is unknown and the gate must assume it holds every account's.
+const liveClaudePtyIds = new Map<string, string | null>()
 // Why: ids restored from persistence at startup, not yet confirmed against the
 // daemon. They keep the OAuth refresh gate closed so an early managed refresh
 // cannot rotate the single-use refresh token out from under a Claude CLI that
@@ -46,7 +48,8 @@ function notifyDrainedOnTransition(hadLivePtys: boolean): void {
 
 export function seedLiveClaudePtysFromPersistence(sessionIds: readonly string[]): void {
   for (const sessionId of sessionIds) {
-    liveClaudePtyIds.add(sessionId)
+    // Why: persistence keeps ids only, so a session that survived the restart has unknown lineage.
+    liveClaudePtyIds.set(sessionId, null)
     seededUnconfirmedPtyIds.add(sessionId)
   }
 }
@@ -74,10 +77,19 @@ export function confirmSeededClaudeLivePtys(aliveSessionIds: readonly string[]):
   notifyDrainedOnTransition(hadLivePtys)
 }
 
-export function markClaudePtySpawned(ptyId: string): void {
-  liveClaudePtyIds.add(ptyId)
+/** `launchProvenance` is the launch's ClaudeRuntimeAuthPreparation.provenance. */
+export function markClaudePtySpawned(ptyId: string, launchProvenance?: string | null): void {
+  liveClaudePtyIds.set(ptyId, managedAccountLineageFromProvenance(launchProvenance))
   seededUnconfirmedPtyIds.delete(ptyId)
   persistence?.addClaudeLivePtySessionId(ptyId)
+}
+
+// Why: only a host `managed:<id>` launch proves which refresh token the session
+// holds. System-default and WSL launches may share a lineage with a managed
+// account (accounts can be captured from the system login), so they stay unknown.
+function managedAccountLineageFromProvenance(provenance: string | null | undefined): string | null {
+  const match = provenance ? /^managed:([^:]+)$/.exec(provenance) : null
+  return match ? match[1] : null
 }
 
 export function markClaudePtyExited(ptyId: string): void {
@@ -102,7 +114,7 @@ export function markClaudePtyExited(ptyId: string): void {
  * next launch would hold the gate closed for a process that is provably gone.
  */
 export function markClaudeStructuredChildSpawned(childKey: string): void {
-  liveClaudePtyIds.add(structuredChildGateId(childKey))
+  liveClaudePtyIds.set(structuredChildGateId(childKey), null)
 }
 
 export function markClaudeStructuredChildExited(childKey: string): void {
@@ -119,6 +131,20 @@ function structuredChildGateId(childKey: string): string {
 
 export function hasLiveClaudePtys(): boolean {
   return liveClaudePtyIds.size > 0
+}
+
+/**
+ * Whether a live Claude may hold this managed account's single-use refresh
+ * token, so refreshing it now would rotate the token out from under that
+ * session. Sessions launched under a different account cannot.
+ */
+export function hasLiveClaudePtysHoldingAccount(accountId: string): boolean {
+  for (const lineage of liveClaudePtyIds.values()) {
+    if (lineage === null || lineage === accountId) {
+      return true
+    }
+  }
+  return false
 }
 
 export function beginClaudeAuthSwitch(): void {
