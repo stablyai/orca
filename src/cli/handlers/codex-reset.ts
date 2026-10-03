@@ -6,7 +6,7 @@ import type {
   CodexRateLimitResetRpcResult
 } from '../../shared/runtime-account-types'
 import { buildCodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
-import { CODEX_RESET_CREDIT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { ConsumeCodexResetCreditParams } from '../../shared/rpc-contract/accounts-params'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { CommandHandler, HandlerContext } from '../dispatch'
@@ -27,10 +27,10 @@ function stringFlag(ctx: HandlerContext, name: string): string | undefined {
 
 async function requireResetSupport(ctx: HandlerContext): Promise<void> {
   const status = await ctx.client.call<RuntimeStatus>('status.get')
-  if (!status.result.capabilities?.includes(CODEX_RESET_CREDIT_RUNTIME_CAPABILITY)) {
+  if (!status.result.capabilities?.includes(CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      'The running Orca runtime does not support scoped Codex resets. Update Orca and try again.'
+      'The running Orca runtime does not support desktop-approved Codex resets. Update Orca and try again.'
     )
   }
 }
@@ -79,9 +79,9 @@ async function previewReset(ctx: HandlerContext, accountId: string, output: stri
       `No reset performed. Account: ${value.email} (${value.accountId}).`,
       `Runtime: ${target.runtime}${target.wslDistro ? ` (${target.wslDistro})` : ''}.`,
       `Available reset credits: ${value.availableCredits}.`,
-      'Confirmation spends one reset credit to reset eligible server-side usage windows.',
+      'Orca will ask you to approve spending one credit to reset eligible server-side windows.',
       `Request saved to: ${value.requestFile}`,
-      'Review the file, then run `orca account reset-codex-limits --request-file <path> --confirm`.',
+      'Review the file, then request desktop approval with `orca account reset-codex-limits --request-file <path> --confirm`.',
       'If the response is lost, retry with that same file; do not generate a new request.'
     ].join('\n')
   )
@@ -106,7 +106,7 @@ async function confirmReset(ctx: HandlerContext, file: string): Promise<void> {
   try {
     // Do not refetch or rebuild the offer here: a retry must retain the original scope and key.
     response = await ctx.client.call<CodexRateLimitResetRpcResult>(
-      'accounts.consumeCodexResetCredit',
+      'accounts.requestCodexResetCredit',
       request.data
     )
   } catch (error) {
@@ -150,7 +150,7 @@ export const CODEX_RESET_HANDLERS: Record<string, CommandHandler> = {
     if (confirm !== undefined && confirm !== true) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Use bare --confirm to authorize spending one reset credit.'
+        'Use bare --confirm to request manual desktop approval.'
       )
     }
     if (requestFile) {

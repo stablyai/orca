@@ -8,7 +8,7 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     account: '--account <id>         Exact managed Codex account id (from account list --json)',
     out: '--out <new-file>       Save a preview request without spending a reset credit',
     'request-file': '--request-file <file>  Read the unchanged request saved by a preview',
-    confirm: '--confirm              Authorize spending one reset credit for the saved scope'
+    confirm: '--confirm              Request manual desktop approval for the saved scope'
   },
   'worktree create': {
     pr: '--pr <number>          Linked GitHub pull request number',

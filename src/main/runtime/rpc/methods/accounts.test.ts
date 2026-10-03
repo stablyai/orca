@@ -14,6 +14,33 @@ function method(name: string) {
 }
 
 describe('account RPC methods', () => {
+  it('routes local reset requests through desktop approval and rejects paired callers', async () => {
+    const request = vi.fn().mockResolvedValue({ outcome: 'reset' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This RPC test exercises only requestCodexRateLimitResetCredit; the stub never touches real account state.
+    const runtime = { requestCodexRateLimitResetCredit: request } as unknown as OrcaRuntimeService
+    const reset = method('accounts.requestCodexResetCredit')
+    if (isStreamingMethod(reset)) {
+      throw new Error('Reset approval must be a request method')
+    }
+    const params = {
+      idempotencyKey: '11111111-1111-4111-8111-111111111111',
+      expectedScope: {
+        accountId: 'account-1',
+        accountRevision: 1,
+        offerRevision: 'v1:test',
+        target: { runtime: 'host', wslDistro: null }
+      }
+    }
+    await reset.handler(reset.params?.parse(params), { runtime })
+    expect(request).toHaveBeenCalledWith(params.idempotencyKey, params.expectedScope)
+    request.mockClear()
+    for (const clientKind of ['mobile', 'runtime'] as const) {
+      await expect(reset.handler(params, { runtime, clientKind })).rejects.toThrow(
+        'only available on the Orca host'
+      )
+    }
+    expect(request).not.toHaveBeenCalled()
+  })
   it.each([
     {
       methodName: 'accounts.addClaudeFromConfigDir',

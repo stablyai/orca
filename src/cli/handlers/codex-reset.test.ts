@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { CODEX_RESET_HANDLERS } from './codex-reset'
 import type { HandlerContext } from '../dispatch'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
-import { CODEX_RESET_CREDIT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { buildCodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import { ConsumeCodexResetCreditParams } from '../../shared/rpc-contract/accounts-params'
 
@@ -60,7 +60,7 @@ describe('Codex reset CLI', () => {
     const client = new RuntimeClient(cwd, 1000, null, null)
     call = vi.spyOn(client, 'call').mockImplementation(async (method) => {
       if (method === 'status.get') {
-        return envelope({ capabilities: [CODEX_RESET_CREDIT_RUNTIME_CAPABILITY] })
+        return envelope({ capabilities: [CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY] })
       }
       if (method === 'accounts.list') {
         return envelope(snapshot())
@@ -112,7 +112,7 @@ describe('Codex reset CLI', () => {
     writeRequest()
     await expect(preview()).rejects.toMatchObject({ code: 'EEXIST' })
     expect(JSON.parse(readFileSync(join(cwd, 'attempt.json'), 'utf8'))).toEqual(savedRequest())
-    expect(call.mock.calls.some(([method]) => method === 'accounts.consumeCodexResetCredit')).toBe(
+    expect(call.mock.calls.some(([method]) => method === 'accounts.requestCodexResetCredit')).toBe(
       false
     )
   })
@@ -129,7 +129,7 @@ describe('Codex reset CLI', () => {
   it('rejects missing or unavailable reset-credit data', async () => {
     const state = snapshot()
     call
-      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_CREDIT_RUNTIME_CAPABILITY] }))
+      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY] }))
       .mockResolvedValueOnce(
         envelope({ ...state, rateLimits: { ...state.rateLimits, codex: null } })
       )
@@ -139,7 +139,7 @@ describe('Codex reset CLI', () => {
   it('preserves the exact WSL account and distro scope', async () => {
     const wslAccount = { ...account, managedHomeRuntime: 'wsl', wslDistro: 'Ubuntu' }
     call
-      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_CREDIT_RUNTIME_CAPABILITY] }))
+      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY] }))
       .mockResolvedValueOnce(
         envelope({
           codex: {
@@ -217,12 +217,14 @@ describe('Codex reset CLI', () => {
     async (outcome) => {
       writeRequest()
       call
-        .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_CREDIT_RUNTIME_CAPABILITY] }))
+        .mockResolvedValueOnce(
+          envelope({ capabilities: [CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY] })
+        )
         .mockResolvedValueOnce(
           envelope({ outcome, scope: savedRequest().expectedScope, snapshot: snapshot() })
         )
       await confirm()
-      expect(call).toHaveBeenLastCalledWith('accounts.consumeCodexResetCredit', savedRequest())
+      expect(call).toHaveBeenLastCalledWith('accounts.requestCodexResetCredit', savedRequest())
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`"outcome": "${outcome}"`))
       expect(call.mock.calls.some(([method]) => method === 'accounts.list')).toBe(false)
     }
@@ -231,20 +233,20 @@ describe('Codex reset CLI', () => {
   it('retains identical params when retrying a lost response', async () => {
     writeRequest()
     call
-      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_CREDIT_RUNTIME_CAPABILITY] }))
+      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY] }))
       .mockRejectedValueOnce(new RuntimeClientError('timeout', 'Response lost'))
     await expect(confirm()).rejects.toMatchObject({
       code: 'timeout',
       data: { idempotencyKey: savedRequest().idempotencyKey }
     })
     call
-      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_CREDIT_RUNTIME_CAPABILITY] }))
+      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY] }))
       .mockResolvedValueOnce(
         envelope({ outcome: 'alreadyRedeemed', scope: savedRequest().expectedScope })
       )
     await confirm()
     const attempts = call.mock.calls.filter(
-      ([method]) => method === 'accounts.consumeCodexResetCredit'
+      ([method]) => method === 'accounts.requestCodexResetCredit'
     )
     expect(attempts).toHaveLength(2)
     expect(attempts[0][1]).toEqual(attempts[1][1])
@@ -254,7 +256,7 @@ describe('Codex reset CLI', () => {
   it('surfaces a pre-provider scope rejection as an error rather than success', async () => {
     writeRequest()
     call
-      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_CREDIT_RUNTIME_CAPABILITY] }))
+      .mockResolvedValueOnce(envelope({ capabilities: [CODEX_RESET_APPROVAL_RUNTIME_CAPABILITY] }))
       .mockResolvedValueOnce(
         envelope({
           status: 'rejectedBeforeProvider',

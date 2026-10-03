@@ -29,7 +29,9 @@ action, run `orca account reset-codex-limits --account <id> --out <new-file>`.
 This saves a scoped JSON request and performs no reset. Review the account,
 runtime, and credit expenditure before running
 `orca account reset-codex-limits --request-file <file> --confirm --json`.
-Confirmation spends one earned credit to reset eligible server-side usage windows.
+Confirmation requests a mandatory manual approval in the visible Orca desktop.
+The dialog defaults to Cancel; no flag or remember option bypasses it. Headless
+runtimes and background/hidden desktop sessions refuse redemption. Approval spends one earned credit to reset eligible server-side usage windows.
 Only the managed account already selected for the active usage runtime is supported;
 no accounts or runtimes are switched. Run on the account-owning host, not via
 `--environment` or `--pairing-code`. If a response is lost, retry with the same

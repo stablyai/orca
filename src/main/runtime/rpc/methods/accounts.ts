@@ -26,6 +26,18 @@ let accountsSubscriptionSeq = 0
 // to the local runtime connection, never a mobile device token. See #1438.
 export const ACCOUNT_METHODS = [
   defineMethod({
+    name: 'accounts.requestCodexResetCredit',
+    params: ConsumeCodexResetCreditParams,
+    handler: async (params, { runtime, clientKind }) => {
+      if (clientKind !== undefined) {
+        throw new Error(
+          'Codex reset approval requests are only available on the Orca host runtime.'
+        )
+      }
+      return runtime.requestCodexRateLimitResetCredit(params.idempotencyKey, params.expectedScope)
+    }
+  }),
+  defineMethod({
     name: 'accounts.list',
     params: ListAccountsParams,
     handler: async (params, { runtime }) => {

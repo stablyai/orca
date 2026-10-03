@@ -341,9 +341,15 @@ The CLI uses the same account service and reset protection:
 orca account list --json
 # Copy the exact managed Codex account id from the JSON result.
 orca account reset-codex-limits --account <id> --out reset-attempt.json
-# Review the preview and file before authorizing the credit expenditure.
+# Review the preview and file before requesting desktop approval.
 orca account reset-codex-limits --request-file reset-attempt.json --confirm --json
 ```
+
+**Every confirmation request requires a manual approval in the Orca desktop.**
+The desktop dialog defaults to Cancel and has no remember/bypass option.
+`--confirm` only requests approval; a flag or saved file cannot grant it. Cancelling,
+closing the dialog, a hidden window, background launch, or a headless runtime cannot
+spend a credit.
 
 The preview performs no reset and refuses to overwrite an existing request file.
 Only the managed account selected for the active Codex usage runtime is eligible;
@@ -361,7 +367,7 @@ reconcile or replay the original attempt without spending another credit. A
 confirming again. The command preserves the distinct `reset`, `nothingToReset`,
 `noCredit`, and `alreadyRedeemed` outcomes in JSON output.
 
-Run on the machine that owns the accounts; `--environment` and `--pairing-code`
+Run with a visible Orca desktop on the machine that owns the accounts; `--environment` and `--pairing-code`
 are rejected. Older runtimes without scoped reset support are refused.
 
 ## Artifacts

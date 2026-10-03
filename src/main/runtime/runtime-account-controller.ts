@@ -19,6 +19,7 @@ export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
   codexAccounts: CodexAccountService
   rateLimits: RateLimitService
+  approveCodexReset?: (scope: CodexResetCreditExpectedScope, email: string) => Promise<boolean>
 }
 export type {
   AccountsSnapshot,
@@ -26,6 +27,7 @@ export type {
 } from '../../shared/runtime-account-types'
 
 export class RuntimeAccountController {
+  private resetApprovalPending = false
   private services: RuntimeAccountServices | null = null
   private commitMessageAgentEnvironment: CommitMessageAgentEnvironmentResolvers | null = null
 
@@ -108,6 +110,38 @@ export class RuntimeAccountController {
       }
     }
     return { outcome: result.outcome, scope: result.scope, snapshot }
+  }
+
+  async requestCodexResetCredit(
+    idempotencyKey: string,
+    expectedScope: CodexResetCreditExpectedScope
+  ): Promise<CodexRateLimitResetRpcResult> {
+    const services = this.requireServices()
+    const approve = services.approveCodexReset
+    if (!approve) {
+      throw new Error(
+        'A desktop user approval is required. Headless reset requests are not supported.'
+      )
+    }
+    if (this.resetApprovalPending) {
+      throw new Error('Another Codex reset approval is already pending.')
+    }
+    const account = services.codexAccounts
+      .listAccounts()
+      .accounts.find((candidate) => candidate.id === expectedScope.accountId)
+    if (!account || account.updatedAt !== expectedScope.accountRevision) {
+      throw new Error('The Codex account changed before approval. Generate a new preview.')
+    }
+    this.resetApprovalPending = true
+    try {
+      if (!(await approve(expectedScope, account.email))) {
+        throw new Error('Codex reset cancelled: desktop user approval was not granted.')
+      }
+      // The existing service rechecks account, target, and offer after the user responds.
+      return await this.consumeCodexResetCredit(idempotencyKey, expectedScope)
+    } finally {
+      this.resetApprovalPending = false
+    }
   }
 
   removeClaude(accountId: string): Promise<ClaudeRateLimitAccountsState> {

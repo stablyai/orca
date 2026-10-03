@@ -8,16 +8,16 @@ import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['account', 'reset-codex-limits'],
-    summary: 'Preview and confirm spending one Codex rate-limit reset credit',
+    summary: 'Preview and request desktop approval for one Codex reset credit',
     usage:
       'orca account reset-codex-limits (--account <id> --out <new-file> | --request-file <file> --confirm) [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'account', 'out', 'request-file', 'confirm'],
     notes: [
       'Preview never resets usage. It saves the account, runtime, offer revision, and a unique attempt key in a new JSON file; existing files are not overwritten.',
       'Only the managed account already selected for the active Codex usage runtime is eligible. This command never switches accounts or runtimes.',
-      'Confirmation consumes one earned reset credit to reset eligible server-side usage windows; it does not clear local statistics or grant unlimited quota.',
+      'The desktop must manually approve every request before it consumes one earned reset credit to reset eligible server-side usage windows; it does not clear local statistics or grant unlimited quota.',
       'After a lost response, retry with the same unchanged request file. A stale scope is rejected before contacting the provider.',
-      'Run on the account-owning Orca host. --environment and --pairing-code are rejected.'
+      'Run with a visible Orca desktop on the account-owning host. Headless runtimes and remote selectors are refused; no approval bypass is provided.'
     ],
     examples: [
       'orca account list --json',
