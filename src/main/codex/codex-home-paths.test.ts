@@ -268,6 +268,22 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     expectSymbolicLinkTargetIfLinked(runtimeHooksPath, systemHooksPath)
   })
 
+  it('mirrors execpolicy rules into a per-account home so the user rules still apply', () => {
+    const systemRulesPath = join(getSystemCodexHomePath(), 'rules')
+    mkdirSync(systemRulesPath, { recursive: true })
+    writeFileSync(join(systemRulesPath, 'default.rules'), 'prefix_rule(pattern=["git", "add"])\n')
+    const perAccountHome = join(userDataDir, 'codex-accounts', 'account-1', 'home')
+    mkdirSync(perAccountHome, { recursive: true })
+
+    syncSystemCodexResourcesIntoManagedHome(perAccountHome)
+
+    const perAccountRulesPath = join(perAccountHome, 'rules')
+    expect(readFileSync(join(perAccountRulesPath, 'default.rules'), 'utf-8')).toBe(
+      'prefix_rule(pattern=["git", "add"])\n'
+    )
+    expectSymbolicLinkTargetIfLinked(perAccountRulesPath, systemRulesPath)
+  })
+
   it('mirrors the global AGENTS.md into the managed runtime home so user instructions survive', () => {
     const systemAgentsPath = join(getSystemCodexHomePath(), 'AGENTS.md')
     const runtimeAgentsPath = join(getRuntimeCodexHomePath(), 'AGENTS.md')
