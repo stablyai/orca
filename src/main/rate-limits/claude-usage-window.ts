@@ -74,3 +74,27 @@ export function mapClaudeUsageWindow(
     resetDescription: parseClaudeUsageResetDescription(raw.resets_at)
   }
 }
+
+// Why: statusline (whole seconds) and OAuth (sub-second) resets for one window differ by under a second; distinct windows are hours apart.
+const SAME_WINDOW_TOLERANCE_MS = 60 * 1000
+
+// Why: usage inside one window only grows, so a lower value for the same reset (or an earlier reset) is an idle session's stale snapshot.
+export function isStaleClaudeUsageWindow(
+  previous: RateLimitWindow | null | undefined,
+  incoming: RateLimitWindow,
+  now: number
+): boolean {
+  if (!previous || previous.resetsAt === null || incoming.resetsAt === null) {
+    return false
+  }
+  if (previous.resetsAt <= now) {
+    return false
+  }
+  if (incoming.resetsAt < previous.resetsAt - SAME_WINDOW_TOLERANCE_MS) {
+    return true
+  }
+  return (
+    Math.abs(incoming.resetsAt - previous.resetsAt) <= SAME_WINDOW_TOLERANCE_MS &&
+    incoming.usedPercent < previous.usedPercent
+  )
+}
