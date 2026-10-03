@@ -157,7 +157,8 @@ describe('useEditorPanelContentState', () => {
     mocks.getState.mockReturnValue({
       settings: null,
       openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
+      setLastKnownDiskSignature: vi.fn(),
+      requestDiffContentReload: vi.fn()
     })
   })
 
