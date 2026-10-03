@@ -16,6 +16,7 @@ import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import { CodexAccountIdentity, type ResolvedCodexIdentity } from './codex-account-identity'
 import { CodexConfigMirror } from './codex-config-mirror'
+import { codexHookService } from '../codex/hook-service'
 import { runCodexLoginSession, type CodexLoginChild } from './codex-login-session'
 import { CodexManagedHomePath } from './codex-managed-home-path'
 import { CodexManagedHomeLifecycle } from './codex-managed-home-lifecycle'
@@ -139,7 +140,12 @@ export class CodexAccountService {
       configMirror: this.configMirror,
       managedHomePaths: this.managedHomePaths,
       managedHomes: this.managedHomes,
-      login: (managedHomePath) => this.runCodexLogin(managedHomePath)
+      login: (managedHomePath) => this.runCodexLogin(managedHomePath),
+      provisionManagedHooks: (managedHome) =>
+        codexHookService.provisionManagedAccountHome(managedHome.managedHomePath, {
+          runtime: managedHome.managedHomeRuntime,
+          wslDistro: managedHome.wslDistro
+        })
     })
     this.configMirror.safeSyncToManagedHomes()
   }
