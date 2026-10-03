@@ -4,6 +4,7 @@ import {
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
+  normalizeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostKind,
   type ExecutionHostScope
@@ -14,6 +15,7 @@ import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Row } from './worktree-list/grouping/row-types'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
+import { getProjectGroupExecutionHostIdForRows } from './worktree-list/listing/host-filtering'
 
 export type HostHeaderRow = {
   type: 'host-header'
@@ -55,6 +57,25 @@ function getRepoHostId(
   return defaultHostId
 }
 
+function getHeaderHostId(
+  row: Extract<Row, { type: 'header' }>,
+  defaultHostId: ExecutionHostId
+): ExecutionHostId | null {
+  if (row.repo) {
+    return getRepoHostId(row.repo, defaultHostId)
+  }
+  const projectGroup = row.projectGroup
+  if (!projectGroup || projectGroup.id === null) {
+    return null
+  }
+  // Why null: Ungrouped, All, and Pinned have no host stamp and stay buffered.
+  // A stamped group follows that host instead of the focused server (#13944).
+  if (!normalizeExecutionHostId(projectGroup.executionHostId) && !projectGroup.connectionId) {
+    return null
+  }
+  return getProjectGroupExecutionHostIdForRows(projectGroup, defaultHostId)
+}
+
 function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId | null {
   switch (row.type) {
     case 'item':
@@ -66,7 +87,7 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
     case 'folder-workspace':
       return getFolderWorkspaceHostId(row.folderWorkspace, row.projectGroup, defaultHostId)
     case 'header':
-      return row.repo ? getRepoHostId(row.repo, defaultHostId) : null
+      return getHeaderHostId(row, defaultHostId)
   }
 }
 
