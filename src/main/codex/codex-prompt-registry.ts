@@ -14,6 +14,7 @@ import { readRecord, readString as readRecordString } from './codex-item-field-r
 export const CODEX_COMMAND_APPROVAL_METHOD = 'item/commandExecution/requestApproval'
 export const CODEX_FILE_CHANGE_APPROVAL_METHOD = 'item/fileChange/requestApproval'
 export const CODEX_USER_INPUT_METHOD = 'item/tool/requestUserInput'
+export const CODEX_MCP_ELICITATION_METHOD = 'mcpServer/elicitation/request'
 
 export type CodexPendingPrompt = {
   requestId: number | string
@@ -47,8 +48,36 @@ export function isCodexPromptMethod(method: string): boolean {
   return (
     method === CODEX_COMMAND_APPROVAL_METHOD ||
     method === CODEX_FILE_CHANGE_APPROVAL_METHOD ||
-    method === CODEX_USER_INPUT_METHOD
+    method === CODEX_USER_INPUT_METHOD ||
+    method === CODEX_MCP_ELICITATION_METHOD
   )
+}
+
+/** Same test as Codex's own TUI: an MCP tool-call approval with no form fields to fill. */
+export function isCodexMcpToolApproval(params: unknown): boolean {
+  const record = readRecord(params)
+  if (readString(record._meta, 'codex_approval_kind') !== 'mcp_tool_call') {
+    return false
+  }
+  const schema = record.requestedSchema
+  if (schema === undefined || schema === null) {
+    return true
+  }
+  const properties = readRecord(schema).properties
+  return (
+    readRecord(schema).type === 'object' &&
+    typeof properties === 'object' &&
+    properties !== null &&
+    Object.keys(properties).length === 0
+  )
+}
+
+/** MCP elicitations carry no item id; the request id is unique for the connection's lifetime. */
+function readPromptItemId(request: { id: number | string; method: string; params: unknown }) {
+  if (request.method === CODEX_MCP_ELICITATION_METHOD) {
+    return isCodexMcpToolApproval(request.params) ? `mcp-elicitation:${request.id}` : null
+  }
+  return readString(request.params, 'itemId')
 }
 
 /** Session-local callback ownership; none of this state is reconstructed from the journal. */
@@ -72,7 +101,7 @@ export class CodexPromptRegistry {
     method: string
     params: unknown
   }): CodexPendingPrompt | null {
-    const codexItemId = readString(request.params, 'itemId')
+    const codexItemId = readPromptItemId(request)
     const threadId = readString(request.params, 'threadId')
     if (!isCodexPromptMethod(request.method) || !codexItemId || !threadId) {
       return null

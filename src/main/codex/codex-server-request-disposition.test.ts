@@ -46,6 +46,25 @@ describe('Codex blocking server request dispositions', () => {
     expect(connection.respondWithError).not.toHaveBeenCalled()
   })
 
+  it('routes an MCP tool-call approval to the durable prompt registry', () => {
+    const { registry, connection } = harness()
+    const result = disposeCodexServerRequest(registry, connection, {
+      id: 6,
+      method: CODEX_MCP_ELICITATION_METHOD,
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        message: 'Allow Notion to run tool "notion.notion-update-page"?',
+        requestedSchema: { type: 'object', properties: {} },
+        _meta: { codex_approval_kind: 'mcp_tool_call' }
+      }
+    })
+
+    expect(result.kind).toBe('prompt')
+    expect(connection.respond).not.toHaveBeenCalled()
+    expect(connection.respondWithError).not.toHaveBeenCalled()
+  })
+
   it.each([
     [CODEX_MCP_ELICITATION_METHOD, { action: 'decline', content: null, _meta: null }],
     [CODEX_PERMISSIONS_APPROVAL_METHOD, { permissions: {}, scope: 'turn', strictAutoReview: true }],

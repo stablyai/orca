@@ -308,3 +308,57 @@ describe('applyCodexPromptAnswer', () => {
     expect(registry.register(userInputRequest([hugeQuestionId]))).toBeNull()
   })
 })
+
+function mcpElicitationRequest(id: number, params: Record<string, unknown>) {
+  return {
+    id,
+    method: 'mcpServer/elicitation/request',
+    params: { threadId: 'thread-1', turnId: 'turn-1', serverName: 'codex_apps', ...params }
+  }
+}
+
+const MCP_TOOL_APPROVAL = {
+  mode: 'form',
+  message: 'Allow Notion to run tool "notion.notion-update-page"?',
+  requestedSchema: { type: 'object', properties: {} },
+  _meta: { codex_approval_kind: 'mcp_tool_call', persist: ['session', 'always'] }
+}
+
+describe('MCP tool-call approvals', () => {
+  it('registers each tool-call approval under its own request id', () => {
+    const registry = new CodexPromptRegistry()
+    const first = registered(registry.register(mcpElicitationRequest(7, MCP_TOOL_APPROVAL)))
+    const second = registered(registry.register(mcpElicitationRequest(8, MCP_TOOL_APPROVAL)))
+
+    expect(first.promptKey).toBe('mcp-elicitation:7')
+    expect(second.promptKey).toBe('mcp-elicitation:8')
+    expect(first.turnId).toBe('turn-1')
+  })
+
+  it('leaves elicitations that ask for form input to the safe decline', () => {
+    const registry = new CodexPromptRegistry()
+
+    expect(
+      registry.register(
+        mcpElicitationRequest(9, {
+          ...MCP_TOOL_APPROVAL,
+          requestedSchema: { type: 'object', properties: { name: { type: 'string' } } }
+        })
+      )
+    ).toBeNull()
+    expect(
+      registry.register(mcpElicitationRequest(10, { ...MCP_TOOL_APPROVAL, _meta: {} }))
+    ).toBeNull()
+  })
+
+  it.each([
+    ['accept', { action: 'accept', content: null, _meta: null }],
+    ['acceptForSession', { action: 'accept', content: null, _meta: { persist: 'session' } }],
+    ['cancel', { action: 'cancel', content: null, _meta: null }]
+  ])('replies to %s in the shape Codex expects', (optionId, reply) => {
+    const registry = new CodexPromptRegistry()
+    const prompt = registry.register(mcpElicitationRequest(11, MCP_TOOL_APPROVAL))
+
+    expect(answer(prompt, { kind: 'option', optionId })).toEqual(reply)
+  })
+})
