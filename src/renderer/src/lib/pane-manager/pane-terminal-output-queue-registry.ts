@@ -43,6 +43,8 @@ type QueueChunk = {
   data: string
   // Tracks the backing data still reachable through this queue slot.
   retainedChars: number
+  /** A parser-side action must run before any later chunk is parsed. */
+  parseBarrier?: boolean
   foreground: boolean
   forceForegroundRefresh: boolean
   followupForegroundRefresh: boolean

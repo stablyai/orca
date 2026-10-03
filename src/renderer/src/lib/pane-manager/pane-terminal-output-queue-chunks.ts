@@ -1,4 +1,5 @@
 import { flattenRetainedSlice } from '@/lib/flatten-retained-slice'
+import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal-synchronized-output-scan'
 import type {
   QueueEntry,
@@ -88,6 +89,9 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       if (chunk.ackCredit) {
         ackCredits.push(chunk.ackCredit)
       }
+      if (chunk.parseBarrier) {
+        break
+      }
       continue
     }
 
@@ -151,7 +155,7 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
           parsedCallbacks.length > 0
             ? () => {
                 for (const callback of parsedCallbacks) {
-                  callback()
+                  runGuardedWriteCompletionStep('coalesced-output-on-parsed', callback)
                 }
               }
             : undefined,
