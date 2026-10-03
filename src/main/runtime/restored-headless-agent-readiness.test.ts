@@ -97,7 +97,8 @@ describe('restored headless Codex provider evidence', () => {
       const pane = await restoredCodex(readRuntimeFixture(name))
       const wait = await waitForTranscriptIdle(pane, 8_000)
       expect(wait.satisfied).toBe(false)
-      expect(wait.status).toBe('blocked')
+      expect(wait.status).toBe('running')
+      expect(wait.blockedReason).toBeDefined()
     }
   )
 

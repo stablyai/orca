@@ -31,6 +31,7 @@ export type RuntimeWorktreeScanCache = {
   expiresAt: number
   adminFingerprint: string | null
   scannedAt: number
+  fingerprintUnavailable?: true
 }
 
 export type RuntimeWorktreeScanInFlight = {
@@ -42,8 +43,8 @@ export type RuntimeWorktreeScanInFlight = {
 export type RuntimeWorktreeScanRefresh = {
   result: RuntimeWorktreeScanResult
   adminFingerprint: string | null
-  adminFingerprintProbe: Promise<string | null> | null
   scannedAt: number
+  fingerprintUnavailable?: true
 }
 
 export type ResolvedTerminalWorkspaceLaunchTarget = {

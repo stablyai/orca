@@ -289,17 +289,24 @@ describe('worktree scan admin-fingerprint gate', () => {
     expect(scanCount()).toBe(2)
   })
 
-  it('scans when the probe cannot describe the repo', async () => {
+  it('keeps unavailable fingerprint reads unknown without restarting the Git scan', async () => {
     vi.useFakeTimers()
     try {
-      readRepoWorktreeAdminFingerprintMock.mockResolvedValue(null)
       const { list } = makeRuntime()
-
       await list()
+      readRepoWorktreeAdminFingerprintMock.mockResolvedValue(null)
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
-      await list()
+      expect(heads(await list())).toEqual(['', ''])
+      expect(scanCount()).toBe(1)
 
-      expect(scanCount()).toBe(2)
+      vi.advanceTimersByTime(1_000)
+      expect(heads(await list())).toEqual(['', ''])
+      expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(2)
+
+      readRepoWorktreeAdminFingerprintMock.mockResolvedValue('fp-1')
+      vi.advanceTimersByTime(SCAN_TTL_MS)
+      expect(heads(await list())).toEqual(['abc', 'def'])
+      expect(scanCount()).toBe(1)
     } finally {
       vi.useRealTimers()
     }
@@ -387,106 +394,131 @@ describe('worktree scan admin-fingerprint gate', () => {
     }
   })
 
-  it('keeps refreshing when a probe on a wedged filesystem never settles', async () => {
+  it('bounds a stalled cold probe and never stamps its late answer onto the scan', async () => {
     vi.useFakeTimers()
     try {
-      stallProbeOnce()
+      const release = stallProbeOnce()
       const { list } = makeRuntime()
+      const first = list()
+      const firstSettled = trackSettled(first)
+      await drainMicrotasks()
+      expect(firstSettled()).toBe(false)
+      expect(scanCount()).toBe(0)
 
-      await list()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      expect(heads(await first)).toEqual(['abc', 'def'])
       expect(scanCount()).toBe(1)
 
-      // No timer advance: the caller's 5s fallback cannot rescue this, so the refresh itself must
-      // not be waiting on the dead probe.
-      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
-      const second = list()
-      const secondSettled = trackSettled(second)
+      release('fp-2')
       await drainMicrotasks()
-      expect(secondSettled()).toBe(true)
-      await second
+      readRepoWorktreeAdminFingerprintMock.mockResolvedValue('fp-2')
+      listWorktreesStrictMock.mockResolvedValue([
+        { path: REPO_PATH, head: 'new-main', branch: 'main', isBare: false, isMainWorktree: true }
+      ])
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      expect(heads(await list())).toEqual(['new-main'])
       expect(scanCount()).toBe(2)
-
-      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
-      const third = list()
-      const thirdSettled = trackSettled(third)
-      await drainMicrotasks()
-      expect(thirdSettled()).toBe(true)
-      await third
-      expect(scanCount()).toBe(3)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('issues no further probes while one is still outstanding', async () => {
+  it('coalesces a wedged probe and scans only at the reconciliation interval', async () => {
     vi.useFakeTimers()
     try {
       readRepoWorktreeAdminFingerprintMock.mockReturnValue(new Promise<string | null>(() => {}))
       const { list } = makeRuntime()
-
-      await list()
-      expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(1)
+      const first = list()
+      await drainMicrotasks()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      await first
 
       for (let refresh = 0; refresh < 20; refresh += 1) {
         vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
-        await list()
+        const pending = list()
+        await drainMicrotasks()
+        await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+        await pending
       }
 
-      // Each abandoned probe pins an fs work item on the 4-slot libuv pool forever.
       expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(1)
-      expect(scanCount()).toBe(21)
+      expect(scanCount()).toBe(3)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('resumes gating once the filesystem recovers', async () => {
+  it('preserves the successful baseline while a timed-out probe recovers', async () => {
     vi.useFakeTimers()
     try {
-      const releaseStalledProbe = stallProbeOnce()
       const { list } = makeRuntime()
-
       await list()
+      const release = stallProbeOnce()
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
-      await list()
-      expect(scanCount()).toBe(2)
-
-      // The mount unwedges; its stale answer must not gate anything, but the repo must probe again.
-      releaseStalledProbe('fp-stale')
+      const pending = list()
       await drainMicrotasks()
-      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
-      await list()
-      expect(scanCount()).toBe(3)
-
-      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
-      await list()
-      expect(scanCount()).toBe(3)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('scans when the awaited probe outlives its deadline', async () => {
-    vi.useFakeTimers()
-    try {
-      const { list } = makeRuntime()
-
-      await list()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      expect(heads(await pending)).toEqual(['', ''])
       expect(scanCount()).toBe(1)
 
+      release('fp-1')
+      await drainMicrotasks()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      expect(heads(await list())).toEqual(['abc', 'def'])
+      expect(scanCount()).toBe(1)
+      expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('returns unknown rows when the awaited probe outlives its deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list } = makeRuntime()
+      await list()
       stallProbeOnce()
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
       const second = list()
       const secondSettled = trackSettled(second)
       await drainMicrotasks()
-      // A reusable cache entry is the one case that genuinely waits on the probe.
       expect(secondSettled()).toBe(false)
       expect(scanCount()).toBe(1)
 
       await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
       await drainMicrotasks()
+      expect(secondSettled()).toBe(true)
+      expect(scanCount()).toBe(1)
+      expect(heads(await second)).toEqual(['', ''])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not certify an expired probe that finishes during a later retry', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list } = makeRuntime()
+      await list()
+      const release = stallProbeOnce()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const firstRetry = list()
+      await drainMicrotasks()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      expect(heads(await firstRetry)).toEqual(['', ''])
+
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const laterRetry = list()
+      await drainMicrotasks()
+      release('fp-1')
+      expect(heads(await laterRetry)).toEqual(['', ''])
+      expect(scanCount()).toBe(1)
+      expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(2)
+
+      readRepoWorktreeAdminFingerprintMock.mockResolvedValue('fp-2')
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      expect(heads(await list())).toEqual(['abc', 'def'])
       expect(scanCount()).toBe(2)
-      await second
     } finally {
       vi.useRealTimers()
     }
@@ -521,24 +553,20 @@ describe('worktree scan admin-fingerprint gate', () => {
     }
   })
 
-  it('still returns scanned rows within the per-repo budget when the probe stalls', async () => {
+  it('shares one bounded pending probe across concurrent warm callers', async () => {
     vi.useFakeTimers()
     try {
       const { list } = makeRuntime()
       await list()
-
       stallProbeOnce()
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
-      const second = list()
-      const secondSettled = trackSettled(second)
-
-      // The probe's own deadline has to end the wait; if the caller's fallback gets there first the
-      // repo answers with persisted rows on every TTL expiry.
-      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      const pending = [list(), list(), list()]
       await drainMicrotasks()
-      expect(secondSettled()).toBe(true)
-      expect(scanCount()).toBe(2)
-      expect(heads(await second)).toEqual(['abc', 'def'])
+      expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      const results = await Promise.all(pending)
+      expect(results.map(heads)).toEqual([['', ''], ['', ''], ['', '']])
+      expect(scanCount()).toBe(1)
     } finally {
       vi.useRealTimers()
     }
@@ -561,6 +589,83 @@ describe('worktree scan admin-fingerprint gate', () => {
       const getRepos = vi.spyOn(store, 'getRepos')
       await list()
       expect(getRepos).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for a cold fingerprint before starting Git enumeration', async () => {
+    vi.useFakeTimers()
+    try {
+      const release = stallProbeOnce()
+      const { list } = makeRuntime()
+      const pending = list()
+      await drainMicrotasks()
+      expect(scanCount()).toBe(0)
+      release('fp-1')
+      expect(heads(await pending)).toEqual(['abc', 'def'])
+      expect(scanCount()).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('discovers external catalog changes at reconciliation while the probe remains pending', async () => {
+    vi.useFakeTimers()
+    try {
+      const { list } = makeRuntime()
+      await list()
+      stallProbeOnce()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const pending = list()
+      await drainMicrotasks()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      expect(heads(await pending)).toEqual(['', ''])
+
+      listWorktreesStrictMock.mockResolvedValue([
+        { path: REPO_PATH, head: 'new-main', branch: 'main', isBare: false, isMainWorktree: true },
+        { path: `${REPO_PATH}-new`, head: 'new-tip', branch: 'new', isBare: false, isMainWorktree: false }
+      ])
+      vi.advanceTimersByTime(WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS)
+      const reconciliation = list()
+      await drainMicrotasks()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+      expect(heads(await reconciliation)).toEqual(['new-main', 'new-tip'])
+      expect(scanCount()).toBe(2)
+      expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets mutation invalidation discover additions and deletions despite an older pending probe', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, list } = makeRuntime()
+      await list()
+      const release = stallProbeOnce()
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      const oldRefresh = list()
+      await drainMicrotasks()
+
+      listWorktreesStrictMock.mockResolvedValue([
+        { path: REPO_PATH, head: 'new-main', branch: 'main', isBare: false, isMainWorktree: true },
+        { path: `${REPO_PATH}-new`, head: 'new-tip', branch: 'new', isBare: false, isMainWorktree: false }
+      ])
+      runtime.invalidateWorktreeCatalog(REPO_ID)
+      expect(heads(await list())).toEqual(['new-main', 'new-tip'])
+      expect(scanCount()).toBe(2)
+      expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(2)
+
+      release('fp-stale')
+      await drainMicrotasks()
+      expect(heads(await oldRefresh)).toEqual(['new-main', 'new-tip'])
+      expect(scanCount()).toBe(2)
+
+      readRepoWorktreeAdminFingerprintMock.mockResolvedValue('fp-stale')
+      vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+      expect(heads(await list())).toEqual(['new-main', 'new-tip'])
+      expect(scanCount()).toBe(3)
     } finally {
       vi.useRealTimers()
     }

@@ -161,7 +161,9 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
       cached.runtimeKey === runtimeKey &&
       cached.expiresAt > now
     ) {
-      return cached.result
+      return cached.fingerprintUnavailable
+        ? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
+        : cached.result
     }
     const inFlight = this.worktreeScanInFlight.get(scanScopeKey)
     if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
@@ -180,6 +182,13 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
       if (generation !== (this.worktreeScanGenerations.get(scanScopeKey) ?? 0)) {
         return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
       }
+      if (refresh.fingerprintUnavailable) {
+        if (reusableCached && this.worktreeScanCache.get(scanScopeKey) === reusableCached) {
+          reusableCached.expiresAt = Date.now() + resolveWorktreeScanCacheTtlMs(repo)
+          reusableCached.fingerprintUnavailable = true
+        }
+        return refresh.result
+      }
       if (
         (refresh.result.ok || !sshConnectionId) &&
         this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise
@@ -193,11 +202,6 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
           scannedAt: refresh.scannedAt
         }
         this.worktreeScanCache.set(scanScopeKey, entry)
-        void refresh.adminFingerprintProbe?.then((fingerprint) => {
-          if (this.worktreeScanCache.get(scanScopeKey) === entry) {
-            entry.adminFingerprint = fingerprint
-          }
-        })
       }
       return refresh.result
     } finally {
