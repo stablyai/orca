@@ -190,6 +190,8 @@ export type CreateWorktreeResult = {
   startupTerminal?: {
     spawned: boolean
     handle?: string
+    /** Optional on older hosts; null means terminal creation used an automatic title. */
+    title?: string | null
     tabId?: string
     paneKey?: string | null
     ptyId?: string | null

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { WorktreeCreate } from './worktree-create-schemas'
 import { WorktreeActivate, WorktreeSet } from './worktree-schemas'
+import { TerminalCreateParams } from '../../../../shared/rpc-contract/terminal-unary-params'
 
 describe('worktree RPC schemas', () => {
   it('accepts optional display-name provenance values', () => {
@@ -40,6 +41,22 @@ describe('worktree RPC schemas', () => {
     })
 
     expect(parsed.success).toBe(false)
+  })
+
+  it.each(['Review tests', '', undefined, 42])(
+    'uses terminal-create title semantics for %s',
+    (title) => {
+      expect(
+        WorktreeCreate.parse({ repo: 'repo-1', startupAgent: 'claude', startupTitle: title })
+          .startupTitle
+      ).toBe(TerminalCreateParams.parse({ title }).title)
+    }
+  )
+
+  it('rejects a startup title without an agent', () => {
+    expect(WorktreeCreate.safeParse({ repo: 'repo-1', startupTitle: 'Review tests' }).success).toBe(
+      false
+    )
   })
 
   it('normalizes durable Jira linked-item metadata and rejects provider mismatches', () => {

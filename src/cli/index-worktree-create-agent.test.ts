@@ -193,6 +193,81 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it.each([
+    ['Review tests', ['--title', 'Review tests']],
+    [undefined, []],
+    [undefined, ['--title', '']]
+  ])('forwards startup title %s with the existing agent launch', async (title, titleFlags) => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/agent-task', 'agent-task', 'abc', 'repo-1'),
+        agentTerminalHandle: 'term-agent',
+        startupTerminal: { spawned: true, handle: 'term-agent', title: title ?? null }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'agent-task',
+        '--no-parent',
+        '--agent',
+        'claude',
+        ...titleFlags,
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({ startupAgent: 'claude' })
+    )
+    expect(callMock.mock.calls[0]?.[1].startupTitle).toBe(title)
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: true,
+      result: { agentTerminalHandle: 'term-agent', startupTerminal: { title: title ?? null } }
+    })
+  })
+
+  it.each([
+    [['--title', 'Review tests'], '--title requires --agent'],
+    [['--agent', 'claude', '--title'], '--title requires a value']
+  ])('rejects invalid startup title flags %s before creation', async (titleFlags, message) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'agent-task',
+        '--no-parent',
+        ...titleFlags,
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message: expect.stringContaining(message) }
+    })
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
   it('rejects prompt without agent on worktree.create', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

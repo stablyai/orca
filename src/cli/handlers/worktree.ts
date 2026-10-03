@@ -88,6 +88,9 @@ function getOptionalStartupAgent(flags: Map<string, string | boolean>): string |
     if (flags.has('prompt')) {
       throw new RuntimeClientError('invalid_argument', '--prompt requires --agent')
     }
+    if (flags.has('title')) {
+      throw new RuntimeClientError('invalid_argument', '--title requires --agent')
+    }
     return undefined
   }
   if (!isTuiAgent(agent)) {
@@ -246,6 +249,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         ? {
             startupAgent,
             startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '',
+            ...(flags.has('title') ? { startupTitle: getOptionalStringFlag(flags, 'title') } : {}),
             launchSource: 'cli'
           }
         : {})

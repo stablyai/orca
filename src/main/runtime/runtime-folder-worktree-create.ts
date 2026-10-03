@@ -132,6 +132,7 @@ export async function createRuntimeFolderWorktree(args: {
     try {
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
+        ...(request.startupTitle !== undefined ? { title: request.startupTitle } : {}),
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
         env: args.startup.env,
@@ -152,6 +153,7 @@ export async function createRuntimeFolderWorktree(args: {
       startupTerminal = {
         spawned: true,
         handle: terminal.handle,
+        title: terminal.title,
         ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
         ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),

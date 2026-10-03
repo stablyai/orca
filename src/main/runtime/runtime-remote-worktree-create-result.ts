@@ -13,6 +13,7 @@ export function finishRuntimeRemoteWorktreeCreate(args: {
   startupTerminalTabId: string | null
   startupTerminalPaneKey: string | null
   startupTerminalPtyId: string | null
+  startupTerminalTitle: string | null
 }): CreateWorktreeResult {
   const returnedSetup = args.didSpawnSetup
     ? undefined
@@ -37,6 +38,7 @@ export function finishRuntimeRemoteWorktreeCreate(args: {
           startupTerminal: {
             spawned: true,
             handle: args.startupTerminalHandle,
+            title: args.startupTerminalTitle,
             ...(args.startupTerminalTabId ? { tabId: args.startupTerminalTabId } : {}),
             ...(args.startupTerminalPaneKey ? { paneKey: args.startupTerminalPaneKey } : {}),
             ...(args.startupTerminalPtyId ? { ptyId: args.startupTerminalPtyId } : {}),

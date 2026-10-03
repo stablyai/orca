@@ -71,6 +71,35 @@ async function startupTerminalOptions(startupPaneKey?: string) {
 }
 
 describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
+  it('applies the title at creation and returns the terminal creation title', async () => {
+    const { createTerminal, ports } = createPorts()
+    createTerminal.mockResolvedValue({
+      handle: 'term-1',
+      worktreeId: worktree.id,
+      title: 'Applied title'
+    })
+
+    const result = await startRuntimeLocalWorktreeTerminals({
+      request: {
+        repoSelector: `id:${repo.id}`,
+        name: worktree.displayName,
+        startupAgent: 'claude',
+        startupTitle: 'Review tests'
+      },
+      repo,
+      worktree,
+      createdWithAgent: 'claude',
+      startup: { command: 'claude' },
+      ports
+    })
+
+    expect(createTerminal).toHaveBeenCalledTimes(1)
+    expect(createTerminal).toHaveBeenCalledWith(
+      `id:${worktree.id}`,
+      expect.objectContaining({ title: 'Review tests', command: 'claude', surfaceOwner: false })
+    )
+    expect(result.startupTerminalTitle).toBe('Applied title')
+  })
   // The local, folder and remote creates each forward this separately, so nothing above them
   // catches the one that stops.
   it('creates the startup terminal under the pane the caller reserved', async () => {
@@ -84,6 +113,7 @@ describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
     const options = await startupTerminalOptions()
     expect(options).not.toHaveProperty('tabId')
     expect(options).not.toHaveProperty('leafId')
+    expect(options).not.toHaveProperty('title')
   })
 })
 
