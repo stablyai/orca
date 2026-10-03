@@ -10,7 +10,7 @@ import {
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
-import { readTerminalModes } from './headless-emulator-modes'
+import { readKittyKeyboardFlags, readTerminalModes } from './headless-emulator-modes'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
 import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'
@@ -144,6 +144,11 @@ export class HeadlessEmulator {
     this.terminal.options.cursorStyle = attributes.cursorStyle
     this.terminal.options.cursorBlink = attributes.cursorBlink
     this.viewAttributeResponder?.clearColorOverrides()
+  }
+
+  /** Flags the hidden xterm parsed from this PTY's output. `0` means the kitty keyboard protocol is off. */
+  kittyKeyboardFlags(): number {
+    return readKittyKeyboardFlags(this.terminal)
   }
 
   /** Re-seeds snapshot kitty flags via the live-push parse, routed unflagged so it can never answer a query (terminal-query-authority.md). */

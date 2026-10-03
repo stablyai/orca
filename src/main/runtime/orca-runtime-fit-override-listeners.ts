@@ -45,6 +45,11 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
 
   protected headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
 
+  /** `0` when this PTY has no headless model yet, so an interrupt stays a bare ETX. */
+  protected readPtyKittyKeyboardFlags(ptyId: string): number {
+    return this.headlessTerminals.get(ptyId)?.emulator.kittyKeyboardFlags() ?? 0
+  }
+
   protected ptyOutputSequenceById = new Map<string, number>()
 
   protected providerSequenceInitializedPtys = new Set<string>()
