@@ -1,5 +1,6 @@
 import { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from '../../../../shared/constants'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
+import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { ColorPicker } from '../ui/color-picker'
 import { cn } from '@/lib/utils'
@@ -8,13 +9,18 @@ import { translate } from '@/i18n/i18n'
 type RepositoryIconColorSectionProps = {
   badgeColor: string | null | undefined
   onBadgeColorChange: (color: string) => void
+  onBadgeColorReset?: () => void
+  badgeColorResetLabel?: string
 }
 
 export function RepositoryIconColorSection({
   badgeColor,
-  onBadgeColorChange
+  onBadgeColorChange,
+  onBadgeColorReset,
+  badgeColorResetLabel
 }: RepositoryIconColorSectionProps): React.JSX.Element {
-  const selectedBadgeColor = normalizeRepoBadgeColor(badgeColor) ?? DEFAULT_REPO_BADGE_COLOR
+  const normalizedBadgeColor = normalizeRepoBadgeColor(badgeColor)
+  const selectedBadgeColor = normalizedBadgeColor ?? DEFAULT_REPO_BADGE_COLOR
   const isPresetBadgeColor = REPO_COLORS.some((color) => color === selectedBadgeColor)
 
   return (
@@ -63,6 +69,17 @@ export function RepositoryIconColorSection({
           showHexInTrigger={!isPresetBadgeColor}
           className="h-7 px-2"
         />
+        {normalizedBadgeColor && onBadgeColorReset && badgeColorResetLabel ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 px-2"
+            onClick={onBadgeColorReset}
+          >
+            {badgeColorResetLabel}
+          </Button>
+        ) : null}
       </div>
     </div>
   )

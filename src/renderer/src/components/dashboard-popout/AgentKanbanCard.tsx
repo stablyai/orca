@@ -11,7 +11,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { ProjectIconGlyph } from '@/components/repo/project-icon-glyph'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import {
@@ -325,7 +325,7 @@ export const AgentKanbanCard = memo(
                 className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-muted-foreground/10 text-muted-foreground transition-colors group-hover:text-foreground"
                 aria-label={card.repoName}
               >
-                <RepoIconGlyph repoIcon={repoIcon} className="size-3" iconClassName="size-3" />
+                <ProjectIconGlyph repoIcon={repoIcon} className="size-3" iconClassName="size-3" />
               </span>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
