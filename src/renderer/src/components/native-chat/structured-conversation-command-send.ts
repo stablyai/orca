@@ -10,7 +10,7 @@ import {
 import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
 import { translate } from '@/i18n/i18n'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { agentSessionFailureStatedByStartRow } from './structured-agent-session-delivery-notices'
+import { agentSessionFailureStatedByStartRow } from '../../../../shared/structured-agent-session-recorded-rejection-words'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
 
 export async function sendStructuredConversationCommand(input: {

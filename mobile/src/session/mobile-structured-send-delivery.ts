@@ -29,6 +29,7 @@ import type { AgentJournalSubmission } from '../../../src/shared/agent-session-j
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
 import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
+import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 
@@ -90,7 +91,11 @@ export function mobileStructuredSendDelivery(
     return {
       outcome: 'rejected',
       operationIdSpent: true,
-      error: structuredAgentSessionRejectionNotice(submission.reason, 'composer-send')
+      // The host recorded it, so its row in the chat says it was not sent and why; only a Stop's
+      // withdrawal leaves no row to say it.
+      error: dispatchWasWithdrawn(submission)
+        ? structuredAgentSessionRejectionNotice(submission.reason, 'composer-send')
+        : null
     }
   }
   if (retained) {

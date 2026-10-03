@@ -32,6 +32,11 @@ export const styles = StyleSheet.create({
   reasoning: {
     opacity: 0.7
   },
+  unsentLabel: {
+    marginTop: spacing.xs,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
   toolRun: {
     marginTop: spacing.xs
   },

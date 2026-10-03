@@ -96,6 +96,8 @@ export function projectAgentSessionConversationOutline(
     if (
       sequence === undefined ||
       message.role !== 'user' ||
+      // Shown as not sent: never part of the conversation the agent saw, so no rail tick.
+      message.unsent === true ||
       !nativeChatRowRendersContent(message.blocks)
     ) {
       continue

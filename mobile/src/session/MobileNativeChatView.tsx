@@ -40,6 +40,7 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** Why the composer input is locked: the transport is disconnected, or the
@@ -280,6 +281,10 @@ export function MobileNativeChatView({
   const hasPendingStructuredInteraction =
     structuredActivityUi && (ask != null || permission != null || question != null)
 
+  const unsentNotices = useMemo(
+    () => mobileNativeChatUnsentNotices(turnJournal, agent ?? null),
+    [turnJournal, agent]
+  )
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
       <MobileNativeChatMessage
@@ -289,10 +294,11 @@ export function MobileNativeChatView({
         onOpenFile={onOpenFile}
         structuredActivityUi={structuredActivityUi}
         onToggleTurn={turns.onToggleTurn}
+        unsentNotice={item.unsent === true ? unsentNotices.get(item.id) : undefined}
         {...turns.resolveRow(index, item)}
       />
     ),
-    [toolsExpanded, fontScale, onOpenFile, structuredActivityUi, turns]
+    [toolsExpanded, fontScale, onOpenFile, structuredActivityUi, turns, unsentNotices]
   )
 
   const liveStatus =

@@ -27,11 +27,17 @@ export type NativeChatRailVirtualItem = {
 /** Only the fields the rail reads, so a test needs no slot builder. */
 export type NativeChatRailSlot = {
   turnKey: string | undefined
-  /** A user row in no turn (one shown as not sent) lights its own tick. */
-  message?: { id: string; role: string }
+  /** A user row in no turn lights its own tick, unless it is shown as not sent. */
+  message?: { id: string; role: string; unsent?: true }
 }
 
-function railTickOf(slot: NativeChatRailSlot | undefined): string | null {
+/** A row shown as not sent has no tick and no turn, so the tick before it stays lit. */
+function railTickAt(slots: readonly NativeChatRailSlot[], index: number): string | null {
+  let at = index
+  while (slots[at]?.message?.unsent === true) {
+    at -= 1
+  }
+  const slot = slots[at]
   return slot?.turnKey ?? (slot?.message?.role === 'user' ? slot.message.id : null)
 }
 
@@ -59,7 +65,7 @@ export function findActiveNativeChatRailItem({
   const atBottom = scrollHeight - clientHeight - scrollTop <= NATIVE_CHAT_BOTTOM_THRESHOLD_PX
   if (atBottom) {
     const last = virtualItems.at(-1)
-    return last === undefined ? previousActiveId : railTickOf(slots[last.index])
+    return last === undefined ? previousActiveId : railTickAt(slots, last.index)
   }
 
   let fold: NativeChatRailVirtualItem | undefined
@@ -71,12 +77,12 @@ export function findActiveNativeChatRailItem({
   // Scrolled above everything the window holds: the first windowed row is the
   // nearest thing to the fold.
   if (fold === undefined) {
-    return railTickOf(slots[virtualItems[0]?.index ?? -1])
+    return railTickAt(slots, virtualItems[0]?.index ?? -1)
   }
   // The window lags the scroll by a commit, so a fold past every row it holds is
   // a stale read, not an answer. Holding the previous tick beats blanking one.
   if (fold.end <= scrollTop) {
     return previousActiveId
   }
-  return railTickOf(slots[fold.index])
+  return railTickAt(slots, fold.index)
 }

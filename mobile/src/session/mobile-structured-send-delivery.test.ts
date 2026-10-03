@@ -112,26 +112,26 @@ describe('mobileStructuredSendDelivery', () => {
     }
   })
 
-  it('spends the id of a rejection and withholds its internal reason', () => {
+  it('spends the id of a recorded rejection and leaves saying it to its row in the chat', () => {
     // Provably undelivered and terminal, so the id can only replay it: spending the
-    // id makes the retry a first delivery. The marker itself names nothing a person
-    // can act on, so it must not reach the screen.
-    expect(
-      mobileStructuredSendDelivery(accepted('rejected', 'provider_write_failed: broken pipe'))
-    ).toEqual({
-      outcome: 'rejected',
-      operationIdSpent: true,
-      error: "Orca couldn't reach the agent. Your message was not sent. Send it again."
-    })
+    // id makes the retry a first delivery. The host recorded the message, so the
+    // transcript shows it as not sent, with why; a banner would say it twice.
+    for (const reason of ['provider_write_failed: broken pipe', 'Claude does not support .bmp']) {
+      expect(mobileStructuredSendDelivery(accepted('rejected', reason))).toEqual({
+        outcome: 'rejected',
+        operationIdSpent: true,
+        error: null
+      })
+    }
   })
 
-  it('shows a provider content rejection verbatim', () => {
+  it('says a send a Stop withdrew was not sent: no row in the chat says it', () => {
     expect(
-      mobileStructuredSendDelivery(accepted('rejected', 'Claude does not support .bmp'))
+      mobileStructuredSendDelivery(accepted('rejected', 'provider_cancelled_before_start'))
     ).toEqual({
       outcome: 'rejected',
       operationIdSpent: true,
-      error: 'Claude does not support .bmp'
+      error: 'Your message was not sent. Send it again.'
     })
   })
 

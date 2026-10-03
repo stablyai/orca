@@ -39,7 +39,8 @@ export function buildNativeChatRailItems(
 ): readonly NativeChatRailItem[] {
   const items: NativeChatRailItem[] = []
   for (const [slotIndex, slot] of slots.entries()) {
-    if (slot.kind !== 'message' || slot.message.role !== 'user') {
+    // A message shown as not sent is no turn of the conversation, as the host's outline agrees.
+    if (slot.kind !== 'message' || slot.message.role !== 'user' || slot.message.unsent === true) {
       continue
     }
     const preview = nativeChatUserMessagePreview(slot.message.blocks)

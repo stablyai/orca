@@ -70,6 +70,7 @@ describe('MobileNativeChatMessage', () => {
         workedSeconds: number | null
       } | null
       onToggleTurn?: () => void
+      unsentNotice?: string
     } = {}
   ): ReactTestRenderer {
     act(() => {
@@ -105,6 +106,27 @@ describe('MobileNativeChatMessage', () => {
       .findAllByType('Text' as never)
       .map((node) => String(node.children.join('')))
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
+  })
+
+  it('says under a message the host recorded but never delivered why it was not sent', () => {
+    const tree = render(
+      { ...userMessage([{ type: 'text', text: 'hello' }]), unsent: true },
+      { unsentNotice: "Orca couldn't reach the agent. Your message was not sent." }
+    )
+    expect(textIn(tree.root)).toEqual([
+      'hello',
+      "Orca couldn't reach the agent. Your message was not sent."
+    ])
+  })
+
+  it('still says it was not sent when no words for it are loaded', () => {
+    const tree = render({ ...userMessage([{ type: 'text', text: 'hello' }]), unsent: true })
+    expect(textIn(tree.root)).toEqual(['hello', 'Your message was not sent.'])
+  })
+
+  it('says nothing more under a delivered message', () => {
+    const tree = render(userMessage([{ type: 'text', text: 'hello' }]))
+    expect(textIn(tree.root)).toEqual(['hello'])
   })
 
   it('makes user message text selectable', () => {

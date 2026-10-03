@@ -123,7 +123,46 @@ describe('active rail item', () => {
     ).toBe('u2')
   })
 
-  // A rejected send the journal recorded keeps its place but opens no turn.
+  // A send shown as not sent keeps its place but has no tick, as the rail's items agree.
+  it('keeps the tick before a not-sent row lit, never the row itself', () => {
+    const slots: NativeChatRailSlot[] = [
+      ...TURNS,
+      { turnKey: undefined, message: { id: 'not-sent', role: 'user', unsent: true } },
+      { turnKey: undefined, message: { id: 'not-sent-2', role: 'user', unsent: true } }
+    ]
+    expect(
+      findActiveNativeChatRailItem({
+        slots,
+        virtualItems: rows(12),
+        scrollTop: 900,
+        clientHeight: VIEWPORT,
+        scrollHeight: 1200,
+        previousActiveId: null
+      })
+    ).toBe('u2')
+    expect(
+      findActiveNativeChatRailItem({
+        slots,
+        virtualItems: rows(12),
+        scrollTop: 1010,
+        ...MID_SCROLL,
+        scrollHeight: 2000
+      })
+    ).toBe('u2')
+    expect(
+      findActiveNativeChatRailItem({
+        slots: [
+          { turnKey: undefined, message: { id: 'first', role: 'user', unsent: true } },
+          ...TURNS
+        ],
+        virtualItems: rows(11),
+        scrollTop: 50,
+        ...MID_SCROLL,
+        scrollHeight: 1100
+      })
+    ).toBeNull()
+  })
+
   it('lights a prompt in no turn by its own id', () => {
     const slots: NativeChatRailSlot[] = [
       ...TURNS,

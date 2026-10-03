@@ -15,10 +15,8 @@ import {
   agentJournalSubmissionKey
 } from '../../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
-import {
-  structuredAgentSessionDeliveryNotices,
-  structuredAgentSessionStartFailureFacts
-} from './structured-agent-session-delivery-notices'
+import { structuredAgentSessionStartFailureFacts } from '../../../../shared/structured-agent-session-recorded-rejection-words'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 
 function entry(
   clientMessageId: string,
@@ -545,5 +543,106 @@ describe('the notice on each message that did not go through', () => {
         { [agentJournalSubmissionKey('first')]: shown }
       )
     })
+  })
+})
+
+describe('a recorded rejection no outbox entry here carries', () => {
+  const recorded = (patch: Partial<AgentJournalSubmission> = {}): AgentJournalSubmission => ({
+    clientMessageId: 'elsewhere',
+    fence: 1,
+    payloadFingerprint: 'fingerprint',
+    dispatchState: 'rejected',
+    providerItemId: null,
+    reason: 'not_delivered',
+    submittedAt: 1,
+    resolvedAt: 1,
+    ...patch
+  })
+
+  it('says it was not sent on its own row, with no Retry, in the words the sender would read', () => {
+    const notices = structuredAgentSessionDeliveryNotices(
+      [],
+      'Claude',
+      () => {},
+      [recorded()],
+      [],
+      NOT_FAILED_HERE
+    )
+    const senderNotices = structuredAgentSessionDeliveryNotices(
+      [
+        entry('elsewhere', {
+          state: 'rejected',
+          lastFailure: structuredAgentSessionRejectedFailure(recorded())
+        })
+      ],
+      'Claude',
+      () => {},
+      [recorded()],
+      [],
+      new Set(['elsewhere'])
+    )
+    const id = agentJournalSubmissionKey('elsewhere')
+    expect(notices.get(id)?.onRetry).toBeUndefined()
+    expect(senderNotices.get(id)?.onRetry).toBeDefined()
+    expect(notices.get(id)?.text).toBe('Your message was not sent.')
+    expect(senderNotices.get(id)?.text).toBe(notices.get(id)?.text)
+  })
+
+  it("keeps the sender's Retry while its outbox entry exists", () => {
+    const retry = vi.fn()
+    const notices = structuredAgentSessionDeliveryNotices(
+      [
+        entry('mine', {
+          state: 'rejected',
+          lastFailure: structuredAgentSessionRejectedFailure(recorded({ clientMessageId: 'mine' }))
+        })
+      ],
+      'Claude',
+      retry,
+      [recorded({ clientMessageId: 'mine' })],
+      [],
+      NOT_FAILED_HERE
+    )
+    notices.get(agentJournalSubmissionKey('mine'))?.onRetry?.()
+    expect(retry).toHaveBeenCalledWith('mine')
+    expect(notices.size).toBe(1)
+  })
+
+  it('says nothing for a send a Stop withdrew', () => {
+    const notices = structuredAgentSessionDeliveryNotices(
+      [],
+      'Claude',
+      () => {},
+      [recorded({ reason: 'provider_cancelled_before_start' })],
+      [],
+      NOT_FAILED_HERE
+    )
+    expect(notices.size).toBe(0)
+  })
+
+  it('says only that it was not sent when the start-failure row already says why', () => {
+    const startFailed: AgentSessionFailureFact = { kind: 'startFailed' }
+    const row: AgentJournalRenderItem = {
+      itemId: agentJournalItemKey(structuredAgentSessionStartFailureRowIdentity('gen')),
+      revision: 1,
+      sequence: 1,
+      observedAt: 1,
+      body: {
+        kind: 'status',
+        tone: 'error',
+        ...agentSessionFailureWords(startFailed, { agentName: 'Claude', surface: 'row' })
+      }
+    }
+    const notices = structuredAgentSessionDeliveryNotices(
+      [],
+      'Claude',
+      () => {},
+      [recorded({ reason: 'Written by the host.', rejection: startFailed })],
+      structuredAgentSessionStartFailureFacts([row]),
+      NOT_FAILED_HERE
+    )
+    expect(notices.get(agentJournalSubmissionKey('elsewhere'))?.text).toBe(
+      'Your message was not sent.'
+    )
   })
 })

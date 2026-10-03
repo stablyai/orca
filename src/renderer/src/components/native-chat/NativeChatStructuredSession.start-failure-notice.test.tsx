@@ -8,7 +8,11 @@ import {
   agentJournalItemKey,
   agentJournalSubmissionKey
 } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
+import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
@@ -78,7 +82,7 @@ function rejected(clientMessageId: string, reason: string, rejection: AgentSessi
       rejection,
       submittedAt: 1,
       resolvedAt: 1
-    }
+    } satisfies AgentJournalSubmission
   }
 }
 
@@ -160,4 +164,48 @@ it("keeps the start failure's own words when its row is not loaded", async () =>
   expect(
     within(await notice('first')).getByText('Claude stopped before it finished starting.')
   ).toBeTruthy()
+})
+
+// Another window, or the sender after its entry is gone: the host's record alone says it.
+it('words a recorded rejection this window holds no outbox entry for, with no Retry', async () => {
+  const userRow = (clientMessageId: string, sequence: number): AgentJournalRenderItem => ({
+    itemId: agentJournalSubmissionKey(clientMessageId),
+    revision: 1,
+    sequence,
+    observedAt: sequence,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] }
+  })
+  const providerRejected: AgentSessionFailureFact = {
+    kind: 'providerRejected',
+    detail: { text: 'Image type .bmp', audience: 'person' }
+  }
+  mocks.journalItems = [startFailureRow(START_FAILED), userRow('stated', 2), userRow('other', 3)]
+  const submissions = [
+    rejected('stated', START_FAILED_REASON, START_FAILED).submission,
+    rejected(
+      'other',
+      'The provider did not accept this message: Image type .bmp.',
+      providerRejected
+    ).submission
+  ]
+  mocks.submissions = submissions
+  mocks.messages = projectStructuredAgentSessionMessages(mocks.journalItems, [], submissions)
+  render(
+    <NativeChatStructuredSession
+      isVisible
+      isFocusedGroup
+      tabId="start-failure-tab"
+      sessionId={SESSION_ID}
+      target={{ kind: 'local' }}
+      agent="claude"
+    />
+  )
+
+  expect(within(await notice('stated')).getByText('Your message was not sent.')).toBeTruthy()
+  expect(
+    within(await notice('other')).getByText(
+      'The provider did not accept this message: Image type .bmp.'
+    )
+  ).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
 })

@@ -4,7 +4,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 import {
   sameAgentSessionFailureFact,
   structuredAgentSessionStartFailureFacts
-} from './structured-agent-session-delivery-notices'
+} from '../../../../shared/structured-agent-session-recorded-rejection-words'
 
 const NO_FACTS: readonly AgentSessionFailureFact[] = []
 
