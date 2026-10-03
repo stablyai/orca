@@ -135,6 +135,35 @@ export function GeneralWorkspaceSettingsSection({
         </SearchableSetting>
       </div>
 
+      <div id="general-skip-remove-project-confirm" className="scroll-mt-6">
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.askBeforeRemovingProjects',
+            'Ask Before Removing Projects'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.askBeforeRemovingProjectsDescription',
+            'Show a confirmation before removing a project from Orca. VM projects always ask because their files may be deleted.'
+          )}
+          keywords={['remove', 'project', 'confirm', 'dialog', 'skip', 'prompt']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.askBeforeRemovingProjects',
+              'Ask Before Removing Projects'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.askBeforeRemovingProjectsDescription',
+              'Show a confirmation before removing a project from Orca. VM projects always ask because their files may be deleted.'
+            )}
+            checked={!settings.skipRemoveProjectConfirm}
+            onChange={() =>
+              updateSettings({ skipRemoveProjectConfirm: !settings.skipRemoveProjectConfirm })
+            }
+          />
+        </SearchableSetting>
+      </div>
+
       <div id="general-skip-delete-automation-confirm" className="scroll-mt-6">
         <SearchableSetting
           title={translate(
