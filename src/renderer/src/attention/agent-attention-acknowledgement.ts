@@ -117,7 +117,7 @@ export function mergeAgentAttentionRemainders(
  */
 export function shouldClearWorkspaceAttention(
   remainder: AgentAttentionRemainder,
-  args: { viewedGroupId: string; clearedSubjectKeys: ReadonlySet<string> }
+  args: { viewedGroupId: string | null; clearedSubjectKeys: ReadonlySet<string> }
 ): boolean {
   if (!remainder.hasSurfaces) {
     return true
@@ -157,12 +157,12 @@ export function applyAgentAttentionAcknowledgement(
   if (args.subjectKeys.length > 0) {
     sink.acknowledgeSubjects(args.subjectKeys)
   }
-  if (args.workspaceIdToClear !== null) {
-    // Why: the selected agent is now visible, so drop the Dock-driving workspace unread.
-    sink.clearWorkspaceUnread(args.workspaceIdToClear)
-  }
   sink.clearGroupUnread(args.viewedGroupId)
   for (const subjectKey of subjectKeysToClear) {
     sink.clearSubjectUnread(subjectKey)
+  }
+  if (args.workspaceIdToClear !== null) {
+    // Clear the viewed markers first so the workspace guard sees only remaining attention.
+    sink.clearWorkspaceUnread(args.workspaceIdToClear)
   }
 }
