@@ -12,7 +12,6 @@ export function parseAnsiControlSequence(
       endIndex: number
     }
   | null {
-  // charCodeAt, not value[i]: indexing mints a one-char string on every escape.
   const introducer = classifyTerminalEscapeIntroducer(value.charCodeAt(escapeIndex + 1))
   if (introducer === 'csi') {
     for (let index = escapeIndex + 2; index < value.length; index += 1) {
