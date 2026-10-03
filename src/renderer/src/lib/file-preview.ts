@@ -34,14 +34,11 @@ function pairedOutsideWorktreeMessage(): string {
 /**
  * How a previewable document should be rendered.
  *
- * `browser-tab` keeps local workspaces on the pre-existing embedded browser tab.
- * `doc-preview` renders the document locally from the owning workspace's disk
- * over the `orca-preview` scheme, which is the only option for SSH and paired
- * workspaces: client-hosted browser guests refuse `file:` by design, and a
- * `file://` URL would resolve on the wrong machine anyway.
+ * `doc-preview` renders the document over the isolated `orca-preview` scheme.
+ * Local files use it too: a normal `file:` page receives broader filesystem and
+ * network access than a previewed workspace document should have.
  */
 export type WorkspaceFilePreviewPlan =
-  | { status: 'browser-tab'; url: string; title: string }
   | { status: 'doc-preview' }
   | { status: 'unsupported'; message: string; reason: 'no-channel' | 'outside-worktree' }
 
@@ -82,11 +79,7 @@ export function getWorkspaceFilePreviewPlan(
   if (availability.state !== 'enabled') {
     return { status: 'unsupported', message: availability.reason, reason: 'no-channel' }
   }
-  return {
-    status: 'browser-tab',
-    url: absolutePathToFileUri(filePath),
-    title: basename(filePath) || filePath
-  }
+  return { status: 'doc-preview' }
 }
 
 export function canShowWorkspaceFileBrowserAction(
@@ -194,8 +187,8 @@ function openDocPreviewTab(
     // Why explicitly client-local: the document is read through a grant this desktop mints, so the
     // page never belongs to a remote runtime even when the worktree does.
     browserRuntimeEnvironmentId: null,
-    // Why the caller decides: opening a file is a request to look at it, while a preview opened to
-    // the side belongs beside the source the reader is still working in.
+    // Why the caller decides: direct opens activate, while side previews preserve their existing
+    // local or remote focus behavior.
     activate: params.activate
   })
 }
@@ -209,15 +202,7 @@ export function openFileInBrowserTab(params: {
   if (plan.status === 'unsupported') {
     return plan
   }
-  if (plan.status === 'doc-preview') {
-    openDocPreviewTab(state, { ...params, activate: true })
-    return plan
-  }
-
-  state.createBrowserTab(params.worktreeId, plan.url, {
-    title: plan.title,
-    activate: true
-  })
+  openDocPreviewTab(state, { ...params, activate: true })
   return plan
 }
 
@@ -339,31 +324,25 @@ export function openFilePreviewToSide(params: {
 
   const layout = state.layoutByWorktree[worktreeId] ?? null
   const existingSibling = layout ? findSiblingGroupId(layout, sourceGroupId) : null
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
 
   // Why the unfocused split on a paired workspace: the preview opens in the background, and a host
   // snapshot reads an activated empty group as a terminal pane.
   const targetGroupId =
     existingSibling ??
-    (getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    (runtimeEnvironmentId
       ? state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right', { activate: false })
       : state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right'))
   if (!targetGroupId) {
     return
   }
 
-  if (plan.status === 'doc-preview') {
-    openDocPreviewTab(state, {
-      filePath: params.filePath,
-      worktreeId,
-      targetGroupId,
-      activate: false
-    })
-    return
-  }
-
-  state.createBrowserTab(worktreeId, plan.url, {
-    title: plan.title,
+  openDocPreviewTab(state, {
+    filePath: params.filePath,
+    worktreeId,
     targetGroupId,
-    activate: true
+    activate:
+      getConnectionIdForFileFromState(state, worktreeId, params.filePath) === null &&
+      !runtimeEnvironmentId
   })
 }

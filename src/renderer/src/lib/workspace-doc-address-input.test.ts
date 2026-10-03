@@ -5,7 +5,6 @@ import type { AppState } from '@/store/types'
 const plan = vi.hoisted(() => ({
   result: { status: 'doc-preview' } as
     | { status: 'doc-preview' }
-    | { status: 'browser-tab'; url: string; title: string }
     | { status: 'unsupported'; message: string; reason: 'no-channel' },
   calls: [] as { worktreeId: string; filePath: string }[]
 }))
@@ -133,12 +132,7 @@ describe('resolveWorkspaceDocAddressTarget', () => {
     expect(plan.calls).toEqual([])
   })
 
-  it('keeps a local file on the file:// pipeline and surfaces an unsupported plan as its message', () => {
-    plan.result = { status: 'browser-tab', url: 'file:///x', title: 'x' }
-    expect(
-      resolveWorkspaceDocAddressTarget(makeState(), CURRENT, '/home/alice/wt1/x.html')
-    ).toEqual({ status: 'not-a-workspace-doc' })
-
+  it('surfaces an unsupported preview plan as its message', () => {
     plan.result = { status: 'unsupported', message: 'no channel', reason: 'no-channel' }
     expect(
       resolveWorkspaceDocAddressTarget(makeState(), CURRENT, '/home/alice/wt1/x.html')
