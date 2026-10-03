@@ -5,6 +5,7 @@ import {
 } from '../../shared/terminal-image-protocol'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { repairDisabledSessionBusEnv } from '../pty/dbus-session-bus-env'
 import { stripPiProcessOwnerEnv } from '../pty/pi-process-owner-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { isWindowsGitBashShellPath } from '../git-bash'
@@ -36,6 +37,7 @@ export function buildLocalPtySpawnEnvironment(args: {
   removeUnspecifiedPaneIdentityEnv(spawnEnv, spawn.env)
   stripPiProcessOwnerEnv(spawnEnv)
   removeAppImageRuntimeEnv(spawnEnv)
+  repairDisabledSessionBusEnv(spawnEnv)
   removeInheritedNoColor(spawnEnv)
   for (const key of spawn.envToDelete ?? []) {
     delete spawnEnv[key]
