@@ -7,6 +7,13 @@ import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
 import type { PluginMarketplaceGitSource } from '../../shared/plugins/plugin-marketplace'
+import type {
+  PluginMarkdownRenderRequest,
+  PluginMarkdownRenderResult,
+  PluginMarkdownRendererRegistration,
+  PluginMarkdownSourceRequest,
+  PluginMarkdownSourceResult
+} from '../../shared/plugins/plugin-markdown-renderer'
 
 /** Panel contribution as surfaced by the main-process plugin service. */
 export type PluginHostPanel = {
@@ -54,6 +61,7 @@ export type PluginHostListEntry = {
     keybindings: { key: string; when: 'global' | 'worktree' }[]
   }[]
   hasWorker: boolean
+  markdownRenderers?: { language: string; commandId: string }[]
   vmRecipes?: {
     id: string
     name: string
@@ -141,6 +149,10 @@ export type PluginMarketplaceHostInstallPreview = {
 }
 
 export type PluginsApi = {
+  listMarkdownRenderers: () => Promise<PluginMarkdownRendererRegistration[]>
+  resolveMarkdownSource: (args: PluginMarkdownSourceRequest) => Promise<PluginMarkdownSourceResult>
+  renderMarkdown: (args: PluginMarkdownRenderRequest) => Promise<PluginMarkdownRenderResult>
+  cancelMarkdownRender: (args: { sessionId: string }) => Promise<void>
   list: () => Promise<PluginHostListEntry[]>
   listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
   /** Records the consent-dialog answer; approval is keyed to the plugin's

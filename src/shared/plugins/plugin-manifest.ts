@@ -16,6 +16,10 @@ import {
   pluginRelativePathSchema
 } from './plugin-manifest-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
+import {
+  PLUGIN_MARKDOWN_RENDERER_LIMIT,
+  pluginMarkdownRendererContributionSchema
+} from './plugin-markdown-renderer'
 
 /**
  * Plugin manifest v1 (`orca-plugin.json` at the plugin root). The
@@ -99,6 +103,10 @@ export const pluginManifestSchema = z
         panels: z.array(panelContributionSchema).max(PLUGIN_PANEL_LIMIT).default([]),
         commands: z.array(commandContributionSchema).max(PLUGIN_COMMAND_LIMIT).default([]),
         events: z.array(eventContributionSchema).max(PLUGIN_EVENT_SUBSCRIPTION_LIMIT).default([]),
+        markdownRenderers: z
+          .array(pluginMarkdownRendererContributionSchema)
+          .max(PLUGIN_MARKDOWN_RENDERER_LIMIT)
+          .default([]),
         languagePacks: z
           .array(pluginLanguagePackContributionSchema)
           .max(PLUGIN_LANGUAGE_PACK_LIMIT)
@@ -121,6 +129,7 @@ export const pluginManifestSchema = z
         panels: [],
         commands: [],
         events: [],
+        markdownRenderers: [],
         languagePacks: [],
         keybindings: [],
         vmRecipes: [],

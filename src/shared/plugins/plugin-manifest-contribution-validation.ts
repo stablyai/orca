@@ -11,6 +11,7 @@ type ContributionValidationManifest = {
     panels: IdentifiedContribution[]
     commands: (IdentifiedContribution & { action?: string; context?: 'global' | 'worktree' })[]
     events: { on: string }[]
+    markdownRenderers: { language: string; commandId: string }[]
     languagePacks: { locale: string }[]
     keybindings: { command: string; key: string; when?: 'global' | 'worktree' }[]
     vmRecipes: PathContribution[]
@@ -85,6 +86,19 @@ export function validatePluginManifestContributions(
   }
 
   const commands = new Map(manifest.contributes.commands.map((command) => [command.id, command]))
+  const languages = new Set<string>()
+  for (const [index, renderer] of manifest.contributes.markdownRenderers.entries()) {
+    const command = commands.get(renderer.commandId)
+    const message = languages.has(renderer.language)
+      ? `duplicate Markdown renderer language: ${renderer.language}`
+      : !command || command.action !== undefined
+        ? 'Markdown renderer must reference a declared worker command'
+        : null
+    languages.add(renderer.language)
+    if (message) {
+      ctx.addIssue({ code: 'custom', path: ['contributes', 'markdownRenderers', index], message })
+    }
+  }
   for (const [index, command] of manifest.contributes.commands.entries()) {
     if (command.action !== undefined && !isPluginCommandAliasActionId(command.action)) {
       ctx.addIssue({

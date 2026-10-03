@@ -43,6 +43,7 @@ package-lock.json
 .env.*.local
 
 # IDE
+.claude/.worktrees/
 .vscode/
 .idea/
 .serena/
