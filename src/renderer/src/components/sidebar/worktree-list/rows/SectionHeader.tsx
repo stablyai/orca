@@ -28,6 +28,7 @@ import {
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
 import {
+  ProjectGroupAddProjectButton,
   ProjectGroupCreateWorkspaceButton,
   ProjectGroupHeaderMenu
 } from './project-group-header-actions'
@@ -62,6 +63,7 @@ export type SectionHeaderRowContext = {
   onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
   onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
+  onAddProjectToGroup: (projectGroup: ProjectGroup) => void
   onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
   onWorkspaceStatusDragLeave: (event: React.DragEvent) => void
   onWorkspacePinDragOver: (event: React.DragEvent) => void
@@ -171,6 +173,16 @@ export function renderWorktreeSectionHeaderRow(args: {
         projectGroupId: folderBackedProjectGroup.id
       })
     : null
+  // Why: folder-backed groups already spend the Plus slot on "create workspace", and `createdFrom`
+  // narrows out the synthetic "Ungrouped" bucket, which has nothing to add a project to.
+  const projectGroupForAddProject =
+    isProjectGroupHeader &&
+    !row.repo &&
+    !folderBackedProjectGroup &&
+    row.projectGroup &&
+    'createdFrom' in row.projectGroup
+      ? row.projectGroup
+      : null
   const isHeaderCollapsed = ctx.collapsedGroups.has(row.key)
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
   const showHeaderCollapseAffordance =
@@ -376,6 +388,14 @@ export function renderWorktreeSectionHeaderRow(args: {
               pathStatus={projectGroupPathStatus}
               disabled={isFolderWorkspaceCreateDisabled(projectGroupPathStatus)}
               onCreate={ctx.onCreateFolderWorkspace}
+            />
+          ) : null}
+
+          {projectGroupForAddProject ? (
+            <ProjectGroupAddProjectButton
+              projectGroup={projectGroupForAddProject}
+              label={row.label}
+              onAddProject={ctx.onAddProjectToGroup}
             />
           ) : null}
 

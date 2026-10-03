@@ -8,6 +8,7 @@ import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
 import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { AddProjectTarget } from '../../../lib/added-project-group-assignment'
 
 export type UISliceContextual = {
   openSettingsPage: () => void
@@ -51,6 +52,13 @@ export type UISliceContextual = {
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
   modalData: Record<string, unknown>
+  /**
+   * Group the in-flight Add Project flow targets. Re-read from modal data on every openModal, so
+   * it survives only the add-flow steps that re-declare it; also cleared on close and once an add
+   * consumes it.
+   */
+  addProjectTarget: AddProjectTarget | null
+  clearAddProjectTarget: () => void
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
   featureTipsSeenIds: FeatureTipId[]
