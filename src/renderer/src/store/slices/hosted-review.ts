@@ -36,7 +36,7 @@ import {
   getHostedReviewRequestForHead,
   hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
-  inflightHostedReviewRequests,
+  finishInflightHostedReviewRequest,
   queueHostedReviewRevalidation,
   registerInflightHostedReviewRequest
 } from './hosted-review-request-state'
@@ -187,7 +187,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
     const inflightRequest = getHostedReviewRequestForHead(requestKey, options?.currentHeadOid)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
-      const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
+      // Tokens stay unique even after the latest request finishes and its entry is removed.
+      const generation = Symbol()
       const requestStartedAt = Date.now()
       const requestStartedEntry = get().hostedReviewCache[cacheKey]
       requestGenerations.set(cacheKey, generation)
@@ -282,13 +283,12 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           }
           return preserved?.data ?? null
         } finally {
-          const activeRequest = inflightHostedReviewRequests.get(requestKey)
-          if (activeRequest?.generation === generation) {
-            inflightHostedReviewRequests.delete(requestKey)
-            if (requestGenerations.get(cacheKey) === generation) {
-              requestGenerations.delete(cacheKey)
-            }
-          }
+          finishInflightHostedReviewRequest(
+            requestKey,
+            options?.currentHeadOid,
+            cacheKey,
+            generation
+          )
         }
       })()
 

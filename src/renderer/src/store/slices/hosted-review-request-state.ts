@@ -10,12 +10,12 @@ export const inflightHostedReviewRequests = new Map<
     promise: Promise<HostedReviewInfo | null>
     force: boolean
     currentHeadOid: string | null
-    generation: number
+    generation: symbol
     startedAt: number
   }
 >()
 
-export const hostedReviewRequestGenerations = new Map<string, number>()
+export const hostedReviewRequestGenerations = new Map<string, symbol>()
 type HostedReviewRevalidationLane = {
   inFlight: Promise<HostedReviewInfo | null> | null
   lastRunDurationMs: number
@@ -29,10 +29,30 @@ export function hostedReviewRequestKey(cacheKey: string, hintKey: string): strin
   return `${cacheKey}\0${hintKey}`
 }
 
+export function inflightHostedReviewRequestKey(requestKey: string, currentHeadOid?: string | null) {
+  return JSON.stringify([requestKey, currentHeadOid ?? null])
+}
+
 /** Only requests for the same Git head can supply a current merged-review result. */
 export function getHostedReviewRequestForHead(requestKey: string, currentHeadOid?: string | null) {
-  const request = inflightHostedReviewRequests.get(requestKey)
-  return request?.currentHeadOid === (currentHeadOid ?? null) ? request : undefined
+  return inflightHostedReviewRequests.get(
+    inflightHostedReviewRequestKey(requestKey, currentHeadOid)
+  )
+}
+
+export function finishInflightHostedReviewRequest(
+  requestKey: string,
+  currentHeadOid: string | null | undefined,
+  cacheKey: string,
+  generation: symbol
+): void {
+  const inflightKey = inflightHostedReviewRequestKey(requestKey, currentHeadOid)
+  if (inflightHostedReviewRequests.get(inflightKey)?.generation === generation) {
+    inflightHostedReviewRequests.delete(inflightKey)
+    if (hostedReviewRequestGenerations.get(cacheKey) === generation) {
+      hostedReviewRequestGenerations.delete(cacheKey)
+    }
+  }
 }
 
 function requiredHostedReviewRevalidationIdleMs(lane: HostedReviewRevalidationLane): number {
@@ -185,11 +205,14 @@ export function registerInflightHostedReviewRequest(
     promise: Promise<HostedReviewInfo | null>
     force: boolean
     currentHeadOid: string | null
-    generation: number
+    generation: symbol
     startedAt: number
   }
 ): Promise<HostedReviewInfo | null> {
-  inflightHostedReviewRequests.set(requestKey, entry)
+  inflightHostedReviewRequests.set(
+    inflightHostedReviewRequestKey(requestKey, entry.currentHeadOid),
+    entry
+  )
   supersedeHostedReviewRevalidation(requestKey, {
     promise: entry.promise,
     startedAt: entry.startedAt
