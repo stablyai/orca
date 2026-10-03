@@ -84,6 +84,19 @@ export function getZcodePlanApiKeyProtection(): SecretAtRestProtection | null {
   }
 }
 
+function removeRejectedPlaintextEnvelope(keyPath: string, attemptedEnvelope: string): void {
+  let published: string
+  try {
+    published = readFileSync(keyPath).toString('utf8')
+  } catch {
+    return
+  }
+  // Why: only the rejected replacement is removed; a restore that already landed must stay.
+  if (published === attemptedEnvelope) {
+    rmSync(keyPath, { force: true })
+  }
+}
+
 export function saveZcodePlanApiKey(key: string): void {
   const trimmed = key.trim()
   if (!trimmed) {
@@ -115,10 +128,8 @@ export function saveZcodePlanApiKey(key: string): void {
       previousEnvelope = null
     }
   }
-  const wroteRestricted = writeSecureFile(
-    keyPath,
-    encodeApiKeyEnvelope('plaintext', Buffer.from(trimmed, 'utf8'))
-  )
+  const attemptedEnvelope = encodeApiKeyEnvelope('plaintext', Buffer.from(trimmed, 'utf8'))
+  const wroteRestricted = writeSecureFile(keyPath, attemptedEnvelope)
   // Why: an unrestricted plaintext credential must never be reported as saved.
   if (!wroteRestricted) {
     if (!previousEnvelope) {
@@ -127,9 +138,10 @@ export function saveZcodePlanApiKey(key: string): void {
       try {
         writeSecureFile(keyPath, previousEnvelope.toString('utf8'))
       } catch {
-        // Why: restriction is failing device-wide; the restored bytes keep the
-        // previous credential available instead of deleting it, and the thrown
-        // save error still tells the user the store is not secure.
+        // Why: identical bytes are the previous key, not a new rejected secret.
+        if (previousEnvelope.toString('utf8') !== attemptedEnvelope) {
+          removeRejectedPlaintextEnvelope(keyPath, attemptedEnvelope)
+        }
       }
     }
     throw new Error('GLM Coding Plan API key could not be stored securely on this device')

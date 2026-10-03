@@ -170,6 +170,61 @@ describe('zcode-plan-api-key-store', () => {
     warn.mockRestore()
   })
 
+  it('removes a rejected plaintext replacement when restoring the previous key fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    const previous = Buffer.from(envelope('encrypted', 'old-key'))
+    const attempted = envelope('plaintext', 'new-key')
+    existsSyncMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValueOnce(previous).mockReturnValueOnce(Buffer.from(attempted))
+    writeSecureFileMock.mockReturnValueOnce(false).mockImplementationOnce(() => {
+      throw new Error('restore failed before publish')
+    })
+    const store = await loadStore()
+
+    expect(() => store.saveZcodePlanApiKey('new-key')).toThrow(
+      'could not be stored securely on this device'
+    )
+    expect(rmSyncMock).toHaveBeenCalledWith(storePath, { force: true })
+    warn.mockRestore()
+  })
+
+  it('keeps a restored key when rollback fails after the previous envelope is published', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    const previous = Buffer.from(envelope('encrypted', 'old-key'))
+    existsSyncMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValue(previous)
+    writeSecureFileMock.mockReturnValueOnce(false).mockImplementationOnce(() => {
+      throw new Error('restore failed after publish')
+    })
+    const store = await loadStore()
+
+    expect(() => store.saveZcodePlanApiKey('new-key')).toThrow(
+      'could not be stored securely on this device'
+    )
+    expect(rmSyncMock).not.toHaveBeenCalledWith(storePath, expect.anything())
+    warn.mockRestore()
+  })
+
+  it('keeps an identical plaintext key when restore fails after publishing it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    const sameKey = Buffer.from(envelope('plaintext', 'same-key'))
+    existsSyncMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValue(sameKey)
+    writeSecureFileMock.mockReturnValueOnce(false).mockImplementationOnce(() => {
+      throw new Error('restore failed after publish')
+    })
+    const store = await loadStore()
+
+    expect(() => store.saveZcodePlanApiKey('same-key')).toThrow(
+      'could not be stored securely on this device'
+    )
+    expect(rmSyncMock).not.toHaveBeenCalledWith(storePath, expect.anything())
+    warn.mockRestore()
+  })
+
   it('refuses to decrypt an encrypted envelope once safeStorage becomes unavailable', async () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
     existsSyncMock.mockReturnValue(true)
