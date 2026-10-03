@@ -14,6 +14,7 @@ import { pruneWorktreePRRefreshAliases } from '../../../github/pr-refresh-coordi
 import { recordWorkspaceCleanupRemovalSnapshotPrune } from '../../../workspace-cleanup-removal-snapshot-prune'
 import { pruneWorkspaceCleanupScanSnapshot } from '../../../workspace-cleanup-scan-snapshot'
 import { pruneWorkspaceSpaceAnalysisSnapshot } from '../../../workspace-space-analysis-snapshot'
+import { revokeCodexTrustForRemovedLocalWorkspace } from '../../../workspace-removal-codex-trust'
 
 export async function stopPtysForDestructiveWorktreeRemoval(
   runtime: OrcaRuntimeService,
@@ -96,6 +97,7 @@ export function removeWorktreeMetadataAndTransientState(
     deleteWorktreeHistoryDir(worktreeId)
     // Why: release the removed worktree's PR-refresh aliases so coalesced queue entries don't retain it all session (memory creep).
     pruneWorktreePRRefreshAliases(worktreeId)
+    revokeCodexTrustForRemovedLocalWorkspace(store, worktreeId, hostId ?? persistedHostId)
   }
   // Why: removed workspaces must never resurrect from the persisted cleanup/space scan snapshots.
   const snapshotDirectory = store.getProfileStorageDirectory()

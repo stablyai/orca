@@ -35,6 +35,7 @@ import {
   retryFailedWorktreeRemoval,
   waitForPendingWorktreeRemoval
 } from '../worktree-background-removal'
+import { revokeCodexTrustForRemovedLocalWorkspace } from '../workspace-removal-codex-trust'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
 import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-table'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
@@ -178,6 +179,7 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       deleteWorktreeHistoryDir(worktreeId)
       this.closeHeadlessBrowserPagesForWorktree(worktreeId)
       closeClientHostedBrowserPagesForWorktree(this, worktreeId)
+      revokeCodexTrustForRemovedLocalWorkspace(store, worktreeId, hostId ?? persistedHostId)
     }
   }
 

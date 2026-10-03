@@ -17,7 +17,7 @@ import {
   upsertHookTrustContent
 } from './config-toml-hook-trust-edit'
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
-import { upsertProjectTrustContent } from './config-toml-project-trust'
+import { hasProjectTrustTable, upsertProjectTrustContent } from './config-toml-project-trust'
 import { escapeTomlBasicString, parseProjectTomlHeaderPath } from './config-toml-syntax'
 import { observe } from './codex-path-observation'
 
@@ -137,16 +137,19 @@ export function upsertHookTrustEntriesInContent(
   return upsertHookTrustContent(existingContent, entries)
 }
 
+/** Returns whether this call created the project's table, rather than finding one. */
 export function upsertProjectTrustLevel(
   configPath: string,
   projectPath: string,
   trustLevel: CodexProjectTrustLevel
-): void {
+): boolean {
   const existing = readTomlForMutation(configPath)
+  const createdTable = !hasProjectTrustTable(existing, projectPath)
   const updated = upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
   if (updated !== existing) {
     writeConfigAtomically(configPath, updated)
   }
+  return createdTable
 }
 
 export function upsertProjectTrustLevelInContent(

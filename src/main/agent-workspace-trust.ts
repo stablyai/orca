@@ -10,6 +10,7 @@ import type { AgentWorkspaceTrustSpawnRequest } from '../shared/agent-workspace-
 import { parseWslUncPath } from '../shared/wsl-paths'
 import { applyWorkspaceTrustOnThisHost, launchedAgentHome } from './execution-host-workspace-trust'
 import { getLocalCodexTrustConfigFiles } from './codex/codex-home-paths'
+import { recordCodexProjectTrustCreated } from './codex/codex-project-trust-ledger'
 import { getCachedWslHome } from './wsl-home-cache'
 
 /** What a trust writer needs to reach the file the launched agent will read. */
@@ -75,6 +76,8 @@ export async function applyAgentWorkspaceTrust(
           wslDistro: context.wslDistro
         }),
       codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome),
+      recordCodexTrustCreated: (configFile, projectPath) =>
+        recordCodexProjectTrustCreated(configFile, projectPath),
       // Why: Codex queues behind a config lane it shares with Orca's hook installs.
       deadlineMs:
         preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
