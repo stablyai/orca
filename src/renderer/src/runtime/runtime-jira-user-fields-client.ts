@@ -49,6 +49,32 @@ export async function jiraListAssignableUsers(
     : window.api.jira.listAssignableUsers(args)
 }
 
+/**
+ * Lists users assignable in a project, for the create dialog where no issue
+ * key exists yet. Remote runtimes have no such RPC, so environment targets
+ * fall back to the site-wide user search — older hosts keep working and a
+ * genuinely unassignable pick still surfaces through the create error.
+ */
+export async function jiraListAssignableUsersForProject(
+  settings: RuntimeJiraSettings,
+  projectIdOrKey: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return []
+  }
+  const target = getJiraRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    return jiraSearchUsers(settings, query, siteId)
+  }
+  return window.api.jira.listAssignableUsersForProject({
+    projectIdOrKey,
+    query,
+    siteId: siteId ?? undefined
+  })
+}
+
 export async function jiraSearchUsers(
   settings: RuntimeJiraSettings,
   query?: string,

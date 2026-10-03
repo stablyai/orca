@@ -21,6 +21,7 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
     newJiraIssueProjectSearchInputRef,
     newJiraIssueTypeId,
     selectedJiraSiteId,
+    setNewJiraIssueAssignee,
     setNewJiraIssueProjectComboboxOpen,
     setNewJiraIssueProjectCommandValue,
     setNewJiraIssueProjectId,
@@ -107,11 +108,15 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
     (selectionKey: string) => {
       setNewJiraIssueProjectId(selectionKey)
       setNewJiraIssueTypeId(null)
+      // Why: account ids are site-scoped, so a project switch (which can change
+      // site) drops the picked assignee; issue-type changes keep it.
+      setNewJiraIssueAssignee(null)
       setNewJiraIssueProjectCommandValue(selectionKey)
       setNewJiraIssueProjectComboboxOpen(false)
       setNewJiraIssueProjectQuery('')
     },
     [
+      setNewJiraIssueAssignee,
       setNewJiraIssueProjectComboboxOpen,
       setNewJiraIssueProjectCommandValue,
       setNewJiraIssueProjectId,

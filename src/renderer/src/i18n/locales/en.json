@@ -17104,6 +17104,13 @@
                 }
               }
             }
+          },
+          "jira": {
+            "IssueAssigneeField": {
+              "9f36a855a2": "Assignee",
+              "3a45582d68": "Automatic",
+              "b2693ea957": "Assign to me ({{value0}})"
+            }
           }
         }
       },

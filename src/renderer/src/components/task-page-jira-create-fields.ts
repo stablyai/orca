@@ -1,10 +1,27 @@
 import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
 import type { JiraCreateField } from '../../../shared/jira-types'
 
-const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
+// 'assignee' is system here because the dialog renders a dedicated picker for it.
+const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set([
+  'project',
+  'issuetype',
+  'summary',
+  'description',
+  'assignee'
+])
 
 /** Jira's own create screen defaults only this field to the authenticated user. */
 export const JIRA_REPORTER_FIELD_KEY = 'reporter'
+
+export const JIRA_ASSIGNEE_FIELD_KEY = 'assignee'
+
+/**
+ * True when the project + issue type's create screen accepts an assignee.
+ * Jira rejects creates that set a field absent from the create screen.
+ */
+export function hasJiraAssigneeCreateField(fields: readonly JiraCreateField[]): boolean {
+  return fields.some((field) => field.key === JIRA_ASSIGNEE_FIELD_KEY)
+}
 
 /** True for required create fields the dialog must render (system fields excluded). */
 export function isVisibleJiraCreateField(field: JiraCreateField): boolean {
@@ -109,4 +126,33 @@ export function buildJiraCreateCustomFields(
     }
   }
   return Object.keys(customFields).length > 0 ? customFields : undefined
+}
+
+/**
+ * Shapes the dialog draft into the create payload: merges the picked assignee
+ * into customFields (omitted when null — Jira then applies the project's
+ * default assignee) and names every user-typed key that carries a value, so
+ * the host wraps those ids as the {accountId}/{name} refs Jira requires.
+ * Valueless user fields stay unnamed to keep `userFieldKeys` empty when
+ * nothing needs shaping — older remote hosts reject the capability otherwise.
+ */
+export function buildJiraCreateSubmission(
+  fields: readonly JiraCreateField[],
+  values: Record<string, string>,
+  assigneeAccountId?: string | null
+): { customFields?: Record<string, unknown>; userFieldKeys?: string[] } {
+  const customFields = { ...buildJiraCreateCustomFields(fields, values) }
+  if (assigneeAccountId) {
+    customFields[JIRA_ASSIGNEE_FIELD_KEY] = assigneeAccountId
+  }
+  const userFieldKeys = getJiraUserCreateFieldKeys(fields).filter(
+    (key) => customFields[key] !== undefined
+  )
+  if (assigneeAccountId) {
+    userFieldKeys.push(JIRA_ASSIGNEE_FIELD_KEY)
+  }
+  return {
+    customFields: Object.keys(customFields).length > 0 ? customFields : undefined,
+    userFieldKeys: userFieldKeys.length > 0 ? userFieldKeys : undefined
+  }
 }
