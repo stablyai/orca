@@ -71,24 +71,16 @@ describe('relay quick open ignored file listing', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   })
 
-  it('rg ignored pass includes ignored non-env files and keeps blocklists/excludes', async () => {
-    const primaryProc = createMockProcess()
+  it('uses one broad rg pass for unbounded listings and keeps blocklists/excludes', async () => {
     const ignoredProc = createMockProcess()
 
-    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
-      if (args.includes('--no-ignore-vcs')) {
-        return ignoredProc
-      }
-      return primaryProc
-    })
+    spawnMock.mockReturnValue(ignoredProc)
 
     const promise = listFilesWithRg('/remote/root', ['packages/other'])
-    expect(spawnMock).toHaveBeenCalledTimes(2)
+    expect(spawnMock).toHaveBeenCalledTimes(1)
 
     setTimeout(() => {
-      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
-      primaryProc.emit('close', 0, null)
-
+      ignoredProc.stdout?.emit('data', 'src/index.ts\n')
       ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
       ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'node_modules/pkg/index.js\n')
       ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\n')
@@ -97,9 +89,7 @@ describe('relay quick open ignored file listing', () => {
 
     await expect(promise).resolves.toEqual(['src/index.ts', 'dist/generated.js'])
 
-    const ignoredArgs = spawnMock.mock.calls.find((call) =>
-      (call[1] as string[]).includes('--no-ignore-vcs')
-    )?.[1] as string[]
+    const ignoredArgs = spawnMock.mock.calls[0][1]
     expect(ignoredArgs).toBeDefined()
     expect(ignoredArgs).toContain('--no-ignore-vcs')
     expect(ignoredArgs).not.toContain('.env*')
@@ -150,6 +140,24 @@ describe('relay quick open ignored file listing', () => {
     await expect(promise).resolves.toEqual(['scripts/check-target.ts', 'src/components/target.ts'])
   })
 
+  it('fills a bounded listing from primary files before admitting ignored files', async () => {
+    const primary = createMockProcess()
+    const broad = createMockProcess()
+    spawnMock.mockReturnValueOnce(primary).mockReturnValueOnce(broad)
+
+    const promise = listFilesWithRg('/remote/root', [], { maxResults: 2 })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls[0][1]).not.toContain('--no-ignore-vcs')
+    primary.stdout?.emit('data', 'src/index.ts\n')
+    primary.emit('close', 0, null)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    expect(spawnMock.mock.calls[1][1]).toContain('--no-ignore-vcs')
+    broad.stdout?.emit('data', 'src/index.ts\ndist/generated.js\ndist/extra.js\n')
+
+    await expect(promise).resolves.toEqual(['src/index.ts', 'dist/generated.js'])
+    expect(broad.kill).toHaveBeenCalled()
+  })
+
   it('retries a transient remote rg spawn failure without reporting ripgrep as missing', async () => {
     const failed = createMockProcess()
     const succeeded = createMockProcess()
@@ -191,32 +199,27 @@ describe('relay quick open ignored file listing', () => {
     await expect(promise).resolves.toEqual(['src/target.ts'])
   })
 
-  it('runs the ignored pass after an unbounded primary listing retry succeeds', async () => {
-    const failedPrimary = createMockProcess()
-    const succeededPrimary = createMockProcess()
-    const ignored = createMockProcess()
-    Object.defineProperty(failedPrimary, 'pid', { value: undefined })
-    spawnMock
-      .mockReturnValueOnce(failedPrimary)
-      .mockReturnValueOnce(succeededPrimary)
-      .mockReturnValueOnce(ignored)
+  it('retries an unbounded broad listing once after a transient spawn failure', async () => {
+    const failed = createMockProcess()
+    const succeeded = createMockProcess()
+    Object.defineProperty(failed, 'pid', { value: undefined })
+    spawnMock.mockReturnValueOnce(failed).mockReturnValueOnce(succeeded)
 
     const promise = listFilesWithRg('/remote/root')
-    failedPrimary.emit('error', Object.assign(new Error('spawn rg EAGAIN'), { code: 'EAGAIN' }))
+    failed.emit('error', Object.assign(new Error('spawn rg EAGAIN'), { code: 'EAGAIN' }))
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
 
-    ;(succeededPrimary.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
-    succeededPrimary.emit('close', 0, null)
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(3))
-    ;(ignored.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
-    ignored.emit('close', 0, null)
+    succeeded.stdout?.emit('data', 'src/index.ts\ndist/generated.js\n')
+    succeeded.emit('close', 0, null)
 
     await expect(promise).resolves.toEqual(['src/index.ts', 'dist/generated.js'])
-    expect(spawnMock.mock.calls[2][1]).toContain('--no-ignore-vcs')
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+    expect(spawnMock.mock.calls[0][1]).toContain('--no-ignore-vcs')
+    expect(spawnMock.mock.calls[1][1]).toContain('--no-ignore-vcs')
   })
 
   it.each(['error-first', 'close-first'] as const)(
-    'tags a %s pre-spawn listing failure without starting the ignored pass',
+    'tags a %s pre-spawn listing failure without starting another pass',
     async (order) => {
       const root = await makeTempRoot()
       const missing = createMockProcess()
@@ -243,21 +246,17 @@ describe('relay quick open ignored file listing', () => {
     }
   )
 
-  it('kills only the admitted pass when ignored rg fails before spawn', async () => {
+  it('does not signal the unbounded broad pass when it fails before spawn', async () => {
     const root = await makeTempRoot()
-    const primary = createMockProcess()
     const missingIgnored = createMockProcess()
     Object.defineProperty(missingIgnored, 'pid', { value: undefined })
-    spawnMock.mockImplementation((_cmd: string, args: string[]) =>
-      args.includes('--no-ignore-vcs') ? missingIgnored : primary
-    )
+    spawnMock.mockReturnValue(missingIgnored)
 
     const promise = listFilesWithRg(root)
-    expect(spawnMock).toHaveBeenCalledTimes(2)
+    expect(spawnMock).toHaveBeenCalledTimes(1)
     missingIgnored.emit('close', -2, null)
 
     await expect(promise).rejects.toBeInstanceOf(RipgrepUnavailableError)
-    expect(primary.kill).toHaveBeenCalled()
     expect(missingIgnored.kill).not.toHaveBeenCalled()
     const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
     expect(() => missingIgnored.emit('error', error)).not.toThrow()
@@ -548,14 +547,8 @@ describe('relay quick open ignored file listing', () => {
   it('rg file listing rejects and detaches when a timed-out child does not emit close', async () => {
     vi.useFakeTimers()
     try {
-      const primaryProc = createMockProcess()
       const ignoredProc = createMockProcess()
-      let callIndex = 0
-
-      spawnMock.mockImplementation(() => {
-        callIndex++
-        return callIndex === 1 ? primaryProc : ignoredProc
-      })
+      spawnMock.mockReturnValue(ignoredProc)
 
       const promise = listFilesWithRg('/remote/root')
       const outcomePromise = promise.then(
@@ -567,12 +560,8 @@ describe('relay quick open ignored file listing', () => {
       const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
 
       expect(outcome).toBe('rejected:rg list timed out')
-      expect(primaryProc.kill).toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledTimes(1)
       expect(ignoredProc.kill).toHaveBeenCalled()
-      expect((primaryProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
-      expect((primaryProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
-      expect(primaryProc.listenerCount('error')).toBe(0)
-      expect(primaryProc.listenerCount('close')).toBe(0)
       expect((ignoredProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect((ignoredProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect(ignoredProc.listenerCount('error')).toBe(0)

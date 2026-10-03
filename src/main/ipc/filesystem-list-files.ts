@@ -277,9 +277,7 @@ export async function listQuickOpenFiles(
   }
 
   const killSurvivors = (): void => {
-    // Why: if one rg pass fails, Promise.all rejects immediately while the
-    // sibling scan can keep walking a huge tree until timeout. Stop it so
-    // repeated Quick Open attempts do not accumulate local rg processes.
+    // Failed listings must release any process still walking the tree.
     for (const entry of children) {
       if (entry.isDone()) {
         continue
@@ -303,16 +301,13 @@ export async function listQuickOpenFiles(
     }
   }
   try {
-    const primaryRun = runRg(primary)
     if (maxResults === undefined && maxSerializedBytes === undefined) {
-      // Why: a pid-less primary proves launch failure; avoid doubling the failed spawn.
-      await (children[0]?.child.pid === undefined
-        ? primaryRun
-        : Promise.all([primaryRun, runRg(ignoredPass)]))
+      // The broader pass already includes source files; an unbounded listing needs only one scan.
+      await runRg(ignoredPass)
     } else {
       // Why: ignored-file output can be much larger and faster than the primary pass; let source
       // files claim every bounded autocomplete budget first, including the transport byte cap.
-      await primaryRun
+      await runRg(primary)
       if (
         (maxResults === undefined || files.size < maxResults) &&
         (maxSerializedBytes === undefined || serializedBytes < maxSerializedBytes)

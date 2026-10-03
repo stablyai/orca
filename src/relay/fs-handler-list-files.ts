@@ -6,7 +6,7 @@
  * matching files" even though the file existed on disk. This implementation:
  *   - streams via spawn (no maxBuffer failure mode)
  *   - prunes traversal at rg level using the shared blocklist globs
- *   - runs a second --no-ignore-vcs pass for ignored files
+ *   - includes gitignored files, preserving primary-first order for bounded listings
  *   - honors excludePathPrefixes for nested linked worktrees
  *   - rejects (not resolves) on timeout / spawn error / signal exit so
  *     the UI shows a load error instead of a false-empty list
@@ -284,10 +284,7 @@ export function listFilesWithRg(
       })
 
     const killSurvivors = (reason: string): void => {
-      // Why: when one pass rejects, Promise.all surfaces the error immediately
-      // but the sibling rg keeps running up to LIST_FILES_TIMEOUT_MS. Kill it
-      // so repeated Quick Open opens don't pile up orphan rg processes on the
-      // remote.
+      // Cancellation or a reached budget must stop any admitted scan or retry.
       for (const entry of children) {
         if (entry.isDone()) {
           continue
@@ -322,21 +319,13 @@ export function listFilesWithRg(
     }
     signal?.addEventListener('abort', onAbort, { once: true })
 
+    // Without a result budget, the broader pass already contains every primary path.
     const passes =
-      searchQuery !== undefined
+      searchQuery !== undefined || maxResults === undefined
         ? runPass(ignoredPass)
-        : (() => {
-            const primaryPass = runPass(primary)
-            return maxResults === undefined
-              ? children[0]?.child.pid === undefined
-                ? primaryPass.then(() => runPass(ignoredPass))
-                : Promise.all([primaryPass, runPass(ignoredPass)])
-              : // Why: deterministic primary-first budgeting prevents a large ignored
-                // tree from starving ordinary source paths on a remote host.
-                primaryPass.then(() =>
-                  files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
-                )
-          })()
+        : runPass(primary).then(() =>
+            files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
+          )
 
     passes
       .then(() => {
@@ -353,7 +342,7 @@ export function listFilesWithRg(
         }
         done = true
         signal?.removeEventListener('abort', onAbort)
-        killSurvivors('rg list canceled after sibling failure')
+        killSurvivors('rg list canceled after failure')
         reject(err instanceof Error ? err : new Error(String(err)))
       })
   })

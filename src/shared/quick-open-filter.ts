@@ -183,7 +183,7 @@ export type RgArgsOptions = {
 export type RgArgs = {
   /** Main pass: all non-ignored files, hidden dotfiles included. */
   primary: string[]
-  /** Second pass: ignored files, hidden dotfiles included. */
+  /** Broader pass: primary files plus gitignored files, hidden dotfiles included. */
   ignoredPass: string[]
 }
 

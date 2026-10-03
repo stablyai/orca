@@ -164,6 +164,19 @@ describe('buildHiddenDirExcludeGlobs', () => {
 })
 
 describe('buildRgArgsForQuickOpen', () => {
+  it.each([
+    { searchRoot: '.', excludePathPrefixes: [], forceSlashSeparator: false },
+    {
+      searchRoot: '/root',
+      excludePathPrefixes: ['packages/app', 'feature[1]'],
+      forceSlashSeparator: true
+    }
+  ])('broadens only VCS ignore handling for $searchRoot', (options) => {
+    const { primary, ignoredPass } = buildRgArgsForQuickOpen(options)
+    expect(ignoredPass).toContain('--no-ignore-vcs')
+    expect(ignoredPass.filter((arg) => arg !== '--no-ignore-vcs')).toEqual(primary)
+  })
+
   it('primary pass includes --files, --hidden, hidden-dir excludes, no --follow', () => {
     const { primary } = buildRgArgsForQuickOpen({
       searchRoot: '/root',
