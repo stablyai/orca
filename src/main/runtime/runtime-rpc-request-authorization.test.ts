@@ -3,11 +3,18 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import type { WebSocket } from 'ws'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './device-registry'
+import type { AuthenticatedMobileSocket } from './rpc/mobile-socket-wiring'
+import {
+  disableSecurityEventLog,
+  enableSecurityEventLog,
+  SECURITY_EVENT_PREFIX
+} from './security-event-log'
 import { sendRequest, withCurrentOrchestrationContract } from './runtime-rpc-test-harness'
 
 vi.mock('../git/worktree', () => {
@@ -221,6 +228,67 @@ describe('OrcaRuntimeRpcServer', () => {
       })
     ])
     expect(createMobileSessionTerminal).not.toHaveBeenCalled()
+  })
+
+  it('records one revoked-token rejection per socket, never the token', async () => {
+    const lines: string[] = []
+    enableSecurityEventLog({ write: (line) => lines.push(line) })
+    try {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a minimal stub; the code under test reads only the fields set here.
+      const runtime = {
+        configureNotificationDismissalStore: () => {},
+        getRuntimeId: () => 'test-runtime'
+      } as unknown as OrcaRuntimeService
+      const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+      server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a minimal stub; the code under test reads only the fields set here.
+      const ws = {} as unknown as WebSocket
+      // Why: the socket carries the transport the refusal happened on, long after its token is gone.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a minimal stub; the code under test reads only the fields set here.
+      const socket = {
+        ws,
+        transport: { transport: 'relay' }
+      } as unknown as AuthenticatedMobileSocket
+      const replies: Record<string, unknown>[] = []
+
+      for (const id of ['req_revoked_1', 'req_revoked_2']) {
+        await server['handleWebSocketMessage'](
+          JSON.stringify({ id, method: 'status.get' }),
+          (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+          () => {},
+          undefined,
+          ws,
+          'revoked-token',
+          socket
+        )
+      }
+
+      expect(replies).toEqual([
+        expect.objectContaining({
+          error: expect.objectContaining({ code: 'unauthorized' }),
+          ok: false
+        }),
+        expect.objectContaining({
+          error: expect.objectContaining({ code: 'unauthorized' }),
+          ok: false
+        })
+      ])
+      expect(
+        lines.map((line): unknown => JSON.parse(line.slice(SECURITY_EVENT_PREFIX.length)))
+      ).toEqual([
+        {
+          event: 'connection_rejected',
+          transport: 'relay',
+          code: 4001,
+          reason: 'revoked or unknown token',
+          ts: expect.any(Number)
+        }
+      ])
+      expect(lines.join('\n')).not.toContain('revoked-token')
+    } finally {
+      disableSecurityEventLog()
+    }
   })
 
   it('allows runtime-scoped WebSocket tokens to use the full RPC surface', async () => {

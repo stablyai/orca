@@ -20,6 +20,7 @@ import {
   parseMobilePushRegistration,
   type MobilePushRegistration
 } from '../../shared/mobile-push-contract'
+import { recordSecurityEvent } from './security-event-log'
 
 export type { DeviceScope }
 
@@ -94,6 +95,7 @@ export class DeviceRegistry {
     scope: DeviceScope,
     pairingReach: RuntimePairingReach
   ): DeviceEntry {
+    const invalidatedPending = this.devices.length - existingDevices.length
     const entry: DeviceEntry = {
       deviceId: randomUUID(),
       name,
@@ -107,6 +109,13 @@ export class DeviceRegistry {
     // Why: a credential is not valid until its durable registry write succeeds.
     this.save(nextDevices)
     this.devices = nextDevices
+    recordSecurityEvent({
+      event: 'pairing_offer_issued',
+      deviceId: entry.deviceId,
+      scope,
+      reach: pairingReach,
+      invalidatedPending
+    })
     return entry
   }
 
@@ -160,14 +169,16 @@ export class DeviceRegistry {
   }
 
   removeDevice(deviceId: string): boolean {
+    const removed = this.devices.find((d) => d.deviceId === deviceId)
     const nextDevices = this.devices.filter((d) => d.deviceId !== deviceId)
-    if (nextDevices.length === this.devices.length) {
+    if (!removed) {
       return false
     }
     // Why: persist before memory swap so a failed write does not drop a device
     // only in-process while disk still lists it (and vice versa on reload).
     this.save(nextDevices)
     this.devices = nextDevices
+    recordSecurityEvent({ event: 'device_removed', deviceId, scope: removed.scope })
     return true
   }
 
@@ -253,12 +264,16 @@ export class DeviceRegistry {
     // Why: persist before memory swap so a failed write cannot leave a scanned
     // device looking never-scanned on disk, where rotation would drop it.
     const seenAt = Date.now()
+    const previous = this.devices[index]!
     const nextDevices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? { ...device, lastSeenAt: seenAt } : device
     )
     this.save(nextDevices)
     this.devices = nextDevices
     this.cancelPendingLastSeenFlush()
+    if (previous.lastSeenAt === 0) {
+      recordSecurityEvent({ event: 'device_paired', deviceId, scope: previous.scope })
+    }
   }
 
   /**
