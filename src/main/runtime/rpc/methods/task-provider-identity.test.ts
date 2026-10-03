@@ -22,7 +22,13 @@ const identities = [
     teamId: 'team',
     teamKey: 'ENG'
   },
-  { provider: 'jira', siteId: 'site', siteUrl: 'https://acme.atlassian.net', projectKey: 'ENG' }
+  { provider: 'jira', siteId: 'site', siteUrl: 'https://acme.atlassian.net', projectKey: 'ENG' },
+  {
+    provider: 'hamteamboard',
+    serverUrl: 'https://board.example.com',
+    projectId: 'project-id',
+    projectKey: 'ORCA'
+  }
 ] satisfies ProviderIdentity[]
 
 describe('task provider identity RPC validation', () => {
@@ -50,14 +56,17 @@ describe('task provider identity RPC validation', () => {
     }
   }
 
-  it.each(['gitlab', 'linear', 'jira'])('keeps %s fields optional and nullable', (provider) => {
-    expect(TaskProviderIdentity.parse({ provider })).toEqual({ provider })
-    const full = identities.find((identity) => identity.provider === provider)!
-    const nullable = Object.fromEntries(
-      Object.keys(full).map((key) => [key, key === 'provider' ? provider : null])
-    )
-    expect(TaskProviderIdentity.parse(nullable)).toEqual(nullable)
-  })
+  it.each(['gitlab', 'linear', 'jira', 'hamteamboard'])(
+    'keeps %s fields optional and nullable',
+    (provider) => {
+      expect(TaskProviderIdentity.parse({ provider })).toEqual({ provider })
+      const full = identities.find((identity) => identity.provider === provider)!
+      const nullable = Object.fromEntries(
+        Object.keys(full).map((key) => [key, key === 'provider' ? provider : null])
+      )
+      expect(TaskProviderIdentity.parse(nullable)).toEqual(nullable)
+    }
+  )
 
   it('preserves unknown fields and never infers GitHub from owner/repo', () => {
     const identity = { provider: 'gitlab', owner: 'acme', repo: 'orca', futureField: 'value' }

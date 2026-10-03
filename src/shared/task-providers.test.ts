@@ -16,7 +16,13 @@ describe('task providers', () => {
   })
 
   it('falls back to all providers when none are visible', () => {
-    expect(normalizeVisibleTaskProviders([])).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(normalizeVisibleTaskProviders([])).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'hamteamboard'
+    ])
   })
 
   it('restores a valid saved default when provider settings drifted', () => {
@@ -115,5 +121,23 @@ describe('task providers', () => {
         linearConnected: false
       })
     ).toEqual(['github'])
+  })
+
+  it('only exposes HamTeamBoard after its connection is ready', () => {
+    expect(
+      filterAvailableTaskProviders(['github', 'hamteamboard'], {
+        gitlabInstalled: false,
+        linearConnected: false,
+        hamteamboardConnected: false
+      })
+    ).toEqual(['github'])
+
+    expect(
+      filterAvailableTaskProviders(['github', 'hamteamboard'], {
+        gitlabInstalled: false,
+        linearConnected: false,
+        hamteamboardConnected: true
+      })
+    ).toEqual(['github', 'hamteamboard'])
   })
 })

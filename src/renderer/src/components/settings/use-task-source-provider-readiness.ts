@@ -91,6 +91,12 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      hamteamboard: {
+        connected: false,
+        checking: false,
+        unavailable: true,
+        visible: visible.has('hamteamboard')
       }
     }
   }, [
