@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   applyRefreshedToken,
+  isOauthTokenExpiredPastGrace,
   isOauthTokenExpiring,
   parseClaudeOauthBlob,
   readRefreshToken,
@@ -77,6 +78,33 @@ describe('isOauthTokenExpiring', () => {
 
   it('is false for credentials without an oauth block', () => {
     expect(isOauthTokenExpiring('{}', NOW)).toBe(false)
+  })
+})
+
+describe('isOauthTokenExpiredPastGrace', () => {
+  it('is false while the token is valid or only inside the refresh buffer', () => {
+    expect(isOauthTokenExpiredPastGrace(credentials(), NOW)).toBe(false)
+    expect(isOauthTokenExpiredPastGrace(credentials({ expiresAt: NOW + 60 * 1000 }), NOW)).toBe(
+      false
+    )
+  })
+
+  it('is false just after expiry, while a live Claude could still be rotating it', () => {
+    expect(isOauthTokenExpiredPastGrace(credentials({ expiresAt: NOW - 60 * 1000 }), NOW)).toBe(
+      false
+    )
+  })
+
+  it('is true once the token has been expired for longer than the grace window', () => {
+    expect(
+      isOauthTokenExpiredPastGrace(credentials({ expiresAt: NOW - 60 * 60 * 1000 }), NOW)
+    ).toBe(true)
+  })
+
+  it('is false without numeric expiry metadata, since nothing proves the token is dead', () => {
+    expect(isOauthTokenExpiredPastGrace(credentials({ expiresAt: undefined }), NOW)).toBe(false)
+    expect(isOauthTokenExpiredPastGrace(credentials({ expiresAt: 'soon' }), NOW)).toBe(false)
+    expect(isOauthTokenExpiredPastGrace('{}', NOW)).toBe(false)
   })
 })
 
@@ -169,6 +197,19 @@ describe('refreshClaudeOauthCredentials', () => {
     const oauth = parseClaudeOauthBlob(result!)!
     expect(oauth.accessToken).toBe('fresh-access')
     expect(oauth.refreshToken).toBe('fresh-refresh')
+  })
+
+  it('identifies itself with a non-browser User-Agent', async () => {
+    // Why: the token endpoint answers 429 to the Chromium User-Agent net.fetch sends by default.
+    netFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ access_token: 'fresh-access', expires_in: 3600 })
+    })
+
+    await refreshClaudeOauthCredentials(credentials(), NOW)
+
+    const [, init] = netFetchMock.mock.calls[0]
+    expect(init.headers['User-Agent']).toBe('orca-desktop')
   })
 
   it('returns null on a non-ok response and logs the status for diagnosability', async () => {

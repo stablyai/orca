@@ -422,4 +422,48 @@ describe('fetchClaudeRateLimits', () => {
     )
     expect(usageCall?.[1]?.headers?.Authorization).toBe('Bearer fresh-access')
   })
+
+  it('persists a rotated inactive account token even when the fetch is aborted mid-refresh', async () => {
+    setPlatform('linux')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    const credentialsPath = join(ownedAuthPath, '.credentials.json')
+    writeFileSync(
+      credentialsPath,
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'stale-access',
+          refreshToken: 'stale-refresh',
+          expiresAt: Date.now() - 60_000
+        }
+      }),
+      'utf-8'
+    )
+    const controller = new AbortController()
+    // The server has already consumed the single-use refresh token by the time the
+    // abort (e.g. app quit) lands, so dropping the rotation would strand the account.
+    netFetchMock.mockImplementationOnce(async () => {
+      controller.abort()
+      return {
+        ok: true,
+        json: async () => ({
+          access_token: 'fresh-access',
+          expires_in: 3600,
+          refresh_token: 'fresh-refresh'
+        })
+      }
+    })
+
+    const result = await fetchManagedAccountUsage(
+      { id: 'account-1', managedAuthPath: ownedAuthPath },
+      { signal: controller.signal }
+    )
+
+    expect(result.status).not.toBe('ok')
+    const persisted = JSON.parse(readFileSync(credentialsPath, 'utf-8'))
+    expect(persisted.claudeAiOauth.refreshToken).toBe('fresh-refresh')
+  })
 })
