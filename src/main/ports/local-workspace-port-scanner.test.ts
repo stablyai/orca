@@ -259,6 +259,30 @@ describe('scanWorkspacePorts attribution work', () => {
     expect(win32WorktreePathResolveCalls).toHaveLength(0)
     expect(posixWorktreePathResolveCalls).toHaveLength(worktrees.length)
   })
+
+  it('runs every macOS lsof without stat-ing mounted file systems', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
+      if (command === 'lsof' && args.includes('-iTCP')) {
+        return { stdout: ['p123', 'cnode', 'n127.0.0.1:3000'].join('\n'), spawnMs: 5 }
+      }
+      if (command === 'lsof') {
+        return { stdout: ['p123', 'n/repo/service'].join('\n'), spawnMs: 5 }
+      }
+      if (command === 'ps') {
+        return { stdout: '123 node /repo/service/server.js', spawnMs: 5 }
+      }
+      return { stdout: '', spawnMs: 5 }
+    })
+
+    await scanWorkspacePorts(worktrees, urlWatcherStub())
+
+    const lsofCalls = runPortScanCommandMock.mock.calls.filter(([command]) => command === 'lsof')
+    expect(lsofCalls).toHaveLength(2)
+    for (const [, args] of lsofCalls) {
+      expect(args).toEqual(expect.arrayContaining(['-b', '-w']))
+    }
+  })
 })
 
 describe('scanWorkspacePorts command timeout', () => {
