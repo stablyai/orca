@@ -1,3 +1,5 @@
+import { translate } from '@/i18n/i18n'
+
 export type ActiveAgentNotesSendStatus =
   | 'sent'
   | 'empty'
@@ -59,8 +61,14 @@ export function activeAgentNotesSendFailureMessage(
       // Why: this is the one refusal a user can hit with no visible cause — a running agent
       // must be present before the notes can be sent (#24286).
       message = options.explicitTarget
-        ? 'No running agent was found in the selected terminal. Start or resume its agent, then send again.'
-        : 'No running agent was found in the active terminal. Focus the agent running in this worktree, then send the notes again.'
+        ? translate(
+            'auto.lib.activeAgentNoteSendResult.noAgent.selectedTerminal',
+            'No running agent was found in the selected terminal. Start or resume its agent, then send again.'
+          )
+        : translate(
+            'auto.lib.activeAgentNoteSendResult.noAgent.activeTerminal',
+            'No running agent was found in the active terminal. Focus the agent running in this worktree, then send the notes again.'
+          )
       break
     case 'permission':
       message = options.explicitTarget
