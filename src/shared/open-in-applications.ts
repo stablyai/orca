@@ -1,3 +1,4 @@
+import { normalizeOpenInAppIcon } from './open-in-app-icons'
 import type { OpenInApplication } from './ui-chrome-types'
 
 export const OPEN_IN_APPLICATIONS_MAX = 8
@@ -55,7 +56,10 @@ export function normalizeOpenInApplications(
       continue
     }
     seenIds.add(id)
-    normalized.push({ id, label, command })
+    // Why: an icon written by a newer client (or hand-edited) must not persist in a
+    // shape this build cannot render — drop it and fall back to the command's preset.
+    const icon = normalizeOpenInAppIcon((row as { icon?: unknown }).icon)
+    normalized.push(icon ? { id, label, command, icon } : { id, label, command })
   }
 
   return normalized

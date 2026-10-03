@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
+import { Copy, Eye, FolderOpen } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -11,13 +11,13 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
   getWorktreeOpenInEntries,
+  OpenInMenuEntryIcon,
   openOpenInAppsSettings,
   openWorktreePath
 } from '@/components/sidebar/WorktreeOpenInMenu'
@@ -127,13 +127,7 @@ export function SourceControlEntryContextMenu({
                   onSelect={() => handleOpenInExternal(entry.target, entry.command)}
                   disabled={!absolutePath || availability.disabled}
                 >
-                  {entry.target === 'file-manager' ? (
-                    <FolderOpen className="size-3.5" />
-                  ) : entry.command ? (
-                    <OpenInApplicationIcon application={{ command: entry.command }} size={14} />
-                  ) : (
-                    <ExternalLink className="size-3.5" />
-                  )}
+                  <OpenInMenuEntryIcon entry={entry} />
                   <span className="min-w-0 truncate">{entry.label}</span>
                   {availability.metadata ? (
                     <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
