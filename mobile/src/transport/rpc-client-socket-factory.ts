@@ -19,6 +19,7 @@ type SocketFactoryOptions = {
   onRpcResponse: (response: RpcResponse) => void
   onBinary: (bytes: Uint8Array) => void
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
+  onControlResponseInbound: (session: RpcClientSocketSession) => void
   onClosed: (session: RpcClientSocketSession, closeCode?: number) => void
   onForcedClose: (session: RpcClientSocketSession) => void
 }
@@ -70,6 +71,7 @@ export class RpcClientSocketFactory {
       onBinary: this.options.onBinary,
       onAnyInbound: (receivedAt) => (this.lastInboundAt = receivedAt),
       onAuthenticatedInbound: this.options.onAuthenticatedInbound,
+      onControlResponseInbound: this.options.onControlResponseInbound,
       onClosed: this.options.onClosed,
       onForcedClose: this.options.onForcedClose
     })
