@@ -61,6 +61,9 @@ export function attachRuntimeWorktreeAgentRows(args: {
       toolInput: source.toolInput,
       interrupted: source.interrupted,
       ...(source.mainAgent ? { mainAgent: source.mainAgent } : {}),
+      // Null means the ps sweep looked and found no wait; absent means not evaluated (no
+      // terminal handle resolved) — the same contract as `terminal show`'s agentWait.
+      ...(source.agentWait !== undefined ? { agentWait: source.agentWait } : {}),
       stateStartedAt: source.stateStartedAt,
       updatedAt: source.updatedAt,
       ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
