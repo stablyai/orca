@@ -19,6 +19,9 @@ import {
   superviseForegroundServe
 } from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
+import { preflightServeRuntime } from './serve-runtime-preflight'
+import { reportCliError } from '../cli-error'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 const USER_NAMESPACE_PROBE_TIMEOUT_MS = 2_000
@@ -77,17 +80,35 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
   child.unref()
 }
 
-export function serveOrcaApp(
-  args: {
-    json?: boolean
-    port?: string | null
-    pairingAddress?: string | null
-    noPairing?: boolean
-    mobilePairing?: boolean
-    recipeJson?: boolean
-    projectRoot?: string | null
-  } = {}
-): Promise<number> {
+type ServeOrcaArgs = {
+  json?: boolean
+  port?: string | null
+  pairingAddress?: string | null
+  noPairing?: boolean
+  mobilePairing?: boolean
+  recipeJson?: boolean
+  projectRoot?: string | null
+}
+
+export function serveOrcaApp(args: ServeOrcaArgs = {}): Promise<number> {
+  if (args.recipeJson && !args.projectRoot) {
+    throw new RuntimeClientError('invalid_argument', 'Recipe JSON output requires --project-root.')
+  }
+  const preflight = preflightServeRuntime(getDefaultUserDataPath())
+  if (!preflight) {
+    return startOrcaServe(args)
+  }
+  return preflight.then((error) => {
+    if (error) {
+      // Recipe stdout must remain a recipe-only channel, including with --json.
+      reportCliError(error, args.json === true && args.recipeJson !== true)
+      return SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
+    }
+    return startOrcaServe(args)
+  })
+}
+
+function startOrcaServe(args: ServeOrcaArgs): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
   const childArgs = [...getExecutableAppArgs(executable)]
   childArgs.push('--serve')
@@ -106,13 +127,7 @@ export function serveOrcaApp(
   if (args.mobilePairing) {
     childArgs.push('--serve-mobile-pairing')
   }
-  if (args.recipeJson) {
-    if (!args.projectRoot) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Recipe JSON output requires --project-root.'
-      )
-    }
+  if (args.recipeJson && args.projectRoot) {
     childArgs.push('--serve-recipe-json', '--serve-project-root', args.projectRoot)
   }
 
