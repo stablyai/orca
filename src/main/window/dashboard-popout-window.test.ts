@@ -360,6 +360,22 @@ describe('createOrFocusDashboardPopout', () => {
     expect(store.uiChangeUnsubscribe).toHaveBeenCalledTimes(1)
   })
 
+  it('does not throw when webContents is destroyed or setZoomLevel throws on UI change', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const store = makeStore({ uiZoomLevel: 0 })
+    const win = createOrFocusDashboardPopout(store as never) as unknown as FakeWindow
+
+    win.webContents.setZoomLevel.mockImplementation(() => {
+      throw new Error('Object has been destroyed')
+    })
+    expect(() => store.emitUIChanged({ uiZoomLevel: 2 })).not.toThrow()
+
+    win.destroyed = true
+    win.webContents.setZoomLevel.mockClear()
+    expect(() => store.emitUIChanged({ uiZoomLevel: 3 })).not.toThrow()
+    expect(win.webContents.setZoomLevel).not.toHaveBeenCalled()
+  })
+
   it('zoomDashboardPopoutIfFocused steps the popout zoom only while focused', () => {
     expect(zoomDashboardPopoutIfFocused('in')).toBe(false)
 
