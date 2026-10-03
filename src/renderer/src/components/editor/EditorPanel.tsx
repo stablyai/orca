@@ -1,3 +1,4 @@
+import { openActiveMarkdownPreviewWindow } from './open-markdown-preview-window'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
@@ -368,6 +369,9 @@ function EditorPanelInner({
         }
         onToggleMarkdownFrontmatter={() =>
           setMarkdownFrontmatterVisible(markdownDocumentStateFileId, !isMarkdownFrontmatterVisible)
+        }
+        onOpenPreviewWindow={() =>
+          void openActiveMarkdownPreviewWindow({ fileId: activeFile.id, root: panelRef.current })
         }
         onExportMarkdownToPdf={() =>
           void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })

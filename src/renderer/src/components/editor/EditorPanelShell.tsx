@@ -43,6 +43,7 @@ type EditorPanelShellProps = {
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  onOpenPreviewWindow?: () => void
   createMarkdownArtifactRequest?: () => Promise<ArtifactWriteRequest>
   onContentChange: (content: string) => void
   onContentChangeForFile: (file: OpenFile, content: string) => void
@@ -84,6 +85,7 @@ export function EditorPanelShell({
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
+  onOpenPreviewWindow,
   createMarkdownArtifactRequest,
   onContentChange,
   onContentChangeForFile,
@@ -131,6 +133,7 @@ export function EditorPanelShell({
           onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
           onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
+          onOpenPreviewWindow={onOpenPreviewWindow}
           createMarkdownArtifactRequest={createMarkdownArtifactRequest}
         />
       )}

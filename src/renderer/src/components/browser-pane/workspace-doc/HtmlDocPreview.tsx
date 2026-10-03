@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import type {
@@ -375,6 +376,17 @@ export function HtmlDocPreview({
         onHardReload={handleHardReload}
         onCopyPath={() => void window.api.ui.writeClipboardText(identity.absolutePath)}
         onCopyRelativePath={() => void window.api.ui.writeClipboardText(relativePath)}
+        onOpenWindow={
+          grantId
+            ? () => {
+                void window.api.docPreview.openHtmlWindow(grantId).catch((error: unknown) => {
+                  toast.error(
+                    error instanceof Error ? error.message : 'Unable to open preview window'
+                  )
+                })
+              }
+            : undefined
+        }
         onOpenSource={() => openDocPreviewSource(previewDocument)}
         onOpenExternally={() => openDocPreviewExternally(previewDocument)}
         elementTools={elementTools}

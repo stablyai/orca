@@ -30,6 +30,7 @@ import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications'
 import { registerNotebookHandlers } from '../notebook'
 import { registerOnboardingHandlers } from '../onboarding'
+import { registerDocumentPreviewWindowHandlers } from '../document-preview-window'
 import { registerDashboardPopoutHandlers } from '../dashboard-popout'
 import { registerTerminalPreviewHandlers } from '../terminal-preview'
 import { registerDeveloperPermissionHandlers } from '../developer-permissions'
@@ -175,6 +176,7 @@ export function registerCoreHandlers(
   registerNotebookHandlers(store)
   registerOnboardingHandlers(store)
   registerDashboardPopoutHandlers(store, keybindings)
+  registerDocumentPreviewWindowHandlers()
   registerTerminalPreviewHandlers(runtime)
   registerDeveloperPermissionHandlers()
   // Why: diagnostics handlers are wired alongside telemetry but the two

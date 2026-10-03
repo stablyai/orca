@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   BrowserChromeToolbar,
   type BrowserChromeElementTools
@@ -8,6 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { DocPreviewAddressEdit } from './doc-preview-address-edit'
 import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity'
 import type { DocPreviewHistory } from './doc-preview-webview-history'
+import type { BrowserChromeOverflowMenuProps } from '../assemble-chrome/browser-chrome-folded-tools'
 import { DocPreviewOverflowMenu } from './doc-preview-overflow-menu'
 
 /**
@@ -25,6 +26,7 @@ export function DocPreviewToolbar({
   onCopyPath,
   onCopyRelativePath,
   onOpenSource,
+  onOpenWindow,
   onOpenExternally,
   elementTools,
   markupActive,
@@ -43,6 +45,7 @@ export function DocPreviewToolbar({
   onCopyPath: () => void
   onCopyRelativePath: () => void
   onOpenSource: () => void
+  onOpenWindow?: () => void
   onOpenExternally: () => void
   elementTools: BrowserChromeElementTools
   markupActive: boolean
@@ -53,6 +56,21 @@ export function DocPreviewToolbar({
   const reloadLabel = translate(
     'auto.components.editor.HtmlDocPreview.reloadPreviewControl',
     'Reload preview'
+  )
+
+  const renderOverflowMenu = useCallback(
+    (overflow: BrowserChromeOverflowMenuProps) => (
+      <DocPreviewOverflowMenu
+        onReload={onReload}
+        onHardReload={onHardReload}
+        onOpenSource={onOpenSource}
+        onOpenWindow={onOpenWindow}
+        onCopyPath={onCopyPath}
+        onCopyRelativePath={onCopyRelativePath}
+        overflow={overflow}
+      />
+    ),
+    [onReload, onHardReload, onOpenSource, onOpenWindow, onCopyPath, onCopyRelativePath]
   )
 
   return (
@@ -112,16 +130,7 @@ export function DocPreviewToolbar({
           'Open with default app'
         )
       }}
-      overflowMenu={(overflow) => (
-        <DocPreviewOverflowMenu
-          onReload={onReload}
-          onHardReload={onHardReload}
-          onOpenSource={onOpenSource}
-          onCopyPath={onCopyPath}
-          onCopyRelativePath={onCopyRelativePath}
-          overflow={overflow}
-        />
-      )}
+      overflowMenu={renderOverflowMenu}
     />
   )
 }

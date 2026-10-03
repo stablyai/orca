@@ -9,6 +9,7 @@ import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-st
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import type { Store } from '../persistence'
+import { closeDocumentPreviewWindows } from './document-preview-window'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import {
   installMainWindowCloseLifecycle,
@@ -204,6 +205,7 @@ export function createMainWindow(
 
   mainWindow.on('closed', () => {
     closeDashboardPopout()
+    closeDocumentPreviewWindows()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
     focus.dispose()

@@ -1,3 +1,4 @@
+import type { MarkdownPreviewWindowRequest } from '../../shared/document-preview-window'
 import type { DocPreviewFailure } from '../../shared/doc-preview-scheme'
 
 export type DocPreviewGrantOwner =
@@ -22,6 +23,8 @@ export type DocPreviewGrantRequest = {
 
 export type DocPreviewApi = {
   docPreview: {
+    openMarkdownWindow: (request: MarkdownPreviewWindowRequest) => Promise<void>
+    openHtmlWindow: (grantId: string) => Promise<void>
     mintGrant: (request: DocPreviewGrantRequest) => Promise<{ grantId: string; url: string }>
     revokeGrant: (grantId: string) => Promise<boolean>
     authorizeDirectory: (grantId: string, relativePath: string) => Promise<boolean>
