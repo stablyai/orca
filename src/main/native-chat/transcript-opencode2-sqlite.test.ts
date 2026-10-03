@@ -129,9 +129,16 @@ describe('OpenCode 2 native transcript', () => {
       expect(page?.items[0]).toMatchObject({
         rowid: 2,
         message: {
-          role: 'user',
+          role: 'system',
           timestamp: 1,
-          blocks: [{ type: 'text', text: AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'] }]
+          transcriptOffset: 2,
+          blocks: [
+            {
+              type: 'text',
+              text: AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'],
+              presentation: 'history-item-too-large'
+            }
+          ]
         }
       })
       expect(readOpenCodeTranscriptPage(args)?.items[0]?.fingerprint).toBe(

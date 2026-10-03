@@ -4,9 +4,10 @@ import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-pa
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { asRecord, parseJsonObject } from '../ai-vault/session-scanner-values'
 import {
-  opencodeMessageBlocks,
+  opencodeMessages,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
 } from './transcript-opencode-part-blocks'
+import type { NativeChatBlock } from '../../shared/native-chat-types'
 import type {
   OpenCodeTranscriptPage,
   OpenCodeTranscriptSignal,
@@ -55,7 +56,7 @@ export function readOpenCode2TranscriptSignal(
   }
 }
 
-function messageItem(value: unknown): OpenCodeTranscriptItem | null {
+function messageItems(value: unknown): OpenCodeTranscriptItem[] {
   const row = asRecord(value)
   if (
     typeof row?.id !== 'string' ||
@@ -65,30 +66,30 @@ function messageItem(value: unknown): OpenCodeTranscriptItem | null {
   ) {
     throw new Error('OpenCode transcript message is invalid')
   }
+  const messageCursor = row.cursor
+  const updatedAt = row.time_updated
   if (
     row.data === null ||
     (typeof row.data === 'string' &&
       Buffer.byteLength(row.data) > OPENCODE_TRANSCRIPT_MAX_ROW_BYTES)
   ) {
-    return {
-      rowid: row.cursor,
-      fingerprint: `${row.time_updated}:omitted`,
-      message: {
+    return opencodeMessages(
+      {
         id: `opencode:${row.id}`,
-        role: row.type === 'user' ? 'user' : row.type === 'assistant' ? 'assistant' : 'system',
-        blocks: opencodeMessageBlocks([
-          { message_id: row.id, time_updated: row.time_updated, data: null }
-        ]),
-        timestamp: row.time_created,
-        source: 'transcript'
-      }
-    }
+        role: 'system',
+        timestamp: row.time_created
+      },
+      [{ message_id: row.id, time_updated: row.time_updated, data: null }]
+    ).map((message) => ({
+      rowid: messageCursor,
+      fingerprint: `${updatedAt}:omitted`,
+      message: { ...message, transcriptOffset: messageCursor }
+    }))
   }
   if (typeof row.data !== 'string') {
     throw new Error('OpenCode transcript message is invalid')
   }
   const messageId = row.id
-  const updatedAt = row.time_updated
   const record = parseJsonObject(row.data)
   if (!record) {
     throw new Error('OpenCode transcript message contains invalid JSON')
@@ -140,7 +141,7 @@ function messageItem(value: unknown): OpenCodeTranscriptItem | null {
       }
     ]
   })
-  const blocks = opencodeMessageBlocks(parts)
+  const blocks: NativeChatBlock[] = []
   const error = asRecord(record.error)
   if (typeof error?.message === 'string') {
     blocks.push({ type: 'text', text: error.message })
@@ -149,25 +150,28 @@ function messageItem(value: unknown): OpenCodeTranscriptItem | null {
     blocks.push({ type: 'text', text: 'Conversation interrupted' })
   }
   if (
-    blocks.length === 0 ||
-    (row.type !== 'user' &&
-      row.type !== 'assistant' &&
-      row.type !== 'system' &&
-      row.type !== 'idle')
+    row.type !== 'user' &&
+    row.type !== 'assistant' &&
+    row.type !== 'system' &&
+    row.type !== 'idle'
   ) {
-    return null
+    return []
   }
-  return {
-    rowid: row.cursor,
-    fingerprint: `${updatedAt}:${createHash('sha256').update(row.data).digest('hex')}`,
-    message: {
+  const messages = opencodeMessages(
+    {
       id: `opencode:${row.id}`,
       role: row.type === 'idle' ? 'system' : row.type,
-      blocks,
-      timestamp: row.time_created,
-      source: 'transcript'
-    }
-  }
+      timestamp: row.time_created
+    },
+    parts,
+    blocks
+  )
+  const fingerprint = `${updatedAt}:${createHash('sha256').update(row.data).digest('hex')}`
+  return messages.toReversed().map((message) => ({
+    rowid: messageCursor,
+    fingerprint,
+    message: { ...message, transcriptOffset: messageCursor }
+  }))
 }
 
 export function readOpenCode2TranscriptPage(
@@ -209,9 +213,9 @@ export function readOpenCode2TranscriptPage(
       if (++scannedRows > MAX_SCAN_ROWS || bytes > MAX_PAGE_BYTES) {
         throw new Error('OpenCode transcript page exceeds its read limit')
       }
-      const item = messageItem(value)
+      const mapped = messageItems(value)
       cursor = row.cursor
-      if (item) {
+      for (const item of mapped) {
         pageBytes += Buffer.byteLength(JSON.stringify(item))
         if (pageBytes > MAX_PAGE_BYTES) {
           throw new Error('OpenCode transcript page exceeds its read limit')

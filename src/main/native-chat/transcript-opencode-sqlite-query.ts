@@ -11,7 +11,7 @@ import type SyncDatabase from '../sqlite/sync-database'
 type BindValue = SyncDatabase.BindValue
 type SqliteStatement = SyncDatabase.Statement
 import {
-  opencodeMessageBlocks,
+  opencodeMessages,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
 } from './transcript-opencode-part-blocks'
 // Cursors are opaque provider order: SQLite rowid in v1, session sequence in v2.
@@ -166,8 +166,16 @@ export function readOpenCodeTranscriptPage(args: {
         break
       }
     }
-    const overshot = collected.length > limit
-    const trimmed = overshot ? collected.slice(0, limit) : collected
+    let retained = Math.min(limit, collected.length)
+    // A raw-row cursor cannot resume inside a reasoning/answer pair.
+    while (
+      retained < collected.length &&
+      collected[retained].rowid === collected[retained - 1].rowid
+    ) {
+      retained++
+    }
+    const overshot = retained < collected.length
+    const trimmed = overshot ? collected.slice(0, retained) : collected
     const items = trimmed.toReversed()
     return {
       items,
@@ -232,27 +240,25 @@ function mapMessageRows(
   const items: OpenCodeTranscriptItem[] = []
   for (const row of rows) {
     const partList = partsByMessage.get(row.id) ?? []
-    const blocks = opencodeMessageBlocks(
+    const record = row.data === null ? null : parseJsonObject(row.data)
+    const role = extractString(record?.role)
+    const messages = opencodeMessages(
+      {
+        id: row.id,
+        role: role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'system',
+        timestamp: Number.isFinite(row.time_created) ? row.time_created : null
+      },
       row.data === null
         ? [{ message_id: row.id, time_updated: row.time_updated, data: null }]
         : partList
     )
-    if (blocks.length === 0) {
-      continue
+    for (const message of messages.toReversed()) {
+      items.push({
+        rowid: row.message_rowid,
+        fingerprint: `${row.time_updated}:${partList.length}:${maxPartTimeUpdated(partList)}`,
+        message: { ...message, transcriptOffset: row.message_rowid }
+      })
     }
-    const record = row.data === null ? null : parseJsonObject(row.data)
-    const role = extractString(record?.role)
-    items.push({
-      rowid: row.message_rowid,
-      fingerprint: `${row.time_updated}:${partList.length}:${maxPartTimeUpdated(partList)}`,
-      message: {
-        id: row.id,
-        role: role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'system',
-        blocks,
-        timestamp: Number.isFinite(row.time_created) ? row.time_created : null,
-        source: 'transcript'
-      }
-    })
   }
   return items
 }

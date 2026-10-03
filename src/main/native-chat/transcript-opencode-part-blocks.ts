@@ -1,6 +1,11 @@
 import { fileURLToPath } from 'node:url'
-import type { NativeChatBlock, NativeChatImageRefBlock } from '../../shared/native-chat-types'
-import { AGENT_SESSION_HOST_STATUS_COPY } from '../../shared/agent-session-host-status-rows'
+import type {
+  NativeChatBlock,
+  NativeChatImageRefBlock,
+  NativeChatMessage,
+  NativeChatTextBlock
+} from '../../shared/native-chat-types'
+import { agentSessionHostStatusBody } from '../../shared/agent-session-host-status-rows'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 // query module so each stays under the repo's file-size cap. Electron-free:
 // runs on the OpenCode SQLite worker thread (#8864).
@@ -13,11 +18,50 @@ export type OpenCodePartRow = {
 
 export const OPENCODE_TRANSCRIPT_MAX_ROW_BYTES = 2 * 1024 * 1024
 
-export function opencodeMessageBlocks(partRows: OpenCodePartRow[]): NativeChatBlock[] {
+export function opencodeMessages(
+  message: Pick<NativeChatMessage, 'id' | 'role' | 'timestamp'>,
+  partRows: OpenCodePartRow[],
+  additionalBlocks: NativeChatBlock[] = []
+): NativeChatMessage[] {
+  const { blocks, reasoning, notices } = opencodeMessageContent(partRows)
+  blocks.push(...additionalBlocks)
+  const messages: NativeChatMessage[] = []
+  if (reasoning.length > 0) {
+    messages.push({
+      ...message,
+      id: blocks.length > 0 || notices.length > 0 ? `${message.id}:reasoning` : message.id,
+      role: 'reasoning',
+      blocks: reasoning,
+      source: 'transcript'
+    })
+  }
+  if (blocks.length > 0) {
+    messages.push({ ...message, blocks, source: 'transcript' })
+  }
+  if (notices.length > 0) {
+    messages.push({
+      ...message,
+      id: messages.length > 0 ? `${message.id}:omission` : message.id,
+      role: 'system',
+      blocks: notices,
+      source: 'transcript'
+    })
+  }
+  return messages
+}
+
+function opencodeMessageContent(partRows: OpenCodePartRow[]): {
+  blocks: NativeChatBlock[]
+  reasoning: NativeChatBlock[]
+  notices: NativeChatTextBlock[]
+} {
   const blocks: NativeChatBlock[] = []
+  const reasoning: NativeChatBlock[] = []
+  const notices: NativeChatTextBlock[] = []
   for (const partRow of partRows) {
     if (partRow.data === null) {
-      blocks.push({ type: 'text', text: AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'] })
+      const { text, presentation } = agentSessionHostStatusBody('history-item-too-large')
+      notices.push({ type: 'text', text, presentation })
       continue
     }
     const part = parseJsonObject(partRow.data)
@@ -38,12 +82,24 @@ export function opencodeMessageBlocks(partRows: OpenCodePartRow[]): NativeChatBl
       case 'reasoning': {
         const text = extractString(part.text)
         if (text) {
-          blocks.push({ type: 'text', text })
+          reasoning.push({ type: 'text', text })
         }
         break
       }
       case 'tool': {
         blocks.push(...opencodeToolBlocks(part))
+        break
+      }
+      case 'patch': {
+        const files = Array.isArray(part.files)
+          ? part.files.filter((file): file is string => typeof file === 'string')
+          : []
+        blocks.push({
+          type: 'tool-call',
+          name: 'patch',
+          state: 'completed',
+          input: { hash: extractString(part.hash), files }
+        })
         break
       }
       case 'file': {
@@ -58,7 +114,7 @@ export function opencodeMessageBlocks(partRows: OpenCodePartRow[]): NativeChatBl
         break
     }
   }
-  return blocks
+  return { blocks, reasoning, notices }
 }
 
 function opencodeFileBlock(part: Record<string, unknown>): NativeChatImageRefBlock | null {
