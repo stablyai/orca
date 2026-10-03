@@ -331,6 +331,45 @@ describe('SourceControl preview row opens', () => {
     )
   })
 
+  it('opens the working-tree file from the row hover action without opening the diff', () => {
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({ path: 'src/file.ts' }),
+          gitEntry({ path: 'src/gone.ts', status: 'deleted' })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    const fileRow = container.querySelector<HTMLDivElement>(
+      '[data-source-control-path="src/file.ts"]'
+    )
+    const deletedRow = container.querySelector<HTMLDivElement>(
+      '[data-source-control-path="src/gone.ts"]'
+    )
+    const openFileButton = fileRow?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open file"]'
+    )
+    expect(openFileButton).not.toBeNull()
+    expect(
+      deletedRow?.querySelector<HTMLButtonElement>('button[aria-label="Open file"]')
+    ).toBeNull()
+
+    act(() => {
+      openFileButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.calls.openFile).toHaveBeenCalledWith({
+      filePath: '/repo/wt/src/file.ts',
+      relativePath: 'src/file.ts',
+      worktreeId: mocks.activeWorktree.id,
+      language: 'typescript',
+      mode: 'edit'
+    })
+    expect(mocks.calls.openDiff).not.toHaveBeenCalled()
+  })
+
   it('keeps explicit permanent uncommitted opens permanent', () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
