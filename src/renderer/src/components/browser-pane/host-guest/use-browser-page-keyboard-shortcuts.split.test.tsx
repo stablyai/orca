@@ -25,6 +25,7 @@ type PaneSpies = {
   webview: FakeWebview
   reload: Mock<(ignoreCache: boolean) => void>
   startGrabIntent: Mock<(intent: GrabIntent) => void>
+  setBrowserDefaultZoomLevel: Mock<(level: number) => void>
 }
 
 let historyNavigate = paneChannel<BrowserHistoryNavigateCommand>()
@@ -42,7 +43,8 @@ function createSpies(): PaneSpies {
       setZoomLevel: vi.fn()
     },
     reload: vi.fn(),
-    startGrabIntent: vi.fn()
+    startGrabIntent: vi.fn(),
+    setBrowserDefaultZoomLevel: vi.fn()
   }
 }
 
@@ -70,7 +72,7 @@ function PaneHarness({
     markupIsActive,
     webviewRef,
     paneZoomLevelRef,
-    setBrowserDefaultZoomLevel: vi.fn(),
+    setBrowserDefaultZoomLevel: spies.setBrowserDefaultZoomLevel,
     showBrowserZoomFeedback: vi.fn(),
     reloadWebviewOrRecoverGuest: spies.reload,
     startGrabIntent: spies.startGrabIntent,
@@ -291,5 +293,16 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
     expect(floating.webview.goBack).not.toHaveBeenCalled()
     expect(floating.reload).not.toHaveBeenCalled()
     expect(floating.startGrabIntent).not.toHaveBeenCalled()
+  })
+
+  it('zooms only the targeted pane and does not overwrite default zoom for other tabs', () => {
+    const { a, b } = renderSplit('focused', 'inactive')
+
+    act(() => zoomRequests.emit({ browserPageId: 'page-b', direction: 'in' }))
+
+    expect(b.webview.setZoomLevel).toHaveBeenCalledTimes(1)
+    expect(b.setBrowserDefaultZoomLevel).not.toHaveBeenCalled()
+    expect(a.webview.setZoomLevel).not.toHaveBeenCalled()
+    expect(a.setBrowserDefaultZoomLevel).not.toHaveBeenCalled()
   })
 })
