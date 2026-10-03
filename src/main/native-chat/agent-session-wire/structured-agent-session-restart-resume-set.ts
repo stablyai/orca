@@ -79,6 +79,8 @@ export type StructuredAgentSessionResumeSetInput = {
   latestPrompt: (sessionId: string) => string
   /** Whether the chat moved on since the offer was taken; false when its journal is not open here. */
   movedOn: (marker: AgentSessionResumeMarker) => boolean
+  /** Whether the chat was saved by a newer Orca: its whole database, or its journal's open. */
+  savedByNewerOrca: (sessionId: string) => boolean
   /**
    * Whether the lease must be free.
    *
@@ -117,6 +119,11 @@ export function structuredAgentSessionResumableSet(
     }
     if (input.movedOn(marker)) {
       superseded.push(marker)
+      continue
+    }
+    // Nothing here can continue a chat a newer Orca saved, so it is not offered. Its offer is kept,
+    // not spent: the offers file is shared by every Orca on the host, and the newer one can act on it.
+    if (input.savedByNewerOrca(marker.sessionId)) {
       continue
     }
     const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)

@@ -666,7 +666,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
   })
 
-  it('invalidates cached status on unreadability and keeps record metadata live', async () => {
+  it('keeps record metadata live', async () => {
     const journal = await openJournal()
     await journal.appendItem(
       USER_IDENTITY,
@@ -681,12 +681,6 @@ describe('StructuredAgentSessionStatusFeed', () => {
       type: 'status',
       session: { status: 'idle', model: 'second-model' }
     })
-    const readOnly = vi.spyOn(journal, 'isReadOnly', 'get').mockReturnValue(true)
-    feed.publish(SESSION)
-    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: null } })
-    readOnly.mockRestore()
-    feed.publish(SESSION)
-    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
   })
 })
 

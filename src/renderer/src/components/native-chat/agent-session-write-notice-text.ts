@@ -58,6 +58,10 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'components.native-chat.writeNotice.updateOrcaToKeepUsing',
       COPY.updateOrcaToKeepUsing
     ),
+  chatSavedByNewerOrca: () =>
+    translate('components.native-chat.writeNotice.chatSavedByNewerOrca', COPY.chatSavedByNewerOrca),
+  updateOrcaToOpenChat: () =>
+    translate('components.native-chat.writeNotice.updateOrcaToOpenChat', COPY.updateOrcaToOpenChat),
   unsupported: () => translate('components.native-chat.writeNotice.unsupported', COPY.unsupported),
   notAvailable: () =>
     translate('components.native-chat.writeNotice.notAvailable', COPY.notAvailable),

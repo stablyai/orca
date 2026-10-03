@@ -17431,6 +17431,8 @@
         "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
         "savedByNewerOrca": "チャットは新しいバージョンの Orca で保存されました。",
         "updateOrcaToKeepUsing": "引き続き使用するには、Orca を更新してください。",
+        "chatSavedByNewerOrca": "このチャットは新しいバージョンの Orca で保存されました。",
+        "updateOrcaToOpenChat": "開くには Orca を更新してください。",
         "unsupported": "このチャットを実行しているコンピューターに新しいバージョンの Orca が必要です。そのコンピューターで Orca を更新してから、もう一度お試しください。",
         "notAvailable": "このチャットでは利用できません。",
         "unreachable": "Orca は Agent に接続できませんでした。",
@@ -17655,6 +17657,7 @@
         "sending": "送信中…"
       },
       "approval": {
+        "needsNewerOrca": "このリクエストには新しいバージョンの Orca が必要です。",
         "title": "{{value0}} を許可しますか?",
         "allow": "許可する",
         "deny": "拒否",

@@ -544,6 +544,36 @@ describe('an unexpected provider exit', () => {
     replaceFailedSink()
   })
 
+  // TypeScript accepts the body; the persisted reader rejects a call id that is only spaces.
+  it('stops a provider whose output would not read back, and the next send starts a child', async () => {
+    await attach()
+
+    sink?.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
+      {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', name: 'Bash', input: null, callId: ' ' }]
+      },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await vi.waitFor(() => {
+      expect(closeSession).toHaveBeenCalledWith(SESSION)
+      expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'released' })
+    })
+    expect(hostErrors).toContainEqual(expect.objectContaining({ code: 'journal_row_rejected' }))
+    replaceFailedSink()
+
+    // Nothing restarts it on its own; the next send does, and the chat still loads.
+    expect(acquire).toHaveBeenCalledOnce()
+    await startAgent()
+    expect(acquire).toHaveBeenCalledTimes(2)
+    emitTurnLifecycle('running', 2)
+    await host.flushAllStreamedEvents()
+    await reboot()
+    expect((await host.history({ sessionId: SESSION, direction: 'tail' })).ok).toBe(true)
+  })
+
   it('settles a journal sink failure whose stop saw the provider root exit', async () => {
     await attach()
     // The lease follows the root, so its seen exit settles like a proven one.

@@ -16,7 +16,6 @@ import { journalDatabasePath } from './journal-host-database'
 import { JournalUnreleasedSchemaError } from './journal-open-failure'
 import {
   deleteJournalEpochRows,
-  deleteJournalRowSuffix,
   deleteUnpublishedJournalRows,
   insertJournalRow,
   iterateJournalEpochRows,
@@ -130,7 +129,7 @@ describe('the host journal database open', () => {
 })
 
 describe('journal row statements', () => {
-  it('serves replay, resume, suffix truncation and an epoch discard', () => {
+  it('serves replay, resume and an epoch discard', () => {
     const db = openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db
     try {
       db.exec('BEGIN IMMEDIATE')
@@ -148,9 +147,6 @@ describe('journal row statements', () => {
       expect(readJournalRowsAfter(db, 'session-1', 'epoch-1', 3).map((row) => row.seq)).toEqual([
         4, 5
       ])
-
-      expect(deleteJournalRowSuffix(db, 'session-1', 'epoch-1', 4)).toBe(2)
-      expect(rowsOf(db, 'session-1', 'epoch-1')).toEqual([1, 2, 3])
 
       // Another chat in the same file is untouched by this chat's discard.
       deleteJournalEpochRows(db, 'session-1', 'epoch-1')

@@ -4,11 +4,9 @@
 import { rmdirSync, rmSync } from 'node:fs'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import Database from '../../sqlite/sync-database'
-import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { startJournalRowFold, type JournalLoad } from './journal-open'
 import { legacyJournalDatabaseFile } from './journal-paths'
 import type { PerSessionJournalHead } from './journal-per-session-reimport'
-import { pendingJournalRepairSequence } from './journal-repair-marker'
 
 /** The newest per-chat file shape any build wrote. */
 const LEGACY_JOURNAL_SCHEMA_VERSION = 2
@@ -21,8 +19,6 @@ const SELECT_LEGACY_TIP =
 const SELECT_LEGACY_ROWS = `SELECT seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC LIMIT ?`
 const HAS_LEGACY_TABLE = "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?"
-const SELECT_LEGACY_REPAIR =
-  'SELECT epoch, content_from, repaired_at FROM journal_repairs WHERE session_id = ?'
 
 type ImportedRow = { seq: number; ts: number; rowJson: string }
 export type ImportBatch = { rows: ImportedRow[]; last: boolean }
@@ -81,27 +77,13 @@ export function* legacyRowBatches(
   }
 }
 
-/** The per-chat repair marker, as stored; v1 files predate the table. */
-export function readLegacyRepair(source: Database.Database, sessionId: string): SqliteRow | null {
-  if (!source.prepare(HAS_LEGACY_TABLE).get('journal_repairs')) {
-    return null
-  }
-  return source.prepare(SELECT_LEGACY_REPAIR).get(sessionId) ?? null
-}
-
 /** The chat as its file holds it, folded the way a replay folds the host's database. */
 export async function foldLegacyJournal(
   source: Database.Database,
   sessionId: string,
   legacy: PerSessionJournalHead
 ): Promise<JournalLoad> {
-  const fold = startJournalRowFold({
-    sessionId,
-    epoch: legacy.epoch,
-    repairedFrom: source.prepare(HAS_LEGACY_TABLE).get('journal_repairs')
-      ? pendingJournalRepairSequence(source, sessionId, legacy.epoch)
-      : null
-  })
+  const fold = startJournalRowFold({ sessionId, epoch: legacy.epoch })
   let first = true
   for (const batch of legacyRowBatches(source, sessionId, legacy.epoch, IMPORT_BATCH_ROWS)) {
     // A batch per turn: a large chat's file read in one task holds up everything else at startup.

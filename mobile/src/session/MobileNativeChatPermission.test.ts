@@ -145,4 +145,56 @@ describe('MobileNativeChatPermission', () => {
     expect(content.findAllByProps({ children: 'raw json that must not be shown' })).toHaveLength(0)
     expect(actions.findAllByProps({ children: 'Approve plan' })).toHaveLength(1)
   })
+
+  describe("a subject of a kind this build cannot draw: a newer Orca's", () => {
+    const NEEDS_NEWER_ORCA = 'This request needs a newer version of Orca.'
+
+    async function renderNewer(detail: string | undefined) {
+      const onRespond = vi.fn(async () => true)
+      const onCancel = vi.fn(async () => true)
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatPermission, {
+            permission: {
+              title: 'Review proposed change',
+              ...(detail ? { detail } : {}),
+              // A subject kind a newer build wrote; this build draws only plans.
+              subject: JSON.parse('{"kind":"diff","path":"a.ts"}'),
+              prompt: { itemId: 'approval-1', expectedRevision: 2 },
+              options: [
+                { label: 'Approve', send: 'allow' },
+                { label: 'Deny', send: 'deny' }
+              ]
+            },
+            onRespond,
+            onCancel
+          })
+        )
+      })
+      const actions = renderer!.root.findByProps({ testID: 'native-chat-approval-actions' })
+      return { onRespond, onCancel, options: actions.findAllByType('Pressable') }
+    }
+
+    it('with no detail: says so, answers nothing, and only its cancel reaches the host', async () => {
+      const { onRespond, onCancel, options } = await renderNewer(undefined)
+      expect(
+        renderer!.root.findByProps({ testID: 'native-chat-approval-needs-newer-orca' }).props
+          .children
+      ).toBe(NEEDS_NEWER_ORCA)
+      expect(options).toHaveLength(2)
+      expect(options.every((option) => option.props.disabled === true)).toBe(true)
+      const cancel = renderer!.root.findByProps({ accessibilityLabel: 'Cancel' })
+      expect(cancel.props.disabled).toBe(false)
+      await act(async () => cancel.props.onPress())
+      expect(onCancel).toHaveBeenCalledWith({ itemId: 'approval-1', expectedRevision: 2 })
+      expect(onRespond).not.toHaveBeenCalled()
+    })
+
+    it('with a detail: shows it, and still approves nothing', async () => {
+      const { options } = await renderNewer('# Release')
+      const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
+      expect(content.findAllByProps({ children: '# Release' })).toHaveLength(1)
+      expect(options.every((option) => option.props.disabled === true)).toBe(true)
+    })
+  })
 })

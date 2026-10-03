@@ -15025,6 +15025,8 @@
         "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",
         "savedByNewerOrca": "Los chats se guardaron con una versión más reciente de Orca.",
         "updateOrcaToKeepUsing": "Actualice Orca para seguir usándolos.",
+        "chatSavedByNewerOrca": "Este chat se guardó con una versión más reciente de Orca.",
+        "updateOrcaToOpenChat": "Actualice Orca para abrirlo.",
         "unsupported": "Esto requiere una versión más reciente de Orca en el equipo que ejecuta este chat. Actualice Orca allí y vuelva a intentarlo.",
         "notAvailable": "Esto no está disponible en este chat.",
         "unreachable": "Orca no pudo comunicarse con el agente.",
@@ -15170,6 +15172,7 @@
         "sending": "Enviando…"
       },
       "approval": {
+        "needsNewerOrca": "Esta solicitud necesita una versión más reciente de Orca.",
         "title": "¿Permitir {{value0}}?",
         "allow": "Permitir",
         "deny": "Denegar"

@@ -525,7 +525,7 @@ describe('a create that reserves its tab', () => {
 })
 
 describe('a chat tab over records a newer Orca wrote', () => {
-  it('opens a closed chat from history for reading', async () => {
+  it("opens a closed chat's tab from history, whose chat does not load", async () => {
     await createChat(HOST_TEST_SESSION)
     await host.close(HOST_TEST_SESSION, 'user-close')
     await host.setSessionTabVisibility(HOST_TEST_SESSION, false)
@@ -537,7 +537,7 @@ describe('a chat tab over records a newer Orca wrote', () => {
 
     expect(await call('agentSession.reveal', { sessionId: HOST_TEST_SESSION })).toMatchObject({
       ok: true,
-      result: { ok: true, readable: true }
+      result: { ok: true, readable: false }
     })
 
     expect((await snapshot()).activeTabId).toBe(`agent-session:${HOST_TEST_SESSION}`)

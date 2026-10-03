@@ -9,10 +9,10 @@
 // The copy runs in bounded batches, each its own transaction, yielding the event loop between them.
 // The rows go in under the file's epoch, which the chat's pointer does not name yet, so no reader
 // sees them. Once they read back as the file does (every row's sequence, time and bytes), one
-// transaction publishes the chat's pointer with its repair and import markers, so the chat is
-// imported all at once or not at all. A try that stops midway leaves only unpublished rows, which
-// the next try deletes before it copies again. A copy that does not read back as the file is never
-// published: the file stays, and the chat is refused as unreadable.
+// transaction publishes the chat's pointer with its import marker, so the chat is imported all at
+// once or not at all. A try that stops midway leaves only unpublished rows, which the next try
+// deletes before it copies again. A copy that does not read back as the file, or a file whose
+// history is damaged, is never published: the file stays, and the chat is refused as unloadable.
 //
 // Only after that commit is the file deleted, its connection closed first. A read that fails
 // leaves the file where it is for the next open, and the open is refused rather than served empty:
@@ -24,8 +24,12 @@ import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import type { JournalHostDatabase } from './journal-host-database'
-import type { JournalLoad } from './journal-open'
-import { JournalImportMismatchError, journalOpenRefusalError } from './journal-open-failure'
+import { startJournalRowFold, type JournalLoad } from './journal-open'
+import {
+  failLoadOnUnloadableJournal,
+  JournalImportMismatchError,
+  journalOpenRefusalError
+} from './journal-open-failure'
 import { legacyJournalDatabaseFile } from './journal-paths'
 import {
   planPerSessionImport,
@@ -42,7 +46,6 @@ import {
   legacyRowBatches,
   openLegacySource,
   readLegacyHead,
-  readLegacyRepair,
   retireLegacyJournal,
   type ImportBatch
 } from './journal-per-session-source'
@@ -57,10 +60,6 @@ import {
 
 const INSERT_ROW =
   'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
-const UPSERT_REPAIR = `INSERT INTO journal_repairs (session_id, epoch, content_from, repaired_at)
-VALUES (?, ?, ?, ?)
-ON CONFLICT(session_id) DO UPDATE SET
-  epoch = excluded.epoch, content_from = excluded.content_from, repaired_at = excluded.repaired_at`
 
 type PerSessionJournalImportDeps = {
   openSource?: (path: string) => Database.Database
@@ -151,7 +150,8 @@ async function importOnce(input: ImportInput): Promise<PerSessionJournalImportOu
  * The chat a first copy would import, folded straight from its per-chat file and copying nothing:
  * for a restore, which must not import. Null when the open has to import now instead: the chat is
  * already in the host's database or was copied before (the reimport rules decide), its file holds
- * no chat, or its fold needs a repair written. The file is closed before this returns.
+ * no chat or no rows, or a newer build wrote it. A damaged file fails the load, copied nowhere. The
+ * file is closed before this returns.
  */
 export async function previewPerSessionJournal(
   input: Pick<ImportInput, 'database' | 'identity' | 'legacyDirectory' | 'openSource'>
@@ -173,16 +173,18 @@ export async function previewPerSessionJournal(
       return null
     }
     const loaded = await foldLegacyJournal(source, sessionId, legacy)
-    return loaded.corrupt || loaded.readOnly || loaded.truncateFrom !== undefined ? null : loaded
+    failLoadOnUnloadableJournal(sessionId, loaded)
+    // An empty one is copied now, so its open founds the chat's epoch in the host's database.
+    return loaded.state.lastSequence === 0 ? null : loaded
   } finally {
     source.close()
   }
 }
 
 /**
- * Batches under the file's epoch, which no reader follows until the chat's pointer names it. Once
- * the rows read back as the file does, one transaction publishes the pointer with the chat's repair
- * marker and the import marker.
+ * Batches under the file's epoch, which no reader follows until the chat's pointer names it. Each
+ * batch is folded as it is copied, so a damaged file is refused before anything is published. Once
+ * the rows read back as the file does, one transaction publishes the pointer and the import marker.
  */
 async function copyLegacyJournal(
   input: ImportInput,
@@ -191,13 +193,15 @@ async function copyLegacyJournal(
 ): Promise<void> {
   const { sessionId } = input.identity
   const { epoch } = legacy
-  const repair = readLegacyRepair(source, sessionId)
   const batchRows = input.batchRows ?? IMPORT_BATCH_ROWS
+  const fold = startJournalRowFold({ sessionId, epoch })
+  let folding = true
   let first = true
   for (const batch of legacyRowBatches(source, sessionId, epoch, batchRows)) {
     if (!first) {
       await yieldToEventLoop()
     }
+    folding &&= batch.rows.every(fold.add)
     // Unsynced: no reader follows these rows, and the publish's synced commit covers them.
     input.database.unsyncedTransaction((db) => {
       if (first) {
@@ -212,17 +216,15 @@ async function copyLegacyJournal(
     })
     first = false
   }
+  const copied = fold.finish()
+  if (copied.damage || copied.newer) {
+    // Never published, so the copy goes; the file it came from stays.
+    input.database.transaction((db) => deleteUnpublishedJournalRows(db, sessionId))
+  }
+  failLoadOnUnloadableJournal(sessionId, copied)
   await verifyCopiedJournal(input, legacyRowBatches(source, sessionId, epoch, batchRows), epoch)
   input.database.transaction((db) => {
     publishJournalSessionEpoch(db, input.identity, epoch)
-    if (repair) {
-      db.prepare(UPSERT_REPAIR).run(
-        sessionId,
-        repair.epoch,
-        repair.content_from,
-        repair.repaired_at
-      )
-    }
     writePerSessionImportMarker(db, sessionId, legacy)
   })
 }

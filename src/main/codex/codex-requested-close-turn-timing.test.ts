@@ -67,7 +67,6 @@ describe('requested-close durable turn timing', () => {
         fence: 7,
         acquisitionGeneration: 'generation-1',
         threadId: 'thread-1',
-        historyPath: null,
         prompts: new CodexPromptRegistry(),
         options: new Map(),
         reportedOptions: {},

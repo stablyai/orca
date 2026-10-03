@@ -209,7 +209,7 @@ describe('host collaborators log with their own scope', () => {
 
   it('the queued-message drain logs a step that fails', async () => {
     const log = recordingStructuredAgentSessionLogger()
-    const journal = { isReadOnly: false, queuedMessages: { settlementOwed: () => true } }
+    const journal = { queuedMessages: { settlementOwed: () => true } }
     const drain = new StructuredAgentSessionQueuedMessageDrain(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a schedule past the owed-settlement check reads only these members.
       {

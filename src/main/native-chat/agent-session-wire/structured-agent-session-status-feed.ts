@@ -241,12 +241,8 @@ export class StructuredAgentSessionStatusFeed {
   private retireSettledChildrenOnNewTurn(
     sessionId: string,
     session: StatusFeedSession,
-    acceptedSendKey: string | null
+    acceptedSendKey: string
   ): void {
-    // An unreadable journal says nothing about the user's turns: the last send read stands.
-    if (acceptedSendKey === null) {
-      return
-    }
     const seen = this.acceptedSends.has(sessionId)
     const previous = this.acceptedSends.get(sessionId)
     this.acceptedSends.set(sessionId, acceptedSendKey)

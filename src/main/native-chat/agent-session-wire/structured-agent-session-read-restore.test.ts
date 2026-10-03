@@ -56,7 +56,6 @@ let journalRoot: string
 const openDeps = () => ({
   store,
   journalDatabase: openTestJournalHostDatabase(journalRoot),
-  adapter: {},
   logger: recordingStructuredAgentSessionLogger().logger
 })
 const opened: AgentSessionJournal[] = []

@@ -473,15 +473,8 @@ describe('structured session acquisition options', () => {
         }
         return cleanup
       })
-      const failingAdapter = {
-        ...base,
-        acquire,
-        readOptions,
-        releaseAcquisition,
-        ...(failurePoint === 'journal'
-          ? { historyFilePath: vi.fn().mockRejectedValueOnce(injected).mockResolvedValue(null) }
-          : {})
-      }
+      const failingAdapter = { ...base, acquire, readOptions, releaseAcquisition }
+      let journalFailure = failurePoint === 'journal' ? injected : null
       const perform = (
         target: AgentSessionRecordStore,
         operationId: string,
@@ -491,10 +484,14 @@ describe('structured session acquisition options', () => {
           logger: createStructuredAgentSessionLogger(),
           store: target,
           adapter: failingAdapter,
-          openConversation: openTestAttachConversation(
-            openTestJournalHostDatabase(root!),
-            failingAdapter
-          ),
+          openConversation: async (record) => {
+            const failure = journalFailure
+            journalFailure = null
+            if (failure) {
+              throw failure
+            }
+            return openTestAttachConversation(openTestJournalHostDatabase(root!))(record)
+          },
           authority: {
             spawnToken: operationId === CREATE_OPERATION ? 'spawn-a' : 'spawn-b',
             claimKeyId: 'key-1',

@@ -363,9 +363,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
   /** Option keys skipped after a provider rejected their persisted restore value. */
   readOptionRestoreFailures?(sessionId: string): readonly string[]
-  /** Transcript path for journal recovery. Omit to let the existing session-file
-   *  resolver discover it from the provider session id. */
-  historyFilePath?(input: { identity: AgentSessionJournalIdentity }): Promise<string | null>
   /** Provider history for restart reconciliation, bounded to what the provider
    *  recorded after the journal's last committed item. Only the adapter can say
    *  whether the read has a proven start and whether a turn is still running, so

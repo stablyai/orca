@@ -10,15 +10,13 @@ import {
   type CodexAppServerConnection
 } from './codex-app-server-connection'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
-import { readCodexThreadId, readCodexThreadPath } from './codex-structured-thread-facts'
+import { readCodexThreadId } from './codex-structured-thread-facts'
 
 export type CodexOpenedThread = {
   threadId: string
   /** The unsaved thread this new one was started in place of. */
   supersededThreadId?: string
   thread?: Record<string, unknown>
-  /** Rollout file Codex named, when it named one. */
-  historyPath: string | null
   historyMode?: 'legacy' | 'paginated'
   model?: string
   effort?: string
@@ -145,7 +143,6 @@ export async function openCodexThread(
     threadId,
     ...(supersededThreadId === undefined ? {} : { supersededThreadId }),
     thread,
-    historyPath: readCodexThreadPath(opened),
     ...(thread.historyMode === 'legacy' || thread.historyMode === 'paginated'
       ? { historyMode: thread.historyMode }
       : {}),

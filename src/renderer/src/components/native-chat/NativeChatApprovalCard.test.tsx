@@ -7,6 +7,77 @@ import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 afterEach(cleanup)
 
 describe('NativeChatApprovalCard', () => {
+  describe("a subject of a kind this build cannot draw: a newer Orca's", () => {
+    // A subject kind a newer build wrote; this build draws only plans.
+    const NEWER_SUBJECT = JSON.parse('{"kind":"diff","path":"a.ts"}')
+    const NEEDS_NEWER_ORCA = 'This request needs a newer version of Orca.'
+
+    function renderNewer(detail: string | undefined) {
+      const onChoose = vi.fn()
+      const onCancel = vi.fn()
+      render(
+        <NativeChatApprovalCard
+          approval={{
+            title: 'Review proposed change',
+            ...(detail ? { detail } : {}),
+            subject: NEWER_SUBJECT,
+            options: [
+              { label: 'Approve', send: 'allow' },
+              { label: 'Deny', send: 'deny' }
+            ]
+          }}
+          onChoose={onChoose}
+          onCancel={onCancel}
+        />
+      )
+      return { onChoose, onCancel }
+    }
+
+    it('with no detail: says so, answers nothing, and only its cancel reaches the host', () => {
+      const { onChoose, onCancel } = renderNewer(undefined)
+      expect(screen.getByText(NEEDS_NEWER_ORCA)).toBeTruthy()
+      for (const label of ['Approve', 'Deny']) {
+        const option = screen.getByRole('button', { name: label })
+        expect(option.hasAttribute('disabled')).toBe(true)
+        fireEvent.click(option)
+      }
+      expect(onChoose).not.toHaveBeenCalled()
+      const cancel = screen.getByRole('button', { name: 'Cancel' })
+      expect(cancel.hasAttribute('disabled')).toBe(false)
+      fireEvent.click(cancel)
+      fireEvent.keyDown(screen.getByRole('group'), { key: 'Escape' })
+      expect(onCancel).toHaveBeenCalledTimes(2)
+    })
+
+    it('with a detail: shows it, and still approves nothing', () => {
+      const { onChoose } = renderNewer('# Release\n- Run tests')
+      expect(document.querySelector('[data-native-chat-approval-detail]')?.textContent).toContain(
+        '# Release'
+      )
+      expect(screen.getByText(NEEDS_NEWER_ORCA)).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+      expect(screen.getByRole('button', { name: 'Approve' }).hasAttribute('disabled')).toBe(true)
+      expect(onChoose).not.toHaveBeenCalled()
+    })
+
+    it('leaves a plan answerable, with no such line', () => {
+      const onChoose = vi.fn()
+      render(
+        <NativeChatApprovalCard
+          approval={{
+            title: 'Review proposed plan',
+            subject: { kind: 'plan', text: 'Step one' },
+            options: [{ label: 'Approve plan', send: 'allow' }]
+          }}
+          onChoose={onChoose}
+        />
+      )
+      expect(screen.queryByText(NEEDS_NEWER_ORCA)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Approve plan' }))
+      expect(onChoose).toHaveBeenCalledWith('allow')
+    })
+  })
+
   it('exposes cancellation while it owns the composer region', () => {
     const onCancel = vi.fn()
 

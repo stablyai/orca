@@ -31,7 +31,6 @@ async function wiredSession() {
   let sequence = 0
   const journal = {
     cursor: () => ({ epoch: 'epoch-1', sequence: ++sequence }),
-    isReadOnly: false,
     lastActivityAt: () => 1,
     snapshot: () => ({
       items: [...run.journalItems.values()]
@@ -46,7 +45,7 @@ async function wiredSession() {
       [
         parent.sessionId,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reads only the cursor, read-only flag, activity clock and snapshot served here.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reads only the cursor, activity clock and snapshot served here.
           journal: journal as unknown as Journal,
           params: {
             location: {

@@ -188,9 +188,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         fence: 7
       })
     ).rejects.toThrow('no live codex app-server')
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
+    expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
     await expect(adapter.closeSession('session-1')).resolves.toBe(false)
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
   })
@@ -205,9 +203,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     codex.connections[0].handlers.onExit?.(new Error('the superseded child died'))
 
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(endedBeforeStaleExit)
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
+    expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
   })
 
   it('ignores Codex traffic that arrives after the session is gone', async () => {

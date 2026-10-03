@@ -17448,6 +17448,8 @@
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录。",
         "savedByNewerOrca": "这些聊天由更新版本的 Orca 保存。",
         "updateOrcaToKeepUsing": "请更新 Orca 以继续使用这些聊天。",
+        "chatSavedByNewerOrca": "此聊天由更新版本的 Orca 保存。",
+        "updateOrcaToOpenChat": "请更新 Orca 以打开它。",
         "unsupported": "运行此聊天的计算机需要更新版本的 Orca。请在该计算机上更新 Orca 后重试。",
         "notAvailable": "此聊天中无法使用此功能。",
         "unreachable": "Orca 无法连接到智能体。",
@@ -17672,6 +17674,7 @@
         "sending": "正在发送…"
       },
       "approval": {
+        "needsNewerOrca": "此请求需要更新版本的 Orca。",
         "title": "允许 {{value0}}？",
         "allow": "允许",
         "deny": "拒绝",

@@ -106,7 +106,7 @@ export class StructuredAgentSessionTurnCompletionFeed {
       return
     }
     if (baseline.epoch !== cursor.epoch || cursor.sequence < baseline.sequence) {
-      // Epoch replacement (rewind, repair, or legacy import) republishes history with a new
+      // Epoch replacement (rewind or legacy import) republishes history with a new
       // identity. It is not a provider edge, so re-baseline silently instead of announcing the
       // newest settled row as a fresh completion.
       baseline.epoch = cursor.epoch

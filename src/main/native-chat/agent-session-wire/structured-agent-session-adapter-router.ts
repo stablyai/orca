@@ -163,9 +163,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   readOptionRestoreFailures = (sessionId: string): readonly string[] =>
     this.owner(sessionId).readOptionRestoreFailures?.(sessionId) ?? []
 
-  historyFilePath = (input: { identity: AgentSessionJournalIdentity }) =>
-    this.requireAgent(input.identity).historyFilePath?.(input) ?? Promise.resolve(null)
-
   providerHistoryWindow = (input: {
     identity: AgentSessionJournalIdentity
     accountHome: AgentSessionAccountHome

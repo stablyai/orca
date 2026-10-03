@@ -96,6 +96,30 @@ describe('rewind keeps each retained row attributed', () => {
     expect(merged.at(-1)?.turnScope).toEqual({ kind: 'turn', turnItemId: commandTurn })
   })
 
+  it("keeps a newer Orca's row after a row the provider still holds, whatever that row's kind", () => {
+    // A kind this build does not know, which the provider now returns in its own words.
+    const future: AgentJournalItemBody = JSON.parse('{"kind":"future-item"}')
+    const newer: AgentJournalItemBody = JSON.parse('{"kind":"plan-card","n":4}')
+    const merged = mergeRetainedHostLifecycleRows(
+      [
+        retained(codexKey('turn-a', 2), prose('ok')),
+        retained(codexKey('turn-a', 9), future),
+        retained(orcaKey('u4'), newer)
+      ],
+      [
+        providerItem(codexKey('turn-a', 2), prose('ok')),
+        providerItem(codexKey('turn-a', 9), prose('provider now renders it'))
+      ]
+    )
+
+    expect(merged.map((row) => row.itemId)).toEqual([
+      codexKey('turn-a', 2),
+      codexKey('turn-a', 9),
+      orcaKey('u4')
+    ])
+    expect(merged[2]?.body).toEqual(newer)
+  })
+
   it('places a provider item the old epoch never held in the turn record for its provider turn', () => {
     const commandTurn = orcaKey('command-turn:cmd-1')
     const reference = [

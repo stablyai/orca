@@ -109,7 +109,6 @@ export type CodexSession = {
   fence: number
   acquisitionGeneration: string
   threadId: string
-  historyPath: string | null
   historyMode?: 'legacy' | 'paginated'
   /** Primary-thread turns Codex reported started and not yet ended, as read off the wire: what
    *  rewind waits out and what a Stop naming no turn interrupts when the journal shows none. */

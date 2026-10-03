@@ -55,13 +55,18 @@ class AgentSessionRpcResponseError extends Error {
   }
 }
 
+/** The refusal a failed read met, from a thrown error or a stream's error frame. */
+export function agentSessionReadFailureRefusal(failure: unknown) {
+  return readAgentSessionErrorRefusal(
+    typeof failure === 'object' && failure !== null && 'error' in failure ? failure.error : failure
+  )
+}
+
 /** A failed read of a chat's history as the pane shows it, from a thrown error or a stream's error
  *  frame (`{ message, error }`): a thrown refusal's message is its bare code, so its words come
  *  from the refusal in the error's data. */
 export function agentSessionReadFailureText(failure: unknown): string {
-  const refusal = readAgentSessionErrorRefusal(
-    typeof failure === 'object' && failure !== null && 'error' in failure ? failure.error : failure
-  )
+  const refusal = agentSessionReadFailureRefusal(failure)
   if (refusal) {
     return agentSessionWriteNoticeEnglish(
       agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')

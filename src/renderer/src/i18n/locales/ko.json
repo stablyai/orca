@@ -17431,6 +17431,8 @@
         "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
         "savedByNewerOrca": "채팅이 최신 버전의 Orca에서 저장되었습니다.",
         "updateOrcaToKeepUsing": "계속 사용하려면 Orca를 업데이트하세요.",
+        "chatSavedByNewerOrca": "이 채팅은 최신 버전의 Orca에서 저장되었습니다.",
+        "updateOrcaToOpenChat": "열려면 Orca를 업데이트하세요.",
         "unsupported": "이 채팅을 실행 중인 컴퓨터에 최신 버전의 Orca가 필요합니다. 해당 컴퓨터에서 Orca를 업데이트한 후 다시 시도하세요.",
         "notAvailable": "이 채팅에서는 사용할 수 없습니다.",
         "unreachable": "Orca가 에이전트에 연결하지 못했습니다.",
@@ -17655,6 +17657,7 @@
         "sending": "전송 중…"
       },
       "approval": {
+        "needsNewerOrca": "이 요청에는 최신 버전의 Orca가 필요합니다.",
         "title": "{{value0}}을(를) 허용하시겠습니까?",
         "allow": "허용",
         "deny": "거부",

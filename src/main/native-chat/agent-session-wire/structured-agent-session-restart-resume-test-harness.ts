@@ -136,7 +136,6 @@ export function claudeRecord(
 /** The fake journal's own shape, so callers can wire `appendItem` without reaching into `unknown`.
  *  The code under test sees the real `AgentSessionJournal` type; tests see this. */
 export type HarnessJournal = {
-  isReadOnly: boolean
   snapshot: () => {
     items: AgentJournalRenderItem[]
     submissions: AgentJournalSubmission[]
@@ -150,12 +149,10 @@ export type HarnessSession = { journal: HarnessJournal; child: { fence: number }
 
 export function journal(
   items: AgentJournalRenderItem[],
-  isReadOnly = false,
   submissions: AgentJournalSubmission[] = []
 ) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only isReadOnly, snapshot(), submissions() and appendItem(); a real AgentSessionJournal needs an on-disk SQLite store.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only snapshot(), submissions() and appendItem(); a real AgentSessionJournal needs an on-disk SQLite store.
   return {
-    isReadOnly,
     snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
     submissions: () => submissions,
     appendItem: async () => undefined
@@ -219,12 +216,15 @@ export function resumableSet(input: {
   markers: AgentSessionResumeMarker[]
   items?: AgentJournalRenderItem[]
   chain?: AgentSessionRecord['providerHandleChain']
+  /** Sessions a newer Orca saved. */
+  savedByNewerOrca?: string[]
 }) {
   return structuredAgentSessionResumableSet({
     markers: input.markers,
     getRecord: () => record(input.chain === undefined ? {} : { chain: input.chain }),
     supportsRecord: () => true,
     latestPrompt: () => 'fix the auth bug',
-    movedOn: () => false
+    movedOn: () => false,
+    savedByNewerOrca: (sessionId) => input.savedByNewerOrca?.includes(sessionId) === true
   })
 }

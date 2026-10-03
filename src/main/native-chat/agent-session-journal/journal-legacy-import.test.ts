@@ -566,8 +566,7 @@ describe('import failures', () => {
   })
 
   // A transcript with no decodable messages recovers nothing. Publishing an
-  // empty replacement would roll the epoch and drop whatever the journal held —
-  // including a repair's own anchor and disclosure.
+  // empty replacement would roll the epoch and drop whatever the journal held.
   it('leaves the epoch untouched when the transcript decodes to no messages', async () => {
     const journal = await open('codex', CODEX_SESSION)
     await journal.appendItem(

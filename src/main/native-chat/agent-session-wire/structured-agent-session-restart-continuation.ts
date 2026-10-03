@@ -14,12 +14,16 @@ import {
   readAgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
 } from '../../../shared/agent-session-failure'
-import type { AgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
+import {
+  agentSessionRefusalReference,
+  type AgentSessionRefusalReference
+} from '../../../shared/agent-session-wire-refusals'
 import {
   agentSessionSendSubmission,
   type AgentSessionMutationEnvelope,
   type AgentSessionMutationResult,
-  type AgentSessionSendResult
+  type AgentSessionSendResult,
+  type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -160,7 +164,7 @@ export type StructuredAgentSessionContinuationDeps = {
     body: AgentJournalMessageItem
   }) => Promise<{
     ok: boolean
-    refusal?: { code: string }
+    refusal?: AgentSessionWireRefusal
     /** The submission is where the provider's answer lives; the envelope only says Orca took it.
      *  A continuation never sends `delivery`, so a queued answer cannot arrive; the key exists so
      *  the host's union return stays assignable. */
@@ -310,7 +314,9 @@ async function sendContinuation(
       done: {
         sessionId,
         outcome: 'refused',
-        reason: sent.refusal?.code ?? 'agent_session_send_failed'
+        reason: sent.refusal?.code ?? 'agent_session_send_failed',
+        // Its details too, so a newer Orca's refusal is filed as one, not as a bare code.
+        ...(sent.refusal ? { refusal: agentSessionRefusalReference(sent.refusal) } : {})
       }
     }
   }

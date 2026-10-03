@@ -639,7 +639,7 @@
       "protection": "partial",
       "owner": "agent-session-runtime",
       "layer": "runtime-unit",
-      "surfaces": ["structured chat journal replay", "structured chat recovery"],
+      "surfaces": ["structured chat journal replay", "structured chat damaged history"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "remote-runtime"],
       "coveredPlatforms": ["macos"],
@@ -648,15 +648,17 @@
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/main/native-chat/agent-session-journal/journal-open.ts"
       ],
-      "invariant": "Replay preserves latest revisions, original item order, fences, aliases, submissions, repair precedence, read-only schema latching and cursor cleanup while retaining live items rather than all historical bodies.",
-      "oracle": "Replay 2,048 16 KiB revisions into one latest item with less than 8 MiB sampled live heap growth; preserve prefix and future-schema latching after a gap, malformed suffix repair precedence, and hold no SQLite read snapshot across reduction (a mid-replay checkpoint is not busy). Existing journal and subscriber tests cover replayed content and recovery.",
+      "invariant": "Replay preserves latest revisions, original item order, fences, aliases, submissions, a newer schema winning over damage and cursor cleanup while retaining live items rather than all historical bodies; damage fails the load and deletes nothing.",
+      "oracle": "Replay 2,048 16 KiB revisions into one latest item with less than 8 MiB sampled live heap growth; name a future-schema row read past a gap, name the first damage, fail a damaged load with every row kept, and hold no SQLite read snapshot across reduction (a mid-replay checkpoint is not busy). Existing journal and subscriber tests cover replayed content.",
       "commands": [
+        // As the 2026-09-11 evidence run ran it; the recovery test it names went with the read-time repair.
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts src/main/native-chat/agent-session-wire/agent-session-journal-recovery.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-damage.test.ts"
       ],
       "testFiles": [
         "src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts",
-        "src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+        "src/main/native-chat/agent-session-journal/journal-damage.test.ts"
       ],
       "assertionRefs": [
         {
@@ -664,9 +666,18 @@
           "assertions": [
             "releases superseded revision bodies while reducing a long journal",
             "holds no read snapshot while reducing, so a checkpoint can pass mid-replay",
-            "keeps the prefix but latches read-only for a future row beyond a gap",
-            "keeps gap repair precedence when a later row is malformed",
-            "rejects an unanchored prefix before a later gap"
+            "reads past a gap to a future row, which names the newer row and no damage",
+            "names the first damage when a later row is malformed too",
+            "names a missing epoch row before a later gap"
+          ]
+        },
+        {
+          "file": "src/main/native-chat/agent-session-journal/journal-damage.test.ts",
+          "assertions": [
+            "fails to load and keeps every row: %s",
+            "reads past damage to a newer build's row, which fails the load as a newer Orca's instead",
+            "is refused when it is written, and the chat still loads with every other row",
+            "is founded afresh on open, with nothing deleted, and takes writes"
           ]
         }
       ],
@@ -679,6 +690,15 @@
           "result": "passed",
           "durationSeconds": 7.71,
           "summary": "245 tests passed across 22 files. Retained-heap oracle fails on baseline at 68.6 MB and passes under 8 MiB with streaming; gap/schema and cursor-cleanup assertions passed."
+        },
+        {
+          "date": "2026-10-02",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts",
+          "result": "passed",
+          "durationSeconds": 5.56,
+          "summary": "450 tests passed across 42 files, run as the vitest invocation the test script makes. Damage fails the load with every row kept; the retained-heap, newer-row-past-a-gap and cursor-cleanup assertions passed."
         }
       ],
       "runtimeBudget": {

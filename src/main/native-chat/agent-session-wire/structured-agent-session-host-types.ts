@@ -2,7 +2,10 @@ import type { SubmissionRejectionFact } from '../../../shared/agent-session-fail
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusSummary,
+  AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
@@ -30,6 +33,8 @@ export type StructuredAgentSessionReveal = {
   workspaceId: string
   agent: 'claude' | 'codex'
   readable: boolean
+  /** Why the journal did not open, as a read would be refused. Host-side only: never published. */
+  openRefusal?: AgentSessionWireRefusal
 }
 
 /** Which provider child: the adapter acquisition and the lease fence it writes at. */
