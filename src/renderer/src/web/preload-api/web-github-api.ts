@@ -1,5 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
+  GITHUB_UPDATE_PR_BRANCH_RUNTIME_CAPABILITY,
+  GITHUB_UPDATE_PR_BRANCH_UPDATE_REQUIRED_MESSAGE,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE
 } from '../../../../shared/protocol-version'
@@ -97,6 +99,13 @@ export function createGitHubApi(): WebGitHubApi {
         GITHUB_WEB_RPC_METHODS.markPRReadyForReview,
         args
       )
+    },
+    updatePRBranch: async (args) => {
+      const status = await getRemoteRuntimeStatus().catch(() => null)
+      if (!status?.capabilities?.includes(GITHUB_UPDATE_PR_BRANCH_RUNTIME_CAPABILITY)) {
+        return { ok: false, error: GITHUB_UPDATE_PR_BRANCH_UPDATE_REQUIRED_MESSAGE }
+      }
+      return route<WebGitHubResult<'updatePRBranch'>>(GITHUB_WEB_RPC_METHODS.updatePRBranch, args)
     },
     setPRAutoMerge: (args) =>
       route<WebGitHubResult<'setPRAutoMerge'>>(GITHUB_WEB_RPC_METHODS.setPRAutoMerge, args),

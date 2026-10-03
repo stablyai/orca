@@ -1,6 +1,7 @@
 import { defineMethod } from '../core'
 import {
   MarkPrReadyForReview,
+  UpdatePrBranch,
   MergePr,
   PRReviewComment,
   PRReviewCommentReply,
@@ -59,6 +60,17 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
     params: MarkPrReadyForReview,
     handler: async (params, { runtime }) =>
       runtime.markRepoPRReadyForReview(params.repo, params.prNumber, params.prRepo ?? null)
+  }),
+  defineMethod({
+    name: 'github.updatePRBranch',
+    params: UpdatePrBranch,
+    handler: async (params, { runtime }) =>
+      runtime.updateRepoPRBranch(
+        params.repo,
+        params.prNumber,
+        params.expectedHeadSha,
+        params.prRepo ?? null
+      )
   }),
   defineMethod({
     name: 'github.requestPRReviewers',

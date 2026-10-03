@@ -6,6 +6,7 @@ import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
 import {
   mergePR,
   markPRReadyForReview,
+  updatePRBranch,
   removePRReviewers,
   requestPRReviewers,
   rerunPRChecks,
@@ -176,6 +177,23 @@ export class RuntimeGitHubReviewMutationCommands {
     return markPRReadyForReview(
       repo.path,
       prNumber,
+      repo.connectionId ?? null,
+      prRepo ?? null,
+      ...this.deps.getLocalGitArgs(repo)
+    )
+  }
+
+  async updateRepoPRBranch(
+    repoSelector: string,
+    prNumber: number,
+    expectedHeadSha: string,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof updatePRBranch>>> {
+    const repo = await this.deps.resolveRepo(repoSelector)
+    return updatePRBranch(
+      repo.path,
+      prNumber,
+      expectedHeadSha,
       repo.connectionId ?? null,
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)

@@ -69,6 +69,15 @@ export const ghMutationsAndProjectsApi = {
     prRepo?: GitHubOwnerRepo | null
   }): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gh:markPRReadyForReview', args),
+  updatePRBranch: (args: {
+    repoPath: string
+    repoId?: string | null
+    sourceContext?: TaskSourceContext | null
+    prNumber: number
+    expectedHeadSha: string
+    prRepo?: GitHubOwnerRepo | null
+  }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('gh:updatePRBranch', args),
   requestPRReviewers: (args: {
     repoPath: string
     repoId?: string | null
