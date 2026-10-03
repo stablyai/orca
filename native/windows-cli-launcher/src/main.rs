@@ -74,6 +74,11 @@ fn main() {
         },
     );
 
+    // Why: an Orca parent can hand us a Crashpad pipe that no longer exists, and the
+    // Electron child then logs a registration error on stderr on every run even though
+    // the command succeeds (#19792).
+    env::remove_var("CHROME_CRASHPAD_PIPE_NAME");
+
     // Each argument stays its own argv entry, so a body holding newlines reaches
     // the CLI intact.
     let mut command = Command::new(&electron_path);

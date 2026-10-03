@@ -24,4 +24,17 @@ describe('packaged Windows CLI launcher asset', () => {
     expect(source).toContain('command.status()')
     expect(source).toContain('exit(status.code().unwrap_or(1))')
   })
+
+  it('clears an inherited Crashpad pipe before launching Electron-as-Node', () => {
+    const sourcePath = join(process.cwd(), 'native', 'windows-cli-launcher', 'src', 'main.rs')
+    const source = readFileSync(sourcePath, 'utf8')
+
+    const cleanupIndex = source.indexOf('env::remove_var("CHROME_CRASHPAD_PIPE_NAME")')
+    const spawnIndex = source.indexOf('Command::new(&electron_path)')
+
+    // Why: the child inherits our environment block, so the stale pipe must be gone before
+    // it is spawned (stablyai/orca#19792).
+    expect(cleanupIndex).toBeGreaterThanOrEqual(0)
+    expect(spawnIndex).toBeGreaterThan(cleanupIndex)
+  })
 })
