@@ -1,0 +1,22 @@
+{
+  "name": "orca",
+  "description": "Orca IDE agent skills: orca CLI (worktrees/terminals/browser/artifacts), multi-agent orchestration, computer-use, iOS/Android emulator control, Linear tickets, per-workspace environments",
+  "owner": {
+    "name": "stablyai",
+    "url": "https://github.com/stablyai/orca"
+  },
+  "plugins": [
+    {
+      "name": "orca",
+      "description": "Bundled Orca agent skills: orca-cli, orchestration, computer-use, orca-emulator (iOS), orca-emulator-android, orca-linear, linear-tickets, orca-per-workspace-env",
+      "source": "./",
+      "category": "productivity",
+      "license": "MIT",
+      "homepage": "https://github.com/stablyai/orca",
+      "author": {
+        "name": "stablyai",
+        "url": "https://github.com/stablyai"
+      }
+    }
+  ]
+}
