@@ -54,7 +54,7 @@ function createModel(overrides: Partial<PollingInput> = {}): PollingInput {
     prNumber: 42,
     prevChecksRef: { current: '' },
     repo: { id: 'repo-1', path: '/workspace/repo' } as NonNullable<PollingInput['repo']>,
-    settings: null,
+    ownerSettings: null,
     setChecks: vi.fn(),
     setChecksLoading: vi.fn(),
     setComments: vi.fn(),
@@ -128,10 +128,31 @@ describe('useChecksPanelPolling live behavior', () => {
     expect(model.fetchPRChecks).not.toHaveBeenCalled()
   })
 
+  it('routes live GitLab polling through the worktree owner runtime', async () => {
+    const ownerSettings = {
+      activeRuntimeEnvironmentId: 'owner-runtime'
+    } as PollingInput['ownerSettings']
+    const model = createModel({
+      activeGitLabReview: {
+        provider: 'gitlab',
+        number: 17,
+        headSha: 'gitlab-head'
+      } as NonNullable<PollingInput['activeGitLabReview']>,
+      ownerSettings
+    })
+    renderHook(() => useChecksPanelPolling(model))
+
+    await act(async () => poller.run?.())
+
+    expect(gitlab.fetchDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ settings: ownerSettings })
+    )
+  })
+
   it('uses an explicit owner and missing head override for a replacement MR', async () => {
     const ownerSettings = {
       activeRuntimeEnvironmentId: 'owner-runtime'
-    } as PollingInput['settings']
+    } as PollingInput['ownerSettings']
     const model = createModel({
       activeGitLabReview: {
         provider: 'gitlab',
@@ -142,8 +163,7 @@ describe('useChecksPanelPolling live behavior', () => {
         id: 'worktree-1',
         repoId: 'repo-1',
         hostId: 'runtime:owner-runtime'
-      }),
-      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as PollingInput['settings']
+      })
     })
     const { result } = renderHook(() => useChecksPanelPolling(model))
 

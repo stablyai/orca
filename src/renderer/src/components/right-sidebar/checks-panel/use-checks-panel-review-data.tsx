@@ -19,8 +19,8 @@ type ChecksPanelReviewDataInput = Pick<
     | 'fetchPRComments'
     | 'gitLabProjectRefRef'
     | 'isPanelVisible'
+    | 'ownerSettings'
     | 'repo'
-    | 'settings'
     | 'setComments'
     | 'setCommentsLoading'
   > &
@@ -39,7 +39,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     prCacheKey,
     prNumber,
     repo,
-    settings,
+    ownerSettings,
     setComments,
     setCommentsLoading
   } = model
@@ -117,12 +117,11 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         return Promise.resolve(null)
       }
       if (check.gitlabJobId) {
-        // Why: `settings` (not ownerSettings) is what fetched the job list, so the
-        // job id and its trace always resolve against the same host.
+        // Why: resolve the trace against the same worktree owner that supplied the job list.
         return loadGitLabJobLogDetails({
           repoPath: repo.path,
           repoId: repo.id,
-          settings,
+          settings: ownerSettings,
           check,
           projectRef: gitLabProjectRefRef.current
         })
@@ -139,7 +138,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         { repoId: repo.id }
       )
     },
-    [fetchPRCheckDetails, pr?.prRepo, repo, settings, gitLabProjectRefRef]
+    [fetchPRCheckDetails, pr?.prRepo, repo, ownerSettings, gitLabProjectRefRef]
   )
 
   // Why: read at call time — the ref is filled by an async MR fetch, so a value prop would be stale.
