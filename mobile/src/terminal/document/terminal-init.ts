@@ -203,7 +203,8 @@ export function init(
       applyFitScale(scope, 'init-replay')
       // Why: a paused (hidden) render service has not rendered yet, so ready reports it too.
       reportLaidOutCellBox(scope)
-      notify(scope, { type: 'ready', cols: cols, rows: rows })
+      // Why: labelled because only this ready follows a committed paint; the app reveals on it.
+      notify(scope, { type: 'ready', source: 'init', cols: cols, rows: rows })
     })
   })
 }
@@ -236,7 +237,7 @@ export function resize(scope: TerminalDocumentScope, cols: number, rows: number)
   scope.term.resize(cols || scope.term.cols, rows || scope.term.rows)
   emitKeyboardAvoidanceMetrics(scope)
   applyFitScale(scope, 'resize-msg')
-  notify(scope, { type: 'ready', cols: cols, rows: rows })
+  notify(scope, { type: 'ready', source: 'resize', cols: cols, rows: rows })
 }
 
 // reflow(): see reflow.ts.
