@@ -1,11 +1,18 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
-import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
+import {
+  getWorktreeIdsWithLiveAgent,
+  hasActiveWorkspaceActivity
+} from '@/lib/worktree-activity-state'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { computeVisibleWorktrees } from '../../visible-worktrees'
+import {
+  createSleepingSweepRetentionState,
+  updateSleepingSweepRetention
+} from '../../sleeping-sweep-retention'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -75,10 +82,74 @@ export function useVisibleSidebarWorktrees(args: {
     getStructuredChatWorktreeIds(showSleepingWorkspaces, s.unifiedTabsByWorktree)
   )
 
-  const recomputedVisibleWorktrees = useMemo(() => {
+  const retentionStateRef = useRef(createSleepingSweepRetentionState())
+  const [sweepGraceTick, setSweepGraceTick] = useState(0)
+
+  // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
+  const sweepInputs = useMemo(() => {
     // Keyed on the epoch, not `agentStatusNow`: two bumps in one millisecond
     // share a sample, so the timestamp alone would not re-key this memo.
     void agentStatusEpoch
+    void sweepGraceTick
+    if (showSleepingWorkspaces) {
+      retentionStateRef.current = createSleepingSweepRetentionState()
+      return {
+        worktreeIdsWithLiveAgent: EMPTY_WORKTREE_ID_SET,
+        sleepingSweepExemptWorktreeIds: undefined,
+        nextExpiryInMs: null
+      }
+    }
+    const worktreeIdsWithLiveAgent = getWorktreeIdsWithLiveAgent(
+      useAppStore.getState().agentStatusByPaneKey,
+      tabsByWorktree,
+      agentStatusNow
+    )
+    // Why: a PTY rebind empties ptyIdsByTabId for a commit, which would sweep an
+    // open remote workspace out and back in one frame (#15996).
+    const { retainedIds, nextExpiryInMs } = updateSleepingSweepRetention({
+      state: retentionStateRef.current,
+      candidateWorktreeIds: sortedIds,
+      isActive: (worktreeId) =>
+        hasActiveWorkspaceActivity(
+          worktreeId,
+          tabsByWorktree,
+          ptyIdsByTabId,
+          browserTabsByWorktree,
+          worktreeIdsWithLiveAgent,
+          worktreeIdsWithStructuredChat
+        ),
+      // oxlint-disable-next-line react/purity -- Grace windows need wall time; the epoch sample stalls between bumps.
+      nowMs: Date.now()
+    })
+    return {
+      worktreeIdsWithLiveAgent,
+      sleepingSweepExemptWorktreeIds: retainedIds,
+      nextExpiryInMs
+    }
+  }, [
+    agentStatusEpoch,
+    agentStatusNow,
+    sweepGraceTick,
+    showSleepingWorkspaces,
+    tabsByWorktree,
+    ptyIdsByTabId,
+    browserTabsByWorktree,
+    worktreeIdsWithStructuredChat,
+    sortedIds
+  ])
+
+  // Why: without a wake the last grace window would hold its row until some
+  // unrelated store change happened to recompute the sweep.
+  const { nextExpiryInMs } = sweepInputs
+  useEffect(() => {
+    if (nextExpiryInMs === null) {
+      return
+    }
+    const timer = setTimeout(() => setSweepGraceTick((tick) => tick + 1), nextExpiryInMs)
+    return () => clearTimeout(timer)
+  }, [nextExpiryInMs])
+
+  const recomputedVisibleWorktrees = useMemo(() => {
     return computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
@@ -86,14 +157,8 @@ export function useVisibleSidebarWorktrees(args: {
       ptyIdsByTabId,
       browserTabsByWorktree,
       worktreeIdsWithStructuredChat,
-      // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
-      worktreeIdsWithLiveAgent: showSleepingWorkspaces
-        ? EMPTY_WORKTREE_ID_SET
-        : getWorktreeIdsWithLiveAgent(
-            useAppStore.getState().agentStatusByPaneKey,
-            tabsByWorktree,
-            agentStatusNow
-          ),
+      worktreeIdsWithLiveAgent: sweepInputs.worktreeIdsWithLiveAgent,
+      sleepingSweepExemptWorktreeIds: sweepInputs.sleepingSweepExemptWorktreeIds,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -112,8 +177,7 @@ export function useVisibleSidebarWorktrees(args: {
     })
   }, [
     args.agentSendTargetWorktreeId,
-    agentStatusEpoch,
-    agentStatusNow,
+    sweepInputs,
     filterRepoIds,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,

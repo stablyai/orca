@@ -86,6 +86,12 @@ export type VisibleWorktreeOptions = {
   worktreeLineageById: Record<string, WorktreeLineage>
   injectLineageAncestors?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
+  /**
+   * Scoped exemption from the sleeping sweep only — unlike
+   * forcedVisibleWorktreeIds these still answer to the repo, host and kind
+   * filters, so a grace window can never resurrect a row the user filtered out.
+   */
+  sleepingSweepExemptWorktreeIds?: ReadonlySet<string>
 }
 
 export function computeVisibleWorktrees(
@@ -151,6 +157,7 @@ export function computeVisibleWorktrees(
     all = all.filter(
       (w) =>
         isSleepingSweepExemptWorkspace(w, opts.alwaysShowDefaultBranchWorkspace) ||
+        opts.sleepingSweepExemptWorktreeIds?.has(w.id) === true ||
         !isInactiveWorkspace(
           w.id,
           opts.tabsByWorktree,
