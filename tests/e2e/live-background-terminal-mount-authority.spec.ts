@@ -89,6 +89,9 @@ const test = base.extend({
   ]
 })
 
+// Drops the --no-daemon capability probe, which re-runs on every launch by design
+// (codex-no-daemon-launch-command.ts) and resolves the same fake CLI this spec puts on
+// PATH. It starts no session, so counting it as a launch reported a false duplicate.
 function readSpawnLedger(): SpawnEvent[] {
   if (!existsSync(spawnLedgerPath)) {
     return []
@@ -97,6 +100,7 @@ function readSpawnLedger(): SpawnEvent[] {
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line) as SpawnEvent)
+    .filter(({ args }) => args.length !== 1 || args[0] !== '--help')
 }
 
 function readJsonLines<T>(filePath: string): T[] {
