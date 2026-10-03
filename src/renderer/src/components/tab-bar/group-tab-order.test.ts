@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
-import { getActiveTabNavOrder, getGroupVisibleTabOrder } from './group-tab-order'
+import {
+  getActiveTabNavOrder,
+  getGroupVisibleTabOrder,
+  moveTabIdWithinGroupOrder
+} from './group-tab-order'
 import { buildOrderedTabItems } from './tab-bar-item-model'
 
 function terminalTab(id: string, groupId: string, entityId: string, sortOrder: number): Tab {
@@ -79,6 +83,35 @@ function agentSessionTab(id: string, groupId: string, sessionId: string, sortOrd
     createdAt: sortOrder
   }
 }
+
+describe('moveTabIdWithinGroupOrder', () => {
+  it('swaps the active tab with its visible neighbor and preserves stale entries', () => {
+    expect(
+      moveTabIdWithinGroupOrder(
+        ['stale-tab', 'tab-a', 'tab-b', 'tab-c'],
+        ['tab-a', 'tab-b', 'tab-c'],
+        'tab-b',
+        -1
+      )
+    ).toEqual(['stale-tab', 'tab-b', 'tab-a', 'tab-c'])
+    expect(
+      moveTabIdWithinGroupOrder(
+        ['tab-a', 'tab-b', 'tab-c'],
+        ['tab-a', 'tab-b', 'tab-c'],
+        'tab-b',
+        1
+      )
+    ).toEqual(['tab-a', 'tab-c', 'tab-b'])
+  })
+
+  it('returns no move at a boundary or for an unrenderable tab', () => {
+    expect(
+      moveTabIdWithinGroupOrder(['tab-a', 'tab-b'], ['tab-a', 'tab-b'], 'tab-a', -1)
+    ).toBeNull()
+    expect(moveTabIdWithinGroupOrder(['tab-a', 'tab-b'], ['tab-a'], 'tab-a', 1)).toBeNull()
+    expect(moveTabIdWithinGroupOrder(['tab-a'], ['tab-a'], 'tab-z', 1)).toBeNull()
+  })
+})
 
 describe('getGroupVisibleTabOrder', () => {
   it('includes structured sessions without a terminal backing entity', () => {

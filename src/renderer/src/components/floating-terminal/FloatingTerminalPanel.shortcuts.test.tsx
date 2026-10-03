@@ -27,6 +27,8 @@ import {
   runEffects
 } from './floating-terminal-panel-render-probe'
 
+const moveFloatingWorkspaceTabMock = vi.hoisted(() => vi.fn())
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
@@ -134,6 +136,10 @@ vi.mock('@/lib/focus-terminal-tab-surface', async () => {
     await import('./floating-terminal-panel-test-module-mocks')
   ).createFocusTerminalTabSurfaceModule()
 })
+
+vi.mock('@/lib/floating-workspace-tab-reorder', () => ({
+  moveFloatingWorkspaceTab: moveFloatingWorkspaceTabMock
+}))
 
 vi.mock('@/lib/orchestration-setup-state', async () => {
   return (
@@ -423,6 +429,33 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.activateTab).toHaveBeenCalledWith('tab-2')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('tab-2')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-2')
+  })
+
+  it('routes focused floating tab reorder shortcuts to the floating workspace', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        code: 'PageUp',
+        ctrlKey: true,
+        key: 'PageUp',
+        preventDefault,
+        stopImmediatePropagation,
+        stopPropagation,
+        shiftKey: true,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(stopPropagation).toHaveBeenCalledWith()
+    expect(stopImmediatePropagation).toHaveBeenCalledWith()
+    expect(moveFloatingWorkspaceTabMock).toHaveBeenCalledWith(expect.anything(), -1)
   })
 
   it('routes focused floating tab rename shortcuts to the active floating tab', async () => {

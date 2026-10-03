@@ -217,6 +217,33 @@ describe('keybindings', () => {
     }
   })
 
+  it('defines terminal-safe shortcuts for moving the active tab within its group', () => {
+    expect(getEffectiveKeybindingsForAction('tab.moveLeft', 'darwin')).toEqual([
+      'Ctrl+Shift+PageUp'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.moveRight', 'linux')).toEqual([
+      'Ctrl+Shift+PageDown'
+    ])
+    expect(getKeybindingDefinition('tab.moveLeft')?.allowInTerminal).toBe(true)
+    expect(getKeybindingDefinition('tab.moveRight')?.allowInTerminal).toBe(true)
+
+    const moveLeft = {
+      key: 'PageUp',
+      code: 'PageUp',
+      meta: false,
+      control: true,
+      alt: false,
+      shift: true
+    }
+    expect(keybindingMatchesAction('tab.moveLeft', moveLeft, 'linux')).toBe(true)
+    expect(
+      keybindingMatchesAction('tab.moveLeft', moveLeft, 'linux', undefined, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'terminal-first'
+      })
+    ).toBe(true)
+  })
+
   it('defines browser history shortcuts for Logitech side-button remaps', () => {
     expect(getEffectiveKeybindingsForAction('browser.back', 'darwin')).toEqual(['Mod+BracketLeft'])
     expect(getEffectiveKeybindingsForAction('browser.forward', 'darwin')).toEqual([
