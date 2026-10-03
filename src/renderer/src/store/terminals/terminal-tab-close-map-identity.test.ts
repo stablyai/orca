@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeTab, makeWorktree, seedStore } from '../slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
+import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
+import {
+  hydrateTerminalFontSizeOverride,
+  resetTerminalFontSizeOverridesForTest,
+  setTerminalFontSizeOverride
+} from '@/components/terminal-pane/terminal-font-size-overrides'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -20,6 +26,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => ({
 const mockApi = createStoreCascadesMockApi()
 
 const WORKTREE = 'repo::/tmp/app'
+const LEAF_ID = mintStablePaneId()
 
 /** Maps a closing tab has no entry in; closing must not give them a new reference. */
 const UNTOUCHED_FIELDS = [
@@ -68,6 +75,7 @@ function storeWithTwoTabs(): ReturnType<typeof createTestStore> {
 describe('closeTab map identity', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetTerminalFontSizeOverridesForTest()
     mockApi.worktrees.updateMeta.mockResolvedValue({})
   })
 
@@ -86,6 +94,74 @@ describe('closeTab map identity', () => {
     for (const field of UNTOUCHED_FIELDS) {
       expect(after[field], field).toBe(snapshot[field])
     }
+  })
+
+  it('clears the font override when a parked tab closes without a mounted pane', () => {
+    const store = storeWithTwoTabs()
+    store.setState({
+      terminalLayoutsByTabId: {
+        'tab-a': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty-a' }
+        }
+      }
+    })
+    setTerminalFontSizeOverride(LEAF_ID, 16)
+
+    store.getState().closeTab('tab-a')
+
+    const remountedFontSizes = new Map<number, number>()
+    hydrateTerminalFontSizeOverride({ id: 2, leafId: LEAF_ID }, remountedFontSizes)
+    expect(remountedFontSizes.has(2)).toBe(false)
+  })
+
+  it('clears the font override for a saved layout leaf without a PTY binding', () => {
+    const store = storeWithTwoTabs()
+    store.setState({
+      terminalLayoutsByTabId: {
+        'tab-a': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+    setTerminalFontSizeOverride(LEAF_ID, 16)
+
+    store.getState().closeTab('tab-a')
+
+    const remountedFontSizes = new Map<number, number>()
+    hydrateTerminalFontSizeOverride({ id: 2, leafId: LEAF_ID }, remountedFontSizes)
+    expect(remountedFontSizes.has(2)).toBe(false)
+  })
+
+  it('keeps the font override when another tab already owns the closing PTY', () => {
+    const store = storeWithTwoTabs()
+    store.setState({
+      tabsByWorktree: {
+        [WORKTREE]: [
+          makeTab({ id: 'tab-a', worktreeId: WORKTREE, ptyId: 'pty-a' }),
+          makeTab({ id: 'tab-b', worktreeId: WORKTREE, ptyId: 'pty-a' })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-a': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty-a' }
+        }
+      }
+    })
+    setTerminalFontSizeOverride(LEAF_ID, 16)
+
+    store.getState().closeTab('tab-a', { reason: 'pty-exit' })
+
+    const movedPaneFontSizes = new Map<number, number>()
+    hydrateTerminalFontSizeOverride({ id: 3, leafId: LEAF_ID }, movedPaneFontSizes)
+    expect(movedPaneFontSizes.get(3)).toBe(16)
   })
 
   it('still drops the closing tab from a map that did hold it', () => {

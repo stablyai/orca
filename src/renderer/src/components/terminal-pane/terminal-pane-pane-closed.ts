@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import {
   resolveTabTitleAfterPaneClose,
@@ -15,6 +15,7 @@ import {
   discardDeferredSplitPaneHandoffForKey
 } from './deferred-split-pane-handoff'
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
+import { clearTerminalFontSizeOverride } from './terminal-font-size-overrides'
 
 export function createTerminalPaneClosedHandler(
   context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
@@ -112,6 +113,9 @@ export function createTerminalPaneClosedHandler(
       })
     } else if (leafId && !isDetachedToTab) {
       useAppStore.getState().retireAgentPaneAuthority(makePaneKey(tabId, leafId))
+      if (isTerminalLeafId(leafId)) {
+        clearTerminalFontSizeOverride(leafId)
+      }
     }
     if (transport && !isRetiredSurface) {
       if (isDetachedToTab) {
