@@ -43,7 +43,7 @@ type Recorded = {
 }
 
 const subscriptions: Recorded[] = []
-const runtimeCall = vi.fn(async () => ({
+const runtimeCall = vi.fn(async (_request: { method: string }) => ({
   id: 'list-all',
   ok: true as const,
   result: { snapshots: [] },
@@ -79,6 +79,11 @@ function hostSnapshot(
 
 function mirroredSubscriptions(method: string): Recorded[] {
   return subscriptions.filter((entry) => entry.request.method === method)
+}
+
+function globalInventoryCalls(): number {
+  return runtimeCall.mock.calls.filter(([request]) => request.method === 'session.tabs.listAll')
+    .length
 }
 
 function makeStatus(runtimeId: string): RuntimeStatus {
@@ -193,6 +198,62 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     expect(mirrorKeys().resubscribeSignal).not.toBe(stranded.signal)
     expect(mirroredSubscriptions('session.tabs.subscribeAll')).toHaveLength(stranded.all + 1)
     expect(mirroredSubscriptions('session.tabs.subscribe')).toHaveLength(stranded.active + 1)
+  })
+
+  it('does not restart a healthy host mirror when another host regains contact', async () => {
+    const healthyEnvironment = useAppStore.getState().runtimeEnvironments[0]!
+    const secondEnvironment = { ...healthyEnvironment, id: 'env-b' }
+    const environments = [healthyEnvironment, secondEnvironment]
+    replaceRuntimeEnvironmentRevisions(environments)
+    useAppStore.setState({
+      runtimeEnvironments: environments,
+      restoredRuntimeHostIdByWorkspaceSessionKey: { 'remote-workspace-b': 'runtime:env-b' }
+    })
+    useAppStore.getState().applyRuntimeHostStatusSnapshot(hostSnapshot(1))
+    useAppStore
+      .getState()
+      .applyRuntimeHostStatusSnapshot(
+        hostSnapshot(1, { environmentId: 'env-b', status: makeStatus('runtime-b') })
+      )
+    renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+    const healthyGlobal = subscriptions.find(
+      (entry) =>
+        entry.request.selector === ENV_A && entry.request.method === 'session.tabs.subscribeAll'
+    )
+    expect(healthyGlobal).toBeDefined()
+    expect(mirroredSubscriptions('session.tabs.subscribeAll')).toHaveLength(2)
+    const healthyActive = subscriptions.find(
+      (entry) =>
+        entry.request.selector === ENV_A && entry.request.method === 'session.tabs.subscribe'
+    )
+    expect(healthyActive).toBeDefined()
+    const initialInventoryCalls = globalInventoryCalls()
+
+    await act(async () => {
+      useAppStore.getState().applyRuntimeHostStatusSnapshot(
+        hostSnapshot(2, {
+          environmentId: 'env-b',
+          status: makeStatus('runtime-b'),
+          verification: 'unavailable'
+        })
+      )
+      await settle()
+    })
+    await act(async () => {
+      useAppStore
+        .getState()
+        .applyRuntimeHostStatusSnapshot(
+          hostSnapshot(3, { environmentId: 'env-b', status: makeStatus('runtime-b') })
+        )
+      await settle()
+    })
+
+    expect(healthyGlobal?.unsubscribe).not.toHaveBeenCalled()
+    expect(healthyActive?.unsubscribe).not.toHaveBeenCalled()
+    expect(mirroredSubscriptions('session.tabs.subscribe')).toHaveLength(1)
+    expect(mirroredSubscriptions('session.tabs.subscribeAll')).toHaveLength(3)
+    expect(globalInventoryCalls()).toBe(initialInventoryCalls + 1)
   })
 
   // Direction 2: the mirror's cache key. #19647 -- recovery is not a second connection, so every

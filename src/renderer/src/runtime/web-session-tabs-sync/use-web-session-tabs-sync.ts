@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { useAppStore } from '../../store'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '../../lib/worktree-runtime-owner'
@@ -7,6 +7,7 @@ import { sessionTabsFreshnessKey } from './tracking'
 import { clearWebSessionTabsTrackingForEnvironment } from './tracking-lifecycle'
 import {
   installGlobalSessionTabsSubscriptions,
+  type GlobalSessionTabsSubscriptions,
   type GlobalSubscriptionRefs
 } from './global-session-subscription'
 import { installActiveSessionTabsSubscription } from './active-session-subscription'
@@ -33,6 +34,9 @@ export function useWebSessionTabsSync(): void {
   const workspaceSessionReady = useAppStore((state) => state.workspaceSessionReady)
   const { environmentKey: runtimeSessionMirrorEnvironmentKey, resubscribeSignal } =
     useRuntimeSessionMirrorEnvironmentKeys()
+  const globalSubscriptionsRef = useRef<GlobalSessionTabsSubscriptions | undefined>(undefined)
+  // Seed contact epochs without making them part of the all-host subscription identity.
+  const readHostContactSignal = useEffectEvent(() => resubscribeSignal)
   const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>
     getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
   )
@@ -90,8 +94,9 @@ export function useWebSessionTabsSync(): void {
   )
 
   useEffect(() => {
-    return installGlobalSessionTabsSubscriptions({
+    const subscriptions = installGlobalSessionTabsSubscriptions({
       runtimeSessionMirrorEnvironmentKey,
+      resubscribeSignal: readHostContactSignal(),
       workspaceSessionReady,
       refs: {
         activeRuntimeEnvironmentId: activeRuntimeEnvironmentIdRef,
@@ -103,9 +108,16 @@ export function useWebSessionTabsSync(): void {
         ownerRevisions: ownerRevisionsRef
       }
     })
-    // `resubscribeSignal` is a dependency and never an argument: a regained host needs its streams
-    // reinstalled, but the mirror state they refill is stamped with the key, which has not moved.
-  }, [runtimeSessionMirrorEnvironmentKey, resubscribeSignal, workspaceSessionReady])
+    globalSubscriptionsRef.current = subscriptions
+    return () => {
+      globalSubscriptionsRef.current = undefined
+      subscriptions?.dispose()
+    }
+  }, [runtimeSessionMirrorEnvironmentKey, workspaceSessionReady])
+
+  useEffect(() => {
+    globalSubscriptionsRef.current?.syncHostContact(resubscribeSignal)
+  }, [resubscribeSignal])
 
   useEffect(() => {
     return installActiveSessionTabsSubscription({
