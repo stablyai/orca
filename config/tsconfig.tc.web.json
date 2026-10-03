@@ -11,6 +11,7 @@
     "../src/preload/close-active-tab-payload-admission.ts",
     "../src/preload/e2e-config.ts",
     "../src/preload/gitlab.ts",
+    "../src/preload/native-screenshot-drop.ts",
     "../src/preload/preload-runtime-support.ts",
     "../src/preload/renderer-heap-statistics-reader.ts",
     "../src/preload/renderer-process-memory-reader.ts",
