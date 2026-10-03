@@ -21,6 +21,10 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'skills install': {
     agent: '--agent <names>        Comma-separated install targets; default is detected agents'
   },
+  'terminal split': {
+    ratio:
+      '--ratio <fraction>     Initial flex share for the existing first pane, greater than 0 and less than 1 (live native local PTY with owning desktop renderer)'
+  },
   search: {
     query: '--query <text>         Search text; also accepted as the positional argument',
     scope: '--scope <corpus>       conversation (user and assistant turns) or all (default)',

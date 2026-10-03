@@ -183,6 +183,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     ptyId: string
     splitFromLeafId: string
     direction: 'horizontal' | 'vertical'
+    ratio?: number
   }): boolean {
     const session = this.getWorkspaceSessionForWorktree(args.worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {

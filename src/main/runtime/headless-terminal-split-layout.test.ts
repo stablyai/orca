@@ -53,28 +53,33 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
       root: {
         type: 'split',
         direction: 'vertical',
+        ratio: 0.7,
         first: { type: 'leaf', leafId: 'leaf-a' },
         second: { type: 'leaf', leafId: 'leaf-b' }
       },
       activeLeafId: 'leaf-b',
       expandedLeafId: null,
-      ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' }
+      ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' },
+      titlesByLeafId: { 'leaf-a': 'First title', 'leaf-b': 'Second title' }
     }
     const next = buildHeadlessTerminalSplitLayout(existing, {
       leafId: 'leaf-c',
       ptyId: 'pty-c',
       splitFromLeafId: 'leaf-b',
-      direction: 'horizontal'
+      direction: 'horizontal',
+      ratio: 0.85
     })
     // 3 leaves total; the split happened at leaf-b, leaf-a untouched.
     expect(countTerminalLayoutLeaves(next.root)).toBe(3)
     expect(next.root).toEqual({
       type: 'split',
       direction: 'vertical',
+      ratio: 0.7,
       first: { type: 'leaf', leafId: 'leaf-a' },
       second: {
         type: 'split',
         direction: 'horizontal',
+        ratio: 0.85,
         first: { type: 'leaf', leafId: 'leaf-b' },
         second: { type: 'leaf', leafId: 'leaf-c' }
       }
@@ -84,6 +89,8 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
       'leaf-b': 'pty-b',
       'leaf-c': 'pty-c'
     })
+    expect(next.titlesByLeafId).toEqual(existing.titlesByLeafId)
+    expect(existing.root).toMatchObject({ ratio: 0.7, second: { type: 'leaf', leafId: 'leaf-b' } })
   })
 
   it('synthesizes a split when there is no existing persisted layout', () => {
@@ -115,12 +122,19 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
         expandedLeafId: null,
         ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-c': 'provisional-pty' }
       },
-      { leafId: 'leaf-c', ptyId: 'pty-c', splitFromLeafId: 'leaf-a', direction: 'horizontal' }
+      {
+        leafId: 'leaf-c',
+        ptyId: 'pty-c',
+        splitFromLeafId: 'leaf-a',
+        direction: 'horizontal',
+        ratio: 0.85
+      }
     )
 
     expect(next.root).toEqual({
       type: 'split',
       direction: 'horizontal',
+      ratio: 0.85,
       first: { type: 'leaf', leafId: 'leaf-a' },
       second: { type: 'leaf', leafId: 'leaf-c' }
     })

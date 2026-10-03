@@ -48,6 +48,7 @@ export function installTerminalPaneMountEvents(args: {
         return
       }
       const splitOptions = {
+        ...(detail.ratio !== undefined ? { ratio: detail.ratio } : {}),
         ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
         ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
       }
