@@ -1,4 +1,5 @@
 import { platform } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { EmulatorError } from '../emulator-errors'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import {
@@ -18,6 +19,7 @@ import {
 import { waitForServeSimEndpointReady } from '../serve-sim-endpoint-readiness'
 import {
   killServeSimHelperProcessesForDevice,
+  killOwnedServeSimHelperProcessesForDevice,
   listServeSimHelperProcessesForDevice
 } from '../serve-sim-helper-processes'
 import type { EmulatorBridgeOptions } from '../emulator-bridge-types'
@@ -29,7 +31,8 @@ import type {
   BackendAvailability,
   EmulatorBackend,
   EmulatorBackendCapabilities,
-  EmulatorDevice
+  EmulatorDevice,
+  EmulatorHelperStopOptions
 } from './emulator-backend'
 
 // The iOS/serve-sim backend: device/helper mechanics extracted from the former
@@ -47,6 +50,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   private cachedServeSimExecutable: ServeSimExecutable | undefined
+  private readonly helperOwner = randomUUID()
   private readonly waitForEndpointReady: (endpoint: string) => Promise<boolean>
 
   constructor(options: EmulatorBridgeOptions = {}) {
@@ -190,7 +194,10 @@ export class IosEmulatorBackend implements EmulatorBackend {
     const udid = await this.resolveDeviceId(deviceId)
     await ensureSimulatorBooted(udid)
     const startDetachedHelper = async (): Promise<EmulatorSessionInfo> => {
-      const raw = await this.execServeSim(['--detach', '-q', udid], { json: true })
+      const raw = await this.execServeSim(['--detach', '-q', udid], {
+        json: true,
+        helperOwner: this.helperOwner
+      })
       return parseServeSimDetachedSession(raw, udid)
     }
 
@@ -203,7 +210,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
       }
       await this.stopHelperForDevice(info.deviceUdid, {
         helperPid: info.helperPid,
-        includeOrphaned: true
+        ownedOnly: true
       })
       return false
     }
@@ -259,15 +266,23 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async stopHelperForDevice(
     deviceId: string,
-    options: { helperPid?: number; includeOrphaned?: boolean } = {}
+    options: EmulatorHelperStopOptions = {}
   ): Promise<void> {
+    if (options.ownedOnly) {
+      await killOwnedServeSimHelperProcessesForDevice(deviceId, this.helperOwner)
+      return
+    }
     await this.execServeSim(['--kill', '-q', deviceId]).catch(() => {})
     // Why: serve-sim --kill depends on its state file; stale helper binaries
     // can survive state loss and keep old streams/listeners around.
     await killServeSimHelperProcessesForDevice(deviceId, options).catch(() => {})
   }
 
-  async shutdownDevice(deviceId: string): Promise<void> {
+  async shutdownDevice(deviceId: string, options: { ownedOnly?: boolean } = {}): Promise<void> {
+    // The simulator is shared; powering it off also exits other tools' helpers.
+    if (options.ownedOnly) {
+      return
+    }
     await shutdownSimulatorDevice(deviceId)
   }
 
@@ -288,7 +303,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   private async execServeSim(
     args: string[],
-    options?: { json?: boolean; timeoutMs?: number }
+    options?: { json?: boolean; timeoutMs?: number; helperOwner?: string }
   ): Promise<unknown> {
     return execServeSimCommand(this.serveSimExecutable, args, options)
   }

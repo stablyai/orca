@@ -5,6 +5,7 @@ import { platform, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { EmulatorError } from './emulator-errors'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
+import { SERVE_SIM_OWNER_ENV } from './serve-sim-helper-processes'
 
 const EXEC_TIMEOUT_MS = 90_000
 const MAC_OPEN_SHIM_DIR = join(tmpdir(), 'orca-serve-sim-open-shim')
@@ -174,7 +175,7 @@ export function stripEmulatorTargetArgs(args: string[]): string[] {
 export async function execServeSimCommand(
   executable: ServeSimExecutable,
   args: string[],
-  options?: { json?: boolean; timeoutMs?: number }
+  options?: { json?: boolean; timeoutMs?: number; helperOwner?: string }
 ): Promise<unknown> {
   const timeout = options?.timeoutMs ?? EXEC_TIMEOUT_MS
   const finalArgs = [...args]
@@ -187,7 +188,10 @@ export async function execServeSimCommand(
     result = await runProcess({
       program: executable.command,
       args: [...executable.baseArgs, ...finalArgs],
-      env: getServeSimEnv(executable),
+      env: {
+        ...getServeSimEnv(executable),
+        ...(options?.helperOwner ? { [SERVE_SIM_OWNER_ENV]: options.helperOwner } : {})
+      },
       maxOutputBytes: 10 * 1024 * 1024,
       timeoutMs: timeout
     })

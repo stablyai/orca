@@ -203,7 +203,7 @@ function installWillQuitHandler(): void {
     // Why immediately before the final store flush with no await in between: beginSshShutdown() marks every
     // active SSH lease detached in memory synchronously, and that flush is what persists it.
     const sshShutdown = beginSshShutdown()
-    killAllPty()
+    const ptyShutdown = killAllPty()
     const watcherShutdown = shutdownWatchersOnce()
     const finalStore = state.store
     const storeFlush = (async () => {
@@ -262,6 +262,7 @@ function installWillQuitHandler(): void {
       { name: 'browser-client-hosts', promise: browserClientHostShutdown },
       { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
       { name: 'ssh', promise: sshShutdown },
+      { name: 'local-ptys', promise: ptyShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },
