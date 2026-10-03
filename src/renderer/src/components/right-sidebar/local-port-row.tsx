@@ -1,6 +1,11 @@
 import React, { useCallback } from 'react'
 import { Box, Copy, ExternalLink, Info, Server, Trash2 } from 'lucide-react'
 import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-port-actions'
+import {
+  clientReachableAddress,
+  useClientReachableUrlForPort,
+  usePortSystemBrowserAvailable
+} from '@/lib/workspace-port-client-reachable-url'
 import { addressForPort } from '@/lib/workspace-port-urls'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -32,9 +37,16 @@ export function LocalPortRow({
   onShowDetails: (port: WorkspacePort) => void
   onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
+  // Why: on a remote workspace the OS-derived address is `localhost:<port>`, which
+  // names *this* machine and reaches nothing. Showing and copying the reachable
+  // address instead keeps the row honest and makes a remote port read like a local one.
+  const reachableUrl = useClientReachableUrlForPort(port)
+  const address = clientReachableAddress(reachableUrl) ?? addressForPort(port)
+  const systemBrowserAvailable = usePortSystemBrowserAvailable(port)
+
   const handleCopy = useCallback(() => {
-    void window.api.ui.writeClipboardText(addressForPort(port))
-  }, [port])
+    void window.api.ui.writeClipboardText(address)
+  }, [address])
 
   const handleOpenBrowser = useCallback(
     (event?: React.MouseEvent<HTMLButtonElement>) => {
@@ -76,7 +88,7 @@ export function LocalPortRow({
   )
 
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
-  const address = addressForPort(port)
+
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
@@ -141,7 +153,11 @@ export function LocalPortRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {getPortOpenBrowserTooltipLabel(openBrowserLabel)}
+                {getPortOpenBrowserTooltipLabel(
+                  openBrowserLabel,
+                  undefined,
+                  systemBrowserAvailable
+                )}
               </TooltipContent>
             </Tooltip>
             <Tooltip>

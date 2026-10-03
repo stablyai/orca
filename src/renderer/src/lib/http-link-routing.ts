@@ -4,7 +4,9 @@ import {
   parseLoopbackUrlWithPort,
   type LocalhostWorktreeLabelRoute
 } from '../../../shared/localhost-worktree-labels'
+import { resolveClientReachableUrlForLoopbackLink } from './workspace-port-urls'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import { toast } from 'sonner'
 
@@ -45,6 +47,11 @@ type StoreAccessor = () => {
   allWorktrees?: () => LocalhostLinkWorktree[]
   workspacePortScan?: { result: WorkspacePortScanResult } | null
   workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
+  // Why declared even though the accessor passes the whole store: rewriting a remote
+  // pane's loopback link needs the endpoint this client dials, and leaving it undeclared
+  // would let a future narrowing of the accessor drop it with no type error — the
+  // rewrite would just silently stop happening.
+  runtimeEnvironments?: readonly PublicKnownRuntimeEnvironment[]
 }
 
 type WorkspaceHttpLinkBrowserRequest = {
@@ -195,7 +202,15 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    void window.api.shell.openUrl(url)
+    // Why: `localhost:<port>` printed by a remote pane names *this* machine, where
+    // nothing is listening. Substitute the address this client already reaches that
+    // runtime on when the listener is wildcard-bound; otherwise keep today's URL,
+    // since a loopback-bound listener has no address that would work here either.
+    const reachable =
+      state && sourceOwner?.kind === 'runtime'
+        ? resolveClientReachableUrlForLoopbackLink(state, url, sourceOwner.runtimeEnvironmentId)
+        : null
+    void window.api.shell.openUrl(reachable ?? url)
     return
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
