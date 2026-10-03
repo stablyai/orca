@@ -17619,6 +17619,7 @@
       "status": {
         "responding": "智能体正在回复",
         "working": "处理中…",
+        "starting": "正在启动…",
         "thinking": "思维",
         "workingFor": "已工作 {{value0}}",
         "workedFor": "工作了 {{value0}}",

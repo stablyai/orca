@@ -83,6 +83,7 @@ export function NativeChatMessageList({
   deliveryNotices,
   awaitingInput = null,
   turnActivity,
+  agentStarting = false,
   runtimeContext
 }: {
   session: NativeChatLiveSession
@@ -109,6 +110,8 @@ export function NativeChatMessageList({
   /** Set while the turn waits on the reader; the live activity line yields to it. */
   awaitingInput?: NativeChatAwaitingInput | null
   turnActivity?: NativeChatTurnActivity | null
+  /** The host reports the agent has not finished starting; the live activity line says so. */
+  agentStarting?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
   const [navigationRequest, setNavigationRequest] = useState<NativeChatNavigationRequest | null>(
@@ -401,6 +404,7 @@ export function NativeChatMessageList({
                   <NativeChatTurnActivityLine
                     activity={turnActivity}
                     thinking={turnStatuses.active?.thinking === true}
+                    starting={agentStarting}
                   />
                 ) : tailRow === 'awaiting-input' ? (
                   <NativeChatAwaitingInputRow subject={null} pending />

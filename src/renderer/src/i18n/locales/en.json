@@ -17865,6 +17865,7 @@
       "status": {
         "responding": "Agent is responding",
         "working": "Working…",
+        "starting": "Starting…",
         "thinking": "Thinking",
         "workingFor": "Working for {{value0}}",
         "workedFor": "Worked for {{value0}}",
