@@ -1,8 +1,8 @@
-import type {
-  AgentSessionMutationResult,
-  AgentSessionWireRefusalCode
-} from '../../../src/shared/agent-session-wire'
-import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import type { AgentSessionMutationResult } from '../../../src/shared/agent-session-wire'
+import {
+  structuredAgentSessionPayloadFingerprint,
+  type StructuredAgentSessionMutationCallResult
+} from '../../../src/shared/structured-agent-session-mutation'
 import {
   agentSessionRefusalNotice,
   agentSessionWriteFailureNotice,
@@ -23,15 +23,6 @@ import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-cli
 import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-send'
 
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
-
-export type StructuredAgentSessionMutationCallResult<TValue> =
-  | { status: 'accepted'; value: TValue }
-  | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
-  /** `hostRejectedByRequestSchema`: the host's schema turned this request away before running
-   *  it, so the same request can never be accepted there. An auth refusal does not set it:
-   *  it says nothing about an earlier delivery of the same id. */
-  | { status: 'failed'; message: string; hostRejectedByRequestSchema?: true }
-  | { status: 'unknown' }
 
 export type StructuredAgentSessionMutationResult<TValue> =
   | { status: 'accepted'; value: TValue; sameFence: boolean }

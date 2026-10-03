@@ -6,7 +6,7 @@ import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-sessi
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
-import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
+import { structuredSendResultFixture } from '../../../src/shared/structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 const asyncStorage = vi.hoisted(() => ({

@@ -11,7 +11,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
+import { structuredSendResultFixture } from '../../../src/shared/structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 const asyncStorage = vi.hoisted(() => ({

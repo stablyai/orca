@@ -3,8 +3,8 @@
 // message landed. A fixture that omits it lets a client claim delivery from `ok`
 // alone, which is the bug these tests exist to hold shut.
 
-import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
+import type { AgentJournalDispatchState } from './agent-session-journal-types'
+import type { AgentSessionSendResult } from './agent-session-wire'
 
 export function structuredSendResultFixture(
   dispatchState: AgentJournalDispatchState,

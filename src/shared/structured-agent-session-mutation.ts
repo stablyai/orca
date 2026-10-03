@@ -1,4 +1,15 @@
+import type { AgentSessionWireRefusalCode } from './agent-session-wire'
 import { sha256 } from './sha256'
+
+/** What a client's `agentSession.*` mutation call came to, before any lane reads it. */
+export type StructuredAgentSessionMutationCallResult<TValue> =
+  | { status: 'accepted'; value: TValue }
+  | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
+  /** `hostRejectedByRequestSchema`: the host's schema turned this request away before running
+   *  it, so the same request can never be accepted there. An auth refusal does not set it:
+   *  it says nothing about an earlier delivery of the same id. */
+  | { status: 'failed'; message: string; hostRejectedByRequestSchema?: true }
+  | { status: 'unknown' }
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {

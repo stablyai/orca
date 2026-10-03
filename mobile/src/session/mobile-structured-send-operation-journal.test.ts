@@ -15,9 +15,9 @@ import {
   clearMobileStructuredSettledSendOperations,
   getOrCreateMobileStructuredSendOperation as getOrCreatePersistedOperation,
   mobileStructuredSendCallerFingerprint,
-  mobileStructuredSendOperationKey,
   resetMobileStructuredSendOperationJournalForTests
 } from './mobile-structured-send-operation-journal'
+import { structuredAgentSessionSendOperationKey } from '../../../src/shared/structured-agent-session-send-retention'
 import { readMirroredStorage } from '../storage/mirrored-storage-keys'
 
 const NOW = 1_900_000_000_000
@@ -156,7 +156,7 @@ describe('mobile structured send operation journal', () => {
   it('clears an ack-lost id only when its journal submission settles', async () => {
     const sessionKey = 'host-a:session-a'
     const payloadFingerprint = 'c'.repeat(64)
-    const operationKey = mobileStructuredSendOperationKey({
+    const operationKey = structuredAgentSessionSendOperationKey({
       sessionKey,
       intentFingerprint: payloadFingerprint
     })
@@ -190,7 +190,7 @@ describe('mobile structured send operation journal', () => {
   it("clears an id a draft hand-off names, whatever that hand-off's state", async () => {
     const sessionKey = 'host-a:session-a'
     const payloadFingerprint = '9'.repeat(64)
-    const operationKey = mobileStructuredSendOperationKey({
+    const operationKey = structuredAgentSessionSendOperationKey({
       sessionKey,
       intentFingerprint: payloadFingerprint
     })
@@ -223,7 +223,7 @@ describe('mobile structured send operation journal', () => {
   it('does not clear a newer id for an older matching-payload submission', async () => {
     const sessionKey = 'host-a:session-a'
     const payloadFingerprint = 'e'.repeat(64)
-    const operationKey = mobileStructuredSendOperationKey({
+    const operationKey = structuredAgentSessionSendOperationKey({
       sessionKey,
       intentFingerprint: payloadFingerprint
     })
@@ -409,21 +409,6 @@ describe('mobile structured send operation journal', () => {
         now: NOW
       })
     ).rejects.toThrow('journal is full')
-  })
-
-  it('hashes the session scope and payload instead of retaining message bodies', () => {
-    const first = mobileStructuredSendOperationKey({
-      sessionKey: 'host-a:session-a',
-      intentFingerprint: 'message-body-fingerprint'
-    })
-    const second = mobileStructuredSendOperationKey({
-      sessionKey: 'host-b:session-a',
-      intentFingerprint: 'message-body-fingerprint'
-    })
-
-    expect(first).toMatch(/^[0-9a-f]{64}$/)
-    expect(second).not.toBe(first)
-    expect(first).not.toContain('message-body')
   })
 
   it('fails closed when a retained id crosses authenticated caller identities', async () => {

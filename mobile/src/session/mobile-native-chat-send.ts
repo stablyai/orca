@@ -4,6 +4,7 @@ import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
+import type { StructuredAgentSessionSendOutcome } from '../../../src/shared/structured-agent-session-send-retention'
 
 /** What a native-chat write takes, named from an operation so no module names the raw port. */
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
@@ -31,7 +32,7 @@ type MobileNativeChatSendArgs = {
  *  frame was written) — callers must not present it as a definite send failure.
  *  'queued' = structured lane only: the host holds the message as a queued
  *  draft, so it shows as a card above the composer, never a transcript echo. */
-export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
+export type MobileNativeChatSendOutcome = StructuredAgentSessionSendOutcome
 
 /** What a terminal write can answer: the PTY lane has no draft queue. */
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>

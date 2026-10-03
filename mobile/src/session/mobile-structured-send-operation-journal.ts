@@ -32,17 +32,6 @@ type OperationJournal = z.infer<typeof OperationJournalSchema>
 
 const mutations: { tail: Promise<void> } = { tail: Promise.resolve() }
 
-export function mobileStructuredSendOperationKey(input: {
-  sessionKey: string
-  intentFingerprint: string
-}): string {
-  return structuredAgentSessionDomainFingerprint({
-    domain: 'mobile.agentSession.send.operation',
-    sessionId: input.sessionKey,
-    fields: { intentFingerprint: input.intentFingerprint }
-  })
-}
-
 export function mobileStructuredSendCallerFingerprint(callerIdentity: string): string {
   return structuredAgentSessionDomainFingerprint({
     domain: 'mobile.agentSession.send.caller',

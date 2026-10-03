@@ -2,11 +2,9 @@ import type { AgentSessionCancelResult } from '../../../src/shared/agent-session
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import type { StructuredAgentSessionMutationCallResult } from '../../../src/shared/structured-agent-session-mutation'
 import type { RpcClient } from '../transport/rpc-client'
-import {
-  requestStructuredAgentSessionMutation,
-  type StructuredAgentSessionMutationCallResult
-} from './mobile-structured-agent-session-rpc'
+import { requestStructuredAgentSessionMutation } from './mobile-structured-agent-session-rpc'
 
 type PromptIdentity = { itemId: string; expectedRevision: number }
 

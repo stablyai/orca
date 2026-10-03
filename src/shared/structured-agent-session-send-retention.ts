@@ -1,15 +1,16 @@
-// What one `agentSession.send` answer means to a client with no outbox.
+// When a client may keep, and must give up, the operation id it sent a message under.
 //
 // The desktop reads the same four dispatch states through
-// `disposeStructuredAgentSessionSendResult`; mobile has no queue to move, so it
-// needs only two facts: the outcome to report, and whether the operation id it
-// sent under is spent.
+// `disposeStructuredAgentSessionSendResult`; a client with no outbox has no queue
+// to move, so it needs only two facts: the outcome to report, and whether the
+// operation id it sent under is spent.
 //
-// The id is the whole safety mechanism here. Mobile keys its retained ids by
-// message body, so re-sending the same text reuses the id — and one id is one
-// delivery: `performSend` answers a second request under a recorded id from the
-// ledger and never puts it back on the wire. Releasing the id turns that replay
-// into a genuine second delivery, which is why only a settled answer releases it:
+// The id is the whole safety mechanism here. A client keys its retained ids by
+// intent (`structuredAgentSessionSendIntentKey`), so re-sending the same text
+// reuses the id — and one id is one delivery: `performSend` answers a second
+// request under a recorded id from the ledger and never puts it back on the wire.
+// Releasing the id turns that replay into a genuine second delivery, which is why
+// only a settled answer releases it:
 //
 //   accepted/pending — the send happened. The id is spent; a later identical
 //     message is a new message and must carry a new id.
@@ -25,25 +26,32 @@
 //     the retry has to stay a replay. Rotating here is what sent one message to a
 //     model five times.
 
-import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
-import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
-import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
+import type { AgentJournalSubmission } from './agent-session-journal-types'
+import type { AgentSessionSendResult } from './agent-session-wire'
+import { agentSessionRefusalOperationState } from './agent-session-refusal-retry'
+import type { StructuredAgentSessionAttachment } from './structured-agent-session-outbox'
+import {
+  structuredAgentSessionDomainFingerprint,
+  type StructuredAgentSessionMutationCallResult
+} from './structured-agent-session-mutation'
+import { structuredAgentSessionRejectionNotice } from './structured-agent-session-send-disposition'
 
-export type MobileStructuredSendDelivery = {
-  outcome: MobileNativeChatSendOutcome
+/** 'queued' = the host holds the message as a queued draft, so it shows as a
+ *  card above the composer, never a transcript echo. */
+export type StructuredAgentSessionSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
+
+export type StructuredAgentSessionSendDelivery = {
+  outcome: StructuredAgentSessionSendOutcome
   /** True when a retry is safe under a fresh operation id. */
   operationIdSpent: boolean
   /** Copy for the user, or null when the outcome needs none. */
   error: string | null
 }
 
-export function mobileStructuredSendDelivery(
+export function structuredAgentSessionSendDelivery(
   result: StructuredAgentSessionMutationCallResult<AgentSessionSendResult>,
   retained = false
-): MobileStructuredSendDelivery {
+): StructuredAgentSessionSendDelivery {
   if (result.status === 'unknown') {
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
@@ -80,7 +88,7 @@ export function mobileStructuredSendDelivery(
   if (submission !== undefined && submission.queuedMessageId === result.value.clientMessageId) {
     // The host says this id's queued draft was handed off as that submission: the send reached
     // it, so the id is spent now, not when a stream that may never carry the hand-off shows it.
-    // Which send the phone meant stays unconfirmed, as for any retained replay of a live send.
+    // Which send the client meant stays unconfirmed, as for any retained replay of a live send.
     return { outcome: 'unknown', operationIdSpent: true, error: null }
   }
   if (!submission || submission.dispatchState === 'unknown') {
@@ -99,4 +107,53 @@ export function mobileStructuredSendDelivery(
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
   return { outcome: 'accepted', operationIdSpent: true, error: null }
+}
+
+export type StructuredAgentSessionSendIntentAttachment = StructuredAgentSessionAttachment & {
+  contentFingerprint?: string
+}
+
+// The `mobile.*` domains are part of keys the phone has already saved; renaming them orphans
+// every retained id.
+export function structuredAgentSessionSendOperationKey(input: {
+  sessionKey: string
+  intentFingerprint: string
+}): string {
+  return structuredAgentSessionDomainFingerprint({
+    domain: 'mobile.agentSession.send.operation',
+    sessionId: input.sessionKey,
+    fields: { intentFingerprint: input.intentFingerprint }
+  })
+}
+
+/** The key a retained send id is saved under: the session, the trimmed text and each
+ *  attachment's fingerprint, plus `delivery` when the send asks to queue. */
+export function structuredAgentSessionSendIntentKey(input: {
+  sessionKey: string
+  text: string
+  attachments: readonly StructuredAgentSessionSendIntentAttachment[]
+  delivery?: 'queue-if-active'
+}): string {
+  const intentFields = {
+    text: input.text.trimEnd(),
+    attachments: input.attachments.map(
+      (attachment) =>
+        attachment.contentFingerprint ??
+        structuredAgentSessionDomainFingerprint({
+          domain: 'mobile.nativeChat.image.preview',
+          sessionId: '',
+          fields: { previewUri: attachment.previewUri }
+        })
+    )
+  }
+  // `delivery` is part of the intent key, never a stored journal field: the
+  // immediate key is exactly today's, so an older build still reads the journal.
+  return structuredAgentSessionSendOperationKey({
+    sessionKey: input.sessionKey,
+    intentFingerprint: structuredAgentSessionDomainFingerprint({
+      domain: 'mobile.agentSession.send.intent',
+      sessionId: input.sessionKey,
+      fields: input.delivery ? { ...intentFields, delivery: input.delivery } : intentFields
+    })
+  })
 }

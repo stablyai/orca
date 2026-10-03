@@ -3,10 +3,11 @@ import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
 } from '../../../src/shared/structured-agent-session-outbox'
+import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import {
-  structuredAgentSessionDomainFingerprint,
-  structuredAgentSessionPayloadFingerprint
-} from '../../../src/shared/structured-agent-session-mutation'
+  structuredAgentSessionSendDelivery,
+  structuredAgentSessionSendIntentKey
+} from '../../../src/shared/structured-agent-session-send-retention'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
@@ -14,13 +15,11 @@ import {
   timeoutForDeadline
 } from './mobile-structured-agent-session-rpc'
 import { structuredSessionOperationId } from './structured-session-operation-id'
-import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import {
   bypassedMobileStructuredSendOperationId,
   clearMobileStructuredSendOperation,
   forgetBypassedMobileStructuredSendOperation,
   getOrCreateMobileStructuredSendOperation,
-  mobileStructuredSendOperationKey,
   rememberBypassedMobileStructuredSendOperation
 } from './mobile-structured-send-operation-journal'
 
@@ -57,31 +56,12 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     sessionId: input.sessionId,
     fields: { body: requestedBody }
   })
-  const intentFields = {
-    text: input.text.trimEnd(),
-    attachments: input.attachments.map(
-      (attachment) =>
-        attachment.contentFingerprint ??
-        structuredAgentSessionDomainFingerprint({
-          domain: 'mobile.nativeChat.image.preview',
-          sessionId: '',
-          fields: { previewUri: attachment.previewUri }
-        })
-    )
-  }
-  // `delivery` is part of the intent key, never a stored journal field: the
-  // immediate key is exactly today's, so an older build still reads the journal.
-  const operationKeyFor = (delivery: 'queue-if-active' | undefined): string =>
-    mobileStructuredSendOperationKey({
-      sessionKey: input.sessionKey,
-      intentFingerprint: structuredAgentSessionDomainFingerprint({
-        domain: 'mobile.agentSession.send.intent',
-        sessionId: input.sessionKey,
-        fields: delivery ? { ...intentFields, delivery } : intentFields
-      })
-    })
-  const queuedOperationKey = operationKeyFor('queue-if-active')
-  const immediateOperationKey = operationKeyFor(undefined)
+  const intent = { sessionKey: input.sessionKey, text: input.text, attachments: input.attachments }
+  const queuedOperationKey = structuredAgentSessionSendIntentKey({
+    ...intent,
+    delivery: 'queue-if-active'
+  })
+  const immediateOperationKey = structuredAgentSessionSendIntentKey(intent)
   const requestedOperationKey = input.delivery ? queuedOperationKey : immediateOperationKey
   const attachmentPaths = input.attachments.map((attachment) => attachment.path)
   const resendKey = input.resendOperationKey ?? requestedOperationKey
@@ -144,7 +124,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     clientOperationId: operation.operationId,
     timeoutMs
   })
-  const outcome = mobileStructuredSendDelivery(result, operation.retained)
+  const outcome = structuredAgentSessionSendDelivery(result, operation.retained)
   if (input.bypassRetainedRecord && outcome.operationIdSpent) {
     forgetBypassedMobileStructuredSendOperation(operationKey, operation.operationId)
   }
