@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import type { PtyListedSession } from '../../../shared/pty-listed-session'
@@ -93,6 +94,7 @@ function testDeps(args: {
   const sleeping = args.sleeping ?? []
   const ptyIdsByTabId: Record<string, string[]> = {}
   const tabsByWorktree: Record<string, TerminalTab[]> = { [WORKTREE_ID]: [] }
+  const closedTerminalTabTombstonesByTabId: ClosedTerminalTabTombstonesByTabId = {}
   const terminalLayoutsByTabId: Record<string, SeededLayout> = Object.fromEntries(
     sleeping.map((record) => {
       const leafId = record.paneKey.slice(record.paneKey.indexOf(':') + 1)
@@ -146,6 +148,7 @@ function testDeps(args: {
     ptyIdsByTabId[tabId] = [...new Set([...(ptyIdsByTabId[tabId] ?? []), ptyId])]
   })
   const store = {
+    closedTerminalTabTombstonesByTabId,
     createTab,
     ptyIdsByTabId,
     setTabLayout,
@@ -329,7 +332,16 @@ describe('worktree agent activation gate', () => {
           boundPtyId: `${WORKTREE_ID}@@other-pty`
         })
     ],
-    ['the recorded tab is gone', () => {}],
+    [
+      'the recorded tab was closed',
+      (store) => {
+        store.closedTerminalTabTombstonesByTabId['tab-live'] = {
+          closedAt: Date.now(),
+          worktreeId: WORKTREE_ID,
+          reason: 'user'
+        }
+      }
+    ],
     // A closed split or a replaced layout leaves the record naming a leaf the tab no longer has.
     [
       'the recorded leaf is no longer in the tab layout',
@@ -364,6 +376,65 @@ describe('worktree agent activation gate', () => {
     // Nothing may be bound to the recorded surface the gate refused.
     expect(deps.getState().terminalLayoutsByTabId['tab-live']).toEqual(recordedLayoutBefore)
     expect(deps.getState().ptyIdsByTabId['tab-live']).toBeUndefined()
+  })
+
+  // Another client's pane spawned these PTYs for its own tab, which this window never had.
+  it('adopts unowned PTYs under the tab they were recorded for when this window lacks it', async () => {
+    const firstPtyId = `${WORKTREE_ID}@@live-agent`
+    const secondPtyId = `${WORKTREE_ID}@@live-sibling`
+    const unownedAt = (ptyId: string, leafId: string): UnownedLiveTerminal => ({
+      unowned: true,
+      recorded: { paneKey: `tab-live:${leafId}`, ptyId, tabId: 'tab-live' }
+    })
+    const { deps, createTab } = testDeps({
+      sessions: [listed(firstPtyId), listed(secondPtyId)],
+      surfaceOwners: new Map([
+        [firstPtyId, unownedAt(firstPtyId, LIVE_LEAF_ID)],
+        [secondPtyId, unownedAt(secondPtyId, SIBLING_LEAF_ID)]
+      ])
+    })
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+
+    // Fresh ids left that client showing each agent in a second tab.
+    expect(createTab).toHaveBeenCalledOnce()
+    expect(deps.getState().terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
+      [LIVE_LEAF_ID]: firstPtyId,
+      [SIBLING_LEAF_ID]: secondPtyId
+    })
+  })
+
+  // Two live PTYs naming one pane: the pane binds once and the other PTY keeps a tab of its own.
+  it.each([
+    ['the host names the second PTY as its owner', false],
+    ['the second PTY only recorded it too', true]
+  ] as const)('binds a recorded pane once when %s', async (_case, secondUnowned) => {
+    const [first, second] = [`${WORKTREE_ID}@@first`, `${WORKTREE_ID}@@second`]
+    const pane = { paneKey: `tab-live:${LIVE_LEAF_ID}`, tabId: 'tab-live' }
+    const { deps, createTab } = testDeps({
+      sessions: [listed(first), listed(second)],
+      surfaceOwners: new Map([
+        [first, { unowned: true, recorded: { ...pane, ptyId: first } }],
+        [
+          second,
+          secondUnowned
+            ? { unowned: true, recorded: { ...pane, ptyId: second } }
+            : { ...pane, ptyId: second }
+        ]
+      ])
+    })
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+
+    const [bound, minted] = secondUnowned ? [first, second] : [second, first]
+    expect(deps.getState().terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
+      [LIVE_LEAF_ID]: bound
+    })
+    expect(createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, undefined, {
+      initialPtyId: minted,
+      activate: false,
+      recordInteraction: false
+    })
   })
 
   it('adopts a daemon PTY minted for a folder workspace', async () => {
