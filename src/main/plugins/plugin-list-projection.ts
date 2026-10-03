@@ -65,6 +65,7 @@ export type PluginListEntry = {
     keybindings: { key: string; when: 'global' | 'worktree' }[]
   }[]
   hasWorker: boolean
+  markdownRenderers?: { language: string; commandId: string }[]
   vmRecipes: {
     id: string
     name: string
@@ -171,6 +172,9 @@ export async function buildPluginList(
           kind: capability.kind,
           description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
         })),
+        ...(plugin.manifest.contributes.markdownRenderers.length
+          ? { markdownRenderers: plugin.manifest.contributes.markdownRenderers }
+          : {}),
         panels: plugin.manifest.contributes.panels.map((panel) => ({
           id: panel.id,
           title: panel.title,

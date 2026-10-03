@@ -6,6 +6,8 @@ import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
 import { createPluginPanelCallAdmission } from '../../shared/plugins/plugin-panel-call-admission'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { PluginPanelController } from './plugin-panel-controller'
+import { bindPluginHostServices } from './plugin-host-service-bindings'
+import { executePluginHostCall } from './plugin-host-methods'
 
 const roots: string[] = []
 
@@ -42,6 +44,80 @@ async function createPlugin(): Promise<ValidDiscoveredPlugin> {
 }
 
 describe('PluginPanelController identity binding', () => {
+  it('allows own settings only through a consented owner session and audits writes', async () => {
+    const plugin = await createPlugin()
+    const audit = { record: vi.fn().mockResolvedValue(undefined) }
+    const services = bindPluginHostServices({
+      pluginsDataDir: plugin.rootDir,
+      subscribeEvents: () => [],
+      delegate: {
+        resolveActiveWorktreeContext: async () => null,
+        listTerminals: async () => ({ terminals: [] }),
+        sendTerminal: async () => ({ accepted: false }),
+        dispatchPluginNotification: async () => ({ delivered: false })
+      }
+    })
+    const set = vi.spyOn(services.settings, 'set')
+    let granted = false
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => plugin,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: (pluginId, method, params) =>
+        executePluginHostCall({
+          pluginId,
+          method,
+          params,
+          viaPanel: true,
+          grantedCapabilities: granted ? ['settings:own'] : [],
+          services,
+          audit
+        }),
+      log: () => vi.fn()
+    })
+    const entry = await controller.open('renderer:1', plugin.pluginKey, 'dashboard')
+    if (!entry) {
+      throw new Error('missing panel fixture')
+    }
+    const call = {
+      sessionToken: entry.sessionToken,
+      action: 'settings.set',
+      params: { key: 'limit', value: 10, pluginId: 'orca-samples.other' }
+    }
+    expect(await controller.execute('renderer:1', call)).toMatchObject({
+      ok: false,
+      code: 'capability_denied'
+    })
+    expect(set).not.toHaveBeenCalled()
+    granted = true
+    expect(await controller.execute('renderer:2', call)).toMatchObject({
+      ok: false,
+      code: 'invalid_request'
+    })
+    expect(set).not.toHaveBeenCalled()
+    expect(await controller.execute('renderer:1', call)).toEqual({ ok: true, value: { ok: true } })
+    expect(set).toHaveBeenCalledWith(plugin.pluginKey, 'limit', 10)
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: `plugin:${plugin.pluginKey}`,
+        method: 'settings.set',
+        outcome: 'attempt'
+      })
+    )
+    expect(
+      await controller.execute('renderer:1', {
+        sessionToken: entry.sessionToken,
+        action: 'settings.get',
+        params: {}
+      })
+    ).toEqual({ ok: true, value: { settings: { limit: 10 } } })
+    expect(services.settings.getAll('orca-samples.other')).toEqual({})
+    controller.revokeOwner('renderer:1')
+    expect(await controller.execute('renderer:1', call)).toMatchObject({
+      ok: false,
+      code: 'invalid_request'
+    })
+  })
+
   it('uses the session identity and rejects caller-supplied plugin claims', async () => {
     const plugin = await createPlugin()
     const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { delivered: true } })

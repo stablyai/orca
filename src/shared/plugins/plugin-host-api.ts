@@ -226,7 +226,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'settings:own',
     mutation: false,
-    panel: false,
+    panel: true,
     params: settingsGetParams,
     result: settingsGetResult
   }),
@@ -236,7 +236,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'settings:own',
     mutation: true,
-    panel: false,
+    panel: true,
     params: settingsSetParams,
     result: settingsSetResult
   }),

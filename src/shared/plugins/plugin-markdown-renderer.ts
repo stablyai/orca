@@ -7,6 +7,7 @@ export const PLUGIN_MARKDOWN_CODE_MAX_LENGTH = 64 * 1024
 export const PLUGIN_MARKDOWN_OUTPUT_MAX_BYTES = 512 * 1024
 export const PLUGIN_MARKDOWN_ROW_LIMIT = 500
 export const PLUGIN_MARKDOWN_COLUMN_LIMIT = 32
+export const PLUGIN_MARKDOWN_REFERENCE_LIMIT = 128
 
 export const pluginMarkdownLanguageSchema = z
   .string()
@@ -73,31 +74,41 @@ export const pluginMarkdownCellSchema = z
   })
   .strict()
 
-export const pluginMarkdownOutputSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      kind: z.literal('table'),
-      columns: z.array(z.string().max(256)).min(1).max(PLUGIN_MARKDOWN_COLUMN_LIMIT),
-      rows: z
-        .array(z.array(pluginMarkdownCellSchema).max(PLUGIN_MARKDOWN_COLUMN_LIMIT))
-        .max(PLUGIN_MARKDOWN_ROW_LIMIT)
-    })
-    .strict()
-    .refine((table) => table.rows.every((row) => row.length === table.columns.length), {
-      message: 'table rows must match column count'
-    }),
-  z
-    .object({
-      kind: z.literal('list'),
-      items: z.array(pluginMarkdownCellSchema).max(PLUGIN_MARKDOWN_ROW_LIMIT)
-    })
-    .strict(),
-  z.object({ kind: z.literal('text'), text: z.string().max(64 * 1024) }).strict(),
-  z.object({ kind: z.literal('error'), message: z.string().max(4096) }).strict()
-])
+export const pluginMarkdownOutputSchema = z
+  .discriminatedUnion('kind', [
+    z
+      .object({
+        kind: z.literal('table'),
+        columns: z.array(z.string().max(256)).min(1).max(PLUGIN_MARKDOWN_COLUMN_LIMIT),
+        rows: z
+          .array(z.array(pluginMarkdownCellSchema).max(PLUGIN_MARKDOWN_COLUMN_LIMIT))
+          .max(PLUGIN_MARKDOWN_ROW_LIMIT)
+      })
+      .strict()
+      .refine((table) => table.rows.every((row) => row.length === table.columns.length), {
+        message: 'table rows must match column count'
+      }),
+    z
+      .object({
+        kind: z.literal('list'),
+        items: z.array(pluginMarkdownCellSchema).max(PLUGIN_MARKDOWN_ROW_LIMIT)
+      })
+      .strict(),
+    z.object({ kind: z.literal('text'), text: z.string().max(64 * 1024) }).strict(),
+    z.object({ kind: z.literal('error'), message: z.string().max(4096) }).strict()
+  ])
+  .refine((output) => {
+    const cells =
+      output.kind === 'table' ? output.rows.flat() : output.kind === 'list' ? output.items : []
+    return cells.filter((cell) => cell.reference).length <= PLUGIN_MARKDOWN_REFERENCE_LIMIT
+  }, 'too many note references')
 
 export const pluginMarkdownWorkerResultSchema = z
-  .object({ sessionId: revisionSchema, revision: revisionSchema, output: pluginMarkdownOutputSchema })
+  .object({
+    sessionId: revisionSchema,
+    revision: revisionSchema,
+    output: pluginMarkdownOutputSchema
+  })
   .strict()
 
 export type PluginMarkdownRendererContribution = z.infer<
@@ -124,7 +135,11 @@ export type PluginMarkdownRenderResult =
   | ({ status: 'rendered'; pluginKey: string } & PluginMarkdownWorkerResult)
   | {
       status: 'unavailable'
-      reason: 'missing-provider' | 'disabled-provider' | 'ambiguous-provider' | 'unsupported-context'
+      reason:
+        | 'missing-provider'
+        | 'disabled-provider'
+        | 'ambiguous-provider'
+        | 'unsupported-context'
     }
   | {
       status: 'error'

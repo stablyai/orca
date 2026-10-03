@@ -4,7 +4,10 @@ import type { PluginManifest } from './plugin-manifest'
 
 type PluginConsentSubject = Pick<PluginManifest, 'capabilities' | 'main'> & {
   contributes?: Partial<
-    Pick<PluginManifest['contributes'], 'keybindings' | 'vmRecipes' | 'agents' | 'markdownRenderers'>
+    Pick<
+      PluginManifest['contributes'],
+      'keybindings' | 'vmRecipes' | 'agents' | 'markdownRenderers'
+    >
   >
 }
 

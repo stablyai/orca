@@ -34,13 +34,13 @@ import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
 import { assertPluginWorkerCommand } from './plugin-command-invocation'
 import { deliverPluginEvent } from './plugin-event-delivery'
 import { PluginInstallationState } from './plugin-installation-state'
+import { createServicePluginMarkdownRenderer } from './plugin-markdown-renderer'
 
 export type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 export type { PluginLogLine } from './plugin-log-buffer'
 export type { PluginServiceOptions } from './plugin-service-options'
 
 export class PluginService {
-  readonly options: PluginServiceOptions
   private readonly registry = createPluginExtensionRegistry()
   private readonly eventBus = new PluginEventBus()
   private readonly audit: PluginAuditLog
@@ -48,6 +48,7 @@ export class PluginService {
   private readonly contentVerifier = new PluginContentVerifier()
   readonly contentPacks: PluginContentPackRegistry
   readonly panels: PluginPanelController
+  readonly markdown = createServicePluginMarkdownRenderer(this, () => this.runtimeDelegate)
   private readonly changeListeners = new Set<(event: PluginChangeEvent) => void>()
   private readonly housekeeping = new PluginServiceHousekeeping()
   private runtimeDelegate: PluginRuntimeDelegate | null = null
@@ -61,8 +62,7 @@ export class PluginService {
     notifyChanged: () => this.notifyChanged(false)
   })
 
-  constructor(options: PluginServiceOptions) {
-    this.options = options
+  constructor(readonly options: PluginServiceOptions) {
     this.contentPacks = new PluginContentPackRegistry(this.contentVerifier, (pluginKey) =>
       Boolean(this.options.getPluginKillListEntry?.(pluginKey))
     )
@@ -237,7 +237,7 @@ export class PluginService {
    *  callers deny uniformly (no probe-able distinction). */
   getGrantedCapabilities(pluginKey: string): PluginCapabilityKind[] | null {
     const plugin = this.findValidPlugin(pluginKey)
-    return plugin && this.isRuntimeApproved(plugin)
+    return plugin && this.canStartPluginWork(plugin)
       ? capabilityKinds(plugin.manifest.capabilities)
       : null
   }
