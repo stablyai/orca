@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type ViewerFixture = {
+  id?: string
   displayName: string
   email: string | null
   organizationId: string
@@ -72,6 +73,9 @@ function writeMultiWorkspaceFiles(
 
 async function loadClientModule(options: SafeStorageMockOptions = {}) {
   vi.resetModules()
+  vi.doMock('../orca-profiles/profile-index-store', () => ({
+    getOrcaProfileListState: () => ({ activeProfileId: 'profile-a' })
+  }))
   linearClientMock = vi.fn(function LinearClient(
     this: { viewer: Promise<unknown> },
     { apiKey }: { apiKey: string }
@@ -81,6 +85,7 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
       throw new Error('Invalid API key')
     }
     this.viewer = Promise.resolve({
+      id: fixture.id ?? `viewer-${fixture.organizationId}`,
       displayName: fixture.displayName,
       email: fixture.email,
       organization: Promise.resolve({
@@ -146,6 +151,71 @@ function mkdtempLike(prefix: string): string {
 }
 
 describe('Linear client workspace storage', () => {
+  it('never migrates a legacy token over an explicitly connected workspace', async () => {
+    writeLegacyLinearFiles('token-alpha', {
+      displayName: 'Legacy',
+      email: 'legacy@example.com',
+      organizationName: 'Alpha'
+    })
+    fixtures.set('token-new', { ...fixtures.get('token-alpha')!, id: 'new-viewer' })
+    const linear = await loadClientModule()
+    await linear.connect('token-new')
+    const saved = linear.getStatus().workspaces?.find((entry) => entry.id === 'org-alpha')
+    await expect(linear.testConnection('legacy')).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('already connected')
+    })
+    expect(linear.getStatus().workspaces?.find((entry) => entry.id === 'org-alpha')).toBe(saved)
+    expect(readFileSync(workspaceTokenPath('org-alpha'), 'utf-8')).toBe('token-new')
+  })
+
+  it('persists the verified viewer only on explicit connect', async () => {
+    const linear = await loadClientModule()
+    await linear.connect('token-alpha')
+    expect(linear.getStatus().workspaces?.[0]).toMatchObject({
+      viewerId: 'viewer-org-alpha',
+      credentialOwnerProfileId: 'profile-a',
+      credentialEpoch: expect.any(String),
+      credentialRevision: 1
+    })
+    fixtures.set('token-alpha', { ...fixtures.get('token-alpha')!, id: 'different-viewer' })
+    await expect(linear.testConnection('org-alpha')).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('identity changed')
+    })
+    expect(linear.getStatus().workspaces?.[0]?.viewerId).toBe('viewer-org-alpha')
+    await linear.connect('token-alpha')
+    expect(linear.getStatus().workspaces?.[0]).toMatchObject({
+      viewerId: 'different-viewer',
+      credentialRevision: 2
+    })
+  })
+
+  it('rejects changed organizations without replacing the stored workspace', async () => {
+    const linear = await loadClientModule()
+    await linear.connect('token-alpha')
+    fixtures.set('token-alpha', { ...fixtures.get('token-alpha')!, organizationId: 'other-org' })
+    await expect(linear.testConnection('org-alpha')).resolves.toMatchObject({ ok: false })
+    expect(linear.getStatus().workspaces?.map((entry) => entry.id)).toEqual(['org-alpha'])
+  })
+
+  it('preserves viewer metadata across disk reload and clears revoked tokens', async () => {
+    let linear = await loadClientModule()
+    await linear.connect('token-alpha')
+    const epoch = linear.getStatus().workspaces?.[0]?.credentialEpoch
+    linear = await loadClientModule()
+    expect(linear.getStatus().workspaces?.[0]).toMatchObject({
+      viewerId: 'viewer-org-alpha',
+      credentialEpoch: epoch
+    })
+    const { loadLinearSdk } = await import('./linear-sdk')
+    linearClientMock.mockImplementationOnce(function () {
+      throw new (loadLinearSdk().AuthenticationLinearError)()
+    })
+    await expect(linear.testConnection('org-alpha')).resolves.toMatchObject({ ok: false })
+    expect(linear.getStatus().connected).toBe(false)
+  })
+
   it('stores multiple workspaces and remembers the selected workspace', async () => {
     const linear = await loadClientModule()
 
@@ -212,6 +282,7 @@ describe('Linear client workspace storage', () => {
       workspaces: [{ id: 'org-alpha', organizationName: 'Alpha' }]
     })
     expect(status.workspaces?.some((workspace) => workspace.id === 'legacy')).toBe(false)
+    expect(status.workspaces?.[0]?.viewerId).toBeUndefined()
     expect(existsSync(join(tempHome, '.orca', 'linear-token.enc'))).toBe(false)
     expect(readFileSync(join(tempHome, '.orca', 'linear-workspaces.json'), 'utf-8')).toContain(
       'org-alpha'
