@@ -57,9 +57,9 @@ export function activeAgentNotesSendFailureMessage(
       break
     case 'no-agent':
       // Why: this is the one refusal a user can hit with no visible cause — a running agent
-      // must be present, but restarting it is not required (#24286).
+      // must be present before the notes can be sent (#24286).
       message = options.explicitTarget
-        ? 'No running agent was found in the selected terminal. Start or resume its agent, then send again — a new session is not required.'
+        ? 'No running agent was found in the selected terminal. Start or resume its agent, then send again.'
         : 'No running agent was found in the active terminal. Focus the agent running in this worktree, then send the notes again.'
       break
     case 'permission':
