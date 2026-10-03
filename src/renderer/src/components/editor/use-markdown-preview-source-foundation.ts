@@ -194,6 +194,8 @@ export function useMarkdownPreviewSourceFoundation({
     keybindings,
     worktreesByRepo,
     sourceWorktree,
+    resolvedSourceFileId: sourceFileId ?? sourceOpenFile?.id ?? null,
+    resolvedSourceWorktreeId,
     sourceRoutingWorktreeId,
     sourceConnectionId,
     sourceOwner,

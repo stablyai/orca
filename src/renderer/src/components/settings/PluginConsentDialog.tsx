@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { pluginConsentErrorMessage } from './plugin-error-presentation'
 import { Button } from '../ui/button'
 import { PluginVmRecipeConsentPreview } from './PluginVmRecipeConsentPreview'
+import { PluginMarkdownRendererConsentPreview } from './PluginMarkdownRendererConsentPreview'
 import { PluginKeybindingConsentPreview } from './PluginKeybindingConsentPreview'
 import { PluginConsentProvenance } from './PluginConsentProvenance'
 import { pluginCapabilityDescription } from './plugin-capability-presentation'
@@ -222,6 +223,7 @@ export function PluginConsentDialog({
               </span>
             </div>
             <PluginKeybindingConsentPreview commands={plugin.commands} />
+            <PluginMarkdownRendererConsentPreview renderers={plugin.markdownRenderers ?? []} />
             <PluginVmRecipeConsentPreview recipes={plugin.vmRecipes ?? []} />
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
             <DialogFooter>
