@@ -187,11 +187,17 @@ function updateState(
   })
 }
 
-export async function getWslCliRegistrationCandidates(
+export type WslCliRegistrationCandidate = {
+  distro: string
+  // Why: false marks speculative discovery of a distro the user never registered from this app.
+  registered: boolean
+}
+
+export async function getWslCliRegistrationCandidateEntries(
   userDataPath: string,
   availableDistros: string[],
   timing: WslCliRegistrationRegistryTiming = {}
-): Promise<string[]> {
+): Promise<WslCliRegistrationCandidate[]> {
   // Why: the stored queue tail never rejects, so a failed concurrent write
   // cannot abort candidate discovery; reads still see fully applied updates.
   await getKeyedSerializedQueueTail(writeQueues, getRegistryPath(userDataPath))
@@ -200,21 +206,21 @@ export async function getWslCliRegistrationCandidates(
   const now = timing.now ?? Date.now()
   const negativeInspectionTtlMs =
     timing.negativeInspectionTtlMs ?? DEFAULT_NEGATIVE_INSPECTION_TTL_MS
-  return uniqueDistros(availableDistros).filter((distro) => {
+  return uniqueDistros(availableDistros).flatMap((distro): WslCliRegistrationCandidate[] => {
     const key = normalizeWslDistroKey(distro)
     if (registered.has(key)) {
       const reconciliation = state.reconciliations[key]
-      return !(
+      const reconciled =
         reconciliation &&
         timing.currentTarget &&
         reconciliation.target === timing.currentTarget &&
         reconciliation.appVersion === (timing.appVersion ?? '')
-      )
+      return reconciled ? [] : [{ distro, registered: true }]
     }
     const inspectedAt = state.inspectionTimes[key]
-    return (
+    const due =
       inspectedAt === undefined || inspectedAt > now || now - inspectedAt >= negativeInspectionTtlMs
-    )
+    return due ? [{ distro, registered: false }] : []
   })
 }
 

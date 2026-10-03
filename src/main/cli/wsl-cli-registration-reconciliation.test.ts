@@ -5,7 +5,10 @@ import { runSerializedWslCliRegistrationOperation } from './wsl-cli-registration
 describe('reconcileManagedWslCliRegistrations', () => {
   it('repairs known and newly discovered registrations, then records ownership', async () => {
     const registry = {
-      getCandidates: vi.fn(async () => ['Ubuntu', 'Debian']),
+      getCandidates: vi.fn(async () => [
+        { distro: 'Ubuntu', registered: true },
+        { distro: 'Debian', registered: false }
+      ]),
       recordObservations: vi.fn(async () => undefined)
     }
     const repairUbuntu = vi.fn(async () => ({
@@ -24,6 +27,8 @@ describe('reconcileManagedWslCliRegistrations', () => {
       isPackaged: true,
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu', 'Debian', 'Fedora'],
+      listRunningDistros: async () => ['Debian'],
+      getHostLauncherTarget: async () => 'C:\\Orca\\orca.exe',
       registry,
       createInstaller: (distro) => {
         if (distro === 'Ubuntu') {
@@ -34,12 +39,17 @@ describe('reconcileManagedWslCliRegistrations', () => {
     })
 
     expect(registry.getCandidates).toHaveBeenCalledWith(['Ubuntu', 'Debian', 'Fedora'], {
-      currentTarget: null,
+      currentTarget: 'C:\\Orca\\orca.exe',
       appVersion: ''
     })
     expect(registry.recordObservations).toHaveBeenCalledTimes(2)
     expect(registry.recordObservations).toHaveBeenCalledWith([
-      { distro: 'Ubuntu', inspected: true, managed: true }
+      {
+        distro: 'Ubuntu',
+        inspected: true,
+        managed: true,
+        reconciled: { target: 'C:\\Orca\\orca.exe', appVersion: '' }
+      }
     ])
     expect(registry.recordObservations).toHaveBeenCalledWith([
       { distro: 'Debian', inspected: true, managed: false, reconciled: null }
@@ -52,7 +62,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
 
   it('passes the host launcher target through and records reconciliations against it', async () => {
     const registry = {
-      getCandidates: vi.fn(async () => ['Ubuntu']),
+      getCandidates: vi.fn(async () => [{ distro: 'Ubuntu', registered: true }]),
       recordObservations: vi.fn(async () => undefined)
     }
 
@@ -89,7 +99,10 @@ describe('reconcileManagedWslCliRegistrations', () => {
 
   it('records unsupported distros without changing ownership and skips failed ones', async () => {
     const registry = {
-      getCandidates: vi.fn(async () => ['Broken Distro', 'No Interop']),
+      getCandidates: vi.fn(async () => [
+        { distro: 'Broken Distro', registered: true },
+        { distro: 'No Interop', registered: true }
+      ]),
       recordObservations: vi.fn(async () => undefined)
     }
 
@@ -134,7 +147,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
         userDataPath: '/user-data',
         listDistros: async () => ['Ubuntu'],
         registry: {
-          getCandidates: async () => ['Ubuntu'],
+          getCandidates: async () => [{ distro: 'Ubuntu', registered: true }],
           recordObservations: async () => {
             throw new Error('ENOSPC')
           }
@@ -182,7 +195,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       repairStarted = resolve
     })
     const registry = {
-      getCandidates: vi.fn(async () => ['Ubuntu']),
+      getCandidates: vi.fn(async () => [{ distro: 'Ubuntu', registered: true }]),
       recordObservations: vi.fn(async () => {
         events.push('repair-observed')
       })

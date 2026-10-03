@@ -37,6 +37,14 @@ type WslCliInstallerOptions = {
   wslRunner?: (distro: string, command: string) => Promise<string>
 }
 
+/** A guest command failed before repair knew whether Orca owns this distro's command. */
+export class WslCliOwnershipProbeError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+    this.name = 'WslCliOwnershipProbeError'
+  }
+}
+
 export type ManagedWslCliRepairResult = {
   changed: boolean
   managed: boolean
@@ -48,6 +56,9 @@ export class WslCliInstaller {
   private readonly distro: string | null
   private readonly hostInstaller: Pick<CliInstaller, 'getStatus'>
   private readonly wslRunner: (distro: string, command: string) => Promise<string>
+  // Why: identity-tagged so repair can classify guest failures while every public
+  // method still rejects with the runner's original error (Settings IPC shows it).
+  private unownedGuestFailure: unknown = undefined
 
   constructor(options: WslCliInstallerOptions = {}) {
     this.platform = options.platform ?? process.platform
@@ -96,7 +107,7 @@ export class WslCliInstaller {
     const managed = content.includes(MANAGED_MARKER)
     const currentTarget = managed ? parseManagedLauncherTarget(content) : null
     if (managedScriptMatches(content, expected, managed)) {
-      const bridgeContent = await this.readCommandFile(ready.distro, ready.bridgePath)
+      const bridgeContent = await this.readOwnedCommandFile(ready.distro, ready.bridgePath)
       const expectedBridge = buildWslBridgeScript()
       const bridgeManaged =
         typeof bridgeContent === 'string' && bridgeContent.includes(BRIDGE_MANAGED_MARKER)
@@ -149,7 +160,7 @@ export class WslCliInstaller {
   }
 
   private async isBridgeConflict(distro: string, bridgePath: string): Promise<boolean> {
-    const bridgeContent = await this.readCommandFile(distro, bridgePath)
+    const bridgeContent = await this.readOwnedCommandFile(distro, bridgePath)
     if (bridgeContent === null) {
       return false
     }
@@ -157,7 +168,9 @@ export class WslCliInstaller {
   }
 
   async repairManagedRegistration(): Promise<ManagedWslCliRepairResult> {
-    const status = await this.getStatus()
+    const status = await this.getStatus().catch((error: unknown) => {
+      throw this.asOwnershipProbeError(error)
+    })
     if (!status.supported) {
       return { changed: false, managed: false, status }
     }
@@ -178,7 +191,12 @@ export class WslCliInstaller {
       return { changed: false, managed: status.state === 'installed', status }
     }
 
-    const legacyContent = await this.readCommandFile(this.distro, legacyCommandPath)
+    const legacyContent = await this.readCommandFile(this.distro, legacyCommandPath).catch(
+      (error: unknown) => {
+        // An installed launcher already proves ownership; only a bare distro is still unknown.
+        throw status.state === 'not_installed' ? this.asOwnershipProbeError(error) : error
+      }
+    )
     const legacyManaged =
       typeof legacyContent === 'string' && legacyContent.includes(MANAGED_MARKER)
     if (!legacyManaged) {
@@ -260,6 +278,26 @@ export class WslCliInstaller {
     )
   }
 
+  /** Bridge reads happen once the launcher is known to be Orca's, so they are not probe failures. */
+  private async readOwnedCommandFile(
+    distro: string,
+    commandPath: string
+  ): Promise<(string & {}) | 'not_file' | null> {
+    try {
+      return await this.readCommandFile(distro, commandPath)
+    } catch (error) {
+      this.unownedGuestFailure = undefined
+      throw error
+    }
+  }
+
+  /** Only a distro-side failure qualifies; a host launcher probe failure says nothing about the guest. */
+  private asOwnershipProbeError(error: unknown): unknown {
+    return error !== undefined && error === this.unownedGuestFailure
+      ? new WslCliOwnershipProbeError(error)
+      : error
+  }
+
   private buildStatus(args: {
     distro: string
     commandPath: string
@@ -273,7 +311,12 @@ export class WslCliInstaller {
   }
 
   private async run(distro: string, command: string): Promise<string> {
-    return this.wslRunner(distro, command)
+    try {
+      return await this.wslRunner(distro, command)
+    } catch (error) {
+      this.unownedGuestFailure = error
+      throw error
+    }
   }
 }
 

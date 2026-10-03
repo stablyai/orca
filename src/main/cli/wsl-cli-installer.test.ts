@@ -438,7 +438,7 @@ describe('WslCliInstaller', () => {
         userDataPath: '/user-data',
         listDistros: async () => ['Ubuntu'],
         registry: {
-          getCandidates: async () => ['Ubuntu'],
+          getCandidates: async () => [{ distro: 'Ubuntu', registered: true }],
           recordObservations: async () => undefined
         },
         createInstaller: () => installer
