@@ -20,6 +20,7 @@ import {
   sshArtifactSourceKey,
   type RemoteArtifactInput
 } from '../../shared/artifact-cli-bridge'
+import { ORCA_CLI_EXECUTION_HOST_ID_ENV, type ExecutionHostId } from '../../shared/execution-host'
 
 export type SshCliRuntimeAuthority = {
   kind: 'ssh'
@@ -32,6 +33,7 @@ export type RemoteOrcaCliRequest = {
   argv: string[]
   cwd: string
   env: Record<string, string>
+  executionHostId?: ExecutionHostId
   stdin?: string
   artifactInput?: RemoteArtifactInput
   runtimeAuthority?: SshCliRuntimeAuthority
@@ -103,6 +105,7 @@ export function buildHostCliEnv(args: {
   remoteEnv: Record<string, string>
   userDataPath: string
   remoteCwd: string
+  executionHostId?: ExecutionHostId
   runtimeAuthority?: SshCliRuntimeAuthority
   artifactInput?: RemoteArtifactInput
 }): NodeJS.ProcessEnv {
@@ -120,6 +123,10 @@ export function buildHostCliEnv(args: {
   // subprocess cwd cannot be chdir'd there; ORCA_CLI_CWD carries it for
   // cwd-based selectors like `--worktree active`.
   env.ORCA_CLI_CWD = args.remoteCwd
+  delete env[ORCA_CLI_EXECUTION_HOST_ID_ENV]
+  if (args.executionHostId) {
+    env[ORCA_CLI_EXECUTION_HOST_ID_ENV] = args.executionHostId
+  }
   // Why: recovery commands run on the SSH execution host through its relay shim.
   env.ORCA_CLI_COMMAND = 'orca'
   // Why: same node-mode hygiene as the shipped CLI launchers — stash and clear
@@ -201,6 +208,7 @@ export async function runHostOrcaCliPassthrough(
     remoteEnv: request.env,
     userDataPath,
     remoteCwd: request.cwd,
+    executionHostId: request.executionHostId,
     runtimeAuthority: request.runtimeAuthority,
     artifactInput: request.artifactInput
   })
