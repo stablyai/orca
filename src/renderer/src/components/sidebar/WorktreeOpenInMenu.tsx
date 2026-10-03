@@ -26,6 +26,8 @@ type WorktreeOpenInMenuItemsProps = {
   connectionId?: string | null
   disabled?: boolean
   labelPrefix?: string
+  worktreeId?: string
+  workspaceKey?: string
 }
 
 export type OpenInMenuEntry = {
@@ -350,33 +352,64 @@ export function WorktreeOpenInMenuItems({
 export function WorktreeOpenInSubMenu({
   worktreePath,
   connectionId,
-  disabled
+  disabled,
+  worktreeId,
+  workspaceKey
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
+  const handleOpenInNewWindow = useCallback(async () => {
+    if (!worktreeId || !workspaceKey) {
+      toast.error('Unable to open in new window')
+      return
+    }
+
+    try {
+      const result = await window.api.worktrees.openInNewWindow(worktreeId, workspaceKey)
+      if (!result.success) {
+        toast.error(result.error || 'Failed to open in new window')
+      }
+    } catch (error) {
+      toast.error('Error opening window: ' + String(error))
+    }
+  }, [worktreeId, workspaceKey])
+
+  const openInNewWindowAvailable = Boolean(worktreeId && workspaceKey)
+
   return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger disabled={disabled}>
-        <FolderOpen className="size-3.5" />
-        {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent
-        className="w-52"
-        onClick={stopMenuPropagation}
-        onPointerDown={stopMenuPropagation}
-      >
-        <WorktreeOpenInMenuItems
-          worktreePath={worktreePath}
-          connectionId={connectionId}
-          disabled={disabled}
-        />
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={stopMenuPropagation}
-          onSelect={openOpenInAppsSettings}
-          disabled={disabled}
-        >
-          {translate('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
+    <>
+      {openInNewWindowAvailable && (
+        <DropdownMenuItem onClick={stopMenuPropagation} onSelect={handleOpenInNewWindow} disabled={disabled}>
+          <ExternalLink className="size-3.5" />
+          {translate(
+            'auto.components.sidebar.WorktreeOpenInMenu.openInNewWindow',
+            'Open in New Window'
+          )}
         </DropdownMenuItem>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+      )}
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger disabled={disabled}>
+          <FolderOpen className="size-3.5" />
+          {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent
+          className="w-52"
+          onClick={stopMenuPropagation}
+          onPointerDown={stopMenuPropagation}
+        >
+          <WorktreeOpenInMenuItems
+            worktreePath={worktreePath}
+            connectionId={connectionId}
+            disabled={disabled}
+          />
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={stopMenuPropagation}
+            onSelect={openOpenInAppsSettings}
+            disabled={disabled}
+          >
+            {translate('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
+          </DropdownMenuItem>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    </>
   )
 }
