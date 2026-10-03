@@ -1,6 +1,7 @@
 import { blockMarkdown } from './html-block-markdown'
 import { markdownToHtml } from './markdown-to-html'
 import { post } from './host-bridge'
+import { applyImageSources } from './editor-image-sources'
 import { editorElement } from './editor-surface'
 import type { RichMarkdownEditorScope } from './document-scope'
 
@@ -48,6 +49,7 @@ export function setMarkdown(scope: RichMarkdownEditorScope, markdown: string, ge
   scope.selectionDroppedOnBlur = false
   scope.lastMarkdown = String(markdown || '')
   editorElement(scope).innerHTML = markdownToHtml(scope, scope.lastMarkdown)
+  applyImageSources(scope)
   syncTaskCheckboxesDisabled(scope)
   scope.suppressInput = false
 }

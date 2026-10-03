@@ -87,14 +87,33 @@ describe('the bundled rich Markdown editor document', () => {
     const { posted, viewportListeners, handle } = evaluateBundle()
     expect(posted).toEqual([{ type: 'keyboardInset', bottom: 280 }, { type: 'ready' }])
     expect(viewportListeners).toEqual(['resize', 'scroll'])
-    // The five members the native component reaches through `injectJavaScript`.
+    // The six members the native component reaches through `injectJavaScript`.
     expect(Object.keys(handle).sort()).toEqual([
       'currentMarkdown',
       'dismissKeyboard',
       'runCommand',
       'setEditable',
+      'setImageSources',
       'setMarkdown'
     ])
+  })
+
+  it('displays a host-resolved relative image without serializing its data URL', () => {
+    const { handle } = evaluateBundle()
+    handle.setMarkdown('![Shot](docs/a.png)', 2)
+    const image = document.querySelector('img')!
+    expect(image.getAttribute('data-orca-src')).toBe('docs/a.png')
+    expect(image.getAttribute('src')).toBe('docs/a.png')
+
+    handle.setImageSources({ 'docs/a.png': 'data:image/png;base64,QUJD' })
+    expect(image.getAttribute('src')).toBe('data:image/png;base64,QUJD')
+    expect(image.getAttribute('data-orca-src')).toBe('docs/a.png')
+    expect(handle.currentMarkdown()).toBe('![Shot](docs/a.png)')
+
+    // A host content replacement rebuilds the surface; the stored sources re-apply to it.
+    handle.setMarkdown('![Shot](docs/a.png)', 3)
+    expect(document.querySelector('img')!.getAttribute('src')).toBe('data:image/png;base64,QUJD')
+    expect(handle.currentMarkdown()).toBe('![Shot](docs/a.png)')
   })
 
   it('takes markdown through the injected handle and gives back the source it was given', () => {
@@ -221,7 +240,7 @@ describe('the bundled rich Markdown editor document', () => {
     // three about the artifact that ships rather than about a bundle this case built for itself.
     const { script, inputs } = await richMarkdownEditorBundle()
     expect(inputs.filter((input) => input.includes('node_modules'))).toEqual([])
-    expect(inputs).toHaveLength(23)
+    expect(inputs).toHaveLength(24)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

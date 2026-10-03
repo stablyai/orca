@@ -93,6 +93,8 @@ export type MarkdownDocState =
       readOnlyReason?: string
       truncated?: true
       byteLength?: number
+      /** Display URLs keyed by authored image src, resolved after the doc renders. */
+      imageSources?: Record<string, string>
     }
   | { status: 'error'; message: string }
 

@@ -3,6 +3,7 @@ import type { RpcFailure } from '../transport/types'
 import { resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
 import { filePreviewTextRead } from '../files/mobile-file-preview-operations'
 import { markdownTabRead } from './mobile-session-read-operations'
+import { readMarkdownImageSources } from './markdown-relative-image-srcs'
 import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
@@ -12,6 +13,31 @@ import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
   const { worktreeId, client, setMarkdownDocs, setFileDocs } = scope
+
+  // Why: relative images cannot render in the editor's WebView, and reading them is N more RPCs —
+  // the doc publishes first and the resolved map lands on the ready doc when the reads settle.
+  const resolveMarkdownImages = useCallback(
+    (tabId: string, relativePath: string, content: string) => {
+      if (!client) {
+        return
+      }
+      void readMarkdownImageSources(client, worktreeId, relativePath, content).then(
+        (imageSources) => {
+          if (Object.keys(imageSources).length === 0) {
+            return
+          }
+          setMarkdownDocs((prev) => {
+            const doc = prev.get(tabId)
+            if (!doc || doc.status !== 'ready') {
+              return prev
+            }
+            return new Map(prev).set(tabId, { ...doc, imageSources })
+          })
+        }
+      )
+    },
+    [client, setMarkdownDocs, worktreeId]
+  )
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
       if (!client) {
@@ -40,6 +66,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
                 : {})
             })
           )
+          resolveMarkdownImages(tab.id, tab.relativePath, result.content)
           return
         }
         if (!shouldReadMarkdownFromDiskAfterReadTabFailure(response as RpcFailure)) {
@@ -67,6 +94,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
             })
           )
         )
+        resolveMarkdownImages(tab.id, tab.relativePath, fileResult.content)
       } catch (err) {
         setMarkdownDocs((prev) =>
           new Map(prev).set(tab.id, {
@@ -76,7 +104,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         )
       }
     },
-    [client, worktreeId]
+    [client, resolveMarkdownImages, worktreeId]
   )
 
   const readFileTab = useCallback(
