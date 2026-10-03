@@ -140,20 +140,37 @@ describe('RuntimeFileCommands', () => {
     )
   })
 
-  it('leaves non-previewable binaries unavailable on mobile', async () => {
+  it.each(['docs/example.pdf', 'dist/bundle.zip'])(
+    'opens binary %s in the desktop editor like the File Explorer does',
+    async (relativePath) => {
+      const openFile = vi.fn()
+      const { commands } = createRuntimeFileCommands({ openFile })
+      resolveAuthorizedPathMock.mockResolvedValue(`/repo/${relativePath}`)
+      statMock.mockResolvedValue({ isDirectory: () => false })
+
+      const result = await commands.openMobileFile('id:wt-1', relativePath)
+
+      expect(openFile).toHaveBeenCalledWith(
+        'wt-1',
+        `/repo/${relativePath}`,
+        relativePath,
+        undefined,
+        undefined
+      )
+      expect(result).toEqual({ worktree: 'wt-1', relativePath, kind: 'binary', opened: true })
+    }
+  )
+
+  it('rejects a missing binary instead of opening a ghost tab', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/docs/missing.pdf')
+    statMock.mockRejectedValue(enoent())
 
-    const result = await commands.openMobileFile('id:wt-1', 'dist/bundle.zip')
-
+    await expect(commands.openMobileFile('id:wt-1', 'docs/missing.pdf')).rejects.toThrow(
+      "ENOENT: no such file or directory, open '/repo/docs/missing.pdf'"
+    )
     expect(openFile).not.toHaveBeenCalled()
-    expect(statMock).not.toHaveBeenCalled()
-    expect(result).toEqual({
-      worktree: 'wt-1',
-      relativePath: 'dist/bundle.zip',
-      kind: 'binary',
-      opened: false
-    })
   })
 
   it('rejects missing local files without creating an editor tab', async () => {

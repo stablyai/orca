@@ -113,28 +113,28 @@ describe('orca file CLI handlers', () => {
     })
   })
 
-  it('reports unopened direct diffs instead of formatting them as opened', async () => {
+  // Why: an older host still answers a PDF with opened:false (STA-9113); that must not read as success.
+  it('fails an unopened file open with ok:false in --json mode', async () => {
     queueFixtures(
       callMock,
-      okFixture('req_diff', {
+      okFixture('req_open', {
         worktree: 'wt-1',
-        relativePath: 'assets/logo.png',
+        relativePath: 'docs/example.pdf',
         kind: 'binary',
         opened: false
       })
     )
 
-    await main(['file', 'diff', '--path', 'assets/logo.png', '--worktree', 'id:wt-1'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith('files.openDiff', {
-      worktree: 'id:wt-1',
-      relativePath: 'assets/logo.png',
-      staged: false,
-      navigation: 'caller'
-    })
-    expect(vi.mocked(console.log).mock.calls[0][0]).toBe(
-      'Did not open diff for assets/logo.png: binary file.'
+    await main(
+      ['file', 'open', '--path', 'docs/example.pdf', '--worktree', 'id:wt-1', '--json'],
+      '/tmp/repo'
     )
+
+    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
+    expect(output).toMatchObject({ ok: false })
+    expect(output.error.message).toContain('Did not open docs/example.pdf')
+    expect(process.exitCode).toBe(1)
+    process.exitCode = undefined
   })
 
   it('rejects --worktree without a value before cwd inference or RPC calls', async () => {
@@ -456,7 +456,7 @@ describe('orca file CLI handlers', () => {
       '/tmp/elsewhere'
     )
 
-    // Why: a binary edit open returns opened:false before reaching the host, so focus carries to the next open.
+    // Why: an older host answers a binary edit open with opened:false, so focus carries to the next open.
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:wt-1',
       relativePath: 'assets/logo.png',

@@ -164,7 +164,6 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
-    // Previewable images open like text (mobile renders via files.readPreview); other binaries stay unavailable on mobile.
     const kind = isMobilePreviewableImagePath(relativePath)
       ? 'image'
       : isMobileBinaryPath(relativePath)
@@ -172,9 +171,7 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         : isMobileMarkdownPath(relativePath)
           ? 'markdown'
           : 'text'
-    if (kind === 'binary') {
-      return { worktree: worktree.id, relativePath, kind, opened: false }
-    }
+    // Why: `kind` only describes the file; the desktop editor opens binaries (e.g. PDFs) like the File Explorer.
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Why: CLI/agents treat opened:true as success; stat first so missing paths fail the RPC instead of opening a ghost tab.
     await this.assertMobileOpenTargetExists(filePath, runtimeFileRouteForTarget(target))

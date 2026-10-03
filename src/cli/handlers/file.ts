@@ -192,15 +192,11 @@ function formatOpenChangedResult(result: FileOpenChangedResult): string {
 }
 
 function formatFileOpen(result: RuntimeFileOpenResult): string {
-  return result.opened
-    ? `Opened ${result.relativePath}.`
-    : `Did not open ${result.relativePath}: ${result.kind} file.`
+  return `Opened ${result.relativePath}.`
 }
 
 function formatFileDiff(result: RuntimeFileOpenResult): string {
-  return result.opened
-    ? `Opened diff for ${result.relativePath}.`
-    : `Did not open diff for ${result.relativePath}: ${result.kind} file.`
+  return `Opened diff for ${result.relativePath}.`
 }
 
 export const FILE_HANDLERS: Record<string, CommandHandler> = {
@@ -213,6 +209,14 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
       relativePath,
       navigation: getFileOpenNavigation(ctx.flags)
     })
+    // Why: older hosts decline binaries with opened:false; a single-file open must not exit 0 on that.
+    if (!result.result.opened) {
+      throw new RuntimeClientError(
+        'file_not_opened',
+        `Did not open ${relativePath}: the Orca app declined this ${result.result.kind} file.`,
+        { nextSteps: ['Update the Orca app, which opens every file type the File Explorer does.'] }
+      )
+    }
     printResult(result, ctx.json, formatFileOpen)
   },
   'file diff': async (ctx) => {
