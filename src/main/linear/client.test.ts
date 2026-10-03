@@ -390,3 +390,33 @@ describe('Linear client workspace storage', () => {
     expect(() => linear.getClients('bad')).toThrow('Could not decrypt')
   })
 })
+
+describe('Linear workspace file cross-process visibility', () => {
+  it('picks up a workspace connected by another Orca process', async () => {
+    // ~/.orca is shared by every Orca process on the machine, so a load-once
+    // cache would report "not connected" until this process restarted.
+    const linear = await loadClientModule()
+    expect(linear.getStatus()).toMatchObject({ connected: false })
+
+    writeMultiWorkspaceFiles([{ id: 'ws-alpha', token: 'token-alpha' }], 'ws-alpha')
+
+    expect(linear.getStatus()).toMatchObject({
+      connected: true,
+      activeWorkspaceId: 'ws-alpha'
+    })
+  })
+
+  it('follows the selected workspace changing underneath it', async () => {
+    const workspaces = [
+      { id: 'ws-alpha', token: 'token-alpha' },
+      { id: 'ws-beta', token: 'token-beta' }
+    ]
+    writeMultiWorkspaceFiles(workspaces, 'ws-alpha')
+    const linear = await loadClientModule()
+    expect(linear.getStatus()).toMatchObject({ selectedWorkspaceId: 'ws-alpha' })
+
+    writeMultiWorkspaceFiles(workspaces, 'ws-beta')
+
+    expect(linear.getStatus()).toMatchObject({ selectedWorkspaceId: 'ws-beta' })
+  })
+})
