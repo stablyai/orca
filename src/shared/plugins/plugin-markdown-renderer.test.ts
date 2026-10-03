@@ -142,7 +142,9 @@ describe('semantic Markdown output', () => {
     'notes\\a.md',
     'notes//a.md',
     'notes/CON.md',
-    'notes/a.md\0'
+    'notes/a.md\0',
+    'program.exe',
+    'script.js'
   ])('rejects unsafe reference %s', (path) => {
     expect(
       pluginMarkdownOutputSchema.safeParse({

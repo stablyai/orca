@@ -3,6 +3,7 @@ import { isAbsolute } from 'node:path'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import { isMarkdownDocumentPath } from '../../shared/markdown-document-path'
 import {
   pluginMarkdownSourceRequestSchema,
   type PluginMarkdownSourceRequest,
@@ -31,7 +32,7 @@ export async function resolvePluginMarkdownSource(
     !isAbsolute(request.documentPath) ||
     request.documentPath.includes('\0') ||
     isWslUncPath(request.documentPath) ||
-    !/\.(?:md|mdown|markdown)$/i.test(request.documentPath)
+    !isMarkdownDocumentPath(request.documentPath)
   ) {
     return { status: 'unavailable', reason: 'unsupported-context' }
   }

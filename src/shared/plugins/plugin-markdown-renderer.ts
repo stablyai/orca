@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { pluginCommandIdSchema } from './plugin-manifest-fields'
 import { isSafePluginRelativePath } from './plugin-path-safety'
+import { isMarkdownDocumentPath } from '../markdown-document-path'
 
 export const PLUGIN_MARKDOWN_RENDERER_LIMIT = 16
 export const PLUGIN_MARKDOWN_CODE_MAX_LENGTH = 64 * 1024
@@ -59,7 +60,8 @@ export const pluginMarkdownReferenceSchema = z
       .min(1)
       .max(1024)
       .refine(
-        (path) => !path.includes('\\') && isSafePluginRelativePath(path),
+        (path) =>
+          !path.includes('\\') && isSafePluginRelativePath(path) && isMarkdownDocumentPath(path),
         'must be a safe relative note path'
       ),
     base: z.enum(['document', 'workspace'])

@@ -106,7 +106,11 @@ consumers render text and reuse existing document navigation authorization.
 
 References are `{path, base: 'document' | 'workspace'}`. Portable relative POSIX
 paths exclude traversal, schemes, absolute paths, backslashes, control characters
-and Windows device names. `document` starts at the verified source parent;
+and Windows device names. Sources and references use the existing `.md`, `.mdx`
+and `.markdown` extension policy. Reference paths are literal filesystem paths:
+encode each segment or use the existing filesystem-to-file-URI conversion before
+navigation, so percent signs and hashes cannot become traversal or fragments.
+`document` starts at the verified source parent;
 `workspace` starts at `source.workspacePath`. The host checks realpath containment,
 including existing ancestors of missing notes, and rejects symlink escapes.
 Navigation reauthorizes on activation because filesystem state can change.

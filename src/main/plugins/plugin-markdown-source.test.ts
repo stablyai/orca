@@ -61,7 +61,7 @@ async function fixture(folder = false) {
 }
 
 describe('Markdown source authorization', () => {
-  it.each(['md', 'mdown', 'markdown'])('supports the %s source extension', async (extension) => {
+  it.each(['md', 'mdx', 'markdown'])('supports the %s source extension', async (extension) => {
     const f = await fixture()
     const documentPath = join(f.workspace, `note.${extension}`)
     await writeFile(documentPath, '# Note')
