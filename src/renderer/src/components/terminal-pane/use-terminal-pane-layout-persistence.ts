@@ -187,6 +187,32 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     [removePaneTitle]
   )
 
+  const setPaneTitle = useCallback(
+    (paneId: number, title: string | null): void => {
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      if (!leafId) {
+        return
+      }
+      const normalizedTitle = title?.trim() || null
+      if (normalizedTitle === null) {
+        removePaneTitle(paneId)
+        return
+      }
+      paneTitlesRef.current = { ...paneTitlesRef.current, [paneId]: normalizedTitle }
+      setPaneTitles((previous) => ({ ...previous, [paneId]: normalizedTitle }))
+      removedTitleLeafIdsRef.current.delete(leafId)
+      persistLayoutSnapshot()
+    },
+    [
+      managerRef,
+      paneTitlesRef,
+      persistLayoutSnapshot,
+      removePaneTitle,
+      removedTitleLeafIdsRef,
+      setPaneTitles
+    ]
+  )
+
   useEffect(() => {
     if (!terminalTab) {
       return
@@ -233,6 +259,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     persistLayoutSnapshot,
     clearPaneScrollback,
     removePaneTitle,
+    setPaneTitle,
     handleClearPaneTitleShortcut
   }
 }

@@ -1,4 +1,11 @@
+import {
+  SET_TERMINAL_PANE_TITLE_EVENT,
+  type SetTerminalPaneTitleDetail
+} from '@/constants/terminal'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
+import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
@@ -83,6 +90,37 @@ export function registerMobileAndTerminalCloseIpcBridge(
       }
     })
   )
+
+  // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
+  if (window.api.ui.onSetPaneTitle) {
+    unsubs.push(
+      window.api.ui.onSetPaneTitle(({ tabId, leafId, title }) => {
+        const store = useAppStore.getState()
+        const layout = store.terminalLayoutsByTabId[tabId]
+        if (
+          !layout ||
+          !isTerminalLeafId(leafId) ||
+          !collectLeafIdsInOrder(layout.root).includes(leafId)
+        ) {
+          return
+        }
+        // Parked panes have no event listener; their next mount reads this same layout.
+        const titlesByLeafId = { ...layout.titlesByLeafId }
+        if (title) {
+          titlesByLeafId[leafId] = title
+        } else {
+          delete titlesByLeafId[leafId]
+        }
+        const nextLayout: TerminalLayoutSnapshot = { ...layout, titlesByLeafId }
+        if (Object.keys(titlesByLeafId).length === 0) {
+          delete nextLayout.titlesByLeafId
+        }
+        store.setTabLayout(tabId, nextLayout)
+        const detail: SetTerminalPaneTitleDetail = { tabId, leafId, title }
+        window.dispatchEvent(new CustomEvent(SET_TERMINAL_PANE_TITLE_EVENT, { detail }))
+      })
+    )
+  }
 
   // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
   if (window.api.ui.onTerminalTabCloseRequest) {

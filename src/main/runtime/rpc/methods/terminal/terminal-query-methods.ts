@@ -7,7 +7,8 @@ import {
   TerminalRecoverPane,
   TerminalRename,
   TerminalResolveActive,
-  TerminalResolvePane
+  TerminalResolvePane,
+  TerminalSetPaneTitle
 } from './unary-schemas'
 
 export const TERMINAL_QUERY_METHODS = [
@@ -113,6 +114,13 @@ export const TERMINAL_QUERY_METHODS = [
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
       rename: await runtime.renameTerminal(params.terminal, params.title || null)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.setPaneTitle',
+    params: TerminalSetPaneTitle,
+    handler: async (params, { runtime }) => ({
+      paneTitle: await runtime.setPaneTitle(params.terminal, params.title)
     })
   }),
   defineMethod({

@@ -11,7 +11,7 @@ import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
 import { closeClientHostedBrowserPagesForWorktree } from './worktree-browser-client-page-close'
 import type { ForceDeleteWorktreeBranchResult } from '../../shared/worktree/create-types'
-import type { RuntimeTerminalRename } from '../../shared/runtime-types'
+import type { RuntimeTerminalRename, RuntimeTerminalSetPaneTitle } from '../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
@@ -185,6 +185,16 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
+  }
+
+  async setPaneTitle(handle: string, title: string | null): Promise<RuntimeTerminalSetPaneTitle> {
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    if (!this.getAvailableAuthoritativeWindow() || !this.notifier?.setPaneTitle) {
+      throw new Error('Pane titles require a running Orca desktop with set-pane-title support')
+    }
+    const normalizedTitle = title?.trim() || null
+    this.notifier.setPaneTitle(leaf.tabId, leaf.leafId, normalizedTitle)
+    return { handle, tabId: leaf.tabId, leafId: leaf.leafId, title: normalizedTitle }
   }
 
   protected async resolveAgentTerminalCreateOptions(

@@ -204,11 +204,10 @@ export type RuntimeTerminalRead = {
   draft?: string
 }
 
-export type RuntimeTerminalRename = {
-  handle: string
-  tabId: string
-  title: string | null
-}
+export type {
+  RuntimeTerminalRename,
+  RuntimeTerminalSetPaneTitle
+} from './runtime-terminal-title-contracts'
 
 export type RuntimeTerminalSend = {
   handle: string

@@ -192,6 +192,9 @@ export type UiCommandEventApi = {
       newLeafId?: string
     }) => void
   ) => () => void
+  onSetPaneTitle?: (
+    callback: (data: { tabId: string; leafId: string; title: string | null }) => void
+  ) => () => void
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null }) => void
   ) => () => void
