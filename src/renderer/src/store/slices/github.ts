@@ -74,7 +74,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   ...createProjectActions(set, get),
   ...createProjectRowActions(set, get),
   ...createWorkItemFetchActions(set, get),
-  ...createWorkItemAggregateActions(get),
+  ...createWorkItemAggregateActions(set, get),
   ...createPullRequestActions(set, get),
   ...createIssueActions(set, get),
   ...createCheckActions(set, get),

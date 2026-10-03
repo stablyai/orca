@@ -1,5 +1,6 @@
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
@@ -220,4 +221,16 @@ export function isGitHubUnavailableWorkItemsError(error: unknown): boolean {
   }
   const message = error instanceof Error ? error.message : String(error)
   return classifyGitHubUnavailable(message) !== null
+}
+
+// Why: a repo whose fetch rejects outright (no envelope, so no per-side
+// classified error) still needs a renderable reason (#16473's invisible
+// failed-count entries). Bucket it the same way the banner distinguishes an
+// outage from any other failure.
+export function classifyWorkItemsFetchFailure(error: unknown): ClassifiedError {
+  const message = error instanceof Error ? error.message : String(error)
+  return {
+    type: isGitHubUnavailableWorkItemsError(error) ? 'network_error' : 'unknown',
+    message
+  }
 }
