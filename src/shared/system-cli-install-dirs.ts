@@ -1,8 +1,9 @@
 import { join } from 'node:path'
+import { isMacPortsPortExecutablePresent } from './macports-port-executable'
 
 /**
  * Where an agent CLI lands when no version manager installed it: Homebrew (both
- * prefixes), npm's default global prefix, snap, nix, or the CLI's own installer
+ * prefixes), MacPorts, npm's default global prefix, snap, nix, or the CLI's own installer
  * (#829 named `~/.opencode/bin` and `~/.vite-plus/bin` as the motivating cases,
  * but only for the login-shell probe; the fallback used when that probe fails
  * never gained either).
@@ -45,6 +46,10 @@ export function getSystemCliInstallDirectories(
     directories.push('/opt/homebrew/bin')
   }
   directories.push('/usr/local/bin')
+  if (platform === 'darwin' && isMacPortsPortExecutablePresent()) {
+    // Why gated unlike Homebrew: Intel-Mac leftover; keep Homebrew/npm ranking and skip unless `port` exists.
+    directories.push('/opt/local/bin')
+  }
   if (platform === 'linux') {
     // Gated like the seed: snap and Linuxbrew ship on Linux only, so elsewhere they are phantom stats.
     directories.push('/snap/bin', '/home/linuxbrew/.linuxbrew/bin')
