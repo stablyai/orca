@@ -185,6 +185,50 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([])
   })
 
+  it('keeps an unread inactive worktree visible when show sleeping is off', () => {
+    const wt = { ...makeWorktree('wt-unread-sleeping'), isUnread: true }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showSleepingWorkspaces: false
+      })
+    )
+
+    expect(result).toEqual([wt.id])
+  })
+
+  it('hides only the read inactive worktree when show sleeping is off', () => {
+    const unread = { ...makeWorktree('wt-unread'), isUnread: true }
+    const read = makeWorktree('wt-read')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [unread, read] },
+      [unread.id, read.id],
+      visibleOptions({
+        showSleepingWorkspaces: false
+      })
+    )
+
+    expect(result).toEqual([unread.id])
+  })
+
+  it('shows both read and unread inactive worktrees when show sleeping is on', () => {
+    const unread = { ...makeWorktree('wt-unread'), isUnread: true }
+    const read = makeWorktree('wt-read')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [unread, read] },
+      [unread.id, read.id],
+      visibleOptions({
+        showSleepingWorkspaces: true
+      })
+    )
+
+    expect(result).toEqual([unread.id, read.id])
+  })
+
   it('hides automation-created workspaces when the automation filter is enabled', () => {
     const manual = makeWorktree('manual')
     const automationCreated = {

@@ -22,7 +22,7 @@ import {
   isWorkspaceFromOtherDevice
 } from '../../workspace-creator-visibility'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getWorktreeIdsWithLiveAgent, isHiddenBySleepFilter } from '@/lib/worktree-activity-state'
 import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs,
@@ -129,8 +129,9 @@ export function useSidebarWorktreeFilters() {
       )
       if (
         !isSleepingSweepExemptWorkspace(worktree, state.alwaysShowDefaultBranchWorkspace) &&
-        isInactiveWorkspace(
-          worktree.id,
+        isHiddenBySleepFilter(
+          worktree,
+          state.showSleepingWorkspaces,
           tabsByWorktree,
           state.ptyIdsByTabId,
           browserTabsByWorktree,
