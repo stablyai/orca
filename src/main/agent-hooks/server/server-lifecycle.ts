@@ -110,7 +110,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
               hookEventName: normalized.event.hookEventName,
               isReplay: normalized.event.isReplay,
               hasExplicitPrompt: normalized.event.hasExplicitPrompt,
-              launchToken: normalized.event.launchToken
+              launchToken: normalized.event.launchToken,
+              agentType: normalized.event.payload.agentType,
+              providerSessionId: normalized.event.providerSession?.id ?? null
             })
           : 'suppress'
         if (normalized.event && statusDisposition !== 'suppress') {

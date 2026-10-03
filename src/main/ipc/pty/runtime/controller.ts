@@ -13,6 +13,7 @@ import {
   resetInputModesFromRuntimeController,
   confirmForegroundProcessFromRuntimeController,
   confirmShellForegroundFromRuntimeController,
+  proveShellForegroundFromRuntimeController,
   getCwdFromRuntimeController,
   getForegroundProcessFromRuntimeController,
   getRendererSerializerGenerationFromRuntimeController,
@@ -68,6 +69,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),
+    proveShellForeground: (ptyId, options) =>
+      proveShellForegroundFromRuntimeController(ptyId, options),
     getCwd: (ptyId) => getCwdFromRuntimeController(ptyId),
     hasChildProcesses: (ptyId) => hasChildProcessesFromRuntimeController(ptyId),
     clearBuffer: (ptyId) => clearBufferFromRuntimeController(deps, ptyId),

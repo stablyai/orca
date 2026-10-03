@@ -26,7 +26,8 @@ export function makeAgentStatusStoreWiring(): {
       paneKey: string
     ) => ReturnType<AgentHookServer['getStatusSnapshotForPane']>
     reconcileAgentStatusForEndedProcess: (
-      paneKeys: Parameters<AgentHookServer['reconcileEndedProcessForPaneKeys']>[0]
+      paneKeys: Parameters<AgentHookServer['reconcileEndedProcessForPaneKeys']>[0],
+      options?: Parameters<AgentHookServer['reconcileEndedProcessForPaneKeys']>[1]
     ) => void
   }
   /** Call once the runtime exists; returns the republish teardown. */
@@ -42,8 +43,8 @@ export function makeAgentStatusStoreWiring(): {
       getAgentProviderSessionSnapshot: () => statusStore.getStatusSnapshot(),
       getAgentProviderSessionRowsForPane: (paneKey) =>
         statusStore.getStatusSnapshotForPane(paneKey),
-      reconcileAgentStatusForEndedProcess: (paneKeys) => {
-        statusStore.reconcileEndedProcessForPaneKeys(paneKeys)
+      reconcileAgentStatusForEndedProcess: (paneKeys, options) => {
+        statusStore.reconcileEndedProcessForPaneKeys(paneKeys, options)
       }
     },
     attach: (runtime) => installHookStatusSessionTabsRepublish(statusStore, () => runtime)

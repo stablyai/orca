@@ -382,7 +382,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
 
     expect(removeAgentStatus).toHaveBeenCalledTimes(1)
-    expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
+    expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY, { agentGone: true })
   })
 
   it('blocks cleared snapshots across remount and accepts newer reconnect replay', async () => {
@@ -510,7 +510,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('keeps a completed worktree-attributed row when main reports pane teardown', async () => {
+  // Why: Done means the agent's TUI is alive and finished its turn; the host clears a pane only
+  // once its agent ended or the pane went away, so the desktop must not keep a Done the host dropped.
+  it('clears a completed worktree-attributed row when main reports pane teardown', async () => {
     const removeAgentStatus = vi.fn()
     const onClearListenerRef: {
       current: ((data: AgentStatusClearIpcPayload) => void) | null
@@ -565,6 +567,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
 
-    expect(removeAgentStatus).not.toHaveBeenCalled()
+    expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY, { agentGone: true })
   })
 })

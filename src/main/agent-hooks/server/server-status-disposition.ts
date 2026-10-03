@@ -8,7 +8,12 @@ import {
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,
   RETIRED_PANE_FENCES_MAX
 } from './server-constants'
-import type { RetiredPaneAlias, RetiredPaneFence } from './server-types'
+import type {
+  EndedAgentSession,
+  EnrichedAgentHookEventPayload,
+  RetiredPaneAlias,
+  RetiredPaneFence
+} from './server-types'
 import { AgentHookServerStatusInference } from './server-status-inference'
 
 export abstract class AgentHookServerStatusDisposition extends AgentHookServerStatusInference {
@@ -52,7 +57,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       launchToken?: string
       /** A process-lifetime Working: a fresh command whose foreground argv proves a new agent run. */
       processNewTurn?: boolean
-    }
+    } & EndedAgentSession
   ): 'accept' | 'restart' | 'suppress' {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     const paneRetired =
@@ -65,6 +70,19 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       this.retiredPaneFencesByKey.get(ownerPaneKey)?.closed
     ) {
       return 'suppress'
+    }
+    const ended = this.endedAgentSessionByPaneKey.get(ownerPaneKey)
+    if (ended && event) {
+      // Why: a reconnecting relay re-sends the status it cached before the exit; only a replay of
+      // that same session restates it. Anything else is newer evidence, so the record dies.
+      if (
+        event.isReplay === true &&
+        event.agentType === ended.agentType &&
+        (event.providerSessionId ?? null) === ended.providerSessionId
+      ) {
+        return 'suppress'
+      }
+      this.endedAgentSessionByPaneKey.delete(ownerPaneKey)
     }
     const retirementFence = this.retiredPaneFencesByKey.get(ownerPaneKey)
     if (
@@ -104,9 +122,9 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       }
       return 'accept'
     }
-    // Why: command completion retires launch authority but leaves its shell pane reusable.
-    // A live new-turn event proves a new agent process owns the retired pane just like a
-    // fresh prompt does — without it, a session resumed in a reused pane stays rowless (STA-3386).
+    // Why: retirement fences a pane whose key a new process can still reuse (a respawn, a
+    // reattach). A live new-turn event proves a new agent process owns the retired pane just like
+    // a fresh prompt does — without it, a session resumed in a reused pane stays rowless (STA-3386).
     // Why the classifier, not literals: only 5 of 18 sources name their boundary
     // `UserPromptSubmit`/`SessionStart`; the rest stayed retired forever.
     // Why four branches: `source` collapses to undefined when an older relay omits the field,
@@ -206,6 +224,18 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
         break
       }
       this.retiredPaneFencesByKey.delete(oldest)
+    }
+  }
+
+  protected recordEndedAgentSession(paneKey: string, row: EnrichedAgentHookEventPayload): void {
+    this.endedAgentSessionByPaneKey.delete(paneKey)
+    this.endedAgentSessionByPaneKey.set(paneKey, {
+      agentType: row.payload.agentType,
+      providerSessionId: row.providerSession?.id ?? null
+    })
+    const oldest = this.endedAgentSessionByPaneKey.keys().next().value
+    if (this.endedAgentSessionByPaneKey.size > CLOSED_AGENT_STATUS_PANE_KEYS_MAX && oldest) {
+      this.endedAgentSessionByPaneKey.delete(oldest)
     }
   }
 

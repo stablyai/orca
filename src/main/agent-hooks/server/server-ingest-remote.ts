@@ -173,7 +173,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       hookEventName,
       isReplay: envelope.isReplay === true,
       hasExplicitPrompt: envelope.hasExplicitPrompt === true,
-      launchToken: envelope.launchToken
+      launchToken: envelope.launchToken,
+      agentType: normalizedPayload.agentType,
+      providerSessionId: providerSession?.id ?? null
     })
     if (statusDisposition === 'suppress') {
       return

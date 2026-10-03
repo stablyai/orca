@@ -49,14 +49,16 @@ export function createAgentStatusCleanupActions(
       })
     },
 
-    removeAgentStatus: (paneKey) => {
+    removeAgentStatus: (paneKey, opts) => {
       const current = get()
+      const agentGone = opts?.agentGone === true
       // Why no ack/cleared-at/manual-unread in the guard: PTY exit calls this unconditionally,
       // including unverified exits from a lost SSH link. A retained-only pane keeps its read
       // state (see preserveActivityClearedState); only a row that is actually here gets swept.
       if (
         !(paneKey in current.agentStatusByPaneKey) &&
         !(paneKey in current.agentLaunchConfigByPaneKey) &&
+        !(agentGone && paneKey in current.retainedAgentsByPaneKey) &&
         !Object.values(current.migrationUnsupportedByPtyId).some(
           (entry) => entry.paneKey === paneKey
         )
@@ -69,6 +71,16 @@ export function createAgentStatusCleanupActions(
         if (hasLive) {
           delete next[paneKey]
         }
+        // Why: an agent that is gone is not waiting on the user, so its Done must not live on as a
+        // retained row — suppress the one this removal would leave and drop any already taken.
+        const hasRetained = agentGone && paneKey in s.retainedAgentsByPaneKey
+        const nextRetained = hasRetained
+          ? { ...s.retainedAgentsByPaneKey }
+          : s.retainedAgentsByPaneKey
+        if (hasRetained) {
+          delete nextRetained[paneKey]
+        }
+        const needsSuppressor = agentGone && hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
         const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
         const nextLaunchConfigs = hasLaunchConfig
           ? { ...s.agentLaunchConfigByPaneKey }
@@ -88,6 +100,10 @@ export function createAgentStatusCleanupActions(
           agentStatusByPaneKey: next,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
+          ...(hasRetained ? { retainedAgentsByPaneKey: nextRetained } : {}),
+          ...(needsSuppressor
+            ? { retentionSuppressedPaneKeys: { ...s.retentionSuppressedPaneKeys, [paneKey]: true } }
+            : {}),
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),

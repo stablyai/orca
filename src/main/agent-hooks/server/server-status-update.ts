@@ -22,12 +22,16 @@ import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected applyNormalizedStatus(
-    incoming: AgentHookEventPayload & { authorityRestartId?: string },
+    event: AgentHookEventPayload & { authorityRestartId?: string },
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
+    // Why here: every writer lands through this function, including the transcript poll and the
+    // assistant-message retry that re-read a hook body, so no row can take back a token whose
+    // authority ended.
+    const incoming = this.withLiveLaunchToken(event)
     const transitioned = transitionHookPresence(
       incoming,
       this.state.lastStatusByPaneKey.get(incoming.paneKey)

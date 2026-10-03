@@ -73,7 +73,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       hookEventName: replay.hookEventName,
       isReplay: true,
       hasExplicitPrompt: replay.hasExplicitPrompt,
-      launchToken: replay.launchToken
+      launchToken: replay.launchToken,
+      agentType: replay.payload.agentType,
+      providerSessionId: replay.providerSession?.id ?? null
     })
     if (statusDisposition === 'suppress') {
       return

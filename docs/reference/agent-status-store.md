@@ -83,6 +83,41 @@ with them would be the wrong direction. So the design is not "add a store". It
 is: **route the two producers that bypass the hook server through it, then
 delete the copies.**
 
+## Removing a row
+
+Every host row removal notifies every reader in the same step: a teardown or an ended process
+emits the pane clear, a dismissal emits the status drop. Launch-authority retirement is no
+exception. The host clears a pane only when its agent ended or the pane went away, so a reader
+drops the row on a clear and never keeps it as a finished (Done) agent.
+
+A command end (OSC 133;D) ends a pane's launch authority at once, because every later process in
+that shell inherits the token. It does not prove the agent exited: a full-screen agent's nested
+shells leak their own 133;D. So at every command end of a PTY whose panes hold a live row, the
+runtime asks the execution host again, and reads its answer in this order:
+1. The hook's own agent process still running keeps the row.
+2. The pane's own shell proven back in front clears it as an ended process, keeping the resume
+   identity. A local node-pty, and the terminal daemon (which is on the same machine), prove that
+   from a fresh read of this machine's process table: the pane's shell, under its login(1) wrapper
+   on macOS, in the foreground and no job stopped. An SSH relay proves it from its fenced foreground
+   evidence (the shell's own process group in front, no agent named), which cannot see a stopped
+   job (temporary), and only from a capture that began after the command end.
+3. Something else proven in front keeps the row; that command ends with its own 133;D.
+4. No trustworthy answer (a host that cannot be reached, an unreadable process table, a capture
+   older than the command end) keeps the row, and is asked again a bounded number of times: loss
+   of contact is never evidence of an exit.
+5. A host that answered but cannot tell (a WSL guest, a Windows daemon or relay, a daemon that
+   predates foreground evidence) leaves the mark as the only evidence, so it stands as the exit.
+   That is a presentation choice, not a proven exit. Temporary: there a nested shell's 133;D
+   under a live TUI drops its row, until those hosts report shell-owns-the-foreground evidence.
+
+A kept row is not latched: the PTY's next command end asks again, and a confirmed PTY exit clears
+it. A verdict acts only on the row it checked. After a proven exit, a row rewritten meanwhile is
+checked again (a new agent then reads as in front, the exiting one's late hook clears); where the
+host cannot tell, only the same session's own rewrite is, and another session's row is left
+alone. The clear also records which session ended, so a reconnecting SSH relay's replay of that
+session's cached status is refused; any newer evidence (a live event, a new turn, another
+session) is admitted and drops the record.
+
 ## PR 1a: structured sessions publish into the store
 
 No renderer behavior changes. The sidebar keeps receiving the same IPC events

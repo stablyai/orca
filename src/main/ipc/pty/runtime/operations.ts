@@ -6,6 +6,10 @@ import { ptySizes } from '../delivery/visibility-state'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
+import type {
+  ShellForegroundProof,
+  ShellForegroundProofOptions
+} from '../../../providers/shell-foreground-proof'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import {
   writeRefused,
@@ -159,6 +163,14 @@ export async function confirmShellForegroundFromRuntimeController(ptyId: string)
   } catch {
     return false
   }
+}
+
+// Why no catch: a host that cannot be reached must reject, never read as an answer.
+export async function proveShellForegroundFromRuntimeController(
+  ptyId: string,
+  options?: ShellForegroundProofOptions
+): Promise<ShellForegroundProof> {
+  return (await getProviderForPty(ptyId).proveShellForeground?.(ptyId, options)) ?? 'other'
 }
 
 export async function getCwdFromRuntimeController(ptyId: string) {

@@ -14,6 +14,7 @@ export type {
   AgentHookStatusRowMutation,
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
+  EndedProcessReconcileOptions,
   EnrichedAgentHookEventPayload
 } from './server/server-types'
 export type { AgentHookSource }

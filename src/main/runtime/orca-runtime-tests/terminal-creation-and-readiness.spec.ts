@@ -269,7 +269,8 @@ describe('OrcaRuntimeService', () => {
 
     runtime.onPtyData('pty-authority', '\x1b]133;D;0\x07', 100)
 
-    expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY)
+    // Authority ends at the mark; the pane's rows wait for a verified exit.
+    expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY, { authorityOnly: true })
     expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
     expect((await runtime.listTerminals()).terminals).toEqual([
       expect.not.objectContaining({ agentIdentity: expect.anything() })
@@ -329,7 +330,7 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyExit('pty-restored-exit', 0, 'restored-exit')
     runtime.onPtyExit('pty-ordinary-shell', 0, 'ordinary-shell')
 
-    expect(retireAuthority).toHaveBeenCalledWith(firstPane)
+    expect(retireAuthority).toHaveBeenCalledWith(firstPane, { authorityOnly: true })
     expect(retireAuthority).toHaveBeenCalledWith(secondPane)
     expect(retireAuthority).toHaveBeenCalledTimes(2)
   })

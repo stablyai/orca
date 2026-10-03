@@ -25,7 +25,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.useRealTimers()
   })
 
-  it('preserves queued set-clear order for working removal and done retention', async () => {
+  it('preserves queued set-clear order: a queued done lands, then the clear removes it', async () => {
     vi.useFakeTimers()
     let storeState: StoreLike
     const applyStatusUpdate = (
@@ -133,7 +133,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect(setAgentStatus).toHaveBeenCalledTimes(1)
 
       onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
-      expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
+      expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY, { agentGone: true })
       expect(storeState.agentStatusByPaneKey).toEqual({})
 
       vi.advanceTimersByTime(40)
@@ -152,10 +152,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect(setAgentStatuses.mock.calls[1][0][0]).toEqual(
         expect.objectContaining({ payload: expect.objectContaining({ state: 'done' }) })
       )
-      expect(removeAgentStatus).toHaveBeenCalledTimes(1)
-      expect(storeState.agentStatusByPaneKey).toEqual({
-        [FUTURE_PANE_KEY]: expect.objectContaining({ state: 'done' })
-      })
+      expect(removeAgentStatus).toHaveBeenCalledTimes(2)
+      expect(storeState.agentStatusByPaneKey).toEqual({})
       vi.advanceTimersByTime(40)
       expect(setAgentStatus).toHaveBeenCalledTimes(2)
       expect(setAgentStatuses).toHaveBeenCalledTimes(2)

@@ -288,6 +288,37 @@ describe('SshPtyProvider', () => {
     })
   })
 
+  it('proves the shell from relay evidence fenced to the raw relay id', async () => {
+    mux.request.mockResolvedValue({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      foregroundProcessEvidence: {
+        authorityGeneration: 'relay-generation',
+        observationEpoch: 1,
+        capturedAgeMs: 0,
+        ptyId: 'pty-1',
+        ptyIncarnationId: 'incarnation-1',
+        verdict: 'live',
+        processName: null,
+        fence: {
+          platform: 'posix',
+          shellPid: 100,
+          shellStartTime: 'shell-birth',
+          tty: '/dev/pts/3',
+          foregroundPgid: 100
+        }
+      }
+    })
+
+    await expect(
+      provider.proveShellForeground(scopedPty1, { expectedIncarnationId: 'incarnation-1' })
+    ).resolves.toBe('shell')
+    expectRequest(mux.request, 'pty.inspectProcess', {
+      id: 'pty-1',
+      expectedIncarnationId: 'incarnation-1'
+    })
+  })
+
   it('probes the additive foreground-evidence capability', async () => {
     mux.request.mockResolvedValue({ foregroundProcessEvidenceVersion: 1 })
 

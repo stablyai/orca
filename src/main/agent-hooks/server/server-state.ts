@@ -35,6 +35,8 @@ import type {
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
   AgentPromptSentDedupeEntry,
+  EndedAgentSession,
+  EndedProcessReconcileOptions,
   EnrichedAgentHookEventPayload,
   NormalizedLocalHook,
   PaneKeyAliasEntry,
@@ -149,6 +151,8 @@ export abstract class AgentHookServerState {
   protected closedAgentStatusTabIds = new Set<string>()
   protected closedAgentStatusPaneKeys = new Set<string>()
   protected restartedStatusLaunchTokenHashByPaneKey = new Map<string, string>()
+  /** The agent session whose exit a pane's last ended-process clear proved; see disposition. */
+  protected endedAgentSessionByPaneKey = new Map<string, EndedAgentSession>()
   protected connectionTimestampWatermarkById = new Map<string, number>()
   // Why: survives the row itself. A transport clear deletes the pane's status row on purpose
   // (absence, not completion), but the *age* of the evidence a later replay restates is not a
@@ -183,8 +187,12 @@ export abstract class AgentHookServerState {
       isReplay?: boolean
       hasExplicitPrompt?: boolean
       launchToken?: string
-    }
+    } & EndedAgentSession
   ): 'accept' | 'restart' | 'suppress'
+  protected abstract recordEndedAgentSession(
+    paneKey: string,
+    row: EnrichedAgentHookEventPayload
+  ): void
   protected abstract isClosedAgentStatusTabForPaneKey(paneKey: string): boolean
   protected abstract takeRetiredPaneRestartId(paneKey: string): string | undefined
   protected abstract recordRetiredPaneFence(
@@ -267,7 +275,7 @@ export abstract class AgentHookServerState {
 
   abstract reconcileEndedProcessForPaneKeys(
     paneKeys: Iterable<string>,
-    options?: { preserveResumeIdentity?: boolean; endedPresence?: AgentProcessPresence }
+    options?: EndedProcessReconcileOptions & { endedPresence?: AgentProcessPresence }
   ): number
 
   protected abstract clearPaneState(
@@ -282,6 +290,10 @@ export abstract class AgentHookServerState {
   protected abstract hydrateLastStatusFromDisk(): void
   protected abstract captureHydratedAuthorityCommitments(): void
   protected abstract recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void
+  protected abstract withLiveLaunchToken<T extends { paneKey: string; launchToken?: string }>(
+    event: T,
+    options?: { requireVoucher?: boolean }
+  ): T
   protected abstract toAuthorityEvidence(
     payload: AgentHookEventPayload | EnrichedAgentHookEventPayload,
     launchTokenHashOverride?: string

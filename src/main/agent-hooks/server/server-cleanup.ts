@@ -6,7 +6,7 @@ import {
 } from '../../../shared/agent-hook-listener/listener-state'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status-types'
-import type { EnrichedAgentHookEventPayload } from './server-types'
+import type { EndedProcessReconcileOptions, EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 
 export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
@@ -25,6 +25,22 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     }
     const { launchToken: _launchToken, ...resumeIdentity } = entry
     return { ...resumeIdentity, providerSessionOnly: true, retainedForLiveness: true }
+  }
+
+  /** The launch token lives on in the shell's environment after its command ends, so its authority
+   *  ends now even while the agent may still run: forget what vouched for it. Rows stay untouched;
+   *  every later write and the persisted file derive that the token they carry is dead. */
+  protected revokePaneLaunchAuthority(paneKey: string): void {
+    const paneKeys = new Set([paneKey, this.resolvePaneKeyAlias(paneKey)])
+    let changed = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
+    for (const key of paneKeys) {
+      changed = this.currentAuthorityObservations.delete(key) || changed
+      // Why: the kept row may have persisted its token's hash; rewrite the file without it.
+      changed = Boolean(this.state.lastStatusByPaneKey.get(key)?.launchToken) || changed
+    }
+    if (changed) {
+      this.scheduleStatusPersist()
+    }
   }
 
   /** Drop only the status row (user dismissal); do NOT wipe prompt/tool caches since the pane's agent may still be alive. Use clearPaneState for PTY-teardown. */
@@ -115,14 +131,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
    *  so a dead pane is cleaned up identically however its keys were resolved. */
   reconcileEndedProcessForPaneKeys(
     paneKeys: Iterable<string>,
-    options?: {
-      endedPresence?: AgentProcessPresence
-      /** The pane's PTY outlived its agent (a confirmed shell foreground), so the session can still
-       *  be resumed in place — keep the `providerSessionOnly` remnant the paired `agentStatus:drop`
-       *  minted for exactly this case. A certified PTY exit passes nothing: there is no pane left to
-       *  resume into, and dropping it matches what `clearProviderPtyState` already does. */
-      preserveResumeIdentity?: boolean
-    }
+    options?: EndedProcessReconcileOptions & { endedPresence?: AgentProcessPresence }
   ): number {
     // A certified PTY exit passes no resume identity; a surviving shell may opt into the remnant.
     let cleared = 0
@@ -131,21 +140,27 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
         continue
       }
+      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      // Why remnants too: the anchor names a live row, and a pid check may have ended it already.
+      if (
+        options?.armedRowReceivedAt !== undefined &&
+        (previous?.receivedAt !== options.armedRowReceivedAt || previous.providerSessionOnly)
+      ) {
+        continue
+      }
       const resumeRow = options?.preserveResumeIdentity
-        ? this.toRetainedProviderSessionRow(
-            this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-              | EnrichedAgentHookEventPayload
-              | undefined
-          )
+        ? this.toRetainedProviderSessionRow(previous)
         : null
       const retained =
         resumeRow && options?.endedPresence
           ? { ...resumeRow, agentPresence: options.endedPresence }
           : resumeRow
-      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-        | EnrichedAgentHookEventPayload
-        | undefined
       this.clearPaneState(resolvedPaneKey, { emitStatusRowMutation: false })
+      if (previous && !previous.providerSessionOnly) {
+        this.recordEndedAgentSession(resolvedPaneKey, previous)
+      }
       if (retained) {
         admitLegacyAgentStatus(
           this.state,

@@ -199,6 +199,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   async confirmShellForeground(id: string): Promise<boolean> {
     return (await this.providerFor(id).confirmShellForeground?.(id)) ?? false
   }
+  proveShellForeground: IPtyProvider['proveShellForeground'] = (id, options) =>
+    this.providerFor(id).proveShellForeground?.(id, options) ?? Promise.resolve('other')
 
   async serialize(ids: string[]): Promise<string> {
     return this.fallback.serialize(ids)

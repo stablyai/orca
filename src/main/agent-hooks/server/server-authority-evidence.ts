@@ -8,7 +8,43 @@ import type {
 } from './server-types'
 import { AgentHookServerStatusRetries } from './server-status-retries'
 
+/** What the runtime holds for a pane's PTY: the hash of the launch token it still honours, or null
+ *  once that authority ended. Null overall when the runtime has no record of a PTY for the pane. */
+export type PaneLaunchAuthorityReader = (
+  paneKey: string
+) => { launchTokenHash: string | null } | null
+
 export abstract class AgentHookServerAuthorityEvidence extends AgentHookServerStatusRetries {
+  private paneLaunchAuthorityReader: PaneLaunchAuthorityReader | null = null
+
+  setPaneLaunchAuthorityReader(reader: PaneLaunchAuthorityReader | null): void {
+    this.paneLaunchAuthorityReader = reader
+  }
+
+  /** The event without its launch token once that token's authority ended. Every process a shell
+   *  starts inherits the token, so after a command end it proves nothing; it is honoured while the
+   *  runtime still holds it for the pane or a commitment of this host still vouches for it. Derived
+   *  at every write and at persist, never stored. A pane with no PTY record keeps today's rule at
+   *  ingest; `requireVoucher` (persist) fails closed there, since a revoked token has no voucher. */
+  protected withLiveLaunchToken<T extends { paneKey: string; launchToken?: string }>(
+    event: T,
+    options?: { requireVoucher?: boolean }
+  ): T {
+    const token = event.launchToken?.trim()
+    const runtime = token ? (this.paneLaunchAuthorityReader?.(event.paneKey) ?? null) : null
+    if (!token || (!runtime && !options?.requireVoucher)) {
+      return event
+    }
+    const launchTokenHash = createHash('sha256').update(token).digest('hex')
+    const ownerPaneKey = this.resolvePaneKeyAlias(event.paneKey)
+    const live =
+      runtime?.launchTokenHash === launchTokenHash ||
+      this.persistedAuthorityCommitmentsByPaneKey.get(ownerPaneKey)?.launchTokenHash ===
+        launchTokenHash ||
+      this.hydratedLaunchTokenHashByPaneKey.get(ownerPaneKey) === launchTokenHash
+    return live ? event : { ...event, launchToken: undefined }
+  }
+
   attestCompatibilityAuthority(candidate: {
     paneKey: string
     launchTokenHash: string
@@ -63,7 +99,7 @@ export abstract class AgentHookServerAuthorityEvidence extends AgentHookServerSt
   }
 
   protected recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void {
-    const evidence = this.toAuthorityEvidence(payload)
+    const evidence = this.toAuthorityEvidence(this.withLiveLaunchToken(payload))
     if (evidence) {
       this.currentAuthorityObservations.set(evidence.paneKey, evidence)
       this.persistedAuthorityCommitmentsByPaneKey.set(evidence.paneKey, evidence)

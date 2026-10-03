@@ -12,6 +12,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
+import type { ShellForegroundProof, ShellForegroundProofOptions } from './shell-foreground-proof'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
@@ -241,6 +242,12 @@ export type IPtyProvider = {
   confirmForegroundProcess?: (id: string) => Promise<string | null>
   /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
   confirmShellForeground?: (id: string) => Promise<boolean>
+  /** Whether the pane's own shell is back in front, or the host cannot tell; rejects when the host
+   *  cannot be reached. */
+  proveShellForeground?: (
+    id: string,
+    options?: ShellForegroundProofOptions
+  ) => Promise<ShellForegroundProof>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
   // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.

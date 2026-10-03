@@ -140,6 +140,7 @@ async function startOrcadRuntime(
   // its persistence and endpoint paths explicitly below.
   const { agentHookServer } = await import('../agent-hooks/server')
   const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
+  const { agentHookStatusStoreRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
@@ -229,11 +230,7 @@ async function startOrcadRuntime(
     onTerminalAgentStatus: (event) => agentHookServer.ingestTerminalStatus(event),
     // Why here too and not only on the desktop: orcad serves `worktree.ps` and `agentSession.*`,
     // so without these a headless host publishes its structured chats nowhere and lists no agents.
-    getAgentStatusSnapshot: () =>
-      agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
-    getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
-    getAgentProviderSessionRowsForPane: (paneKey) =>
-      agentHookServer.getStatusSnapshotForPane(paneKey),
+    ...agentHookStatusStoreRuntimeDeps(agentHookServer),
     // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
     // read, so a row observed under one process otherwise acquires whatever process owns the pane now.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
@@ -244,9 +241,6 @@ async function startOrcadRuntime(
         agentHookServer.ingestStructuredChildWork(subject, evidence, provider),
       readChildWork: (subject) => agentHookServer.getStructuredChildWorkViews(subject)
     },
-    checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
-    reconcileAgentStatusForEndedProcess: (paneKeys) =>
-      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(profileStore.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     // Why the dedupe here and not in the instance: `apply` closes and reconstructs

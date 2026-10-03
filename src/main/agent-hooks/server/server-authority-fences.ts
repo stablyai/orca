@@ -8,8 +8,20 @@ import type {
 } from './server-types'
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
+  /** Ends only the launch authority a pane's rows vouch for; rows and status fences stay. */
+  protected abstract revokePaneLaunchAuthority(paneKey: string): void
+
   // Why: retirement fences a pane and every alias of it, then deletes those aliases.
-  retirePaneAuthority(paneKey: string, retirementId?: string): void {
+  retirePaneAuthority(
+    paneKey: string,
+    retirementId?: string,
+    /** A command end: the agent may still be alive, so only its launch authority ends now. */
+    options?: { authorityOnly?: boolean }
+  ): void {
+    if (options?.authorityOnly) {
+      this.revokePaneLaunchAuthority(paneKey)
+      return
+    }
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     const previousFence = this.retiredPaneFencesByKey.get(ownerPaneKey)
     const paneKeys = new Set([paneKey, ownerPaneKey])
@@ -69,6 +81,12 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     if (hadStatus || authorityChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+    }
+    // Why: a removal every reader must hear, like any other pane clear; readers never saw a remnant.
+    for (const row of retiredRows) {
+      if (row.providerSessionOnly !== true) {
+        this.emitPaneStatusCleared({ paneKey: row.paneKey })
+      }
     }
   }
 

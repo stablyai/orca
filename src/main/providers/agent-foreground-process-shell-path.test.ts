@@ -9,7 +9,10 @@ vi.mock('child_process', () => ({
 }))
 
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot-reader'
-import { confirmShellForegroundProcess } from './agent-foreground-process'
+import {
+  confirmPaneShellForegroundProcess,
+  confirmShellForegroundProcess
+} from './agent-foreground-process'
 
 // Why: the POSIX reader wraps execFile with promisify, so the mock must honor the Node callback contract.
 function mockPs(stdout: string): void {
@@ -50,5 +53,24 @@ describe('confirmShellForegroundProcess with a spawned shell path', () => {
     )
 
     await expect(confirmShellForegroundProcess(100, '/Users/John Doe/bin/zsh')).resolves.toBe(true)
+  })
+
+  // The terminal daemon knows the PTY's root (login(1) on macOS) but not which shell it spawned.
+  it.each([
+    ['its shell alone in front', ['101 100 101 101 S+ -zsh'], true],
+    [
+      'an agent in front',
+      ['101 100 101 102 S -zsh', '102 101 102 102 S+ node /usr/bin/codex'],
+      false
+    ],
+    [
+      'an agent suspended with Ctrl+Z',
+      ['101 100 101 101 S+ -zsh', '102 101 102 101 T node codex'],
+      false
+    ]
+  ] as const)('a pane rooted in login(1), with %s', async (_name, rows, shellInFront) => {
+    mockPs(['100 99 100 101 Ss /usr/bin/login -pfl developer /bin/zsh', ...rows].join('\n'))
+
+    await expect(confirmPaneShellForegroundProcess(100)).resolves.toBe(shellInFront)
   })
 })

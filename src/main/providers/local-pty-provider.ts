@@ -1,3 +1,4 @@
+import { win32 as pathWin32 } from 'node:path'
 import type * as pty from 'node-pty'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
@@ -24,10 +25,12 @@ import {
   clearPtyState,
   pendingLocalPtySpawns,
   ptyProcesses,
+  ptyShellPath,
   resetLoadGeneration,
   type DataCallback,
   type ExitCallback
 } from './local-pty-provider-state'
+import type { ShellForegroundProof } from './shell-foreground-proof'
 import {
   clearLocalPtyBuffer,
   closeLocalPtyStartupQueryAuthority,
@@ -168,6 +171,14 @@ export class LocalPtyProvider implements IPtyProvider {
 
   confirmShellForeground(id: string): Promise<boolean> {
     return confirmLocalPtyShellForeground(id)
+  }
+
+  async proveShellForeground(id: string): Promise<ShellForegroundProof> {
+    // Why: a WSL pane's root is wsl.exe, and the guest's processes are out of this host's reach.
+    if (pathWin32.basename(ptyShellPath.get(id) ?? '').toLowerCase() === 'wsl.exe') {
+      return 'unprovable'
+    }
+    return (await confirmLocalPtyShellForeground(id)) ? 'shell' : 'other'
   }
 
   async serialize(_ids: string[]): Promise<string> {

@@ -120,8 +120,9 @@ export type AgentStatusSlice = {
   setMigrationUnsupportedPty: (entry: MigrationUnsupportedPtyEntry) => void
   clearMigrationUnsupportedPty: (ptyId: string) => void
 
-  /** Remove a single entry (e.g., when a pane's terminal exits). */
-  removeAgentStatus: (paneKey: string) => void
+  /** Remove a single entry (e.g., when a pane's terminal exits). `agentGone` (the host cleared the
+   *  pane: its agent ended or the pane went away) also keeps the row out of retention. */
+  removeAgentStatus: (paneKey: string, opts?: { agentGone?: boolean }) => void
 
   /** Remove all entries whose paneKey starts with the given prefix (tab close prefix-sweep). */
   removeAgentStatusByTabPrefix: (tabIdPrefix: string) => void

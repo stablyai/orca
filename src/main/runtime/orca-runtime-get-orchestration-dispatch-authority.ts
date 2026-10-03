@@ -23,6 +23,11 @@ import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-
 import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { matchesProcessIncarnation } from './orchestration/worker-terminal-process-liveness'
+import {
+  CommandEndAgentExitVerifier,
+  liveRowAnchor,
+  type CommandEndRowAnchor
+} from './command-end-agent-exit-verifier'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   /** Every pane key this PTY could be addressed by, including restored receipts. */
@@ -125,7 +130,55 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     }
   }
 
-  protected retirePtyAgentLaunchAuthority(ptyId: string): void {
+  /** The launch token this runtime still honours for a pane's PTY; null only when it has no record
+   *  of one. A disconnected record still answers: a disconnect drops no authority, retirement does. */
+  readPaneLaunchAuthority(paneKey: string): { launchTokenHash: string | null } | null {
+    const pty = this.getPtyRecordForPaneKey(paneKey)
+    if (!pty) {
+      return null
+    }
+    return {
+      launchTokenHash: pty.launchToken
+        ? createHash('sha256').update(pty.launchToken).digest('hex')
+        : null
+    }
+  }
+
+  protected readonly commandEndAgentExit = new CommandEndAgentExitVerifier({
+    readLiveRowAnchors: (ptyId) => {
+      const anchors = new Map<string, CommandEndRowAnchor>()
+      for (const paneKey of this.collectAgentStatusPaneKeysForPty(ptyId)) {
+        const anchor = liveRowAnchor(this.getAgentProviderSessionRowsForPaneFn?.(paneKey))
+        if (anchor) {
+          anchors.set(paneKey, anchor)
+        }
+      }
+      return anchors
+    },
+    checkHookAgentPresence: async (paneKey) =>
+      (await this.checkHookAgentPresenceFn?.(paneKey)) ?? null,
+    proveShellForeground: async (ptyId, notCapturedBefore) => {
+      const expectedIncarnationId = this.ptysById.get(ptyId)?.incarnationId ?? undefined
+      const options = { expectedIncarnationId, notCapturedBefore }
+      return (await this.ptyController?.proveShellForeground?.(ptyId, options)) ?? 'other'
+    },
+    reconcileEndedProcess: (paneKey, armedRowReceivedAt) =>
+      this.reconcileAgentStatusForEndedProcessFn?.([paneKey], {
+        // The shell outlived its agent, so the session stays resumable in place.
+        preserveResumeIdentity: true,
+        armedRowReceivedAt
+      }),
+    now: () => performance.now()
+  })
+
+  /** A command end (OSC 133;D): the launch token lives on in the shell's environment, so its
+   *  authority ends now; the rows wait for proof the agent exited, since nested shells leak a 133;D. */
+  protected settleAgentAtCommandEnd(ptyId: string): void {
+    this.retirePtyAgentLaunchAuthority(ptyId, 'command')
+    this.commandEndAgentExit.onCommandEnd(ptyId)
+  }
+
+  protected retirePtyAgentLaunchAuthority(ptyId: string, ended: 'command' | 'pty'): void {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return
@@ -142,7 +195,11 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     pty.launchIncarnationId = null
     pty.launchAgent = null
     for (const paneKey of paneKeys) {
-      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
+      if (ended === 'command') {
+        this.retireAgentHookCompatibilityAuthorityFn?.(paneKey, { authorityOnly: true })
+      } else {
+        this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
+      }
     }
   }
 

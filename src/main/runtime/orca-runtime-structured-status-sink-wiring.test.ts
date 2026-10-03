@@ -33,11 +33,10 @@ import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-sess
 
 type OrcaRuntimeDeps = NonNullable<ConstructorParameters<typeof OrcaRuntimeService>[2]>
 
-/** Renaming either option reddens this list, and dropping either from a host's construction
- *  reddens the assertion below. Both are needed: the runtime class does not typecheck its own
- *  `this` calls, and each entry point wires the store separately. */
+/** Renaming the option reddens this list, and dropping it (or the shared store deps) from a
+ *  host's construction reddens the assertion below. Both are needed: the runtime class does not
+ *  typecheck its own `this` calls, and each entry point wires the store separately. */
 const AGENT_STATUS_STORE_DEPS = [
-  'getAgentStatusSnapshot',
   'structuredAgentStatusSink'
 ] as const satisfies readonly (keyof OrcaRuntimeDeps)[]
 
@@ -77,6 +76,8 @@ describe('every host that constructs a runtime wires the agent-status store', ()
       for (const dep of AGENT_STATUS_STORE_DEPS) {
         expect(construction).toContain(`${dep}:`)
       }
+      // `getAgentStatusSnapshot` and the rest of the store reads come from the shared builder.
+      expect(construction).toContain('...agentHookStatusStoreRuntimeDeps(agentHookServer)')
       // A sink without it leaves the host holding no child records for that entry point.
       expect(construction).toContain('publishChildWork: (subject, evidence, provider) =>')
       expect(construction).toContain('ingestStructuredChildWork(subject, evidence, provider)')
@@ -86,6 +87,20 @@ describe('every host that constructs a runtime wires the agent-status store', ()
       )
     }
   )
+})
+
+describe('the desktop host wires launch authority', () => {
+  // Why: both are optional deps, so dropping either still typechecks, and the hook server would
+  // then keep vouching for a launch token every later process in the shell inherits.
+  it('passes the launch-authority deps and wires the runtime as the token reader', () => {
+    const relativePath = 'startup/main-process-runtime-service.ts'
+    expect(runtimeConstruction(relativePath)).toContain(
+      '...agentHookLaunchAuthorityRuntimeDeps(agentHookServer)'
+    )
+    expect(readFileSync(join(MAIN_ROOT, relativePath), 'utf8')).toContain(
+      'wireRuntimeLaunchAuthorityReader(agentHookServer, runtime)'
+    )
+  })
 })
 
 describe('structured status sink wiring', () => {

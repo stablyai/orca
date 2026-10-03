@@ -9,6 +9,13 @@ import {
 } from './types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { clientOnlyUnverifiableInspection } from '../../shared/terminal-process-inspection'
+import {
+  proveDaemonShellForeground,
+  type ShellForegroundProof,
+  type ShellForegroundProofOptions
+} from '../providers/shell-foreground-proof'
+import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
+import { confirmPaneShellForegroundProcess } from '../providers/agent-foreground-process'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
   // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
@@ -89,6 +96,38 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     } catch {
       return false
     }
+  }
+
+  async proveShellForeground(
+    id: string,
+    options?: ShellForegroundProofOptions
+  ): Promise<ShellForegroundProof> {
+    if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
+      return 'unprovable'
+    }
+    const expectedIncarnationId = options?.expectedIncarnationId
+    return proveDaemonShellForeground({
+      ptyId: id,
+      incarnationId: expectedIncarnationId ?? null,
+      platform: process.platform,
+      confirmShellForeground: () =>
+        this.client
+          .request<{ confirmed: boolean }>('confirmShellForeground', { sessionId: id })
+          .then(
+            (result) => result.confirmed === true,
+            (error: unknown) => {
+              // Why: daemons from before this request (v27-v36) answer it as unknown; their fenced
+              // evidence still answers. Any other failure is loss of contact and must reject.
+              if (isUnknownRequestTypeError(error)) {
+                return false
+              }
+              throw error
+            }
+          ),
+      inspectProcess: () =>
+        this.inspectProcess(id, expectedIncarnationId ? { expectedIncarnationId } : undefined),
+      confirmPaneShellForeground: confirmPaneShellForegroundProcess
+    })
   }
 
   async serialize(ids: string[]): Promise<string> {

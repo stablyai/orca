@@ -166,10 +166,9 @@ export function createAgentStatusAuthorityActions(
         return { recentlyRetiredAgentStatusPaneKeys: next }
       })
       // Why: deliberately OUTSIDE the guard above, and not gated on having cleared
-      // anything here. This map is not a mirror of main's — main fences panes the
-      // renderer never hears about (retirePtyAgentLaunchAuthority on command-finished
-      // and PTY exit calls the hook server directly, and nothing pushes that back), and
-      // this map is per-window and non-persisted, so a renderer reload empties it while
+      // anything here. This map is not a mirror of main's — main fences panes it retires
+      // itself on PTY exit, which the renderer hears only as a pane clear, not as a fence —
+      // and this map is per-window and non-persisted, so a renderer reload empties it while
       // main's survives. Gating the send on a local tombstone reintroduces STA-4114 for
       // exactly those panes. The send is idempotent and main refuses closed tabs itself.
       if (typeof window !== 'undefined') {

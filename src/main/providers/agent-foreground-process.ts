@@ -89,27 +89,41 @@ export async function confirmShellForegroundProcess(
       return false
     }
   }
+  // A path, not a command line: splitting on whitespace would cut `/Users/John Doe/bin/zsh` to `john`.
+  const spawnedShellBasename = spawnedShellProcess.split(/[\\/]/).pop()?.toLowerCase() ?? ''
+  return confirmPosixShellOwnsForeground(
+    shellPid,
+    (command) => executableBasename(command) === spawnedShellBasename
+  )
+}
+
+/**
+ * POSIX: the shallowest shell under a PTY's root process (the root itself, or the login(1)
+ * wrapper's shell on macOS) holds the terminal's foreground, and nothing in the tree is stopped.
+ * For a host that knows the root but not which shell it spawned (the terminal daemon).
+ */
+export function confirmPaneShellForegroundProcess(rootPid: number): Promise<boolean> {
+  return confirmPosixShellOwnsForeground(rootPid, () => true)
+}
+
+async function confirmPosixShellOwnsForeground(
+  rootPid: number,
+  isPaneShell: (command: string) => boolean
+): Promise<boolean> {
   try {
     const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
-    const root = index.byPid.get(shellPid)
+    const root = index.byPid.get(rootPid)
     if (!root) {
       return false
     }
-    const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, shellPid)]
-    // A path, not a command line: splitting on whitespace would cut `/Users/John Doe/bin/zsh` to `john`.
-    const spawnedShellBasename = spawnedShellProcess.split(/[\\/]/).pop()?.toLowerCase() ?? ''
+    const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, rootPid)]
     const foregroundShell = tree
-      .filter(
-        (row) =>
-          executableBasename(row.command) === spawnedShellBasename &&
-          isShellProcess(commandExecutable(row.command))
-      )
+      .filter((row) => isShellProcess(commandExecutable(row.command)) && isPaneShell(row.command))
       .sort((left, right) => left.depth - right.depth)[0]
     if (tree.some((row) => row.depth > 0 && row.stat.includes('T'))) {
       return false
     }
-    const confirmed = foregroundShell?.stat.includes('+') === true
-    return confirmed
+    return foregroundShell?.stat.includes('+') === true
   } catch {
     return false
   }
