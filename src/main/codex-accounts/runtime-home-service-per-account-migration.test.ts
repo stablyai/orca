@@ -18,15 +18,19 @@ vi.mock('node:os', async () => {
 })
 // Why: selecting an account starts the history bridge, which would otherwise
 // spawn the real `codex app-server` on these fixture homes.
-vi.mock('../codex/codex-account-session-index-heal', () => ({
-  createCodexAccountStateDb: async () => false,
-  healCodexAccountSessionIndex: async () => ({
+vi.mock('../codex/codex-account-session-index-heal', () => {
+  const upToDate = async () => ({
     outcome: 'up-to-date',
     healedThreads: 0,
     missingThreads: 0,
     failedThreads: 0
   })
-}))
+  return {
+    createCodexAccountStateDb: async () => false,
+    healCodexAccountSessionIndex: upToDate,
+    healPendingCodexAccountThreads: upToDate
+  }
+})
 
 beforeEach(() => {
   vi.resetModules()
