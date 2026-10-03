@@ -224,6 +224,7 @@ export function buildDefaultSettings(args: {
     agentStatusHooksEnabled: true,
     agentWorkspaceTrustEnabled: true,
     codexTerminalServerIsolation: true,
+    codexSharedServerWarning: true,
     tabAutoGenerateTitle: false,
     confirmClosePinnedTab: true,
     editorPreviewTabsEnabled: true,

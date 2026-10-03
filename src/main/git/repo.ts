@@ -11,6 +11,7 @@ import { gitExecFileAsync } from './runner'
 
 export {
   isGitRepo,
+  inspectGitRepoForRegistration,
   getGitRepoRoot,
   getLinkedWorktreeMainRepoRoot,
   normalizeGitRepoRootForInputPath
@@ -85,7 +86,15 @@ export async function getRecentDriftSubjects(
 ): Promise<string[]> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['log', '--format=%s', '-n', String(limit), `${localRef}..${remoteRef}`],
+      [
+        'log',
+        '--no-show-signature',
+        '--no-color',
+        '--format=%s',
+        '-n',
+        String(limit),
+        `${localRef}..${remoteRef}`
+      ],
       {
         ...gitExecOptions(repoPath, options),
         timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS

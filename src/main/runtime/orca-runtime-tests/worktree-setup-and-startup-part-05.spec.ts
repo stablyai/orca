@@ -13,6 +13,7 @@ import {
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_REPO_ID,
+  isLocalBranchCatalogQuery,
   isOriginMainBaseRefProbe,
   makeWorktreeMeta,
   store
@@ -67,11 +68,11 @@ describe('OrcaRuntimeService', () => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
-        if (args[0] === 'branch') {
+        if (args[0] === 'branch' || isLocalBranchCatalogQuery(args)) {
           return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
+        if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+          return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
         }
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
@@ -170,11 +171,11 @@ describe('OrcaRuntimeService', () => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
-        if (args[0] === 'branch') {
+        if (args[0] === 'branch' || isLocalBranchCatalogQuery(args)) {
           return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
+        if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+          return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
         }
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
@@ -276,11 +277,11 @@ describe('OrcaRuntimeService', () => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
-        if (args[0] === 'branch') {
+        if (args[0] === 'branch' || isLocalBranchCatalogQuery(args)) {
           return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
+        if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+          return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
         }
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }

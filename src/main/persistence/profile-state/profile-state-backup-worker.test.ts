@@ -1,5 +1,13 @@
 import { build } from 'esbuild'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  watch,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -67,6 +75,32 @@ function script(directory: string, source: string): string {
   const path = join(directory, 'worker.cjs')
   writeFileSync(path, source)
   return path
+}
+
+function waitForBackupWorkerReady(directory: string, ready: string): Promise<void> {
+  const deadline = AbortSignal.timeout(5_000)
+  return new Promise((resolve, reject) => {
+    const watcher = watch(directory, () => {
+      if (existsSync(ready)) {
+        finish()
+      }
+    })
+    const abort = () => finish(new Error('Backup worker did not become ready'))
+    const finish = (error?: Error) => {
+      watcher.close()
+      deadline.removeEventListener('abort', abort)
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    }
+    watcher.once('error', finish)
+    deadline.addEventListener('abort', abort, { once: true })
+    if (existsSync(ready)) {
+      finish()
+    }
+  })
 }
 
 describe('profile state backup worker', () => {
@@ -179,20 +213,35 @@ describe('profile state backup worker', () => {
     `
       )
       const cancellation = new AbortController()
+      const workerReady = waitForBackupWorkerReady(directory, ready)
+      // Native startup must finish before the parent deadline advances.
+      if (mode === 'timeout') {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      }
       const pending = runProfileStateBackupWorker(job, {
         workerPath: worker,
-        timeoutMs: 500,
+        timeoutMs: mode === 'cancel' ? 10_000 : 500,
         signal: cancellation.signal
       })
       const failed = expect(pending).rejects.toThrow(mode === 'cancel' ? 'cancelled' : 'timed out')
-      await vi.waitFor(() => expect(existsSync(ready)).toBe(true))
-      expect(readdirSync(directory).filter((name) => name.startsWith('backup.db.'))).toHaveLength(4)
-      if (mode === 'cancel') {
+      try {
+        await workerReady
+        expect(readdirSync(directory).filter((name) => name.startsWith('backup.db.'))).toHaveLength(
+          4
+        )
+        if (mode === 'cancel') {
+          cancellation.abort()
+        } else {
+          await vi.advanceTimersByTimeAsync(500)
+        }
+        await failed
+        expect(readdirSync(directory).filter((name) => name.startsWith('backup.db.'))).toEqual([])
+        expect(existsSync(job.databasePath)).toBe(true)
+      } finally {
         cancellation.abort()
+        await pending.catch(() => undefined)
+        vi.useRealTimers()
       }
-      await failed
-      expect(readdirSync(directory).filter((name) => name.startsWith('backup.db.'))).toEqual([])
-      expect(existsSync(job.databasePath)).toBe(true)
     }
   )
 

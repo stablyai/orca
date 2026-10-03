@@ -27,6 +27,7 @@ import {
   stopStructuredAgentSessionRuntime,
   waitForStructuredAgentSessionRecovery
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const SESSION = 'claude-integration-1'
 const PROVIDER_SESSION = claudeSessionIdForOrcaSession(SESSION)
@@ -234,6 +235,7 @@ beforeEach(async () => {
     publishStructuredAgentSessionTab: vi.fn(),
     ensureStructuredAgentSessionHost: () =>
       ensureStructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         stateDirectory: root,
         hostId: 'local',
         claimKeyId: 'key-1',

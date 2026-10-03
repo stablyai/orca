@@ -11,8 +11,8 @@ export function registerGitHandlers(
   dispatcher.onRequest('git.submoduleStatus', (p, context) =>
     handlers.read.getSubmoduleStatus(p, context)
   )
-  dispatcher.onRequest('git.checkIgnored', (p) => handlers.read.checkIgnored(p))
-  dispatcher.onRequest('git.history', (p) => handlers.read.history(p))
+  dispatcher.onRequest('git.checkIgnored', (p, context) => handlers.read.checkIgnored(p, context))
+  dispatcher.onRequest('git.history', (p, context) => handlers.read.history(p, context))
   dispatcher.onRequest('git.commit', (p) => handlers.changes.commit(p))
   dispatcher.onRequest('git.diff', (p, context) => handlers.read.getDiff(p, context))
   dispatcher.onRequest('git.stage', (p) => handlers.changes.stage(p))
@@ -26,9 +26,15 @@ export function registerGitHandlers(
   dispatcher.onRequest('git.discard', (p) => handlers.discard.discard(p))
   dispatcher.onRequest('git.bulkDiscard', (p) => handlers.discard.bulkDiscard(p))
   dispatcher.onRequest('git.conflictOperation', (p) => handlers.discard.conflictOperation(p))
-  dispatcher.onRequest('git.branchCompare', (p) => handlers.comparison.branchCompare(p))
-  dispatcher.onRequest('git.commitCompare', (p) => handlers.comparison.commitCompare(p))
-  dispatcher.onRequest('git.upstreamStatus', (p) => handlers.comparison.upstreamStatus(p))
+  dispatcher.onRequest('git.branchCompare', (p, context) =>
+    handlers.comparison.branchCompare(p, context)
+  )
+  dispatcher.onRequest('git.commitCompare', (p, context) =>
+    handlers.comparison.commitCompare(p, context)
+  )
+  dispatcher.onRequest('git.upstreamStatus', (p, context) =>
+    handlers.comparison.upstreamStatus(p, context)
+  )
   dispatcher.onRequest('git.fetch', (p) => handlers.fetch.fetch(p))
   dispatcher.onRequest('git.forkSync', (p, context) => handlers.fetch.forkSync(p, context))
   dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) =>

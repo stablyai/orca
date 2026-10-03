@@ -1,7 +1,10 @@
 # Antigravity readiness: what the transcripts show
 
-`findAntigravityReadyPromptIndex` in `src/main/runtime/terminal-wait-detection.ts` decides whether
-an Antigravity pane is ready for a prompt. It has been written five times, each version tuned
+Antigravity readiness lives in `src/main/runtime/agent-state-rules/antigravity.json`: a screen rule
+over the trusted grid, and a text anchor that runs the named scan
+`findAntigravityComposerIndex` (`agent-state-rules/antigravity-text-composer.ts`) over the
+line-folded tail when no trusted grid exists. That text scan decides whether a pane is ready for a
+prompt from its tail alone. It has been written five times, each version tuned
 against a five-line screen typed from memory into a `.spec.ts` fixture. Three of the first four
 were found worse than the bug they replaced, and the fifth was reverted.
 
@@ -41,7 +44,7 @@ replays them.
 What they show:
 
 - **The text tail misses three ready screens.** On `ready-accept-edits`, `ready-plan` and
-  `turn-ended` the line-folded tail never satisfies `findAntigravityReadyPromptIndex`; the screen
+  `turn-ended` the line-folded tail never satisfies `findAntigravityComposerIndex`; the screen
   rule does. (`turn-ended` is the 1.2.14 form of the old `busy-turn-ended` known defect.)
 - **A caret rule is wrong on the screen.** The grid keeps the bare `>` through a turn and behind
   the picker. The text tail happened to lose it mid-turn (section 8); the screen does not.

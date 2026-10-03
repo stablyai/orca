@@ -103,6 +103,7 @@
     "../src/main/amp/managed-plugin-install-status.ts",
     "../src/main/antigravity/hook-events.ts",
     "../src/main/antigravity/hook-script.ts",
+    "../src/main/antigravity/windows-hook-json-post.ts",
     "../src/main/antigravity/hook-service.ts",
     "../src/main/antigravity/hooks-json-bundle.ts",
     "../src/main/claude/hook-settings.ts",

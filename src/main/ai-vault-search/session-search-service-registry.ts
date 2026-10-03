@@ -14,6 +14,7 @@ import {
   type SessionSearchTransport
 } from '../../shared/ai-vault-search-transport'
 import type { SessionSearchService } from './session-search-service'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 
 let service: SessionSearchService | null = null
 
@@ -34,7 +35,23 @@ export async function searchSessionService(
   // The choke point every entry point funnels through, so every host kind
   // resolves alike; the verdict goes to the service, which answers off and
   // not-ready first.
-  const { within, ...request } = parsed
+  const { within, supportsQoderHistory, ...request } = parsed
+  // Older clients reject the whole page when a hit has an unknown agent tag.
+  const requestedAgents = request.filters?.agents
+  const compatibleAgents = (requestedAgents?.length ? requestedAgents : AI_VAULT_AGENTS).filter(
+    (agent) => supportsQoderHistory || agent !== 'qoder'
+  )
+  const compatibleRequest = supportsQoderHistory
+    ? request
+    : {
+        ...request,
+        filters: {
+          ...request.filters,
+          agents: compatibleAgents.length
+            ? compatibleAgents
+            : AI_VAULT_AGENTS.filter((agent) => agent !== 'qoder')
+        }
+      }
   const hostScope = within
     ? resolveSessionSearchScope(within, sessionSearchScopeCatalog())
     : undefined
@@ -42,9 +59,14 @@ export async function searchSessionService(
     request.freshness === 'wait-until-current'
       ? await reconcileWithin(current, freshnessTimeoutMs)
       : false
-  const result = AiVaultSearchResponseSchema.parse(await current.search(request, hostScope))
+  const result = AiVaultSearchResponseSchema.parse(
+    await current.search(compatibleRequest, hostScope)
+  )
   if (result.kind !== 'results') {
     return result
+  }
+  if (compatibleAgents.length === 0) {
+    return { ...result, hits: [], page: { cursor: null, hasMore: false } }
   }
   const { debug, ...fields } = result
   return {
@@ -61,9 +83,10 @@ export async function sessionSearchServiceStatus(
 ): Promise<AiVaultSearchStatus> {
   AiVaultSearchStatusRequestSchema.parse(raw)
   return redactStatusForTransport(
-    AiVaultSearchStatusSchema.parse(
-      service ? await service.status() : unavailableSessionSearchStatus()
-    ),
+    AiVaultSearchStatusSchema.parse({
+      ...(service ? await service.status() : unavailableSessionSearchStatus()),
+      supportsQoderHistory: true
+    }),
     transport
   )
 }

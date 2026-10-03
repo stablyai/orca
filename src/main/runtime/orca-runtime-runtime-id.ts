@@ -47,7 +47,7 @@ import { RuntimeTerminalWriter } from './runtime-terminal-writer'
 import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
 import { TerminalIntentionalStops } from './terminal-intentional-stops'
 import { TerminalRunFactsRegister, type TerminalSpawnCommit } from './terminal-run-facts'
-import type { TuiIdleEvidenceSource } from './tui-idle-evidence'
+import type { TuiIdleEvidenceSource } from './tui-idle-evidence-source'
 import { hasTerminalCommandPainted } from './terminal-command-paint'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
@@ -348,8 +348,11 @@ export class OrcaRuntimeWithRuntimeId {
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
     getFirstPartyAgentStatus: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
+    getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
-    readScreenRuledLines: (ptyId) => this.readScreenRuledLines(ptyId)
+    readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
+    getTitleObservedAtEpochMs: (ptyId) =>
+      (ptyId ? this.ptysById.get(ptyId)?.lastOscTitleEpochMs : null) ?? null
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({

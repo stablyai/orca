@@ -23,6 +23,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const caller = { callerKey: 'desktop' }
 let directory: string
@@ -64,6 +65,7 @@ let ownerProbe: AgentSessionOwnerProbe = { outcome: 'pid-absent' }
 async function openHost(): Promise<void> {
   store = await openTestAgentSessionRecordStore(generationRoot())
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
     journalDatabase: openTestJournalHostDatabase(generationRoot()),
@@ -346,6 +348,25 @@ describe('/clear starts nothing', () => {
     })
     await clearCommits()
     expect(atCommit).toEqual({ child: null, claim: 'released' })
+  })
+
+  // Its own cause, never the reason of whatever Stop the journal holds last.
+  it("ends a running source's agent as the user closing the chat", async () => {
+    const session = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!
+    await session.journal.appendStopEvent(
+      { reason: 'host-stop' },
+      store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
+    )
+    const commit = store.commitConversationClear
+    let endedAs: string | undefined
+    vi.spyOn(store, 'commitConversationClear').mockImplementationOnce(async (clear) => {
+      endedAs = session.lastEndedChild?.cause
+      return commit(clear)
+    })
+
+    await clearCommits()
+
+    expect(endedAs).toBe('user-close')
   })
 
   it('founds one record per /clear through a chain of clears, starting neither', async () => {
@@ -667,5 +688,93 @@ describe('what an older build left', () => {
     expect(host.collaboratorsForTests().sessions.has(orphan)).toBe(false)
     expect(startsFor(orphan)).toBe(1)
     expect(startsFor(replacement)).toBe(0)
+  })
+})
+
+// Every press carries its own operation id, so a /clear pressed after one committed is a new call.
+describe('a /clear pressed again after it committed', () => {
+  function replacementsOtherThanTheSource(): string[] {
+    return store
+      .listRecords()
+      .flatMap((record) => (record.sessionId === HOST_TEST_SESSION ? [] : [record.sessionId]))
+  }
+
+  function startsForSource(): number {
+    return vi
+      .mocked(adapter.acquire)
+      .mock.calls.filter(([input]) => input.identity.sessionId === HOST_TEST_SESSION).length
+  }
+
+  async function expectAnsweredWithTheCommittedClear(replacement: string): Promise<void> {
+    const starts = startsForSource()
+    const result = await host.conversationCommand(caller, commandParams('clear'))
+    expect(result).toMatchObject({
+      ok: true,
+      value: { phase: 'committed', state: 'completed', replacementSessionId: replacement }
+    })
+    expect(result.ok && result.value.error).toBeFalsy()
+    expect(replacementsOtherThanTheSource()).toEqual([replacement])
+    // The cleared conversation's agent is not started to answer it.
+    expect(startsForSource()).toBe(starts)
+    expect(store.listVisibleSessionIds()).toEqual([replacement])
+    expect(host.conversationReplacements().map((entry) => entry.sessionId)).toEqual([replacement])
+  }
+
+  it('answers a double press with the clear the first press committed', async () => {
+    const first = await host.conversationCommand(caller, commandParams('clear'))
+    const replacement = first.ok ? first.value.replacementSessionId! : ''
+    expect(replacement).toBeTruthy()
+    // What the RPC handler does once the first answer is out.
+    await host.close(HOST_TEST_SESSION, 'user-close')
+    await expectAnsweredWithTheCommittedClear(replacement)
+  })
+
+  it('answers a retyped /clear whose committed answer was lost with that clear', async () => {
+    const persist = store.recordOperationOutcome.bind(store)
+    let lost = false
+    vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
+      if (!lost && input.outcome.status === 'succeeded' && input.outcome.conversationCommand) {
+        lost = true
+        throw new Error('connection lost')
+      }
+      return persist(input)
+    })
+    await expect(host.conversationCommand(caller, commandParams('clear'))).rejects.toThrow(
+      'connection lost'
+    )
+    const [replacement] = replacementsOtherThanTheSource()
+    await expectAnsweredWithTheCommittedClear(replacement!)
+  })
+
+  it('refuses a second /clear pressed under a new id while the first is still running', async () => {
+    const [first, second] = await Promise.all([
+      host.conversationCommand(caller, commandParams('clear')),
+      host.conversationCommand(caller, commandParams('clear'))
+    ])
+    expect(first).toMatchObject({ ok: true })
+    expect(second).toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'conversationCommandInFlight' } }
+    })
+    expect(replacementsOtherThanTheSource()).toHaveLength(1)
+  })
+
+  it('still tells another window the conversation was cleared', async () => {
+    expect((await host.conversationCommand(caller, commandParams('clear'))).ok).toBe(true)
+    expect(
+      await host.conversationCommand({ callerKey: 'mobile' }, commandParams('clear'))
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'conversationCleared' } } })
+    expect(replacementsOtherThanTheSource()).toHaveLength(1)
+  })
+
+  // Opened again from history on purpose, so that tab stays on the cleared conversation.
+  it('still tells a cleared conversation opened from history that it was cleared', async () => {
+    expect((await host.conversationCommand(caller, commandParams('clear'))).ok).toBe(true)
+    await host.setSessionTabVisibility(HOST_TEST_SESSION, true)
+    expect(await host.conversationCommand(caller, commandParams('clear'))).toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'conversationCleared' } }
+    })
+    expect(replacementsOtherThanTheSource()).toHaveLength(1)
   })
 })

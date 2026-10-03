@@ -138,7 +138,7 @@ describe('closing the handle', () => {
     await foundRestTestChat(rig)
 
     await rig.host.close(SESSION, 'evict')
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, 'evict')
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
     // The stop says not-running; the row belongs to the tab, so nothing forgets it.
     expect(rig.sink.forget).not.toHaveBeenCalled()
     expect(rig.sink.publish.mock.calls.at(-1)?.[0]).toMatchObject({ sessionId: SESSION })
@@ -261,7 +261,7 @@ describe('a start that never finishes (P2-15)', () => {
     rig.clock.now += IDLE_MS + 1
 
     await sweepOnce(rig.host)
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, 'host-stop')
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
     await vi.waitFor(() =>
       expect(readerSaw(reader.events).submissions).toContainEqual(
         expect.objectContaining({ dispatchState: 'rejected', reason: stopReason })
@@ -301,6 +301,7 @@ describe('the wind-down retry with a message queued (P2-31)', () => {
       owesProviderChildWindDown: { generation: 'generation-1', fence: 1 }
     }
     const stopAgent = vi.fn(async () => undefined)
+    const finishOwedWindDown = vi.fn(async () => true)
     const sweep = new StructuredAgentSessionIdleSweep({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a session fixture carrying only the journal and child facts the sweep reads.
       sessions: Object.assign(new Map([[SESSION, session as never]]), {
@@ -316,12 +317,20 @@ describe('the wind-down retry with a message queued (P2-31)', () => {
       providerHoldsDispatch: () => false,
       stopAgent,
       stopStartingAgent: stopAgent,
+      finishOwedWindDown,
       closeConversation: vi.fn(async () => false),
-      onError: (_id, error) => {
-        throw error
+      // A failed step fails the test.
+      logger: {
+        warn: (_message, fields) => {
+          throw fields.error
+        },
+        error: (_message, fields) => {
+          throw fields.error
+        }
       }
     })
     await sweep.tick()
     expect(stopAgent).not.toHaveBeenCalled()
+    expect(finishOwedWindDown).not.toHaveBeenCalled()
   })
 })

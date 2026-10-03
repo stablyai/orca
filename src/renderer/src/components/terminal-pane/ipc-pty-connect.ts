@@ -181,6 +181,7 @@ function handleConnectError(
   context: IpcPtyConnectContext
 ): PtyConnectResult | undefined {
   const { connectionId } = context.transportOptions
+  // Unclamped: host diagnoses put the remedy on later lines, and the pane toast renders them all.
   const message =
     readIpcErrorDetail(error) ?? (error instanceof Error ? error.message : String(error))
   if (connectionId && options.sessionId && isSshSessionGoneError(message)) {

@@ -6,8 +6,10 @@ import {
   readRuntimeFixture,
   replayTranscript
 } from './agent-transcript-replay-test-harness'
-import { isClineComposerReadyScreen } from './cline-terminal-readiness'
-import { describeScreenRuledAgentTranscripts } from './screen-ruled-agent-transcript-suite'
+import {
+  describeScreenRuledAgentTranscripts,
+  readsIdleComposer
+} from './screen-ruled-agent-transcript-suite'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -38,7 +40,6 @@ describe('Cline readiness from captured bytes', () => {
   describeScreenRuledAgentTranscripts({
     agent: 'cline',
     foregroundProcess: 'cline',
-    rule: isClineComposerReadyScreen,
     ready: READY,
     notReady: NOT_READY,
     // Why all: an idle Cline is quiet, so the quiet-process lane settles it.
@@ -55,7 +56,7 @@ describe('Cline readiness from captured bytes', () => {
   // Why only quiescence can refuse it: the streaming reply has scrolled its spinner away.
   it('paints the same empty composer while a reply streams', async () => {
     const { ruledScreenLines } = await finalReplayFrame(STREAMING, 120, 40)
-    expect(isClineComposerReadyScreen(ruledScreenLines)).toBe(true)
+    expect(readsIdleComposer('cline', ruledScreenLines)).toBe(true)
   })
 
   it('refuses every frame whose spinner row is still on screen', async () => {
@@ -67,7 +68,7 @@ describe('Cline readiness from captured bytes', () => {
     )) {
       if (ruledScreenLines.some((line) => /[\u2800-\u28ff] Thinking/.test(line))) {
         spinnerFrames += 1
-        expect(isClineComposerReadyScreen(ruledScreenLines)).toBe(false)
+        expect(readsIdleComposer('cline', ruledScreenLines)).toBe(false)
       }
     }
     // Presence precondition: the thinking spinner was painted above the composer.

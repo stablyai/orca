@@ -1,7 +1,3 @@
-import {
-  childEndCauseOfEndedEvent,
-  turnVerdictForChildEnd
-} from '../native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
@@ -179,8 +175,10 @@ export function createClaudeJournalTranslator(
     message: Record<string, unknown>,
     startsTurn: boolean,
     observedAt: number,
-    requestedAt?: number
-  ): boolean => journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt)
+    requestedAt?: number,
+    openedBy?: string
+  ): boolean =>
+    journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt, openedBy)
 
   return {
     handle: (event) => {
@@ -189,11 +187,9 @@ export function createClaudeJournalTranslator(
         streamedText.flush()
         subagents.settleSession()
         backgroundTasks.settleSession()
-        // The host saw the child end, so the turn's end is observed, not lost; its verdict is only
-        // what the host's own cause says, a user's stop of this chat or else news.
-        turn.settle(
-          turnVerdictForChildEnd(childEndCauseOfEndedEvent(event), event.observedAt ?? Date.now())
-        )
+        // The host saw the child end, so the turn's end is observed, not lost. Whether it was a
+        // person's Stop is the journal's Stop event to say (`turnEndAfterStop`), else it is news.
+        turn.settle({ state: 'interrupted', completedAt: event.observedAt ?? Date.now() })
         // A frame that arrives after the child is gone must not open a turn no
         // event can close.
         turn.suppressReopen()
@@ -250,7 +246,8 @@ export function createClaudeJournalTranslator(
             event.message,
             event.startsTurn === true,
             event.observedAt ?? Date.now(),
-            event.requestedAt
+            event.requestedAt,
+            event.clientMessageId
           )
         ) {
           providerFallback.append(
@@ -282,7 +279,6 @@ export function createClaudeJournalTranslator(
     get currentTurnId() {
       return turn.id
     },
-    recordTurnStop: (turnId, cause) => turn.recordStop(turnId, cause),
     get commandTurnId() {
       return turn.command ? turn.id : null
     },

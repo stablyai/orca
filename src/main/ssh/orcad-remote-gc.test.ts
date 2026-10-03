@@ -15,6 +15,8 @@ vi.mock('./ssh-relay-gc-tombstone', () => ({
 }))
 vi.mock('./ssh-relay-install-lock', () => ({
   RELAY_INSTALL_LOCK_NAME: '.install-lock',
+  INSTALL_LOCK_STALE_MS: 20 * 60_000,
+  INSTALL_LOCK_STALE_SECONDS: 20 * 60,
   isRelayInstallLockStale: vi.fn().mockResolvedValue(false)
 }))
 
@@ -44,6 +46,9 @@ function scriptHost(options: {
     }
     if (command.includes('.install-lock')) {
       return 'OPEN'
+    }
+    if (command.includes('.store-lock') && command.includes('mkdir')) {
+      return 'OK'
     }
     if (command.includes('.install-complete')) {
       return 'COMPLETE'

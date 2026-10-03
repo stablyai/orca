@@ -1,5 +1,12 @@
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import { gitExecFileAsync } from './runner'
+import { resolveDefaultBaseRefViaExec } from '../../shared/git-default-base-ref'
+
+export {
+  DEFAULT_BASE_REF_PROBES,
+  resolveDefaultBaseRefViaExec
+} from '../../shared/git-default-base-ref'
+export type { GitExec } from '../../shared/git-default-base-ref'
 
 export type LocalGitExecOptions = {
   wslDistro?: string
@@ -25,66 +32,11 @@ export function gitExecOptions(
   }
 }
 
-export const DEFAULT_BASE_REF_PROBES: readonly { ref: string; returnAs: string }[] = [
-  { ref: 'refs/remotes/origin/main', returnAs: 'origin/main' },
-  { ref: 'refs/remotes/origin/master', returnAs: 'origin/master' },
-  { ref: 'refs/heads/main', returnAs: 'main' },
-  { ref: 'refs/heads/master', returnAs: 'master' }
-]
-
-async function resolveDefaultBaseRefFromProbes(
-  hasRef: (ref: string) => Promise<boolean>
-): Promise<string | null> {
-  for (const { ref, returnAs } of DEFAULT_BASE_REF_PROBES) {
-    if (await hasRef(ref)) {
-      return returnAs
-    }
-  }
-  return null
-}
-
-function gitRefToDefaultBaseRef(ref: string): string {
-  return ref.replace(/^refs\/remotes\//, '')
-}
-
 export async function getBaseRefDefault(
   path: string,
   options: LocalGitExecOptions = {}
 ): Promise<string | null> {
   return getDefaultBaseRefAsync(path, options)
-}
-
-export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
-
-async function hasGitRefViaExec(exec: GitExec, ref: string): Promise<boolean> {
-  try {
-    await exec(['rev-parse', '--verify', '--quiet', ref])
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function resolveVerifiedOriginHeadBaseRefViaExec(exec: GitExec): Promise<string | null> {
-  try {
-    const { stdout } = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
-    const ref = stdout.trim()
-    if (!ref || !(await hasGitRefViaExec(exec, ref))) {
-      return null
-    }
-    return gitRefToDefaultBaseRef(ref)
-  } catch {
-    return null
-  }
-}
-
-/** Resolve the same default-base ordering through a host-owned Git executor. */
-export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<string | null> {
-  const originHeadBaseRef = await resolveVerifiedOriginHeadBaseRefViaExec(exec)
-  if (originHeadBaseRef) {
-    return originHeadBaseRef
-  }
-  return resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
 }
 
 export function resolveDefaultBaseRefWithLocalGit(

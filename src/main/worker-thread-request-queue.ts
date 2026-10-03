@@ -35,6 +35,11 @@ export type WorkerThreadRequestQueueOptions<TRequest> = {
   describeCrashLoop: (lastError: string) => string
   /** First spawn failure only; a repeating one must not repeat the log. */
   onUnavailable: (error: unknown) => void
+  /**
+   * Fail calls closed while a terminated worker has yet to exit, instead of
+   * spawning beside it. For workers whose native calls delay termination.
+   */
+  awaitRetirement?: boolean
 }
 
 type PendingCall<TRequest, TResponse> = {
@@ -66,7 +71,8 @@ export class WorkerThreadRequestQueue<
       onError: (error) => this.onWorkerFault(error),
       onExit: (code) => this.onWorkerExit(code),
       isIdle: () => !this.active && this.queue.length === 0,
-      onUnavailable: options.onUnavailable
+      onUnavailable: options.onUnavailable,
+      awaitRetirement: options.awaitRetirement
     })
   }
 
@@ -246,10 +252,9 @@ export class WorkerThreadRequestQueue<
   private failQueuedAsUnavailable(): void {
     const pending = this.queue
     this.queue = []
+    const reason = this.host.isRetiring ? 'previous worker still exiting' : 'worker spawn failed'
     for (const call of pending) {
-      this.settle(call, () =>
-        call.reject(this.options.createUnavailableError('worker spawn failed'))
-      )
+      this.settle(call, () => call.reject(this.options.createUnavailableError(reason)))
     }
   }
 

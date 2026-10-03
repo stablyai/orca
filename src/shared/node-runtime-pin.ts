@@ -25,10 +25,14 @@ export type CompatServerTarget = (typeof COMPAT_SERVER_TARGETS)[number]
 
 export type NodeRuntimeTarget = ServerTarget | CompatServerTarget
 
-// Managed SSH deployment supports POSIX hosts; Windows uses standalone builds.
-export const ORCAD_TEMPLATE_TARGETS = SERVER_TARGETS.filter(
-  (target) => !target.startsWith('win32-')
-)
+/** The default target a compat runtime stands in for: same host, older glibc. */
+export const COMPAT_SERVER_TARGET_BASES: Record<CompatServerTarget, ServerTarget> = {
+  'linux-x64-glibc217': 'linux-x64-glibc'
+}
+
+// Every target: Windows SSH relays take their node-pty/ConPTY slot from here (design D5), even
+// though managed orcad launch stays POSIX-only (orcad-remote-host-support.ts).
+export const ORCAD_TEMPLATE_TARGETS: readonly ServerTarget[] = SERVER_TARGETS
 
 export type NodeRuntimePin = {
   version: string
@@ -147,6 +151,13 @@ export const NODE_RUNTIME_COMPAT_ASSETS: Record<CompatServerTarget, NodeRuntimeA
 
 export function isCompatServerTarget(target: string): target is CompatServerTarget {
   return COMPAT_SERVER_TARGETS.some((known) => known === target)
+}
+
+/** The pinned asset for a known default or compat target. */
+export function pinnedNodeRuntimeAsset(target: NodeRuntimeTarget): NodeRuntimeAsset {
+  return isCompatServerTarget(target)
+    ? NODE_RUNTIME_COMPAT_ASSETS[target]
+    : NODE_RUNTIME_ASSETS[target]
 }
 
 /** The pinned asset for a default or compat target; undefined for anything else. */

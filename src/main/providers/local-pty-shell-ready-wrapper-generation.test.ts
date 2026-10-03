@@ -187,12 +187,20 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps markerless fish spawns unwrapped', async () => {
+  it('keeps markerless fish argv untouched and points it at the vendor snippet', async () => {
     const { getMarkerlessShellLaunchConfig } = await importFreshLocalPtyShellReady()
 
     const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
-    expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
+    expect(config.args).toBeNull()
+    expect(config.supportsReadyMarker).toBe(false)
+    const prefix = config.env.ORCA_FISH_XDG_DATA_DIRS_PREFIX
+    expect(prefix).toMatch(/\/fish-xdg-data:\/usr\/local\/share:\/usr\/share$/)
+    expect(config.env).toEqual({ XDG_DATA_DIRS: prefix, ORCA_FISH_XDG_DATA_DIRS_PREFIX: prefix })
+    const dataDir = prefix.split(':')[0]
+    expect(
+      readFileSync(`${dataDir}/fish/vendor_conf.d/orca-shell-integration.fish`, 'utf8')
+    ).toContain('set argv --no-daemon $argv')
   })
 
   it('falls back to HOME for ORCA_ORIG_ZDOTDIR when inherited ZDOTDIR points at a wrapper dir', async () => {

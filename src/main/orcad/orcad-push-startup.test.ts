@@ -30,6 +30,10 @@ vi.mock('./orcad-daemon-supervision', () => ({
   stopOrcadDaemon: async () => {}
 }))
 vi.mock('./orcad-health', () => ({ collectOrcadHealth: async () => ({}) }))
+// Why: the real updater would fetch rules from GitHub inside a unit test.
+vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
+  startAgentStateRulesLiveUpdates: () => {}
+}))
 vi.mock('../daemon/daemon-init', () => ({ daemonOwnsFreshPersistentPtys: () => false }))
 vi.mock('../ipc/pty', () => ({
   registerHeadlessPtyRuntime: async () => {},

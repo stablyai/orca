@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseGitRevListAheadBehindCounts,
-  parseGitRevListFirstParentOid
+  parseGitRevListFirstParentOid,
+  parseGitRevListCommitAndFirstParentOid
 } from './git-rev-list-output'
 
 describe('parseGitRevListAheadBehindCounts', () => {
@@ -41,5 +42,27 @@ describe('parseGitRevListFirstParentOid', () => {
 
   it('returns null for a root commit', () => {
     expect(parseGitRevListFirstParentOid('commit-oid\n')).toBeNull()
+  })
+})
+
+describe('parseGitRevListCommitAndFirstParentOid', () => {
+  it.each([40, 64])('reads SHA-%i commit metadata without retaining later parents', (length) => {
+    expect(
+      parseGitRevListCommitAndFirstParentOid(
+        `${'a'.repeat(length)} ${'b'.repeat(length)} ${'c'.repeat(length)}\n`
+      )
+    ).toEqual({
+      commitOid: 'a'.repeat(length),
+      parentOid: 'b'.repeat(length)
+    })
+  })
+
+  it('preserves a root commit and rejects empty or malformed answers', () => {
+    expect(parseGitRevListCommitAndFirstParentOid(`${'a'.repeat(40)}\n`)).toEqual({
+      commitOid: 'a'.repeat(40),
+      parentOid: null
+    })
+    expect(() => parseGitRevListCommitAndFirstParentOid('')).toThrow('Unexpected')
+    expect(() => parseGitRevListCommitAndFirstParentOid('HEAD\n')).toThrow('Unexpected')
   })
 })

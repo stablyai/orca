@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -346,5 +354,107 @@ describe('readPrebuiltSlotManifest', () => {
       })
     )
     expect(readPrebuiltSlotManifest(prebuilds)).toBeNull()
+  })
+})
+
+describe('installPrebuiltSlot compat slot (design D6 rung B)', () => {
+  const stageSlots = (
+    prebuilds: string,
+    slots: Record<string, { glibc: string; bytes: string }>
+  ) => {
+    const manifestSlots: Record<string, PrebuiltSlotEntry> = {}
+    for (const [slot, { glibc, bytes }] of Object.entries(slots)) {
+      const path = join(prebuilds, slot, 'pty.node')
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(path, bytes)
+      manifestSlots[slot] = { ...LINUX_GLIBC_ENTRY, glibc, files: { 'pty.node': sha256(bytes) } }
+    }
+    writeFileSync(
+      join(prebuilds, 'manifest.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        module: 'node-pty',
+        version: '1.1.0',
+        napi: 8,
+        slots: manifestSlots
+      })
+    )
+  }
+  const installed = (nodePtyDir: string): string =>
+    readFileSync(join(nodePtyDir, 'build', 'Release', 'pty.node'), 'utf8')
+
+  it('takes the compat slot when the host glibc is below the default slot floor', () => {
+    const prebuilds = temp()
+    const nodePtyDir = temp()
+    stageSlots(prebuilds, {
+      'linux-x64-glibc': { glibc: '2.28', bytes: 'default' },
+      'linux-x64-glibc217': { glibc: '2.17', bytes: 'compat' }
+    })
+
+    const outcome = installPrebuiltSlot({
+      abi: { ...LINUX_GLIBC, glibcVersion: '2.17' },
+      nodePtyDir,
+      prebuildsDir: prebuilds,
+      hostNapi: 10
+    })
+
+    expect(outcome).toEqual({ installed: true, slot: 'linux-x64-glibc217', spawnHelper: false })
+    expect(installed(nodePtyDir)).toBe('compat')
+  })
+
+  it('keeps the default slot on a host that meets its floor', () => {
+    const prebuilds = temp()
+    const nodePtyDir = temp()
+    stageSlots(prebuilds, {
+      'linux-x64-glibc': { glibc: '2.28', bytes: 'default' },
+      'linux-x64-glibc217': { glibc: '2.17', bytes: 'compat' }
+    })
+
+    const outcome = installPrebuiltSlot({
+      abi: LINUX_GLIBC,
+      nodePtyDir,
+      prebuildsDir: prebuilds,
+      hostNapi: 10
+    })
+
+    expect(outcome).toMatchObject({ installed: true, slot: 'linux-x64-glibc' })
+    expect(installed(nodePtyDir)).toBe('default')
+  })
+
+  it('reports the default slot refusal when the compat slot cannot load either', () => {
+    const prebuilds = temp()
+    const nodePtyDir = temp()
+    stageSlots(prebuilds, {
+      'linux-x64-glibc': { glibc: '2.28', bytes: 'default' },
+      'linux-x64-glibc217': { glibc: '2.17', bytes: 'compat' }
+    })
+
+    const outcome = installPrebuiltSlot({
+      abi: { ...LINUX_GLIBC, glibcVersion: '2.12' },
+      nodePtyDir,
+      prebuildsDir: prebuilds,
+      hostNapi: 10
+    })
+
+    expect(outcome).toMatchObject({
+      installed: false,
+      slot: 'linux-x64-glibc',
+      why: 'glibc-too-old'
+    })
+  })
+
+  it('never offers the x64 compat slot to an arm64 host', () => {
+    const prebuilds = temp()
+    const nodePtyDir = temp()
+    stageSlots(prebuilds, { 'linux-x64-glibc217': { glibc: '2.17', bytes: 'compat' } })
+
+    const outcome = installPrebuiltSlot({
+      abi: { ...LINUX_GLIBC, arch: 'arm64', glibcVersion: '2.17' },
+      nodePtyDir,
+      prebuildsDir: prebuilds,
+      hostNapi: 10
+    })
+
+    expect(outcome).toEqual({ installed: false, slot: 'linux-arm64-glibc', why: 'no-slot' })
   })
 })

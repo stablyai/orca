@@ -52,14 +52,23 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
     if (input.plan.markUnknownBeforeRun && error instanceof AgentSessionPreDispatchError) {
       throw error
     }
+    const { logger, sessionId } = input.context
     try {
       await settle({ status: 'unknown' })
     } catch {
       // Bookkeeping must not replace the operation's proof of whether dispatch began.
-      console.warn('[structured-agent-session] operation uncertainty persistence failed')
+      logger.warn('recording an operation as unknown failed', {
+        scope: 'operation-unknown-settlement',
+        sessionId,
+        operationId: input.envelope.clientOperationId
+      })
     }
     if (outcome && !outcome.ok) {
-      console.warn('[structured-agent-session] refused operation settlement failed')
+      logger.warn('recording a refused operation failed', {
+        scope: 'operation-refused-settlement',
+        sessionId,
+        operationId: input.envelope.clientOperationId
+      })
       return outcome
     }
     throw error

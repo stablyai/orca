@@ -11,6 +11,12 @@
     "retrying": "再試行中…"
   },
   "settings": {
+    "terminal": {
+      "optionLayoutAlt": "ABCまたはU.S. — OptionはAlt/Escシーケンスを送信します",
+      "optionLayoutCompose": "この配列ではOptionで@、€、[、]などの文字を入力します",
+      "optionLayoutUnknown": "不明な配列 — Optionで文字を入力します（安全な既定値）",
+      "optionShortcutHint": "Optionショートカットには「両方」、アクセント付き文字や記号には「オフ」、用途を左右のOptionキーに分けるには「左」または「右」を選んでください。"
+    },
     "appearance": {
       "language": {
         "title": "言語",
@@ -900,6 +906,17 @@
         "symlink": "シンボリックリンクは接続できません。",
         "permissionDenied": "アクセスが拒否されました。",
         "unsupported": "サポートされていないファイル形式です。"
+      },
+      "dropTempCopyFailure": {
+        "changed": "コピー中にファイルが変更されました。もう一度ドロップしてください。",
+        "outOfSpace": "ドロップされたファイルをコピーするためのディスク容量が足りません。",
+        "storageUnavailable": "ドロップされたファイル用の保存先を Orca で作成できませんでした。",
+        "storageNotPrivate": "ドロップされたファイル用の Orca の保存先が他のユーザーから読み取れる状態のため、何もコピーしませんでした。",
+        "timedOut": "コピーに時間がかかりすぎました。もう一度ドロップしてください。",
+        "busy": "コピー中のドロップが多すぎます。しばらく待ってから、もう一度お試しください。",
+        "tooLarge": "サイズが大きすぎてコピーできないため、Orca は Agent に渡せませんでした。",
+        "storageFull": "ドロップされたファイル用の Orca の保存先がいっぱいのため、Orca は Agent に渡せませんでした。",
+        "generic": "もう一度ドロップしてください。"
       }
     },
     "hooks": {
@@ -934,7 +951,10 @@
         "nativeDropPathsTooLarge": "ドロップされたパス一覧が大きすぎます。",
         "ownerChanged": "このワークスペースを所有するホストを確認できませんでした。再接続してから、もう一度お試しください。",
         "nativeDropUnresolvedPathsDescription": "まずそれらをディスクに保存してから、保存したファイルをドロップします。",
-        "nativeDropUnresolvedPaths": "Orca はドロップされたファイルのパスを読み取ることができませんでした。"
+        "nativeDropUnresolvedPaths": "Orca はドロップされたファイルのパスを読み取ることができませんでした。",
+        "nativeDropTempCopyFailed": "ドロップされた {{count}} 個のファイルを Orca でコピーできませんでした。",
+        "nativeDropTempCopyFailed_one": "ドロップされた {{count}} 個のファイルを Orca でコピーできませんでした。",
+        "nativeDropTempCopyFailed_other": "ドロップされた {{count}} 個のファイルを Orca でコピーできませんでした。"
       },
       "useIpcEvents": {
         "0e3cf53060": "ブラウザタブ {{value0}} が見つかりません",
@@ -3889,7 +3909,7 @@
             "compact": "コンパクト",
             "footerDetailAria": "使用量フッターの詳細",
             "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
-            "compactTooltip": "凝縮された使用状況: 最も狭いウィンドウのみ"
+            "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}}を更新中",
@@ -5439,6 +5459,7 @@
           "74522ee457": "名前の変更に失敗しました",
           "02e19349f4": "名前の自動変更に失敗しました: 表示エラー",
           "691ccfd622": "削除中…",
+          "deleteFailed": "削除に失敗しました",
           "35ccfe2475": "プロジェクト{{value0}}",
           "1d66d84f0b": "文字列",
           "57eaa61b55": "子ワークスペースを非表示にする",
@@ -7072,7 +7093,7 @@
             "shellEnvCopy": "Codex と Claude のチャットは、ターミナルと同じく、ログインシェルがエクスポートするすべての変数を引き継いで開始します。オフにすると、渡す変数を選択できます。",
             "shellEnvToggleLabel": "シェル環境の使用の切り替え",
             "structuredTitle": "更新された構造化ネイティブチャットを使用する",
-            "structuredCopy": "Codex と Claude 用のホスト所有の構造化チャットランタイムにオプトインします。 Off では、既存のターミナルを使用したチャットパスが維持されます。",
+            "structuredCopy": "新規の Codex および Claude の Agent を構造化チャットとして開きます。オフにすると、ターミナルを使用したチャットで開きます。既存のチャットはそのまま残ります。",
             "structuredScope": "今のところローカルセッションのみ。 WSL およびリモート実行ホスト (SSH を含む) は引き続きターミナルチャットを使用し、Orca がプロセスの開始時間を読み取ることができない限り、Windows はターミナルチャットにフォールバックします。",
             "structuredToggleLabel": "更新された構造化ネイティブチャットの切り替え",
             "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
@@ -17317,6 +17338,12 @@
       }
     },
     "native-chat": {
+      "contextMenu": {
+        "copyOrcaSessionId": "Orca セッション ID をコピー",
+        "orcaSessionIdCopied": "Orca セッション ID をコピーしました",
+        "orcaSessionIdCopyFailed": "Orca セッション ID をコピーできませんでした",
+        "orcaSessionIdTooltip": "このチャットに対する Orca の ID です。Agent CLI 独自のセッション ID とは別のものです。Agent は Orca を通じて互いを指すときにこれを使います。"
+      },
       "failureWords": {
         "theAgent": "Agent",
         "providerStartFailed": "{{agent}} は起動が完了する前に停止しました。",
@@ -17374,7 +17401,8 @@
         "hostStopped": "{{agent}} の起動が完了しなかったため、Orca が停止しました。",
         "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
         "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
-        "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。"
+        "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。",
+        "previousExitUnverifiable": "Orca は {{agent}} の前のプロセスが終了したことを確認できませんでした。Orca が終了を確認するまで、メッセージは送信を待機します。"
       },
       "writeNotice": {
         "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",
@@ -18389,6 +18417,17 @@
     },
     "fileLoad": {
       "hostUnresolved": "ホストはこのファイルのワークスペースを見つけることができませんでした。削除されたか、ホストがまだそれを認識していない可能性があります。再試行するか、タブストリップからこのタブを閉じてください。"
+    },
+    "markdownPreview": {
+      "tooLarge": "ファイルがプレビュー上限の {{limit}} を超えています。ソースを表示するにはファイルを開いてください。",
+      "tooLargeInDiff": "ファイルがプレビュー上限の {{limit}} を超えています。差分を表示するにはソースモードに切り替えてください。",
+      "blockTooLarge": "このブロックは大きすぎるため表示できません。ソース表示で確認してください。",
+      "largeNotice": "大きなプレビューです。文書全体をコピーするにはソース表示を使用してください。PDF エクスポートは利用できません。",
+      "processingFailed": "この文書はプレビューの制限を超えています。ファイル全体を読むにはソース表示を開いてください。",
+      "preparing": "プレビューを準備中…",
+      "searching": "検索中…",
+      "searchFailed": "検索を完了できませんでした。もう一度お試しください。",
+      "refreshFailed": "プレビューの更新に失敗しました。以前のバージョンを表示しています。現在の内容はソース表示で確認してください。"
     }
   },
   "featureTips": {
@@ -18476,7 +18515,12 @@
     "genericDetail": "これは多くの場合、グラフィックスドライバーまたはインストールの問題です。リロードして再試行するか、Orca を終了して再起動してください。",
     "title": "Orca がロードに失敗し続ける",
     "stalledMessage": "クラッシュ後のリロード中にアプリウィンドウが応答を停止しました。",
-    "crashLoopMessage": "アプリウィンドウが繰り返しクラッシュし、自動的にリロードされなくなりました。"
+    "crashLoopMessage": "アプリウィンドウが繰り返しクラッシュし、自動的にリロードされなくなりました。",
+    "tryAgain": "再試行",
+    "launchFailedMessage": "Orca はウィンドウを描画するプロセスを起動できませんでした。",
+    "launchFailedDetail": "Orca は {{recoveryCount}} 回再試行しましたが、成功しませんでした。",
+    "processLimitDetail": "ユーザーアカウントのプロセス数が上限に達したため、システムが新しいプロセスの作成を拒否しました。暴走したターミナル、開発サーバー、Agent が原因であることがよくあります。いくつか終了してから「再試行」をクリックしてください。",
+    "launchFailedGenericDetail": "システムが起動を拒否しました。メモリを空けるか他のアプリを終了してから「再試行」をクリックしてください。繰り返し発生する場合は Orca を再インストールしてください。"
   },
   "sessionSearch": {
     "panel": {

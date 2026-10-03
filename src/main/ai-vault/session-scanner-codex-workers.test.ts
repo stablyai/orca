@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
+import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
 
@@ -10,10 +11,6 @@ afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
-
-function jsonLines(records: unknown[]): string {
-  return records.map((record) => JSON.stringify(record)).join('\n')
-}
 
 describe('scanAiVaultSessions Codex worker sessions', () => {
   it('hides Codex worker transcripts from session history', async () => {
@@ -198,28 +195,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
     )
 
     const result = await scanAiVaultSessions({
-      claudeProjectsDir: join(root, 'claude-projects'),
-      codexSessionsDir,
-      geminiSessionsDir: join(root, 'gemini-sessions'),
-      antigravityBrainDir: join(root, 'antigravity-brain'),
-      copilotSessionsDir: join(root, 'copilot-sessions'),
-      cursorProjectsDir: join(root, 'cursor-projects'),
-      opencodeStorageDir: join(root, 'opencode-storage'),
-      opencodeDbPaths: [],
-      grokSessionsDir: join(root, 'grok-sessions'),
-      devinTranscriptsDir: join(root, 'devin-transcripts'),
-      hermesSessionsDir: join(root, 'hermes-sessions'),
-      rovoSessionsDir: join(root, 'rovo-sessions'),
-      openclawStateDir: join(root, 'openclaw-state'),
-      openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
-      piSessionsDir: join(root, 'pi-sessions'),
-      ompSessionsDir: join(root, 'omp-sessions'),
-      primeAgentSessionsDir: join(root, 'prime-agent-sessions'),
-      droidSessionsDir: join(root, 'droid-sessions'),
-      droidProjectsDir: join(root, 'droid-projects'),
-      kimiSessionsDir: join(root, 'kimi-sessions'),
-      museSessionsDir: join(root, 'muse-sessions'),
-      zcodeDbPath: join(root, 'zcode-db.sqlite'),
+      ...isolatedScanRoots(root),
       platform: 'darwin'
     })
 

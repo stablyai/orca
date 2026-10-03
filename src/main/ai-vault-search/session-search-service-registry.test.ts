@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSearchService } from '../../shared/ai-vault-search-test-fixture'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+import {
+  unavailableSessionSearchStatus,
+  createSessionSearchClient
+} from '../../shared/ai-vault-search-client'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import {
   setSessionSearchService,
   searchSessionService,
@@ -51,12 +55,49 @@ describe('session search service registry', () => {
       'ipc'
     )
     expect(service.reconcile).not.toHaveBeenCalled()
-    expect(service.search).toHaveBeenCalledWith({ query: 'needle', limit: 20 }, undefined)
+    expect(service.search).toHaveBeenCalledWith(
+      {
+        query: 'needle',
+        limit: 20,
+        filters: { agents: AI_VAULT_AGENTS.filter((a) => a !== 'qoder') }
+      },
+      undefined
+    )
     expect(result).not.toHaveProperty('debug')
     expect(await searchSessionService({ query: 'needle', debug: true }, 'ipc')).toHaveProperty(
       'debug'
     )
   })
+  it.each(['ipc', 'runtime', 'relay'] as const)(
+    'negotiates Qoder hits before retrieval on %s, without widening explicit filters',
+    async (transport) => {
+      const service = fakeSearchService()
+      setSessionSearchService(service)
+      await searchSessionService(
+        { query: 'proof', filters: { agents: ['claude', 'qoder'] } },
+        transport
+      )
+      expect(service.search).toHaveBeenLastCalledWith(
+        { query: 'proof', limit: 20, filters: { agents: ['claude'] } },
+        undefined
+      )
+      expect(
+        await searchSessionService({ query: 'proof', filters: { agents: ['qoder'] } }, transport)
+      ).toMatchObject({ kind: 'results', hits: [], page: { cursor: null, hasMore: false } })
+      const client = createSessionSearchClient(
+        (method, request) =>
+          method === 'aiVault.searchStatus'
+            ? sessionSearchServiceStatus(request, transport)
+            : searchSessionService(request, transport),
+        transport
+      )
+      await client.searchSessions({ query: 'proof', filters: { agents: ['qoder'] } })
+      expect(service.search).toHaveBeenLastCalledWith(
+        { query: 'proof', limit: 20, filters: { agents: ['qoder'] } },
+        undefined
+      )
+    }
+  )
   it('waits for reconcile before search, and clears its timeout', async () => {
     vi.useFakeTimers()
     const service = fakeSearchService()

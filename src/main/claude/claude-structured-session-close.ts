@@ -6,7 +6,6 @@ import type {
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 import { cancelClaudeAcquisitionAttempt } from './claude-structured-session-state'
-import type { StructuredAgentSessionStopCause } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError,
@@ -79,8 +78,6 @@ export function settleClaudeExitedSession(session: ClaudeSession): void {
 type CloseClaudePublishedSessionInput = {
   sessions: Map<string, ClaudeSession>
   sessionId: string
-  /** Who asked for the close; the translator settles the open turn with it. */
-  stopCause?: StructuredAgentSessionStopCause
   persistHandle?: (handle: {
     sessionId: string
     providerSessionId: string
@@ -140,7 +137,6 @@ async function finalizeClaudePublishedSession(
     type: 'ended',
     sessionId: input.sessionId,
     reason: 'claude session closed',
-    ...(input.stopCause ? { stopCause: input.stopCause } : {}),
     observedAt: Date.now()
   } as const
   let callbackError: unknown
@@ -244,7 +240,6 @@ export function closeClaudePublishedSessionForDeps(
 
 export async function closeClaudeSession(input: {
   sessionId: string
-  stopCause?: StructuredAgentSessionStopCause
   sessions: Map<string, ClaudeSession>
   acquisitions: ClaudeAcquisitionRegistry
   persistHandle?: (handle: {

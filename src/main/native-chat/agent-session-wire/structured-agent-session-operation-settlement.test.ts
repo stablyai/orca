@@ -17,9 +17,11 @@ import {
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { sendPlan } from './structured-agent-session-mutation-plans'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 async function context(): Promise<AgentSessionTurnContext> {
   return {
+    logger: createStructuredAgentSessionLogger(),
     sessionId: SESSION,
     journal: await journals.open({
       identity: {
@@ -36,7 +38,6 @@ async function context(): Promise<AgentSessionTurnContext> {
     persistOptions: async () => {},
     resolvedBy: 'test',
     publish: () => {},
-    flushStreamedEvents: async () => {},
     now: () => 0
   }
 }
@@ -131,15 +132,12 @@ it.each([1, 2])(
   }
 )
 
-// A send's plan only accepts: it records the submission and never waits on the provider's stream
-// barrier, so a sink that stalls or fails cannot delay or double a send. Handing it over is the
-// delivery loop's.
-it('accepts without touching the event-stream barrier or the provider', async () => {
+// A send's plan only accepts: it records the submission and never reaches the provider. Handing
+// it over is the delivery loop's.
+it('accepts without touching the provider', async () => {
   const ctx = await context()
   const { store } = hostTestState()
   vi.spyOn(store, 'recordOperationOutcome').mockResolvedValue()
-  const barrier = vi.fn(() => new Promise<void>(() => {}))
-  ctx.flushStreamedEvents = barrier
   const beforeRun = vi.fn()
   const body = hostTestMessage('Continue the interrupted work')
   const operation = envelope('agentSession.send', { body })
@@ -157,7 +155,6 @@ it('accepts without touching the event-stream barrier or the provider', async ()
     dispatchState: 'pending',
     handoverRecorded: true
   })
-  expect(barrier).not.toHaveBeenCalled()
 })
 
 it('refuses a superseded send at acceptance, recording and dispatching nothing', async () => {

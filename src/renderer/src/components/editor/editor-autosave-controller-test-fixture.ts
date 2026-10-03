@@ -5,7 +5,7 @@ import { vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
 import type { AppState } from '@/store'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 export type FakeEditorDisk = {
   files: Map<string, string>

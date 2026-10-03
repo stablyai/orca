@@ -32,12 +32,12 @@ import type {
   AgentSessionThreadGoalChange
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type {
-  ProviderDiagnostic,
-  SubmissionRejectionFact
-} from '../../../shared/agent-session-failure'
-import type { StructuredAgentSessionStopCause } from './structured-agent-session-stop-cause'
-import type { StructuredAgentSessionAdapterStop } from './structured-agent-session-adapter-stop'
+  AgentSessionCancelOutcome,
+  StructuredAgentSessionAdapterStop
+} from './structured-agent-session-adapter-stop'
+export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
 export type {
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionStopCause
@@ -190,8 +190,6 @@ export type StructuredAgentSessionEndedEvent = {
    *  Orca fault. Absent reads as a provider exit with nothing to add. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
-  /** With `requested-close`: who asked for it. Absent when the host named no cause. */
-  stopCause?: StructuredAgentSessionStopCause
   fence: number
   acquisitionGeneration: string
   /** Host receipt of the child exit: the end time of a turn it interrupted. */
@@ -240,12 +238,6 @@ export type StructuredAgentSessionSetOptionInput = {
   key: string
   value: string
   fence: number
-}
-
-/** `refusal`: the provider answered the Stop and declined it, in its own words when it gave any. */
-export type AgentSessionCancelOutcome = {
-  cancelled: boolean
-  refusal?: { detail?: ProviderDiagnostic }
 }
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
@@ -386,11 +378,11 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** Gracefully stops the structured owner after its event stream is drained. */
   /** Returns true only after the provider child exit is proven. A root-exit or processless verdict
    *  is thrown only once the session is finalized; read it through `stopAgentSessionProviderRoot`. */
-  closeSession?(sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean>
+  closeSession?(sessionId: string): Promise<boolean>
   /** Stops a provider after a sink failure; the resulting exit is recovered as unexpected. */
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Stops a provider child for teardown without requiring a future-resume cursor. */
-  disposeSession?(sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean>
+  disposeSession?(sessionId: string): Promise<boolean>
   /** Host acknowledgement that the proven-dead child, lease and journal owner are released. */
   acknowledgeSessionRelease?(sessionId: string): void
 }

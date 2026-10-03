@@ -4,6 +4,7 @@ import type { JournalHostDatabase } from './journal-host-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { JournalRow } from './journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
+import type { JournalWriteBody } from './journal-write-queue'
 
 /** Runs between BEGIN IMMEDIATE and COMMIT, on the SAME connection as the row
  *  insert; a throw rolls the whole append back. Synchronous by construction so
@@ -13,7 +14,7 @@ export type JournalRowTransactionHook = (db: Database.Database, row: JournalRow)
 export type JournalRowWriterDeps = {
   sessionId: string
   now: () => number
-  serialize: <T>(run: () => Promise<T>) => Promise<T>
+  serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
   database: () => JournalHostDatabase
   readOnly: () => boolean
   highestFence: () => number
@@ -36,7 +37,7 @@ export class JournalRowWriter {
     build: (seq: number, ts: number) => JournalRow,
     hook?: JournalRowTransactionHook
   ): Promise<JournalRow> {
-    return this.deps.serialize(async () => {
+    return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
       const row = build(this.deps.nextSequence(), this.deps.now())
       assertJournalFence(row.fence, this.deps.highestFence())

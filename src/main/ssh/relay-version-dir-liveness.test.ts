@@ -2,6 +2,7 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RELAY_PID_FILENAME } from '../../shared/relay-artifacts'
@@ -10,6 +11,7 @@ import {
   relayVersionDirLivenessCommand
 } from './relay-version-dir-liveness'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { WINDOWS_RELAY_LIVENESS_JS } from './ssh-remote-commands'
 
 const host = getRemoteHostPlatform('linux-x64')
 const posixOnly = process.platform === 'win32' ? describe.skip : describe
@@ -127,5 +129,71 @@ describe('parseRelayVersionDirLiveness', () => {
     expect(parseRelayVersionDirLiveness('DEAD\n')).toBe('exited')
     expect(parseRelayVersionDirLiveness('')).toBe('unverifiable')
     expect(parseRelayVersionDirLiveness('UNKNOWN')).toBe('unverifiable')
+  })
+})
+
+/** The Windows probe's JavaScript under the local Node; only the pipe names are Windows-only. */
+describe('Windows relay liveness script (design D5 .relay-pid)', () => {
+  const dirs: string[] = []
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  function windowsProbe(setup: (dir: string) => void): string {
+    const dir = mkdtempSync(join(tmpdir(), 'rvl-win-'))
+    dirs.push(dir)
+    setup(dir)
+    return parseRelayVersionDirLiveness(
+      execFileSync(process.execPath, ['-e', WINDOWS_RELAY_LIVENESS_JS, dir], { encoding: 'utf8' })
+    )
+  }
+
+  const deadPid = (): number =>
+    Number.parseInt(
+      spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], {
+        encoding: 'utf8'
+      }).stdout,
+      10
+    )
+  const marker = (dir: string): void =>
+    writeFileSync(
+      join(dir, '.windows-active-pipe-a'),
+      '\\\\.\\pipe\\orca-relay-1234567890abcdef1234'
+    )
+
+  it('is live for a running recorded PID without touching any pipe', () => {
+    expect(
+      windowsProbe((dir) => {
+        writeFileSync(join(dir, RELAY_PID_FILENAME), `${process.pid}\n`)
+        marker(dir)
+      })
+    ).toBe('live')
+  })
+
+  it('is exited for a dead recorded PID whose pipes all refuse', () => {
+    expect(
+      windowsProbe((dir) => {
+        writeFileSync(join(dir, RELAY_PID_FILENAME), `${deadPid()}\n`)
+        marker(dir)
+      })
+    ).toBe('exited')
+  })
+
+  it('is exited for a dead recorded PID that left no pipe marker', () => {
+    expect(
+      windowsProbe((dir) => writeFileSync(join(dir, RELAY_PID_FILENAME), `${deadPid()}\n`))
+    ).toBe('exited')
+  })
+
+  it('is unverifiable for an unreadable PID record', () => {
+    expect(windowsProbe((dir) => writeFileSync(join(dir, RELAY_PID_FILENAME), 'x\n'))).toBe(
+      'unverifiable'
+    )
+  })
+
+  it('keeps the old rule without a PID file: no marker is never evidence of exit', () => {
+    expect(windowsProbe(() => {})).toBe('live')
   })
 })

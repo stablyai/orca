@@ -8,10 +8,10 @@ import { downloadVerifiedArchive, extractRuntimeArchive } from './runtime-archiv
 import { findOrcadCachePath } from './orcad-cache-path'
 import { orcadNodeRuntimeExecutable } from '../../shared/orcad-artifacts'
 import {
-  NODE_RUNTIME_ASSETS,
+  pinnedNodeRuntimeAsset,
   nodeRuntimeExecutablePath,
   nodeRuntimeReleaseUrl,
-  type ServerTarget
+  type NodeRuntimeTarget
 } from '../../shared/node-runtime-pin'
 
 export type PinnedRuntimeMaterializeOptions = {
@@ -153,8 +153,8 @@ async function publishVerified(
   await verifyFileSha256(destination, sha256, label)
 }
 
-function nodeRuntimeArchive(target: ServerTarget): PinnedRuntimeArchive {
-  const asset = NODE_RUNTIME_ASSETS[target]
+function nodeRuntimeArchive(target: NodeRuntimeTarget): PinnedRuntimeArchive {
+  const asset = pinnedNodeRuntimeAsset(target)
   return {
     label: 'Node',
     url: nodeRuntimeReleaseUrl(asset.source, asset.archive),
@@ -164,7 +164,7 @@ function nodeRuntimeArchive(target: ServerTarget): PinnedRuntimeArchive {
 
 /** The pinned official archive, uploaded to hosts as published (design D5). */
 export function materializeNodeRuntimeArchive(
-  target: ServerTarget,
+  target: NodeRuntimeTarget,
   cacheRoot: string,
   options: PinnedRuntimeMaterializeOptions
 ): Promise<string> {
@@ -180,11 +180,11 @@ export function materializeNodeRuntimeArchive(
  * that cannot extract the archive themselves get the bare executable (Windows SSH vault reads).
  */
 export function materializeCachedNodeRuntime(
-  target: ServerTarget,
+  target: NodeRuntimeTarget,
   cacheRoot: string,
   options: PinnedRuntimeMaterializeOptions
 ): Promise<string> {
-  const asset = NODE_RUNTIME_ASSETS[target]
+  const asset = pinnedNodeRuntimeAsset(target)
   const executableName = basename(orcadNodeRuntimeExecutable(target))
   return materializeCachedRuntimeExecutable(
     {

@@ -72,6 +72,8 @@ export class RelayRuntimeLadderRun {
   firstRefusal: RelayRuntimeFallbackReason | null = null
   lastRefusal: RelayRuntimeFallbackReason | null = null
   pinnedRefusal: PinnedRuntimeRefusal | null = null
+  /** A noexec this pass replayed from a cache rather than proved. */
+  noexecRemembered = false
   selfTest: RelayRuntimeSelfTestOutcome = 'not_run'
   runtimeTransfer: RelayRuntimeTransfer = 'none'
   hostNode: HostNodeVersion | null = null
@@ -85,9 +87,12 @@ export class RelayRuntimeLadderRun {
     return this.store ? persistedPinnedRefusal(this.store.read(this.targetId), facts) : null
   }
 
-  refused(step: RelayRuntimeStep, reason: RelayRuntimeFallbackReason): void {
+  refused(step: RelayRuntimeStep, reason: RelayRuntimeFallbackReason, remembered = false): void {
     this.firstRefusal ??= reason
     this.lastRefusal = reason
+    if (reason === 'noexec' && remembered) {
+      this.noexecRemembered = true
+    }
     if (step === 'A' && isPinnedRuntimeRefusal(reason)) {
       this.pinnedRefusal = reason
     }
@@ -102,7 +107,11 @@ export class RelayRuntimeLadderRun {
 
   settle(rung: SshRemoteRuntimeRung): void {
     // Why: C's self-test loaded addons from the same tree, which disproves a remembered noexec.
-    if (rung === 'C' && this.selfTest === 'passed' && this.pinnedRefusal === 'noexec') {
+    // Why also at D on a replayed noexec: nothing connects there, so the next connect re-proves A
+    // instead of the message's "allow exec" advice being unfixable.
+    const disproved = rung === 'C' && this.selfTest === 'passed'
+    const replayedAtD = rung === 'D' && this.noexecRemembered
+    if ((disproved || replayedAtD) && this.pinnedRefusal === 'noexec') {
       this.pinnedRefusal = null
       if (this.facts) {
         forgetPinnedRuntimeRefusal(this.targetId, this.facts.target)
@@ -153,7 +162,7 @@ export class RemoteRuntimeUnavailableError extends Error {
     readonly reason: RemoteRuntimeUnavailableReason,
     run: RelayRuntimeLadderRun
   ) {
-    super(remoteRuntimeUnavailableMessage(reason, run.firstRefusal))
+    super(remoteRuntimeUnavailableMessage(reason, run.firstRefusal, run.noexecRemembered))
     this.name = 'RemoteRuntimeUnavailableError'
     const glibc = run.facts?.glibc
     this.data = {
@@ -178,7 +187,10 @@ export class RemoteRuntimeUnavailableError extends Error {
 }
 
 export function remoteRuntimeUnavailableError(run: RelayRuntimeLadderRun): Error {
-  return new RemoteRuntimeUnavailableError(remoteRuntimeUnavailableReason(run.lastRefusal), run)
+  return new RemoteRuntimeUnavailableError(
+    remoteRuntimeUnavailableReason(run.lastRefusal, run.noexecRemembered),
+    run
+  )
 }
 
 export function sshTargetRelayRuntimeDecisionStore(registry: {

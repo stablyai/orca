@@ -101,11 +101,25 @@ describe('getBranchCompare', () => {
       if (args[0] === 'merge-base') {
         return reply(responses.mergeBase, 'merge-base')
       }
-      if (args.includes('--name-status')) {
-        return reply(responses.nameStatus, 'diff --name-status')
-      }
-      if (args.includes('--numstat')) {
-        return reply(responses.numstat, 'diff --numstat')
+      if (args.includes('--raw')) {
+        const raw =
+          typeof responses.nameStatus === 'string'
+            ? responses.nameStatus
+                .split(/\r?\n/)
+                .filter(Boolean)
+                .map((line) => {
+                  const [status, ...paths] = line.split('\t')
+                  return `:100644 100644 a b ${status}\0${paths.join('\0')}\0`
+                })
+                .join('')
+            : responses.nameStatus
+        if (raw instanceof Error) {
+          return reply(raw, 'diff')
+        }
+        if (responses.numstat instanceof Error) {
+          return reply(responses.numstat, 'diff')
+        }
+        return reply((raw ?? '') + (responses.numstat ?? ''), 'diff')
       }
       if (args[0] === 'rev-list') {
         return reply(responses.revList, 'rev-list')
@@ -245,7 +259,7 @@ describe('getBranchCompare', () => {
     expect(result.entries).toEqual([])
   })
 
-  it('passes core.quotePath=false to diff --name-status and parses UTF-8 paths', async () => {
+  it('loads UTF-8 paths and line counts with one diff', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
       probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
@@ -260,16 +274,7 @@ describe('getBranchCompare', () => {
     const result = await getBranchCompare('/repo', 'origin/main')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'diff',
-        '--name-status',
-        '-M',
-        '-C',
-        'merge-base-oid',
-        'head-oid'
-      ],
+      ['diff', '--raw', '--numstat', '-z', '-M', '-C', 'merge-base-oid', 'head-oid', '--'],
       expect.objectContaining({ cwd: '/repo' })
     )
     expect(result.entries).toEqual([
@@ -361,10 +366,7 @@ describe('getBranchCompare', () => {
       if (args[0] === 'merge-base') {
         return Promise.resolve({ stdout: 'merge-base-oid\n' })
       }
-      if (args.includes('--name-status')) {
-        return Promise.resolve({ stdout: '' })
-      }
-      if (args.includes('--numstat')) {
+      if (args.includes('--raw')) {
         return Promise.resolve({ stdout: '' })
       }
       if (args[0] === 'rev-list') {
@@ -404,12 +406,9 @@ describe('getBranchCompare', () => {
       if (args[0] === 'merge-base') {
         return Promise.resolve({ stdout: 'merge-base-oid\n' })
       }
-      if (args.includes('--name-status')) {
-        return Promise.resolve({ stdout: 'M\tdocs/a => b.txt\n' })
-      }
-      if (args.includes('--numstat')) {
+      if (args.includes('--raw')) {
         return Promise.resolve({
-          stdout: args.includes('-z') ? '1\t0\tdocs/a => b.txt\0' : '1\t0\tdocs/a => b.txt\n'
+          stdout: ':100644 100644 a b M\0docs/a => b.txt\0' + '1\t0\tdocs/a => b.txt\0'
         })
       }
       if (args[0] === 'rev-list') {
@@ -421,17 +420,7 @@ describe('getBranchCompare', () => {
     const result = await getBranchCompare('/repo', 'origin/main')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'diff',
-        '-z',
-        '--numstat',
-        '-M',
-        '-C',
-        'merge-base-oid',
-        'head-oid'
-      ],
+      ['diff', '--raw', '--numstat', '-z', '-M', '-C', 'merge-base-oid', 'head-oid', '--'],
       expect.objectContaining({ cwd: '/repo' })
     )
     expect(result.entries).toEqual([
@@ -454,12 +443,9 @@ describe('getCommitCompare', () => {
       if (args[0] === 'rev-list') {
         return Promise.resolve({ stdout: 'commit-oid parent-oid\n' })
       }
-      if (args.includes('--name-status')) {
-        return Promise.resolve({ stdout: 'M\tdocs/a => b.txt\n' })
-      }
-      if (args.includes('--numstat')) {
+      if (args.includes('--raw')) {
         return Promise.resolve({
-          stdout: args.includes('-z') ? '1\t0\tdocs/a => b.txt\0' : '1\t0\tdocs/a => b.txt\n'
+          stdout: ':100644 100644 a b M\0docs/a => b.txt\0' + '1\t0\tdocs/a => b.txt\0'
         })
       }
       throw new Error(`unexpected git args: ${args.join(' ')}`)
@@ -468,17 +454,7 @@ describe('getCommitCompare', () => {
     const result = await getCommitCompare('/repo', 'commit-oid')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'diff',
-        '-z',
-        '--numstat',
-        '-M',
-        '-C',
-        'parent-oid',
-        'commit-oid'
-      ],
+      ['diff', '--raw', '--numstat', '-z', '-M', '-C', 'parent-oid', 'commit-oid', '--'],
       expect.objectContaining({ cwd: '/repo' })
     )
     expect(result.entries).toEqual([

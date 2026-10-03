@@ -16,6 +16,9 @@ import {
 } from './structured-agent-session-host-test-harness'
 import { hostTestMessage } from './structured-agent-session-host-test-data'
 
+const STOP_LEDGER_ROW_FAILED =
+  "[agent-session] stop-ledger-row: writing Stop's ledger row failed; Stop runs without it"
+
 let root: string
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
@@ -70,9 +73,10 @@ it('refuses a send as corrupt when SQLite reports damage, and still stops the ag
   // the caller sees, after the fact.
   await expect(stop()).rejects.toBe(damaged)
   expect(cancelTurn).toHaveBeenCalledTimes(1)
-  expect(warn).toHaveBeenCalledWith("[agent-session] Stop's ledger row skipped:", {
+  expect(warn).toHaveBeenCalledWith(STOP_LEDGER_ROW_FAILED, {
+    scope: 'stop-ledger-row',
     sessionId: expect.any(String),
-    error: 'database disk image is malformed'
+    error: expect.objectContaining({ message: 'database disk image is malformed' })
   })
   // The restart-offer withdrawal the attach started holds its lock until it ends.
   await hostTestRecoveryCapsuleSettled()
@@ -93,9 +97,10 @@ it.each([
     value: { turnId: 'turn-1', cancelled: true }
   })
   expect(cancelTurn).toHaveBeenCalledTimes(1)
-  expect(warn).toHaveBeenCalledWith("[agent-session] Stop's ledger row skipped:", {
+  expect(warn).toHaveBeenCalledWith(STOP_LEDGER_ROW_FAILED, {
+    scope: 'stop-ledger-row',
     sessionId: expect.any(String),
-    error: error.message
+    error
   })
 })
 

@@ -5,8 +5,10 @@ import {
   readRuntimeFixture,
   replayTranscript
 } from './agent-transcript-replay-test-harness'
-import { isAntigravityComposerReadyScreen } from './antigravity-terminal-readiness'
-import { describeScreenRuledAgentTranscripts } from './screen-ruled-agent-transcript-suite'
+import {
+  describeScreenRuledAgentTranscripts,
+  readsIdleComposer
+} from './screen-ruled-agent-transcript-suite'
 import {
   isKnownReadyPromptBody,
   isKnownReadyPromptPreview,
@@ -43,7 +45,6 @@ describe('Antigravity 1.2.14 readiness from captured bytes', () => {
   describeScreenRuledAgentTranscripts({
     agent: 'antigravity',
     foregroundProcess: 'agy',
-    rule: isAntigravityComposerReadyScreen,
     ready: READY,
     notReady: NOT_READY,
     // Why these: the line-folded text rule reads only these ready screens.
@@ -93,7 +94,7 @@ describe('Antigravity 1.2.14 readiness from captured bytes', () => {
     for await (const { ruledScreenLines } of replayTranscript(data, 120, 40)) {
       submitted ||= ruledScreenLines.some((line) => line.startsWith('> Without using any tools'))
       answered ||= ruledScreenLines.some((line) => line.trim() === 'ok')
-      if (submitted && !answered && isAntigravityComposerReadyScreen(ruledScreenLines)) {
+      if (submitted && !answered && readsIdleComposer('antigravity', ruledScreenLines)) {
         readyMidTurn += 1
       }
     }

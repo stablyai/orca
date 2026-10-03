@@ -48,6 +48,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   args.onStage('dispatch_input')
   const delivery = await deliverWorkerDispatchPreamble({
     runtime,
+    db,
     structuredSession,
     terminalHandle,
     dispatchId: args.dispatchId,

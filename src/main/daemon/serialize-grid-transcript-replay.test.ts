@@ -99,7 +99,12 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'prime-agent-0-9-8-slash-menu': 34,
   'prime-agent-0-9-8-tool-turn': 40,
   'prime-agent-0-9-8-trace-question': 4,
-  'prime-agent-0-9-8-turn-ended': 24
+  'prime-agent-0-9-8-turn-ended': 24,
+  // OMP 18.4.5 captures, serializer untouched: after a shrink the restored cursor sits one column
+  // short, as for Qoder. The unscrubbed captures diverge identically, so the scrub is not the cause.
+  'omp-18-composer': 2,
+  'omp-18-composer-narrow': 7,
+  'omp-18-setup': 6
 }
 
 // Exact resize checkpoints and full GridDiff hashes from base 6835b9b4e3ea, not this branch.

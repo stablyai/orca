@@ -21,24 +21,35 @@ const SHAPES = {
     domain: 'relay.onorca.dev',
     allCells: [
       'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
-      'production-gce-c31'
+      'production-gce-c31', 'production-gce-c32', 'production-gce-c33'
     ],
     // The launch set was registered together; each later cell registers alone beside it.
     registrationWaves: [
       ['production-gce-c27', 'production-gce-c28', 'production-gce-c29'],
       ['production-gce-c30'],
-      ['production-gce-c31']
+      ['production-gce-c31'],
+      ['production-gce-c32'],
+      ['production-gce-c33']
     ],
     promotionWaves: [
       ['production-gce-c27'],
       ['production-gce-c28', 'production-gce-c29'],
       ['production-gce-c30'],
-      ['production-gce-c31']
+      ['production-gce-c31'],
+      ['production-gce-c32'],
+      ['production-gce-c33']
     ]
   }
 }
 
 const PRODUCTION_CANARY_CELL = 'production-gce-c27'
+const ASIA_REGION = 'asia-east2'
+// The US cells at the Asia shape live in the root region; every other cell here is Asia.
+const CELL_REGIONS = { 'production-gce-c32': 'us-central1', 'production-gce-c33': 'us-central1' }
+
+function cellRegion(cellId) {
+  return CELL_REGIONS[cellId] ?? ASIA_REGION
+}
 
 export function parseRelayAsiaAdmissionArguments(argv) {
   const values = {}
@@ -140,7 +151,7 @@ async function verifyRuntime(fetchImpl, post, shape, cellId, imageDigest, requir
   if (
     runtime.cellId !== cellId ||
     runtime.cellUrl !== origin ||
-    runtime.region !== 'asia-east2' ||
+    runtime.region !== cellRegion(cellId) ||
     runtime.imageDigest !== imageDigest ||
     runtime.draining !== false ||
     runtime.connectionCapacity?.hardCap !== 3_000 ||
@@ -404,7 +415,7 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
         cells: config.cells.map((cellId) => ({
           cellId,
           cellUrl: cellOrigin(shape, cellId),
-          region: 'asia-east2',
+          region: cellRegion(cellId),
           capacityRequests: 6_000,
           connectionHardCap: 3_000,
           connectionUnobservedBound: 60
@@ -438,8 +449,11 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
   if (config.mode === 'promote' && config.cells.some(
     (cellId) => selectorCellState(current.selector, cellId) !== 'migration-only'
   )) throw new Error('Asia promotion requires migration-only cells')
+  // The Asia launch order binds Asia cells only; a US cell is proven by its own canary.
+  const asiaWave = config.cells.every((cellId) => cellRegion(cellId) === ASIA_REGION)
   if (
     config.mode === 'promote' &&
+    asiaWave &&
     config.environment === 'production' &&
     !config.cells.includes(PRODUCTION_CANARY_CELL) &&
     selectorCellState(current.selector, PRODUCTION_CANARY_CELL) !== 'general'
@@ -449,6 +463,7 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
   const [launchWave] = shape.registrationWaves
   if (
     config.mode === 'promote' &&
+    asiaWave &&
     !config.cells.some((cellId) => launchWave.includes(cellId)) &&
     launchWave.some((cellId) => selectorCellState(current.selector, cellId) !== 'general')
   ) {

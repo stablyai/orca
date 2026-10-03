@@ -103,7 +103,8 @@ export class AgentSessionSubscribers {
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
     }
-    return () => this.close(input.sessionId, input.id)
+    const { sessionId, id } = subscriber
+    return () => this.close(sessionId, id)
   }
 
   close(sessionId: string, id: string): void {

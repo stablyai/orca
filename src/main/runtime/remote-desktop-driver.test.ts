@@ -154,6 +154,16 @@ describe('remote desktop viewer width driver', () => {
     expect(driverEvents).toHaveLength(0)
   })
 
+  it('keeps a wide desktop viewport through resize', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 500, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 500, rows: 40 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 800, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 800, rows: 40 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 2000, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 1024, rows: 40 })
+  })
+
   it('sizes the PTY to the latest active desktop viewer', async () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 40)

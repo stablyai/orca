@@ -53,8 +53,8 @@ export async function runRecording(
     // byte-identical.
     await scheduler.flush()
     // A stream the product forgot to close is only visible on the wire when its method has an
-    // unsubscribe builder; `notifications.subscribe` has none, so closing it writes nothing and the
-    // leak stays a live registry record until some later cutover replays it. Observed here, after
+    // unsubscribe builder; closing a builder-less one writes nothing and the leak stays a live
+    // registry record until some later cutover replays it. Observed here, after
     // the product's own cleanup and before the transport tears the registries down, so a
     // builder-less subscription is pinned without a scenario that cuts over to expose it.
     const registered = transport.registeredStreams()

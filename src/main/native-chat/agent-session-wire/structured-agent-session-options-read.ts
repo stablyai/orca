@@ -117,7 +117,7 @@ export async function readStructuredAgentSessionOptions(
   const { adapter, store } = context.deps
   const live = await context.serialize(sessionId, async () => {
     const session = await context.openConversation(sessionId).catch((error: unknown) => {
-      throw journalOpenReadRefusal(error)
+      throw journalOpenReadRefusal(error, context.deps.logger, sessionId)
     })
     const child = session?.child
     if (!child) {

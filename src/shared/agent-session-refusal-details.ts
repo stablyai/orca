@@ -66,7 +66,10 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'spawnIdentityMismatch',
     'notResumable',
     'noProviderChild',
-    'conversationHeldElsewhere'
+    'conversationHeldElsewhere',
+    /** A Stop could not prove its child gone, and a retry could not either: that child takes no
+     *  input and none starts beside it. Sent with `ownerVerdict: 'unverifiable'`. */
+    'previousExitUnverifiable'
   ],
   agent_session_conflict: [
     'chatStarting',

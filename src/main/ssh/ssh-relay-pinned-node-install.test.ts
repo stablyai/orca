@@ -5,6 +5,7 @@ import {
   ensureRemoteOrcadNodeRuntime,
   REMOTE_NODE_RUNTIME_MISSING,
   REMOTE_NODE_RUNTIME_READY,
+  RemoteNodeRuntimeSecurityModifiedError,
   RemoteNodeRuntimeSelfTestError
 } from './orcad-remote-node-runtime'
 import { ensurePinnedRelayRuntime, verifyPinnedRelayInstall } from './ssh-relay-pinned-node-install'
@@ -17,12 +18,17 @@ import {
 import { runPinnedRuntimeSelfTest } from './ssh-relay-runtime-self-test'
 import type { HostNodeAddonRelayPlan } from './ssh-relay-host-node-addons'
 import { RelayRuntimeLadderRun } from './ssh-relay-runtime-resolution'
+import { withRuntimeStoreLock } from './remote-node-runtime-store-lock'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn() }))
 vi.mock('./orcad-remote-node-runtime', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ensureRemoteOrcadNodeRuntime: vi.fn()
+}))
+vi.mock('./remote-node-runtime-store-lock', () => ({
+  withRuntimeStoreLock: vi.fn((_conn, _host, _store, task: () => Promise<unknown>) => task())
 }))
 vi.mock('./ssh-relay-runtime-self-test', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -97,8 +103,31 @@ describe('ensurePinnedRelayRuntime', () => {
 })
 
 describe('verifyPinnedRelayInstall', () => {
+  beforeEach(() => {
+    vi.mocked(execCommand).mockResolvedValue(REMOTE_NODE_RUNTIME_READY)
+  })
+
+  it('confirms the runtime under the store lock once the relay ref is visible', async () => {
+    vi.mocked(runPinnedRuntimeSelfTest).mockResolvedValueOnce({ verdict: 'failed', detail: 'x' })
+    await verifyPinnedRelayInstall(context).catch(() => {})
+    expect(withRuntimeStoreLock).toHaveBeenCalledWith(
+      conn,
+      host,
+      '/home/u/.orca-remote/runtimes',
+      expect.any(Function),
+      undefined
+    )
+    expect(ensureRemoteOrcadNodeRuntime).not.toHaveBeenCalled()
+  })
+
+  it('reinstalls a runtime a store GC collected before the ref existed', async () => {
+    vi.mocked(execCommand).mockResolvedValueOnce(REMOTE_NODE_RUNTIME_MISSING)
+    vi.mocked(runPinnedRuntimeSelfTest).mockResolvedValueOnce({ verdict: 'failed', detail: 'x' })
+    await verifyPinnedRelayInstall(context).catch(() => {})
+    expect(ensureRemoteOrcadNodeRuntime).toHaveBeenCalledOnce()
+  })
+
   it('passes a verified runtime through', async () => {
-    vi.mocked(execCommand).mockResolvedValue('')
     vi.mocked(runPinnedRuntimeSelfTest).mockResolvedValueOnce({
       verdict: 'passed',
       report: {
@@ -116,12 +145,12 @@ describe('verifyPinnedRelayInstall', () => {
       context.remoteRelayDir,
       expect.stringMatching(/\/\.orca-remote\/runtimes\/node-[0-9a-f]{64}\/bin\/node$/),
       undefined,
-      2,
-      { expectPinnedVersion: true }
+      { host, expectPinnedVersion: true }
     )
   })
 
   it('self-tests rung C on the host Node without the pinned version check or a cached refusal', async () => {
+    vi.mocked(withRuntimeStoreLock).mockClear()
     vi.mocked(execCommand).mockResolvedValue('')
     const run = new RelayRuntimeLadderRun('target-1', null)
     const hostPlan: HostNodeAddonRelayPlan = {
@@ -146,10 +175,11 @@ describe('verifyPinnedRelayInstall', () => {
       context.remoteRelayDir,
       '/opt/node18/bin/node',
       undefined,
-      2,
-      { expectPinnedVersion: false }
+      { host, expectPinnedVersion: false }
     )
     expect(run.selfTest).toBe('refused')
+    // Rung C runs no managed runtime, so there is nothing to hold under the store lock.
+    expect(withRuntimeStoreLock).not.toHaveBeenCalled()
     // A host Node refusal says nothing about Orca's pinned Node on this host.
     vi.mocked(execCommand).mockResolvedValueOnce('ldd (GNU libc) 2.31')
     const next = await planPinnedNodeRelay({
@@ -205,6 +235,91 @@ describe('verifyPinnedRelayInstall', () => {
       conn,
       expect.stringContaining("node_modules/node-pty/build/Release/spawn-helper'"),
       expect.anything()
+    )
+  })
+})
+
+describe('pinned relay on a Windows host', () => {
+  const windowsHost = getRemoteHostPlatform('win32-x64')
+  const windowsContext = {
+    ...context,
+    host: windowsHost,
+    remoteRelayDir: 'C:/Users/u/.orca-remote/relay-0.1.0+feedfacecafe',
+    plan: { ...plan, target: 'win32-x64' as const, glibc: null }
+  }
+
+  it('checks the warm runtime through one unwrapped powershell.exe', async () => {
+    vi.mocked(execCommand).mockResolvedValueOnce(`${REMOTE_NODE_RUNTIME_READY}\r\n`)
+    await ensurePinnedRelayRuntime(windowsContext, true)
+    const [, command, options] = vi.mocked(execCommand).mock.calls[0]
+    expect(command).toMatch(/^powershell\.exe /)
+    expect(options).toMatchObject({ wrapCommand: false })
+    expect(decodeRemotePowerShellScript(command)).toContain('/.orca-remote/runtimes/node-')
+    expect(ensureRemoteOrcadNodeRuntime).not.toHaveBeenCalled()
+  })
+
+  it('steps down to host Node, and remembers it, when security software touched node.exe', async () => {
+    vi.mocked(ensureRemoteOrcadNodeRuntime).mockRejectedValueOnce(
+      new RemoteNodeRuntimeSecurityModifiedError('node.exe changed after it ran')
+    )
+    const failure = await ensurePinnedRelayRuntime(windowsContext, false).catch(
+      (error: unknown) => error
+    )
+    expect(failure).toBeInstanceOf(PinnedRelayFallbackError)
+    expect(failure).toMatchObject({ reason: 'security_software' })
+    await expect(
+      planPinnedNodeRelay({
+        conn,
+        host: windowsHost,
+        baseVersion: '0.1.0+abc',
+        targetId: 'target-1'
+      })
+    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'security_software', remembered: true })
+  })
+
+  it('classifies application control blocking node.exe as a refusal', async () => {
+    vi.mocked(ensureRemoteOrcadNodeRuntime).mockRejectedValueOnce(
+      new RemoteNodeRuntimeSelfTestError(-1, 'This program is blocked by group policy.')
+    )
+    await expect(ensurePinnedRelayRuntime(windowsContext, false)).rejects.toMatchObject({
+      reason: 'noexec'
+    })
+  })
+
+  it('confirms the runtime under the store lock, then self-tests on node.exe with no chmod step', async () => {
+    vi.mocked(execCommand).mockResolvedValueOnce(`${REMOTE_NODE_RUNTIME_READY}\r\n`)
+    vi.mocked(runPinnedRuntimeSelfTest).mockResolvedValueOnce({
+      verdict: 'passed',
+      report: {
+        ok: true,
+        nonce: 'n',
+        node: 'v24.21.0',
+        napi: '10',
+        glibcVersionRuntime: null,
+        runtime: 'pinned-node'
+      }
+    })
+    await expect(verifyPinnedRelayInstall(windowsContext)).resolves.toBeUndefined()
+    // Windows store GC collects too, so the held-runtime check runs there as well (design D5).
+    expect(withRuntimeStoreLock).toHaveBeenCalledWith(
+      conn,
+      windowsHost,
+      'C:/Users/u/.orca-remote/runtimes',
+      expect.any(Function),
+      undefined
+    )
+    expect(execCommand).toHaveBeenCalledOnce()
+    const [, command, options] = vi.mocked(execCommand).mock.calls[0]
+    expect(command).toMatch(/^powershell\.exe /)
+    expect(options).toMatchObject({ wrapCommand: false })
+    expect(runPinnedRuntimeSelfTest).toHaveBeenCalledWith(
+      conn,
+      windowsContext.remoteRelayDir,
+      expect.stringMatching(
+        /^C:\/Users\/u\/\.orca-remote\/runtimes\/node-[0-9a-f]{64}\/node\.exe$/
+      ),
+      undefined,
+      { host: windowsHost, expectPinnedVersion: true }
     )
   })
 })

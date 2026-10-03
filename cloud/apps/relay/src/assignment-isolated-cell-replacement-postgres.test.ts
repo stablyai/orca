@@ -352,6 +352,26 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     expect(await rollIsolatedAt(ISOLATED.id)).toBeNull()
   }, 30_000)
 
+  it('classifies a reconnect by its home cell’s stamp in the verification read', async () => {
+    await resetFleet()
+    const identity = hostIdentity(903)
+    const classify = { classifyHomeRollIsolation: true }
+    await applySelector({ [TARGETS[0]!.id]: 'migration-only', [TARGETS[1]!.id]: 'migration-only' })
+    const first = await stores[0]!.assign(identity, 'us-central1')
+    await applySelector({ [TARGETS[0]!.id]: 'general', [TARGETS[1]!.id]: 'general' })
+    expect(first.cellId).toBe(ISOLATED.id)
+    expect(await stores[0]!.resolve(identity, classify)).not.toHaveProperty('homeCellRollIsolated')
+
+    await applySelector({ [ISOLATED.id]: 'migration-only' }, [ISOLATED.id])
+    expect(await stores[0]!.resolve(identity, classify)).toMatchObject({
+      cellId: ISOLATED.id,
+      homeCellRollIsolated: true
+    })
+
+    await applySelector({ [ISOLATED.id]: 'general' })
+    expect(await stores[0]!.resolve(identity, classify)).not.toHaveProperty('homeCellRollIsolated')
+  }, 30_000)
+
   it('ignores a stamp older than the roll it is supposed to describe', async () => {
     // A failed wave keeps its stamp on purpose and can sit for hours; past the
     // bound the cell stops shedding hosts one dial at a time.

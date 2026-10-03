@@ -18,6 +18,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_NOW,
@@ -87,6 +88,7 @@ async function openHost(catalog = catalogFor(workspace)): Promise<void> {
     adapter: adapter(catalog),
     journalDatabase: openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
+    logger: recordingStructuredAgentSessionLogger().logger,
     now: () => clock,
     probeOwner: async () => ({ outcome: 'pid-absent' })
   })

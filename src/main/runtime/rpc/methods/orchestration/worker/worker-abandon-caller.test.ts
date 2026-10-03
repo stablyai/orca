@@ -58,9 +58,9 @@ describe('orchestration.workerAbandon', () => {
 
   it('records the resolved Orca session as the one who abandoned the worker', async () => {
     const dispatchId = readyWorker()
-    const orcaSessionId = parseOrcaSessionAddress('session:chat_1')!
+    const orcaSessionId = parseOrcaSessionAddress('orca_session_id:chat_1')!
     const session: OrchestrationSessionCaller = {
-      address: 'session:chat_1',
+      address: 'orca_session_id:chat_1',
       terminalHandle: null,
       paneKey: null,
       orcaSessionId,
@@ -72,7 +72,9 @@ describe('orchestration.workerAbandon', () => {
       orchestrationCaller: session,
       orchestrationCompatibilityEvidence: { terminalHandle: 'term_coord' }
     })
-    expect(db.getWorkerDispatch(dispatchId)?.last_error).toBe('Abandoned by session:chat_1.')
+    expect(db.getWorkerDispatch(dispatchId)?.last_error).toBe(
+      'Abandoned by orca_session_id:chat_1.'
+    )
   })
 
   it('reports an already-settled worker as stale and changes nothing', async () => {

@@ -15,7 +15,7 @@ on:
         type: choice
         options: [inspect, initialize, verify, register, configure, promote, rollback]
       cell-ids:
-        description: Exact reviewed comma-separated Asia cell wave
+        description: Exact reviewed comma-separated cell wave (Asia, or a US cell at the Asia shape)
         required: true
         type: string
       selector-generation:
@@ -39,7 +39,7 @@ on:
         required: false
         type: string
       evidence-run-id:
-        description: Staging evidence run ID for C27, C27 canary run ID for C28/C29; C30/C31 take none and each proves itself by its own canary
+        description: Staging evidence run ID for C27, C27 canary run ID for C28/C29; C30-C33 take none and each proves itself by its own canary
         required: false
         type: string
       evidence-run-attempt:
@@ -105,6 +105,7 @@ jobs:
           [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
           evidence_kind=none
           canary_cell=none
+          canary_region=asia-east2
           artifact_name=none
           if test "${OPERATION_MODE}" = inspect; then
             test -z "${EXPECTED_SELECTOR_GENERATION}"
@@ -159,6 +160,11 @@ jobs:
                 # No earlier proof binds a later cell's generation; its own canary below rolls it back on failure.
                 canary_cell="${TARGET_CELL_IDS}"
                 ;;
+              production-gce-c32|production-gce-c33)
+                # A US cell at the Asia shape proves itself the same way, with load aimed at its own region.
+                canary_cell="${TARGET_CELL_IDS}"
+                canary_region=us-central1
+                ;;
               *) echo "production promotion wave is not reviewed" >&2; exit 1 ;;
             esac
           fi
@@ -180,6 +186,7 @@ jobs:
             echo "artifact_name=${artifact_name}"
             echo "canary=${canary}"
             echo "canary_cell=${canary_cell}"
+            echo "canary_region=${canary_region}"
             echo "canary_hostname=${canary_cell##*-}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -323,7 +330,7 @@ jobs:
               verify_cells=production-gce-c27,production-gce-c28,production-gce-c29
               expected_states='{"production-gce-c27":"general","production-gce-c28":"migration-only","production-gce-c29":"migration-only"}'
               ;;
-            production-gce-c30|production-gce-c31)
+            production-gce-c30|production-gce-c31|production-gce-c32|production-gce-c33)
               verify_cells="${CANARY_CELL}"
               expected_states="{\"${CANARY_CELL}\":\"general\"}"
               ;;
@@ -342,6 +349,8 @@ jobs:
       - name: Run a real five-minute canary control and splice
         id: canary-load
         if: ${{ steps.inputs.outputs.canary == 'true' }}
+        env:
+          CANARY_REGION: ${{ steps.inputs.outputs.canary_region }}
         shell: bash
         run: |
           set -euo pipefail
@@ -350,7 +359,7 @@ jobs:
           node dev/scripts/load-relay-controls.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" \
             --auth-origin "${AUTH_ORIGIN}" \
-            --preferred-region asia-east2 \
+            --preferred-region "${CANARY_REGION}" \
             --relay-asia-load-principals 1 \
             --controls 1 \
             --splices 1 \

@@ -12,10 +12,14 @@ import {
   classifyPinnedRuntimeFailure,
   evaluatePinnedRuntimeVersion,
   evaluateRelayRuntimeSelfTest,
+  evaluateWindowsRelayRuntimeSelfTest,
   pinnedRuntimeVersionCommand,
   relayRuntimeSelfTestCommand,
-  runPinnedRuntimeSelfTest
+  runPinnedRuntimeSelfTest,
+  windowsRelayRuntimeSelfTestCommand
 } from './ssh-relay-runtime-self-test'
+import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn() }))
 
@@ -66,8 +70,39 @@ describe('pinned runtime refusal classification', () => {
       127,
       'node: error while loading shared libraries: libatomic.so.1: cannot open shared object file: No such file or directory',
       'missing_lib'
+    ],
+    // Alpine without libstdc++: musl lists every unresolved C++ symbol after the missing library.
+    [
+      127,
+      [
+        'Error loading shared library libstdc++.so.6: No such file or directory (needed by /root/.orca-remote/runtimes/node-x/bin/node)',
+        'Error loading shared library libgcc_s.so.1: No such file or directory (needed by /root/.orca-remote/runtimes/node-x/bin/node)',
+        'Error relocating /root/.orca-remote/runtimes/node-x/bin/node: _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_createERmm: symbol not found'
+      ].join('\n'),
+      'missing_lib'
     ]
   ])('classifies exit %j with %j as %s', (status, output, refusal) => {
+    expect(classifyPinnedRuntimeFailure(status, output)).toBe(refusal)
+  })
+
+  it.each([
+    [
+      -1,
+      "Program 'node.exe' failed to run: Operation did not complete successfully because the file contains a virus or potentially unwanted software",
+      'security_software'
+    ],
+    [
+      null,
+      'bundled ConPTY file missing after upload: C:\\r\\node_modules\\node-pty\\build\\Release\\conpty\\OpenConsole.exe',
+      'security_software'
+    ],
+    [-1, "Program 'node.exe' failed to run: This program is blocked by group policy.", 'noexec'],
+    [
+      -1,
+      'Your organization used Device Guard to block this app. An Application Control policy has blocked this file.',
+      'noexec'
+    ]
+  ])('classifies Windows exit %j with %j as %s', (status, output, refusal) => {
     expect(classifyPinnedRuntimeFailure(status, output)).toBe(refusal)
   })
 
@@ -151,6 +186,68 @@ describe('relay self-test report evaluation', () => {
       error: 'posix_openpt: Permission denied'
     })}`
     expect(evaluateRelayRuntimeSelfTest(output, 'n').verdict).toBe('failed')
+  })
+})
+
+describe('Windows relay self-test', () => {
+  it('is one encoded powershell.exe line that runs relay.js on node.exe from the relay dir', () => {
+    const command = windowsRelayRuntimeSelfTestCommand(
+      'C:/Users/u/.orca-remote/relay-0.1.0+abc',
+      "C:/Users/o'brien/.orca-remote/runtimes/node-x/node.exe",
+      'feed'
+    )
+    expect(command).toMatch(/^powershell\.exe -NoProfile -NonInteractive -EncodedCommand \S+$/)
+    expect(decodeRemotePowerShellScript(command)).toMatchInlineSnapshot(`
+      "Set-Location -LiteralPath 'C:/Users/u/.orca-remote/relay-0.1.0+abc'
+      $out = ''; $status = $null
+      try { $out = ((& 'C:/Users/o''brien/.orca-remote/runtimes/node-x/node.exe' 'relay.js' '--orca-runtime-selftest' 'feed' 2>&1) | ForEach-Object { "$_" }) -join "\`n"; $status = $LASTEXITCODE } catch { $status = -1; $out = $_.Exception.Message }
+      Write-Output ('ORCA_RUNTIME_EXIT=' + $status)
+      Write-Output ($out.Substring(0, [Math]::Min(16000, $out.Length)))"
+    `)
+  })
+
+  it('requires the report to name the pinned Node, since no separate --version runs', () => {
+    expect(
+      evaluateWindowsRelayRuntimeSelfTest(
+        `ORCA_RUNTIME_EXIT=0\r\n${report('n', { ok: true })}`,
+        'n'
+      )
+    ).toMatchObject({ verdict: 'passed' })
+    expect(
+      evaluateWindowsRelayRuntimeSelfTest(
+        `ORCA_RUNTIME_EXIT=0\r\n${report('n', { ok: true, node: 'v22.16.0' })}`,
+        'n'
+      )
+    ).toMatchObject({ verdict: 'failed' })
+  })
+
+  it('runs in a single unwrapped exec on a Windows host', async () => {
+    vi.mocked(execCommand).mockReset()
+    vi.mocked(execCommand).mockImplementationOnce(async (_conn, command) => {
+      const nonce = /'--orca-runtime-selftest' '([0-9a-f]+)'/.exec(
+        decodeRemotePowerShellScript(command)
+      )?.[1]
+      return `ORCA_RUNTIME_EXIT=0\r\n${report(nonce ?? '', { ok: true })}\r\n`
+    })
+    await expect(
+      runPinnedRuntimeSelfTest(conn, 'C:/r', 'C:/n/node.exe', undefined, {
+        host: getRemoteHostPlatform('win32-x64')
+      })
+    ).resolves.toMatchObject({ verdict: 'passed' })
+    expect(execCommand).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(execCommand).mock.calls[0][2]).toMatchObject({ wrapCommand: false })
+  })
+
+  it('refuses a runtime whose ConPTY pair was quarantined after upload', () => {
+    const output = `ORCA_RUNTIME_EXIT=0\r\n${report('n', {
+      ok: false,
+      stage: 'load',
+      error: 'bundled ConPTY file missing after upload: C:/r/conpty/OpenConsole.exe'
+    })}`
+    expect(evaluateWindowsRelayRuntimeSelfTest(output, 'n')).toMatchObject({
+      verdict: 'refused',
+      refusal: 'security_software'
+    })
   })
 })
 

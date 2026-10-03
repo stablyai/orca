@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
@@ -97,10 +97,11 @@ export function useMobileStructuredAgentSession(args: {
   // Old host ⇒ exactly today's behavior: no delivery field, no cards, plain Stop.
   const queueCapable = hostSupport?.queuedMessages === true
   const promptCancelSupported = hostSupport?.promptCancel ?? null
+  const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
-  const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
-  useEffect(() => () => operationIdsRef.current.clear(), [])
+  // Against a host that predates the quiet repeated Stop, a Stop of a turn still being stopped joins it.
+  const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
   const { state, stateRef, queuedMessages, queuePause, loadingOlder, loadEarlier } =
     useMobileStructuredAgentState(stateArgs)
@@ -109,10 +110,8 @@ export function useMobileStructuredAgentSession(args: {
   const mutate = useMobileStructuredAgentMutate({
     client,
     sessionId,
-    sessionKey,
     enabled,
     stateRef,
-    operationIds: operationIdsRef.current,
     onSendError
   })
 
@@ -147,7 +146,6 @@ export function useMobileStructuredAgentSession(args: {
     queueCapable,
     stateRef,
     commandPending: commandPendingRef,
-    operationIds: operationIdsRef.current,
     controller: sendController,
     onSendError
   })
@@ -197,15 +195,23 @@ export function useMobileStructuredAgentSession(args: {
       requestMobileStructuredAgentSessionCancel({
         client,
         enabled,
+        hostAnswersRepeatedStops,
+        inFlight: inFlightStopsRef.current,
         onSendError,
-        operationIds: operationIdsRef.current,
         prompt,
         promptCancelSupported,
         sessionId,
-        sessionKey,
         stateRef
       }),
-    [client, enabled, onSendError, promptCancelSupported, sessionId, sessionKey, stateRef]
+    [
+      client,
+      enabled,
+      hostAnswersRepeatedStops,
+      onSendError,
+      promptCancelSupported,
+      sessionId,
+      stateRef
+    ]
   )
 
   return {

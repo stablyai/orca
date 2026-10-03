@@ -16,6 +16,7 @@ import {
   type RelayRuntimeSelfTestReport
 } from '../shared/relay-runtime-self-test-report'
 import { describeRelayRuntime } from './relay-runtime-identity'
+import { relayBundledConptyPaths } from './relay-windows-conpty'
 
 const PTY_EXIT_TIMEOUT_MS = 10_000
 
@@ -23,9 +24,10 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function ptyBindingPath(nodePtyDir: string): string | null {
+function ptyBindingPath(nodePtyDir: string, platform: NodeJS.Platform): string | null {
+  const binding = platform === 'win32' ? 'conpty.node' : 'pty.node'
   for (const dir of ['build/Release', 'build/Debug']) {
-    const candidate = join(nodePtyDir, dir, 'pty.node')
+    const candidate = join(nodePtyDir, dir, binding)
     if (existsSync(candidate)) {
       return candidate
     }
@@ -33,15 +35,21 @@ function ptyBindingPath(nodePtyDir: string): string | null {
   return null
 }
 
-function openAndClosePty(pty: typeof NodePty): Promise<void> {
+function openAndClosePty(pty: typeof NodePty, platform: NodeJS.Platform): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
-      name: 'xterm',
-      cols: 80,
-      rows: 24,
-      cwd: process.cwd(),
-      env: { PATH: process.env.PATH ?? '/usr/bin:/bin' }
-    })
+    const common = { name: 'xterm', cols: 80, rows: 24, cwd: process.cwd() }
+    const child =
+      platform === 'win32'
+        ? // Why the bundled DLL: it is the ConPTY a pinned relay's terminals run on.
+          pty.spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', 'exit 0'], {
+            ...common,
+            env: { ...process.env },
+            useConptyDll: true
+          })
+        : pty.spawn('/bin/sh', ['-c', 'exit 0'], {
+            ...common,
+            env: { PATH: process.env.PATH ?? '/usr/bin:/bin' }
+          })
     const timer = setTimeout(() => {
       child.kill()
       reject(new Error(`the PTY child did not exit within ${PTY_EXIT_TIMEOUT_MS / 1000}s`))
@@ -55,7 +63,8 @@ function openAndClosePty(pty: typeof NodePty): Promise<void> {
 
 export async function runRelayRuntimeSelfTest(
   nonce: string,
-  nodePtyDir: string = join(__dirname, 'node_modules', 'node-pty')
+  nodePtyDir: string = join(__dirname, 'node_modules', 'node-pty'),
+  platform: NodeJS.Platform = process.platform
 ): Promise<RelayRuntimeSelfTestReport> {
   const abi = detectNativeHostAbi()
   const base = {
@@ -65,9 +74,21 @@ export async function runRelayRuntimeSelfTest(
     glibcVersionRuntime: abi.glibcVersion,
     runtime: describeRelayRuntime().kind
   }
-  const binding = ptyBindingPath(nodePtyDir)
+  const binding = ptyBindingPath(nodePtyDir, platform)
   if (!binding) {
-    return { ...base, ok: false, stage: 'load', error: `no pty.node under ${nodePtyDir}` }
+    return { ...base, ok: false, stage: 'load', error: `no PTY binding under ${nodePtyDir}` }
+  }
+  if (platform === 'win32') {
+    // The upload completed, so a file gone now was removed on the host (AV quarantine).
+    const missing = relayBundledConptyPaths(nodePtyDir).find((path) => !existsSync(path))
+    if (missing) {
+      return {
+        ...base,
+        ok: false,
+        stage: 'load',
+        error: `bundled ConPTY file missing after upload: ${missing}`
+      }
+    }
   }
   try {
     // Why dlopen first: node-pty's loader rethrows only its last attempt, which hides the
@@ -84,7 +105,7 @@ export async function runRelayRuntimeSelfTest(
     return { ...base, ok: false, stage: 'load', error: errorText(error) }
   }
   try {
-    await openAndClosePty(pty)
+    await openAndClosePty(pty, platform)
   } catch (error) {
     return { ...base, ok: false, stage: 'spawn', error: errorText(error) }
   }

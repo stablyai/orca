@@ -87,6 +87,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   lastOscTitleEpochMs: number | null
+  /** The stale-working timer's cleared title, dated as a genuine title would be, while it stands
+   *  over `lastOscTitle`. Display readers project through it (getPtyDisplayRecord); evidence never
+   *  reads it. On the record so it lives as long as the native title it retires. In memory only. */
+  titleDisplayClear?: { title: string; observedAt: number; observedAtEpochMs: number } | null
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null

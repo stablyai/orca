@@ -15,7 +15,7 @@ on:
         type: choice
         options: [plan, apply]
       cell-ids:
-        description: Exact reviewed comma-separated Asia cell set
+        description: Exact reviewed comma-separated cell set (Asia, or the US cells at the Asia shape)
         required: true
         type: string
       image:
@@ -50,7 +50,6 @@ jobs:
       TARGET_ENVIRONMENT: ${{ inputs.environment }}
       TARGET_CELL_IDS: ${{ inputs.cell-ids }}
       TARGET_IMAGE: ${{ inputs.image }}
-      TARGET_REGION: asia-east2
       GCP_PROJECT_ID: ${{ inputs.environment == 'production' && 'onorca-cloud' || 'onorca-cloud-staging' }}
       CLOUD_SQL_INSTANCE: ${{ inputs.environment == 'production' && 'orca-cloud-auth-db' || 'orca-cloud-staging-auth-db' }}
       VERIFIED_DEFAULT_MAX_CONNECTIONS_TIER: db-custom-4-15360
@@ -72,13 +71,16 @@ jobs:
           set -euo pipefail
           test -n "${TOPOLOGY_WORKLOAD_IDENTITY_PROVIDER}"
           test -n "${TOPOLOGY_SERVICE_ACCOUNT}"
+          target_region=asia-east2
           case "${TARGET_ENVIRONMENT}:${TARGET_CELL_IDS}" in
             staging:staging-gce-c4) ;;
             production:production-gce-c27,production-gce-c28,production-gce-c29) ;;
             production:production-gce-c30) ;;
             production:production-gce-c31) ;;
+            production:production-gce-c32,production-gce-c33) target_region=us-central1 ;;
             *) echo "cell-ids do not match the reviewed environment topology" >&2; exit 1 ;;
           esac
+          echo "TARGET_REGION=${target_region}" >> "${GITHUB_ENV}"
           [[ "${TARGET_IMAGE}" =~ ^us-central1-docker\.pkg\.dev/${GCP_PROJECT_ID}/orca-cloud/relay@sha256:[0-9a-f]{64}$ ]]
           if test "${DEPLOY_MODE}" = apply; then
             test "${CONFIRMATION}" = APPLY_RELAY_ASIA_TOPOLOGY
@@ -156,11 +158,14 @@ jobs:
           set -euo pipefail
           file="${RUNNER_TEMP}/relay-asia-targets"
           : > "${file}"
-          printf '%s\n' \
-            '-target=google_compute_subnetwork.relay_gce_additional["asia-east2"]' \
-            '-target=google_compute_router.relay_gce_additional["asia-east2"]' \
-            '-target=google_compute_router_nat.relay_gce_additional["asia-east2"]' \
-            '-target=google_compute_url_map.relay_gce[0]' >> "${file}"
+          # The root region's network predates every cell; only asia-east2's is additive.
+          if test "${TARGET_REGION}" = asia-east2; then
+            printf '%s\n' \
+              '-target=google_compute_subnetwork.relay_gce_additional["asia-east2"]' \
+              '-target=google_compute_router.relay_gce_additional["asia-east2"]' \
+              '-target=google_compute_router_nat.relay_gce_additional["asia-east2"]' >> "${file}"
+          fi
+          printf '%s\n' '-target=google_compute_url_map.relay_gce[0]' >> "${file}"
           IFS=, read -ra cells <<< "${TARGET_CELL_IDS}"
           for cell_id in "${cells[@]}"; do
             printf '%s\n' \

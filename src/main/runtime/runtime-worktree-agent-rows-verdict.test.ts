@@ -20,6 +20,7 @@ import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-w
 import { indexedStatusFeedSession } from '../native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -76,6 +77,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
 function publishedSummary(journal: AgentSessionJournal): AgentSessionStatusSummary {
   const session = indexedStatusFeedSession({ journal })
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, session]]),
     getRecord: () => agentSessionRecordFixture(),
     now: () => 1_000

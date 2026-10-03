@@ -34,6 +34,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 // The turns a send or Stop is waiting on to open, so a test knows the wait began.
 const openWaits = vi.hoisted(() => {
@@ -217,6 +218,7 @@ beforeEach(async () => {
     return connection
   }
   host = await ensureStructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
@@ -285,6 +287,64 @@ describe('a Codex send its turn ended without taking it', () => {
     expect(verdictOf(after.submissions, followUp)).toBe('withdrawn')
     expect(after.owesWork).toBe(false)
   })
+})
+
+describe('a queued card sent now into the turn a Stop ends', () => {
+  async function handoffs(messageId: string): Promise<AgentJournalSubmission[]> {
+    return (await settled()).submissions.filter((entry) => entry.queuedMessageId === messageId)
+  }
+
+  /** Each hand-off of the card, as who sent it and how it settled. */
+  async function sends(messageId: string) {
+    return (await handoffs(messageId)).map((entry) => ({
+      origin: entry.origin,
+      verdict: verdictOf([entry], entry.clientMessageId)
+    }))
+  }
+
+  async function queue() {
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    if (!page.ok) {
+      throw new Error('history refused')
+    }
+    return {
+      pause: page.page.queuePause ?? null,
+      cards: (page.page.queuedMessages ?? []).map(({ messageId, state }) => ({ messageId, state }))
+    }
+  }
+
+  it('comes back as a paused waiting card, and nothing sends it again', async () => {
+    const opening = await send('look around')
+    await vi.waitFor(() => expect(answers).toBe(1))
+    turns.start()
+    turns.echo(opening)
+    const { messageId: cardId } = await queueThenSendNow('and check the tests')
+    // Steered into the running turn, with no echo yet.
+    await vi.waitFor(() => expect(steers).toBe(1))
+    const [steered] = await handoffs(cardId)
+    expect(steered?.dispatchState).toBe('pending')
+
+    await stop('turn-1')
+
+    await vi.waitFor(async () => {
+      const [withdrawn] = await handoffs(cardId)
+      expect(verdictOf([withdrawn!], withdrawn!.clientMessageId)).toBe('withdrawn')
+    })
+    await vi.waitFor(
+      async () =>
+        expect({ ...(await queue()), sends: await sends(cardId) }).toEqual({
+          pause: { reason: 'stopped' },
+          cards: [{ messageId: cardId, state: 'waiting' }],
+          sends: [{ origin: 'client', verdict: 'withdrawn' }]
+        }),
+      { timeout: 5_000 }
+    )
+    // A drain ignoring the pause re-sends only after the stopped turn ends: watch past that.
+    await vi.waitFor(() => expect(turns.turnId).toBeNull())
+    await new Promise((resolve) => setTimeout(resolve, 2_500))
+    expect(steers + answers).toBe(2)
+    expect(await sends(cardId)).toEqual([{ origin: 'client', verdict: 'withdrawn' }])
+  }, 20_000)
 })
 
 describe('a Codex before 0.148, which names a steered start falsely', () => {

@@ -5,6 +5,7 @@ import {
   AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
@@ -13,6 +14,12 @@ import {
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 
 describe('agentResumeHostAuthorityCapability', () => {
+  it('requires Cursor support from the owning host', () => {
+    expect(agentResumeHostAuthorityCapability('cursor')).toBe(
+      AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY
+    )
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY)
+  })
   it('gates Muse resume behind its own advertised capability', () => {
     expect(agentResumeHostAuthorityCapability('muse')).toBe(
       AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY
@@ -44,6 +51,7 @@ describe('agentResumeHostAuthorityCapability', () => {
       claude: undefined,
       codebuddy: AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
       codex: undefined,
+      cursor: AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
       qoder: AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
       gemini: undefined,
       antigravity: undefined,

@@ -9,6 +9,8 @@ import { createTrackedJournalOpener } from '../agent-session-journal/journal-hos
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -56,6 +58,7 @@ describe('structured send idempotency', () => {
 
     const result = await performSend(
       {
+        logger: recordingStructuredAgentSessionLogger().logger,
         sessionId: 'session-1',
         journal,
         fence: 2,
@@ -63,7 +66,6 @@ describe('structured send idempotency', () => {
         persistOptions: async () => undefined,
         resolvedBy: 'caller',
         publish: vi.fn(),
-        flushStreamedEvents: async () => undefined,
         now: () => 1
       },
       input
@@ -97,6 +99,7 @@ describe('structured send idempotency', () => {
       }
     }))
     const context: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
       journal,
       fence: 1,
@@ -104,7 +107,6 @@ describe('structured send idempotency', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'caller',
       publish: vi.fn(),
-      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
     const input = {

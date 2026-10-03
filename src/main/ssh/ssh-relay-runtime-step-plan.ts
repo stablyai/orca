@@ -6,7 +6,7 @@ import {
   planPinnedNodeRelay,
   resolvePinnedRelayTargetFacts
 } from './ssh-relay-pinned-node'
-import { compatRelayRuntimeFor, type RelayRuntimeStep } from './ssh-relay-runtime-ladder'
+import { rungBCompatRuntimeFor, type RelayRuntimeStep } from './ssh-relay-runtime-ladder'
 import type { RelayRuntimeLadderRun } from './ssh-relay-runtime-resolution'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import type { OrcadDeploymentTargetFacts } from './orcad-deployment-target'
@@ -47,12 +47,6 @@ export async function planRelayRuntimeStep(
     case 'legacy':
       return undefined
     case 'A': {
-      if (host.os === 'win32') {
-        throw new PinnedRelayFallbackError(
-          'windows_host_unsupported',
-          'Windows hosts keep the host-Node relay for now'
-        )
-      }
       const facts = await ladderTargetFacts(options)
       const plan = await planPinnedNodeRelay({
         conn,
@@ -73,21 +67,44 @@ export async function planRelayRuntimeStep(
       return plan
     }
     case 'B': {
-      const facts = host.os === 'win32' ? null : await ladderTargetFacts(options)
-      const compat = facts ? compatRelayRuntimeFor(facts) : null
-      // Why data-driven: B turns on when a compat runtime is listed, and not before.
-      throw new PinnedRelayFallbackError(
-        compat ? 'artifacts_unavailable' : 'runtime_unavailable',
-        compat
-          ? `compat runtime ${compat.id} has no deploy path in this build`
-          : 'no compat runtime serves this host'
-      )
+      if (host.os === 'win32') {
+        throw new PinnedRelayFallbackError(
+          'runtime_unavailable',
+          'no compat runtime serves Windows'
+        )
+      }
+      const facts = await ladderTargetFacts(options)
+      // run.lastRefusal is rung A's: B is entered only by stepping down from A.
+      const compat = rungBCompatRuntimeFor(facts, run.lastRefusal)
+      if (!compat) {
+        throw new PinnedRelayFallbackError(
+          'runtime_unavailable',
+          'no compat runtime serves this host'
+        )
+      }
+      const plan = await planPinnedNodeRelay({
+        conn,
+        host,
+        baseVersion,
+        targetId: run.targetId,
+        facts,
+        compat: { target: compat.runtimeTarget, glibcFloor: compat.glibcFloor },
+        signal
+      })
+      if (plan.kind === 'host-node') {
+        throw new PinnedRelayFallbackError(
+          plan.fallbackReason ?? 'artifacts_unavailable',
+          `compat runtime ${compat.id} cannot run here`,
+          plan.remembered === true
+        )
+      }
+      return plan
     }
     case 'C': {
       if (host.os === 'win32') {
         throw new PinnedRelayFallbackError(
           'windows_host_unsupported',
-          'Windows hosts keep the host-Node relay for now'
+          'Windows hosts have no host-Node addon relay'
         )
       }
       const plan = await planHostNodeAddonRelay({

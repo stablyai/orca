@@ -1,3 +1,4 @@
+import { createQoderSessionResumeState } from './session-scanner-qoder-parser'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { inSessionParseFileLane } from './session-parse-file-lane'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
@@ -52,6 +53,8 @@ function resumableStateFactoryFor(
   switch (candidate.agent) {
     case 'claude':
       return (messages) => createClaudeSessionResumeState(candidate.file, messages)
+    case 'qoder':
+      return (messages) => createQoderSessionResumeState(candidate.file, messages)
     case 'codebuddy':
       return (messages) => createCodebuddySessionResumeState(candidate.file, messages)
     case 'codex':

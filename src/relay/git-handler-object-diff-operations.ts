@@ -22,7 +22,7 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
       filePath: params.filePath as string | undefined,
       oldPath: params.oldPath as string | undefined
     }
-    const result = await this.gitDiffReadDedupe.run(
+    const result = await this.gitDiffReadDedupe.lease(
       stableInFlightKey([
         'branchDiff',
         worktreePath,
@@ -32,7 +32,8 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
         options.filePath ?? null,
         options.oldPath ?? null
       ]),
-      () => {
+      context?.signal,
+      (signal) => {
         if (
           headOid &&
           isFullGitObjectId(baseRef) &&
@@ -41,7 +42,7 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
           options.filePath.length > 0
         ) {
           return branchDiffEntryAtPinnedOids(
-            this.gitBuffer.bind(this),
+            this.gitBufferForSignal(signal),
             worktreePath,
             baseRef,
             headOid,
@@ -50,8 +51,8 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
           )
         }
         return branchDiffEntries(
-          this.git.bind(this),
-          this.gitBuffer.bind(this),
+          this.gitForSignal(signal),
+          this.gitBufferForSignal(signal),
           worktreePath,
           baseRef,
           options
@@ -69,7 +70,7 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
       filePath: params.filePath as string,
       oldPath: params.oldPath as string | undefined
     }
-    const result = await this.gitDiffReadDedupe.run(
+    const result = await this.gitDiffReadDedupe.lease(
       stableInFlightKey([
         'commitDiff',
         worktreePath,
@@ -78,7 +79,8 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
         args.filePath,
         args.oldPath ?? null
       ]),
-      () => commitDiffEntry(this.gitBuffer.bind(this), worktreePath, args)
+      context?.signal,
+      (signal) => commitDiffEntry(this.gitBufferForSignal(signal), worktreePath, args)
     )
     return this.maybeStreamResponse(result, params, context)
   }

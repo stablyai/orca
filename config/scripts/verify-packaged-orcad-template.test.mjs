@@ -9,6 +9,7 @@ import {
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR
 } from '../../src/shared/orcad-artifacts.ts'
+import { NODE_RUNTIME_ASSETS } from '../../src/shared/node-runtime-pin.ts'
 import { writeOrcadTemplateTestFixture } from './orcad-template-test-fixture.mjs'
 
 const require = createRequire(import.meta.url)
@@ -16,10 +17,10 @@ const { verifyPackagedOrcadTemplate } = require('./verify-packaged-orcad-templat
 const builderConfig = require('../electron-builder.config.cjs')
 const roots = []
 
-async function createFixture() {
+async function createFixture(options) {
   const root = await mkdtemp(join(tmpdir(), 'orca-packaged-orcad-template-'))
   roots.push(root)
-  const templateDir = await writeOrcadTemplateTestFixture(root)
+  const templateDir = await writeOrcadTemplateTestFixture(root, options)
   return { root, templateDir }
 }
 
@@ -32,6 +33,29 @@ describe('verifyPackagedOrcadTemplate', () => {
     const fixture = await createFixture()
 
     expect(() => verifyPackagedOrcadTemplate(fixture.root)).not.toThrow()
+  })
+
+  it('accepts the optional rung B compat target beside the default ones', async () => {
+    const fixture = await createFixture({ compat: true })
+
+    expect(() => verifyPackagedOrcadTemplate(fixture.root)).not.toThrow()
+  })
+
+  it('rejects a compat target whose runtime reference names the default Node', async () => {
+    const fixture = await createFixture({ compat: true })
+    await writeFile(
+      join(
+        fixture.templateDir,
+        ORCAD_TEMPLATE_TARGETS_DIR,
+        'linux-x64-glibc217',
+        ORCAD_NODE_RUNTIME_MARKER_FILENAME
+      ),
+      `${NODE_RUNTIME_ASSETS['linux-x64-glibc'].executableSha256}\n`
+    )
+
+    expect(() => verifyPackagedOrcadTemplate(fixture.root)).toThrow(
+      /linux-x64-glibc217 .*(checksum mismatch|runtime reference)/
+    )
   })
 
   it('rejects target-native bytes changed after manifest generation', async () => {
@@ -112,15 +136,47 @@ describe('verifyPackagedOrcadTemplate', () => {
     )
   })
 
-  it('does not ship the unused deployment template in desktop packages', async () => {
+  it('verifies a partial template only against the targets it was built for', async () => {
+    const fixture = await createFixture()
+    const kept = ['linux-x64-glibc', 'linux-x64-musl']
+    const manifestPath = join(fixture.templateDir, ORCAD_TEMPLATE_MANIFEST_FILENAME)
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    for (const target of Object.keys(manifest.targets).filter((name) => !kept.includes(name))) {
+      delete manifest.targets[target]
+      await rm(join(fixture.templateDir, ORCAD_TEMPLATE_TARGETS_DIR, target), { recursive: true })
+    }
+    await writeFile(manifestPath, JSON.stringify(manifest))
+
+    expect(() => verifyPackagedOrcadTemplate(fixture.root, kept)).not.toThrow()
+    expect(() => verifyPackagedOrcadTemplate(fixture.root)).toThrow(
+      'target manifest inventory mismatch'
+    )
+    expect(() => verifyPackagedOrcadTemplate(fixture.root, ['linux-x64-glibc'])).toThrow(
+      'target manifest inventory mismatch'
+    )
+  })
+
+  // Design D2 reverses the old "unused, excluded" contract: SSH relays and managed orcad deploys
+  // materialize their slot from process.resourcesPath/orcad-template, so every desktop OS ships it.
+  it('ships the deployment template as a resource on every desktop OS, never its runtimes', async () => {
     for (const platform of ['win', 'mac', 'linux']) {
+      expect(builderConfig[platform].extraResources).toContainEqual({
+        from: 'out/orcad-template',
+        to: 'orcad-template'
+      })
+      // electron-builder's copy filter drops a source's root node_modules, so it needs its own entry.
+      expect(builderConfig[platform].extraResources).toContainEqual({
+        from: 'out/orcad-template/node_modules',
+        to: 'orcad-template/node_modules'
+      })
       expect(
         builderConfig[platform].extraResources.some(
-          (resource) => typeof resource === 'object' && resource.to.startsWith('orcad-template')
+          (resource) =>
+            typeof resource === 'object' && /runtimes|node-runtime-cache/.test(resource.from)
         )
       ).toBe(false)
     }
-    // The pinned Node a local build references is ~120 MB; none of these outputs is desktop code.
+    // The pinned Node a local build references is ~120 MB and is downloaded on demand instead.
     expect(builderConfig.files).toEqual(
       expect.arrayContaining([
         '!out/orcad{,/**/*}',
@@ -129,6 +185,8 @@ describe('verifyPackagedOrcadTemplate', () => {
         '!out/node-runtime-cache{,/**/*}'
       ])
     )
+    expect(builderConfig.mac.signIgnore).toContain('/orcad-template/')
+    // Release CI builds the template from every lane's slot; one host cannot build it alone.
     const { scripts } = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf8'))
     for (const name of ['build:desktop', 'build:release', 'build:release:parallel']) {
       expect(scripts[name]).not.toContain('build:orcad-template')

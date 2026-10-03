@@ -416,6 +416,63 @@ test('records but does not gate organic US-targeted fallbacks during a canary', 
   assert.throws(() => buildProductionCanaryEvidence(input), /C31 canary asiaRegionFallbacks must be zero/)
 })
 
+// A root-region cell logs region us-central1, and the directors place US hosts too.
+function usCanaryInput(cellId) {
+  const input = canaryInput({}, cellId)
+  for (const entry of input.logs) {
+    if (entry.jsonPayload.role === 'cell') entry.jsonPayload.region = 'us-central1'
+    else entry.jsonPayload.selectedRegionsDelta = { 'asia-east2': 1, 'us-central1': 3 }
+  }
+  return input
+}
+
+test('builds and verifies C32 and C33 canaries from their own us-central1 metrics', () => {
+  for (const cellId of ['production-gce-c32', 'production-gce-c33']) {
+    const label = cellId.split('-').at(-1).toUpperCase()
+    const kind = `production-${label.toLowerCase()}-canary`
+    const evidence = buildProductionCanaryEvidence(usCanaryInput(cellId))
+    assert.equal(evidence.kind, kind)
+    assert.equal(evidence.metrics.usSelections, 18)
+    assert.equal(verifyRolloutEvidence(
+      evidence, workflowRun(evidence), verifyExpected(kind, { cellIds: [cellId], selectorGeneration: 9 })
+    ), evidence)
+    // The Asia-region filter would find none of a US cell's samples.
+    assert.throws(
+      () => buildProductionCanaryEvidence(canaryInput({}, cellId)),
+      new RegExp(`${cellId} metrics`)
+    )
+    const elsewhere = usCanaryInput(cellId)
+    elsewhere.loadReport.assignedCellOrigins = ['https://c26.relay.onorca.dev']
+    assert.throws(
+      () => buildProductionCanaryEvidence(elsewhere),
+      new RegExp(`${label} canary load was not placed only on ${label}`)
+    )
+    const noUs = usCanaryInput(cellId)
+    for (const entry of noUs.logs) {
+      if (entry.jsonPayload.role === 'director') entry.jsonPayload.selectedRegionsDelta = { 'asia-east2': 1 }
+    }
+    assert.throws(() => buildProductionCanaryEvidence(noUs), /observed no US selections/)
+  }
+})
+
+test('records but does not gate either region\'s fallbacks during a US canary', () => {
+  const input = usCanaryInput('production-gce-c32')
+  for (const entry of input.logs.filter(({ jsonPayload }) => jsonPayload.role === 'director')) {
+    entry.jsonPayload.regionFallbacksDelta = { 'us-central1': 24, 'asia-east2': 1 }
+  }
+  const evidence = buildProductionCanaryEvidence(input)
+  assert.equal(evidence.metrics.usRegionFallbacks, 144)
+  assert.equal(evidence.metrics.asiaRegionFallbacks, 6)
+  // Every other gate still binds a US canary.
+  input.logs.find(({ jsonPayload }) => jsonPayload.role === 'cell').jsonPayload.sqlFailuresDelta = 1
+  assert.throws(() => buildProductionCanaryEvidence(input), /relaySqlFailures must be zero/)
+})
+
+test('keeps the Asia canary evidence field set unchanged', () => {
+  const evidence = buildProductionCanaryEvidence(canaryInput({}, 'production-gce-c31'))
+  assert.equal('usSelections' in evidence.metrics, false)
+})
+
 test('rejects a C30 canary that C30 did not serve', () => {
   const onLaunchCell = canaryInput({}, c30)
   onLaunchCell.loadReport.assignedCellOrigins = ['https://c27.relay.onorca.dev']

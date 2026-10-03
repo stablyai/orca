@@ -66,6 +66,7 @@ describe('syncForkDefaultBranch', () => {
     const result = await syncForkDefaultBranch(runGit)
 
     expect(result).toMatchObject({ status: 'synced', branchName: 'main', ahead: 0, behind: 3 })
+    expect(calls.filter((args) => args[0] === 'remote' && args.length === 1)).toEqual([['remote']])
     expect(calls).toContainEqual([
       'push',
       'origin',
@@ -148,12 +149,23 @@ describe('syncForkDefaultBranch', () => {
   })
 
   it('blocks when the upstream remote is missing', async () => {
-    const { runGit } = createRunner({ remotes: 'origin\n' })
+    const { runGit, calls } = createRunner({ remotes: 'origin\n' })
 
     await expect(syncForkDefaultBranch(runGit)).resolves.toMatchObject({
       status: 'blocked',
       reason: 'missing-upstream'
     })
+    expect(calls).toEqual([['remote']])
+  })
+
+  it('reports missing origin first when both remotes are missing', async () => {
+    const { runGit, calls } = createRunner({ remotes: '' })
+
+    await expect(syncForkDefaultBranch(runGit)).resolves.toMatchObject({
+      status: 'blocked',
+      reason: 'missing-origin'
+    })
+    expect(calls).toEqual([['remote']])
   })
 
   it('blocks when the upstream remote no longer matches the expected fork metadata', async () => {

@@ -335,7 +335,11 @@ compatible image has been published and each entry can pin its immutable
 digest. A later cell, such as C30 or C31, is its own reviewed wave. The shared URL map
 pulls every live cell into its plan, so the workflow plans each live cell at the
 image its state template already serves, and the validator rejects any change
-to a cell outside the wave.
+to a cell outside the wave. US C32 and C33 use the same workflow at the same
+3,000-connection shape, as one wave because they are declared together: each
+wave's region comes from its reviewed zone, a
+`us-central1` wave targets no additional-region network, and its template
+carries no region label or line and the default pool of 10.
 
 Topology creation intentionally does not apply the director resource. Once all
 MIGs and backends are healthy, register every new cell atomically as

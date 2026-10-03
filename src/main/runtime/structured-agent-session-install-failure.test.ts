@@ -11,6 +11,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const mocks = vi.hoisted(() => ({ failWiring: vi.fn(() => false) }))
 
@@ -32,6 +33,7 @@ let root: string
 
 function install(): ReturnType<typeof ensureStructuredAgentSessionHost> {
   return ensureStructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',

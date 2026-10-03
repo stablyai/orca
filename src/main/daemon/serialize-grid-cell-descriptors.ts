@@ -18,16 +18,17 @@ function canonicalColorMode(mode: number, colorValue: number): number {
   return mode === COLOR_MODE_P256 && colorValue >= 0 && colorValue < 16 ? COLOR_MODE_P16 : mode
 }
 
-function flags(values: boolean[]): string {
-  return values.map((flag) => (flag ? '1' : '0')).join('')
-}
-
 /** Visually effective cell state, same blank-cell policy as terminal-restore-parity-fixture. */
-export function cellDescriptor(line: BufferLine | undefined, x: number, cols: number): string {
+export function cellDescriptor(
+  line: BufferLine | undefined,
+  x: number,
+  cols: number,
+  reusableCell?: ReturnType<Buffer['getNullCell']>
+): string {
   if (!line || x >= line.length) {
     return DEFAULT_BLANK
   }
-  const cell = line.getCell(x)
+  const cell = line.getCell(x, reusableCell)
   if (!cell) {
     return DEFAULT_BLANK
   }
@@ -40,26 +41,22 @@ export function cellDescriptor(line: BufferLine | undefined, x: number, cols: nu
   if (chars === '' || chars === ' ') {
     const blank = chars === ' '
     const inverseFg = cell.isInverse() ? `·if${fgMode}:${cell.getFgColor()}` : ''
-    return `▯·w${cell.getWidth()}·b${bgMode}:${cell.getBgColor()}·${flags([
-      blank && cell.isUnderline() !== 0,
-      blank && cell.isStrikethrough() !== 0,
-      blank && cell.isOverline() !== 0
-    ])}${inverseFg}`
+    return `▯·w${cell.getWidth()}·b${bgMode}:${cell.getBgColor()}·${blank && cell.isUnderline() !== 0 ? '1' : '0'}${blank && cell.isStrikethrough() !== 0 ? '1' : '0'}${blank && cell.isOverline() !== 0 ? '1' : '0'}${inverseFg}`
   }
-  const cellFlags = flags([
-    cell.isBold() !== 0,
-    cell.isDim() !== 0,
-    cell.isItalic() !== 0,
-    cell.isUnderline() !== 0,
-    cell.isInverse() !== 0,
-    cell.isInvisible() !== 0,
-    cell.isStrikethrough() !== 0
-  ])
+  const cellFlags =
+    `${cell.isBold() !== 0 ? '1' : '0'}${cell.isDim() !== 0 ? '1' : '0'}` +
+    `${cell.isItalic() !== 0 ? '1' : '0'}${cell.isUnderline() !== 0 ? '1' : '0'}` +
+    `${cell.isInverse() !== 0 ? '1' : '0'}${cell.isInvisible() !== 0 ? '1' : '0'}` +
+    `${cell.isStrikethrough() !== 0 ? '1' : '0'}`
   return `${chars}·w${cell.getWidth()}·f${fgMode}:${cell.getFgColor()}·b${bgMode}:${cell.getBgColor()}·${cellFlags}`
 }
 
-function rowCells(line: BufferLine | undefined, cols: number): string[] {
-  return Array.from({ length: cols }, (_, x) => cellDescriptor(line, x, cols))
+function rowCells(
+  line: BufferLine | undefined,
+  cols: number,
+  reusableCell: ReturnType<Buffer['getNullCell']>
+): string[] {
+  return Array.from({ length: cols }, (_, x) => cellDescriptor(line, x, cols, reusableCell))
 }
 
 // A wide glyph whose trailing half lies past the grid cannot be replayed; any blank is faithful.
@@ -73,8 +70,9 @@ function rowsMatch(expected: string[], actual: string[]): boolean {
 
 export function bufferRows(buffer: Buffer, start: number, end: number, cols: number): string[][] {
   const rows: string[][] = []
+  const reusableCell = buffer.getNullCell()
   for (let y = start; y < end; y++) {
-    rows.push(rowCells(buffer.getLine(y), cols))
+    rows.push(rowCells(buffer.getLine(y), cols, reusableCell))
   }
   while (rows.length > 0 && rows.at(-1)!.every((c) => c === DEFAULT_BLANK)) {
     rows.pop()

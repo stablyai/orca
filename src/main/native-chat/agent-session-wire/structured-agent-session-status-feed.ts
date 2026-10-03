@@ -29,6 +29,10 @@ import {
 } from './structured-agent-session-status-journal-projection'
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
 import {
+  deferredStructuredAgentSessionLogger,
+  type StructuredAgentSessionLogger
+} from './structured-agent-session-logger'
+import {
   StructuredAgentSessionStatusOwnership,
   type StructuredAgentSessionStatusSink
 } from './structured-agent-session-status-ownership'
@@ -52,6 +56,8 @@ export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   now: () => number
+  /** Where a failing sink or observer is reported; neither may cost subscribers their event. */
+  logger: StructuredAgentSessionLogger
   /** Every projection change, whether or not anyone is subscribed. `replay` marks a re-projection
    *  of state the host already knew (restore, an arriving subscriber) rather than a journal edge. */
   onStatusChanged?: (summary: AgentSessionStatusSummary, options: { replay: boolean }) => void
@@ -72,6 +78,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   now: () => number
   deps: () => {
     store: { getRecord: (sessionId: string) => AgentSessionRecord | null }
+    logger: StructuredAgentSessionLogger
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
   }
@@ -82,6 +89,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     sessions: args.sessions,
     getRecord: (sessionId) => args.deps().store.getRecord(sessionId),
     now: args.now,
+    logger: deferredStructuredAgentSessionLogger(() => args.deps().logger),
     onStatusChanged: (summary, options) => args.deps().onSessionStatusChanged?.(summary, options),
     // Resolved per call for the same reason the other deps are: the host builds this feed in a
     // field initializer, before its constructor parameters are assigned.
@@ -103,6 +111,10 @@ export class StructuredAgentSessionStatusFeed {
   private readonly projections = new StructuredAgentSessionJournalProjections()
 
   constructor(private readonly deps: StructuredAgentSessionStatusFeedDeps) {}
+
+  private logFailure(scope: string, message: string, sessionId: string, error: unknown): void {
+    this.deps.logger.warn(message, { scope, sessionId, error })
+  }
 
   /** Opens with every session this host has projected, live ones re-read, then only changes. */
   subscribe(subscriber: StructuredAgentSessionStatusSubscriber): () => void {
@@ -131,7 +143,7 @@ export class StructuredAgentSessionStatusFeed {
     try {
       this.ownership.forget(sessionId)
     } catch (error) {
-      console.warn('[structured-session-status] status sink forget failed', error)
+      this.logFailure('status-sink-forget', 'status sink forget failed', sessionId, error)
     }
     const previous = this.published.get(sessionId)
     if (!previous || (!previous.children && !previous.backgroundTasks)) {
@@ -215,7 +227,7 @@ export class StructuredAgentSessionStatusFeed {
       this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
     } catch (error) {
       // An observer must never cost the subscribers their status event.
-      console.warn('[structured-session-status] status observer failed', error)
+      this.logFailure('status-observer', 'status observer failed', sessionId, error)
     }
   }
 
@@ -315,7 +327,7 @@ export class StructuredAgentSessionStatusFeed {
     try {
       return this.ownership.readChildWork(sessionId)
     } catch (error) {
-      console.warn('[structured-session-status] child work read failed', error)
+      this.logFailure('child-work-read', 'child work read failed', sessionId, error)
       return undefined
     }
   }
@@ -328,13 +340,13 @@ export class StructuredAgentSessionStatusFeed {
     try {
       this.ownership.publishChildWork(sessionId, evidence, session.params.provider)
     } catch (error) {
-      console.warn('[structured-session-status] child work publish failed', error)
+      this.logFailure('child-work-publish', 'child work publish failed', sessionId, error)
       return false
     }
     try {
       this.deps.onChildWorkChanged?.(sessionId)
     } catch (error) {
-      console.warn('[structured-session-status] child work observer failed', error)
+      this.logFailure('child-work-observer', 'child work observer failed', sessionId, error)
     }
     return true
   }
@@ -347,7 +359,7 @@ export class StructuredAgentSessionStatusFeed {
     try {
       this.ownership.publish(summary, location)
     } catch (error) {
-      console.warn('[structured-session-status] status sink publish failed', error)
+      this.logFailure('status-sink-publish', 'status sink publish failed', summary.sessionId, error)
     }
   }
 

@@ -1,11 +1,20 @@
 // How a provider's Stop, and a prompt card's own Cancel, end what they end. Every member is
-// optional: a provider that declares none keeps its child after a Stop, and its card's Cancel
-// interrupts the turn holding the card.
+// optional: a provider that declares none keeps its child after a Stop it took, and its card's
+// Cancel interrupts the turn holding the card.
 
 import type {
   AgentJournalApprovalItem,
   AgentJournalQuestionItem
 } from '../../../shared/agent-session-journal-types'
+import type { ProviderDiagnostic } from '../../../shared/agent-session-failure'
+
+/** `refusal`: the provider answered the Stop and declined it, in its own words when it gave any.
+ *  `turnNotRunning`: its refusal is the kind it gives for a turn not running there, so the Stop keeps
+ *  the child; absent, it could not interrupt that turn, which may run on. */
+export type AgentSessionCancelOutcome = {
+  cancelled: boolean
+  refusal?: { detail?: ProviderDiagnostic; turnNotRunning?: true }
+}
 
 /** Where a card's Cancel goes: a dismissal (`dismissPrompt`), or the chat's Stop. */
 export type AgentSessionPromptCancelRoute = { kind: 'dismiss' } | { kind: 'stop' }
@@ -13,7 +22,8 @@ export type AgentSessionPromptCancelRoute = { kind: 'dismiss' } | { kind: 'stop'
 export type StructuredAgentSessionAdapterStop = {
   /** A Stop ends this provider's child after `cancelTurn`, whatever it answered, unless it named a
    *  turn that is no longer live and the cancel answered that it did not take it; the next send
-   *  resumes the conversation. Absent or false keeps the child after a Stop. */
+   *  resumes the conversation. Absent or false keeps the child after a Stop the provider took; a
+   *  failed interrupt still ends a child running the turn the Stop meant. */
   stopEndsSession?(sessionId: string): boolean
   /** What a Stop that ends the session waits on before it ends the child: resolves once the provider
    *  has nothing in flight, a send it has not answered included, or when its grace, counted from

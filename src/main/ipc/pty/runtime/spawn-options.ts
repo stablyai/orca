@@ -34,6 +34,7 @@ import {
 } from '../pane/spawn-reservation'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
+import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
 /** Headless spawns need the same host-side environment isolation as desktop spawns. */
 export async function buildRuntimePtySpawnOptions(
@@ -102,6 +103,14 @@ export async function buildRuntimePtySpawnOptions(
     ctx.spawnOptions.envToDelete = removeCodexHomeDeletionRequests(ctx.spawnOptions.envToDelete)
   }
   deleteRequestedEnvKeys(ctx.env, ctx.spawnOptions.envToDelete)
+  await prepareAntigravityAccountForLaunch({
+    launchAgent: args.launchAgent,
+    command: ctx.launchCommand,
+    connectionId: args.connectionId,
+    isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
+    env: ctx.env,
+    envToDelete: ctx.spawnOptions.envToDelete
+  })
   promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
   const noDaemonLaunch = planCodexNoDaemonLaunch({
     command: ctx.launchCommand,

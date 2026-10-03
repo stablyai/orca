@@ -13,17 +13,16 @@ import {
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
+import type { JournalRowTransactionHook } from './journal-row-writer'
 import type { JournalSubmissionConsume } from './journal-store-contracts'
 import { adoptQueuedMessages, holdQueuedMessages } from './queued-message-holds'
 import {
-  clearQueuePause,
-  queuePauseHoldsBack,
-  readQueuePause,
-  recordQueuePause,
-  retireQueuePauseIfNothingHeld,
-  type QueuePauseFact,
-  type QueuePauseReason
-} from './queued-message-pause-table'
+  deriveQueuePauses,
+  journalUserStopInForce,
+  nextSendableQueuedCard,
+  type DerivedQueuePause,
+  type JournalQueuePauseMarks
+} from './queued-message-pause'
 import {
   consumeQueuedMessageInTransaction,
   getQueuedMessage,
@@ -37,12 +36,12 @@ import {
 import { draftsDeliveredByAppliedEcho } from './queued-message-delivered-echo'
 import { pruneQueuedMessages, retainedSubmissionVerdict } from './queued-message-retention'
 import {
-  owedBackToWaiting,
   queuedMessageSettlementOwed,
   settleOwedQueuedMessages,
   settleQueuedMessagesForRow
 } from './queued-message-settlement'
 import { AgentSessionJournalError, assertJournalWritable } from './journal-write-guards'
+import type { JournalWriteBody, JournalWriteResult } from './journal-write-queue'
 
 /** Tombstones must outlive the window in which their operation id could still be admitted as new. */
 export const QUEUED_MESSAGE_REPLAY_WINDOW_MS =
@@ -51,10 +50,12 @@ export const QUEUED_MESSAGE_REPLAY_WINDOW_MS =
 export type JournalQueuedMessagesDeps = {
   sessionId: string
   now: () => number
-  serialize: <T>(run: () => Promise<T>) => Promise<T>
+  serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
   database: () => JournalHostDatabase
   readOnly: () => boolean
   state: () => JournalReducerState
+  /** Whether this handle found the row at `sequence` on disk when it opened. */
+  wroteBeforeOpen: (sequence: number) => boolean
   /** The journal's own commit notification. Every standalone draft-table
    *  transaction that changed rows fires it after COMMIT, so a draft or hold
    *  change publishes and wakes the drain through the same path a journal row
@@ -67,18 +68,11 @@ export class JournalQueuedMessages {
   /** Bumped on every draft-table write, so publication memos recompute only when they must. */
   private changeRevision = 0
   private listed: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
-  private paused: { revision: number; fact: QueuePauseFact | null } | null = null
 
   constructor(private readonly deps: JournalQueuedMessagesDeps) {}
 
   revision(): number {
     return this.changeRevision
-  }
-
-  /** The submission row of the latest accepted turn a person asked for; 0 when none. What
-   *  ends the queue's pause, read from the reducer in O(1). */
-  latestPersonTurnSequence(): number {
-    return this.deps.state().latestPersonTurnSequence
   }
 
   /** A journal transaction rolled back: nothing read inside it may stay cached. */
@@ -107,33 +101,32 @@ export class JournalQueuedMessages {
     return queuedMessagesSettledByOp(this.deps.database().db, this.deps.sessionId, settledByOp)
   }
 
-  /** `pausedBy`: the queue is paused in the SAME transaction as this card lands
-   *  (a /clear's carry), so the drain never sees it unpaused and no pause fact
-   *  exists without a card under it. */
+  /** `carriedFrom`: a /clear's carry. The card is its own 'cleared' pause, so it lands paused. */
   insert(input: {
     messageId: string
     body: AgentJournalMessageItem
     fingerprint: string
     hostInstance: string
-    pausedBy?: QueuePauseReason
+    carriedFrom?: string
   }): Promise<QueuedMessageRow> {
-    const { pausedBy, ...draft } = input
     const { sessionId } = this.deps
     let inserted = false
     return this.transact(
       (db) => {
-        const existing = getQueuedMessage(db, sessionId, draft.messageId)
+        const existing = getQueuedMessage(db, sessionId, input.messageId)
         if (existing) {
           // One id, one draft: admission replays a recorded operation before it
           // gets here, so an existing row is the same accept landing twice.
           return existing
         }
         inserted = true
-        const row = insertQueuedMessage(db, { ...draft, sessionId, now: this.deps.now() })
-        if (pausedBy) {
-          recordQueuePause(db, { sessionId, fact: this.pauseFact(pausedBy) })
-        }
-        return row
+        const { epoch, lastSequence } = this.deps.state()
+        return insertQueuedMessage(db, {
+          ...input,
+          sessionId,
+          queuedAt: { epoch, sequence: lastSequence },
+          now: this.deps.now()
+        })
       },
       () => inserted
     )
@@ -149,53 +142,44 @@ export class JournalQueuedMessages {
     ).then(() => undefined)
   }
 
-  /** Where the user's last Stop took effect, if it is still recorded; cached per revision. */
-  pause(): QueuePauseFact | null {
-    if (this.paused?.revision !== this.changeRevision) {
-      this.paused = {
-        revision: this.changeRevision,
-        fact: readQueuePause(this.deps.database().db, this.deps.sessionId)
-      }
-    }
-    return this.paused.fact
+  /** The queue's pauses in force, derived from the fold and the cards (`queued-message-pause.ts`). */
+  pauses(hostInstance: string): DerivedQueuePause[] {
+    return this.derivePauses(this.list(), hostInstance)
   }
 
-  /** A Stop took effect here: the queue is paused from this position on — if, judged in
-   *  the same transaction, it holds back a card at all. Returns whether it recorded. */
-  recordPause(reason: QueuePauseReason): Promise<boolean> {
-    const fact = this.pauseFact(reason)
-    return this.transact(
-      (db) =>
-        queuePauseHoldsBack(db, this.pauseScope()) &&
-        (recordQueuePause(db, { sessionId: this.deps.sessionId, fact }), true),
-      (recorded) => recorded
-    )
+  /** The person's Stop still pausing the queue, if any (`journalUserStopInForce`). */
+  userStopInForce(): JournalQueuePauseMarks['latestStop'] {
+    const state = this.deps.state()
+    return journalUserStopInForce(state.queuePauseMarks, state.latestPersonTurnSequence)
   }
 
-  /** What `queuePauseHoldsBack` judges a pause by, from this journal's submissions. */
-  private pauseScope() {
-    return {
-      sessionId: this.deps.sessionId,
-      owedToWaiting: owedBackToWaiting(this.deps.state().submissions)
-    }
+  private derivePauses(
+    cards: readonly QueuedMessageRow[],
+    hostInstance: string
+  ): DerivedQueuePause[] {
+    const state = this.deps.state()
+    return deriveQueuePauses({
+      epoch: state.epoch,
+      marks: state.queuePauseMarks,
+      latestPersonTurnSequence: state.latestPersonTurnSequence,
+      cards,
+      hostInstance,
+      restartEnded: this.restartEnded()
+    })
   }
 
-  private pauseFact(reason: QueuePauseReason): QueuePauseFact {
-    const { epoch, lastSequence: sequence } = this.deps.state()
-    return { reason, epoch, sequence, recordedAt: this.deps.now() }
+  /** A person's turn started since this handle opened, which ends a restart's pause. */
+  restartEnded(): boolean {
+    const latest = this.deps.state().latestPersonTurnSequence
+    return latest > 0 && !this.deps.wroteBeforeOpen(latest)
   }
 
-  /** Ends the queue's pause: `stop` retires that Stop fact (never a later one),
-   *  `adoptInto` adopts a restart's rows into this host instance. Returns whether
-   *  anything changed. */
-  liftPause(input: { stop: QueuePauseFact | null; adoptInto: string | null }): Promise<boolean> {
+  /** Adopts waiting rows another host instance wrote into this one, ending a restart's pause.
+   *  Returns whether anything changed. */
+  adopt(hostInstance: string): Promise<boolean> {
     const { sessionId } = this.deps
     return this.transact(
-      (db) =>
-        (input.stop ? clearQueuePause(db, { sessionId, fact: input.stop }) : 0) +
-        (input.adoptInto === null
-          ? 0
-          : adoptQueuedMessages(db, { sessionId, hostInstance: input.adoptInto })),
+      (db) => adoptQueuedMessages(db, { sessionId, hostInstance }),
       (changed) => changed > 0
     ).then((changed) => changed > 0)
   }
@@ -224,17 +208,13 @@ export class JournalQueuedMessages {
   /** One standalone draft-table transaction on the journal's queue; one that
    *  changed rows bumps the revision and notifies after COMMIT. */
   private transact<T>(
-    run: (db: Database.Database) => T,
+    run: (db: Database.Database) => JournalWriteResult<T>,
     changed: (result: T) => boolean
   ): Promise<T> {
-    return this.deps.serialize(async () => {
+    return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-      const { result, retired } = this.deps.database().transaction((db) => ({
-        result: run(db),
-        // Any draft write may take the last card a pause holds back.
-        retired: retireQueuePauseIfNothingHeld(db, this.pauseScope())
-      }))
-      if (changed(result) || retired > 0) {
+      const result = this.deps.database().transaction(run)
+      if (changed(result)) {
         this.changeRevision++
         this.deps.committed()
       }
@@ -252,7 +232,6 @@ export class JournalQueuedMessages {
       row,
       now: this.deps.now()
     })
-    this.changeRevision += retireQueuePauseIfNothingHeld(db, this.pauseScope())
   }
 
   /** The in-transaction consume for `appendSubmission`; a false compare-and-set
@@ -266,6 +245,16 @@ export class JournalQueuedMessages {
       // Same handle only: a second connection could not join the transaction.
       throw new AgentSessionJournalError('journal_closed', 'consume crossed database handles')
     }
+    if (input.yieldsToPause) {
+      // Judged again here, by the drain's own rule. Today a Stop cannot land between the drain's
+      // pick and this claim (both run on the session's serialized lane, held across the send), so
+      // this guards any pause-relevant row written off that lane from overtaking a held card.
+      const cards = listQueuedMessages(db, this.deps.sessionId)
+      const pauses = this.derivePauses(cards, input.yieldsToPause.hostInstance)
+      if (nextSendableQueuedCard(pauses, cards)?.messageId !== input.messageId) {
+        throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
+      }
+    }
     const consumed = consumeQueuedMessageInTransaction(db, {
       ...input,
       sessionId: this.deps.sessionId,
@@ -274,7 +263,6 @@ export class JournalQueuedMessages {
     if (!consumed) {
       throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
     }
-    retireQueuePauseIfNothingHeld(db, this.pauseScope())
     this.changeRevision++
   }
 
@@ -317,11 +305,11 @@ export class JournalQueuedMessages {
    * Open-time reconciliation, a re-derivation behind the stored fact: owed
    * settlements apply exactly as the live hook would have (covers consume →
    * crash → downgrade → upgrade, where the old build rejected the leftover with
-   * no hook), then retention runs; a pause left holding back nothing retires.
+   * no hook), then retention runs.
    */
   repairAndPrune(): Promise<void> {
     // No draft, no work, and no write: a chat whose first-use copy is still owed stays uncopied.
-    if (this.deps.readOnly() || (this.list().length === 0 && this.pause() === null)) {
+    if (this.deps.readOnly() || this.list().length === 0) {
       return Promise.resolve()
     }
     const { sessionId } = this.deps
@@ -348,7 +336,7 @@ export function queuedMessageConsumeHook(
   queuedMessages: JournalQueuedMessages,
   consumedAs: string,
   consume: JournalSubmissionConsume
-): (db: Database.Database) => void {
+): JournalRowTransactionHook {
   return (db) => queuedMessages.consumeInTransaction(db, { ...consume, consumedAs })
 }
 

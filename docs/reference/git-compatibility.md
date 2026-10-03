@@ -37,10 +37,20 @@ authority.
 | --------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `fetch-no-write-fetch-head` | Fetch a private rebase ref without changing worktree-local `FETCH_HEAD` | Serialize all Orca fetch/pull operations per worktree Git directory before Git 2.29                                                                                                                        |
 | `worktree-list-z`           | NUL-delimited worktree paths with `prunable` marks                      | Line-block parser for Git before `worktree list -z` (2.36); the `prunable`/`locked` annotations still parse on Git 2.31–2.35, and a path-existence probe restores `prunable` detection for Git before 2.31 |
+| `worktree-add-lock-reason`  | Create a prepared checkout with its ownership marker already present    | Before Git 2.33, add without checkout, then exclusively create the same reason marker before materializing files                                                                                           |
 | `rev-parse-path-format`     | Absolute repo metadata paths                                            | Resolve legacy relative output against the scanned repo                                                                                                                                                    |
 | `for-each-ref-exclude`      | Exclude remote HEAD before the output limit                             | Request extra refs, then filter remote HEAD in Orca                                                                                                                                                        |
 | `merge-tree-write-tree`     | Derive real-merge conflicts and no-op tree proofs                       | Omit the conflict summary and keep conservative branch cleanup behavior before Git 2.38                                                                                                                    |
 | `merge-tree-merge-base`     | Supply the already-resolved merge base                                  | Use the older two-commit `merge-tree --write-tree` form                                                                                                                                                    |
+
+Prepared creation registers and locks without checking out files while its shared
+exact-base fetch runs. A cancellable in-process barrier waits for fetch settlement,
+including offline failure, then resolves the current commit OID on the owning host
+and materializes files once. Existing preparations queue a tip refresh on that same
+barrier before a create can claim them. Finalization still resolves the latest base
+and runs the post-checkout hook only when attaching the requested branch. This uses
+baseline-compatible `rev-parse` and `reset --hard`; the barrier never enters Git
+transport options or the remote wire.
 
 ### Placeholders That Fail Open
 
@@ -74,6 +84,10 @@ container start, so their wall clock is runner contention, not Git. Build the
 2.25.5 binary and pull the images before the lanes start: anything heavy left
 running alongside them is charged to whichever boundary case is in flight and
 surfaces as a Vitest timeout rather than as a slow setup step.
+
+The idle maintenance contract also verifies `multi-pack-index write` and packed
+object reads. The command arrived in Git 2.20 and needs no newer-Git fallback;
+Orca uses only index metadata writes, respecting `core.multiPackIndex=false`.
 
 Keep the unit tests alongside that matrix. They cover concurrent probes,
 native/WSL/SSH/relay isolation, and error-stream shapes that a single real

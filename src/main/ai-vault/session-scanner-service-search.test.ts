@@ -117,11 +117,11 @@ it('reports the indexer phase and a live generation over the protocol', async ()
   const status = await vi.waitFor(async () => {
     const value = await searchStatus()
     expect(value.filesIndexed).toBeGreaterThan(0)
+    expect(value.phase).toBe('current')
+    expect(value.generation).toBeGreaterThan(0)
     return value
   })
   expect(status.enabled).toBe(true)
-  expect(status.phase).toBe('current')
-  expect(status.generation).toBeGreaterThan(0)
   expect(existsSync(harness.databasePath)).toBe(true)
 })
 

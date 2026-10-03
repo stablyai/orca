@@ -6,13 +6,15 @@ import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
   loadWorktreeRemovalRecords,
-  projectPendingWorktreeRemovals,
   resumeInterruptedWorktreeRemovals,
-  snapshotPendingWorktreeRemovals,
   startBackgroundWorktreeRemoval,
   stopBackgroundWorktreeRemovals,
   waitForPendingWorktreeRemoval
 } from './worktree-background-removal'
+import {
+  projectPendingWorktreeRemovals,
+  snapshotPendingWorktreeRemovals
+} from './worktree-removal-listing'
 import type * as WorktreeRemovalRecords from './worktree-removal-records'
 import {
   readWorktreeRemovalRecords,

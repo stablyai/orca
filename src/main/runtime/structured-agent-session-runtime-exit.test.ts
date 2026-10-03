@@ -17,6 +17,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 describe('structured session runtime provider-exit wiring', () => {
   let root: string | null = null
@@ -80,6 +81,7 @@ describe('structured session runtime provider-exit wiring', () => {
       return connection
     }) as typeof openCodexAppServerConnection
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
@@ -184,6 +186,7 @@ describe('structured session runtime provider-exit wiring', () => {
       return connection
     }) as typeof openCodexAppServerConnection
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
@@ -214,6 +217,7 @@ describe('structured session runtime provider-exit wiring', () => {
     })
 
     const restarted = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
@@ -288,6 +292,7 @@ describe('structured session runtime provider-exit wiring', () => {
       return connection
     }) as typeof openCodexAppServerConnection
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
@@ -394,6 +399,7 @@ describe('structured session runtime provider-exit wiring', () => {
       return connection
     }
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',

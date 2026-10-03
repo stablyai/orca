@@ -4,13 +4,14 @@ import {
   AGENT_SESSION_LEASE_TTL_MS,
   type AgentSessionRecordStore
 } from '../../runtime/agent-session-record-store'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const RENEW_INTERVAL_MS = Math.floor(AGENT_SESSION_LEASE_TTL_MS / 3)
 
 export class StructuredAgentSessionLeaseRenewer {
   private timer: ReturnType<typeof setInterval> | null = null
   private running = false
-  /** The tick in flight. Never rejects: the timer path reports renewal failures through `onError`,
+  /** The tick in flight. Never rejects: the timer path logs renewal failures,
    *  and stopping must not turn one into a teardown failure as well. */
   private inFlight: Promise<void> = Promise.resolve()
 
@@ -22,7 +23,7 @@ export class StructuredAgentSessionLeaseRenewer {
         records: readonly AgentSessionRecord[]
       ) => Promise<Map<string, AgentSessionOwnerProbe>>
       now: () => number
-      onError?: (input: { sessionId: string; error: unknown }) => void
+      logger: StructuredAgentSessionLogger
       intervalMs?: number
     }
   ) {}
@@ -106,7 +107,7 @@ export class StructuredAgentSessionLeaseRenewer {
       if (result.status === 'rejected') {
         const renewal = renewals[index]
         if (renewal) {
-          this.input.onError?.({ sessionId: renewal.sessionId, error: result.reason })
+          this.reportFailure(renewal.sessionId, result.reason)
         }
       }
     })
@@ -126,15 +127,24 @@ export class StructuredAgentSessionLeaseRenewer {
         if (result.status === 'fulfilled') {
           probes.set(record.sessionId, result.value)
         } else {
-          this.input.onError?.({ sessionId: record.sessionId, error: result.reason })
+          this.reportFailure(record.sessionId, result.reason)
         }
       }
       return probes
     } catch (error) {
       for (const record of records) {
-        this.input.onError?.({ sessionId: record.sessionId, error })
+        this.reportFailure(record.sessionId, error)
       }
       return new Map()
     }
+  }
+
+  /** Lease and ownership failures are transient: the next tick, attach or send retries them. */
+  private reportFailure(sessionId: string, error: unknown): void {
+    this.input.logger.warn('renewing a chat lease failed', {
+      scope: 'lease-renewal',
+      sessionId,
+      error
+    })
   }
 }

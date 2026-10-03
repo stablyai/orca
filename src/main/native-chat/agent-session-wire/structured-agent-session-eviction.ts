@@ -17,22 +17,19 @@
 // reach it; forgetting it anyway stranded the process forever and reported success. Leaving the
 // session in place is what makes the next close a real retry instead of a no-op.
 
-import type {
-  StructuredAgentSessionAdapter,
-  StructuredAgentSessionStopCause
-} from './structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionStopVerdict } from './structured-agent-session-host-types'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionEvictionContext = {
   sessionId: string
-  /** Why the host stops the child; the adapter settles the turn it cuts with it. */
-  stopCause?: StructuredAgentSessionStopCause
   hasProviderChild?: boolean
   eventSink: DeferredStructuredAgentSessionEventSink
   adapter: StructuredAgentSessionAdapter
+  logger: StructuredAgentSessionLogger
   /** Tells the adapter the released lease is done with, so it drops this child's route and index.
    *  The conversation stays: stopping the agent never closes its journal. */
   acknowledgeRelease: () => Promise<void> | void
@@ -76,7 +73,10 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
         try {
           context.beforeProviderChildStop()
         } catch {
-          console.warn('[structured-agent-session] capturing recovery witness failed')
+          context.logger.warn('capturing a recovery witness before a stop failed', {
+            scope: 'recovery-witness',
+            sessionId: context.sessionId
+          })
         }
       }
     },
@@ -89,9 +89,7 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
         // An adapter with no close has nothing to stop; anything else must PROVE the exit.
         const stop = context.adapter.disposeSession ?? context.adapter.closeSession
         const rootGone = stop
-          ? await stopAgentSessionProviderRoot(() =>
-              stop.call(context.adapter, context.sessionId, context.stopCause)
-            )
+          ? await stopAgentSessionProviderRoot(() => stop.call(context.adapter, context.sessionId))
           : true
         if (!rootGone) {
           throw new Error('provider child exit was not proven')

@@ -337,7 +337,7 @@ describe('a task dispatched into a worker whose own dispatch settled', () => {
       await vi.waitFor(() =>
         expect(observeStructuredWorker({ sessionId: REST_TEST_SESSION }).status).toBe('exited')
       )
-      expect(rig.adapter.closeSession).toHaveBeenCalledWith(REST_TEST_SESSION, 'evict')
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(REST_TEST_SESSION)
     } finally {
       hostRef.current = null
       await rig.dispose()

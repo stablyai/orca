@@ -20,6 +20,7 @@ import {
   type NativeFileDropRejectedPayload
 } from '../../../shared/native-file-drop'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import { describeDropTempCopyFailure } from '@/lib/drop-temp-copy-failure-copy'
 
 export function getEditorFileDropSettingsForWorktree(
   store: WorktreeRuntimeOwnerState,
@@ -207,6 +208,17 @@ export function getNativeFileDropRejectionMessage(data: NativeFileDropRejectedPa
   description: string
   title: string
 } {
+  if (data.reason === 'temp-copy-failed') {
+    return {
+      description: describeDropTempCopyFailure(data.commonReason),
+      title: translate(
+        'auto.hooks.useGlobalFileDrop.nativeDropTempCopyFailed',
+        "Orca couldn't copy {{count}} dropped files.",
+        { count: data.pathCount }
+      )
+    }
+  }
+
   if (data.reason === 'unresolved-paths') {
     return {
       description: translate(

@@ -76,6 +76,10 @@ function openHost(
   probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
 ): void {
   host = new StructuredAgentSessionHost({
+    logger: {
+      warn: (_message, fields) => hostErrors.push(fields.error),
+      error: (_message, fields) => hostErrors.push(fields.error)
+    },
     store,
     adapter: adapter(),
     journalDatabase: openTestJournalHostDatabase(root),
@@ -83,7 +87,6 @@ function openHost(
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     idleSweep: { intervalMs: SWEEP_MS, idleMs: IDLE_MS },
     now: () => clock,
-    onEventSinkError: ({ error }) => hostErrors.push(error),
     statusSink,
     ...(probeOwner ? { probeOwner } : {})
   })
@@ -132,7 +135,7 @@ function emitTurnLifecycle(state: 'running' | 'completed', ordinal: number): voi
 /** The sweep stops the child first and closes the conversation last. */
 function waitForEviction(): Promise<void> {
   return vi.waitFor(() => {
-    expect(closeSession).toHaveBeenCalledWith(SESSION, 'evict')
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
     expect(host.hasSession(SESSION)).toBe(false)
   })
 }
@@ -142,12 +145,14 @@ function waitOutSeveralSweeps(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, SWEEP_MS * 20))
 }
 
-/** Fails the next eviction at `drain-published`, which leaves the session indexed for a retry. */
-function failNextDrain(): void {
-  vi.spyOn(host['runtimeState'].eventSinkFor(SESSION), 'drained').mockResolvedValueOnce({
-    ok: false,
-    error: new Error('drain barrier lost')
-  })
+/** Fails the next eviction at `drain-published`, which leaves the session indexed for a retry. The
+ *  stop drains once before it, to judge whether it ends work. */
+function failEvictionDrain(): void {
+  const sink = host['runtimeState'].eventSinkFor(SESSION)
+  const drained = sink.drained.bind(sink)
+  vi.spyOn(sink, 'drained')
+    .mockImplementationOnce(drained)
+    .mockResolvedValueOnce({ ok: false, error: new Error('drain barrier lost') })
 }
 
 /** The submissions as they stood when the session was forgotten; its journal is gone after that. */
@@ -247,7 +252,7 @@ describe('a chat that closes', () => {
 
     await host.close(SESSION, 'evict')
 
-    expect(closeSession).toHaveBeenCalledWith(SESSION, 'evict')
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
     expect(host.hasSession(SESSION)).toBe(false)
     expect(hostErrors).toEqual([])
     // The record and its journal stay; only the process and the claim on it go.
@@ -343,10 +348,7 @@ describe('a chat that closes', () => {
     expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
     const session = host['sessions'].get(SESSION)
     expect(session).toBeDefined()
-    vi.spyOn(host['runtimeState'].eventSinkFor(SESSION), 'drained').mockResolvedValueOnce({
-      ok: false,
-      error: new Error('drain barrier lost')
-    })
+    failEvictionDrain()
     const settled = captureSettledSubmissions()
 
     await expect(host.close(SESSION, 'evict')).rejects.toMatchObject({ step: 'drain-published' })
@@ -818,7 +820,7 @@ describe('a quit over an eviction that never got its retry', () => {
     await attach()
     await sendPending('pending across an abandoned eviction')
     const settled = captureSettledSubmissions()
-    failNextDrain()
+    failEvictionDrain()
 
     await expect(host.close(SESSION, 'evict')).rejects.toMatchObject({ step: 'drain-published' })
     expect(host['sessions'].get(SESSION)?.child).toBeNull()

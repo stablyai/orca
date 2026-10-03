@@ -101,7 +101,14 @@ export async function fetchOpenCodeGoUsage(
   })
   input.onApiKeyResolved?.(apiKeyResolution)
   const hasCookie = Boolean(normalizeCookieInput(input.cookie))
-  if (apiKeyResolution.status === 'missing') {
+  if (apiKeyResolution.status === 'credential-database-unreadable' && !hasCookie) {
+    return emptyResult(
+      "Could not read OpenCode's credential database, so OPENCODE_API_KEY was not used; it may be a Zen key. Add your OpenCode Go key in Settings, or retry.",
+      'error',
+      { failureKind: 'usage-unavailable' }
+    )
+  }
+  if (apiKeyResolution.status !== 'found') {
     return hasCookie
       ? fetchOpenCodeGoRateLimits(
           input.cookie,

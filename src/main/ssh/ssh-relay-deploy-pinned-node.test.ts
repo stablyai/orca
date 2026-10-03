@@ -120,10 +120,19 @@ vi.mock('./ssh-relay-host-node-addons', async (importOriginal) => ({
 vi.mock('./ssh-target-registry', () => ({ getSshTargetRegistryStore: vi.fn(() => null) }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 
+vi.mock('./remote-node-runtime-store-gc', () => ({
+  gcRemoteNodeRuntimeStore: vi.fn().mockResolvedValue({ state: 'skipped', reason: 'test' })
+}))
+
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { gcRemoteNodeRuntimeStore } from './remote-node-runtime-store-gc'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
-import { finalizeInstall, isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
+import {
+  finalizeInstall,
+  gcOldRelayVersions,
+  isRelayAlreadyInstalled
+} from './ssh-relay-versioned-install'
 import {
   PinnedRelayFallbackError,
   planPinnedNodeRelay,
@@ -138,13 +147,16 @@ import { getSshTargetRegistryStore } from './ssh-target-registry'
 import { track } from '../telemetry/client'
 import type { SshConnection } from './ssh-connection'
 import type { SshConnectionStore } from './ssh-connection-store'
-import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
+import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_COMPAT_ASSETS } from '../../shared/node-runtime-pin'
 import type { SshRemoteRuntime, SshTarget } from '../../shared/ssh-types'
 import { terminalUnavailableCauseFromError } from '../../shared/terminal-unavailable-cause'
+import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 
 const PINNED_VERSION = '0.1.0+feedfacecafe'
 const RUNTIME_SHA = NODE_RUNTIME_ASSETS['linux-x64-glibc'].executableSha256
 const PINNED_NODE = `/home/user/.orca-remote/runtimes/node-${RUNTIME_SHA}/bin/node`
+const COMPAT_SHA = NODE_RUNTIME_COMPAT_ASSETS['linux-x64-glibc217'].executableSha256
+const COMPAT_NODE = `/home/user/.orca-remote/runtimes/node-${COMPAT_SHA}/bin/node`
 
 function pinnedPlan(): PinnedRelayPlan {
   return {
@@ -260,12 +272,46 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     ).toBe(false)
   })
 
+  it('collects the runtime store after a launch, keeping the pin it runs', async () => {
+    const conn = makeConnection('pinned-node')
+    queueInstalledPinnedLaunch()
+
+    await deployAndLaunchRelay(conn, undefined, undefined, 'target-1')
+
+    await vi.waitFor(() => expect(gcRemoteNodeRuntimeStore).toHaveBeenCalledOnce())
+    expect(gcRemoteNodeRuntimeStore).toHaveBeenCalledWith(
+      conn,
+      expect.objectContaining({ os: 'linux' }),
+      '/home/user',
+      // The compat runtime stays pinned too, so a rung A connect never collects rung B's.
+      { currentPins: [RUNTIME_SHA, COMPAT_SHA] }
+    )
+    // Why after: the version pass is what drops the refs that held superseded runtimes.
+    expect(vi.mocked(gcOldRelayVersions).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(gcRemoteNodeRuntimeStore).mock.invocationCallOrder[0]
+    )
+  })
+
+  it('leaves the runtime store alone on the legacy host-Node path', async () => {
+    const conn = makeConnection()
+    queueInstalledLegacyLaunch()
+
+    await deployAndLaunchRelay(conn, undefined, undefined, 'target-1')
+
+    await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalled())
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(gcRemoteNodeRuntimeStore).not.toHaveBeenCalled()
+  })
+
   it('steps down the ladder to the host-npm relay on classified refusals', async () => {
     const conn = makeConnection('pinned-node')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(ensurePinnedRelayRuntime).mockRejectedValueOnce(
       new PinnedRelayFallbackError('missing_lib', 'libstdc++.so.6: cannot open')
     )
+    vi.mocked(planPinnedNodeRelay)
+      .mockResolvedValueOnce(pinnedPlan())
+      .mockResolvedValueOnce({ kind: 'host-node', fallbackReason: 'artifacts_unavailable' })
     vi.mocked(execCommand)
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       .mockResolvedValueOnce('/home/user')
@@ -277,8 +323,56 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     expect(result.serverBuildId).toBe('0.1.0+abcdef012345')
     expect(detachedLaunchCommand(conn)).toContain("'/usr/bin/node' relay.js --detached")
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('rung A unavailable (missing_lib)'))
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('rung B unavailable'))
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('rung B unavailable (artifacts_unavailable)')
+    )
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('rung C unavailable (libc_floor)'))
+    warn.mockRestore()
+  })
+
+  it('runs rung B on the glibc 2.17 compat runtime when rung A is below its glibc floor', async () => {
+    const conn = makeConnection('pinned-node')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const oldGlibc = { major: 2, minor: 17 }
+    vi.mocked(resolvePinnedRelayTargetFacts).mockResolvedValue({
+      target: 'linux-x64-glibc',
+      glibc: oldGlibc
+    })
+    vi.mocked(planPinnedNodeRelay)
+      .mockResolvedValueOnce({ kind: 'host-node', fallbackReason: 'libc_floor' })
+      .mockResolvedValueOnce({ ...pinnedPlan(), target: 'linux-x64-glibc217', glibc: oldGlibc })
+    queueInstalledPinnedLaunch()
+
+    const result = await deployAndLaunchRelay(conn, undefined, undefined, 'target-1')
+
+    expect(vi.mocked(planPinnedNodeRelay).mock.calls[1]?.[0]).toMatchObject({
+      compat: { target: 'linux-x64-glibc217', glibcFloor: oldGlibc }
+    })
+    expect(result.nodePath).toBe(COMPAT_NODE)
+    expect(detachedLaunchCommand(conn)).toContain(`'${COMPAT_NODE}' relay.js --detached`)
+    expect(planHostNodeAddonRelay).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(gcRemoteNodeRuntimeStore).toHaveBeenCalledOnce())
+    expect(vi.mocked(gcRemoteNodeRuntimeStore).mock.calls[0]?.[3]).toEqual({
+      currentPins: [RUNTIME_SHA, COMPAT_SHA]
+    })
+    warn.mockRestore()
+  })
+
+  it('skips rung B on a current glibc when rung A refused for a reason B cannot answer', async () => {
+    const conn = makeConnection('pinned-node')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
+      kind: 'host-node',
+      fallbackReason: 'illegal_instruction'
+    })
+    queueInstalledLegacyLaunch()
+
+    await deployAndLaunchRelay(conn, undefined, undefined, 'target-1')
+
+    expect(planPinnedNodeRelay).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('rung B unavailable (runtime_unavailable)')
+    )
     warn.mockRestore()
   })
 
@@ -448,5 +542,41 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     // A different glibc is a different key: the cached refusal no longer applies.
     expect(persisted?.({ target: 'linux-x64-glibc', glibc: { major: 2, minor: 35 } })).toBeNull()
     expect(track).toHaveBeenCalledOnce()
+  })
+
+  it('launches a Windows relay on node.exe from the runtimes store, with no host Node probe', async () => {
+    const conn = makeConnection('pinned-node')
+    Object.assign(conn, { writeFile: vi.fn().mockResolvedValue(undefined) })
+    const sha = NODE_RUNTIME_ASSETS['win32-x64'].executableSha256
+    const nodeExe = `C:/Users/me/.orca-remote/runtimes/node-${sha}/node.exe`
+    vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
+      ...pinnedPlan(),
+      target: 'win32-x64',
+      glibc: null
+    })
+    vi.mocked(execCommand)
+      .mockRejectedValueOnce(new Error('uname not found'))
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64')
+      .mockResolvedValueOnce('C:\\Users\\me')
+      .mockResolvedValueOnce('') // no persisted active pipe
+      .mockResolvedValueOnce('WAITING') // named pipe probe
+      .mockResolvedValueOnce('') // WMI relay launch
+      .mockResolvedValueOnce('READY') // named pipe poll
+      .mockResolvedValueOnce('') // persist active pipe marker
+
+    const result = await deployAndLaunchRelay(conn, undefined, 300, 'target-1')
+
+    expect(resolveRemoteNodePath).not.toHaveBeenCalled()
+    expect(result.nodePath).toBe(nodeExe)
+    expect(result.remoteRelayDir).toBe(`C:/Users/me/.orca-remote/relay-${PINNED_VERSION}`)
+    expect(ensurePinnedRelayRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({ host: expect.objectContaining({ os: 'win32' }) }),
+      true
+    )
+    const launchScript = vi
+      .mocked(execCommand)
+      .mock.calls.map(([, command]) => decodeRemotePowerShellScript(String(command)))
+      .find((script) => script.includes('Invoke-CimMethod'))
+    expect(launchScript).toContain(nodeExe)
   })
 })

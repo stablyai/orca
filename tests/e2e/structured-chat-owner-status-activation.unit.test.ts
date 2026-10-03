@@ -25,6 +25,7 @@ import { runWorktreeAgentActivationGate } from '../../src/renderer/src/lib/workt
 import { readWorktreeStructuredActivationInventory } from '../../src/renderer/src/lib/worktree-agent-structured-inventory'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 
 const WORKTREE = 'repo-1::/workspace/repo'
 
@@ -36,6 +37,7 @@ let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']
 
 function openHost(): void {
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire: async ({ fence, spawnToken }) => ({
@@ -133,7 +135,7 @@ describe('a chat at rest keeps its worktree activatable', () => {
   it('after the idle sweep stopped its agent and closed the conversation', async () => {
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION, 'evict')
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
 
     expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
     expect(await activate()).toBe('structured')

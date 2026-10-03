@@ -172,6 +172,8 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
   const gitArgs: string[] = [
     '-c',
     'submodule.recurse=false',
+    '-c',
+    'grep.column=false',
     'grep',
     '-n',
     '-I',

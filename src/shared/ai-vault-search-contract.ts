@@ -23,6 +23,7 @@ export const AiVaultSearchRequestSchema = z
     limit: z.number().optional().transform(resolveSessionSearchLimit),
     cursor: z.string().optional(),
     filters: AiVaultSearchFiltersSchema.optional(),
+    supportsQoderHistory: z.boolean().optional(),
     /** Scope by identity, resolved into paths by whichever host answers. */
     within: AiVaultSearchScopeIdentitySchema.optional(),
     debug: z.boolean().optional()
@@ -90,7 +91,8 @@ export const AiVaultSearchHostOutcomeSchema = z.object({
     'no-service',
     'unreachable',
     // This host does not know the workspace or project the scope named.
-    'scope-unknown'
+    'scope-unknown',
+    'unsupported-agent'
   ])
 })
 const routeSchema = z.enum(['phrase', 'and', 'or', 'typo+phrase', 'typo+and', 'typo+or'])
@@ -125,13 +127,14 @@ export const AiVaultSearchResponseSchema = z.discriminatedUnion('kind', [
     kind: z.literal('unavailable'),
     // `scope-unknown` only ever answers a request that carried `within`, so a
     // client too old to send one can never receive a reason it cannot parse.
-    reason: z.enum(['disabled', 'not-ready', 'no-service', 'scope-unknown'])
+    reason: z.enum(['disabled', 'not-ready', 'no-service', 'scope-unknown', 'unsupported-agent'])
   })
 ])
 export const AiVaultSearchStatusRequestSchema = z.object({})
 /** Consent flip for one host's index. Answered with that host's status after the change is applied. */
 export const AiVaultSetSearchEnabledParamsSchema = z.object({ enabled: z.boolean() })
 export const AiVaultSearchStatusSchema = z.object({
+  supportsQoderHistory: z.boolean().optional(),
   enabled: z.boolean(),
   phase: z.enum(['idle', 'indexing', 'current', 'degraded', 'closed']),
   filesIndexed: z.number().int().nonnegative(),

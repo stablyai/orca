@@ -141,14 +141,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -861,7 +861,7 @@ describe('connectPanePty', () => {
           prompt: 'stop quickly',
           updatedAt: 1_000,
           stateStartedAt: 900,
-          agentType: 'codex',
+          agentType: 'custom-agent',
           terminalTitle: 'Codex',
           stateHistory: []
         }

@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync
@@ -12,7 +13,12 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
+import {
+  NODE_RUNTIME_ASSETS,
+  NODE_RUNTIME_COMPAT_ASSETS,
+  pinnedNodeRuntimeAsset,
+  type NodeRuntimeTarget
+} from '../../shared/node-runtime-pin'
 import {
   ORCAD_BUILD_TARGET_FILENAME,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
@@ -27,7 +33,14 @@ import {
 } from '../../shared/orcad-artifacts'
 import { readOrcadArtifactIdentity } from '../orcad/orcad-artifact-identity'
 import {
+  getAppEnvironment,
+  hasAppEnvironment,
+  setAppEnvironment,
+  type AppEnvironment
+} from '../../shared/app-environment'
+import {
   assembleOrcadArtifact,
+  getOrcadTemplateCandidates,
   materializeOrcadArtifact,
   resetOrcadArtifactMaterializationsForTests
 } from './orcad-artifact-materializer'
@@ -62,17 +75,17 @@ const ManifestSchema = z
   })
   .passthrough()
 
-function targetContents(target: ServerTarget, filename: string): string {
+function targetContents(target: NodeRuntimeTarget, filename: string): string {
   if (filename === ORCAD_SERVER_TARGET_FILENAME) {
     return `${target}\n`
   }
   if (filename === ORCAD_NODE_RUNTIME_MARKER_FILENAME) {
-    return `${NODE_RUNTIME_ASSETS[target].executableSha256}\n`
+    return `${pinnedNodeRuntimeAsset(target).executableSha256}\n`
   }
   return `${target}:${filename}`
 }
 
-function createTemplate(target: ServerTarget = TARGET): {
+function createTemplate(target: NodeRuntimeTarget = TARGET): {
   templateDir: string
   cacheRoot: string
 } {
@@ -138,6 +151,40 @@ describe('assembleOrcadArtifact', () => {
       }
     }
   )
+
+  it('assembles the rung B compat slot against the compat runtime', async () => {
+    const target = 'linux-x64-glibc217' as const
+    const fixture = createTemplate(target)
+    const artifactDir = await assembleOrcadArtifact({ ...fixture, target })
+
+    expect(readFileSync(join(artifactDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME), 'utf8').trim()).toBe(
+      NODE_RUNTIME_COMPAT_ASSETS[target].executableSha256
+    )
+    expect(
+      readFileSync(join(artifactDir, 'node_modules/node-pty/build/Release/pty.node'), 'utf8')
+    ).toBe(`${target}:node_modules/node-pty/build/Release/pty.node`)
+  })
+
+  it('refuses a compat slot that names the default runtime', async () => {
+    const target = 'linux-x64-glibc217' as const
+    const fixture = createTemplate(target)
+    const marker = join(
+      fixture.templateDir,
+      ORCAD_TEMPLATE_TARGETS_DIR,
+      target,
+      ORCAD_NODE_RUNTIME_MARKER_FILENAME
+    )
+    write(marker, `${NODE_RUNTIME_ASSETS['linux-x64-glibc'].executableSha256}\n`)
+    rewriteManifest(fixture.templateDir, (manifest) => {
+      const entry = manifest.targets[target]
+      if (entry) {
+        entry.files[ORCAD_NODE_RUNTIME_MARKER_FILENAME] = sha256(marker)
+      }
+    })
+    await expect(assembleOrcadArtifact({ ...fixture, target })).rejects.toThrow(
+      'does not reference the pinned Node'
+    )
+  })
 
   it('assembles a complete content-addressed slot that references the pinned Node', async () => {
     const fixture = createTemplate()
@@ -270,6 +317,73 @@ describe('materializeOrcadArtifact cancellation', () => {
     controller.abort(new Error('cancelled'))
     await expect(materializeOrcadArtifact(TARGET, { signal: controller.signal })).rejects.toThrow(
       'cancelled'
+    )
+  })
+})
+
+describe('packaged template lookup', () => {
+  const originalResourcesPath = process.resourcesPath
+  const originalTemplatePath = process.env.ORCA_ORCAD_TEMPLATE_PATH
+  let previousEnvironment: AppEnvironment | null = null
+
+  afterEach(() => {
+    Object.defineProperty(process, 'resourcesPath', {
+      value: originalResourcesPath,
+      configurable: true,
+      writable: true
+    })
+    if (originalTemplatePath === undefined) {
+      delete process.env.ORCA_ORCAD_TEMPLATE_PATH
+    } else {
+      process.env.ORCA_ORCAD_TEMPLATE_PATH = originalTemplatePath
+    }
+    if (previousEnvironment) {
+      setAppEnvironment(previousEnvironment)
+    }
+  })
+
+  /** An installed app: electron-builder copies out/orcad-template to Resources/orcad-template. */
+  function installPackagedApp(): { resourcesDir: string; userData: string } {
+    const fixture = createTemplate()
+    const root = dirname(fixture.templateDir)
+    const resourcesDir = join(root, 'Resources')
+    mkdirSync(resourcesDir)
+    renameSync(fixture.templateDir, join(resourcesDir, 'orcad-template'))
+    const userData = join(root, 'userData')
+    delete process.env.ORCA_ORCAD_TEMPLATE_PATH
+    Object.defineProperty(process, 'resourcesPath', {
+      value: resourcesDir,
+      configurable: true,
+      writable: true
+    })
+    previousEnvironment = hasAppEnvironment() ? getAppEnvironment() : null
+    setAppEnvironment({
+      getPath: () => userData,
+      getAppPath: () => join(resourcesDir, 'app.asar'),
+      getVersion: () => '0.0.0-test',
+      isPackaged: () => true,
+      onWillQuit: () => {},
+      exit: () => {},
+      getAppMetrics: () => []
+    })
+    return { resourcesDir, userData }
+  }
+
+  it('materializes from Resources/orcad-template into userData with no explicit paths', async () => {
+    const { resourcesDir, userData } = installPackagedApp()
+
+    expect(getOrcadTemplateCandidates()[0]).toBe(join(resourcesDir, 'orcad-template'))
+    const artifact = await materializeOrcadArtifact(TARGET)
+    expect(dirname(dirname(artifact))).toBe(join(userData, 'orcad-artifacts'))
+    expect(readFileSync(join(artifact, 'orcad.js'), 'utf8')).toBe('orcad-entry')
+  })
+
+  it('reports a build that shipped no template, which relays treat as a legacy fallback', async () => {
+    const { resourcesDir } = installPackagedApp()
+    rmSync(join(resourcesDir, 'orcad-template'), { recursive: true })
+
+    await expect(materializeOrcadArtifact(TARGET)).rejects.toThrow(
+      'The packaged orcad deployment template is missing'
     )
   })
 })

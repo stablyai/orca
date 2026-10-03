@@ -6,6 +6,7 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
 import type { AppState } from '@/store/types'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'
 import {
   getExecutionHostLabel,
   parseExecutionHostId,
@@ -61,6 +62,7 @@ export function DeleteWorktreeTargetPreview({
         <div className="space-y-1 px-3 py-2" role="list">
           {worktrees.map((item, index) => {
             const itemDeleteState = getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)
+            const itemDeleteError = getWorktreeDeleteErrorToShow(item, itemDeleteState)
             const labelIds = {
               name: `${targetIdPrefix}-${index}-name`,
               path: `${targetIdPrefix}-${index}-path`,
@@ -92,9 +94,9 @@ export function DeleteWorktreeTargetPreview({
                         item.hostId ? getWorktreeHostIdentity(item) : item.id
                       )}
                     />
-                    {itemDeleteState?.error ? (
+                    {itemDeleteError ? (
                       <div className="mt-1 whitespace-pre-wrap break-all text-destructive">
-                        {itemDeleteState.error}
+                        {itemDeleteError}
                       </div>
                     ) : null}
                   </div>

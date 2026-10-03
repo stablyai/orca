@@ -36,6 +36,7 @@ const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
 function localManagedCodexEvents(): string[] {
   return [
+    'Interrupt',
     'PermissionRequest',
     'PostToolUse',
     'PreToolUse',

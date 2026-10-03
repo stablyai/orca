@@ -26,14 +26,11 @@ import {
   settleStaleStructuredAgentSessionState,
   settleStructuredAgentSessionDeadGeneration
 } from './structured-agent-session-dead-generation-settlement'
-import {
-  childEndCauseOfEndedEvent,
-  turnVerdictForChildEnd,
-  type StructuredAgentSessionTurnVerdict
-} from './structured-agent-session-stale-turn-verdict'
+import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const SESSION = 'recovered-turn-session'
 const THREAD = 'thread-1'
@@ -81,6 +78,7 @@ async function sessionWithRunningTurn() {
   const server = new AgentHookServer()
   const sessions = new Map([[SESSION, indexedStatusFeedSession({ journal })]])
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions,
     getRecord: () => null,
     now: () => clock,
@@ -129,7 +127,7 @@ async function sessionWithRunningTurn() {
 function settleDeadGeneration(
   journal: AgentSessionJournal,
   verdict: StructuredAgentSessionTurnVerdict
-): Promise<boolean> {
+): ReturnType<typeof settleStructuredAgentSessionDeadGeneration> {
   return settleStructuredAgentSessionDeadGeneration({
     journal,
     sessionId: SESSION,
@@ -160,7 +158,7 @@ describe('a turn recovery settled after its host went away', () => {
     async (_label, verdict, outcome, mark) => {
       const session = await sessionWithRunningTurn()
       session.recoverAt(RECOVERED)
-      expect(await settleDeadGeneration(session.journal, verdict)).toBe(true)
+      expect(await settleDeadGeneration(session.journal, verdict)).toEqual({ ok: true })
       session.publish()
 
       expect(session.summaries.at(-1)).toMatchObject({
@@ -195,7 +193,7 @@ describe('a turn recovery settled after its host went away', () => {
     ],
     [
       'quitting Orca',
-      // A quit evicts the child, and its adapter settles the open turn through the one mapping.
+      // A quit evicts the child, writing no Stop event, and its adapter settles the open turn.
       (journal: AgentSessionJournal) =>
         journal.appendItem(
           { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 9 },
@@ -203,14 +201,8 @@ describe('a turn recovery settled after its host went away', () => {
             kind: 'turn',
             turnId: 'turn-1',
             startedAt: TURN_STARTED,
-            ...turnVerdictForChildEnd(
-              childEndCauseOfEndedEvent({
-                type: 'ended',
-                cause: 'requested-close',
-                stopCause: 'evict'
-              }),
-              EXIT_OBSERVED
-            )
+            state: 'interrupted',
+            completedAt: EXIT_OBSERVED
           },
           { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
         )

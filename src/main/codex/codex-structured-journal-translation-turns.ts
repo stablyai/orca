@@ -123,7 +123,7 @@ export function publishCodexTurnLifecycle(input: {
   } else {
     input.sink.appendItem(identity, body, appendOptions)
   }
-  // Preserve first-work evidence when completion arrives before the journal drains.
+  // Keyed apart, so a completion's publication never replaces a start one still waiting to run.
   const publishOptions = {
     lifecycle: true,
     ...(input.state === 'running'

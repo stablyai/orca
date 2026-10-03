@@ -16,12 +16,13 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
+import { inspect } from 'node:util'
 
 it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(
   'keeps private %s failures out of logs while completing teardown',
   async (method) => {
     await attach()
-    const { host, store } = hostTestState()
+    const { host, store, log } = hostTestState()
     const failure = new Error('private recovery payload at /private/account/session.json')
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const operation = vi.spyOn(host.restartResume, method).mockImplementation(() => {
@@ -30,14 +31,27 @@ it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(
     try {
       await expect(host.flushAllStreamedEvents()).resolves.toBeUndefined()
       expect(operation).toHaveBeenCalledOnce()
-      expect(warning).toHaveBeenCalledExactlyOnceWith(
+      expect(warning).toHaveBeenCalledOnce()
+      expect(warning.mock.calls[0]?.[0]).toBe(
         {
-          beginTeardown: '[structured-agent-session] capturing recovery witnesses failed',
-          captureBeforeStop: '[structured-agent-session] capturing recovery witness failed',
-          recordMarkers: '[structured-agent-session] recording recovery capsule failed'
+          beginTeardown:
+            '[agent-session] teardown-recovery-witnesses: capturing recovery witnesses for teardown failed',
+          captureBeforeStop:
+            '[agent-session] recovery-witness: capturing a recovery witness before a stop failed',
+          recordMarkers:
+            '[agent-session] teardown-recovery-capsule: recording the recovery capsule at teardown failed'
         }[method]
       )
-      expect(warning.mock.calls.flat().map(String).join(' ')).not.toContain(failure.message)
+      expect(inspect(warning.mock.calls, { depth: 8 })).not.toContain(failure.message)
+      // Every level and every field the logger received, not only what its console mirror printed.
+      expect(log.scopes()).toContain(
+        {
+          beginTeardown: 'teardown-recovery-witnesses',
+          captureBeforeStop: 'recovery-witness',
+          recordMarkers: 'teardown-recovery-capsule'
+        }[method]
+      )
+      expect(inspect(log.entries, { depth: 8 })).not.toContain('/private/account')
       expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
       await expect(host.journalSnapshot(SESSION)).rejects.toThrow('agent_session_ownership_unknown')
     } finally {

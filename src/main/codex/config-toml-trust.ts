@@ -32,6 +32,7 @@ export type CodexEventLabel =
   | 'subagent_start'
   | 'subagent_stop'
   | 'stop'
+  | 'interrupt'
 
 export type CodexTrustEntry = {
   /** Path on disk to the hooks.json that declares the hook (the "key_source"). */

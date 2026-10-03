@@ -1,3 +1,4 @@
+import { annotateWorktreeLocksFromAdmin } from '../shared/git-worktree-admin'
 import * as path from 'node:path'
 import type { RequestContext } from './dispatcher'
 import { expandTilde } from './context'
@@ -35,22 +36,23 @@ function resolveRelayPath(repoPath: string, value: string): string {
     : path.posix.resolve(repoPath, value)
 }
 
-type RelayRepoLocation = { topLevel: string; commonDir: string }
+type RelayRepoLocation = { topLevel: string; commonDir: string; gitDir: string }
 
 function parseRelayRepoLocation(repoPath: string, output: string): RelayRepoLocation | undefined {
-  // Old git (pre `--path-format`) echoes the unknown flag and exits 0; drop `-`-prefixed lines, take the last two paths.
+  // Old git (pre `--path-format`) echoes the unknown flag and exits 0; drop `-`-prefixed lines, take the last three paths.
   // Strip only the trailing CR, not surrounding spaces — git paths may legitimately start or end with a space.
   const lines = output
     .split('\n')
     .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
     .filter((line) => line.length > 0 && !line.startsWith('-'))
-  if (lines.length < 2) {
+  if (lines.length < 3) {
     return undefined
   }
-  const [topLevel, commonDir] = lines.slice(-2)
+  const [topLevel, commonDir, gitDir] = lines.slice(-3)
   return {
     topLevel: resolveRelayPath(repoPath, topLevel),
-    commonDir: resolveRelayPath(repoPath, commonDir)
+    commonDir: resolveRelayPath(repoPath, commonDir),
+    gitDir: resolveRelayPath(repoPath, gitDir)
   }
 }
 
@@ -71,7 +73,13 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
         'rev-parse-path-format',
         async () => {
           const { stdout } = await this.git(
-            ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
+            [
+              'rev-parse',
+              '--path-format=absolute',
+              '--show-toplevel',
+              '--git-common-dir',
+              '--git-dir'
+            ],
             repoPath
           )
           if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
@@ -82,7 +90,7 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
         },
         async () => {
           const { stdout } = await this.git(
-            ['rev-parse', '--show-toplevel', '--git-common-dir'],
+            ['rev-parse', '--show-toplevel', '--git-common-dir', '--git-dir'],
             repoPath
           )
           return parseRelayRepoLocation(repoPath, stdout)
@@ -116,6 +124,10 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
     if (!areRelayWorktreePathsEqual(mainPath, location.commonDir)) {
       return worktrees
     }
+    // Why: a linked worktree of a bare/separate-git-dir repo passes the gate above too; relabelling would repeat its path (#23631).
+    if (!areRelayWorktreePathsEqual(location.gitDir, location.commonDir)) {
+      return worktrees
+    }
 
     const normalized = [...worktrees]
     normalized[mainIndex] = { ...mainWorktree, path: location.topLevel }
@@ -144,7 +156,11 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
         })
         const normalized = await this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
         // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
-        return annotatePrunableWorktreesByExistence(normalized)
+        return annotatePrunableWorktreesByExistence(
+          await annotateWorktreeLocksFromAdmin(expandTilde(repoPath), normalized, {
+            signal: context?.signal
+          })
+        )
       },
       isUnsupportedWorktreeListZError
     )

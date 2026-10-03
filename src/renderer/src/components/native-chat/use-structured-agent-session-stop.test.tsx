@@ -24,6 +24,7 @@ let fence = 3
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
+  supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false),
   supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
 }))
 
@@ -327,28 +328,35 @@ describe('Stop against a host that stops the conversation', () => {
     expect(ids[1]).not.toBe(ids[0])
   })
 
-  it('replays a lost stop of one background task, which names what it stops', async () => {
-    const answers: (() => unknown)[] = [
-      () => {
+  it('stops one background task on a second press after the first lost its answer', async () => {
+    const ran = new Set<string>()
+    let lostAnswers = 1
+    mocks.call.mockImplementation(async (_target, method, params) => {
+      if (method !== 'agentSession.cancel') {
+        return null
+      }
+      // As the host's ledger does: an id it already ran replays as handled and stops nothing.
+      const operationId: string = params.envelope.clientOperationId
+      const value = { cancelled: !ran.has(operationId) }
+      ran.add(operationId)
+      if (lostAnswers > 0) {
+        lostAnswers -= 1
         throw new Error('the connection dropped before the host answered')
       }
-    ]
-    mocks.call.mockImplementation(async (_target, method) =>
-      method === 'agentSession.cancel'
-        ? (answers.shift()?.() ?? { ok: true, value: { cancelled: true } })
-        : null
-    )
+      return { ok: true, value }
+    })
     const { result } = render()
 
-    for (let press = 0; press < 2; press += 1) {
-      await act(async () => {
-        await result.current.stopBackgroundTask('task-1')
-      })
-    }
+    let second: unknown
+    await act(async () => {
+      await result.current.stopBackgroundTask('task-1')
+      second = await result.current.stopBackgroundTask('task-1')
+    })
 
     const ids = cancelOperationIds()
     expect(ids).toHaveLength(2)
-    expect(ids[1]).toBe(ids[0])
+    expect(ids[1]).not.toBe(ids[0])
+    expect(second).toEqual({ cancelled: true })
   })
 
   it('sends a new cancel of a named turn after the host could not settle the last one', async () => {

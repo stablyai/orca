@@ -11,6 +11,12 @@
     "retrying": "Reintentando…"
   },
   "settings": {
+    "terminal": {
+      "optionLayoutAlt": "ABC o EE. UU. — Option envía secuencias Alt/Esc",
+      "optionLayoutCompose": "la distribución usa Option para escribir caracteres como @, €, [, ]",
+      "optionLayoutUnknown": "distribución desconocida — Option escribe caracteres (opción predeterminada segura)",
+      "optionShortcutHint": "Elige Ambos para los atajos con Option, Desactivado para acentos y símbolos, o Izquierda/Derecha para dedicar una tecla Option a cada uso."
+    },
     "appearance": {
       "language": {
         "title": "Idioma",
@@ -733,6 +739,23 @@
             "totalTooLarge": "{{fileName}} superaría el total de {{maxSize}} de archivos adjuntos."
           }
         }
+      },
+      "dropSkipReason": {
+        "missing": "Ya no está en su ruta original.",
+        "symlink": "Los enlaces simbólicos no se pueden adjuntar.",
+        "permissionDenied": "Permiso denegado.",
+        "unsupported": "Tipo de archivo no compatible."
+      },
+      "dropTempCopyFailure": {
+        "changed": "El archivo cambió mientras Orca lo copiaba. Vuelve a soltarlo.",
+        "outOfSpace": "No hay suficiente espacio en disco para copiar los archivos soltados.",
+        "storageUnavailable": "Orca no pudo crear el almacenamiento para los archivos soltados.",
+        "storageNotPrivate": "Otros usuarios pueden leer el almacenamiento de Orca para archivos soltados, así que no se copió nada.",
+        "timedOut": "La copia tardó demasiado. Vuelve a soltar los archivos.",
+        "busy": "Todavía se están copiando demasiados archivos soltados. Espera un momento y vuelve a intentarlo.",
+        "tooLarge": "Es demasiado grande para copiarlo, así que Orca no pudo pasárselo al agente.",
+        "storageFull": "El almacenamiento de Orca para archivos soltados está lleno, así que Orca no pudo pasárselo al agente.",
+        "generic": "Vuelve a soltar los archivos."
       }
     },
     "hooks": {
@@ -761,7 +784,12 @@
         "nativeDropTooManyPaths": "Has soltado demasiados archivos.",
         "nativeDropPathsTooLargeDescription": "Suelta menos archivos o usa una lista de rutas más corta.",
         "nativeDropPathsTooLarge": "La lista de rutas soltadas es demasiado grande.",
-        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects."
+        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects.",
+        "nativeDropUnresolvedPathsDescription": "Guárdalos primero en el disco y luego suelta los archivos guardados.",
+        "nativeDropUnresolvedPaths": "Orca no pudo leer una ruta para los archivos soltados.",
+        "nativeDropTempCopyFailed": "Orca no pudo copiar {{count}} archivos soltados.",
+        "nativeDropTempCopyFailed_one": "Orca no pudo copiar {{count}} archivo soltado.",
+        "nativeDropTempCopyFailed_other": "Orca no pudo copiar {{count}} archivos soltados."
       },
       "useIpcEvents": {
         "0e3cf53060": "Pestaña del navegador {{value0}} no encontrada",
@@ -3553,7 +3581,7 @@
             "compact": "Compact",
             "footerDetailAria": "Usage footer detail",
             "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
-            "compactTooltip": "Uso condensado: sólo la ventana más estrecha"
+            "compactTooltip": "Uso condensado: un resumen por proveedor"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -4680,6 +4708,7 @@
           "74522ee457": "falló el cambio de nombre",
           "02e19349f4": "Error al cambiar el nombre automáticamente: ver error",
           "691ccfd622": "Eliminando…",
+          "deleteFailed": "Error al eliminar",
           "35ccfe2475": "Proyecto {{value0}}",
           "1d66d84f0b": "cadena",
           "57eaa61b55": "Ocultar espacios de trabajo secundarios",
@@ -14907,6 +14936,12 @@
   },
   "components": {
     "native-chat": {
+      "contextMenu": {
+        "copyOrcaSessionId": "Copiar ID de sesión de Orca",
+        "orcaSessionIdCopied": "ID de sesión de Orca copiado",
+        "orcaSessionIdCopyFailed": "No se pudo copiar el ID de sesión de Orca",
+        "orcaSessionIdTooltip": "El ID de Orca para este chat, distinto del ID de sesión propio de la CLI del agente. Los agentes lo usan para referirse entre sí a través de Orca."
+      },
       "failureWords": {
         "theAgent": "El agente",
         "providerStartFailed": "{{agent}} se detuvo antes de terminar de iniciarse.",
@@ -14964,7 +14999,8 @@
         "hostStopped": "{{agent}} no terminó de iniciarse, así que Orca lo detuvo.",
         "providerRateLimited": "{{agent}} alcanzó un límite de solicitudes y está reintentando.",
         "providerRetrying": "{{agent}} tuvo un problema temporal y está reintentando.",
-        "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}."
+        "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}.",
+        "previousExitUnverifiable": "Orca no pudo confirmar que el proceso anterior de {{agent}} terminó. Los mensajes esperan para enviarse hasta que Orca confirme que terminó."
       },
       "writeNotice": {
         "notDoneReadHistory": "No se pudo cargar el historial de este chat.",
@@ -15508,5 +15544,18 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "editor": {
+    "markdownPreview": {
+      "tooLarge": "El archivo supera el límite de vista previa de {{limit}}. Abre el archivo para ver su código fuente.",
+      "tooLargeInDiff": "El archivo supera el límite de vista previa de {{limit}}. Cambia al modo fuente para ver las diferencias.",
+      "blockTooLarge": "Este bloque es demasiado grande para renderizarlo. Abre la vista de código fuente para leerlo.",
+      "largeNotice": "Vista previa grande. Usa la vista de código fuente para copiar el documento completo. La exportación a PDF no está disponible.",
+      "processingFailed": "Este documento supera los límites de la vista previa. Abre la vista de código fuente para leer el archivo completo.",
+      "preparing": "Preparando vista previa…",
+      "searching": "Buscando…",
+      "searchFailed": "La búsqueda no pudo finalizar. Inténtalo de nuevo.",
+      "refreshFailed": "No se pudo actualizar la vista previa. Se muestra la versión anterior; abre la vista de código para ver el contenido actual."
+    }
   }
 }

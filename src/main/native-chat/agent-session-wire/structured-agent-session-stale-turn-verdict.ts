@@ -17,17 +17,12 @@ import {
   readAgentJournalTurn
 } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
-import type {
-  StructuredAgentSessionChildEndCause,
-  StructuredAgentSessionEndedEvent
-} from './structured-agent-session-adapter'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export type StructuredAgentSessionTurnVerdict =
-  /** `cancellation` only for a stop the user aimed at this chat: every other cut is news. */
-  | { state: 'interrupted'; completedAt: number; outcome?: 'cancellation' }
-  | { state: 'unverifiable' }
+  /** Whose end it was is the Stop event's to say, where the row is built (`turnEndAfterStop`). */
+  { state: 'interrupted'; completedAt: number } | { state: 'unverifiable' }
 
 export const UNVERIFIABLE_TURN_VERDICT: StructuredAgentSessionTurnVerdict = {
   state: 'unverifiable'
@@ -36,7 +31,9 @@ export const UNVERIFIABLE_TURN_VERDICT: StructuredAgentSessionTurnVerdict = {
 export function turnVerdictFromDeathEvidence(
   evidence: AgentSessionDeathEvidence | null | undefined,
   /** Fence of the owner that wrote the turn. */
-  turnFence: number | undefined
+  turnFence: number | undefined,
+  /** When a Stop event found the turn running (`stopFoundTurnLiveAt`): a later proof of life. */
+  liveAt?: number
 ): StructuredAgentSessionTurnVerdict {
   if (!evidence) {
     return UNVERIFIABLE_TURN_VERDICT
@@ -54,50 +51,36 @@ export function turnVerdictFromDeathEvidence(
     return { state: 'interrupted', completedAt: evidence.observedAt }
   }
   // A probe finds a dead child long after it died; its last renewal bounds the end, so the turn never
-  // counts the time Orca was down. Timeline rows don't: a send can land there after the death.
-  return {
-    state: 'interrupted',
-    completedAt: Math.min(evidence.lastProvenAliveAt ?? evidence.observedAt, evidence.observedAt)
-  }
+  // counts the time Orca was down. Timeline rows don't: a send can land there after the death. A
+  // Stop that found the turn running is a later renewal, so the end reads after that Stop.
+  const lastAlive = Math.max(evidence.lastProvenAliveAt ?? evidence.observedAt, liveAt ?? 0)
+  return { state: 'interrupted', completedAt: Math.min(lastAlive, evidence.observedAt) }
 }
 
-/**
- * The one mapping from why a provider child ended to what the turn it cut reads as. Each adapter
- * settles its own open turn through it on `ended`, and the host's fallback settles through it any
- * turn no adapter did. Only a stop the user aimed at this chat is their cancellation.
- */
-export function turnVerdictForChildEnd(
-  cause: StructuredAgentSessionChildEndCause,
-  completedAt: number
-): Extract<StructuredAgentSessionTurnVerdict, { state: 'interrupted' }> {
-  return stopIsTheUsers(cause)
-    ? { state: 'interrupted', completedAt, outcome: 'cancellation' }
-    : { state: 'interrupted', completedAt }
+/** When the latest Stop event found `item`'s turn running: E1 writes one only for a live turn. */
+export function stopFoundTurnLiveAt(
+  journal: Pick<AgentSessionJournal, 'stopMarks'>,
+  item: AgentJournalRenderItem
+): number | undefined {
+  const stop = journal.stopMarks.latest()
+  const turnId = readAgentJournalTurn(item.body)?.turnId
+  return stop && turnId !== undefined && stop.event.turnId === turnId ? stop.event.at : undefined
 }
 
-/** Whether the user asked for this end. Only then is a cut turn their cancellation. */
-export function stopIsTheUsers(cause: StructuredAgentSessionChildEndCause): boolean {
-  switch (cause) {
-    case 'user-stop':
-    case 'user-close':
-      return true
-    case 'host-stop':
-    case 'evict':
-    case 'exit':
-    case 'attach-failed':
-      return false
-  }
-}
-
-/** Why the child an `ended` event reports ended: who asked for a close, else an exit it had. A
- *  requested close with no cause named is the host's own. */
-export function childEndCauseOfEndedEvent(
-  event: { type: 'ended' } & Partial<Pick<StructuredAgentSessionEndedEvent, 'cause' | 'stopCause'>>
-): StructuredAgentSessionChildEndCause {
-  if (event.cause === 'unexpected-exit') {
-    return 'exit'
-  }
-  return event.stopCause ?? 'host-stop'
+/** Every turn this settle interrupts is a person's Stop's to end (`turnEndAfterStop`), so it reads
+ *  as theirs, muted, with no row saying the provider stopped: as a live Stop writes none. */
+export function endedByPersonsStop(
+  journal: Pick<AgentSessionJournal, 'stopMarks'>,
+  turnEnds: readonly JournalLifecycleMutationInput[]
+): boolean {
+  const interrupted = turnEnds.flatMap((mutation) => {
+    const turn = mutation.kind === 'item' ? readAgentJournalTurn(mutation.body) : undefined
+    return turn?.state === 'interrupted' ? [turn] : []
+  })
+  return (
+    interrupted.length > 0 &&
+    interrupted.every((turn) => journal.stopMarks.personStopDecides(turn.turnId, turn.completedAt))
+  )
 }
 
 /** Revises every still-running lifecycle item in place, keeping its identity and start. */
@@ -119,7 +102,7 @@ export function runningTurnLifecycleRevisions(
 export function provenUnverifiableTurnRevisions(
   items: readonly AgentJournalRenderItem[],
   evidence: AgentSessionDeathEvidence | null | undefined,
-  journal: Pick<AgentSessionJournal, 'itemFence'>
+  journal: Pick<AgentSessionJournal, 'itemFence' | 'stopMarks'>
 ): JournalLifecycleMutationInput[] {
   const ownerFence = evidence?.ownerFence
   if (ownerFence === undefined) {
@@ -128,7 +111,11 @@ export function provenUnverifiableTurnRevisions(
   return items.flatMap((item) => {
     const turn = readAgentJournalTurn(item.body)
     return turn?.state === 'unverifiable' && journal.itemFence(item.itemId) === ownerFence
-      ? turnLifecycleRevision(item, turn, turnVerdictFromDeathEvidence(evidence, ownerFence))
+      ? turnLifecycleRevision(
+          item,
+          turn,
+          turnVerdictFromDeathEvidence(evidence, ownerFence, stopFoundTurnLiveAt(journal, item))
+        )
       : []
   })
 }
@@ -172,7 +159,6 @@ function settledLifecycle(
   return {
     ...kept,
     state: verdict.state,
-    completedAt: Math.max(verdict.completedAt, began),
-    ...(verdict.outcome ? { outcome: verdict.outcome } : {})
+    completedAt: Math.max(verdict.completedAt, began)
   }
 }

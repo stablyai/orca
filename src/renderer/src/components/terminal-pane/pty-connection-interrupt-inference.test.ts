@@ -130,87 +130,96 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('infers interrupts only from the focused terminal key target', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
-    transportFactoryQueue.push(transport)
-    vi.useFakeTimers()
-    vi.setSystemTime(1_100)
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      state: 'working',
-      prompt: 'stop this task',
-      updatedAt: 1_000,
-      stateStartedAt: 900,
-      agentType: 'codex',
-      paneKey,
-      terminalTitle: 'Codex',
-      stateHistory: []
+  it.each(['custom-agent', 'codex'] as const)(
+    'handles focused Ctrl+C for %s without guessing Codex cancellation',
+    async (agentType) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      vi.setSystemTime(1_100)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'working',
+        prompt: 'stop this task',
+        updatedAt: 1_000,
+        stateStartedAt: 900,
+        agentType,
+        paneKey,
+        terminalTitle: 'Codex',
+        stateHistory: []
+      }
+      const terminalTarget = createKeyboardEventTarget()
+      const unrelatedTarget = createKeyboardEventTarget()
+      ;(
+        globalThis.window as unknown as { addEventListener?: ReturnType<typeof vi.fn> }
+      ).addEventListener = vi.fn()
+      const pane = createPane(1)
+      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+      let onDataHandler: ((data: string) => void) | null = null
+      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+        onDataHandler = handler
+        return { dispose: vi.fn() }
+      }) as typeof pane.terminal.onData)
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      if (!onDataHandler) {
+        throw new Error('expected onData handler to be registered')
+      }
+      unrelatedTarget.dispatch({
+        key: 'c',
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        repeat: false
+      } as KeyboardEvent)
+      vi.advanceTimersByTime(500)
+      expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+      expect(globalThis.window.addEventListener).not.toHaveBeenCalled()
+
+      terminalTarget.dispatch({
+        key: 'c',
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        repeat: false
+      } as KeyboardEvent)
+      ;(onDataHandler as unknown as (data: string) => void)('\x03')
+      await flushAsyncTicks()
+      vi.advanceTimersByTime(500)
+
+      if (agentType === 'codex') {
+        expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+        expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({ state: 'working' })
+        expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
+        return
+      }
+      expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
+        paneKey,
+        baselineUpdatedAt: 1_000,
+        baselineStateStartedAt: 900,
+        baselinePrompt: 'stop this task',
+        baselineAgentType: agentType,
+        intent: 'ctrl-c'
+      })
     }
-    const terminalTarget = createKeyboardEventTarget()
-    const unrelatedTarget = createKeyboardEventTarget()
-    ;(
-      globalThis.window as unknown as { addEventListener?: ReturnType<typeof vi.fn> }
-    ).addEventListener = vi.fn()
-    const pane = createPane(1)
-    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
-    let onDataHandler: ((data: string) => void) | null = null
-    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-      onDataHandler = handler
-      return { dispose: vi.fn() }
-    }) as typeof pane.terminal.onData)
-
-    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
-    if (!onDataHandler) {
-      throw new Error('expected onData handler to be registered')
-    }
-    unrelatedTarget.dispatch({
-      key: 'c',
-      ctrlKey: true,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-      repeat: false
-    } as KeyboardEvent)
-    vi.advanceTimersByTime(500)
-    expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
-    expect(globalThis.window.addEventListener).not.toHaveBeenCalled()
-
-    terminalTarget.dispatch({
-      key: 'c',
-      ctrlKey: true,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-      repeat: false
-    } as KeyboardEvent)
-    ;(onDataHandler as unknown as (data: string) => void)('\x03')
-    await flushAsyncTicks()
-    vi.advanceTimersByTime(500)
-
-    expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
-      paneKey,
-      baselineUpdatedAt: 1_000,
-      baselineStateStartedAt: 900,
-      baselinePrompt: 'stop this task',
-      baselineAgentType: 'codex',
-      intent: 'ctrl-c'
-    })
-  })
+  )
 
   it('clears stale working pane title after inferred interrupt applies', async () => {
     const { connectPanePty } = await import('./pty-connection')
@@ -231,7 +240,7 @@ describe('connectPanePty', () => {
       prompt: 'stop visible spinner',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'custom-agent',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -382,7 +391,7 @@ describe('connectPanePty', () => {
       prompt: 'stop from real terminal byte',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'custom-agent',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -408,7 +417,7 @@ describe('connectPanePty', () => {
       baselineUpdatedAt: 1_000,
       baselineStateStartedAt: 900,
       baselinePrompt: 'stop from real terminal byte',
-      baselineAgentType: 'codex',
+      baselineAgentType: 'custom-agent',
       intent: 'ctrl-c'
     })
   })
@@ -454,7 +463,7 @@ describe('connectPanePty', () => {
       prompt: 'stop enhanced keyboard input',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'custom-agent',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -484,7 +493,7 @@ describe('connectPanePty', () => {
       baselineUpdatedAt: 1_000,
       baselineStateStartedAt: 900,
       baselinePrompt: 'stop enhanced keyboard input',
-      baselineAgentType: 'codex',
+      baselineAgentType: 'custom-agent',
       intent: 'ctrl-c'
     })
   })
@@ -506,7 +515,7 @@ describe('connectPanePty', () => {
       prompt: 'stop after process exit',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'custom-agent',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -540,7 +549,7 @@ describe('connectPanePty', () => {
       baselineUpdatedAt: 1_000,
       baselineStateStartedAt: 900,
       baselinePrompt: 'stop after process exit',
-      baselineAgentType: 'codex',
+      baselineAgentType: 'custom-agent',
       intent: 'ctrl-c'
     })
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
@@ -563,7 +572,7 @@ describe('connectPanePty', () => {
       prompt: 'stop and leave shell',
       updatedAt: 1_000,
       stateStartedAt: 900,
-      agentType: 'codex',
+      agentType: 'custom-agent',
       paneKey,
       terminalTitle: 'Codex working',
       stateHistory: []
@@ -575,7 +584,7 @@ describe('connectPanePty', () => {
         interrupted: true,
         updatedAt: 1_100,
         stateStartedAt: 1_100,
-        agentType: 'codex',
+        agentType: 'custom-agent',
         paneKey,
         terminalTitle: 'Terminal 1'
       }

@@ -1,16 +1,11 @@
 import { randomBytes } from 'node:crypto'
-import { copyFile, link, mkdtemp, rm } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE } from '../../shared/orcad-artifacts'
 import type { SshConnection } from './ssh-connection'
 import type { RemoteRuntimeStep } from './orcad-remote-node-runtime'
-import {
-  preparePinnedNodeForVault,
-  type PinnedNodeVaultUpload
-} from './ssh-relay-opencode-pinned-node'
+import { preparePinnedNodeForVault } from './ssh-relay-opencode-pinned-node'
+import { RUNTIME_REF_NODE_PREFIX } from './remote-node-runtime-store-inventory'
 import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
-import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
+import { writeRelayFile } from './ssh-relay-install-transfers'
 import {
   createRelayUploadStageNamespace,
   relayUploadStageSftpNamespaceMapping
@@ -28,7 +23,6 @@ import {
 import {
   parseOpenCodeRuntimeResult,
   probeOpenCodeNodeSqliteCommand,
-  promoteOpenCodeRuntimeCommand,
   publishOpenCodeRuntimeReferenceCommand
 } from './ssh-relay-opencode-runtime-commands'
 
@@ -46,6 +40,8 @@ const installations = new WeakMap<
 
 type SetupOptions = {
   nodePath: string
+  /** The relay's verified pinned node.exe, if any; stage fencing then needs no Add-Type (D5). */
+  verifiedNodePath?: string
   relayDir: string
   signal?: AbortSignal
   cacheRoot?: string
@@ -156,21 +152,28 @@ async function install(
     throw new Error('The host did not complete its SQLite read probe.')
   }
   let executable = node.executable
-  let upload: PinnedNodeVaultUpload | undefined
+  let runtimeRef: { path: string; sha256: string } | undefined
+  let identityNode = options.verifiedNodePath
   if (node.status === 'unsupported') {
     const pinned = await preparePinnedNodeForVault({
       conn,
       host,
-      nodePath: options.nodePath,
       relayDir: options.relayDir,
       cacheRoot: options.cacheRoot,
-      referencePath: joinRemotePath(host, options.relayDir, RUNTIME_REFERENCE_NAME),
       signal,
       exec,
       remote
     })
     executable = pinned.executable
-    upload = pinned.upload
+    identityNode ??= pinned.executable
+    runtimeRef = {
+      path: joinRemotePath(
+        host,
+        options.relayDir,
+        `${RUNTIME_REF_NODE_PREFIX}${pinned.runtimeSha256}`
+      ),
+      sha256: pinned.runtimeSha256
+    }
   }
   if (!executable) {
     throw new Error('The host did not identify its SQLite executable.')
@@ -179,12 +182,13 @@ async function install(
   const relativePool = `${RELAY_REMOTE_DIR}/${RELAY_UPLOAD_STAGE_POOL_NAME}`
   const poolDir = joinRemotePath(host, remoteHome, relativePool)
   const owner = createRelayInstallMarkerFileName()
-  await exec(recoverOneStaleRelayUploadStageCommand(host, poolDir))
+  const identity = identityNode ? { node: identityNode } : undefined
+  await exec(recoverOneStaleRelayUploadStageCommand(host, poolDir, undefined, identity))
   const stage = parseReservedRelayUploadStage(
     host,
     poolDir,
     owner,
-    await exec(reserveRelayUploadStageCommand(host, poolDir, owner))
+    await exec(reserveRelayUploadStageCommand(host, poolDir, owner, identity))
   )
   const stageDir = stage.slotDir
   const namespace = createRelayUploadStageNamespace(`${relativePool}/${stage.slotName}`, owner)
@@ -194,40 +198,6 @@ async function install(
       : undefined
   let cleanupAllowed = true
   try {
-    if (upload) {
-      const { localRuntime } = upload
-      const localStage = await mkdtemp(join(dirname(localRuntime), '.vault-upload-'))
-      try {
-        const binaryName = ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE
-        const localBinary = join(localStage, binaryName)
-        await link(localRuntime, localBinary).catch(() => copyFile(localRuntime, localBinary))
-        signal.throwIfAborted()
-        await remote(() =>
-          uploadRelayDirectory(conn, localStage, joinRemotePath(host, stageDir, 'payload'), host, {
-            signal,
-            sftpNamespace: mapping()
-          })
-        )
-        const promoted = parseOpenCodeRuntimeResult(
-          await exec(
-            promoteOpenCodeRuntimeCommand({
-              host,
-              nodePath: options.nodePath,
-              stagedBinary: joinRemotePath(host, stageDir, 'payload', binaryName),
-              executable,
-              expectedHash: upload.expectedHash,
-              repairToken: token
-            })
-          )
-        )
-        if (promoted.status !== 'ready' || !promoted.executable) {
-          throw new Error('The host did not verify the uploaded SQLite runtime.')
-        }
-        executable = promoted.executable
-      } finally {
-        await rm(localStage, { recursive: true, force: true }).catch(() => {})
-      }
-    }
     const referenceName = RUNTIME_REFERENCE_NAME
     const stagedReference = joinRemotePath(host, stageDir, 'payload', referenceName)
     signal.throwIfAborted()
@@ -244,7 +214,8 @@ async function install(
           nodePath: options.nodePath,
           stagedReference,
           reference: joinRemotePath(host, options.relayDir, referenceName),
-          token
+          token,
+          runtimeRef
         })
       )
     )
@@ -254,11 +225,13 @@ async function install(
     throw error
   } finally {
     if (cleanupAllowed && !signal.aborted) {
-      await exec(cleanupOwnedRelayUploadStageCommand(host, stage, owner)).catch((error) => {
-        if (isUnconfirmedSshCommandTermination(error)) {
-          throw error
+      await exec(cleanupOwnedRelayUploadStageCommand(host, stage, owner, identity)).catch(
+        (error) => {
+          if (isUnconfirmedSshCommandTermination(error)) {
+            throw error
+          }
         }
-      })
+      )
     }
   }
 }

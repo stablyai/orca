@@ -23,6 +23,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { z } from 'zod'
 import { usesNodePtySpawnHelper } from '../../shared/node-pty-spawn-helper'
+import { COMPAT_SERVER_TARGET_BASES, COMPAT_SERVER_TARGETS } from '../../shared/node-runtime-pin'
 import {
   compareDottedVersions,
   hostNodeApiVersion,
@@ -133,9 +134,44 @@ function sha256File(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
+/** Compat slots (design D6 rung B) tried after `slot`'s own, e.g. linux-x64-glibc217 for linux-x64-glibc. */
+export function compatSlotsFor(slot: string): string[] {
+  return COMPAT_SERVER_TARGETS.filter((compat) => COMPAT_SERVER_TARGET_BASES[compat] === slot)
+}
+
+type SlotChoice =
+  | { slot: string; entry: PrebuiltSlotEntry }
+  | { slot: string; why: PrebuiltSlotRefusal; detail?: string }
+
 /**
- * Copy every file the manifest lists for this host's slot into node-pty's `build/Release`,
- * after checking N-API, libc, arch, glibc and each file's sha256.
+ * The host's own slot, or a compat slot when the own one is missing or needs a newer glibc.
+ * Why only those two: any other refusal (libc, arch, N-API) holds for the compat slot too.
+ */
+function chooseSlot(
+  manifest: PrebuiltSlotManifest,
+  slot: string,
+  abi: NativeHostAbi,
+  hostNapi: number | null
+): SlotChoice {
+  const own = manifest.slots[slot]
+  const ownRefusal = own ? checkPrebuiltSlotEntry(own, abi, hostNapi) : null
+  if (own && !ownRefusal) {
+    return { slot, entry: own }
+  }
+  if (!own || ownRefusal?.why === 'glibc-too-old') {
+    for (const compat of compatSlotsFor(slot)) {
+      const entry = manifest.slots[compat]
+      if (entry && !checkPrebuiltSlotEntry(entry, abi, hostNapi)) {
+        return { slot: compat, entry }
+      }
+    }
+  }
+  return ownRefusal ? { slot, ...ownRefusal } : { slot, why: 'no-slot' }
+}
+
+/**
+ * Copy every file the manifest lists for this host's slot (or its compat slot) into node-pty's
+ * `build/Release`, after checking N-API, libc, arch, glibc and each file's sha256.
  */
 export function installPrebuiltSlot(options: {
   abi: NativeHostAbi
@@ -143,29 +179,26 @@ export function installPrebuiltSlot(options: {
   prebuildsDir?: string | null
   hostNapi?: number | null
 }): PrebuiltSlotOutcome {
-  const slot = nativeSlotName(options.abi)
+  const hostSlot = nativeSlotName(options.abi)
   const prebuildsDir = options.prebuildsDir ?? resolveOrcadPrebuildsDir()
   if (!prebuildsDir || !existsSync(prebuildsDir)) {
-    return { installed: false, slot, why: 'no-prebuilds-dir' }
+    return { installed: false, slot: hostSlot, why: 'no-prebuilds-dir' }
   }
   const manifest = readPrebuiltSlotManifest(prebuildsDir)
   if (!manifest) {
     return {
       installed: false,
-      slot,
+      slot: hostSlot,
       why: 'no-manifest',
       detail: 'manifest.json is missing or not a schema 2 prebuild manifest'
     }
   }
-  const entry = manifest.slots[slot]
-  if (!entry) {
-    return { installed: false, slot, why: 'no-slot' }
-  }
   const hostNapi = options.hostNapi === undefined ? hostNodeApiVersion() : options.hostNapi
-  const refusal = checkPrebuiltSlotEntry(entry, options.abi, hostNapi)
-  if (refusal) {
-    return { installed: false, slot, ...refusal }
+  const choice = chooseSlot(manifest, hostSlot, options.abi, hostNapi)
+  if (!('entry' in choice)) {
+    return { installed: false, ...choice }
   }
+  const { slot, entry } = choice
   const files = Object.entries(entry.files)
   for (const [file, expected] of files) {
     const source = join(prebuildsDir, slot, ...file.split('/'))

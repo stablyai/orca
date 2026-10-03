@@ -112,7 +112,7 @@ describe('Claude child work from captured frame orders', () => {
     const connection = run.claude.connections[0]!
     connection.exitVerdict = { root: 'exited', tree: 'live' }
     connection.close = async () => false
-    await expect(run.adapter.closeSession('session-1', 'user-stop')).rejects.toMatchObject({
+    await expect(run.adapter.closeSession('session-1')).rejects.toMatchObject({
       name: 'AgentSessionAcquisitionRootExitObservedError'
     })
     expect(run.records().map(({ membership, outcome }) => ({ membership, outcome }))).toEqual([

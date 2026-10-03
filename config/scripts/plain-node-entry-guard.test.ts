@@ -231,8 +231,8 @@ describe('CLI and worker thread entry guard', () => {
   it('follows shared chunks out of a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
     const bundle: Rollup.OutputBundle = {
-      'session-scanner-opencode-sqlite-worker-entry.js': entryChunk(
-        'session-scanner-opencode-sqlite-worker-entry',
+      'foreign-sqlite-reader-entry.js': entryChunk(
+        'foreign-sqlite-reader-entry',
         'require("./chunks/shared.js")',
         ['chunks/shared.js']
       ),

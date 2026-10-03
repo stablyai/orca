@@ -21,6 +21,7 @@ import {
   getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsAntigravitySearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
@@ -38,6 +39,8 @@ import {
   providerAccountMatchesView
 } from './provider-account-visibility'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { AntigravityAccountsSection } from './AntigravityAccountsSection'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { CursorAccountsSection } from './CursorAccountsSection'
 import type {
   AccountsPaneProps,
@@ -384,6 +387,14 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries())
       ? renderGeminiAccountsSection(model)
       : null,
+    matchesSettingsSearch(searchQuery, getAccountsAntigravitySearchEntries()) ? (
+      <AntigravityAccountsSection
+        key={`antigravity:${settings.activeRuntimeEnvironmentId ?? 'local'}:${accountRuntime.runtime}:${accountRuntime.wslDistro ?? ''}`}
+        owner={getActiveRuntimeTarget(settings)}
+        target={{ runtime: accountRuntime.runtime, wslDistro: accountRuntime.wslDistro }}
+        label={accountRuntimeSentenceLabel}
+      />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model)
       : null,

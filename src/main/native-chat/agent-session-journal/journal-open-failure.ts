@@ -13,6 +13,7 @@ import {
 } from '../../../shared/agent-session-wire-refusals'
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
 import { AgentSessionJournalError } from './journal-write-guards'
+import type { StructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
 
 type JournalRefusalReason = AgentSessionRefusalReason<'agent_session_journal_unreadable'>
 
@@ -107,11 +108,15 @@ export function journalOpenRefusalError(error: unknown): AgentSessionRefusalErro
  * (a path, "file is not a database") goes to the log only; the reader gets the classified refusal,
  * whose message stays the bare code.
  */
-export function journalOpenReadRefusal(error: unknown): AgentSessionRefusalError {
+export function journalOpenReadRefusal(
+  error: unknown,
+  logger: StructuredAgentSessionLogger,
+  sessionId: string
+): AgentSessionRefusalError {
   if (isAgentSessionRefusalError(error)) {
     return error
   }
-  return unreadableRefusal(error, journalRefusalReason(error), true)
+  return unreadableRefusal(error, journalRefusalReason(error), { logger, sessionId })
 }
 
 const MAX_LOGGED_SESSIONS = 256
@@ -120,7 +125,7 @@ const MAX_LOGGED_SESSIONS = 256
  * The read door's refusals for one host. A reader reconnects on a timer while an open can clear,
  * so a session's failure is logged once until that session opens or the failure changes.
  */
-export function createJournalOpenReadRefusals() {
+export function createJournalOpenReadRefusals(logger: StructuredAgentSessionLogger) {
   const logged = new Map<string, string>()
   return {
     refusal: (sessionId: string, error: unknown): AgentSessionRefusalError => {
@@ -134,7 +139,7 @@ export function createJournalOpenReadRefusals() {
       if (!repeat && (logged.has(sessionId) || logged.size < MAX_LOGGED_SESSIONS)) {
         logged.set(sessionId, failure)
       }
-      return unreadableRefusal(error, reason, !repeat)
+      return unreadableRefusal(error, reason, repeat ? null : { logger, sessionId })
     },
     /** The session opened or closed: its next failure is news. */
     forget: (sessionId: string): void => {
@@ -146,11 +151,13 @@ export function createJournalOpenReadRefusals() {
 function unreadableRefusal(
   error: unknown,
   reason: JournalRefusalReason,
-  log: boolean
+  log: { logger: StructuredAgentSessionLogger; sessionId: string } | null
 ): AgentSessionRefusalError {
-  if (log) {
-    console.warn('[agent-session] opening the conversation for a read failed:', error)
-  }
+  log?.logger.warn('opening the conversation for a read failed', {
+    scope: 'open-for-read',
+    sessionId: log.sessionId,
+    error
+  })
   const code = 'agent_session_journal_unreadable'
   return new AgentSessionRefusalError(refuse(code, { reason }, code), { cause: error })
 }

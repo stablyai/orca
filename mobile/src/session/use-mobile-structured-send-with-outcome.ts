@@ -36,7 +36,6 @@ export function useMobileStructuredSendWithOutcome(args: {
   queueCapable: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
   commandPending: { current: boolean }
-  operationIds: Map<string, string>
   controller: Pick<
     StructuredAgentSessionComposerOptions,
     'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands'
@@ -56,7 +55,6 @@ export function useMobileStructuredSendWithOutcome(args: {
     controller,
     enabled,
     onSendError,
-    operationIds,
     queueCapable,
     sessionId,
     sessionKey,
@@ -90,9 +88,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         client,
         sessionId,
         fence: currentFence,
-        sessionKey,
         pending: commandPending,
-        operationIds,
         controller: {
           agent: agent === 'claude' ? 'claude' : 'codex',
           ...controller
@@ -133,7 +129,6 @@ export function useMobileStructuredSendWithOutcome(args: {
       controller,
       enabled,
       onSendError,
-      operationIds,
       queueCapable,
       sessionId,
       sessionKey,

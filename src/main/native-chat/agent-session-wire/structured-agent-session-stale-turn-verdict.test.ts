@@ -276,6 +276,7 @@ describe('stale session state on a cold acquire', () => {
     const journal = {
       snapshot: () => ({ items }),
       itemFence: () => 1,
+      stopMarks: { latest: () => null },
       cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
       appendLifecycleBatch
     } as unknown as AgentSessionJournal

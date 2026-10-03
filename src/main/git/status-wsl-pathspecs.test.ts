@@ -44,7 +44,11 @@ describe('WSL git pathspecs', () => {
     const pathspecs = gitExecFileAsyncMock.mock.calls.flatMap(([args]) =>
       (args as string[]).filter((arg) => arg.startsWith(':(literal)'))
     )
-    expect(pathspecs).toEqual(Array(8).fill(':(literal)tests/breakgit'))
+    expect(pathspecs).toEqual(Array(5).fill(':(literal)tests/breakgit'))
+    const inputs = gitExecFileAsyncMock.mock.calls
+      .map(([, options]) => options.stdin)
+      .filter((input) => input !== undefined)
+    expect(inputs).toEqual(Array(3).fill(':(literal)tests/breakgit\0'))
   })
 
   it('uses POSIX separators when discarding untracked files inside WSL', async () => {

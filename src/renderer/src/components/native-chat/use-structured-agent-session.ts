@@ -243,8 +243,8 @@ export function useStructuredAgentSession(args: {
     },
     queuedMessages: queuedController,
     cancel: async (turnId: string, prompt?: StructuredPromptCancelTarget) => {
-      // Capability negotiation must complete before mutate constructs the payload
-      // fingerprint and operation id: older hosts reject the strict prompt field.
+      // Capability negotiation must complete before mutate fingerprints the payload:
+      // older hosts reject the strict prompt field.
       const promptSupported =
         prompt !== undefined && (await supportsStructuredAgentSessionPromptCancel(target))
       return mutate('agentSession.cancel', 'agentSession.cancel', {

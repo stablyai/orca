@@ -26,8 +26,10 @@ import {
 } from './structured-agent-session-start-failure-row'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import {
+  endedByPersonsStop,
   provenUnverifiableTurnRevisions,
   runningTurnLifecycleRevisions,
+  stopFoundTurnLiveAt,
   turnVerdictFromDeathEvidence,
   type StructuredAgentSessionTurnVerdict
 } from './structured-agent-session-stale-turn-verdict'
@@ -102,6 +104,11 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   return outcomeItems.some((item) => !isCleanlySettled(currentItems.get(item.itemId)))
 }
 
+/** Whether the settlement was written, and what stopped it when it was not. */
+export type StructuredAgentSessionDeadGenerationSettlement =
+  | { ok: true }
+  | { ok: false; error: unknown }
+
 export async function settleStructuredAgentSessionDeadGeneration(input: {
   journal: DeadGenerationJournal
   sessionId: string
@@ -117,13 +124,12 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
   /** The provider never finished starting: the start that failed, keyed by the child's
    *  generation. Its row is the one the delivery loop writes for the same start. */
   exitedDuringStartup?: { generation: string | null }
-  onError?: (sessionId: string, error: unknown) => void
-}): Promise<boolean> {
+}): Promise<StructuredAgentSessionDeadGenerationSettlement> {
   try {
     const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal)
     const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? hasUnfinishedWork
     if (!showUnexpectedExitOutcome && !hasUnfinishedWork) {
-      return true
+      return { ok: true }
     }
     // A queued message is the delivery loop's to settle: it was never handed to this child. A
     // child that never proved its start accepted nothing either — input is written only after it
@@ -189,10 +195,10 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
         mutations: chunk.mutations
       })
     }
-    return true
+    return { ok: true }
   } catch (error) {
-    input.onError?.(input.sessionId, error)
-    return false
+    // Returned rather than logged: each caller logs it under its own scope.
+    return { ok: false, error }
   }
 }
 
@@ -216,7 +222,11 @@ export async function settleStaleStructuredAgentSessionState(input: {
   const items = journal.snapshot().items
   // Each turn is judged by the evidence only if it names that turn's owner.
   const verdictFor = (item: AgentJournalRenderItem) =>
-    turnVerdictFromDeathEvidence(input.deathEvidence, journal.itemFence(item.itemId))
+    turnVerdictFromDeathEvidence(
+      input.deathEvidence,
+      journal.itemFence(item.itemId),
+      stopFoundTurnLiveAt(journal, item)
+    )
   // Per attempt: a retry re-partitions only what is left, and a reused chunk id would skip it.
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
   const settlementId = `stale-session:${input.sessionId}:${input.fence}:${generation}`
@@ -234,15 +244,17 @@ export async function settleStaleStructuredAgentSessionState(input: {
     }
   }
   const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal)
-  mutations.push(
+  const turnEnds = [
     ...items.flatMap((item) => runningTurnLifecycleRevisions([item], verdictFor(item))),
     ...proven
-  )
+  ]
+  mutations.push(...turnEnds)
   const evidence = input.deathEvidence
   if (
     evidence &&
     (proven.length > 0 ||
-      items.some((item) => isInProgressItem(item) && verdictFor(item).state === 'interrupted'))
+      items.some((item) => isInProgressItem(item) && verdictFor(item).state === 'interrupted')) &&
+    !endedByPersonsStop(journal, turnEnds)
   ) {
     mutations.unshift({
       kind: 'item',

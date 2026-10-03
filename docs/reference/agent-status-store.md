@@ -441,6 +441,45 @@ the renderer, `runtime-worktree-status-projection.ts` in main, and
 PR 3 moves the rollup and the decay into `src/shared` and makes all three
 call it.
 
+## Readiness reads the store
+
+`terminal wait --for tui-idle` is a reader too. Before STA-9100 hook state
+reached it only through the `<Agent> ready` titles the window writes, so a
+headless `orca serve` never saw it (#16095). Now an agent whose rule file says
+`profile.hooks: "authoritative"` (OpenCode, OpenCode 2, Pi, OMP) or
+`"turn-end"` (Codex) has its fresh row read straight from the store, through the same
+`selectFreshExplicitAgentStatusRow` join prompt-receipt verification uses
+(`src/main/runtime/tui-idle-hook-lane.ts`):
+
+- the main agent's turn, not the combined row, decides: `mainAgent.state` when
+  published, so a subagent's Stop does not end the lead turn. `done` settles
+  the wait, `working` holds it, and a permission wait never settles. The tail's
+  blocked text goes through the existing permission arbiter with the turn as
+  its explicit status, so a denied prompt's dialog left in the tail no longer
+  blocks a turn the hook says ended;
+- the row joins on any pane key or terminal handle the PTY owns; a pane neither
+  reaches, a stale or restored row, a session-start `done`, a row from before
+  the PTY respawned, and a `done` received before the pane's latest input all
+  leave the decision to the screen and text rules, which is also how startup
+  readiness works before an agent's first hook. The input is the PTY run's
+  `lastInputAt` (`terminal-run-facts.ts`), which both write funnels record, so
+  a key the user typed counts like a prompt Orca sent: the next turn's first
+  hook may still be in flight, and an agent restarted in the same shell has
+  not posted one. A shell command marker is no process boundary: Pi paints
+  OSC 133 zones itself;
+- every other agent stays `identity-only`: Claude sends no event when an
+  approval is denied or Esc stops a tool, so its row can sit at `waiting` or
+  `working` forever, and the rules keep deciding;
+- Codex is `turn-end`: only a `done` decides (it settles the wait), and a
+  `working` or permission row leaves the decision to the rules. Before its
+  `Interrupt` hook an Esc mid-turn can leave the row `working`, and an older
+  TUI can hand its hooks to a newer shared app server, so no version check
+  tells which Codex posts it. A `done` is a real turn end on every version, so
+  trusting only that one keeps the headless gain (no quiet window after the
+  turn) without letting a missing cancel hang the wait.
+
+The titles stay for display; remote clients read them.
+
 ## What does not change
 
 - The hook scripts, the OSC 9999 wire format, and the relay protocol.

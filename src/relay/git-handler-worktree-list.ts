@@ -1,3 +1,5 @@
+import { annotateWorktreeLocksFromAdmin } from '../shared/git-worktree-admin'
+import { expandTilde } from './context'
 import { stat } from 'node:fs/promises'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
@@ -27,7 +29,9 @@ export async function readRelayWorktreeList(
     async () => {
       // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
       const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-      return normalizeRelayWorktrees(parseWorktreeList(stdout))
+      return normalizeRelayWorktrees(
+        await annotateWorktreeLocksFromAdmin(expandTilde(repoPath), parseWorktreeList(stdout))
+      )
     },
     isUnsupportedWorktreeListZError
   )
@@ -55,8 +59,7 @@ export async function annotatePrunableWorktreesByExistence(
       const worktreePath = worktree?.path ?? ''
       // Git only marks linked worktrees prunable, and never locked ones (a
       // lock shields the registration even when the directory is missing). The
-      // `locked` annotation is only parsed on Git >=2.31, so on older Git a
-      // locked+missing worktree cannot be shielded here. A missing main
+      // Older Git locks are annotated from the host admin directory. A missing main
       // worktree is surfaced by the repo-level failure paths.
       if (
         !worktreePath ||

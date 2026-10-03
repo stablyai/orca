@@ -1,47 +1,74 @@
 export const NODE_SERVER_RUNNERS = [
   'ubuntu-22.04',
   'ubuntu-24.04-arm',
-  'macos-14',
+  'macos-15',
   'macos-15-intel',
   'windows-2022',
   'windows-11-arm'
 ]
 
-// Only surfaces whose behaviour actually differs per platform. Escalating on `config/`,
-// `resources/` and `.github/` wholesale took 36.5% of the last 1100 commits through all six
-// platforms where a platform-flavoured predicate takes 19%.
-const PLATFORM_PREFIXES = [
+// Shared execution and storage changes need every host; explicit platform paths need their family.
+const BUILD_PREFIXES = [
   'native/',
   'config/patches/',
   '.github/actions/install-node-dependencies/',
+  '.github/actions/restore-pnpm-verification/',
+  '.github/actions/prepare-native-runtime/',
+  '.github/actions/prepare-orcad-prebuilds/'
+]
+// A remote target's OS does not identify the client platform that builds its commands.
+const CROSS_HOST_PREFIXES = ['src/main/ssh/', 'src/main/providers/', 'src/relay/']
+const PLATFORM_PREFIXES = [
   'src/main/persistence/',
   'src/main/sqlite/',
   'src/main/orcad/',
-  'src/main/providers/',
   'src/main/daemon/',
-  'src/main/ssh/',
   'src/main/wsl/',
-  'src/relay/',
-  'src/shared/child-process/',
-  // Every native prebuild slot is compiled and smoked against the pinned runtime.
-  'src/shared/node-runtime-pin.ts'
+  'src/shared/child-process/'
 ]
 
-export function nodeServerQualification(changedFiles, scope) {
-  const platformSpecific = changedFiles.some(
-    (file) =>
-      // A root manifest can move a native dependency on every platform at once.
+const PLATFORM_FAMILIES = [
+  { pattern: /(?:^|[/.-])(?:windows|win32|wsl)(?:[/.-]|$)/i, prefix: 'windows-' },
+  { pattern: /(?:^|[/.-])(?:macos|darwin|posix)(?:[/.-]|$)/i, prefix: 'macos-' },
+  { pattern: /(?:^|[/.-])(?:linux|posix)(?:[/.-]|$)/i, prefix: 'ubuntu-' }
+]
+
+export function nodeServerQualification(changedFiles, scope, { fullQualification = false } = {}) {
+  const selected = new Set(['ubuntu-22.04'])
+  let qualification = false
+  let full = fullQualification || changedFiles.length === 0 || scope.graphUnavailable === true
+  for (const file of changedFiles) {
+    // Build policy and native sources can change every slot, even with a platform in the name.
+    if (
       !file.includes('/') ||
-      PLATFORM_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
-      /(?:^|[/.-])(?:windows|win32|wsl|macos|darwin|linux|posix|bun|prebuilds?)(?:[/.-]|$)/i.test(
-        file
-      )
-  )
-  // A pull request qualifies one platform unless the change is platform-flavoured; the push to
-  // main re-qualifies all six, so an unescalated miss surfaces minutes after merge, not a day.
-  const full = changedFiles.length === 0 || scope.graphUnavailable === true || platformSpecific
+      BUILD_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
+      CROSS_HOST_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
+      (/(?:^|[/.-])(?:remote|ssh)(?:[/.-]|$)/i.test(file) &&
+        PLATFORM_FAMILIES.some(({ pattern }) => pattern.test(file))) ||
+      file === 'src/shared/node-runtime-pin.ts' ||
+      file === '.github/workflows/node-server-tests.yml' ||
+      file.startsWith('config/scripts/node-server-') ||
+      /(?:^|[/.-])(?:bun|prebuilds?)(?:[/.-]|$)/i.test(file)
+    ) {
+      full = true
+      continue
+    }
+    const families = PLATFORM_FAMILIES.filter(({ pattern }) => pattern.test(file))
+    if (families.length > 0) {
+      for (const { prefix } of families) {
+        for (const runner of NODE_SERVER_RUNNERS.filter((runner) => runner.startsWith(prefix))) {
+          selected.add(runner)
+        }
+        qualification ||= prefix === 'ubuntu-'
+      }
+    } else if (PLATFORM_PREFIXES.some((prefix) => file.startsWith(prefix))) {
+      full = true
+    }
+  }
   return {
-    qualification: full,
-    runners: full ? NODE_SERVER_RUNNERS : ['ubuntu-22.04']
+    qualification: full || qualification,
+    runners: full
+      ? NODE_SERVER_RUNNERS
+      : NODE_SERVER_RUNNERS.filter((runner) => selected.has(runner))
   }
 }

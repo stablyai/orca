@@ -45,7 +45,7 @@ export function createRelayOpenCodeReader(
     pending ??= (async () => {
       const configured = await readRuntimeExecutable(join(baseDir, 'opencode-sqlite-runtime.json'))
       if (!configured && !(options.canReadSqlite ?? canCurrentRuntimeReadSqlite)()) {
-        throw new Error('OpenCode history is waiting for its database reader on this host.')
+        throw new Error(openCodeReaderUnavailableMessage(process.version))
       }
       if (disposed) {
         throw new Error('OpenCode database reader was disposed.')
@@ -144,6 +144,14 @@ async function readRuntimeExecutable(path: string): Promise<string | undefined> 
   } finally {
     await file.close()
   }
+}
+
+/** Rung C runs the relay on the host's Node, which may predate the full node:sqlite surface. */
+export function openCodeReaderUnavailableMessage(nodeVersion: string): string {
+  return (
+    `OpenCode history is unavailable on this host for now: its Node.js ${nodeVersion} has no ` +
+    'complete node:sqlite (22.16 or newer), and Orca has not installed its own Node reader here yet.'
+  )
 }
 
 function canCurrentRuntimeReadSqlite(): boolean {

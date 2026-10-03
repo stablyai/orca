@@ -8,9 +8,10 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import path, { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
+import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_COMPAT_ASSETS } from '../../shared/node-runtime-pin'
+import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/relay-artifacts'
 import { remoteInstallVersionDirRegex, RELAY_INSTALL_MODEL } from './remote-install-model'
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
@@ -123,6 +124,30 @@ describe('staged addons', () => {
     expect(existsSync(addons.dir)).toBe(false)
   })
 
+  it('ships the win32 ConPTY pair and the process-table addon at the names the relay loads', async () => {
+    const files = pinnedRelayAddonFiles('win32-x64')
+    expect(files).toEqual(
+      expect.arrayContaining([
+        'node_modules/node-pty/build/Release/conpty.node',
+        'node_modules/node-pty/build/Release/conpty_console_list.node',
+        'node_modules/node-pty/build/Release/conpty/conpty.dll',
+        'node_modules/node-pty/build/Release/conpty/OpenConsole.exe',
+        RELAY_WINDOWS_PROCESS_TREE_FILENAME
+      ])
+    )
+    expect(files).not.toContain('node_modules/node-pty/build/Release/pty.node')
+    expect(pinnedRelayAddonFiles('linux-x64-glibc')).not.toContain(
+      RELAY_WINDOWS_PROCESS_TREE_FILENAME
+    )
+    const addons = await stagePinnedRelayAddons(
+      fakeOrcadSlot('win32-x64'),
+      'win32-x64',
+      tempDir('stage-')
+    )
+    expect(existsSync(join(addons.dir, RELAY_WINDOWS_PROCESS_TREE_FILENAME))).toBe(true)
+    await addons.dispose()
+  })
+
   it('refuses a slot missing an addon and leaves nothing behind', async () => {
     const slot = fakeOrcadSlot('linux-x64-glibc')
     rmSync(join(slot, 'node_modules/@parcel/watcher/watcher.node'))
@@ -141,21 +166,58 @@ describe('pinned runtime layout', () => {
       pinnedRelayNodePath(host, '/home/u/.orca-remote/relay-0.1.0+abc', 'linux-x64-glibc')
     ).toBe(`/home/u/.orca-remote/runtimes/node-${SHA}/bin/node`)
   })
+
+  it('keeps node.exe under its real name at the runtime root on Windows', () => {
+    const host = getRemoteHostPlatform('win32-x64')
+    const sha = NODE_RUNTIME_ASSETS['win32-x64'].executableSha256
+    const nodePath = pinnedRelayNodePath(
+      host,
+      'C:/Users/u/.orca-remote/relay-0.1.0+abc',
+      'win32-x64'
+    )
+    expect(nodePath).toBe(`C:/Users/u/.orca-remote/runtimes/node-${sha}/node.exe`)
+    expect(path.win32.normalize(nodePath)).toBe(
+      `C:\\Users\\u\\.orca-remote\\runtimes\\node-${sha}\\node.exe`
+    )
+    expect(path.win32.basename(nodePath)).toBe('node.exe')
+  })
 })
 
 describe('planPinnedNodeRelay', () => {
   const base = '0.1.0+abcdef012345'
 
-  it('keeps Windows hosts on the host-Node relay', async () => {
+  it('plans a Windows host on the win32 slot without a libc probe', async () => {
+    const plan = await planPinnedNodeRelay({
+      conn,
+      host: getRemoteHostPlatform('win32-arm64'),
+      baseVersion: base,
+      targetId: 't',
+      materializeOrcad: async (target) => fakeOrcadSlot(target)
+    })
+    expect(execCommand).not.toHaveBeenCalled()
+    expect(plan).toMatchObject({ kind: 'pinned-node', target: 'win32-arm64', glibc: null })
+    if (plan.kind === 'pinned-node') {
+      expect(plan.fullVersion).toBe(
+        pinnedNodeRelayFullVersion(
+          base,
+          NODE_RUNTIME_ASSETS['win32-arm64'].executableSha256,
+          plan.addons.digest
+        )
+      )
+      await plan.addons.dispose()
+    }
+  })
+
+  it('falls back on Windows when this client packaged no win32 slot', async () => {
     await expect(
       planPinnedNodeRelay({
         conn,
         host: getRemoteHostPlatform('win32-x64'),
         baseVersion: base,
-        targetId: 't'
+        targetId: 't',
+        materializeOrcad: () => Promise.reject(new Error('template has no win32-x64'))
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'windows_host_unsupported' })
-    expect(execCommand).not.toHaveBeenCalled()
+    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'artifacts_unavailable' })
   })
 
   it('refuses a glibc below the pinned Node floor without uploading anything', async () => {
@@ -244,5 +306,67 @@ describe('planPinnedNodeRelay', () => {
       expect(plan.fullVersion).toBe(pinnedNodeRelayFullVersion(base, SHA, plan.addons.digest))
       await plan.addons.dispose()
     }
+  })
+
+  describe('on the rung B compat runtime', () => {
+    const compat = { target: 'linux-x64-glibc217' as const, glibcFloor: { major: 2, minor: 17 } }
+    const COMPAT_SHA = NODE_RUNTIME_COMPAT_ASSETS['linux-x64-glibc217'].executableSha256
+
+    it('plans the compat slot on a glibc below the default floor, folding the compat runtime', async () => {
+      vi.mocked(execCommand).mockResolvedValueOnce('ldd (GNU libc) 2.17')
+      const materializeOrcad = vi.fn(async (target: Parameters<typeof fakeOrcadSlot>[0]) =>
+        fakeOrcadSlot(target)
+      )
+      const plan = await planPinnedNodeRelay({
+        conn,
+        host: getRemoteHostPlatform('linux-x64'),
+        baseVersion: base,
+        targetId: 't',
+        compat,
+        // A persisted rung A refusal says nothing about the compat runtime.
+        persistedRefusal: () => 'libc_floor',
+        materializeOrcad
+      })
+      expect(materializeOrcad).toHaveBeenCalledWith('linux-x64-glibc217', undefined)
+      expect(plan).toMatchObject({ kind: 'pinned-node', target: 'linux-x64-glibc217' })
+      if (plan.kind === 'pinned-node') {
+        expect(plan.fullVersion).toBe(
+          pinnedNodeRelayFullVersion(base, COMPAT_SHA, plan.addons.digest)
+        )
+        expect(plan.fullVersion).not.toBe(pinnedNodeRelayFullVersion(base, SHA, plan.addons.digest))
+        expect(readdirSync(plan.addons.dir)).toContain(`${RELAY_RUNTIME_REF_PREFIX}${COMPAT_SHA}`)
+        await plan.addons.dispose()
+      }
+    })
+
+    it('refuses a glibc below the compat floor too', async () => {
+      vi.mocked(execCommand).mockResolvedValueOnce('ldd (GNU libc) 2.12')
+      await expect(
+        planPinnedNodeRelay({
+          conn,
+          host: getRemoteHostPlatform('linux-x64'),
+          baseVersion: base,
+          targetId: 't',
+          compat,
+          materializeOrcad: vi.fn()
+        })
+      ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'libc_floor' })
+    })
+
+    it('remembers compat refusals apart from the default runtime', async () => {
+      recordPinnedRuntimeRefusal('t', 'linux-x64-glibc', 'libc_floor')
+      recordPinnedRuntimeRefusal('t', 'linux-x64-glibc217', 'missing_lib')
+      vi.mocked(execCommand).mockResolvedValue('ldd (GNU libc) 2.17')
+      await expect(
+        planPinnedNodeRelay({
+          conn,
+          host: getRemoteHostPlatform('linux-x64'),
+          baseVersion: base,
+          targetId: 't',
+          compat,
+          materializeOrcad: vi.fn()
+        })
+      ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'missing_lib', remembered: true })
+    })
   })
 })

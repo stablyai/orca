@@ -394,12 +394,12 @@ It is not a substitute for reading the diff. Five facts bound it, all learned th
 - **It was blind to a stream close with no frame behind it.** Deleting `unsubscribeStream()` from
   `mobile-notifications.ts`'s cleanup — the local close, not the `notifications.unsubscribe` RPC
   beside it — survived all 810 tests. Neither unsubscribe builder in `rpc-client-stream-registry.ts`
-  knows `notifications.subscribe`, so closing that stream writes nothing to the wire: what the
-  mutant leaks is a live subscription record, and the leak stayed invisible until a cutover replayed
+  knew `notifications.subscribe` then, so closing that stream wrote nothing to the wire: what the
+  mutant leaked was a live subscription record, and the leak stayed invisible until a cutover replayed
   it. `notifications-desktop-stream-closed` stops the stream and then cuts over, where the leak
   becomes a second `notifications.subscribe` payload — one hand-written scenario per builder-less
   method, which is a rule nobody enforces. The teardown observation below closes the class: the same
-  mutant now fails seven goldens rather than that one, and a family whose method does build an
+  mutant then failed seven goldens rather than that one, and a family whose method does build an
   unsubscribe (`nativeChat.subscribe`, `runtime.clientEvents.subscribe`) is pinned by that payload
   at unmount as well.
 
@@ -594,14 +594,15 @@ timer has not run when `dispose()` returns, so reading the set first made a defe
 byte-identical to a stream nobody ever closed.
 
 Why it is not enough to watch the wire: closing a stream only writes a frame when its method has an
-unsubscribe builder, and `notifications.subscribe` has none. Deleting that cleanup's
-`unsubscribeStream()` used to fail one golden, the cutover scenario written for it; it now fails
-seven, and the next builder-less method needs no scenario of its own.
+unsubscribe builder. `notifications.subscribe` had none until the transport took over its release:
+deleting its cleanup's `unsubscribeStream()` used to fail one golden, the cutover scenario written
+for it, and this observation made it fail seven, so the next builder-less method needs no scenario
+of its own.
 
 An empty set is not recorded, so the corpus stays quiet and a family that starts leaking gains a
-checkpoint. Four goldens report a non-empty set today, and all four are the same non-leak: the two
-`runtime.clientEvents.subscribe` matrices, on every partition whose subscribe reply is not a
-well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
+checkpoint. Five goldens report a non-empty set today, and all five are the same non-leak: the two
+`runtime.clientEvents.subscribe` matrices and the `notifications.subscribe` matrix, on every
+partition whose subscribe reply is not a well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
 the record cancelled and keeps it until the id arrives — the retention the per-session registry
 paragraph above describes. `cancelled` is in the observation so those are legible as what they are:
 a product cleanup that never ran records `cancelled: false`, and because the drain precedes the

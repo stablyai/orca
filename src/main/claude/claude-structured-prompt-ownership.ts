@@ -48,16 +48,7 @@ function cancelClaudeConversation(
     session.fence === request.fence &&
     session.acquisitionGeneration === acquisitionGeneration &&
     (claudeLiveTurnId(session, request) !== null || session.dispatchWaiters.length > 0)
-  // A turn is cancelled only at a client's request, so the stop is the user's: on the named turn,
-  // else on whatever turn is open.
-  const stoppedTurnId = request.turnId ?? session.translator?.currentTurnId ?? null
-  return cancelClaudeTurn(
-    session,
-    timeoutMs,
-    isCurrent,
-    onDispatchSettledLate,
-    stoppedTurnId === null ? undefined : { turnId: stoppedTurnId, cause: 'user-stop' }
-  )
+  return cancelClaudeTurn(session, timeoutMs, isCurrent, onDispatchSettledLate)
 }
 
 /** A Stop's interrupt. A card's own Cancel never comes here: `claudePromptCancelRoute` routes it. */
@@ -96,8 +87,8 @@ export async function cancelClaudeStructuredTurn(input: {
     )
   }
   // Judge against the published journal, because that is the only turn a client could have been
-  // shown — but only while it HAS an answer. The journal drains through a serialized async queue,
-  // so a null read means the row has not landed yet, not that nothing is running; falling back to
+  // shown — but only while it HAS an answer. A null read can mean the row never landed (a sink not
+  // yet bound, or refusing under backpressure), not that nothing is running; falling back to
   // the in-memory turn there keeps Stop from being gated on bookkeeping. No live turn either way
   // means nothing has published an identity this request can contradict.
   const ownsRequestedTurn = (): boolean => {
@@ -117,7 +108,6 @@ export async function cancelClaudeStructuredTurn(input: {
         )
   const compactionOwnsTurn = (): boolean =>
     session.translator !== null && session.translator.commandTurnId === requestedTurnId
-  // A turn is cancelled only at a client's request, so the stop is the user's.
   return cancelClaudeTurn(
     session,
     timeoutMs,
@@ -133,8 +123,7 @@ export async function cancelClaudeStructuredTurn(input: {
       }
       return current
     },
-    input.onDispatchSettledLate,
-    { turnId: requestedTurnId, cause: 'user-stop' }
+    input.onDispatchSettledLate
   )
 }
 

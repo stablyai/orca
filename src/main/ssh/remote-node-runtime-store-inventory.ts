@@ -14,9 +14,9 @@ import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 /** A version dir names a runtime it needs with an empty file of this prefix + sha (design D5). */
 export const RUNTIME_REF_NODE_PREFIX = '.runtime-ref-node-'
 export const RUNTIME_STORE_TOMBSTONE_PREFIX = '.gc-tombstone-'
-const INVENTORY_OK = '__ORCA_RUNTIME_STORE__OK'
-const REFS_ERR = '__ORCA_RUNTIME_STORE__REFS_ERR'
-const MAX_DIRS = 512
+export const INVENTORY_OK = '__ORCA_RUNTIME_STORE__OK'
+export const REFS_ERR = '__ORCA_RUNTIME_STORE__REFS_ERR'
+export const MAX_DIRS = 512
 const SHA256 = /^[0-9a-f]{64}$/
 export const RUNTIME_STORE_ENTRY_NAME = new RegExp(
   `^${ORCAD_NODE_RUNTIME_DIR_PREFIX}([0-9a-f]{64})$`
@@ -24,8 +24,10 @@ export const RUNTIME_STORE_ENTRY_NAME = new RegExp(
 export const RUNTIME_STORE_TOMBSTONE_NAME = new RegExp(
   `^${RUNTIME_STORE_TOMBSTONE_PREFIX.replace(/\./g, '\\.')}${ORCAD_NODE_RUNTIME_DIR_PREFIX}([0-9a-f]{64})\\.[0-9]+\\.([0-9]+)$`
 )
+// Why `[/\\]`: Windows process paths use backslashes (see remote-node-runtime-store-windows.ts).
 const HELD_PATH = new RegExp(
-  `/${ORCAD_RUNTIMES_DIRNAME}/(?:${RUNTIME_STORE_TOMBSTONE_PREFIX.replace(/\./g, '\\.')})?${ORCAD_NODE_RUNTIME_DIR_PREFIX}([0-9a-f]{64})[./]`
+  `[/\\\\]${ORCAD_RUNTIMES_DIRNAME}[/\\\\](?:${RUNTIME_STORE_TOMBSTONE_PREFIX.replace(/\./g, '\\.')})?${ORCAD_NODE_RUNTIME_DIR_PREFIX}([0-9a-f]{64})[./\\\\]`,
+  'i'
 )
 
 export type RuntimeStoreInventory = {
@@ -43,6 +45,7 @@ export type RuntimeStoreInventory = {
 
 export function runtimeStoreInventoryCommand(host: RemoteHostPlatform, remoteHome: string): string {
   const root = joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR)
+
   const refPrefix = RUNTIME_REF_NODE_PREFIX
   return [
     `root=${shellEscape(root)}`,
@@ -126,7 +129,7 @@ export function parseRuntimeStoreInventory(output: string): RuntimeStoreInventor
     } else if (tag === 'VERIFIED' && RUNTIME_STORE_ENTRY_NAME.test(value)) {
       inventory.verifiedNewestFirst.push(value)
     } else if (tag === 'HOLD') {
-      const sha = HELD_PATH.exec(value)?.[1]
+      const sha = HELD_PATH.exec(value)?.[1]?.toLowerCase()
       if (sha) {
         inventory.held.add(sha)
       }

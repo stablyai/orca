@@ -147,9 +147,10 @@ async function restorePersistedTabVisibility(
   try {
     await host.setSessionTabVisibility?.(sessionId, true, tabId)
   } catch (error) {
-    console.warn(
-      `[structured-session-close] could not restore the chat tab for ${sessionId} after a failed close`,
+    host.deps.logger.warn('restoring the chat tab after a failed close failed', {
+      scope: 'close-tab-restore',
+      sessionId,
       error
-    )
+    })
   }
 }

@@ -21,6 +21,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 const DEFAULT_MODEL = 'gpt-default'
@@ -124,6 +125,7 @@ beforeEach(async () => {
   store = await openTestAgentSessionRecordStore(root)
   router = adapter()
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: router,
     journalDatabase: openTestJournalHostDatabase(root),
@@ -214,7 +216,7 @@ describe('structured session options and close', () => {
 
     await host.close(SESSION, 'evict')
 
-    expect(closeNativeSession).toHaveBeenCalledWith(SESSION, 'evict')
+    expect(closeNativeSession).toHaveBeenCalledWith(SESSION)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       ownerProcess: null,

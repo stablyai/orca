@@ -99,7 +99,6 @@ function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor
       cancel: () => ({ accepted: true })
     },
     currentTurnId: turnId,
-    recordTurnStop: () => true,
     commandTurnId: null,
     beginCommand: vi.fn(),
     forgetCommand: vi.fn(),

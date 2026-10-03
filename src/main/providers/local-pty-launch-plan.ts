@@ -51,9 +51,9 @@ export type LocalPtyLaunchPlan = {
   getFallbackShellReadyConfig:
     | ((shell: string) => ReturnType<typeof getShellLaunchConfig>)
     | undefined
-  // Why hoisted: a fallback shell must drop the primary's launch env, and
+  // Why hoisted: a fallback shell must undo the primary's launch env, and
   // re-deriving the key names would re-run wrapper generation.
-  primaryLaunchEnvKeys: string[]
+  primaryPreLaunchEnv: Record<string, string | undefined>
   isWslShell: boolean
   launchWslDistro: string | null
 }
@@ -98,7 +98,7 @@ function finalizeLocalPtyLaunchPlan(
     windowsFallbackAttempts: shell.windowsFallbackAttempts ?? [],
     shellReadyLaunch: null,
     getFallbackShellReadyConfig: undefined,
-    primaryLaunchEnvKeys: [],
+    primaryPreLaunchEnv: {},
     isWslShell,
     launchWslDistro: isWslShell ? (seed.launchWslContext?.distro ?? null) : null
   }

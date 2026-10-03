@@ -1,6 +1,6 @@
 /**
  * Where a mailbox owned by a structured session is delivered: a chat that coordinates a Run
- * (`run:<id>` with no coordinator handle), a session addressed directly at `session:<id>`, and the
+ * (`run:<id>` with no coordinator handle), a session addressed directly at `orca_session_id:<id>`, and the
  * live session behind a structured worker's handle. The session is resolved here, never a pane, and
  * takes the pointer as a session turn.
  */
@@ -76,7 +76,7 @@ export function structuredWorkerMailSessionId(
 }
 
 /**
- * The target of a `session:<id>` mailbox; `undefined` when the handle is not a session address at
+ * The target of an `orca_session_id:<id>` mailbox; `undefined` when the handle is not a session address at
  * all, so other address forms keep their own resolution.
  */
 export function structuredSessionAddressTarget(

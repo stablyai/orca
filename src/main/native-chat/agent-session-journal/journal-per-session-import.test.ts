@@ -28,6 +28,7 @@ import {
 import { journalDirectoryFor, legacyJournalDatabaseFile } from './journal-paths'
 import { importPerSessionJournal } from './journal-per-session-import'
 import { readJournalSessionEpoch, type JournalStoredRow } from './journal-row-table'
+import { createStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
@@ -221,6 +222,7 @@ describe('importing a per-chat journal', () => {
 
     const journal = await openChat()
     const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
+      logger: createStructuredAgentSessionLogger(),
       sessions: new Map([[IDENTITY.sessionId, { journal, child: null }]]),
       now: () => clock,
       enqueue: (operation) => operation()
@@ -234,25 +236,25 @@ describe('importing a per-chat journal', () => {
     await writeLegacyJournal(epoch, rows)
     const database = openTestJournalHostDatabase(root)
     const turns: { published: boolean; copied: number }[] = []
-    let ticking = true
     const tick = (): void => {
       turns.push({
         published: readJournalSessionEpoch(database.db, IDENTITY.sessionId) !== null,
         copied: rowCount(database.db)
       })
-      if (ticking) {
-        setImmediate(tick)
-      }
+      pending = setImmediate(tick)
     }
-    setImmediate(tick)
+    let pending = setImmediate(tick)
 
-    await importPerSessionJournal({
-      database,
-      identity: IDENTITY,
-      legacyDirectory: legacyDir(),
-      batchRows: 1
-    })
-    ticking = false
+    try {
+      await importPerSessionJournal({
+        database,
+        identity: IDENTITY,
+        legacyDirectory: legacyDir(),
+        batchRows: 1
+      })
+    } finally {
+      clearImmediate(pending)
+    }
 
     // Other work ran while rows were copied, and none of it could see a partly copied chat.
     expect(turns.filter((turn) => !turn.published && turn.copied > 0).length).toBeGreaterThan(0)

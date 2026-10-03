@@ -16,7 +16,7 @@ import {
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
 } from '../../shared/orcad-artifacts'
-import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
+import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../shared/node-runtime-pin'
 import { findOrcadCachePath } from './orcad-cache-path'
 import {
   fileSha256,
@@ -52,7 +52,7 @@ const materializations = new Map<string, Promise<string>>()
 
 /** A verified slot directory for `target`; its runtime is referenced, not included (design D2). */
 export async function materializeOrcadArtifact(
-  target: ServerTarget,
+  target: NodeRuntimeTarget,
   options: MaterializeOptions = {}
 ): Promise<string> {
   options.signal?.throwIfAborted()
@@ -75,7 +75,7 @@ export async function materializeOrcadArtifact(
 export async function assembleOrcadArtifact(args: {
   templateDir: string
   cacheRoot: string
-  target: ServerTarget
+  target: NodeRuntimeTarget
   manifest?: z.infer<typeof TemplateManifestSchema>
 }): Promise<string> {
   const manifest = args.manifest ?? (await readTemplateManifest(args.templateDir))
@@ -127,7 +127,7 @@ function isExecutableArtifact(filename: string): boolean {
 
 function artifactSources(
   templateDir: string,
-  target: ServerTarget,
+  target: NodeRuntimeTarget,
   manifest: z.infer<typeof TemplateManifestSchema>
 ): { filename: string; path: string; executable?: boolean }[] {
   const targetDir = join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR, target)
@@ -204,7 +204,7 @@ async function readTemplateManifest(
 
 async function verifyTemplate(
   templateDir: string,
-  target: ServerTarget,
+  target: NodeRuntimeTarget,
   manifest: z.infer<typeof TemplateManifestSchema>
 ): Promise<void> {
   const targetManifest = manifest.targets[target]
@@ -234,7 +234,7 @@ async function verifyTemplate(
     join(targetDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
     'utf8'
   )
-  if (runtimeReference.trim() !== NODE_RUNTIME_ASSETS[target].executableSha256) {
+  if (runtimeReference.trim() !== pinnedNodeRuntimeAsset(target).executableSha256) {
     throw new Error(`Packaged orcad template ${target} does not reference the pinned Node`)
   }
   if (targetManifest.browserName && targetManifest.browserSha256) {

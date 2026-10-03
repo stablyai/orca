@@ -20,6 +20,8 @@ import {
   identityFor,
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 function controlledSink(): {
   sink: StructuredAgentSessionEventSink
@@ -48,7 +50,7 @@ function persistedTarget(
 ): StructuredAgentSessionEventTarget {
   const journal =
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test double implements the journal methods exercised by the deferred sink.
-    {
+    withJournalQueueMembers({
       appendItem: async (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         persisted.set(agentJournalItemKey(identity), body)
         return { cursor: { epoch: 'test', sequence: persisted.size }, itemId: '', revision: 1 }
@@ -67,7 +69,7 @@ function persistedTarget(
       }) satisfies StructuredAgentSessionLinkageJournal['visitItemsWithLinkage'],
       itemBody: (itemId: string) => persisted.get(itemId) ?? null,
       epoch: 'test'
-    } as unknown as AgentSessionJournal
+    }) as unknown as AgentSessionJournal
   return { journal, fence: 1, publish: vi.fn() }
 }
 
@@ -212,6 +214,7 @@ describe('Claude structured reading control', () => {
     const persisted = new Map<string, AgentJournalItemBody>()
     const target = persistedTarget(persisted)
     const deferred = createDeferredStructuredAgentSessionEventSink({
+      ...testEventSinkLogging(),
       watermarks: {
         pauseQueuedOperations: 1,
         maxQueuedOperations: 4,

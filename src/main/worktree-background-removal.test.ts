@@ -3,14 +3,16 @@ import type { ExecutionHostId } from '../shared/execution-host'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
-  assertNoPendingWorktreeRemovalConflict,
   finishAcceptedWorktreeRemoval,
-  projectPendingWorktreeRemovals,
   removesInBackground,
-  snapshotPendingWorktreeRemovals,
   startBackgroundWorktreeRemoval,
   waitForPendingWorktreeRemoval
 } from './worktree-background-removal'
+import {
+  projectPendingWorktreeRemovals,
+  snapshotPendingWorktreeRemovals
+} from './worktree-removal-listing'
+import { assertNoPendingWorktreeRemovalConflict } from './worktree-removal-table'
 
 const removal = {
   worktreeId: 'repo-1::/work/feature',

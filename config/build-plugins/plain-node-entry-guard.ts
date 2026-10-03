@@ -55,8 +55,7 @@ const PLAIN_NODE_ENTRY_NAMES = [
 const WORKER_THREAD_ENTRY_NAMES = [
   'stt-worker',
   'warp-theme-parser-worker',
-  'session-scanner-opencode-sqlite-worker-entry',
-  'session-scanner-worker-entry',
+  'foreign-sqlite-reader-entry',
   'main-thread-hang-watchdog-entry',
   'port-scan-command-worker-entry',
   'usage-scan-worker-entry',

@@ -81,7 +81,10 @@ export function normalizePiCompatibleEvent(
     stateName = hookPayload.is_idle === true ? 'done' : 'working'
   }
 
-  if (!stateName) {
+  if (
+    !stateName ||
+    (stateName === 'working' && holdsOmpApproval(state, agentType, eventName, paneKey))
+  ) {
     return null
   }
 
@@ -106,4 +109,31 @@ export function normalizePiCompatibleEvent(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
   })
+}
+
+const OMP_APPROVAL_RELEASE_EVENTS: ReadonlySet<unknown> = new Set([
+  'tool_approval_resolved',
+  'before_agent_start',
+  'agent_start'
+])
+
+/**
+ * Whether an OMP approval wait must survive this working event. omp posts `tool_execution_start`
+ * right after `tool_approval_requested`, while its Approve/Deny select still holds the human, so
+ * only the resolution (or a new turn) ends the wait. An `ask` row is its own tool's wait, which
+ * `tool_execution_end` ends.
+ */
+function holdsOmpApproval(
+  state: HookListenerState,
+  agentType: 'pi' | 'omp' | 'prime-agent',
+  eventName: unknown,
+  paneKey: string
+): boolean {
+  if (agentType !== 'omp' || OMP_APPROVAL_RELEASE_EVENTS.has(eventName)) {
+    return false
+  }
+  const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
+  return (
+    previous?.agentType === 'omp' && previous.state === 'blocked' && previous.toolName !== 'ask'
+  )
 }

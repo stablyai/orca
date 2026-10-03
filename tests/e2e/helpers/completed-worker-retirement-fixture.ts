@@ -18,6 +18,7 @@ import type {
 } from '../../../src/shared/runtime-types'
 import { buildFakeAgentCommandOverride } from './fake-agent-command-override'
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scanner'
+import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './fake-codex-launch-probes'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-retired-worker-'))
 const recoveryConfigPath = path.join(fakeCliDir, 'recovery-config.json')
@@ -49,15 +50,7 @@ async function publishRecovery() {
   }
 }
 const args = process.argv.slice(2)
-if (args.includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
-// Why: Orca probes codex --help before each launch; answer it without counting a spawn.
-if (args.includes('--help')) {
-  process.stdout.write('Usage: codex [OPTIONS] [PROMPT]\\n')
-  process.exit(0)
-}
+${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
 append({ event: 'spawn', args })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 ${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}

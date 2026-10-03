@@ -11,6 +11,12 @@
     "retrying": "正在重试..."
   },
   "settings": {
+    "terminal": {
+      "optionLayoutAlt": "ABC 或 U.S. — Option 键发送 Alt/Esc 序列",
+      "optionLayoutCompose": "此布局使用 Option 键输入 @、€、[、] 等字符",
+      "optionLayoutUnknown": "未知布局 — Option 键输入字符（安全的默认设置）",
+      "optionShortcutHint": "选择“两个都”使用 Option 快捷键，选择“关”输入重音字符和符号，或选择“左边”/“右边”让两个 Option 键各司其职。"
+    },
     "appearance": {
       "language": {
         "title": "语言",
@@ -900,6 +906,17 @@
         "symlink": "无法附加符号链接。",
         "permissionDenied": "没有访问权限。",
         "unsupported": "不支持的文件类型。"
+      },
+      "dropTempCopyFailure": {
+        "changed": "Orca 复制时文件发生了变化。请重新拖放。",
+        "outOfSpace": "磁盘空间不足，无法复制拖放的文件。",
+        "storageUnavailable": "Orca 无法为拖放的文件创建存储位置。",
+        "storageNotPrivate": "Orca 用于拖放文件的存储位置可被其他用户读取，因此未复制任何内容。",
+        "timedOut": "复制耗时过长。请重新拖放。",
+        "busy": "仍有太多拖放正在复制。请稍候再试。",
+        "tooLarge": "文件太大，无法复制，因此 Orca 无法将其交给代理。",
+        "storageFull": "Orca 用于拖放文件的存储空间已满，因此 Orca 无法将其交给代理。",
+        "generic": "请重新拖放。"
       }
     },
     "hooks": {
@@ -934,7 +951,10 @@
         "nativeDropPathsTooLarge": "拖放的路径列表过大。",
         "ownerChanged": "无法确认哪个主机拥有此工作区。请在它重新连接后重试。",
         "nativeDropUnresolvedPathsDescription": "首先将它们保存到磁盘，然后删除保存的文件。",
-        "nativeDropUnresolvedPaths": "Orca 无法读取已删除文件的路径。"
+        "nativeDropUnresolvedPaths": "Orca 无法读取已删除文件的路径。",
+        "nativeDropTempCopyFailed": "Orca 无法复制 {{count}} 个拖放的文件。",
+        "nativeDropTempCopyFailed_one": "Orca 无法复制 {{count}} 个拖放的文件。",
+        "nativeDropTempCopyFailed_other": "Orca 无法复制 {{count}} 个拖放的文件。"
       },
       "useIpcEvents": {
         "0e3cf53060": "未找到浏览器选项卡 {{value0}}",
@@ -3889,7 +3909,7 @@
             "compact": "精简",
             "footerDetailAria": "使用情况页脚详情",
             "detailedTooltip": "完整使用情况，包含条形图、标签和百分比",
-            "compactTooltip": "精简使用情况：仅显示最吃紧的窗口"
+            "compactTooltip": "精简使用情况：每个提供方显示一项汇总"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -5439,6 +5459,7 @@
           "74522ee457": "重命名失败",
           "02e19349f4": "自动重命名失败：查看错误",
           "691ccfd622": "正在删除...",
+          "deleteFailed": "删除失败",
           "35ccfe2475": "项目{{value0}}",
           "1d66d84f0b": "字符串",
           "57eaa61b55": "隐藏子工作区",
@@ -7072,7 +7093,7 @@
             "shellEnvCopy": "Codex 和 Claude 聊天启动时会带上登录 shell 导出的所有变量，与终端一致。关闭后可选择传递哪些变量。",
             "shellEnvToggleLabel": "切换使用 shell 环境",
             "structuredTitle": "使用更新的结构化本机聊天",
-            "structuredCopy": "选择加入 Codex 和 Claude 的主机拥有的结构化聊天运行时。关闭会保留现有的终端支持的聊天路径。",
+            "structuredCopy": "将新的 Codex 和 Claude 代理作为结构化聊天打开。关闭时会在终端支持的聊天中打开。已有的聊天保持不变。",
             "structuredScope": "目前仅限本地会话。 WSL 和远程执行主机（包括 SSH）继续使用终端聊天，Windows 会回退到它，除非 Orca 可以读取进程启动时间。",
             "structuredToggleLabel": "切换更新的结构化本机聊天",
             "resumeTitle": "重启后自动恢复工作聊天",
@@ -8535,7 +8556,7 @@
           "19f4935159": "JIS 日元 (¥) 至 反斜杠 (\\\\)",
           "1c337bef4a": "控制按 JIS 日元 (¥) 键是否发送反斜杠 (\\\\)。",
           "3fe1c5bfe0": "关",
-          "c73d510938": "正确的",
+          "c73d510938": "右边",
           "e7aec1fd60": "左边",
           "badb1219fc": "两个都",
           "43c2ff7b0e": "自动",
@@ -17282,6 +17303,12 @@
   },
   "components": {
     "native-chat": {
+      "contextMenu": {
+        "copyOrcaSessionId": "复制 Orca 会话 ID",
+        "orcaSessionIdCopied": "已复制 Orca 会话 ID",
+        "orcaSessionIdCopyFailed": "无法复制 Orca 会话 ID",
+        "orcaSessionIdTooltip": "Orca 为此聊天分配的 ID，独立于智能体 CLI 自身的会话 ID。智能体通过 Orca 用它来相互指代。"
+      },
       "failureWords": {
         "theAgent": "智能体",
         "providerStartFailed": "{{agent}} 在完成启动前已停止。",
@@ -17339,7 +17366,8 @@
         "hostStopped": "{{agent}} 始终未完成启动，因此 Orca 已将其停止。",
         "providerRateLimited": "{{agent}} 已被限流，正在重试。",
         "providerRetrying": "{{agent}} 遇到临时问题，正在重试。",
-        "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。"
+        "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。",
+        "previousExitUnverifiable": "Orca 无法确认 {{agent}} 的上一个进程已结束。在 Orca 确认其已结束之前，消息会等待发送。"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录。",
@@ -18389,6 +18417,17 @@
     },
     "fileLoad": {
       "hostUnresolved": "主机找不到该文件的工作区。它可能已被删除，或者主机可能还不知道。重试，或从选项卡栏中关闭此选项卡。"
+    },
+    "markdownPreview": {
+      "tooLarge": "文件超过 {{limit}} 预览限制。请打开文件查看源代码。",
+      "tooLargeInDiff": "文件超过 {{limit}} 预览限制。请切换到源代码模式查看差异。",
+      "blockTooLarge": "此区块过大，无法渲染。请打开源代码视图阅读。",
+      "largeNotice": "大型预览。请使用源代码视图复制完整文档。PDF 导出不可用。",
+      "processingFailed": "此文档超出了预览限制。请打开源代码视图阅读完整文件。",
+      "preparing": "正在准备预览…",
+      "searching": "正在搜索…",
+      "searchFailed": "搜索未能完成，请重试。",
+      "refreshFailed": "预览更新失败，正在显示上一版本。请打开源码视图查看当前内容。"
     }
   },
   "featureTips": {
@@ -18476,7 +18515,12 @@
     "genericDetail": "这通常是图形驱动程序或安装问题。重新加载以重试，或退出并重新启动 Orca。",
     "title": "Orca 一直无法加载",
     "stalledMessage": "崩溃后重新加载时应用程序窗口停止响应。",
-    "crashLoopMessage": "应用程序窗口反复崩溃并自动停止重新加载。"
+    "crashLoopMessage": "应用程序窗口反复崩溃并自动停止重新加载。",
+    "tryAgain": "重试",
+    "launchFailedMessage": "Orca 无法启动绘制其窗口的进程。",
+    "launchFailedDetail": "Orca 重试了 {{recoveryCount}} 次，但未成功。",
+    "processLimitDetail": "由于你的用户帐户已达到进程数上限，系统拒绝创建新进程。这通常由失控的终端、开发服务器或代理导致。请关闭其中一些，然后点击“重试”。",
+    "launchFailedGenericDetail": "系统拒绝启动它。请释放内存或关闭其他应用，然后点击“重试”。如果问题持续出现，请重新安装 Orca。"
   },
   "sessionSearch": {
     "panel": {

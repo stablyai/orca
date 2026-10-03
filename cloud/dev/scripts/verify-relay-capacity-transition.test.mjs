@@ -789,16 +789,12 @@ test('restart gate rejects live or durable cell work', async (t) => {
     ['splice', { active: 1, activityLeases: 0, splices: 1 }],
     ['pending splice', { active: 1, activityLeases: 0, pendingSplices: 1 }],
     ['queued data', { active: 1, activityLeases: 0, queuedBytes: 1 }],
-    ['in-flight connection', {
+    ['control beside a reserved data unit', {
+      active: 2,
       activityLeases: 0,
-      inFlightConnections: 1,
-      enforcedConnectionUnits: 1
-    }],
-    ['reserved data unit', {
-      active: 1,
-      activityLeases: 0,
+      controls: 1,
       reservedConnectionUnits: 1,
-      enforcedConnectionUnits: 2
+      enforcedConnectionUnits: 3
     }],
     ['outgoing migration', { outgoingMigrations: 1 }],
     ['incoming migration', { incomingMigrations: 1 }]
@@ -810,7 +806,8 @@ test('restart gate rejects live or durable cell work', async (t) => {
           fetch: harness(state),
           token: 'masked-token'
         }),
-        /timed out/
+        // A zero timeout can never collect two samples; the blocker must stop the first one.
+        /timed out.*"restartSafeSamples":0/
       )
     })
   }
@@ -1281,8 +1278,6 @@ test('the pace window resets on any non-zero runtime sample', async () => {
 
 test('restart-safe fails on live runtime work or an open migration regardless of leases', async (t) => {
   for (const blocker of [
-    { inFlightConnections: 1 },
-    { reservedConnectionUnits: 1 },
     { controls: 1 },
     { splices: 1 },
     { pendingSplices: 1 },
@@ -1327,4 +1322,167 @@ test('unauthenticated redials do not reset the pace window', async () => {
     lines.slice(0, 4).map((line) => [line.totalConnections, line.preAuthConnections]),
     [[1, 1], [2, 0], [3, 1], [0, 0]]
   )
+})
+
+// c29 2026-10-01: a phone redialling the drained cell holds one physical socket and one
+// reserved host-data unit until the cell refuses it; a host control redial holds an in-flight unit.
+const refusedPhoneDial = {
+  active: 1,
+  preAuthConnections: 1,
+  reservedConnectionUnits: 1,
+  enforcedConnectionUnits: 2
+}
+const refusedControlDial = { inFlightConnections: 1, enforcedConnectionUnits: 1 }
+
+test('a draining cell reaches the pace window through refused redials', async () => {
+  let runtimeReads = 0
+  const lines = []
+  const result = await verifyCapacityTransition(pacedRestartConfig, {
+    fetch: async (url, options) => {
+      if (new URL(url).pathname === '/v1/admin/runtime-status') runtimeReads += 1
+      const redial = runtimeReads % 3 === 0
+        ? refusedPhoneDial
+        : runtimeReads % 3 === 1 ? refusedControlDial : {}
+      return await harness({ ...strandedCell, ...redial })(url, options)
+    },
+    token: 'masked-token',
+    progress: (line) => lines.push(line),
+    ...fakeClock()
+  })
+  assert.equal(runtimeReads, 61)
+  assert.equal(result.cellId, config.cellId)
+  assert.deepEqual(lines.slice(0, 3).map((line) => line.restartSafeSamples), [1, 2, 3])
+})
+
+test('a refused redial cannot hide a persistent control on a draining cell', async () => {
+  let runtimeReads = 0
+  const lines = []
+  await assert.rejects(
+    verifyCapacityTransition(pacedRestartConfig, {
+      fetch: async (url, options) => {
+        if (new URL(url).pathname === '/v1/admin/runtime-status') runtimeReads += 1
+        const redial = runtimeReads % 2 === 0 ? refusedPhoneDial : {}
+        return await harness({ ...strandedCell, ...redial, controls: 1 })(url, options)
+      },
+      token: 'masked-token',
+      progress: (line) => lines.push(line),
+      ...fakeClock()
+    }),
+    /timed out.*"restartSafeSamples":0/
+  )
+  assert.ok(lines.length > 61)
+  assert.ok(lines.every((line) => line.restartSafeSamples === 0 && line.runtime.controls === 1))
+})
+
+test('a runtime that is not draining never passes restart-safe', async (t) => {
+  for (const [name, state] of [
+    ['idle', {}],
+    ['refused phone dial', refusedPhoneDial],
+    ['refused control dial', refusedControlDial]
+  ]) {
+    await t.test(name, async () => {
+      await assert.rejects(
+        verifyCapacityTransition(pacedRestartConfig, {
+          fetch: harness({ ...strandedCell, ...state, draining: 'forbidden' }),
+          token: 'masked-token',
+          progress: () => {},
+          ...fakeClock()
+        }),
+        /timed out.*"draining":false.*"restartSafeSamples":0/
+      )
+    })
+  }
+})
+
+test('quiescent transitions still reject refused redials', async (t) => {
+  for (const [name, state] of [
+    ['refused phone dial', refusedPhoneDial],
+    ['refused control dial', refusedControlDial]
+  ]) {
+    await t.test(name, async () => {
+      await assert.rejects(
+        verifyCapacityTransition(config, { fetch: harness(state), token: 'masked-token' }),
+        /timed out/
+      )
+    })
+  }
+})
+
+test('restart progress prints every counter the gate reads', async () => {
+  const lines = []
+  await assert.rejects(
+    verifyCapacityTransition(
+      { ...pacedRestartConfig, timeoutMs: 0 },
+      {
+        fetch: harness({
+          ...strandedCell,
+          active: 7,
+          preAuthConnections: 1,
+          inFlightConnections: 2,
+          reservedConnectionUnits: 3,
+          enforcedConnectionUnits: 12,
+          controls: 4,
+          splices: 5,
+          pendingSplices: 6,
+          queuedBytes: 8,
+          incomingMigrations: 9,
+          outgoingMigrations: 10
+        }),
+        token: 'masked-token',
+        progress: (line) => lines.push(line),
+        ...fakeClock()
+      }
+    ),
+    /timed out/
+  )
+  assert.equal(lines.length, 1)
+  assert.deepEqual(lines[0], {
+    event: 'relay_capacity_transition_restart_progress',
+    restartSafeSamples: 0,
+    requiredRestartSafeSamples: 61,
+    totalConnections: 7,
+    preAuthConnections: 1,
+    runtimeAvailable: true,
+    admissionState: 'migration-only',
+    draining: true,
+    runtime: {
+      totalConnections: 7,
+      preAuthConnections: 1,
+      inFlightConnections: 2,
+      reservedConnectionUnits: 3,
+      enforcedConnectionUnits: 12,
+      controls: 4,
+      splices: 5,
+      pendingSplices: 6,
+      queuedBytes: 8
+    },
+    directorHeartbeatFresh: true,
+    stranded: {
+      restartBlockingActivityLeases: 4,
+      restartBlockingActivityRequestUnits: 4,
+      restartBlockingReservedRequests: -2,
+      outgoingMigrations: 10,
+      incomingMigrations: 9
+    }
+  })
+})
+
+test('a draining cell still fails closed on malformed handshake counters', async (t) => {
+  for (const [name, state] of [
+    ['negative in-flight', { inFlightConnections: -1 }],
+    ['fractional reserved', { reservedConnectionUnits: 0.5 }],
+    ['non-numeric reserved', { reservedConnectionUnits: 'unknown' }]
+  ]) {
+    await t.test(name, async () => {
+      await assert.rejects(
+        verifyCapacityTransition(pacedRestartConfig, {
+          fetch: harness({ ...strandedCell, ...state }),
+          token: 'masked-token',
+          progress: () => {},
+          ...fakeClock()
+        }),
+        /live runtime count is invalid/
+      )
+    })
+  }
 })

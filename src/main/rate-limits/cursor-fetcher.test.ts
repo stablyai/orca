@@ -119,14 +119,22 @@ describe('fetchCursorRateLimits', () => {
     expect(limited.usageMetadata?.retryAtMs).toBeGreaterThan(Date.now())
   })
 
-  it('treats a redirect to the login page as an expired sign-in', async () => {
-    // Why: the dashboard bounces an unusable session to /login. With
-    // redirect:'error' that surfaced as a generic network failure, hiding the
-    // one message that tells the user what to do.
-    netFetchMock.mockResolvedValueOnce(jsonResponse({}, 302, { location: '/login' }))
+  it.each([403, 302, 304])('reports HTTP %i without claiming the login expired', async (status) => {
+    netFetchMock.mockResolvedValueOnce(jsonResponse({}, status, { location: '/login' }))
     const limits = await fetchCursorRateLimits({ authReadResult: session() })
-    expect(limits.usageMetadata?.failureKind).toBe('stale-token')
-    expect(limits.error).toContain('cursor-agent login')
+    expect(limits.usageMetadata?.failureKind).toBe('server')
+    expect(limits.error).toBe(`Cursor usage request failed (HTTP ${status})`)
+    expect(limits.usageMetadata?.authProvenance).toBeTruthy()
+    expect(netFetchMock.mock.calls[0]?.[1]?.redirect).toBe('manual')
+  })
+
+  it('preserves a forbidden response from the legacy usage endpoint', async () => {
+    netFetchMock
+      .mockResolvedValueOnce(jsonResponse({ membershipType: 'free' }))
+      .mockResolvedValueOnce(jsonResponse({}, 403))
+    const limits = await fetchCursorRateLimits({ authReadResult: session() })
+    expect(limits.error).toBe('Cursor usage request failed (HTTP 403)')
+    expect(limits.usageMetadata?.failureKind).toBe('server')
   })
 
   it('names the account on failures too, so an account switch can clear stale figures', async () => {

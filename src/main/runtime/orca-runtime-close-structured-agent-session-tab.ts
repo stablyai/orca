@@ -27,7 +27,11 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
         // The restore index is bookkeeping: one that cannot be written (a newer Orca's records, a
         // failing disk) is reported, and the tab still closes.
         await host.setSessionTabVisibility(tab.sessionId, false).catch((error: unknown) => {
-          console.warn('[structured-agent-session] recording a closed chat tab failed', error)
+          host.deps.logger.warn('recording a closed chat tab failed', {
+            scope: 'tab-visibility-close',
+            sessionId: tab.sessionId,
+            error
+          })
         })
       }
     }

@@ -13,6 +13,7 @@ import {
   type StructuredAgentSessionUnexpectedExitContext,
   type StructuredAgentSessionUnexpectedExitSession
 } from './structured-agent-session-unexpected-exit'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const exitOutcome = (agent: string): string =>
   `${agent} stopped while this response was in progress. You can continue in this conversation.`
@@ -98,13 +99,16 @@ describe('provider-exit settlement', () => {
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
         itemFence: () => 7,
+        stopMarks: { latest: () => null, personStopDecides: () => false },
         appendLifecycleBatch,
         markPendingSubmissionsUnknown: vi.fn(async () => [])
       }
     } as unknown as StructuredAgentSessionHostSession
 
     await settleUnexpectedStructuredAgentSessionExit(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exit settlement reads only these members of its context; the store double is partial.
       {
+        logger: recordingStructuredAgentSessionLogger().logger,
         store,
         sessions: new Map([[SESSION, session]]),
         flushLifecycle: async () => {
@@ -295,6 +299,7 @@ describe('provider-exit settlement', () => {
 
       const { store } = mutableStore()
       const context: StructuredAgentSessionUnexpectedExitContext<typeof session> = {
+        logger: recordingStructuredAgentSessionLogger().logger,
         store,
         sessions: new Map([[SESSION, session]]),
         flushLifecycle: async () => {
@@ -354,6 +359,7 @@ describe('provider-exit settlement', () => {
 
     const { store } = mutableStore()
     const context: StructuredAgentSessionUnexpectedExitContext<typeof session> = {
+      logger: recordingStructuredAgentSessionLogger().logger,
       store,
       sessions: new Map([[SESSION, session]]),
       flushLifecycle: async () => ({ ok: true }),
@@ -406,7 +412,7 @@ describe('provider-exit settlement', () => {
         })
       }
     }
-    const release = vi.fn()
+    const log = recordingStructuredAgentSessionLogger()
     const publishFence = vi.fn()
     const event = {
       type: 'ended' as const,
@@ -424,12 +430,12 @@ describe('provider-exit settlement', () => {
       publishFence,
       serialize: async (_sessionId, task) => task(),
       now: () => 1,
-      onBarrierError: release
+      logger: log.logger
     }
     await settleUnexpectedStructuredAgentSessionExit(context, event)
 
     expect(session.child).toBeNull()
     expect(publishFence).toHaveBeenCalledTimes(1)
-    expect(release).toHaveBeenCalledTimes(2)
+    expect(log.scopes()).toEqual(['exit-lifecycle-barrier', 'exit-settlement'])
   })
 })

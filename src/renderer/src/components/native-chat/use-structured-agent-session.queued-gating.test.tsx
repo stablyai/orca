@@ -210,7 +210,8 @@ describe('against a capable host', () => {
     )
   })
 
-  it("an unconfirmed /clear's next press replays its operation id (the host refuses any other)", async () => {
+  // The host finds an earlier /clear from its own journal, so the client keeps no id for it.
+  it("an unconfirmed /clear's next press goes out under its own id", async () => {
     items = []
     mocks.call.mockImplementation(async (_target, method) =>
       method === 'agentSession.conversationCommand'
@@ -234,7 +235,7 @@ describe('against a capable host', () => {
       .filter(([, method]) => method === 'agentSession.conversationCommand')
       .map(([, , params]) => ConversationCommandParams.parse(params).envelope.clientOperationId)
     expect(ids).toHaveLength(2)
-    expect(ids[1]).toBe(ids[0])
+    expect(ids[1]).not.toBe(ids[0])
   })
 
   it('a mid-turn queue send is never a transcript bubble, before or after the host holds it', () => {

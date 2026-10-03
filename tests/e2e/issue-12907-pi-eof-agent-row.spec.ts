@@ -27,7 +27,7 @@ test('Pi EOF removes the completed agent row from the live Electron sidebar (#12
     }
     state.setAgentActivityDisplayMode('full')
     if (!state.worktreeCardProperties.includes('inline-agents')) {
-      state.toggleWorktreeCardProperty('inline-agents')
+      state.setWorktreeCardProperties([...state.worktreeCardProperties, 'inline-agents'])
     }
   })
 

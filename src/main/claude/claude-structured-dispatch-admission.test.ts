@@ -16,7 +16,7 @@ function resolveClaudeReplayWaiter(...args: Parameters<typeof resolveClaudeRepla
 }
 
 describe('Claude structured dispatch admission', () => {
-  it('opens queued exact replays with the origin owned by each send', async () => {
+  it('opens queued exact replays with the origin and the send owned by each send', async () => {
     const session = sessionFor()
     await dispatchClaudeTurn(session, {
       clientMessageId: 'client-a',
@@ -25,7 +25,8 @@ describe('Claude structured dispatch admission', () => {
     })
     const aUuid = session.dispatchWaiters[0]!.sentUuid
     expect(resolveClaudeReplayTurn(session, userReplayFrame(aUuid, 'a'))).toEqual({
-      requestedAt: 100
+      requestedAt: 100,
+      clientMessageId: 'client-a'
     })
 
     await dispatchClaudeTurn(session, {
@@ -41,10 +42,12 @@ describe('Claude structured dispatch admission', () => {
     const [b, c] = session.dispatchWaiters
 
     expect(resolveClaudeReplayTurn(session, userReplayFrame(b!.sentUuid, 'b'))).toEqual({
-      requestedAt: 200
+      requestedAt: 200,
+      clientMessageId: 'client-b'
     })
     expect(resolveClaudeReplayTurn(session, userReplayFrame(c!.sentUuid, 'c'))).toEqual({
-      requestedAt: 300
+      requestedAt: 300,
+      clientMessageId: 'client-c'
     })
   })
 

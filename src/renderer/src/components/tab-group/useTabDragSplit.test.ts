@@ -271,6 +271,26 @@ describe('canDropTabIntoPaneBody', () => {
 })
 
 describe('useTabDragSplit', () => {
+  it('keeps the drag sensors across re-renders until enablement changes', () => {
+    const sensorsByRender: ReturnType<typeof useTabDragSplit>['sensors'][] = []
+    function Probe({ enabled }: { enabled: boolean }): null {
+      sensorsByRender.push(useTabDragSplit({ worktreeId: WT, enabled }).sensors)
+      return null
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mounted.push({ container, root })
+
+    act(() => root.render(createElement(Probe, { enabled: true })))
+    act(() => root.render(createElement(Probe, { enabled: true })))
+    // Why: new sensors rebuild every tab's drag listeners, which re-renders every tab.
+    expect(sensorsByRender.at(-1)).toBe(sensorsByRender.at(-2))
+
+    act(() => root.render(createElement(Probe, { enabled: false })))
+    expect(sensorsByRender.at(-1)).not.toBe(sensorsByRender.at(-2))
+  })
+
   it.each(['split', 'insertion'])(
     'does not restore a %s preview after blur cleared the drag',
     async (preview) => {

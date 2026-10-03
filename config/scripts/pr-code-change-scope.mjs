@@ -38,6 +38,8 @@ const ALWAYS_ON_CODE_JOBS = new Set(['static_analysis', 'typecheck', 'test'])
 const GLOBAL_FORCE_PREFIXES = [
   '.github/workflows/pr.yml',
   '.github/actions/install-node-dependencies/',
+  '.github/actions/restore-pnpm-verification/',
+  '.github/actions/prepare-native-runtime/',
   'config/scripts/pr-code-change-scope'
 ]
 
@@ -98,6 +100,9 @@ const SHELL_PREFIXES = [
   'src/main/shell-wrapper-',
   'src/main/terminal-history-fish',
   'src/main/zsh-',
+  'src/main/runtime/structured-session-cli-login-shell',
+  'src/main/runtime/structured-session-login-shell-test-harness',
+  'src/main/runtime/structured-session-child-identity-env',
   'src/renderer/src/components/terminal-pane/fish-color-scheme',
   'src/shared/fish-',
   'src/shared/pty-reply-echo-shapes',
@@ -178,7 +183,19 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/runtime-worktree-agent-',
   'src/main/runtime/runtime-worktree-pty-agent-sources',
   'src/shared/runtime-worktree-contracts',
-  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
+  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
+  // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
+  'src/shared/agent-turn-outcome',
+  'src/shared/agent-status-types',
+  'src/shared/agent-lead-status-fold',
+  'src/shared/agent-session-turn-record',
+  'src/shared/structured-agent-session-agent-status',
+  'src/shared/structured-agent-session-projection',
+  'src/shared/workspace-session-sleeping-agents',
+  // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
+  'src/main/runtime/orchestration/db.ts',
+  'src/main/runtime/orchestration/db/',
+  'src/main/runtime/orchestration/orchestration-schema-version-skew'
 ]
 
 const MANAGED_HOOK_PREFIXES = [
@@ -207,8 +224,26 @@ const NATIVE_CACHE_FILES = new Set([
   'package.json',
   'pnpm-lock.yaml',
   '.github/actions/install-node-dependencies/action.yml',
+  '.github/actions/prepare-native-runtime/action.yml',
+  'pnpm-workspace.yaml',
+  '.npmrc',
+  '.pnpmfile.cjs',
   'config/scripts/ensure-native-runtime.mjs',
-  'config/scripts/rebuild-native-deps.mjs'
+  'config/scripts/rebuild-native-deps.mjs',
+  'config/scripts/node-pty-job-ownership.cjs',
+  'config/scripts/windows-pe-machine.cjs',
+  'config/scripts/windows-process-tree-gyp-rebuild.mjs',
+  'config/scripts/windows-process-tree-creation-time.cjs',
+  'config/scripts/install-electron-package-binary.mjs',
+  'config/scripts/electron-platform-path.mjs',
+  'config/scripts/zip-extractor-command.mjs',
+  'src/shared/zip-extractor-command.ts',
+  'config/scripts/shared-electron-dist-cache.mjs',
+  'config/scripts/space-sharing-copy.mjs',
+  'native/windows-registry/src/addon.cc',
+  'native/windows-registry/binding.gyp',
+  'native/windows-registry/package.json',
+  'native/windows-registry/index.js'
 ])
 
 const NATIVE_CACHE_PREFIXES = [
@@ -321,7 +356,9 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
   'src/main/ipc/pty-codex-account-attribution.test.ts',
   'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
-  'src/relay/windows-port-scan.win32.test.ts'
+  'src/relay/windows-port-scan.win32.test.ts',
+  'src/main/ssh/ssh-relay-upload-stage-windows-identity.test.ts',
+  'src/main/ssh/remote-node-runtime-store-windows.test.ts'
 ]
 
 const DESKTOP_IRRELEVANT_PREFIXES = [

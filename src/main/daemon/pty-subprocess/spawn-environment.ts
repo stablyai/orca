@@ -228,4 +228,13 @@ export function finalizeDaemonPtyEnvironment(
   stripLegacyTerminalShimEnv(env, process.platform)
   dropIncoherentCondaActivationEnv(env, process.platform)
   stripPiProcessOwnerEnv(env)
+  // A live daemon pins this runtime across app updates; callers cannot name the host executable.
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === 'ORCA_AGENT_HOOK_NODE') {
+      delete env[key]
+    }
+  }
+  if (process.platform === 'win32') {
+    env.ORCA_AGENT_HOOK_NODE = process.execPath
+  }
 }

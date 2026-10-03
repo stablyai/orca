@@ -339,14 +339,7 @@ export class CodexSubagentRoster {
     group.lastSerialized = serialized
     // Deliberately unstamped: a child's frame can trigger this write, but the
     // row is the PARENT's roster of its children.
-    // The append coalesces per group so a burst collapses to the latest roster.
-    // The publish must NOT reuse that key: the queue coalesces by key alone,
-    // with no op-kind check, so a publish carrying it would splice out the
-    // still-queued append and the row would never reach the journal.
-    const options = {
-      coalescingKey: `codex-subagents:${group.groupId}`,
-      turnScope: group.turnScope
-    }
+    const options = { turnScope: group.turnScope }
     const admission = this.deps.sink.tryAppendItem
       ? this.deps.sink.tryAppendItem(group.identity, body, options)
       : (this.deps.sink.appendItem(group.identity, body, options), ADMITTED)

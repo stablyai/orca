@@ -204,7 +204,14 @@ export async function getPullRequestDraftContext(
 
   const range = `${mergeBase}..HEAD`
   const [commitSummary, changeSummary, patch] = await Promise.all([
-    safeExec(execGit, ['log', '--pretty=format:- %s', '--max-count=50', range]),
+    safeExec(execGit, [
+      'log',
+      '--no-show-signature',
+      '--no-color',
+      '--pretty=format:- %s',
+      '--max-count=50',
+      range
+    ]),
     safeExec(execGit, ['diff', '--name-status', range]),
     safeExec(execGit, ['diff', '--patch', '--minimal', '--no-color', '--no-ext-diff', range])
   ])

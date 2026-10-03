@@ -4,9 +4,11 @@ import {
   ensureRemoteOrcadNodeRuntime,
   remoteNodeRuntimeDir,
   remoteNodeRuntimePresentCommand,
+  RemoteNodeRuntimeSecurityModifiedError,
   RemoteNodeRuntimeSelfTestError,
   REMOTE_NODE_RUNTIME_READY
 } from './orcad-remote-node-runtime'
+import { withRuntimeStoreLock } from './remote-node-runtime-store-lock'
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import { execCommand } from './ssh-relay-deploy-helpers'
@@ -24,7 +26,12 @@ import {
   classifyPinnedRuntimeFailure,
   runPinnedRuntimeSelfTest
 } from './ssh-relay-runtime-self-test'
-import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
+import {
+  isWindowsRemoteHost,
+  joinRemotePath,
+  remoteDirname,
+  type RemoteHostPlatform
+} from './ssh-remote-platform'
 
 type PinnedInstallContext = {
   conn: SshConnection
@@ -66,7 +73,8 @@ export async function ensurePinnedRelayRuntime(
   if (relayAlreadyInstalled) {
     const runtimeDir = remoteNodeRuntimeDir(host, remoteRelayDir, plan.target)
     const present = await execCommand(conn, remoteNodeRuntimePresentCommand(host, runtimeDir), {
-      signal
+      signal,
+      wrapCommand: !isWindowsRemoteHost(host)
     })
     if (present.trim() === REMOTE_NODE_RUNTIME_READY) {
       if (run && run.runtimeTransfer === 'none') {
@@ -91,6 +99,9 @@ export async function ensurePinnedRelayRuntime(
     if (error instanceof PinnedRelayFallbackError) {
       refuse(context, error)
     }
+    if (error instanceof RemoteNodeRuntimeSecurityModifiedError) {
+      refuse(context, new PinnedRelayFallbackError('security_software', error.detail))
+    }
     if (error instanceof RemoteNodeRuntimeSelfTestError) {
       const refusal = classifyPinnedRuntimeFailure(error.exitStatus, error.output)
       if (refusal) {
@@ -101,9 +112,42 @@ export async function ensurePinnedRelayRuntime(
   }
 }
 
+/**
+ * The runtime was ensured before the relay dir carried its ref, so a store GC in between could
+ * have collected it. Now that the ref is visible, a check under the store lock is final: GC only
+ * deletes while holding that lock, and it never deletes a referenced runtime.
+ */
+async function confirmPinnedRuntimeHeld(
+  context: PinnedInstallContext & { plan: PinnedRelayPlan }
+): Promise<void> {
+  const { conn, host, remoteRelayDir, plan, signal } = context
+  const runtimeDir = remoteNodeRuntimeDir(host, remoteRelayDir, plan.target)
+  const present = await withRuntimeStoreLock(
+    conn,
+    host,
+    remoteDirname(runtimeDir, host),
+    () =>
+      execCommand(conn, remoteNodeRuntimePresentCommand(host, runtimeDir), {
+        signal,
+        wrapCommand: !isWindowsRemoteHost(host)
+      }),
+    signal
+  )
+  if (present.trim() !== REMOTE_NODE_RUNTIME_READY) {
+    console.warn(
+      `[ssh-relay] Pinned Node runtime vanished before launch; reinstalling ${runtimeDir}`
+    )
+    await ensurePinnedRelayRuntime(context, false)
+  }
+}
+
 /** Runs after the payload is promoted and before `.install-complete`, so a refused dir never completes. */
 export async function verifyPinnedRelayInstall(context: PinnedInstallContext): Promise<void> {
   const { conn, host, remoteRelayDir, plan, signal } = context
+  // Rung C runs no store runtime, so it has nothing store GC can take.
+  if (plan.kind === 'pinned-node') {
+    await confirmPinnedRuntimeHeld({ ...context, plan })
+  }
   const spawnHelpers = orcadNodePtyNativeArtifacts(plan.target).filter((artifact) =>
     artifact.endsWith('/spawn-helper')
   )
@@ -120,7 +164,8 @@ export async function verifyPinnedRelayInstall(context: PinnedInstallContext): P
     )
   }
   const nodePath = prebuiltRelayNodePath(context)
-  const verdict = await runPinnedRuntimeSelfTest(conn, remoteRelayDir, nodePath, signal, 2, {
+  const verdict = await runPinnedRuntimeSelfTest(conn, remoteRelayDir, nodePath, signal, {
+    host,
     expectPinnedVersion: plan.kind === 'pinned-node'
   })
   if (context.run && verdict.verdict !== 'unverifiable') {

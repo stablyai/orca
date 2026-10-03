@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { basename, normalizeRelativePath } from '@/lib/path'
+import { basename } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
@@ -40,7 +40,7 @@ export default function EditorFileTab({
   hasTabsToRight,
   hasTabsToLeft,
   tabCount,
-  statusByRelativePath,
+  gitStatus: tabStatus,
   onActivate,
   onClose,
   onCloseOthers,
@@ -59,7 +59,7 @@ export default function EditorFileTab({
   hasTabsToRight: boolean
   hasTabsToLeft: boolean
   tabCount: number
-  statusByRelativePath: Map<string, GitFileStatus>
+  gitStatus: GitFileStatus | null
   onActivate: () => void
   onClose: () => void
   onCloseOthers: () => void
@@ -196,10 +196,6 @@ export default function EditorFileTab({
     [file.filePath]
   )
 
-  const tabStatus =
-    file.relativePath === 'All Changes'
-      ? null
-      : (statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null)
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
   const tabLabel = getEditorDisplayLabel(file)
 

@@ -10,8 +10,9 @@ const {
   orcadTemplateTargetFilenames
 } = require('../../src/shared/orcad-artifacts.ts')
 const {
-  NODE_RUNTIME_ASSETS,
-  ORCAD_TEMPLATE_TARGETS
+  COMPAT_SERVER_TARGETS,
+  ORCAD_TEMPLATE_TARGETS,
+  pinnedNodeRuntimeAsset
 } = require('../../src/shared/node-runtime-pin.ts')
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
@@ -117,7 +118,7 @@ function verifyTarget(templateDir, target, value) {
   requireContent(join(targetDir, ORCAD_SERVER_TARGET_FILENAME), target, `${target} server target`)
   requireContent(
     join(targetDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
-    NODE_RUNTIME_ASSETS[target].executableSha256,
+    pinnedNodeRuntimeAsset(target).executableSha256,
     `${target} runtime reference`
   )
 
@@ -141,7 +142,8 @@ function verifyTarget(templateDir, target, value) {
   requireExactNames(listFiles(targetDir), inventory, `${target} file inventory`)
 }
 
-function verifyPackagedOrcadTemplate(resourcesDir) {
+/** `targets` narrows the inventory for a CI-only partial template; packaging checks them all. */
+function verifyPackagedOrcadTemplate(resourcesDir, targets = ORCAD_TEMPLATE_TARGETS) {
   const templateDir = join(resourcesDir, 'orcad-template')
   const manifest = requireRecord(readManifest(templateDir), 'manifest')
   if (manifest.schemaVersion !== TEMPLATE_SCHEMA_VERSION) {
@@ -160,18 +162,23 @@ function verifyPackagedOrcadTemplate(resourcesDir) {
     )
   }
 
-  const targets = requireRecord(manifest.targets, 'targets')
-  requireExactNames(Object.keys(targets), ORCAD_TEMPLATE_TARGETS, 'target manifest inventory')
+  const manifestTargets = requireRecord(manifest.targets, 'targets')
+  // Compat targets (design D6 rung B) are optional: a build without the compat slot omits them.
+  const compatTargets = COMPAT_SERVER_TARGETS.filter((target) =>
+    Object.hasOwn(manifestTargets, target)
+  )
+  const expectedTargets = [...targets, ...compatTargets]
+  requireExactNames(Object.keys(manifestTargets), expectedTargets, 'target manifest inventory')
   requireExactNames(
     readdirSync(join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR)),
-    ORCAD_TEMPLATE_TARGETS,
+    expectedTargets,
     'target directory inventory'
   )
-  for (const target of ORCAD_TEMPLATE_TARGETS) {
-    verifyTarget(templateDir, target, targets[target])
+  for (const target of expectedTargets) {
+    verifyTarget(templateDir, target, manifestTargets[target])
   }
   console.log(
-    `[verify-packaged-orcad-template] OK — verified ${ORCAD_TEMPLATE_TARGETS.length} Node targets`
+    `[verify-packaged-orcad-template] OK — verified ${expectedTargets.length} Node targets`
   )
 }
 

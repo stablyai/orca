@@ -149,15 +149,14 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
   // Why turn timestamps, not entry identity: a runtime orchestration merge replaces the live
   // entry object without a state change (setRuntimeAgentOrchestrationByPaneKey), and an
   // identity check would then strand the clear-planted suppressor past Undo, losing the run.
-  const introducedSuppressorLiveTurns = new Map(
-    plan.retainedSnapshots.flatMap((retained) => {
-      const paneKey = retained.entry.paneKey
-      const liveEntry = state.agentStatusByPaneKey[paneKey]
-      return liveEntry && !state.retentionSuppressedPaneKeys[paneKey]
-        ? ([[paneKey, liveEntry.stateStartedAt]] as const)
-        : []
-    })
-  )
+  const introducedSuppressorLiveTurns = new Map<string, number>()
+  for (const retained of plan.retainedSnapshots) {
+    const paneKey = retained.entry.paneKey
+    const liveEntry = state.agentStatusByPaneKey[paneKey]
+    if (liveEntry && !state.retentionSuppressedPaneKeys[paneKey]) {
+      introducedSuppressorLiveTurns.set(paneKey, liveEntry.stateStartedAt)
+    }
+  }
   state.dismissRetainedAgents(plan.retainedSnapshots.map((retained) => retained.entry.paneKey))
 
   let undone = false

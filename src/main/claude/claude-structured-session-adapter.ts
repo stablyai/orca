@@ -3,8 +3,7 @@ import { dispatchClaudeCommand } from './claude-structured-command-dispatch'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionAdapter,
-  StructuredAgentSessionStopCause
+  StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { stopClaudeBackgroundTasks } from './claude-structured-control-actions'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
@@ -287,30 +286,21 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       ...(this.deps.onEvent ? { onEvent: this.deps.onEvent } : {})
     })
 
-  closeSession = (sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean> =>
+  closeSession = (sessionId: string): Promise<boolean> =>
     // After the close, not before: releasing an exit still settling settles it on the way.
-    this.closeSessionProcess(sessionId, cause).finally(() =>
-      this.settledExitErrors.delete(sessionId)
-    )
+    this.closeSessionProcess(sessionId).finally(() => this.settledExitErrors.delete(sessionId))
 
-  private closeSessionProcess(
-    sessionId: string,
-    cause: StructuredAgentSessionStopCause | undefined
-  ): Promise<boolean> {
+  private closeSessionProcess(sessionId: string): Promise<boolean> {
     // An exit seen first settles as that exit, whoever asked for the close after it.
     if (this.exits.has(sessionId)) {
       return this.releaseAcquisition({ sessionId })
     }
-    return this.afterClose(sessionId, () => this.closeProviderSession(sessionId, cause))
+    return this.afterClose(sessionId, () => this.closeProviderSession(sessionId))
   }
 
-  private closeProviderSession = (
-    sessionId: string,
-    stopCause?: StructuredAgentSessionStopCause
-  ): Promise<boolean> =>
+  private closeProviderSession = (sessionId: string): Promise<boolean> =>
     closeClaudeSession({
       sessionId,
-      ...(stopCause ? { stopCause } : {}),
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       ...(this.deps.persistHandle ? { persistHandle: this.deps.persistHandle } : {}),

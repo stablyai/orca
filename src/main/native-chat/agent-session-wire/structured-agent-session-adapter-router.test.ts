@@ -165,7 +165,7 @@ describe('StructuredAgentSessionAdapterRouter optional lifecycle methods', () =>
 
       await expect(stopSession('session-1')).resolves.toBe(true)
       // A host with no cause to name passes none; the adapter settles its turn as news.
-      expect(closeSession).toHaveBeenCalledWith('session-1', undefined)
+      expect(closeSession).toHaveBeenCalledWith('session-1')
     }
   )
 })
