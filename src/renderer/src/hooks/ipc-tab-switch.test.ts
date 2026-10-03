@@ -23,6 +23,7 @@ import {
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from './ipc-tab-switch'
+import { consumeBrowserFocusRequest } from '@/components/browser-pane/host-guest/browser-focus'
 
 type ActiveTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
 
@@ -40,6 +41,7 @@ type MockStore = {
   activeFileId: string
   activeBrowserTabId: string
   activeGroupIdByWorktree: Record<string, string>
+  browserTabsByWorktree: Record<string, { id: string; activePageId: string | null; url: string }[]>
   groupsByWorktree: Record<string, MockGroup[]>
   tabsByWorktree: Record<string, { id: string }[]>
   unifiedTabsByWorktree: Record<
@@ -67,6 +69,7 @@ function makeStore(activeTabType: ActiveTabType, overrides: Partial<MockStore> =
     activeFileId: 'editor-1',
     activeBrowserTabId: 'browser-1',
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+    browserTabsByWorktree: {},
     groupsByWorktree: { 'wt-1': [{ id: 'group-1', activeTabId: 'tab-1' }] },
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
@@ -333,8 +336,16 @@ describe('handleSwitchTab', () => {
   })
 
   it('cycles browser tabs without jumping to other tab types', () => {
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', { dispatchEvent })
     const store = makeStore('browser')
     store.activeBrowserTabId = 'browser-1'
+    store.browserTabsByWorktree = {
+      'wt-1': [
+        { id: 'browser-1', activePageId: 'page-1', url: 'https://example.com' },
+        { id: 'browser-2', activePageId: 'page-2', url: 'https://example.com/next' }
+      ]
+    }
     getStateMock.mockReturnValue(store)
     getActiveTabNavOrderMock.mockReturnValue([
       { type: 'terminal', id: 'term-1' },
@@ -349,6 +360,10 @@ describe('handleSwitchTab', () => {
     expect(store.setActiveTab).not.toHaveBeenCalled()
     expect(store.setActiveFile).not.toHaveBeenCalled()
     expect(store.setActiveTabType).toHaveBeenCalledWith('browser', 'wt-1')
+    // Why: cycling only updated the store before, so the guest never took the keyboard.
+    expect(consumeBrowserFocusRequest('page-2')).toBe('webview')
+    expect(dispatchEvent).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
   })
 
   it('returns false when the active type has only one tab', () => {
