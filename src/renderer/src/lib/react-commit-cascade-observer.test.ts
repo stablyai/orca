@@ -56,11 +56,14 @@ describe('react devtools commit hook shim', () => {
   // Why asserted: react-dom calls this once per DELETED FIBER, guarded only by
   // a typeof check. Defining it would put our shim on every unmount path.
   it('leaves the per-deleted-fiber callbacks undefined', () => {
-    const hook = readHook() as Record<string, unknown>
+    delete (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: unknown })
+      .__REACT_DEVTOOLS_GLOBAL_HOOK__
+    // Fresh shim, not readHook(): the installed observer adds onPostCommitFiberRoot.
+    const hook = ensureReactDevtoolsCommitHook()
 
-    expect(hook.onCommitFiberUnmount).toBeUndefined()
-    expect(hook.onPostCommitFiberRoot).toBeUndefined()
-    expect(hook.setStrictMode).toBeUndefined()
+    expect(hook).not.toHaveProperty('onCommitFiberUnmount')
+    expect(hook).not.toHaveProperty('onPostCommitFiberRoot')
+    expect(hook).not.toHaveProperty('setStrictMode')
   })
 
   // Why asserted: react-refresh captures this property and calls
@@ -140,6 +143,47 @@ describe('installReactCommitCascadeObserver', () => {
     expect(previous).toHaveBeenCalledWith(7, CASCADING_ROOT, undefined, true)
   })
 
+  it('chains onto an existing post-commit callback instead of replacing it', () => {
+    const previous = vi.fn()
+    const hook = readHook()
+    hook.onPostCommitFiberRoot = previous
+    resetReactCommitCascadeObserverForTests()
+    installReactCommitCascadeObserver()
+
+    hook.onPostCommitFiberRoot?.(7, CASCADING_ROOT)
+
+    expect(previous).toHaveBeenCalledWith(7, CASCADING_ROOT)
+  })
+
+  // Why asserted: production closes the settle window from a microtask, which
+  // is what keeps a later async passive flush out of the count.
+  it('stops counting post-commit flushes once the commit microtask has run', async () => {
+    const hook = readHook()
+    for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT; commit += 1) {
+      hook.onCommitFiberRoot?.(1, { pendingLanes: 0 }, undefined, false)
+      await Promise.resolve()
+      hook.onPostCommitFiberRoot?.(1, CASCADING_ROOT)
+    }
+
+    expect(recordBreadcrumb).not.toHaveBeenCalled()
+  })
+
+  it('counts a post-commit flush that lands inside the commit stack', () => {
+    const hook = readHook()
+    const quietRoot = { pendingLanes: 0 }
+    for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT; commit += 1) {
+      hook.onCommitFiberRoot?.(1, quietRoot, undefined, false)
+      quietRoot.pendingLanes = 2
+      hook.onPostCommitFiberRoot?.(1, quietRoot)
+      quietRoot.pendingLanes = 0
+    }
+
+    expect(recordBreadcrumb).toHaveBeenCalledWith(
+      REACT_COMMIT_CASCADE_BREADCRUMB,
+      expect.objectContaining({ commits: REACT_COMMIT_CASCADE_NOTICE_LIMIT })
+    )
+  })
+
   // Why asserted: our throw would otherwise land in react-dom's own catch and
   // silently unhook DevTools and Fast Refresh from the rest of the chain.
   it('still calls the chained hook when our own work throws', () => {
@@ -201,7 +245,10 @@ describe('install self-check', () => {
   it('breadcrumbs when the hook refuses the callback assignment', () => {
     vi.useFakeTimers()
     resetReactCommitCascadeObserverForTests()
-    const frozenHook = Object.freeze({ isDisabled: false, supportsFiber: true })
+    const frozenHook = Object.freeze({
+      isDisabled: false,
+      supportsFiber: true
+    })
     ;(globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: unknown }).__REACT_DEVTOOLS_GLOBAL_HOOK__ =
       frozenHook
 

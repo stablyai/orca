@@ -12,10 +12,13 @@
  * only make us count a commit React would have skipped, so we fire early, never
  * late — the safe direction for a diagnostic that must beat the throw.
  *
- * Out of scope by construction: a passive-effect (useEffect) loop reports
- * pendingLanes 0 here, because passive effects flush after the commit callback.
- * That is correct — React tracks those in nestedPassiveUpdateCount, which only
- * console.errors in development and never throws #185.
+ * Passive effects: after a commit whose lanes include SyncLane, react-dom
+ * flushes useEffect synchronously AFTER onCommitFiberRoot and BEFORE it reads
+ * pendingLanes for its counter, so a useEffect that writes a store throws #185
+ * while the commit callback saw pendingLanes 0. A quiet commit therefore only
+ * opens a settle window: a synchronous post-commit flush on that root
+ * (observeReactPassiveFlush) supplies the lanes React actually counts, and the
+ * window otherwise closes as a reset at the next observation or microtask.
  */
 import { compactBreadcrumbData } from '@/lib/crash-breadcrumb-data'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
@@ -63,6 +66,8 @@ export type ReactCommitCascadeState = {
   lastReportedAtMs: number | null
   /** Cascades that reached the notice limit while the report interval was live. */
   suppressed: number
+  /** Root whose quiet commit may still get cascading lanes from its sync passive flush. */
+  settlingRoot: unknown
 }
 
 export function createReactCommitCascadeState(): ReactCommitCascadeState {
@@ -72,7 +77,8 @@ export function createReactCommitCascadeState(): ReactCommitCascadeState {
     reported: false,
     armedAtMs: null,
     lastReportedAtMs: null,
-    suppressed: 0
+    suppressed: 0,
+    settlingRoot: null
   }
 }
 
@@ -122,21 +128,72 @@ function reportCascade(state: ReactCommitCascadeState, pendingLanes: number, now
   )
 }
 
+function settleCommit(state: ReactCommitCascadeState): void {
+  if (state.settlingRoot === null) {
+    return
+  }
+  state.settlingRoot = null
+  if (state.cascadeRoot !== null) {
+    endCascade(state)
+  }
+}
+
+type CascadeLimits = {
+  readNowMs: () => number
+  noticeLimit: number
+  armCommits: number
+  minReportIntervalMs: number
+}
+
+const PRODUCTION_LIMITS: CascadeLimits = {
+  readNowMs: Date.now,
+  noticeLimit: REACT_COMMIT_CASCADE_NOTICE_LIMIT,
+  armCommits: REACT_COMMIT_CASCADE_ARM_COMMITS,
+  minReportIntervalMs: REACT_COMMIT_CASCADE_MIN_REPORT_INTERVAL_MS
+}
+
+/** Returns true when it opened a settle window the caller must close. */
 function recordCommit(
   state: ReactCommitCascadeState,
   root: unknown,
   pendingLanes: number,
-  readNowMs: () => number,
-  noticeLimit: number,
-  armCommits: number,
-  minReportIntervalMs: number
-): void {
+  limits: CascadeLimits
+): boolean {
+  // A new commit means the previous one's synchronous passive flush is over.
+  settleCommit(state)
   if ((pendingLanes & REACT_CASCADING_LANES) === 0) {
-    if (state.cascadeRoot !== null) {
-      endCascade(state)
-    }
+    state.settlingRoot = root
+    return true
+  }
+  countCascadingCommit(state, root, pendingLanes, limits)
+  return false
+}
+
+function recordPassiveFlush(
+  state: ReactCommitCascadeState,
+  root: unknown,
+  pendingLanes: number,
+  limits: CascadeLimits
+): void {
+  // Why only the settling root: a cascading commit was already counted, and an
+  // async flush runs after React reset its counter, so either would over-count.
+  if (root === null || root !== state.settlingRoot) {
     return
   }
+  if ((pendingLanes & REACT_CASCADING_LANES) === 0) {
+    settleCommit(state)
+    return
+  }
+  state.settlingRoot = null
+  countCascadingCommit(state, root, pendingLanes, limits)
+}
+
+function countCascadingCommit(
+  state: ReactCommitCascadeState,
+  root: unknown,
+  pendingLanes: number,
+  { readNowMs, noticeLimit, armCommits, minReportIntervalMs }: CascadeLimits
+): void {
   if (root !== state.cascadeRoot) {
     endCascade(state)
     state.cascadeRoot = root
@@ -176,30 +233,42 @@ export function recordReactCommit(args: {
   noticeLimit?: number
   armCommits?: number
   minReportIntervalMs?: number
+  /** A post-commit passive flush rather than the commit itself. */
+  passiveFlush?: boolean
 }): void {
-  recordCommit(
-    args.state,
-    args.root,
-    args.pendingLanes,
-    args.readNowMs,
-    args.noticeLimit ?? REACT_COMMIT_CASCADE_NOTICE_LIMIT,
-    args.armCommits ?? REACT_COMMIT_CASCADE_ARM_COMMITS,
-    args.minReportIntervalMs ?? REACT_COMMIT_CASCADE_MIN_REPORT_INTERVAL_MS
-  )
+  const limits: CascadeLimits = {
+    readNowMs: args.readNowMs,
+    noticeLimit: args.noticeLimit ?? REACT_COMMIT_CASCADE_NOTICE_LIMIT,
+    armCommits: args.armCommits ?? REACT_COMMIT_CASCADE_ARM_COMMITS,
+    minReportIntervalMs: args.minReportIntervalMs ?? REACT_COMMIT_CASCADE_MIN_REPORT_INTERVAL_MS
+  }
+  if (args.passiveFlush) {
+    recordPassiveFlush(args.state, args.root, args.pendingLanes, limits)
+  } else {
+    recordCommit(args.state, args.root, args.pendingLanes, limits)
+  }
+}
+
+/** Injectable twin of settleReactCommit. */
+export function settleReactCommitState(state: ReactCommitCascadeState): void {
+  settleCommit(state)
 }
 
 /**
  * Per-commit hot path: one property read, one mask, two compares, one
- * increment. No clock read and no allocation until a cascade arms.
+ * increment. No clock read and no allocation until a cascade arms. Returns true
+ * when the caller must schedule settleReactCommit.
  */
-export function observeReactCommit(root: unknown, pendingLanes: number): void {
-  recordCommit(
-    sharedState,
-    root,
-    pendingLanes,
-    Date.now,
-    REACT_COMMIT_CASCADE_NOTICE_LIMIT,
-    REACT_COMMIT_CASCADE_ARM_COMMITS,
-    REACT_COMMIT_CASCADE_MIN_REPORT_INTERVAL_MS
-  )
+export function observeReactCommit(root: unknown, pendingLanes: number): boolean {
+  return recordCommit(sharedState, root, pendingLanes, PRODUCTION_LIMITS)
+}
+
+/** onPostCommitFiberRoot: lanes after the passive flush, which React counts when it ran synchronously. */
+export function observeReactPassiveFlush(root: unknown, pendingLanes: number): void {
+  recordPassiveFlush(sharedState, root, pendingLanes, PRODUCTION_LIMITS)
+}
+
+/** Closes the settle window once the commit's synchronous work has returned. */
+export function settleReactCommit(): void {
+  settleCommit(sharedState)
 }
