@@ -18,7 +18,7 @@ import {
 } from '../../shared/automation-owner-conflict'
 
 type RefusableAutomationService = {
-  runNow: (automationId: string) => Promise<AutomationRun>
+  runNow: (automationId: string, sourceRunId?: string) => Promise<AutomationRun>
   recordRefusedRun: (automationId: string) => void | Promise<void>
 }
 
@@ -26,17 +26,22 @@ export async function runAutomationNowFenced(input: {
   fence: () => void
   service: RefusableAutomationService
   automationId: string
+  sourceRunId?: string
 }): Promise<AutomationRun> {
   try {
     input.fence()
   } catch (error) {
     if (
       error instanceof AutomationOwnerConflictError &&
-      error.code === AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved
+      error.code === AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved &&
+      // A refused rerun must not create an unrelated occurrence for today.
+      input.sourceRunId === undefined
     ) {
       await input.service.recordRefusedRun(input.automationId)
     }
     throw error
   }
-  return await input.service.runNow(input.automationId)
+  return input.sourceRunId === undefined
+    ? await input.service.runNow(input.automationId)
+    : await input.service.runNow(input.automationId, input.sourceRunId)
 }

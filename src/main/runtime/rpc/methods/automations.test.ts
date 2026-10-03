@@ -10,6 +10,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 
 describe('automation RPC methods', () => {
   it('routes automation CRUD and run operations to the runtime server', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This dispatcher fixture implements every runtime operation invoked by these requests.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       listAutomations: vi.fn().mockReturnValue([{ id: 'auto-1', name: 'Daily review' }]),
@@ -21,6 +22,7 @@ describe('automation RPC methods', () => {
       createAutomation: vi.fn().mockResolvedValue({ id: 'auto-2', name: 'New review' }),
       updateAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', name: 'Paused' }),
       deleteAutomation: vi.fn().mockReturnValue({ removed: true, id: 'auto-1' }),
+      rerunAutomation: vi.fn().mockResolvedValue({ id: 'retry-1', automationId: 'auto-1' }),
       runAutomationNow: vi.fn().mockResolvedValue({ id: 'run-1', automationId: 'auto-1' }),
       listAutomationRuns: vi.fn().mockReturnValue([{ id: 'run-1', automationId: 'auto-1' }])
     } as unknown as OrcaRuntimeService
@@ -72,6 +74,7 @@ describe('automation RPC methods', () => {
     )
     await dispatcher.dispatch(makeRequest('automation.delete', { id: 'auto-1' }))
     await dispatcher.dispatch(makeRequest('automation.runNow', { id: 'auto-1' }))
+    await dispatcher.dispatch(makeRequest('automation.rerun', { id: 'auto-1', runId: 'old-run' }))
     await dispatcher.dispatch(makeRequest('automation.runs', { automationId: 'auto-1' }))
 
     expect(runtime.listAutomationsForScope).toHaveBeenCalledWith({})
@@ -102,6 +105,19 @@ describe('automation RPC methods', () => {
     )
     expect(runtime.deleteAutomation).toHaveBeenCalledWith('auto-1', undefined)
     expect(runtime.runAutomationNow).toHaveBeenCalledWith('auto-1', undefined)
+    expect(runtime.rerunAutomation).toHaveBeenCalledWith('auto-1', 'old-run', undefined)
+    await expect(
+      dispatcher.dispatch(makeRequest('automation.rerun', { id: 'auto-1' }))
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.rerunAutomation).toHaveBeenCalledOnce()
+    const oldHost = new RpcDispatcher({
+      runtime,
+      methods: AUTOMATION_METHODS.filter((method) => method.name !== 'automation.rerun')
+    })
+    await expect(
+      oldHost.dispatch(makeRequest('automation.rerun', { id: 'auto-1', runId: 'old-run' }))
+    ).resolves.toMatchObject({ ok: false, error: { code: 'method_not_found' } })
+    expect(runtime.runAutomationNow).toHaveBeenCalledOnce()
     expect(runtime.listAutomationRuns).toHaveBeenCalledWith('auto-1', undefined)
   })
 

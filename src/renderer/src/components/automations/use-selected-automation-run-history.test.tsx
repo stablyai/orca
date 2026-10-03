@@ -88,6 +88,26 @@ afterEach(async () => {
 })
 
 describe('useSelectedAutomationRunHistory', () => {
+  it('discards a pre-rerun read even before the reload render cleans up its effect', async () => {
+    const olderRead = Promise.withResolvers<{ ok: true; value: AutomationRun[] }>()
+    mocks.dispatch.mockReturnValueOnce(olderRead.promise)
+    const requestRevision = { current: 0 }
+    const input = makeInput({ requestRevision })
+    const rerender = await render(input)
+
+    await act(async () => {
+      requestRevision.current += 1
+      olderRead.resolve({ ok: true, value: [makeRun({ id: 'old-failure' })] })
+      await olderRead.promise
+    })
+    expect(input.onSettled).not.toHaveBeenCalled()
+
+    const retry = makeRun({ id: 'queued-retry' })
+    mocks.dispatch.mockResolvedValueOnce({ ok: true, value: [retry] })
+    await rerender({ ...input, reloadToken: 1 })
+    expect(settled(input).at(-1)?.runs).toEqual([retry])
+  })
+
   it('reports the refusal instead of leaving the pane on the previous automation', async () => {
     mocks.dispatch.mockResolvedValue({
       ok: false,

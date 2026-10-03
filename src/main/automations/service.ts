@@ -25,6 +25,7 @@ import {
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
+import { resolveAutomationRerunSource } from './rerun-source'
 import {
   describeScheduledRefusal,
   missedBeyondGrace,
@@ -140,14 +141,20 @@ export class AutomationService {
     this.timer = null
   }
 
-  async runNow(automationId: string): Promise<AutomationRun> {
+  async runNow(automationId: string, sourceRunId?: string): Promise<AutomationRun> {
     const generation = this.dispatchGeneration
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (!automation) {
       throw new Error('Automation not found.')
     }
+    const source = resolveAutomationRerunSource(this.store, automationId, sourceRunId)
     const target = this.resolveTarget(automation)
-    const run = await this.runs.createRun(automation, Date.now(), 'manual')
+    const run = await this.runs.createRun(
+      automation,
+      source?.scheduledFor ?? Date.now(),
+      'manual',
+      source
+    )
     return await this.requestDispatch(automation, run, target, generation)
   }
 

@@ -51,6 +51,8 @@ export type SelectedAutomationRunHistoryInput = {
   navigation: SelectedAutomationRunNavigation
   /** Changing this re-asks the host; it is how a failed read offers Retry. */
   reloadToken: number
+  /** A queued run invalidates older reads before React commits the next render. */
+  requestRevision?: { current: number }
   onSettled: (outcome: SelectedAutomationRunHistoryOutcome) => void
 }
 
@@ -92,6 +94,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
       return
     }
     let cancelled = false
+    const requestRevision = inputRef.current.requestRevision?.current
     const owner = capturedAutomationOwnerKey(
       capturedAutomationOwner(context.capturedOwners, rowKey)
     )
@@ -105,7 +108,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
       () => listAutomationRunsForTarget(target, automationId),
       rowAuthority
     ).then((result) => {
-      if (cancelled) {
+      if (cancelled || inputRef.current.requestRevision?.current !== requestRevision) {
         return
       }
       // A refused or failed read still settles: leaving the previous automation's

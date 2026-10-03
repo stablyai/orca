@@ -47,6 +47,7 @@ import {
   listOrphanAutomationRunsPage,
   matchAutomationOwnerConflict,
   runAutomationNowForOwner,
+  rerunAutomationForOwner,
   updateAutomationForOwner,
   updateOrphanAutomation
 } from './automation-scoped-list-client'
@@ -180,6 +181,14 @@ export async function deleteOwnedAutomation(
     (owner) => deleteAutomationForOwner(owner, id),
     () => deleteOrphanAutomation(authority, id)
   )
+}
+
+export async function rerunOwnedAutomation(
+  availability: AutomationActionAvailability,
+  id: string,
+  runId: string
+): Promise<AutomationActionResult<AutomationRun>> {
+  return await attempt(availability, (owner) => rerunAutomationForOwner(owner, id, runId))
 }
 
 export async function runOwnedAutomationNow(

@@ -69,10 +69,22 @@ export function createAutomationRun(
   operations: AutomationRunOperations,
   automation: Automation,
   scheduledFor: number,
-  trigger: AutomationRunTrigger = 'scheduled'
+  trigger: AutomationRunTrigger = 'scheduled',
+  rerunSource?: AutomationRun
 ): AutomationRun {
+  const rerun = rerunSource
+    ? {
+        sourceRunId: rerunSource.id,
+        originalRunId: rerunSource.rerun?.originalRunId ?? rerunSource.id
+      }
+    : undefined
   const existing = (operations.state.automationRuns ?? []).find(
-    (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
+    (run) =>
+      run.automationId === automation.id &&
+      (rerun
+        ? run.rerun?.originalRunId === rerun.originalRunId &&
+          !isFinalAutomationRunStatus(run.status)
+        : !run.rerun && run.scheduledFor === scheduledFor)
   )
   if (existing) {
     return existing
@@ -90,6 +102,8 @@ export function createAutomationRun(
     sourceContext: automation.sourceContext ?? null,
     title: `${automation.name} run ${runNumber}`,
     scheduledFor,
+    scheduledTimezone: rerunSource ? (rerunSource.scheduledTimezone ?? null) : automation.timezone,
+    ...(rerun ? { rerun: { ...rerun } } : {}),
     status: 'pending',
     trigger,
     workspaceId: automation.workspaceId,
