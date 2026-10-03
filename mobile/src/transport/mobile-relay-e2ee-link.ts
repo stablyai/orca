@@ -130,6 +130,9 @@ export class MobileRelayE2eeLink {
     // `error` is often delivered just before `close`; wait for close so a
     // typed relay code is not replaced by a generic transport error.
     this.socket.onerror = () => {
+      if (this.closed) {
+        return
+      }
       this.transportErrorTimer ??= setTimeout(() => {
         this.transportErrorTimer = null
         this.fail(new RelayOuterError(1006))
