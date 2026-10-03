@@ -133,7 +133,9 @@ describe('the notice on each message that did not go through', () => {
   })
 
   it('says a message is unconfirmed, and only that it was not sent when nothing more is known', () => {
-    expect(texts([entry('doubt', { state: 'unconfirmed' })])).toEqual({
+    expect(
+      texts([entry('doubt', { state: 'unconfirmed', retryAfterUnknownSubmittedAt: -1 })])
+    ).toEqual({
       [agentJournalSubmissionKey('doubt')]: 'Message delivery is unconfirmed.'
     })
     expect(texts([entry('bare', { state: 'rejected' })])).toEqual({
@@ -160,7 +162,7 @@ describe('the notice on each message that did not go through', () => {
         entry('sent', { state: 'dispatching' }),
         entry('rejected', { state: 'rejected' }),
         entry('failed', { lastFailure: { kind: 'failed' } }),
-        entry('stuck', { state: 'unconfirmed' }),
+        entry('stuck', { state: 'unconfirmed', retryAfterUnknownSubmittedAt: -1 }),
         entry('behind', { state: 'unconfirmed' }),
         entry('queued')
       ])
@@ -175,7 +177,10 @@ describe('the notice on each message that did not go through', () => {
   it('keeps a rejected message behind the stopped one its words but not its Retry', () => {
     const retry = vi.fn()
     for (const outbox of [
-      [entry('stuck', { state: 'unconfirmed' }), entry('rejected', { state: 'rejected' })],
+      [
+        entry('stuck', { state: 'unconfirmed', retryAfterUnknownSubmittedAt: -1 }),
+        entry('rejected', { state: 'rejected' })
+      ],
       [entry('held', { outlivedStop: true }), entry('rejected', { state: 'rejected' })]
     ]) {
       const notices = structuredAgentSessionDeliveryNotices(
@@ -194,7 +199,7 @@ describe('the notice on each message that did not go through', () => {
 
   // Ahead of the stopped message, its Retry sends it at once, so the row offers it.
   it.each([
-    ['in doubt', { state: 'unconfirmed' as const }],
+    ['in doubt', { state: 'unconfirmed' as const, retryAfterUnknownSubmittedAt: -1 }],
     ['outlived by a Stop', { outlivedStop: true as const }]
   ])('gives a failed message ahead of one %s its Retry', (_label, patch) => {
     const retry = vi.fn()
@@ -458,6 +463,64 @@ describe('the notice on each message that did not go through', () => {
 
   it('says nothing on a message that is only waiting its turn or on its way', () => {
     expect(texts([entry('queued'), entry('sending', { state: 'dispatching' })])).toEqual({})
+  })
+
+  // The unconfirmed probe resends it under its own id until the journal answers, as a send still
+  // on its way: nothing to say until a row lands.
+  describe('a message in doubt that Orca resends on its own', () => {
+    const doubt = (patch: Partial<StructuredAgentSessionOutboxEntry> = {}) =>
+      entry('doubt', { state: 'unconfirmed', lastAttemptAt: 1, ...patch })
+    const row = (patch: Partial<AgentJournalSubmission>): AgentJournalSubmission => ({
+      clientMessageId: 'doubt',
+      fence: 1,
+      payloadFingerprint: 'fp',
+      dispatchState: 'unknown',
+      providerItemId: null,
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: null,
+      ...patch
+    })
+    const UNCONFIRMED = { [agentJournalSubmissionKey('doubt')]: 'Message delivery is unconfirmed.' }
+
+    it('says nothing while the journal holds no row for it', () => {
+      expect(texts([doubt(), entry('behind')])).toEqual({})
+      // Another message's row is not its answer.
+      expect(
+        texts([doubt()], [row({ clientMessageId: 'other', dispatchState: 'accepted' })])
+      ).toEqual({})
+    })
+
+    it.each([
+      ['a live unknown', row({})],
+      ['a recovered unknown', row({ recovered: true })],
+      [
+        "an older host's recovered unknown",
+        row({ reason: 'host_restarted_before_acknowledgement' })
+      ]
+    ])('says it is unconfirmed, with its Retry, once the journal holds %s', (_label, answer) => {
+      const retry = vi.fn()
+      const notices = structuredAgentSessionDeliveryNotices(
+        [doubt()],
+        'Claude',
+        retry,
+        [answer],
+        [],
+        NOT_FAILED_HERE
+      )
+      expect(Object.fromEntries([...notices].map(([id, notice]) => [id, notice.text]))).toEqual(
+        UNCONFIRMED
+      )
+      notices.get(agentJournalSubmissionKey('doubt'))?.onRetry?.()
+      expect(retry).toHaveBeenCalledExactlyOnceWith('doubt')
+    })
+
+    it.each([
+      ['the user already retried', { retryAfterUnknownSubmittedAt: 1 }],
+      ['a Stop outlived', { outlivedStop: true as const }]
+    ])('says it is unconfirmed when %s it, as nothing resends it', (_label, patch) => {
+      expect(texts([doubt(patch)])).toEqual(UNCONFIRMED)
+    })
   })
 
   // Matched on the typed fact of a row found by its identity, never on either sentence.

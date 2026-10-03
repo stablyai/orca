@@ -183,7 +183,10 @@ vi.mock('./NativeChatQuestionCard', () => ({
 }))
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
-import { appendStructuredAgentSessionOutboxMessage } from './structured-agent-session-outbox-storage'
+import {
+  appendStructuredAgentSessionOutboxMessage,
+  getStructuredAgentSessionOutbox
+} from './structured-agent-session-outbox-storage'
 
 describe('NativeChatStructuredSession delivery', () => {
   afterEach(() => {
@@ -232,7 +235,8 @@ describe('NativeChatStructuredSession delivery', () => {
     )
   }
 
-  it('retries an unconfirmed transport send and clears the delivery notice', async () => {
+  // Resent under its own id until the host answers, as a send still on its way: nothing to say.
+  it('confirms a transport-unconfirmed send on its own, with no notice or Retry', async () => {
     mocks.mode = 'outbox'
     mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValueOnce({
       ok: true,
@@ -260,13 +264,114 @@ describe('NativeChatStructuredSession delivery', () => {
       | undefined
     expect(send?.('hello', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
+    expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2), { timeout: 5000 })
+    expect(mocks.call.mock.calls[1]?.[2]).toEqual(mocks.call.mock.calls[0]?.[2])
+    expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
+  }, 10000)
 
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull())
-  })
+  // Reopened mid-send, the send is read back in doubt; the probe resends it under its own id.
+  function seedMidSend(sessionId: string, patch: Record<string, unknown> = {}): void {
+    seedOutbox(sessionId, [
+      {
+        ...seededEntry(sessionId, 'op-sent', 'first', 'queued'),
+        state: 'dispatching',
+        lastAttemptAt: 1,
+        retryAfterUnknownSubmittedAt: null,
+        ...patch
+      }
+    ])
+  }
+
+  function renderSession(sessionId: string): void {
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId={`structured-tab-${sessionId}`}
+        sessionId={sessionId}
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+  }
+
+  it('says nothing on a send reopened mid-send while it is resent, and settles it', async () => {
+    mocks.mode = 'outbox'
+    mocks.submissions = []
+    mocks.call.mockResolvedValue({
+      ok: true,
+      value: { submission: { clientMessageId: 'op-sent', dispatchState: 'accepted' } }
+    })
+    seedMidSend('session-reopened')
+
+    renderSession('session-reopened')
+
+    expect(getStructuredAgentSessionOutbox('session-reopened')).toMatchObject([
+      { clientMessageId: 'op-sent', state: 'unconfirmed' }
+    ])
+    expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull()
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce(), { timeout: 3000 })
+    expect(mocks.call.mock.calls[0]?.[2]).toMatchObject({
+      envelope: { clientOperationId: 'op-sent' }
+    })
+    await waitFor(() => expect(getStructuredAgentSessionOutbox('session-reopened')).toEqual([]))
+    expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
+  }, 10000)
+
+  it.each([
+    ['a live unknown', {}],
+    ['a recovered unknown', { recovered: true }],
+    ["an older host's recovered unknown", { reason: 'host_restarted_before_acknowledgement' }]
+  ])(
+    'says a send reopened mid-send is unconfirmed, with its Retry, once the journal holds %s',
+    async (label, patch) => {
+      mocks.mode = 'outbox'
+      const sessionId = `session-reopened-${label.replace(/\W+/g, '-')}`
+      mocks.submissions = [
+        {
+          clientMessageId: 'op-sent',
+          fence: 1,
+          payloadFingerprint: 'fp',
+          dispatchState: 'unknown',
+          providerItemId: null,
+          reason: null,
+          submittedAt: 1,
+          resolvedAt: null,
+          ...patch
+        }
+      ]
+      seedMidSend(sessionId)
+
+      renderSession(sessionId)
+
+      await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
+      expect(screen.getByRole('button', { name: /Retry/ })).toBeTruthy()
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      })
+      expect(mocks.call).not.toHaveBeenCalled()
+    },
+    10000
+  )
+
+  it('says a send a Stop outlived is unconfirmed when reopened, as nothing resends it', async () => {
+    mocks.mode = 'outbox'
+    mocks.submissions = []
+    seedMidSend('session-reopened-stopped', { outlivedStop: true })
+
+    renderSession('session-reopened-stopped')
+
+    expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Retry/ })).toBeTruthy()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+    })
+    expect(mocks.call).not.toHaveBeenCalled()
+  }, 10000)
 
   it('retries the head, not a later stuck message', async () => {
     mocks.mode = 'outbox'
@@ -484,7 +589,6 @@ describe('NativeChatStructuredSession delivery', () => {
       | undefined
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
 
     expect(send?.('second', [])).toBe(true)
     // The head is probed automatically, clears, and the queue drains.
@@ -569,6 +673,8 @@ describe('NativeChatStructuredSession delivery', () => {
     await act(async () => {
       send?.('second', [])
     })
+    // From the row on, only the user's Retry moves it, so it says so.
+    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 3000))
     })
@@ -653,7 +759,6 @@ describe('NativeChatStructuredSession delivery', () => {
       | undefined
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 300))
@@ -669,8 +774,8 @@ describe('NativeChatStructuredSession delivery', () => {
   it('never auto-probes an entry the user already force-retried', async () => {
     mocks.mode = 'outbox'
     mocks.submissions = []
-    // Both the original send and the user's explicit Retry fail at the transport.
     mocks.call.mockRejectedValue(new Error('socket closed'))
+    seedOutbox('session-forced', [seededEntry('session-forced', 'op-head', 'first', 'unconfirmed')])
 
     render(
       <NativeChatStructuredSession
@@ -683,25 +788,12 @@ describe('NativeChatStructuredSession delivery', () => {
       />
     )
 
-    const send = mocks.composerProps?.structuredTransport?.send as
-      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
-      | undefined
-    expect(send?.('first', [])).toBe(true)
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    // Only the user's Retry moves it, so it says so.
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
-
-    // User retries with the same envelope and no legacy redelivery signal.
-    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    const forcedRequest = mocks.call.mock.calls[1]?.[2] as Record<string, unknown> | undefined
-    expect(forcedRequest?.retryUnknown).toBeUndefined()
-
-    // That retry also failed at the transport. The probe must not repeat an
-    // explicit retry automatically.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 3000))
     })
-    expect(mocks.call).toHaveBeenCalledTimes(2)
+    expect(mocks.call).not.toHaveBeenCalled()
   }, 20000)
 
   it('does not hot-loop when the host answers pending', async () => {

@@ -32,6 +32,7 @@ import {
   admitStructuredAgentSessionOutboxEntry,
   structuredAgentSessionEntryHeldForRetry
 } from '../../../../shared/structured-agent-session-outbox-admission'
+import { structuredAgentSessionEntryResendsUnconfirmed } from '../../../../shared/structured-agent-session-outbox-unconfirmed-resend'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session-failure-words'
 import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
 import { translate } from '@/i18n/i18n'
@@ -135,7 +136,8 @@ export function structuredAgentSessionDeliveryNotices(
   outbox: readonly StructuredAgentSessionOutboxEntry[],
   agentName: string,
   retry: (clientMessageId: string) => void,
-  /** The journal's rows, whose rejected ones carry more of a rejection than the message keeps. */
+  /** The journal's rows: rejected ones carry more of a rejection than the message keeps, and a
+   *  message in doubt with none yet is still being resent on its own. */
   submissions: readonly AgentJournalSubmission[],
   /** What the loaded start-failure rows state, from `structuredAgentSessionStartFailureFacts`. */
   startFailures: readonly AgentSessionFailureFact[],
@@ -152,6 +154,10 @@ export function structuredAgentSessionDeliveryNotices(
   )
   const notices = new Map<string, NativeChatDeliveryNotice>()
   for (const [index, entry] of outbox.entries()) {
+    // Resent under its own id until the journal answers, as a send still on its way: nothing to say.
+    if (structuredAgentSessionEntryResendsUnconfirmed(entry, submissions)) {
+      continue
+    }
     if (
       entry.state === 'rejected' ||
       structuredAgentSessionEntryHeldForRetry(entry) ||
