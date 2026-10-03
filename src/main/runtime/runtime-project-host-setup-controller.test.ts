@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
+import type { ProjectHostSetupDeleteResult } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 
 const TARGET_ID = 'target-1'
@@ -116,5 +117,64 @@ describe('RuntimeProjectHostSetupController host routing', () => {
       })
     ).rejects.toThrow(/Cloning onto an SSH host is not supported/)
     expect(cloneRepo).not.toHaveBeenCalled()
+  })
+})
+
+// `orca project setup-delete` reaches deleteSetup over runtime RPC; without a notify the window
+// keeps the removed project in its sidebar until a force reload.
+describe('RuntimeProjectHostSetupController deleteSetup', () => {
+  const deletedSetup = getProjectHostSetupForRepo([], remoteRepo)
+  const deletedProject = projectHostSetupProjectionFromRepos([remoteRepo]).projects[0]
+
+  function makeDeleteController(result: ProjectHostSetupDeleteResult | null): {
+    controller: RuntimeProjectHostSetupController
+    deleteProjectHostSetup: ReturnType<typeof vi.fn>
+    notifyReposChanged: ReturnType<typeof vi.fn>
+  } {
+    const deleteProjectHostSetup = vi.fn().mockReturnValue(result)
+    const notifyReposChanged = vi.fn()
+    const controller = new RuntimeProjectHostSetupController({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deleteSetup only reads deleteProjectHostSetup from the store.
+      getStore: () => ({ deleteProjectHostSetup }) as never,
+      listRepos: () => [remoteRepo],
+      addRepo: vi.fn(),
+      addRemoteRepo: vi.fn(),
+      cloneRepo: vi.fn(),
+      invalidateResolvedWorktrees: vi.fn(),
+      invalidateWorktreeScan: vi.fn(),
+      notifyReposChanged
+    })
+    return { controller, deleteProjectHostSetup, notifyReposChanged }
+  }
+
+  it('notifies repos changed once after a delete that removed the repo', () => {
+    const result = { project: deletedProject, setup: deletedSetup, repo: remoteRepo }
+    const { controller, deleteProjectHostSetup, notifyReposChanged } = makeDeleteController(result)
+
+    expect(controller.deleteSetup({ setupId: deletedSetup.id })).toBe(result)
+
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: deletedSetup.id })
+    expect(notifyReposChanged).toHaveBeenCalledTimes(1)
+    expect(notifyReposChanged.mock.invocationCallOrder[0]).toBeGreaterThan(
+      deleteProjectHostSetup.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('notifies repos changed once when the delete result carries no repo', () => {
+    const result = { project: deletedProject, setup: deletedSetup }
+    const { controller, notifyReposChanged } = makeDeleteController(result)
+
+    expect(controller.deleteSetup({ setupId: deletedSetup.id })).toBe(result)
+
+    expect(notifyReposChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws and does not notify when the setup is not found', () => {
+    const { controller, notifyReposChanged } = makeDeleteController(null)
+
+    expect(() => controller.deleteSetup({ setupId: 'missing-setup' })).toThrow(
+      'Project host setup not found: missing-setup'
+    )
+    expect(notifyReposChanged).not.toHaveBeenCalled()
   })
 })

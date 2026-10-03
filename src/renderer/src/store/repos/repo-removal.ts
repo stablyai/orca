@@ -22,6 +22,13 @@ import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { settingsForRepoOwner } from './owner-routing'
+import {
+  beginRepoRemoval,
+  createLocalPtyKiller,
+  endRepoRemoval,
+  readRemovalTabPtyIds,
+  type RemovalTabPtyIds
+} from './repo-removal-terminals'
 
 export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: string): boolean {
   return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
@@ -52,6 +59,12 @@ export function createRepoRemovalActions(
 ): Pick<RepoSlice, 'removeProject'> {
   return {
     removeProject: async (projectId, options) => {
+      let inFlightRemoval: ReadonlySet<string> | undefined
+      let tabPtyIdsBeforeRemoval: RemovalTabPtyIds[] = []
+      // Why: read tabs/PTYs before and after the await: another purge can drop them, and a PTY can attach meanwhile.
+      const readTabPtyIds = (ids: Iterable<string>): RemovalTabPtyIds[] =>
+        readRemovalTabPtyIds(get(), ids)
+      const killLocalPtys = createLocalPtyKiller()
       try {
         // Why: pass an explicit hostId so a duplicate id across hosts resolves to the intended row, not the focused-host fallback.
         const ownerRepo = findRepoForHost(get().repos, projectId, {
@@ -75,6 +88,33 @@ export function createRepoRemovalActions(
             )
           }
         }
+        // Why: read the repo's worktrees before removal; its repos:changed refetch can drop their rows mid-await.
+        const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
+        // A raw id can be published by two hosts. Keep the purge host-scoped for
+        // those twins so the sibling's qualified visit recency survives.
+        const knownRepoWorktrees = [
+          ...(get().worktreesByRepo[projectId] ?? []),
+          ...(get().detectedWorktreesByRepo[projectId]?.worktrees ?? [])
+        ]
+        const exactSiblingIds = new Set(
+          knownRepoWorktrees
+            .filter((worktree) => !worktreeBelongsToHost(worktree, ownerHostId))
+            .map((worktree) => worktree.id)
+        )
+        const purgeTargets = worktreeIds.map((id) =>
+          exactSiblingIds.has(id) ? { id, hostId: ownerHostId } : id
+        )
+        const localAgentContextProjectIds =
+          ownerHostId === LOCAL_EXECUTION_HOST_ID
+            ? [
+                projectId,
+                ...(get().worktreesByRepo[projectId] ?? [])
+                  .filter((worktree) => worktreeBelongsToHost(worktree, ownerHostId))
+                  .flatMap((worktree) => (worktree.projectId ? [worktree.projectId] : []))
+              ]
+            : []
+        tabPtyIdsBeforeRemoval = readTabPtyIds(worktreeIds)
+        inFlightRemoval = beginRepoRemoval(get, worktreeIds)
         // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
         const target = getActiveRuntimeTarget(
           settingsForRepoOwner(get(), projectId, options?.hostId)
@@ -104,31 +144,6 @@ export function createRepoRemovalActions(
         const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
         clearRepoSlugCacheEntry(projectId)
 
-        // Kill PTYs for all worktrees belonging to this repo
-        const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
-        // A raw id can be published by two hosts. Keep the purge host-scoped for
-        // those twins so the sibling's qualified visit recency survives.
-        const knownRepoWorktrees = [
-          ...(get().worktreesByRepo[projectId] ?? []),
-          ...(get().detectedWorktreesByRepo[projectId]?.worktrees ?? [])
-        ]
-        const exactSiblingIds = new Set(
-          knownRepoWorktrees
-            .filter((worktree) => !worktreeBelongsToHost(worktree, ownerHostId))
-            .map((worktree) => worktree.id)
-        )
-        const purgeTargets = worktreeIds.map((id) =>
-          exactSiblingIds.has(id) ? { id, hostId: ownerHostId } : id
-        )
-        const localAgentContextProjectIds =
-          ownerHostId === LOCAL_EXECUTION_HOST_ID
-            ? [
-                projectId,
-                ...(get().worktreesByRepo[projectId] ?? [])
-                  .filter((worktree) => worktreeBelongsToHost(worktree, ownerHostId))
-                  .flatMap((worktree) => (worktree.projectId ? [worktree.projectId] : []))
-              ]
-            : []
         const killedTabIds = new Set<string>()
         if (target.kind === 'environment') {
           await Promise.allSettled(
@@ -142,16 +157,12 @@ export function createRepoRemovalActions(
             )
           )
         }
-        for (const wId of worktreeIds) {
-          const tabs = get().tabsByWorktree[wId] ?? []
-          for (const tab of tabs) {
-            killedTabIds.add(tab.id)
-            for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
-              if (!ptyId.startsWith('remote:')) {
-                window.api.pty.kill(ptyId)
-              }
-            }
-          }
+        for (const { tabId, ptyIds } of [
+          ...tabPtyIdsBeforeRemoval,
+          ...readTabPtyIds(worktreeIds)
+        ]) {
+          killedTabIds.add(tabId)
+          killLocalPtys(ptyIds)
         }
 
         // Why: use the canonical per-worktree purge to evict all worktree-scoped maps (hand-deletion leaked most); runs before the set() below so it still sees tabsByWorktree.
@@ -270,6 +281,20 @@ export function createRepoRemovalActions(
           }
         })
       } catch (err) {
+        if (inFlightRemoval) {
+          // Why: a refetch during this removal may have dropped these rows and left their PTYs and terminal state to us.
+          const listedIds = new Set(getKnownRepoWorktreeIds(get(), projectId))
+          const droppedIds = new Set([...inFlightRemoval].filter((id) => !listedIds.has(id)))
+          for (const { worktreeId, ptyIds } of [
+            ...tabPtyIdsBeforeRemoval,
+            ...readTabPtyIds(droppedIds)
+          ]) {
+            if (droppedIds.has(worktreeId)) {
+              killLocalPtys(ptyIds)
+            }
+          }
+          get().purgeWorktreeTerminalState([...droppedIds])
+        }
         console.error('Failed to remove repo:', err)
         // Why: bulk and background callers aggregate their own failures, so only opted-in single-project entry points toast (#11994).
         if (options?.errorFeedback === 'toast') {
@@ -280,6 +305,10 @@ export function createRepoRemovalActions(
               duration: ERROR_TOAST_DURATION
             }
           )
+        }
+      } finally {
+        if (inFlightRemoval) {
+          endRepoRemoval(get, inFlightRemoval)
         }
       }
     }
