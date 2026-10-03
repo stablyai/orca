@@ -238,7 +238,7 @@ export function renameRuntimeTerminal(
     }
     for (const leaf of host.leaves.values()) {
       if (leaf.ptyId === pty.pty.ptyId) {
-        host.notifier?.renameTerminal(leaf.tabId, title)
+        host.notifier?.renameTerminal?.(leaf.tabId, title)
         return { handle, tabId: leaf.tabId, title }
       }
     }
@@ -253,6 +253,6 @@ export function renameRuntimeTerminal(
   host.assertGraphReady()
   const { leaf } = host.getLiveLeafForHandle(handle)
   rememberManualTerminalTitle(host, leaf.ptyId, leaf.worktreeId, title)
-  host.notifier?.renameTerminal(leaf.tabId, title)
+  host.notifier?.renameTerminal?.(leaf.tabId, title)
   return { handle, tabId: leaf.tabId, title }
 }
