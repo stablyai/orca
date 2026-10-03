@@ -26,12 +26,48 @@ export function useMarkdownPreviewScrollViewport({
         clearTimeout(throttleTimer)
       }
       throttleTimer = setTimeout(() => {
-        setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+        // Why: a scroll burst while hidden (layout re-drop) must not overwrite the blur-time snapshot.
+        if (!document.hidden) {
+          setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+        }
         throttleTimer = null
       }, 150)
     }
 
+    // Why: macOS can drop an occluded window's scroll position; blur flushes the
+    // pending save and reveal re-anchors from the cache before the user reads on (#24667).
+    const flushPendingSave = (): void => {
+      if (throttleTimer === null) {
+        return
+      }
+      clearTimeout(throttleTimer)
+      throttleTimer = null
+      setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+    }
+    const reanchorAfterReveal = (): void => {
+      const cached = scrollTopCache.get(scrollCacheKey)
+      if (
+        cached === undefined ||
+        cached <= 1 ||
+        container.scrollTop > 1 ||
+        container.scrollHeight <= container.clientHeight + 1
+      ) {
+        return
+      }
+      container.scrollTop = Math.min(cached, container.scrollHeight - container.clientHeight)
+    }
+    const onWindowBlur = flushPendingSave
+    const onWindowFocus = reanchorAfterReveal
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'visible') {
+        reanchorAfterReveal()
+      }
+    }
+
     container.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('blur', onWindowBlur)
+    window.addEventListener('focus', onWindowFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       // Why: StrictMode's zero-height mount must not clobber a valid cached position.
       if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
@@ -41,6 +77,9 @@ export function useMarkdownPreviewScrollViewport({
         clearTimeout(throttleTimer)
       }
       container.removeEventListener('scroll', onScroll)
+      window.removeEventListener('blur', onWindowBlur)
+      window.removeEventListener('focus', onWindowFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [rootRef, scrollCacheKey])
 
