@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DeepSeekBalanceResponse } from '../../../src/shared/deepseek-balance'
 
 const TimestampSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const AccountIdSchema = z.string().min(1)
@@ -40,12 +41,14 @@ export const ProviderRateLimitsSchema = z
       'minimax',
       'grok',
       'antigravity',
-      'cursor'
+      'cursor',
+      'deepseek'
     ]),
     session: RateLimitWindowSchema.nullable(),
     weekly: RateLimitWindowSchema.nullable(),
     fableWeekly: RateLimitWindowSchema.nullable().optional(),
     monthly: RateLimitWindowSchema.nullable().optional(),
+    balance: DeepSeekBalanceResponse.nullable().optional().catch(null),
     buckets: z
       .array(RateLimitWindowSchema.extend({ name: z.string().min(1) }).passthrough())
       .optional(),
@@ -175,6 +178,20 @@ export const AccountsSnapshotSchema = z
       .object({
         claude: ProviderRateLimitsSchema.nullable(),
         codex: ProviderRateLimitsSchema.nullable(),
+        deepseek: ProviderRateLimitsSchema.refine((limits) => limits.provider === 'deepseek')
+          .nullable()
+          .optional()
+          .catch(null),
+        deepseekAccount: z
+          .object({
+            supported: z.boolean(),
+            configured: z.boolean(),
+            ownerId: z.string().min(1).nullable(),
+            protection: z.literal('sealed').nullable()
+          })
+          .nullable()
+          .optional()
+          .catch(null),
         // Why: protocol-compatible hosts from before runtime targeting omit
         // these fields; their account selection semantics were host-only.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),

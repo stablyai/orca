@@ -34,6 +34,7 @@ import {
 } from '../../../src/components/codex-reset-credit'
 import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
+import { DeepSeekBalanceCard } from '../../../src/components/DeepSeekBalanceCard'
 
 export default function AccountsScreen() {
   const router = useRouter()
@@ -379,6 +380,7 @@ export default function AccountsScreen() {
           </View>
         ) : (
           <>
+            <DeepSeekBalanceCard snapshot={snapshot} />
             {renderProviderSection('claude', 'Claude')}
             {renderProviderSection('codex', 'Codex')}
             <View style={styles.footerHint}>

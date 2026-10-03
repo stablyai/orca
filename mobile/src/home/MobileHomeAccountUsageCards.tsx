@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
+import { DeepSeekBalanceCard } from '../components/DeepSeekBalanceCard'
 import {
   getActiveProviderRateLimits,
   getUsageBarState,
@@ -41,6 +42,7 @@ export function MobileHomeAccountUsageCards(props: {
                 {host.name}
               </Text>
             ) : null}
+            <DeepSeekBalanceCard snapshot={snapshot} compact />
             {(['claude', 'codex'] as ProviderKey[]).map((provider) => {
               const active = provider === 'claude' ? claudeActive : codexActive
               const accounts =
