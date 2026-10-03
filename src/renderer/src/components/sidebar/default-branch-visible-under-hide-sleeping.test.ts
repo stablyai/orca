@@ -52,6 +52,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     ptyIdsByTabId: {},
     browserTabsByWorktree: {},
     worktreeIdsWithLiveAgent: new Set(),
+    pendingReconnectWorktreeIds: new Set(),
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,

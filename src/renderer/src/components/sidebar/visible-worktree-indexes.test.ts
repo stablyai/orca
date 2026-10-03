@@ -90,6 +90,7 @@ function visibleOptions(
     ptyIdsByTabId: null,
     browserTabsByWorktree: null,
     worktreeIdsWithLiveAgent: new Set<string>(),
+    pendingReconnectWorktreeIds: new Set<string>(),
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,

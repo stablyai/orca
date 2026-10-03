@@ -43,6 +43,7 @@ export function useWorktreeJumpPaletteWorktrees({
   hideWorkspacesFromOtherDevices,
   showSleepingWorkspaces,
   alwaysShowDefaultBranchWorkspace,
+  pendingReconnectWorktreeIds,
   ptyIdsByTabId,
   browserTabsByWorktree,
   unifiedTabsByWorktree,
@@ -83,6 +84,11 @@ export function useWorktreeJumpPaletteWorktrees({
         ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
         : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     [hideWorkspacesFromOtherDevices, runtimeEnvironments, runtimeStatusByEnvironmentId]
+  )
+  // Same startup-reconnect exemption as the sidebar sweep. #16247
+  const pendingReconnectWorktreeIdSet = useMemo(
+    () => new Set(pendingReconnectWorktreeIds),
+    [pendingReconnectWorktreeIds]
   )
   const worktreeIdsWithStructuredChat = getStructuredChatWorktreeIds(
     showSleepingWorkspaces,
@@ -127,7 +133,8 @@ export function useWorktreeJumpPaletteWorktrees({
             ptyIdsByTabId,
             browserTabsByWorktree,
             worktreeIdsWithLiveAgent,
-            worktreeIdsWithStructuredChat
+            worktreeIdsWithStructuredChat,
+            pendingReconnectWorktreeIdSet
           )
         ) {
           return false
@@ -150,7 +157,8 @@ export function useWorktreeJumpPaletteWorktrees({
       showSleepingWorkspaces,
       tabsByWorktree,
       worktreeIdsWithLiveAgent,
-      worktreeIdsWithStructuredChat
+      worktreeIdsWithStructuredChat,
+      pendingReconnectWorktreeIdSet
     ]
   )
   const { visibleWorktreesForState, switchableWorktreesForRows } = useMemo(

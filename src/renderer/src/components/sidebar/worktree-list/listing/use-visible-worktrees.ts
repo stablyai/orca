@@ -74,6 +74,17 @@ export function useVisibleSidebarWorktrees(args: {
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
     getStructuredChatWorktreeIds(showSleepingWorkspaces, s.unifiedTabsByWorktree)
   )
+  // Drained by startup reconnect, so empty in the steady state. #16247
+  const pendingReconnectWorktreeIdList = useAppStore((s) =>
+    showSleepingWorkspaces ? null : s.pendingReconnectWorktreeIds
+  )
+  const pendingReconnectWorktreeIds = useMemo(
+    () =>
+      pendingReconnectWorktreeIdList?.length
+        ? new Set(pendingReconnectWorktreeIdList)
+        : EMPTY_WORKTREE_ID_SET,
+    [pendingReconnectWorktreeIdList]
+  )
 
   const recomputedVisibleWorktrees = useMemo(() => {
     // Keyed on the epoch, not `agentStatusNow`: two bumps in one millisecond
@@ -94,6 +105,7 @@ export function useVisibleSidebarWorktrees(args: {
             tabsByWorktree,
             agentStatusNow
           ),
+      pendingReconnectWorktreeIds,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -129,6 +141,7 @@ export function useVisibleSidebarWorktrees(args: {
     tabsByWorktree,
     ptyIdsByTabId,
     browserTabsByWorktree,
+    pendingReconnectWorktreeIds,
     sortedIds,
     worktreeLineageById,
     worktreesByRepo,
