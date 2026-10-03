@@ -1,3 +1,8 @@
+import { z } from 'zod'
+import {
+  readMarkdownPreviewWindowSource,
+  updateMarkdownPreviewWindow
+} from '../window/markdown-preview-window'
 import { ipcMain } from 'electron'
 import {
   HtmlPreviewWindowSchema,
@@ -11,7 +16,19 @@ export function registerDocumentPreviewWindowHandlers(): void {
     if (!isTrustedUIRenderer(event.sender)) {
       throw new Error('Untrusted document window request')
     }
-    await openMarkdownPreviewWindow(MarkdownPreviewWindowSchema.parse(request))
+    await openMarkdownPreviewWindow(MarkdownPreviewWindowSchema.parse(request), event.sender)
+  })
+  ipcMain.handle('docPreview:updateMarkdownWindow', async (event, request: unknown) => {
+    if (!isTrustedUIRenderer(event.sender)) {
+      throw new Error('Untrusted document window request')
+    }
+    return updateMarkdownPreviewWindow(MarkdownPreviewWindowSchema.parse(request))
+  })
+  ipcMain.handle('docPreview:readMarkdownWindowSource', async (event, fileId: unknown) => {
+    if (!isTrustedUIRenderer(event.sender)) {
+      throw new Error('Untrusted document window request')
+    }
+    return readMarkdownPreviewWindowSource(z.string().min(1).max(1024).parse(fileId))
   })
   ipcMain.handle('docPreview:openHtmlWindow', async (event, request: unknown) => {
     if (!isTrustedUIRenderer(event.sender)) {

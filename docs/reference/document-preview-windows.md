@@ -8,11 +8,21 @@ moved to another monitor. Opening the same document again reuses its window.
 The source tab stays open. Closing that tab leaves the independent preview open;
 closing the main Orca window closes the previews too.
 
-Markdown windows show a read-only snapshot of the rendered document, including
-unsaved rich-editor content and embedded local images. Reopen the action to
-replace the snapshot with the current rendering. Source mode and incomplete
-large-document previews cannot produce a snapshot; switch to a rendered mode
-first. This prototype does not watch Markdown files or synchronize scrolling.
+Markdown windows follow the source file automatically. The viewer checks the same
+file every two seconds and updates the rendered document without resetting its
+scroll position or raising the window. The source tab can be switched or closed.
+Unsaved edits in an open source tab take precedence over disk content.
+
+Local files use the existing editor file-read bridge, pinned to the original local
+workspace. SSH and paired-runtime files use a separate document grant pinned to
+that host. Disconnects and deleted files retain the last rendered document with a
+refresh notice; successful reads clear the notice. Closing the independent window
+stops reads and disposes its hidden renderer and grant.
+
+Initial opening still requires rich or preview mode and a complete rendered
+Markdown document. If an update exceeds the normal preview size limit, the viewer
+keeps the last version and asks the reader to use source view. Scroll synchronization
+between the two windows is not enabled.
 
 HTML windows continue reading through the existing document-preview protocol,
 including SSH and paired-runtime files. Their separate grant copies the original

@@ -1,85 +1,17 @@
-import { BrowserWindow, Menu, type WebContents } from 'electron'
+import { Menu, type BrowserWindow, type WebContents } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { MarkdownPreviewWindowRequest } from '../../shared/document-preview-window'
 import { buildDocPreviewUrl } from '../../shared/doc-preview-scheme'
 import {
   getDocPreviewGrant,
   mintDocPreviewGrant,
   revokeDocPreviewGrant
 } from '../browser/doc-preview-grant-registry'
-import { getDocPreviewSession } from '../browser/doc-preview-protocol'
 import { installDocPreviewGuestPolicy } from '../browser/doc-preview-guest-policy'
-import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
-import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { createPreviewWindow, revealPreviewWindow } from './document-preview-window-frame'
+import { closeMarkdownPreviewWindows } from './markdown-preview-window'
+export { openMarkdownPreviewWindow } from './markdown-preview-window'
 
 const windows = new Map<string, BrowserWindow>()
-let markdownSessionConfigured = false
-
-function revealPreviewWindow(window: BrowserWindow): void {
-  if (!isBackgroundLaunch() && window.isMinimized()) {
-    window.restore()
-  }
-  showWindowWithoutStealingFocus(window)
-}
-
-function createPreviewWindow(title: string, htmlDocument: boolean): BrowserWindow {
-  const window = new BrowserWindow({
-    width: 960,
-    height: 720,
-    minWidth: 360,
-    minHeight: 240,
-    title,
-    show: false,
-    autoHideMenuBar: true,
-    webPreferences: {
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-      webviewTag: false,
-      javascript: htmlDocument,
-      ...(htmlDocument
-        ? { session: getDocPreviewSession() }
-        : { partition: 'orca-markdown-preview' })
-    }
-  })
-  window.once('ready-to-show', () => showWindowWithoutStealingFocus(window))
-  return window
-}
-
-export async function openMarkdownPreviewWindow(
-  request: MarkdownPreviewWindowRequest
-): Promise<void> {
-  const key = `markdown:${request.fileId}`
-  const existing = windows.get(key)
-  const window =
-    existing && !existing.isDestroyed() ? existing : createPreviewWindow(request.title, false)
-  if (window !== existing) {
-    installPrivilegedWindowNavigationPolicy(window.webContents)
-    if (!markdownSessionConfigured) {
-      window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
-        callback(false)
-      )
-      window.webContents.session.setPermissionCheckHandler(() => false)
-      window.webContents.session.on('will-download', (event) => event.preventDefault())
-      markdownSessionConfigured = true
-    }
-    windows.set(key, window)
-    window.once('closed', () => {
-      if (windows.get(key) === window) {
-        windows.delete(key)
-      }
-    })
-  }
-  try {
-    await window.loadURL(
-      `data:text/html;charset=utf-8;base64,${Buffer.from(request.html).toString('base64')}`
-    )
-    revealPreviewWindow(window)
-  } catch (error) {
-    window.close()
-    throw error
-  }
-}
 
 export async function openHtmlPreviewWindow(grantId: string, host: WebContents): Promise<void> {
   const source = getDocPreviewGrant(grantId)
@@ -129,6 +61,7 @@ export async function openHtmlPreviewWindow(grantId: string, host: WebContents):
 }
 
 export function closeDocumentPreviewWindows(): void {
+  closeMarkdownPreviewWindows()
   for (const window of windows.values()) {
     if (!window.isDestroyed()) {
       window.close()

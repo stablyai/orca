@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   ipcMain: { handle: (name: string, handler: Handler) => mocks.handlers.set(name, handler) }
 }))
+vi.mock('../window/markdown-preview-window', () => ({
+  readMarkdownPreviewWindowSource: vi.fn(),
+  updateMarkdownPreviewWindow: vi.fn()
+}))
 vi.mock('./ui', () => ({ isTrustedUIRenderer: () => mocks.trusted }))
 vi.mock('../window/document-preview-window', () => ({
   openMarkdownPreviewWindow: mocks.openMarkdown,

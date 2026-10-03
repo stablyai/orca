@@ -7,6 +7,11 @@ import {
   revokeDocPreviewGrant
 } from '../browser/doc-preview-grant-registry'
 import { parseDocPreviewUrl } from '../../shared/doc-preview-scheme'
+import { readDocPreviewFile } from '../browser/doc-preview-file-reader'
+import {
+  readMarkdownPreviewWindowSource,
+  updateMarkdownPreviewWindow
+} from './markdown-preview-window'
 import {
   closeDocumentPreviewWindows,
   openHtmlPreviewWindow,
@@ -27,6 +32,7 @@ class MockPreviewWindow extends EventEmitter {
   showInactive = vi.fn()
   restore = vi.fn()
   webContents = {
+    executeJavaScriptInIsolatedWorld: vi.fn(async () => undefined),
     session: {
       setPermissionRequestHandler: vi.fn(),
       setPermissionCheckHandler: vi.fn(),
@@ -64,6 +70,7 @@ vi.mock('electron', () => ({
   }),
   Menu: { buildFromTemplate: vi.fn(() => ({})) }
 }))
+vi.mock('../browser/doc-preview-file-reader', () => ({ readDocPreviewFile: vi.fn() }))
 vi.mock('../browser/doc-preview-protocol', () => ({
   getDocPreviewSession: () => mocks.previewSession
 }))
@@ -160,5 +167,64 @@ describe('independent document preview windows', () => {
     expect(mocks.windows[0]?.destroyed).toBe(true)
     await openMarkdownPreviewWindow(request)
     expect(mocks.windows).toHaveLength(2)
+  })
+
+  it('reads the original owner after the source closes, and updates without navigation or reveal', async () => {
+    const source = mintDocPreviewGrant({
+      owner: { kind: 'ssh', connectionId: 'server-1' },
+      root: '/workspace/reports',
+      entryRelativePath: 'report.md',
+      browserPageId: 'source-md'
+    })
+    await openMarkdownPreviewWindow({
+      fileId: 'md-live',
+      title: 'Report',
+      html: '<p>Before</p>',
+      sourceGrantId: source.id
+    })
+    revokeDocPreviewGrant(source.id)
+    vi.mocked(readDocPreviewFile).mockResolvedValue({
+      ok: true,
+      bytes: Buffer.from('# After'),
+      contentType: 'text/plain'
+    })
+    expect(await readMarkdownPreviewWindowSource('md-live')).toEqual({
+      open: true,
+      content: '# After',
+      error: null
+    })
+    const retained = vi.mocked(readDocPreviewFile).mock.calls[0]![0]
+    expect(retained.owner).toEqual({ kind: 'ssh', connectionId: 'server-1' })
+    expect(retained.id).not.toBe(source.id)
+    const window = mocks.windows[0]!
+    await updateMarkdownPreviewWindow({
+      fileId: 'md-live',
+      title: 'Report',
+      html: '<h1>After</h1>'
+    })
+    expect(window.loadURL).toHaveBeenCalledOnce()
+    expect(window.webContents.executeJavaScriptInIsolatedWorld).toHaveBeenCalledOnce()
+    expect(window.show).not.toHaveBeenCalled()
+    vi.mocked(readDocPreviewFile).mockResolvedValue({
+      ok: false,
+      status: 404,
+      reason: 'unreadable',
+      message: 'Host disconnected'
+    })
+    expect(await readMarkdownPreviewWindowSource('md-live')).toEqual({
+      open: true,
+      content: null,
+      error: 'Host disconnected'
+    })
+    window.close()
+    expect(getDocPreviewGrant(retained.id)).toBeNull()
+    expect(await readMarkdownPreviewWindowSource('md-live')).toEqual({
+      open: false,
+      content: null,
+      error: null
+    })
+    expect(
+      await updateMarkdownPreviewWindow({ fileId: 'md-live', title: '', html: '<p>Late</p>' })
+    ).toBe(false)
   })
 })
