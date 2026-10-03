@@ -15124,6 +15124,8 @@
         "failedAfter": "Falló tras {{value0}}"
       },
       "jumpToLatest": "Saltar a lo último",
+      "jumpToTop": "Ir al principio",
+      "transcriptLabel": "Conversación",
       "toggle": {
         "showTerminal": "Mostrar terminal",
         "showChat": "Mostrar vista de chat"

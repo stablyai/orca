@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import {
   distanceFromBottom,
+  FOLLOWING,
   isNearBottom,
   nextFollowingEnd,
+  nextFollowState,
   shouldShowJumpToLatest,
   NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
-  NATIVE_CHAT_FOLLOW_REARM_PX
+  NATIVE_CHAT_FOLLOW_REARM_PX,
+  type FollowEvent,
+  type FollowState
 } from './native-chat-autoscroll'
 
 const atBottom = { scrollTop: 952, scrollHeight: 1000, clientHeight: 48 }
@@ -140,5 +144,118 @@ describe('nextFollowingEnd', () => {
   // Sub-pixel and zoom rounding put the true end a fraction short of exact.
   it('holds follow through rounding noise at the end', () => {
     expect(nextFollowingEnd({ ...following, geometry: parkedAbove(1.5) })).toBe(true)
+  })
+})
+
+describe('nextFollowState', () => {
+  const opened = (...rows: string[]): FollowState => ({
+    kind: 'detached',
+    reason: 'open',
+    opens: new Set(rows)
+  })
+  const scrolled: FollowState = { kind: 'detached', reason: 'scroll' }
+  const navigated: FollowState = { kind: 'detached', reason: 'navigation' }
+  const scroll = (distance: number, programmatic = false): FollowEvent => ({
+    kind: 'scroll',
+    programmatic,
+    geometry: parkedAbove(distance),
+    previousDistanceFromEnd: 400
+  })
+  const events = {
+    'reader opens a': { kind: 'open', row: 'a' },
+    'reader opens c': { kind: 'open', row: 'c' },
+    'reader closes a': { kind: 'close', row: 'a' },
+    // Opened before this detach, so never one of its opens.
+    'reader closes c': { kind: 'close', row: 'c' },
+    'reader scrolls away': scroll(200),
+    'reader scrolls to the end': scroll(0),
+    'application scrolls away': scroll(200, true),
+    'application scrolls to the end': scroll(0, true),
+    'reader reveals the latest': { kind: 'reveal-latest' },
+    'reader navigates': { kind: 'navigate' }
+  } satisfies Record<string, FollowEvent>
+
+  const row = (
+    name: string,
+    state: FollowState,
+    after: Record<keyof typeof events, FollowState>
+  ): { name: string; state: FollowState; after: Map<string, FollowState> } => ({
+    name,
+    state,
+    after: new Map(Object.entries(after))
+  })
+  const table = [
+    row('following', FOLLOWING, {
+      'reader opens a': opened('a'),
+      'reader opens c': opened('c'),
+      'reader closes a': FOLLOWING,
+      'reader closes c': FOLLOWING,
+      'reader scrolls away': scrolled,
+      'reader scrolls to the end': FOLLOWING,
+      'application scrolls away': FOLLOWING,
+      'application scrolls to the end': FOLLOWING,
+      'reader reveals the latest': FOLLOWING,
+      'reader navigates': navigated
+    }),
+    row('scrolled away', scrolled, {
+      'reader opens a': scrolled,
+      'reader opens c': scrolled,
+      'reader closes a': scrolled,
+      'reader closes c': scrolled,
+      'reader scrolls away': scrolled,
+      'reader scrolls to the end': FOLLOWING,
+      'application scrolls away': scrolled,
+      'application scrolls to the end': scrolled,
+      'reader reveals the latest': FOLLOWING,
+      'reader navigates': navigated
+    }),
+    row('navigated away', navigated, {
+      'reader opens a': navigated,
+      'reader opens c': navigated,
+      'reader closes a': navigated,
+      'reader closes c': navigated,
+      'reader scrolls away': scrolled,
+      'reader scrolls to the end': FOLLOWING,
+      'application scrolls away': navigated,
+      'application scrolls to the end': navigated,
+      'reader reveals the latest': FOLLOWING,
+      'reader navigates': navigated
+    }),
+    row('opened a', opened('a'), {
+      'reader opens a': opened('a'),
+      'reader opens c': opened('a', 'c'),
+      'reader closes a': FOLLOWING,
+      'reader closes c': opened('a'),
+      'reader scrolls away': scrolled,
+      'reader scrolls to the end': FOLLOWING,
+      'application scrolls away': opened('a'),
+      'application scrolls to the end': opened('a'),
+      'reader reveals the latest': FOLLOWING,
+      'reader navigates': navigated
+    }),
+    row('opened a and b', opened('a', 'b'), {
+      'reader opens a': opened('a', 'b'),
+      'reader opens c': opened('a', 'b', 'c'),
+      'reader closes a': opened('b'),
+      'reader closes c': opened('a', 'b'),
+      'reader scrolls away': scrolled,
+      'reader scrolls to the end': FOLLOWING,
+      'application scrolls away': opened('a', 'b'),
+      'application scrolls to the end': opened('a', 'b'),
+      'reader reveals the latest': FOLLOWING,
+      'reader navigates': navigated
+    })
+  ]
+
+  const cases = table.flatMap(({ name, state, after }) =>
+    Object.entries(events).map(([eventName, event]) => ({
+      name: `${name}: ${eventName}`,
+      state,
+      event,
+      expected: after.get(eventName)
+    }))
+  )
+  it.each(cases)('$name', ({ state, event, expected }) => {
+    expect(nextFollowState(state, event)).toEqual(expected)
   })
 })

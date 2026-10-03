@@ -22,15 +22,17 @@ function isEditableTarget(target: EventTarget): boolean {
 
 export type NativeChatReaderScrollInputHandlers = Pick<
   React.HTMLAttributes<HTMLDivElement>,
-  'onWheel' | 'onTouchMove' | 'onKeyDown' | 'onPointerDown'
+  'onWheel' | 'onTouchMove' | 'onKeyDown' | 'onPointerDown' | 'tabIndex' | 'role'
 >
 
 /** Scroller props that call `onReaderScroll` on a wheel, touch drag, scroll key or
- *  scrollbar grab. */
+ *  scrollbar grab. Focusable, so the scroll keys reach it; a named region once focused. */
 export function nativeChatReaderScrollInputHandlers(
   onReaderScroll: () => void
 ): NativeChatReaderScrollInputHandlers {
   return {
+    tabIndex: 0,
+    role: 'region',
     onWheel: onReaderScroll,
     onTouchMove: onReaderScroll,
     onKeyDown: (event) => {

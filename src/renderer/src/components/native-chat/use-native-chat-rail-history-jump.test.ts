@@ -88,7 +88,9 @@ function createLane({
   }
   const useLaneRailJump = (
     jumpToLoaded: (item: NativeChatRailItem) => void,
-    sessionKey = 'session-1'
+    sessionKey = 'session-1',
+    jumpToStart: () => void = () => {},
+    isVisible = true
   ) => {
     const current = useSyncExternalStore(lane.subscribe, lane.getSnapshot)
     const items = useMemo<NativeChatRailItem[]>(() => {
@@ -103,8 +105,10 @@ function createLane({
     return useNativeChatRailHistoryJump({
       items,
       sessionKey,
+      isVisible,
       loadEarlier: lane.loadEarlier,
-      jumpToLoaded
+      jumpToLoaded,
+      jumpToStart
     })
   }
   return { lane, useLaneRailJump }
@@ -304,5 +308,76 @@ describe('rail jump through unloaded history', () => {
     await releasePage(lane)
     expect(lane.reads.count).toBe(1)
     expect(jumpToLoaded).not.toHaveBeenCalled()
+  })
+})
+
+describe('jumping to the start of the conversation', () => {
+  it('pages until no older history is left, then jumps to the start', async () => {
+    const { lane, useLaneRailJump } = createLane({ total: 100, pageSize: 10, initiallyLoaded: 10 })
+    const jumpToStart = vi.fn()
+    const { result } = renderHook(() => useLaneRailJump(vi.fn(), 'session-1', jumpToStart))
+
+    act(() => result.current.startFromBeginning())
+    expect(result.current.startPending).toBe(true)
+    expect(result.current.pendingId).toBeNull()
+
+    await waitFor(() => expect(jumpToStart).toHaveBeenCalledTimes(1))
+    expect(lane.getSnapshot().loaded).toBe(100)
+    // Nine pages load the rest; the tenth answers that nothing older is left.
+    expect(lane.reads.count).toBe(9)
+    expect(lane.loadEarlier).toHaveBeenCalledTimes(10)
+    expect(result.current.startPending).toBe(false)
+  })
+
+  it('lands on the top of what loaded when an older page cannot be read', async () => {
+    const { lane, useLaneRailJump } = createLane({
+      total: 40,
+      pageSize: 10,
+      initiallyLoaded: 10,
+      pageResult: 'failed'
+    })
+    const jumpToStart = vi.fn()
+    const { result } = renderHook(() => useLaneRailJump(vi.fn(), 'session-1', jumpToStart))
+
+    act(() => result.current.startFromBeginning())
+    await waitFor(() => expect(jumpToStart).toHaveBeenCalledTimes(1))
+    expect(lane.getSnapshot().loaded).toBe(10)
+  })
+
+  it('does not jump once aborted mid-page', async () => {
+    const { lane, useLaneRailJump } = createLane({ total: 40, pageSize: 10, initiallyLoaded: 10 })
+    lane.holdPages()
+    const jumpToStart = vi.fn()
+    const { result } = renderHook(() => useLaneRailJump(vi.fn(), 'session-1', jumpToStart))
+
+    act(() => result.current.startFromBeginning())
+    await waitFor(() => expect(lane.reads.count).toBe(1))
+    act(() => result.current.abort())
+    expect(result.current.startPending).toBe(false)
+    await releasePage(lane)
+
+    expect(lane.reads.count).toBe(1)
+    expect(jumpToStart).not.toHaveBeenCalled()
+  })
+
+  // A hidden terminal-backed pane stops reading its transcript, so the page would never land.
+  it('abandons the jump when the pane hides mid-page', async () => {
+    const { lane, useLaneRailJump } = createLane({ total: 40, pageSize: 10, initiallyLoaded: 10 })
+    lane.holdPages()
+    const jumpToStart = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ isVisible }: { isVisible: boolean }) =>
+        useLaneRailJump(vi.fn(), 'session-1', jumpToStart, isVisible),
+      { initialProps: { isVisible: true } }
+    )
+
+    act(() => result.current.startFromBeginning())
+    await waitFor(() => expect(lane.reads.count).toBe(1))
+    rerender({ isVisible: false })
+    expect(result.current.startPending).toBe(false)
+    await releasePage(lane)
+
+    expect(lane.reads.count).toBe(1)
+    expect(jumpToStart).not.toHaveBeenCalled()
   })
 })

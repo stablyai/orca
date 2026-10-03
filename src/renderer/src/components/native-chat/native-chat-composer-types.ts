@@ -31,6 +31,8 @@ export type NativeChatStructuredComposerTransport = {
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
   onError: (message: string | null) => void
+  /** The host accepted a message, a command it runs itself, or a goal. */
+  onSubmitted?: () => void
   runtime: 'local' | 'remote'
   /** The session behind this composer; a real user send relinquishes orchestration ownership. */
   sessionId: string
@@ -67,6 +69,8 @@ export type NativeChatComposerProps = {
   onOptimisticSendCanceled?: (pendingId: string) => void
   /** Record a dispatched slash command that does not create a chat turn. */
   onSlashCommand?: (command: string) => void
+  /** Anything delivered to the terminal: a message, a command or a session option. */
+  onSubmitted?: () => void
   /** Picker-only agent commands continue in the hosted TUI after dispatch. */
   onSwitchToTerminal?: () => void
   /** Reads the hosted TUI's current rendered screen when chat is entered. */

@@ -17673,6 +17673,8 @@
         "toggleDetails": "Basculer les détails du tour"
       },
       "jumpToLatest": "Aller au dernier message",
+      "jumpToTop": "Remonter en haut",
+      "transcriptLabel": "Conversation",
       "toggle": {
         "showTerminal": "Afficher le terminal",
         "showChat": "Afficher la vue chat"

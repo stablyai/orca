@@ -7,11 +7,13 @@
 // the reader's back. Rows read through this store when the transcript provides
 // one, and fall back to their own state when they are rendered standalone.
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useId, useMemo, useState } from 'react'
 
 export type NativeChatDisclosureStore = {
   read: (key: string) => boolean | undefined
   write: (key: string, open: boolean) => void
+  /** Told whenever the reader opens or closes a row, keyed or not, and which one. */
+  onToggle?: (row: string, open: boolean) => void
 }
 
 export const NativeChatDisclosureContext = createContext<NativeChatDisclosureStore | null>(null)
@@ -54,6 +56,9 @@ export function useNativeChatDisclosure(
   const store = useContext(NativeChatDisclosureContext)
   const [local, setLocal] = useState({ key, initialOpen, open: initialOpen })
   const write = store?.write
+  const onToggle = store?.onToggle
+  const unkeyedRow = useId()
+  const row = key ?? unkeyedRow
   const isStored = key !== undefined && store !== null
   const localOpen =
     local.key === key && local.initialOpen === initialOpen ? local.open : initialOpen
@@ -64,8 +69,9 @@ export function useNativeChatDisclosure(
       if (key !== undefined && write) {
         write(key, next)
       }
+      onToggle?.(row, next)
     },
-    [initialOpen, key, write]
+    [initialOpen, key, onToggle, row, write]
   )
   return { open, setOpen }
 }

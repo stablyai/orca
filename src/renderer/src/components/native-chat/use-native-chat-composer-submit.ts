@@ -89,6 +89,7 @@ export function useNativeChatComposerSubmit(args: {
         return
       }
       structuredTransport.onError(null)
+      structuredTransport.onSubmitted?.()
       setHistory((previous) => pushHistory(previous, draft))
       if (composition.current !== draft) {
         return

@@ -6,7 +6,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render } from '@testing-library/react'
+import { cleanup } from '@testing-library/react'
+import { render } from './native-chat-app-root-test-render'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,

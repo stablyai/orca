@@ -70,3 +70,50 @@ export function nextFollowingEnd(intent: FollowIntent): boolean {
   }
   return isNearBottom(intent.geometry, NATIVE_CHAT_FOLLOW_REARM_PX)
 }
+
+/** Whether the transcript follows its end, and if not, what the reader did to stop it. */
+export type FollowState =
+  | { kind: 'following' }
+  | { kind: 'detached'; reason: 'scroll' | 'navigation' }
+  /** Stopped only by opening rows, and not scrolled since: closing the last one follows again. */
+  | { kind: 'detached'; reason: 'open'; opens: ReadonlySet<string> }
+
+export type FollowEvent =
+  | { kind: 'open' | 'close'; row: string }
+  | ({ kind: 'scroll' } & Omit<FollowIntent, 'following'>)
+  | { kind: 'reveal-latest' }
+  | { kind: 'navigate' }
+
+export const FOLLOWING: FollowState = { kind: 'following' }
+
+export function nextFollowState(state: FollowState, event: FollowEvent): FollowState {
+  switch (event.kind) {
+    case 'open':
+      if (state.kind === 'following') {
+        return { kind: 'detached', reason: 'open', opens: new Set([event.row]) }
+      }
+      return state.reason === 'open' && !state.opens.has(event.row)
+        ? { ...state, opens: new Set([...state.opens, event.row]) }
+        : state
+    case 'close': {
+      // By identity: a row opened before this detach is not one of its opens.
+      if (state.kind === 'following' || state.reason !== 'open' || !state.opens.has(event.row)) {
+        return state
+      }
+      const opens = new Set(state.opens)
+      opens.delete(event.row)
+      return opens.size === 0 ? FOLLOWING : { ...state, opens }
+    }
+    case 'scroll':
+      if (event.programmatic) {
+        return state
+      }
+      return nextFollowingEnd({ ...event, following: state.kind === 'following' })
+        ? FOLLOWING
+        : { kind: 'detached', reason: 'scroll' }
+    case 'reveal-latest':
+      return FOLLOWING
+    case 'navigate':
+      return { kind: 'detached', reason: 'navigation' }
+  }
+}

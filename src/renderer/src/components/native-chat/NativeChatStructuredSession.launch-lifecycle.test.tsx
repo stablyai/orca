@@ -240,6 +240,20 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
   })
 
+  // The parked messages are the transcript here, and the reader may have scrolled up among them.
+  it('brings the latest into view when launch Retry relaunches behind a parked message', async () => {
+    mocks.mode = 'outbox'
+    mocks.launchLifecycle = 'failed'
+    render(sessionView())
+    expect(composerSend()('still there?', [])).toBe(true)
+    await screen.findByRole('button', { name: 'Retry' })
+    mocks.revealLatest.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    expect(mocks.revealLatest).toHaveBeenCalledOnce()
+  })
+
   it('leaves a send into an unconfirmed start parked without relaunching', () => {
     mocks.mode = 'outbox'
     mocks.launchLifecycle = 'visibility-unknown'

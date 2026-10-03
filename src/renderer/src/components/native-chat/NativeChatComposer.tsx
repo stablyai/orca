@@ -63,6 +63,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       optimisticSendOutcome,
       onOptimisticSendCanceled,
       onSlashCommand,
+      onSubmitted,
       onSwitchToTerminal,
       readTerminalScreen,
       launchSeed,
@@ -230,6 +231,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         agent,
         disabled,
         onSlashCommand,
+        onSubmitted,
         resolveTarget,
         setHistory
       })
@@ -274,6 +276,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       onOptimisticSend,
       optimisticSendOutcome,
       onSlashCommand,
+      onSubmitted,
       sessionOptionsSurface: ptySessionOptionsSurface,
       terminalTabId,
       trackPendingSend,
@@ -310,6 +313,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       isDispatchingSessionOption,
       resolveTarget,
       onSlashCommand,
+      onSubmitted,
       sessionOptionsSurface: ptySessionOptionsSurface,
       trackPendingSend,
       setHistory,

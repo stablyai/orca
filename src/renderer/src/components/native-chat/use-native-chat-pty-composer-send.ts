@@ -34,6 +34,7 @@ export function useNativeChatPtyComposerSend(args: {
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   onSlashCommand?: (command: string) => void
+  onSubmitted?: () => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   terminalTabId: string
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
@@ -121,6 +122,7 @@ export function useNativeChatPtyComposerSend(args: {
       agent: args.agent,
       runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
     })
+    args.onSubmitted?.()
     args.setHistory((previous) => pushHistory(previous, text))
     args.setDraft('')
     args.setCaret(0)

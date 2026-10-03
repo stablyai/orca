@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-app-root-test-render'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'

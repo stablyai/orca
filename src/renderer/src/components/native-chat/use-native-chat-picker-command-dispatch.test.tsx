@@ -28,10 +28,11 @@ const COMMAND = {
   skillCollision: false
 }
 
-function renderDispatch(agent: 'codex' | 'claude' | 'openclaude') {
+function renderDispatch(agent: 'codex' | 'claude' | 'openclaude', onSubmitted = vi.fn()) {
   return renderHook(() =>
     useNativeChatPickerCommandDispatch({
       agent,
+      onSubmitted,
       disabled: false,
       isDispatchingSessionOption: false,
       resolveTarget: () => ({ settings: {}, ptyId: 'pty-1' }),
@@ -57,11 +58,13 @@ describe('useNativeChatPickerCommandDispatch', () => {
   })
 
   it('types Codex autocomplete commands', () => {
-    const hook = renderDispatch('codex')
+    const onSubmitted = vi.fn()
+    const hook = renderDispatch('codex', onSubmitted)
     act(() => hook.result.current(COMMAND))
 
     expect(sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
     expect(sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(onSubmitted).toHaveBeenCalledOnce()
   })
 
   it.each(['claude', 'openclaude'] as const)('keeps %s autocomplete commands pasted', (agent) => {

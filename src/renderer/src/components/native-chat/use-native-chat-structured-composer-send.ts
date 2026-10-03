@@ -63,6 +63,10 @@ export function useNativeChatStructuredComposerSend({
             return
           }
           emitNativeChatMessageSent({ agent, runtime: structuredTransport.runtime })
+          // An accepted command can still be one chat sessions don't run; nothing landed then.
+          if (!error) {
+            structuredTransport.onSubmitted?.()
+          }
           // A real user send is a takeover, exactly as typing into a worker's pane is. Only past
           // `accepted`, and only from this hook: the outbox dispatcher retries and would re-fire,
           // and orchestration's own pointer nudges never reach the composer at all.

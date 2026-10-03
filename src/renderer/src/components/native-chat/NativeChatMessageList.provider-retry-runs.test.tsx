@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-app-root-test-render'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'

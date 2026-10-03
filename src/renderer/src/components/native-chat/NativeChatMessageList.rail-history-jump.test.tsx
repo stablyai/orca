@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-app-root-test-render'
 import { useCallback, useMemo, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -77,10 +78,13 @@ function PagedTranscript({
 }): React.JSX.Element {
   const [loaded, setLoaded] = useState(PAGE)
   const loadEarlier = useCallback(async (): Promise<NativeChatOlderPageResult> => {
+    if (loaded >= TOTAL) {
+      return 'exhausted'
+    }
     await (holdPage?.() ?? Promise.resolve())
     setLoaded((current) => Math.min(TOTAL, current + PAGE))
     return 'applied'
-  }, [holdPage])
+  }, [holdPage, loaded])
   const messages = useMemo(() => HISTORY.slice(TOTAL - loaded), [loaded])
   const railOutline = useMemo<NativeChatRailOutlineEntry[]>(
     () =>
@@ -448,6 +452,74 @@ describe('jumping from the rail while following the end', () => {
     expect(pages.asked()).toBe(1)
     expect(screen.queryByText('prompt-5')).toBeNull()
     expect(distanceFromBottom()).toBe(0)
+  })
+
+  it('"Jump to top" loads every older page and lands on the first message', async () => {
+    render(<PagedTranscript />)
+    await settle(10)
+    // Anti-vacuous: only the newest page is loaded, and the controls hide at the end.
+    expect(screen.queryByText('prompt-0')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Jump to top' })).toBeNull()
+    act(() => {
+      scroller().scrollTop = 200
+    })
+    await settle(2)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to top' }))
+    await settle(60)
+
+    expect(screen.getByText('prompt-0')).toBeTruthy()
+    expect(scroller().scrollTop).toBe(0)
+    expect(screen.queryByRole('button', { name: /load earlier messages/i })).toBeNull()
+  })
+
+  it('marks "Jump to top" busy, with a reduced-motion-safe spinner, while its pages load', async () => {
+    let openGate: (() => void) | null = null
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve
+    })
+    render(<PagedTranscript holdPage={() => gate} />)
+    await settle(10)
+    act(() => {
+      scroller().scrollTop = 200
+    })
+    await settle(2)
+    const top = screen.getByRole('button', { name: 'Jump to top' })
+    // Anti-vacuous: idle until pressed, whatever else is already paging.
+    expect(top).not.toHaveAttribute('aria-busy')
+
+    fireEvent.click(top)
+    await frame()
+
+    expect(top).toHaveAttribute('aria-busy', 'true')
+    expect(top.querySelector('svg')).toHaveClass('animate-spin', 'motion-reduce:animate-none')
+    act(() => openGate?.())
+    await settle(60)
+    expect(scroller().scrollTop).toBe(0)
+    expect(top).not.toHaveAttribute('aria-busy')
+  })
+
+  it('jumps to a message without animating when the reader asks for reduced motion', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false
+    }))
+    render(<PagedTranscript />)
+    await settle(10)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
+    await frame()
+    fireEvent.click(screen.getByRole('button', { name: 'prompt-45' }))
+    await frame()
+
+    // A smooth scroll would still be easing in here, a few pixels from where it started.
+    expect(Math.abs(rowOffsetFromViewportTop('prompt-45'))).toBeLessThanOrEqual(2)
   })
 })
 

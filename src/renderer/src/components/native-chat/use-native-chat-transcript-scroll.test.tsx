@@ -34,6 +34,8 @@ function TranscriptHarness({
   return (
     <div ref={scrollRef} data-testid="scroll" onScroll={transcript.onScroll}>
       <div ref={contentRef} />
+      <button onClick={() => transcript.readerOpened('row')}>open</button>
+      <button onClick={() => transcript.readerClosed('row')}>close</button>
     </div>
   )
 }
@@ -129,5 +131,36 @@ describe('native chat transcript follow', () => {
     view.rerender(<TranscriptHarness {...props} itemCount={102} />)
 
     expect(scrollToEnd).toHaveBeenCalled()
+  })
+
+  // A close that resizes nothing reaches no observer, so the close itself has to pin.
+  it('pins to the end the moment the reader closes the row that stopped it following', () => {
+    let scrollTop = 900
+    const scrollToEnd = vi.fn()
+    const view = render(
+      <TranscriptHarness isVisible restoreScrollOffset={vi.fn()} scrollToEnd={scrollToEnd} />
+    )
+    Object.defineProperties(view.getByTestId('scroll'), {
+      clientHeight: { configurable: true, get: () => 100 },
+      scrollHeight: { configurable: true, get: () => 1_400 },
+      scrollTop: { configurable: true, get: () => scrollTop, set: (value) => (scrollTop = value) }
+    })
+
+    fireEvent.click(view.getByText('open'))
+    scrollToEnd.mockClear()
+    view.rerender(
+      <TranscriptHarness
+        isVisible
+        restoreScrollOffset={vi.fn()}
+        scrollToEnd={scrollToEnd}
+        itemCount={101}
+      />
+    )
+    // Anti-vacuous: opening stopped the following, 400px from the end.
+    expect(scrollToEnd).not.toHaveBeenCalled()
+
+    fireEvent.click(view.getByText('close'))
+
+    expect(scrollToEnd).toHaveBeenCalledOnce()
   })
 })

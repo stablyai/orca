@@ -29,9 +29,11 @@ function harness(options: {
   lane?: 'pty'
 }) {
   const onError = vi.fn()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: submit reads only threadGoal and onError.
+  const onSubmitted = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: submit reads only threadGoal, onError and onSubmitted.
   const structuredTransport = {
     onError,
+    onSubmitted,
     ...(options.threadGoal ? { threadGoal: options.threadGoal } : {})
   } as unknown as NativeChatStructuredComposerTransport
   const calls = {
@@ -53,7 +55,7 @@ function harness(options: {
       }),
     { initialProps: { draft: options.draft, caret: options.caret ?? options.draft.length } }
   )
-  return { hook, calls, onError }
+  return { hook, calls, onError, onSubmitted }
 }
 
 describe('composer goal mode', () => {
@@ -86,13 +88,15 @@ describe('composer goal mode', () => {
 
   it('sets the draft as the goal instead of sending it, then leaves goal mode', async () => {
     const setObjective = vi.fn(async () => true)
-    const { hook, calls } = harness({ draft: '/go', threadGoal: { setObjective } })
+    const { hook, calls, onSubmitted } = harness({ draft: '/go', threadGoal: { setObjective } })
     act(() => hook.result.current.goalMode.interceptPick(vi.fn())(GOAL_ITEM))
     hook.rerender({ draft: '  Ship the parser  ', caret: 0 })
 
     await act(async () => hook.result.current.send())
 
     expect(setObjective).toHaveBeenCalledWith('Ship the parser')
+    // The pane brings the latest into view for a goal it set, as for a sent message.
+    expect(onSubmitted).toHaveBeenCalledOnce()
     expect(calls.sendStructured).not.toHaveBeenCalled()
     expect(calls.setDraft).toHaveBeenLastCalledWith('')
     expect(hook.result.current.goalMode.active).toBe(false)
@@ -100,7 +104,7 @@ describe('composer goal mode', () => {
 
   it('keeps the draft and goal mode when the goal is refused', async () => {
     const setObjective = vi.fn(async () => false)
-    const { hook, calls } = harness({ draft: '/go', threadGoal: { setObjective } })
+    const { hook, calls, onSubmitted } = harness({ draft: '/go', threadGoal: { setObjective } })
     act(() => hook.result.current.goalMode.interceptPick(vi.fn())(GOAL_ITEM))
     calls.setDraft.mockClear()
     hook.rerender({ draft: 'Ship the parser', caret: 0 })
@@ -108,6 +112,7 @@ describe('composer goal mode', () => {
     await act(async () => hook.result.current.send())
 
     expect(setObjective).toHaveBeenCalledOnce()
+    expect(onSubmitted).not.toHaveBeenCalled()
     expect(calls.setDraft).not.toHaveBeenCalled()
     expect(hook.result.current.goalMode.active).toBe(true)
   })

@@ -3,13 +3,14 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock
 } from '../../../../shared/native-chat-types'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
 import { NativeChatToolRun } from './NativeChatToolRun'
+import { NativeChatDisclosureContext } from './native-chat-disclosure-store'
 
 afterEach(cleanup)
 
@@ -334,4 +335,27 @@ describe('NativeChatToolRun with a spawn group', () => {
     ])
     expect(screen.getByRole('button', { name: /search/, expanded: true })).toBeInTheDocument()
   })
+})
+
+const onToggle = vi.fn()
+const TRANSCRIPT_DISCLOSURES = { read: () => undefined, write: vi.fn(), onToggle }
+
+// Without a held open state the run keeps its own, and the transcript still hears the reader toggle it.
+it('reports opening and closing an unheld run to the transcript', () => {
+  onToggle.mockClear()
+  render(
+    <NativeChatDisclosureContext.Provider value={TRANSCRIPT_DISCLOSURES}>
+      <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'working' }])} />
+    </NativeChatDisclosureContext.Provider>
+  )
+  const toggle = screen.getByRole('button')
+
+  fireEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  expect(onToggle.mock.calls).toEqual([[expect.any(String), true]])
+  fireEvent.click(toggle)
+  // The close names the row the open did, so the transcript can match them.
+  const [[openedRow], [closedRow, closedOpen]] = onToggle.mock.calls
+  expect(closedOpen).toBe(false)
+  expect(closedRow).toBe(openedRow)
 })

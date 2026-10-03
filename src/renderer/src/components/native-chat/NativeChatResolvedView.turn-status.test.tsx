@@ -3,7 +3,8 @@
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-app-root-test-render'
 import type { AgentStatusEntry, AgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'

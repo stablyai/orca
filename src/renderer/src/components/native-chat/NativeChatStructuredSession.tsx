@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
@@ -8,6 +8,7 @@ import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatC
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatLoadingCue } from './NativeChatLoadingCue'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
@@ -115,14 +116,8 @@ export function NativeChatStructuredSession(
     }),
     [controller, historyPhase, props.agent, props.sessionId]
   )
-  // Read at click time, so the notices stay put while the outbox's Retry is rebuilt each render.
-  const retryRef = useRef(controller.retry)
-  useEffect(() => {
-    retryRef.current = controller.retry
-  })
-  const retryDelivery = useCallback((clientMessageId: string) => {
-    retryRef.current(clientMessageId)
-  }, [])
+  const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry)
+  const { retryDelivery, revealLatest } = submits
   const agentLabel = structuredAgentLabel(props.agent === 'codex' ? 'codex' : 'claude')
   // Only a rejected message reads the journal's rows, so a new batch of them re-renders no row else.
   const hasRejected = controller.outbox.some((entry) => entry.state === 'rejected')
@@ -237,6 +232,7 @@ export function NativeChatStructuredSession(
       contextUsage: controller.contextUsage,
       worktreeId: fileLinkContext?.worktreeId,
       onError: setComposerError,
+      onSubmitted: revealLatest,
       runtime: (props.target.kind === 'local' ? 'local' : 'remote') as 'local' | 'remote',
       sessionId: props.sessionId,
       runtimeEnvironmentId:
@@ -249,6 +245,7 @@ export function NativeChatStructuredSession(
     props.agent,
     props.sessionId,
     props.target,
+    revealLatest,
     sendThroughRelaunch
   ])
 
@@ -282,6 +279,7 @@ export function NativeChatStructuredSession(
           <NativeChatEmptyState kind="empty" agent={props.agent} />
         ) : (
           <NativeChatMessageList
+            ref={submits.messageListRef}
             session={session}
             journalItems={controller.journalItems}
             journalSubmissions={controller.submissions}
@@ -306,11 +304,11 @@ export function NativeChatStructuredSession(
         lifecycle={provisionalLaunch.lifecycle}
         failure={provisionalLaunch.failure}
         agentLabel={agentLabel}
-        onRetry={provisionalLaunch.retry}
+        onRetry={submits.retryLaunch}
       />
       {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
       <NativeChatQueuedMessageList
-        controller={controller.queuedMessages}
+        controller={submits.queuedMessages}
         focusComposer={() => {
           composerRef.current?.focus()
         }}
@@ -346,7 +344,7 @@ export function NativeChatStructuredSession(
         <NativeChatApprovalCard
           key={`${prompt.itemId}:${prompt.revision}`}
           approval={approval}
-          onChoose={(optionId) => void controller.respond(prompt, { kind: 'option', optionId })}
+          onChoose={(optionId) => void submits.respond(prompt, { kind: 'option', optionId })}
           onCancel={cancelPrompt}
           shouldFocus={props.isVisible && props.isFocusedGroup}
           onLinkClick={onLinkClick}
@@ -379,7 +377,7 @@ export function NativeChatStructuredSession(
               return { questionId: question.id, optionIds, ...(other ? { other } : {}) }
             })
             if (chosen.every((answer) => answer.optionIds.length > 0 || answer.other)) {
-              void controller.respond(prompt, { kind: 'answers', answers: chosen })
+              void submits.respond(prompt, { kind: 'answers', answers: chosen })
             }
           }}
           onCancel={cancelPrompt}
@@ -395,7 +393,7 @@ export function NativeChatStructuredSession(
           canSend={!prompt}
           isWorking={controller.canStop}
           onStop={() => void controller.stop()}
-          steerQueued={controller.queuedMessages.steerNewest}
+          steerQueued={submits.queuedMessages.steerNewest}
           structuredTransport={structuredTransport}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft: true }}
         />

@@ -18,10 +18,11 @@ vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn
 
 import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
 
-function renderDispatch(agent: 'codex' | 'claude' | 'openclaude') {
+function renderDispatch(agent: 'codex' | 'claude' | 'openclaude', onSubmitted = vi.fn()) {
   return renderHook(() =>
     useNativeChatSessionOptionCommand({
       agent,
+      onSubmitted,
       disabled: false,
       resolveTarget: () => ({ settings: {}, ptyId: 'pty-1' }),
       setHistory: vi.fn()
@@ -37,8 +38,10 @@ describe('useNativeChatSessionOptionCommand', () => {
   })
 
   it('types Codex option commands even without caller delivery metadata', async () => {
-    const hook = renderDispatch('codex')
+    const onSubmitted = vi.fn()
+    const hook = renderDispatch('codex', onSubmitted)
     await act(() => hook.result.current.dispatch('/model'))
+    expect(onSubmitted).toHaveBeenCalledOnce()
 
     expect(typeNativeChatCommand).toHaveBeenCalledWith(
       {},

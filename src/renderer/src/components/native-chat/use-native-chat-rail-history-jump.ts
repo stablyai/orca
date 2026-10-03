@@ -1,5 +1,6 @@
 // Jumping to a rail tick whose message is not loaded yet: page older history in
-// until the message has a slot, then hand it to the ordinary rail jump.
+// until the message has a slot, then hand it to the ordinary rail jump. Jumping
+// to the start of the conversation is the same walk, with no older page as its target.
 //
 // One awaited loop per jump, owning its own lifecycle. Each step reads the rail
 // from a commit made after the last page landed, so "has a slot yet?" is always
@@ -16,6 +17,9 @@ import type { NativeChatOlderPageResult } from './native-chat-pagination'
  *  runaway loop reaches it. */
 export const NATIVE_CHAT_RAIL_JUMP_MAX_PAGES = 1000
 
+const HISTORY_START = Symbol('history-start')
+type HistoryJumpTarget = string | typeof HISTORY_START
+
 function railItemById(
   items: readonly NativeChatRailItem[],
   id: string
@@ -26,28 +30,36 @@ function railItemById(
 export function useNativeChatRailHistoryJump({
   items,
   sessionKey,
+  isVisible,
   loadEarlier,
-  jumpToLoaded
+  jumpToLoaded,
+  jumpToStart
 }: {
   items: readonly NativeChatRailItem[]
   /** A change abandons the jump: its target belongs to the previous session. */
   sessionKey: string
+  /** Hiding the pane abandons the jump too: a hidden lane stops reading, so a page never lands. */
+  isVisible: boolean
   loadEarlier: () => Promise<NativeChatOlderPageResult>
   jumpToLoaded: (item: NativeChatRailItem) => void
+  /** Called once no older page is left, or none can be read: the top of what loaded. */
+  jumpToStart: () => void
 }): {
   pendingId: string | null
+  startPending: boolean
   start: (item: NativeChatRailItem) => void
+  startFromBeginning: () => void
   abort: () => void
 } {
-  const [pendingId, setPendingId] = useState<string | null>(null)
+  const [pending, setPending] = useState<HistoryJumpTarget | null>(null)
   const [, requestCommit] = useReducer((count: number) => count + 1, 0)
   const controllerRef = useRef<AbortController | null>(null)
-  const committedRef = useRef({ items, loadEarlier, jumpToLoaded })
+  const committedRef = useRef({ items, loadEarlier, jumpToLoaded, jumpToStart })
   const commitWaitersRef = useRef(new Set<() => void>())
 
   // Every commit: the loop reads what the list last rendered, never a render in progress.
   useLayoutEffect(() => {
-    committedRef.current = { items, loadEarlier, jumpToLoaded }
+    committedRef.current = { items, loadEarlier, jumpToLoaded, jumpToStart }
     const waiters = [...commitWaitersRef.current]
     commitWaitersRef.current.clear()
     for (const resolve of waiters) {
@@ -71,22 +83,32 @@ export function useNativeChatRailHistoryJump({
   }, [])
 
   const run = useCallback(
-    async (id: string, signal: AbortSignal): Promise<void> => {
+    async (target: HistoryJumpTarget, signal: AbortSignal): Promise<void> => {
       for (let pages = 0; ; pages += 1) {
-        // Each pass reads a newer commit's rail, so there is no list to index up front.
-        const target = railItemById(committedRef.current.items, id)
-        if (!target) {
-          return
-        }
-        if (target.slotIndex !== null) {
-          committedRef.current.jumpToLoaded(target)
-          return
+        if (target !== HISTORY_START) {
+          // Each pass reads a newer commit's rail, so there is no list to index up front.
+          const item = railItemById(committedRef.current.items, target)
+          if (!item) {
+            return
+          }
+          if (item.slotIndex !== null) {
+            committedRef.current.jumpToLoaded(item)
+            return
+          }
         }
         if (pages >= NATIVE_CHAT_RAIL_JUMP_MAX_PAGES) {
           return
         }
         const result = await committedRef.current.loadEarlier()
-        if (signal.aborted || result !== 'applied') {
+        if (signal.aborted) {
+          return
+        }
+        // A page that cannot be read still leaves the reader asking for the top of what loaded.
+        if (target === HISTORY_START && result !== 'applied' && result !== 'superseded') {
+          committedRef.current.jumpToStart()
+          return
+        }
+        if (result !== 'applied') {
           return
         }
         await nextCommit(signal)
@@ -105,29 +127,37 @@ export function useNativeChatRailHistoryJump({
     }
     controllerRef.current = null
     controller.abort()
-    setPendingId(null)
+    setPending(null)
   }, [])
 
   // The latest pick wins; a page the previous jump started is joined, not repeated.
-  const start = useCallback(
-    (item: NativeChatRailItem) => {
+  const begin = useCallback(
+    (target: HistoryJumpTarget) => {
       controllerRef.current?.abort()
       const controller = new AbortController()
       controllerRef.current = controller
-      setPendingId(item.id)
-      void run(item.id, controller.signal)
+      setPending(target)
+      void run(target, controller.signal)
         .catch(() => undefined)
         .finally(() => {
           if (controllerRef.current === controller) {
             controllerRef.current = null
-            setPendingId(null)
+            setPending(null)
           }
         })
     },
     [run]
   )
+  const start = useCallback((item: NativeChatRailItem) => begin(item.id), [begin])
+  const startFromBeginning = useCallback(() => begin(HISTORY_START), [begin])
 
-  useEffect(() => abort, [abort, sessionKey])
+  useEffect(() => abort, [abort, sessionKey, isVisible])
 
-  return { pendingId, start, abort }
+  return {
+    pendingId: typeof pending === 'string' ? pending : null,
+    startPending: pending === HISTORY_START,
+    start,
+    startFromBeginning,
+    abort
+  }
 }

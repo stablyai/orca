@@ -9,8 +9,10 @@
 //
 // The offset belongs to the virtualizer — every pin goes through it, so a scroll
 // it is still reconciling is replaced rather than raced. Its public write adapter
-// marks every application offset; follow intent changes only on an unmarked
-// reader event, never from delayed geometry alone.
+// marks every application offset; follow intent changes only on a reader's own
+// act — an unmarked scroll, a navigation, or opening or closing a row — never from
+// delayed geometry alone. A detach remembers which act caused it: one caused only
+// by opening rows ends when the last of those rows closes, wherever the end is by then.
 
 import {
   useCallback,
@@ -22,8 +24,10 @@ import {
 } from 'react'
 import {
   distanceFromBottom,
-  nextFollowingEnd,
+  FOLLOWING,
+  nextFollowState,
   shouldShowJumpToLatest,
+  type FollowEvent,
   type ScrollGeometry
 } from './native-chat-autoscroll'
 
@@ -41,10 +45,19 @@ function hasMeasurableViewport(element: HTMLElement | null): element is HTMLElem
 
 export type NativeChatTranscriptScroll = {
   showJump: boolean
+  /** More than a viewport below the top of what is loaded. */
+  awayFromTop: boolean
   onScroll: UIEventHandler<HTMLDivElement>
   scrollToBottom: () => void
+  scrollToTop: () => void
   /** Align an element inside the transcript with the top of the viewport. */
   scrollMessageToTop: (element: HTMLElement) => void
+  /** The reader opened a row to read it: leave it where it is. */
+  readerOpened: (row: string) => void
+  /** The reader closed a row: follow again if only their opens had stopped it. */
+  readerClosed: (row: string) => void
+  /** Wraps an act so it lapses if the reader acts first. */
+  untilReaderActs: (act: () => void) => () => void
 }
 
 export function useNativeChatTranscriptScroll({
@@ -74,11 +87,22 @@ export function useNativeChatTranscriptScroll({
   reconcileReaderScroll: (isTakingOver: boolean) => void
 }): NativeChatTranscriptScroll {
   const [showJump, setShowJump] = useState(false)
-  const followingRef = useRef(true)
+  const [awayFromTop, setAwayFromTop] = useState(false)
+  const followRef = useRef(FOLLOWING)
   const detachedScrollTopRef = useRef<number | null>(null)
   const isVisibleRef = useRef(isVisible)
   const previousIsVisibleRef = useRef(isVisible)
   const previousDistanceFromEndRef = useRef(Number.POSITIVE_INFINITY)
+
+  /** Applies a reader's act; true when the transcript follows its end afterwards. */
+  const readerActsRef = useRef(0)
+  const follow = useCallback((event: FollowEvent): boolean => {
+    if (event.kind !== 'scroll' || !event.programmatic) {
+      readerActsRef.current += 1
+    }
+    followRef.current = nextFollowState(followRef.current, event)
+    return followRef.current.kind === 'following'
+  }, [])
 
   const syncScrollState = useCallback(
     (event?: Event): ScrollGeometry | null => {
@@ -88,24 +112,25 @@ export function useNativeChatTranscriptScroll({
       }
       const geometry = geometryOf(element)
       if (event) {
-        const wasFollowing = followingRef.current
+        const wasFollowing = followRef.current.kind === 'following'
         const programmatic = consumeProgrammaticScroll(event)
-        const following = nextFollowingEnd({
-          following: followingRef.current,
+        const following = follow({
+          kind: 'scroll',
           programmatic,
           geometry,
           previousDistanceFromEnd: previousDistanceFromEndRef.current
         })
-        followingRef.current = following
         if (!programmatic) {
           reconcileReaderScroll(wasFollowing && !following)
         }
       }
-      detachedScrollTopRef.current = followingRef.current ? null : geometry.scrollTop
-      setShowJump(shouldShowJumpToLatest(followingRef.current, geometry))
+      const following = followRef.current.kind === 'following'
+      detachedScrollTopRef.current = following ? null : geometry.scrollTop
+      setShowJump(shouldShowJumpToLatest(following, geometry))
+      setAwayFromTop(geometry.scrollTop > geometry.clientHeight)
       return geometry
     },
-    [consumeProgrammaticScroll, reconcileReaderScroll, scrollRef]
+    [consumeProgrammaticScroll, follow, reconcileReaderScroll, scrollRef]
   )
 
   const onScroll = useCallback<UIEventHandler<HTMLDivElement>>(
@@ -125,18 +150,57 @@ export function useNativeChatTranscriptScroll({
   }, [scrollRef, scrollToEnd])
 
   const scrollToBottom = useCallback(() => {
-    followingRef.current = true
+    follow({ kind: 'reveal-latest' })
     scrollToEndWhenMeasurable()
     setShowJump(false)
-  }, [scrollToEndWhenMeasurable])
+  }, [follow, scrollToEndWhenMeasurable])
+
+  const scrollToTop = useCallback(() => {
+    follow({ kind: 'navigate' })
+    // Also where a hidden pane lands once revealed, since the write below waits for layout.
+    detachedScrollTopRef.current = 0
+    restoreScrollOffset(0)
+  }, [follow, restoreScrollOffset])
 
   const scrollMessageToTop = useCallback(
     (element: HTMLElement) => {
-      followingRef.current = false
+      follow({ kind: 'navigate' })
       alignToViewportTop(element)
     },
-    [alignToViewportTop]
+    [alignToViewportTop, follow]
   )
+
+  const readerOpened = useCallback(
+    (row: string) => {
+      follow({ kind: 'open', row })
+      syncScrollState()
+    },
+    [follow, syncScrollState]
+  )
+
+  // Read at close time: the pin is rebuilt on a reveal, and every row's toggle hangs off this.
+  const scrollToBottomRef = useRef(scrollToBottom)
+  useEffect(() => {
+    scrollToBottomRef.current = scrollToBottom
+  })
+  const readerClosed = useCallback(
+    (row: string) => {
+      const wasFollowing = followRef.current.kind === 'following'
+      if (follow({ kind: 'close', row }) && !wasFollowing) {
+        scrollToBottomRef.current()
+      }
+    },
+    [follow]
+  )
+
+  const untilReaderActs = useCallback((act: () => void) => {
+    const acts = readerActsRef.current
+    return () => {
+      if (readerActsRef.current === acts) {
+        act()
+      }
+    }
+  }, [])
 
   useLayoutEffect(() => {
     const revealed = isVisible && !previousIsVisibleRef.current
@@ -145,7 +209,7 @@ export function useNativeChatTranscriptScroll({
     if (!isVisible) {
       return
     }
-    if (!followingRef.current) {
+    if (followRef.current.kind !== 'following') {
       if (revealed && detachedScrollTopRef.current !== null) {
         restoreScrollOffset(detachedScrollTopRef.current)
       }
@@ -167,7 +231,7 @@ export function useNativeChatTranscriptScroll({
       return
     }
     const observer = new ResizeObserver(() => {
-      if (followingRef.current) {
+      if (followRef.current.kind === 'following') {
         scrollToEndWhenMeasurable()
       } else {
         syncScrollState()
@@ -182,5 +246,15 @@ export function useNativeChatTranscriptScroll({
     return () => observer.disconnect()
   }, [contentRef, scrollRef, scrollToEndWhenMeasurable, syncScrollState])
 
-  return { showJump, onScroll, scrollToBottom, scrollMessageToTop }
+  return {
+    showJump,
+    awayFromTop,
+    onScroll,
+    scrollToBottom,
+    scrollToTop,
+    scrollMessageToTop,
+    readerOpened,
+    readerClosed,
+    untilReaderActs
+  }
 }
