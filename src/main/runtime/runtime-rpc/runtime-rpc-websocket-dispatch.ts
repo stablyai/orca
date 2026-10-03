@@ -8,6 +8,7 @@ import type { AuthenticatedMobileSocket } from '../rpc/mobile-socket-wiring'
 import type { RpcRequest, RpcResponse } from '../rpc/core'
 import type { WebSocketTransport } from '../rpc/ws-transport'
 import type { DeviceScope } from '../device-registry'
+import { recordSecurityEvent } from '../security-event-log'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
@@ -27,6 +28,9 @@ function injectDeviceScope(response: string, scope: DeviceScope): string {
 }
 
 export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
+  // Why: a revoked token keeps failing every request on a live socket, so trace it once per socket.
+  private readonly revokedTokenSockets = new WeakSet<WebSocket>()
+
   // Why: WebSocket dispatch is streaming (multiple responses) and auths via per-device tokens, not the shared token.
   protected async handleWebSocketMessage(
     rawMessage: string,
@@ -70,6 +74,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
     }
     const device = this.deviceRegistry?.validateToken(token)
     if (!device) {
+      this.recordRevokedTokenRejection(ws, authenticatedSocket)
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
       return
     }
@@ -159,5 +164,25 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
       abortRegistration?.dispose()
       this.releaseLongPoll(longPoll, device.deviceId)
     }
+  }
+
+  // Why: dedup keyed on the socket, so a chatty client cannot turn its own rejection into a flood.
+  private recordRevokedTokenRejection(
+    ws: WebSocket | undefined,
+    authenticatedSocket: AuthenticatedMobileSocket | undefined
+  ): void {
+    if (ws) {
+      if (this.revokedTokenSockets.has(ws)) {
+        return
+      }
+      this.revokedTokenSockets.add(ws)
+    }
+    recordSecurityEvent({
+      event: 'connection_rejected',
+      transport: authenticatedSocket?.transport.transport ?? 'direct',
+      // Why 4001: the same unauthorized class the E2EE handshake closes with.
+      code: 4001,
+      reason: 'revoked or unknown token'
+    })
   }
 }

@@ -3,6 +3,7 @@ import type { WebSocket } from 'ws'
 import type { DeviceEntry, DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
+import { recordSecurityEvent } from '../security-event-log'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 
@@ -181,9 +182,22 @@ export class MobileSocketWiring {
           transport.setClientId(ws, device.deviceToken)
           // Why: deferred — the client's e2ee_authenticated must not wait on a secure-file rewrite.
           this.deviceRegistry.updateLastSeenDeferred(device.deviceId)
+          recordSecurityEvent({
+            event: 'connection_accepted',
+            deviceId: device.deviceId,
+            scope: device.scope,
+            transport: metadata.transport === 'relay' ? 'relay' : 'direct'
+          })
           this.onReady?.(socket)
         },
         onError: (code, reason) => {
+          recordSecurityEvent({
+            event: 'connection_rejected',
+            transport: metadata.transport === 'relay' ? 'relay' : 'direct',
+            code,
+            // Why bounded: the reason is a server-side constant, but it must never grow into client data.
+            reason: String(reason).slice(0, 80)
+          })
           const reportUnpairedDevice = code === 4001 && reason === 'Unauthorized'
           this.channels.get(ws)?.destroy()
           this.channels.delete(ws)
