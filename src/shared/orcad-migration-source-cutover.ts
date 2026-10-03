@@ -38,6 +38,10 @@ const CutoverRecordSchema = z
     provenPtyIds: z.array(z.string().min(1).max(256)).max(10_000),
     // Committed, with the source rows kept so a downgraded build still sees the host's projects.
     sourceRetainedAt: z.string().datetime().optional(),
+    // A delta move after an older build changed the source: the migration it extends, never merges.
+    supersedesMigrationId: z.string().min(1).max(128).optional(),
+    // What the retained source must still look like; absent means this manifest's own catalog.
+    sourceBaselineFingerprint: z.string().min(1).max(64).optional(),
     manifest: z.unknown()
   })
   .strict()

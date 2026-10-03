@@ -61,19 +61,43 @@ export function listOrcadMigrationSourceCutovers(
   return cutovers
 }
 
+/** The target's current cutover: the head of its chain, which no later delta move supersedes. */
 export function findOrcadMigrationSourceCutoverForTarget(
   userDataPath: string,
   sshTargetId: string
 ): OrcadMigrationSourceCutover | null {
+  const chain = listOrcadMigrationCutoverChainForTarget(userDataPath, sshTargetId)
+  return chain.at(-1) ?? null
+}
+
+/** Oldest first; throws unless the target's journals form one chain of delta moves. */
+export function listOrcadMigrationCutoverChainForTarget(
+  userDataPath: string,
+  sshTargetId: string
+): OrcadMigrationSourceCutover[] {
   const matches = listOrcadMigrationSourceCutovers(userDataPath).filter(
     (cutover) => cutover.sshTargetId === sshTargetId
   )
-  if (matches.length > 1) {
+  const superseded = new Set(matches.map((cutover) => cutover.supersedesMigrationId))
+  const heads = matches.filter((cutover) => !superseded.has(cutover.migrationId))
+  if (heads.length > 1) {
     throw new OrcadMigrationCutoverJournalUnreadableError(
-      `${matches.length} journals name SSH target ${sshTargetId}`
+      `${heads.length} journals name SSH target ${sshTargetId}`
     )
   }
-  return matches[0] ?? null
+  const byId = new Map(matches.map((cutover) => [cutover.migrationId, cutover]))
+  const chain: OrcadMigrationSourceCutover[] = []
+  let entry: OrcadMigrationSourceCutover | undefined = heads[0]
+  while (entry && chain.length <= matches.length) {
+    chain.unshift(entry)
+    entry = entry.supersedesMigrationId ? byId.get(entry.supersedesMigrationId) : undefined
+  }
+  if (chain.length !== matches.length) {
+    throw new OrcadMigrationCutoverJournalUnreadableError(
+      `the journals naming SSH target ${sshTargetId} do not form one chain`
+    )
+  }
+  return chain
 }
 
 /** Durable before it returns: a fence written after this always has its journal on disk. */

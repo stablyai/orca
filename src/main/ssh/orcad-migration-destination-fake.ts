@@ -11,10 +11,15 @@ export type FakeOrcadMigrationDestination = { commits: number } & {
   [Method in keyof Catalog]: Mock<Catalog[Method]>
 }
 
-/** An in-memory destination with the T6-9 semantics: idempotent stage, receipt-keyed commit. */
+/**
+ * An in-memory destination with the T6-9 semantics: idempotent stage, receipt-keyed commit, one
+ * catalog state per migration so a delta move after a first migration starts absent.
+ */
 export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
-  let state: 'absent' | 'staged' | 'committed' = 'absent'
+  const states = new Map<string, 'absent' | 'staged' | 'committed'>()
+  const stateOf = (manifest: OrcadMigrationManifest) => states.get(manifest.migrationId) ?? 'absent'
   const view = (manifest: OrcadMigrationManifest): OrcadMigrationCatalogState => {
+    const state = stateOf(manifest)
     const base = { migrationId: manifest.migrationId, manifestSha256: manifest.manifestSha256 }
     if (state === 'committed') {
       return {
@@ -42,22 +47,22 @@ export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
       view(manifest)
     ),
     stage: vi.fn<Catalog['stage']>(async (manifest: OrcadMigrationManifest) => {
-      if (state === 'absent') {
-        state = 'staged'
+      if (stateOf(manifest) === 'absent') {
+        states.set(manifest.migrationId, 'staged')
       }
       return view(manifest)
     }),
     commit: vi.fn<Catalog['commit']>(async (manifest: OrcadMigrationManifest) => {
-      if (state === 'staged') {
-        state = 'committed'
+      if (stateOf(manifest) === 'staged') {
+        states.set(manifest.migrationId, 'committed')
         destination.commits += 1
       }
       return view(manifest)
     }),
     abort: vi.fn<Catalog['abort']>(async (manifest: OrcadMigrationManifest) => {
-      const aborted = state === 'staged'
+      const aborted = stateOf(manifest) === 'staged'
       if (aborted) {
-        state = 'absent'
+        states.set(manifest.migrationId, 'absent')
       }
       return { ...view(manifest), aborted, ...(aborted ? {} : { durableAbsent: true as const }) }
     }),

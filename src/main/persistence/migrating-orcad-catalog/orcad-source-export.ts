@@ -23,6 +23,10 @@ import {
 } from './orcad-source-dependency-census'
 import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
 import { readOrcadMigrationSourceScrollbackChunk } from './orcad-source-scrollback-state'
+import {
+  createOrcadMigrationDeltaView,
+  type OrcadMigrationDeltaView
+} from './orcad-source-delta-view'
 
 type OrcadSourceExportRuntime = Pick<
   StoreRuntimeState,
@@ -51,6 +55,11 @@ export class OrcadSourceExportPersistence {
       runtime.terminalScrollbackSnapshotStorage,
       destinationEnvironmentId
     ).payload
+  }
+
+  /** A copy of the source with `moved` retired from it, for a delta move. */
+  createOrcadMigrationDeltaView(moved: OrcadMigrationManifest): OrcadMigrationDeltaView {
+    return createOrcadMigrationDeltaView(this[orcadSourceExportContext], moved)
   }
 
   /** Every dependency on the target, transferable or not; preflight decides what blocks. */

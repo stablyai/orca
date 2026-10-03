@@ -1,19 +1,14 @@
 /** The live collaborators behind each connect's server decision. */
 import { getAppEnvironment } from '../../shared/app-environment'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
-import { isRetainedOrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
 import { listEnvironments } from '../../shared/runtime-environment-store'
-import type { SshTarget } from '../../shared/ssh-types'
-import type { Store } from '../persistence'
-import { findOrcadMigrationSourceCutoverForTarget } from '../ssh/orcad-migration-cutover-journal'
 import { orcadMigrationRelayPtyLister } from '../ssh/orcad-migration-relay-pty-lister'
 import { releaseUndeployedMigrationFence } from '../ssh/orcad-migration-source-fence'
 import { isOrcadSourceRetirementEnabled } from '../ssh/orcad-migration-source-retention'
-import { retireOrcadMigrationSource } from '../ssh/orcad-migration-source-retirement'
+import { retireRetainedOrcadSourceChain } from '../ssh/orcad-retained-source-retirement'
 import { assessOrcadMigrationTerminals } from '../ssh/orcad-migration-terminal-gate'
 import { hasOrcadTemplate } from '../ssh/orcad-artifact-materializer'
 import { ensureOrcadManagedTunnel } from '../ssh/orcad-managed-tunnel'
-import { compareRetainedOrcadSource } from '../ssh/orcad-retained-source'
 import { convertSshTargetToManagedOrcad } from '../ssh/orcad-runtime-conversion'
 import { orcadMigrationDestinationFor } from '../ssh/orcad-runtime-conversion-wiring'
 import { createManagedOrcadEnvironment } from '../ssh/orcad-runtime-deployment'
@@ -44,7 +39,11 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
     ensureTunnel: async (environmentId) => {
       await ensureOrcadManagedTunnel(userDataPath, environmentId)
     },
-    retireRetainedSource: (target) => retireRetainedSource(userDataPath, store, target),
+    retireRetainedSource: async (target) => {
+      if (isOrcadSourceRetirementEnabled()) {
+        await retireRetainedOrcadSourceChain(userDataPath, store, target, runTargetLifecycle)
+      }
+    },
     hasTemplate: hasOrcadTemplate,
     recordedUnavailable: (target) =>
       target.managedServerUnavailable?.appVersion === appVersion
@@ -119,28 +118,4 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       })
     }
   }
-}
-
-async function retireRetainedSource(
-  userDataPath: string,
-  store: Store,
-  target: SshTarget
-): Promise<void> {
-  if (!isOrcadSourceRetirementEnabled()) {
-    return
-  }
-  const cutover = findOrcadMigrationSourceCutoverForTarget(userDataPath, target.id)
-  if (!cutover || !isRetainedOrcadMigrationSourceCutover(cutover)) {
-    return
-  }
-  // Why compare first: rows an older build changed are a new move, never something to delete.
-  if (compareRetainedOrcadSource(store, target, cutover.manifest.payload) !== 'unchanged') {
-    return
-  }
-  const environment =
-    listEnvironments(userDataPath).find((entry) => entry.id === cutover.destinationEnvironmentId) ??
-    null
-  await runTargetLifecycle(target.id, () =>
-    retireOrcadMigrationSource({ userDataPath, store, environment }, cutover.migrationId)
-  )
 }

@@ -9,6 +9,7 @@ import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration-s
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { Store } from '../persistence'
 import {
+  listOrcadMigrationCutoverChainForTarget,
   listOrcadMigrationSourceCutovers,
   removeOrcadMigrationSourceCutover,
   writeOrcadMigrationSourceCutover
@@ -51,7 +52,14 @@ export async function retireOrcadMigrationSource(
   if (cutover.phase === 'destination-committed') {
     const target = context.store.getSshTarget(cutover.sshTargetId)
     const fence = target ? resolveOrcadMigrationFence(context.userDataPath, target) : null
-    if (fence?.state !== 'fenced' || fence.cutover.migrationId !== cutover.migrationId) {
+    // A delta move's earlier migrations retire under the chain head's fence.
+    const chain = target
+      ? listOrcadMigrationCutoverChainForTarget(context.userDataPath, target.id)
+      : []
+    if (
+      fence?.state !== 'fenced' ||
+      !chain.some((entry) => entry.migrationId === cutover.migrationId)
+    ) {
       throw new Error('orcad_migration_source_fence_lost')
     }
     context.store.retireOrcadMigrationSourceCatalog(cutover.manifest)

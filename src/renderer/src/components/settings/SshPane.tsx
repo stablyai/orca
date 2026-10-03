@@ -399,7 +399,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
                         requestRemoveTarget({ id, label: target.label }, requestRemove)
                       }
                     />
-                    <SshTargetServerStatus target={target} />
+                    <SshTargetServerStatus target={target} onChanged={() => void loadTargets()} />
                   </div>
                 ))}
               </div>

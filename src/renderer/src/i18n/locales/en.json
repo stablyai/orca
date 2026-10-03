@@ -12380,6 +12380,28 @@
           "terminalsUnverifiable": "Runs the relay: Orca couldn’t confirm its terminals are closed. It moves on a later connect.",
           "refused": "Not moved to a managed server: {{blocker}}",
           "retry": "Runs the relay this session; it moves to a managed server on a later connect."
+        },
+        "deltaMove": {
+          "action": "Move the new projects…",
+          "title": "Move the new projects",
+          "description": "An older version of Orca changed this host after it moved to its managed server. This adds what it created to the server; it never merges over what the server already has.",
+          "added": "Added to the server",
+          "nothingNew": "Nothing new to add.",
+          "notReflected": "Changed or removed on the older version; the server keeps its own copy",
+          "cancel": "Cancel",
+          "confirm": "Move the new projects",
+          "kind": {
+            "repository": "Repository {{name}}",
+            "folder": "Folder {{name}}",
+            "group": "Project group {{name}}"
+          }
+        },
+        "keepServer": {
+          "action": "Keep the server’s version…",
+          "title": "Keep the server’s version",
+          "description": "This host goes back to its managed server as it is. What the older version of Orca added or changed here is not moved; it stays only in this computer’s saved settings until they are cleaned up.",
+          "cancel": "Cancel",
+          "confirm": "Keep the server’s version"
         }
       },
       "right": {

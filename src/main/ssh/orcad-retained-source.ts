@@ -6,9 +6,13 @@
  * changed them, the host is marked `sourceChangedAt`: its rows show again, it stays on the relay,
  * and it needs a new move. A second manifest is never merged into the server automatically.
  */
+import { createHash } from 'node:crypto'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration-manifest'
-import { isRetainedOrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
+import {
+  isRetainedOrcadMigrationSourceCutover,
+  type OrcadMigrationSourceCutover
+} from '../../shared/orcad-migration-source-cutover'
 import type { Repo } from '../../shared/repo-types'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -18,7 +22,7 @@ import {
   orcadSourceFolderWorkspaceIds,
   repoBelongsToOrcadSource
 } from '../persistence/migrating-orcad-catalog/orcad-source-ownership'
-import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
+import { findOrcadMigrationSourceCutoverForTarget } from './orcad-migration-cutover-journal'
 
 type CatalogStore = Pick<Store, 'getFolderWorkspaces' | 'getProjectGroups' | 'getRepos'>
 type TargetStore = Pick<Store, 'getSshTargets' | 'updateSshTarget'>
@@ -60,13 +64,32 @@ export function visibleFolderWorkspaces(
   return folderWorkspaces.filter((workspace) => !hiddenIds.has(workspace.id))
 }
 
-/** Identity only: an older build adding or removing a project is a change, a touched timestamp is not. */
-function catalogFingerprint(catalog: OrcadMigrationCatalogPayload): string {
-  return JSON.stringify([
-    catalog.repositories.map((repo) => `${repo.id}\0${repo.path}`).sort(),
-    catalog.folderWorkspaces.map((folder) => `${folder.id}\0${folder.folderPath}`).sort(),
-    catalog.projectGroups.map((group) => group.id).sort()
-  ])
+/**
+ * Identity only, hashed to fit the journal: an older build adding, removing or moving a project is
+ * a change, a touched timestamp is not.
+ */
+export function orcadCatalogFingerprint(catalog: OrcadMigrationCatalogPayload): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        catalog.repositories.map((repo) => `${repo.id}\0${repo.path}`).sort(),
+        catalog.folderWorkspaces.map((folder) => `${folder.id}\0${folder.folderPath}`).sort(),
+        catalog.projectGroups.map((group) => group.id).sort()
+      ])
+    )
+    .digest('hex')
+}
+
+export function currentOrcadSourceFingerprint(
+  store: CatalogStore,
+  target: Pick<SshTarget, 'id'>
+): string {
+  return orcadCatalogFingerprint(collectOrcadMigrationSourceCatalog(store, target))
+}
+
+/** What the retained source must still look like for this build to keep serving it from orcad. */
+export function retainedOrcadSourceBaseline(head: OrcadMigrationSourceCutover): string {
+  return head.sourceBaselineFingerprint ?? orcadCatalogFingerprint(head.manifest.payload)
 }
 
 export type RetainedSourceVerdict = 'unchanged' | 'changed'
@@ -74,10 +97,11 @@ export type RetainedSourceVerdict = 'unchanged' | 'changed'
 export function compareRetainedOrcadSource(
   store: CatalogStore,
   target: Pick<SshTarget, 'id'>,
-  committed: OrcadMigrationCatalogPayload
+  head: OrcadMigrationSourceCutover
 ): RetainedSourceVerdict {
-  const current = collectOrcadMigrationSourceCatalog(store, target)
-  return catalogFingerprint(current) === catalogFingerprint(committed) ? 'unchanged' : 'changed'
+  return currentOrcadSourceFingerprint(store, target) === retainedOrcadSourceBaseline(head)
+    ? 'unchanged'
+    : 'changed'
 }
 
 /**
@@ -118,20 +142,19 @@ function markChangedRetainedSources(
   store: CatalogStore & TargetStore,
   now: () => Date
 ): void {
-  const targets = new Map(store.getSshTargets().map((target) => [target.id, target]))
-  for (const cutover of listOrcadMigrationSourceCutovers(userDataPath)) {
-    const target = targets.get(cutover.sshTargetId)
-    const fence = target?.orcadFence
+  for (const target of store.getSshTargets()) {
+    const fence = target.orcadFence
+    const head = fence ? findOrcadMigrationSourceCutoverForTarget(userDataPath, target.id) : null
     if (
-      !target ||
       !fence ||
-      fence.environmentId !== cutover.destinationEnvironmentId ||
+      !head ||
+      fence.environmentId !== head.destinationEnvironmentId ||
       fence.sourceChangedAt ||
-      !isRetainedOrcadMigrationSourceCutover(cutover)
+      !isRetainedOrcadMigrationSourceCutover(head)
     ) {
       continue
     }
-    if (compareRetainedOrcadSource(store, target, cutover.manifest.payload) === 'changed') {
+    if (compareRetainedOrcadSource(store, target, head) === 'changed') {
       store.updateSshTarget(target.id, {
         orcadFence: { ...fence, sourceChangedAt: now().toISOString() }
       })

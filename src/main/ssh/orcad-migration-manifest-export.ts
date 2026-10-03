@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto'
 import {
   ORCAD_MIGRATION_MANIFEST_VERSION,
   parseOrcadMigrationManifest,
+  type OrcadMigrationCatalogPayload,
   type OrcadMigrationDormantStatePayload,
   type OrcadMigrationManifest
 } from '../../shared/orcad-migration-manifest'
@@ -28,9 +29,18 @@ export type OrcadMigrationExportStore = Pick<
 export function createOrcadMigrationManifest(
   store: OrcadMigrationExportStore,
   target: SshTarget,
-  options: { migrationId?: string; now?: () => Date; destinationEnvironmentId?: string } = {}
+  options: {
+    migrationId?: string
+    now?: () => Date
+    destinationEnvironmentId?: string
+    /** Only these rows: a re-export of what earlier migrations of the host already moved. */
+    onlyCatalog?: OrcadMigrationCatalogIds
+  } = {}
 ): OrcadMigrationManifest {
-  const payload = collectOrcadMigrationSourceCatalog(store, target)
+  const payload = restrictCatalog(
+    collectOrcadMigrationSourceCatalog(store, target),
+    options.onlyCatalog
+  )
   const source = {
     sshTargetId: target.id,
     sshTargetGeneration: target.generation ?? null,
@@ -58,6 +68,36 @@ export function createOrcadMigrationManifest(
     ...unsigned,
     manifestSha256: computeOrcadMigrationManifestSha256(unsigned)
   })
+}
+
+export type OrcadMigrationCatalogIds = {
+  repositoryIds: ReadonlySet<string>
+  folderWorkspaceIds: ReadonlySet<string>
+  projectGroupIds: ReadonlySet<string>
+}
+
+export function orcadMigrationCatalogIds(
+  payloads: readonly OrcadMigrationCatalogPayload[]
+): OrcadMigrationCatalogIds {
+  return {
+    repositoryIds: new Set(payloads.flatMap((p) => p.repositories.map((row) => row.id))),
+    folderWorkspaceIds: new Set(payloads.flatMap((p) => p.folderWorkspaces.map((row) => row.id))),
+    projectGroupIds: new Set(payloads.flatMap((p) => p.projectGroups.map((row) => row.id)))
+  }
+}
+
+function restrictCatalog(
+  payload: OrcadMigrationCatalogPayload,
+  ids: OrcadMigrationCatalogIds | undefined
+): OrcadMigrationCatalogPayload {
+  if (!ids) {
+    return payload
+  }
+  return {
+    repositories: payload.repositories.filter((row) => ids.repositoryIds.has(row.id)),
+    folderWorkspaces: payload.folderWorkspaces.filter((row) => ids.folderWorkspaceIds.has(row.id)),
+    projectGroups: payload.projectGroups.filter((row) => ids.projectGroupIds.has(row.id))
+  }
 }
 
 function hasDormantState(state: OrcadMigrationDormantStatePayload): boolean {

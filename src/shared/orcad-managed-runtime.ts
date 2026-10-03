@@ -145,3 +145,23 @@ export type OrcadManagedPendingMigrationRow = {
   phase: 'source-fenced' | 'destination-staged' | 'destination-committed' | 'source-retired'
   startedAt: string
 }
+
+export type OrcadDeltaMoveRow = {
+  kind: 'repository' | 'folder-workspace' | 'project-group'
+  id: string
+  label: string
+}
+
+/** What moving a host's newer projects would add, and what the server will keep as it is. */
+export type OrcadDeltaMovePreview = {
+  sshTargetId: string
+  environmentId: string
+  added: OrcadDeltaMoveRow[]
+  /** Projects an older build changed or removed; the server keeps its own copy of these. */
+  notReflected: { edited: OrcadDeltaMoveRow[]; removed: OrcadDeltaMoveRow[] }
+  blockers: OrcadMigrationBlocker[]
+}
+
+export type OrcadDeltaMoveResult =
+  | { outcome: 'moved'; migrationId: string }
+  | { outcome: 'refused'; code: string; reason: string; blockers?: OrcadMigrationBlocker[] }
