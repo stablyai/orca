@@ -134,6 +134,20 @@ export function isActivitySearchQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
+export function createActivityThreadSearchMatcher(
+  searchQuery: string
+): (thread: AgentPaneThread) => boolean {
+  if (isActivitySearchQueryTooLarge(searchQuery)) {
+    return () => false
+  }
+  const trimmedQuery = searchQuery.trim()
+  if (!trimmedQuery) {
+    return () => true
+  }
+  const normalizedQuery = trimmedQuery.toLowerCase()
+  return (thread) => threadSearchText(thread).includes(normalizedQuery)
+}
+
 export function activityThreadMatchesSearchQuery({
   thread,
   searchQuery
