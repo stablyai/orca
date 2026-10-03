@@ -13,7 +13,11 @@ type CustomToastOptions = {
 }
 
 const toastDismissMock = vi.hoisted(() => vi.fn())
-const customToastMock = vi.hoisted(() => vi.fn())
+const customToastMock = vi.hoisted(() =>
+  vi.fn<
+    (render: (id: string | number) => React.ReactElement, options: CustomToastOptions) => string
+  >()
+)
 
 vi.mock('sonner', () => ({
   toast: {
@@ -27,6 +31,7 @@ type StarNagApi = {
   onHide: (callback: () => void) => () => void
   dismiss: ReturnType<typeof vi.fn>
   later: ReturnType<typeof vi.fn>
+  disable: ReturnType<typeof vi.fn>
   openWeb: ReturnType<typeof vi.fn>
   starOrca: ReturnType<typeof vi.fn>
 }
@@ -61,7 +66,7 @@ function renderHost(): { root: Root; container: HTMLDivElement } {
 }
 
 function renderToastFromCustomCall(container: HTMLElement): void {
-  const render = customToastMock.mock.calls[0][0] as (id: string | number) => React.ReactElement
+  const render = customToastMock.mock.calls[0][0]
   act(() => {
     createRoot(container).render(render('toast-1'))
   })
@@ -95,6 +100,7 @@ describe('StarNagToastHost', () => {
       }),
       dismiss: vi.fn().mockResolvedValue(undefined),
       later: vi.fn().mockResolvedValue(undefined),
+      disable: vi.fn().mockResolvedValue(undefined),
       openWeb: vi.fn().mockResolvedValue(undefined),
       starOrca: vi.fn().mockResolvedValue(true)
     }
@@ -142,6 +148,70 @@ describe('StarNagToastHost', () => {
     expect(toastContainer.textContent).toContain('Starred — thank you!')
   })
 
+  it.each(['gh', 'web'] as const)(
+    'permanently dismisses in %s mode only after saving',
+    async (mode) => {
+      const pending = createDeferred<void>()
+      starNag.disable.mockReturnValueOnce(pending.promise)
+      ;({ root, container } = renderHost())
+      act(() => showCallback?.({ mode, surface: 'toast' }))
+      toastContainer = document.createElement('div')
+      renderToastFromCustomCall(toastContainer)
+      const button = Array.from(toastContainer.querySelectorAll('button')).find(
+        (candidate) => candidate.textContent === "Don't ask again"
+      )
+      expect(button).toBeDefined()
+      act(() => {
+        button?.click()
+        button?.click()
+        toastContainer?.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')?.click()
+      })
+      expect(starNag.disable).toHaveBeenCalledTimes(1)
+      expect(toastDismissMock).not.toHaveBeenCalled()
+      expect(
+        Array.from(toastContainer.querySelectorAll('button')).every((item) => item.disabled)
+      ).toBe(true)
+      expect(toastContainer.textContent).toContain('Saving…')
+      const options = customToastMock.mock.calls[0][1]
+      act(() => options.onDismiss?.())
+      expect(starNag.dismiss).not.toHaveBeenCalled()
+      await act(async () => {
+        pending.resolve()
+        await pending.promise
+      })
+      expect(toastDismissMock).toHaveBeenCalledWith('toast-1')
+      act(() => options.onDismiss?.())
+      expect(starNag.dismiss).not.toHaveBeenCalled()
+      expect(starNag.later).not.toHaveBeenCalled()
+      expect(starNag.starOrca).not.toHaveBeenCalled()
+      expect(starNag.openWeb).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps a failed opt-out recoverable and retries saving', async () => {
+    starNag.disable.mockRejectedValueOnce(new Error('Save failed'))
+    ;({ root, container } = renderHost())
+    act(() => showCallback?.({ mode: 'gh', surface: 'toast' }))
+    toastContainer = document.createElement('div')
+    renderToastFromCustomCall(toastContainer)
+    const button = Array.from(toastContainer.querySelectorAll('button')).find(
+      (candidate) => candidate.textContent === "Don't ask again"
+    )
+    expect(button).toBeDefined()
+    await act(async () => button?.click())
+    expect(toastDismissMock).not.toHaveBeenCalled()
+    expect(button?.disabled).toBe(false)
+    expect(toastContainer.querySelector('[role="alert"]')?.textContent).toContain(
+      'Please try again'
+    )
+    const options = customToastMock.mock.calls[0][1]
+    act(() => options.onDismiss?.())
+    expect(starNag.dismiss).toHaveBeenCalledTimes(1)
+    await act(async () => button?.click())
+    expect(starNag.disable).toHaveBeenCalledTimes(2)
+    expect(toastDismissMock).toHaveBeenCalledWith('toast-1')
+  })
+
   it('opens GitHub fallback without calling direct star success path', async () => {
     ;({ root, container } = renderHost())
 
@@ -163,6 +233,17 @@ describe('StarNagToastHost', () => {
     expect(starNag.openWeb).toHaveBeenCalledTimes(1)
     expect(starNag.starOrca).not.toHaveBeenCalled()
     expect(toastContainer.textContent).toContain('GitHub opened')
+    expect(starNag.disable).not.toHaveBeenCalled()
+    const disableButton = Array.from(toastContainer.querySelectorAll('button')).find(
+      (candidate) => candidate.textContent === "Don't ask again"
+    )
+    expect(disableButton?.disabled).toBe(false)
+    await act(async () => disableButton?.click())
+    expect(starNag.disable).toHaveBeenCalledTimes(1)
+    expect(toastDismissMock).toHaveBeenCalledWith('toast-1')
+    act(() => customToastMock.mock.calls[0][1].onDismiss?.())
+    expect(starNag.dismiss).not.toHaveBeenCalled()
+    expect(starNag.later).not.toHaveBeenCalled()
     expect(toastContainer.textContent).not.toContain('GitHub opened in your browser.')
   })
 
@@ -236,7 +317,14 @@ describe('StarNagToastHost', () => {
     )
     await act(async () => {
       starButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      starButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      Array.from(toastContainer?.querySelectorAll('button') ?? [])
+        .find((candidate) => candidate.textContent === "Don't ask again")
+        ?.click()
     })
+
+    expect(starNag.starOrca).toHaveBeenCalledTimes(1)
+    expect(starNag.disable).not.toHaveBeenCalled()
 
     const closeButton = Array.from(toastContainer.querySelectorAll('button')).find(
       (candidate) => candidate.getAttribute('aria-label') === 'Dismiss'
