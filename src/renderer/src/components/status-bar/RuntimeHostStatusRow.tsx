@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, MoreHorizontal } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   DropdownMenuItem,
+  DropdownMenuRadioItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
@@ -15,7 +16,7 @@ import {
 } from '@/runtime/runtime-host-connection-state'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 
-function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
+export function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
   switch (state) {
     case 'connected':
       return translate('auto.components.status.bar.SshStatusSegment.runtime_online', 'Connected')
@@ -44,7 +45,7 @@ function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
   }
 }
 
-function runtimeDotColor(state: RuntimeHostConnectionState): string {
+export function runtimeDotColor(state: RuntimeHostConnectionState): string {
   switch (state) {
     case 'connected':
       return 'bg-emerald-500'
@@ -54,11 +55,11 @@ function runtimeDotColor(state: RuntimeHostConnectionState): string {
     case 'runtime-unavailable':
       return 'bg-yellow-500'
     case 'disconnected':
-      return 'bg-muted-foreground/40'
+      return 'bg-destructive'
   }
 }
 
-function runtimeStatusTone(state: RuntimeHostConnectionState): string {
+export function runtimeStatusTone(state: RuntimeHostConnectionState): string {
   if (
     state === 'checking' ||
     state === 'reconnecting' ||
@@ -67,7 +68,7 @@ function runtimeStatusTone(state: RuntimeHostConnectionState): string {
   ) {
     return 'text-yellow-500'
   }
-  return 'text-muted-foreground'
+  return state === 'disconnected' ? 'text-destructive' : 'text-muted-foreground'
 }
 
 function runtimeActionLabel(state: RuntimeHostConnectionState): string | null {
@@ -141,7 +142,8 @@ export function RuntimeHostStatusRow({
   detail,
   diagnostics,
   onConnect,
-  onDisconnect
+  onDisconnect,
+  selection
 }: {
   label: string
   state: RuntimeHostConnectionState
@@ -149,6 +151,7 @@ export function RuntimeHostStatusRow({
   diagnostics?: RemoteRuntimeSharedConnectionDiagnostics | null
   onConnect?: () => Promise<void>
   onDisconnect?: () => Promise<void>
+  selection?: { value: string; disabled: boolean }
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [submenuOpen, setSubmenuOpen] = useState(false)
@@ -156,20 +159,24 @@ export function RuntimeHostStatusRow({
   const mountedRef = useMountedRef()
   const actionLabel = runtimeActionLabel(state)
 
-  const handleAction = useCallback(async () => {
-    const action = isConnectedRuntimeHostState(state) ? onDisconnect : onConnect
-    if (!action) {
-      return
-    }
-    setBusy(true)
-    try {
-      await action()
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
+  const handleAction = useCallback(
+    async (requestedAction?: () => Promise<void>) => {
+      const action =
+        requestedAction ?? (isConnectedRuntimeHostState(state) ? onDisconnect : onConnect)
+      if (!action || busy) {
+        return
       }
-    }
-  }, [mountedRef, onConnect, onDisconnect, state])
+      setBusy(true)
+      try {
+        await action()
+      } finally {
+        if (mountedRef.current) {
+          setBusy(false)
+        }
+      }
+    },
+    [busy, mountedRef, onConnect, onDisconnect, state]
+  )
 
   const action = isConnectedRuntimeHostState(state) ? onDisconnect : onConnect
   const lastConnectedLabel = diagnostics?.lastConnectedAt
@@ -202,13 +209,17 @@ export function RuntimeHostStatusRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12px] font-medium">{label}</div>
         <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span>
-            {translate(
-              'auto.components.status.bar.SshStatusSegment.remote_server',
-              'Remote Server'
-            )}
-          </span>
-          <span aria-hidden="true">·</span>
+          {!selection ? (
+            <>
+              <span>
+                {translate(
+                  'auto.components.status.bar.SshStatusSegment.remote_server',
+                  'Remote Server'
+                )}
+              </span>
+              <span aria-hidden="true">·</span>
+            </>
+          ) : null}
           <span className={`inline-flex min-w-0 items-center gap-1 ${runtimeStatusTone(state)}`}>
             {state === 'checking' || state === 'reconnecting' ? (
               <Loader2 className="size-2.5 shrink-0 animate-spin" />
@@ -270,6 +281,87 @@ export function RuntimeHostStatusRow({
     )
   ) : null
 
+  const submenuContent = (
+    <DropdownMenuSubContent className="w-[min(18rem,calc(100vw-1rem))] p-1.5">
+      <div className="px-1.5 pt-0.5 pb-1.5">
+        <div className="text-[11px] font-semibold">
+          {state === 'connected' && !detail ? label : runtimeFailureSummary(state)}
+        </div>
+        {failureExplanation ? (
+          <div className="mt-1 text-[11px] leading-4 text-muted-foreground">
+            {failureExplanation}
+          </div>
+        ) : null}
+      </div>
+      {rawDetail ? (
+        <div className="mx-1 mb-1.5 max-h-24 overflow-y-auto scrollbar-sleek whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-[10px] leading-4 text-muted-foreground [overflow-wrap:anywhere]">
+          {rawDetail}
+        </div>
+      ) : null}
+      {diagnosticLabel ? (
+        <div className="px-1.5 pb-1.5 text-[10px] text-muted-foreground">{diagnosticLabel}</div>
+      ) : null}
+      {actionLabel && action ? (
+        <DropdownMenuItem
+          disabled={busy}
+          onSelect={(event) => {
+            event.preventDefault()
+            void handleAction()
+          }}
+        >
+          {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+          {actionLabel}
+        </DropdownMenuItem>
+      ) : null}
+    </DropdownMenuSubContent>
+  )
+
+  const reconnectLabel =
+    state === 'reconnecting' || state === 'runtime-unavailable' || diagnostics?.lastConnectedAt
+      ? translate(
+          'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectButton',
+          'Reconnect'
+        )
+      : translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')
+
+  if (selection) {
+    return (
+      <div className="flex items-center gap-1">
+        <DropdownMenuRadioItem
+          value={selection.value}
+          disabled={selection.disabled || busy || state !== 'connected'}
+          aria-label={label}
+          className="min-w-0 flex-1"
+        >
+          {rowDetails}
+        </DropdownMenuRadioItem>
+        {state !== 'connected' && onConnect ? (
+          <DropdownMenuItem
+            disabled={selection.disabled || busy}
+            aria-busy={busy}
+            onSelect={(event) => {
+              event.preventDefault()
+              void handleAction(onConnect)
+            }}
+          >
+            {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+            {reconnectLabel}
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger
+            aria-label={`${label}: ${translate('auto.components.status.bar.SshStatusSegment.remote_server', 'Remote Server')}`}
+            hideChevron
+            disabled={selection.disabled || busy}
+          >
+            <MoreHorizontal className="size-3" />
+          </DropdownMenuSubTrigger>
+          {submenuContent}
+        </DropdownMenuSub>
+      </div>
+    )
+  }
+
   if (!detail) {
     return (
       <div className="flex items-center gap-2.5 px-2 py-1.5">
@@ -292,36 +384,7 @@ export function RuntimeHostStatusRow({
         {rowDetails}
         {actionButton}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-[min(18rem,calc(100vw-1rem))] p-1.5">
-        <div className="px-1.5 pt-0.5 pb-1.5">
-          <div className="text-[11px] font-semibold">{runtimeFailureSummary(state)}</div>
-          {failureExplanation ? (
-            <div className="mt-1 text-[11px] leading-4 text-muted-foreground">
-              {failureExplanation}
-            </div>
-          ) : null}
-        </div>
-        {rawDetail ? (
-          <div className="mx-1 mb-1.5 max-h-24 overflow-y-auto scrollbar-sleek whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-[10px] leading-4 text-muted-foreground [overflow-wrap:anywhere]">
-            {rawDetail}
-          </div>
-        ) : null}
-        {diagnosticLabel ? (
-          <div className="px-1.5 pb-1.5 text-[10px] text-muted-foreground">{diagnosticLabel}</div>
-        ) : null}
-        {actionLabel && action ? (
-          <DropdownMenuItem
-            disabled={busy}
-            onSelect={(event) => {
-              event.preventDefault()
-              void handleAction()
-            }}
-          >
-            {busy ? <Loader2 className="size-3 animate-spin" /> : null}
-            {actionLabel}
-          </DropdownMenuItem>
-        ) : null}
-      </DropdownMenuSubContent>
+      {submenuContent}
     </DropdownMenuSub>
   )
 }

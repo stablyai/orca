@@ -1,10 +1,14 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useId, useMemo } from 'react'
 import { AlertTriangle, Loader2, MonitorSmartphone, Server, ServerOff } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
@@ -17,14 +21,22 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
+import {
+  RuntimeHostStatusRow,
+  runtimeDotColor,
+  runtimeStatusLabel,
+  runtimeStatusTone
+} from './RuntimeHostStatusRow'
 import {
   connectedHostCountLabel,
   connectingHostsLabel,
   workspaceSyncProblemLabel
 } from './ssh-status-segment-copy'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
-import { connectRuntimeEnvironmentAndRecordStatus } from './runtime-environment-explicit-connect'
+import {
+  connectRuntimeEnvironmentAndRecordStatus,
+  connectRuntimeHostForNavigation
+} from './runtime-environment-explicit-connect'
 import {
   overallDotColor,
   overallStatus,
@@ -36,31 +48,10 @@ import {
   runtimeHostConnectionStateForEntry,
   runtimeStatusForOverall
 } from '@/runtime/runtime-host-connection-state'
-import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-
-export async function connectRuntimeHostForNavigation(args: {
-  environmentId: string
-  refreshStatus: (environmentId: string, timeoutMs: number) => Promise<boolean>
-  fetchRepos: (environmentId: string) => Promise<{ id: string }[]>
-  fetchWorktrees: (
-    repoId: string,
-    options: { executionHostId: ExecutionHostId; suppressRemoteLineageRefresh: true }
-  ) => Promise<unknown>
-  fetchLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>
-}): Promise<boolean> {
-  if (!(await args.refreshStatus(args.environmentId, 5_000))) {
-    return false
-  }
-  const repos = await args.fetchRepos(args.environmentId)
-  await refreshRuntimeProjectWorktreesAndLineage(
-    args.environmentId,
-    repos,
-    args.fetchWorktrees,
-    args.fetchLineage
-  )
-  return true
-}
+import { useActiveServerSelection } from './use-active-server-selection'
+import { LOCAL_RUNTIME_VALUE } from '../settings/runtime-environment-selection'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 
 export function SshStatusSegment({
   compact,
@@ -69,6 +60,8 @@ export function SshStatusSegment({
   compact: boolean
   iconOnly: boolean
 }): React.JSX.Element | null {
+  const selection = useActiveServerSelection()
+  const statusId = useId()
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const settings = useAppStore((s) => s.settings)
@@ -185,8 +178,31 @@ export function SshStatusSegment({
   const syncProblemLabel = syncProblem
     ? workspaceSyncProblemLabel(syncProblem.syncStatus?.phase)
     : null
+  const activeHost = runtimeHostRows.find((host) => host.active)
+  const activeLabel = settings?.activeRuntimeEnvironmentId
+    ? (activeHost?.label ?? settings.activeRuntimeEnvironmentId)
+    : selection.localLabel
+  const activeState =
+    activeHost?.state ?? (settings?.activeRuntimeEnvironmentId ? 'disconnected' : 'connected')
+  const activeStatus =
+    selection.enabled && activeState !== 'connected' ? runtimeStatusLabel(activeState) : null
+  const triggerLabel = selection.enabled
+    ? `${translate('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'Remote Hosts')}: ${activeLabel}`
+    : translate(
+        'auto.components.status.bar.SshStatusSegment.fdc57e9970',
+        'Remote host connection status'
+      )
+  const dotColor = selection.enabled
+    ? runtimeDotColor(activeState)
+    : overallDotColor(overall, connectedHostCount)
+  const showConnecting =
+    selection.switching ||
+    (selection.enabled
+      ? activeHost?.state === 'checking' || activeHost?.state === 'reconnecting'
+      : anyConnecting)
   return (
     <DropdownMenu
+      modal={false}
       onOpenChange={(open) => {
         if (open) {
           void hydrateRuntimeEnvironmentStatuses()
@@ -194,63 +210,91 @@ export function SshStatusSegment({
         }
       }}
     >
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-          aria-label={translate(
-            'auto.components.status.bar.SshStatusSegment.fdc57e9970',
-            'Remote host connection status'
-          )}
-        >
-          {iconOnly ? (
-            <span className="inline-flex items-center gap-1">
-              <span
-                className={`inline-block size-2 rounded-full ${
-                  syncProblem ? 'bg-destructive' : overallDotColor(overall, connectedHostCount)
-                }`}
-              />
-              {syncProblem ? (
-                <AlertTriangle className="size-3 text-destructive" />
-              ) : anyConnecting ? (
-                <Loader2 className="size-3 animate-spin text-muted-foreground" />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
+              {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
+              aria-label={triggerLabel}
+              aria-describedby={activeStatus ? statusId : undefined}
+              aria-busy={selection.switching}
+              disabled={selection.switching}
+            >
+              {iconOnly ? (
+                <span className="inline-flex items-center gap-1">
+                  <span
+                    className={`inline-block size-2 rounded-full ${
+                      syncProblem ? 'bg-destructive' : dotColor
+                    }`}
+                  />
+                  {syncProblem ? (
+                    <AlertTriangle className="size-3 text-destructive" />
+                  ) : showConnecting ? (
+                    <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                  ) : (
+                    <MonitorSmartphone className="size-3 text-muted-foreground" />
+                  )}
+                </span>
               ) : (
-                <MonitorSmartphone className="size-3 text-muted-foreground" />
-              )}
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5">
-              {syncProblem ? (
-                <AlertTriangle className="size-3 text-destructive" />
-              ) : anyConnecting ? (
-                <Loader2 className="size-3 animate-spin text-yellow-500" />
-              ) : overall === 'connected' ? (
-                <Server className="size-3 text-emerald-500" />
-              ) : overall === 'partial' ? (
-                <Server className="size-3 text-muted-foreground" />
-              ) : (
-                <ServerOff className="size-3 text-muted-foreground" />
-              )}
-              {!compact && (
-                <span className="text-[11px]">
-                  <span className={syncProblem ? 'text-destructive' : 'text-muted-foreground'}>
-                    {syncProblemLabel ??
-                      (anyConnecting
-                        ? connectingHostsLabel()
-                        : connectedHostCountLabel(connectedHostCount))}
-                  </span>
+                <span className="inline-flex items-center gap-1.5">
+                  {syncProblem ? (
+                    <AlertTriangle className="size-3 text-destructive" />
+                  ) : showConnecting ? (
+                    <Loader2 className="size-3 animate-spin text-yellow-500" />
+                  ) : selection.enabled && activeState === 'disconnected' ? (
+                    <ServerOff className="size-3 text-destructive" />
+                  ) : selection.enabled ? (
+                    <Server className="size-3 text-muted-foreground" />
+                  ) : overall === 'connected' ? (
+                    <Server className="size-3 text-emerald-500" />
+                  ) : overall === 'partial' ? (
+                    <Server className="size-3 text-muted-foreground" />
+                  ) : (
+                    <ServerOff className="size-3 text-muted-foreground" />
+                  )}
+                  {(selection.enabled || !compact) && (
+                    <span className="max-w-32 truncate text-[11px]">
+                      <span className={syncProblem ? 'text-destructive' : 'text-muted-foreground'}>
+                        {selection.enabled
+                          ? activeLabel
+                          : (syncProblemLabel ??
+                            (anyConnecting
+                              ? connectingHostsLabel()
+                              : connectedHostCountLabel(connectedHostCount)))}
+                      </span>
+                    </span>
+                  )}
+                  <span
+                    className={`inline-block size-1.5 rounded-full ${
+                      syncProblem ? 'bg-destructive' : dotColor
+                    }`}
+                  />
                 </span>
               )}
-              <span
-                className={`inline-block size-1.5 rounded-full ${
-                  syncProblem ? 'bg-destructive' : overallDotColor(overall, connectedHostCount)
-                }`}
-              />
-            </span>
-          )}
-        </button>
-      </DropdownMenuTrigger>
+              {activeStatus && (
+                <span
+                  id={statusId}
+                  className={cn(
+                    'shrink-0 text-[11px]',
+                    iconOnly ? 'sr-only' : runtimeStatusTone(activeState)
+                  )}
+                >
+                  {iconOnly ? activeStatus : `· ${activeStatus}`}
+                </span>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        {iconOnly ? (
+          <TooltipContent side="top" sideOffset={6}>
+            {activeStatus ? `${triggerLabel} · ${activeStatus}` : triggerLabel}
+          </TooltipContent>
+        ) : null}
+      </Tooltip>
       <DropdownMenuContent
+        {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
         side="top"
         align="start"
         sideOffset={8}
@@ -259,17 +303,39 @@ export function SshStatusSegment({
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           {translate('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'Remote Hosts')}
         </div>
-        {connectedRuntimeHosts.map((host) => (
-          <RuntimeHostStatusRow
-            key={host.id}
-            label={host.label}
-            state={host.state}
-            detail={runtimeHostConnectionDetail(host.remoteControl)}
-            diagnostics={host.remoteControl}
-            onConnect={() => connectRuntimeHost(host.id)}
-            onDisconnect={() => disconnectRuntimeHost(host.id)}
-          />
-        ))}
+        <DropdownMenuRadioGroup
+          value={selection.activeValue}
+          onValueChange={(value) => void selection.switchServer(value)}
+        >
+          {selection.enabled ? (
+            <>
+              <DropdownMenuLabel>
+                {translate(
+                  'auto.components.settings.RuntimeEnvironmentsPane.64b6bea541',
+                  'Active Server'
+                )}
+              </DropdownMenuLabel>
+              <DropdownMenuRadioItem value={LOCAL_RUNTIME_VALUE} disabled={selection.switching}>
+                {selection.localLabel}
+              </DropdownMenuRadioItem>
+            </>
+          ) : null}
+          {[...connectedRuntimeHosts, ...inactiveRuntimeHosts].map((host) => (
+            <RuntimeHostStatusRow
+              key={host.id}
+              label={host.label}
+              state={host.state}
+              detail={runtimeHostConnectionDetail(host.remoteControl)}
+              diagnostics={host.remoteControl}
+              selection={
+                selection.enabled ? { value: host.id, disabled: selection.switching } : undefined
+              }
+              onConnect={() => connectRuntimeHost(host.id)}
+              onDisconnect={() => disconnectRuntimeHost(host.id)}
+            />
+          ))}
+        </DropdownMenuRadioGroup>
+        {targets.length > 0 && runtimeHosts.length > 0 ? <DropdownMenuSeparator /> : null}
         {connectedTargets.map((t) => (
           <SshTargetStatusRow
             key={t.id}
@@ -277,17 +343,6 @@ export function SshStatusSegment({
             label={t.label}
             status={t.status}
             syncStatus={t.syncStatus}
-          />
-        ))}
-        {inactiveRuntimeHosts.map((host) => (
-          <RuntimeHostStatusRow
-            key={host.id}
-            label={host.label}
-            state={host.state}
-            detail={runtimeHostConnectionDetail(host.remoteControl)}
-            diagnostics={host.remoteControl}
-            onConnect={() => connectRuntimeHost(host.id)}
-            onDisconnect={() => disconnectRuntimeHost(host.id)}
           />
         ))}
         {disconnectedTargets.map((t) => (

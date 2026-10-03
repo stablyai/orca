@@ -96,6 +96,10 @@ On the computer you want to use as the client:
 
 Adding a server saves it without forcing every new project onto it. Open **Advanced → Active Server** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
 
+On desktop, the **Remote Hosts** status-bar menu shows the active server when you have a saved remote server. Select a server or **Local desktop** to switch context and show that host's projects in the sidebar and restore its last visited workspace and remembered tabs. A host with no previous workspace selection opens an empty view; switching does not close the other host's terminals. The footer also shows the active server's status while disconnected, reconnecting or otherwise unavailable. A notice above the project list also identifies the unavailable active server and offers **Reconnect**. Each server row shows its connection status. Disconnected or reconnecting servers offer **Connect** or **Reconnect** directly in the menu; connect successfully before selecting their context. The submenu provides disconnect actions and diagnostics.
+
+Selecting a context from **Remote Hosts** intentionally replaces the sidebar host filter with that host and saves it as the workspace creation default. A previous **All hosts** or multi-host filter is not restored when switching back; you can change it again through the sidebar filters. **Settings → Advanced → Active Server** changes only the runtime preference and leaves the sidebar filter unchanged.
+
 ## Use the remote server
 
 Once the server shows **Connected**, select it or one of its projects and use Orca normally. Terminals, agent processes, files, worktrees, and session state live on the server computer.

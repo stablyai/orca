@@ -17,6 +17,7 @@ import {
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
 import { SshStatusSegment } from './SshStatusSegment'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 type StoreState = {
   sshConnectionStates: Map<string, { status: SshConnectionStatus }>
@@ -149,7 +150,7 @@ describe('status-bar copy under a non-English UI language', () => {
       { id: 'ssh-1', label: 'builder', status: 'connected' },
       { id: 'ssh-2', label: 'openclaw', status: 'connected' }
     ])
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
+    render(<SshStatusSegment compact={false} iconOnly={false} />, { wrapper: TooltipProvider })
 
     expect(screen.getByRole('button').getAttribute('aria-label')).toBe('リモートホスト接続状態')
     expect(triggerText()).toContain('2 台のホスト')
@@ -157,14 +158,14 @@ describe('status-bar copy under a non-English UI language', () => {
 
   it('translates the singular host count', () => {
     setSshTargets([{ id: 'ssh-1', label: 'builder', status: 'connected' }])
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
+    render(<SshStatusSegment compact={false} iconOnly={false} />, { wrapper: TooltipProvider })
 
     expect(triggerText()).toContain('1 台のホスト')
   })
 
   it('translates the connecting and workspace-sync states', () => {
     setSshTargets([{ id: 'ssh-1', label: 'builder', status: 'connecting' }])
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
+    render(<SshStatusSegment compact={false} iconOnly={false} />, { wrapper: TooltipProvider })
     expect(triggerText()).toContain('接続中…')
     cleanup()
 
@@ -172,12 +173,12 @@ describe('status-bar copy under a non-English UI language', () => {
       { id: 'ssh-1', label: 'builder', status: 'connected', syncPhase: 'conflict' },
       { id: 'ssh-2', label: 'openclaw', status: 'connected', syncPhase: 'error' }
     ])
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
+    render(<SshStatusSegment compact={false} iconOnly={false} />, { wrapper: TooltipProvider })
     expect(triggerText()).toContain('ワークスペースの競合')
     cleanup()
 
     setSshTargets([{ id: 'ssh-1', label: 'builder', status: 'connected', syncPhase: 'error' }])
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
+    render(<SshStatusSegment compact={false} iconOnly={false} />, { wrapper: TooltipProvider })
     expect(triggerText()).toContain('ワークスペースの同期エラー')
   })
 })
