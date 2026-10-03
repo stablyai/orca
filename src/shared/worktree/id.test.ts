@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   WORKTREE_ID_SEPARATOR,
+  isFolderWorkspaceInstanceIdentityConsistent,
   getRepoIdFromWorktreeId,
   getRepoMainWorktreeId,
   getWorktreePathBasenameFromId,
@@ -8,6 +10,38 @@ import {
   splitWorktreeIdForFilesystem,
   worktreeIdComparisonKey
 } from './id'
+
+describe('isFolderWorkspaceInstanceIdentityConsistent', () => {
+  const rootId = 'repo::/folder'
+
+  it('accepts the root and legacy identities without an instance id', () => {
+    expect(isFolderWorkspaceInstanceIdentityConsistent(rootId, rootId, undefined)).toBe(true)
+    expect(
+      isFolderWorkspaceInstanceIdentityConsistent(
+        rootId,
+        `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}legacy`,
+        undefined
+      )
+    ).toBe(true)
+  })
+
+  it('requires an instance id to match the workspace id suffix', () => {
+    expect(
+      isFolderWorkspaceInstanceIdentityConsistent(
+        rootId,
+        `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}same`,
+        'same'
+      )
+    ).toBe(true)
+    expect(
+      isFolderWorkspaceInstanceIdentityConsistent(
+        rootId,
+        `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}named`,
+        'attached-elsewhere'
+      )
+    ).toBe(false)
+  })
+})
 
 describe('WORKTREE_ID_SEPARATOR', () => {
   it('is the literal "::" separator', () => {

@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  isFolderWorkspaceInstanceIdentityConsistent
+} from '../../shared/worktree/id'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import { gitExecFileAsync } from '../git/runner'
@@ -76,11 +79,16 @@ export function listRuntimeFolderWorkspaces(
   const rootId = getRuntimeFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
   const expectedHostId = getRepoExecutionHostId(repo)
-  const ids = Object.keys(allMeta).filter(
-    (worktreeId) =>
-      isRuntimeFolderWorkspaceIdForRepo(repo, worktreeId) &&
-      (repoOwnerCount === 1 || allMeta[worktreeId]?.hostId === expectedHostId)
-  )
+  const ids = Object.keys(allMeta).filter((worktreeId) => {
+    if (
+      !isRuntimeFolderWorkspaceIdForRepo(repo, worktreeId) ||
+      (repoOwnerCount !== 1 && allMeta[worktreeId]?.hostId !== expectedHostId)
+    ) {
+      return false
+    }
+    const instanceId = allMeta[worktreeId]?.instanceId
+    return isFolderWorkspaceInstanceIdentityConsistent(rootId, worktreeId, instanceId)
+  })
   if (!ids.includes(rootId)) {
     ids.unshift(rootId)
   } else {
