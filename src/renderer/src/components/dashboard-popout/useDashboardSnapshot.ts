@@ -23,6 +23,12 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 }
 
+/** Why: a View Transition started on a hidden document rejects `ready` with
+ *  InvalidStateError. The pop-out is hidden whenever the main window covers it. */
+function documentIsHidden(): boolean {
+  return document.visibilityState === 'hidden'
+}
+
 /** Why: View Transition snapshots render in the browser top layer, which paints
  *  above any z-index — so a card morphing columns would flicker OVER the open
  *  terminal dialog (a z-50 Radix portal). Skip the transition while it's open;
@@ -114,6 +120,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       const startViewTransition = document.startViewTransition?.bind(document)
       if (
         !layoutChanged ||
+        documentIsHidden() ||
         prefersReducedMotion() ||
         terminalDialogIsOpen() ||
         !startViewTransition
@@ -123,9 +130,11 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       }
       // flushSync so the DOM reflects `next` synchronously inside the transition
       // callback — the browser captures the "after" state from it.
-      startViewTransition(() => {
+      // Why: `ready` rejects when the window is occluded after the transition
+      // starts. Nothing else observes it, so consume the rejection here.
+      void startViewTransition(() => {
         flushSync(() => setSnapshot(next))
-      })
+      }).ready.catch(() => {})
     }
 
     const unsubscribe = window.api.dashboard.onSnapshot(apply)
