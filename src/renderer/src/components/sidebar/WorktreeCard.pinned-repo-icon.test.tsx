@@ -156,6 +156,64 @@ describe('WorktreeCard pinned repo icon', () => {
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )
 
+  it.each([
+    { mode: 'detailed', compact: false, newStyle: false },
+    { mode: 'compact', compact: true, newStyle: false },
+    { mode: 'new style', compact: false, newStyle: true }
+  ])(
+    'shows visible project names on mixed-project pins in $mode cards',
+    async ({ compact, newStyle }) => {
+      settings = {
+        compactWorktreeCards: compact,
+        experimentalNewWorktreeCardStyle: newStyle
+      }
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+
+      for (const displayName of ['atlas-api', 'beacon-web']) {
+        const repo = makeRepo({ displayName })
+        const worktree = makeWorktree({ displayName: 'main', branch: 'main', isMainWorktree: true })
+        const pinned = renderToStaticMarkup(
+          <WorktreeCard
+            worktree={worktree}
+            repo={repo}
+            isActive={false}
+            inPinnedSection
+            hideRepoBadge
+          />
+        )
+
+        // The chip's accessible name and tooltip also contain the project name.
+        expect(pinned).toMatch(new RegExp(`data-pinned-repo-label[^>]*>${displayName}<`))
+
+        const grouped = renderToStaticMarkup(
+          <WorktreeCard worktree={worktree} repo={repo} isActive={false} hideRepoBadge />
+        )
+        expect(grouped).not.toContain('data-pinned-repo-label')
+      }
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'shows the project name on pinned folder workspaces',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree({ branch: '', displayName: 'Notes' })}
+          repo={makeRepo({ kind: 'folder', displayName: 'shared-notes' })}
+          isActive={false}
+          inPinnedSection
+          hideRepoBadge
+        />
+      )
+
+      expect(markup).toMatch(/data-pinned-repo-label[^>]*>shared-notes</)
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
   it(
     'uses the pinned-style repo icon in new card style instead of a metadata-row badge',
     async () => {
