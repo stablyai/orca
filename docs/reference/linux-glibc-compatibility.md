@@ -49,7 +49,10 @@ the floor, so node-pty was the sole blocker.
 [`config/patches/node-pty@1.1.0.patch`](../../config/patches/node-pty@1.1.0.patch)
 adds a `.symver` shim in `src/unix/pty.cc` that binds `openpty`, `forkpty`, and
 `pthread_sigmask` to their pre-merge version node — `GLIBC_2.2.5` on x64,
-`GLIBC_2.17` on arm64 (each architecture's baseline glibc). glibc still ships
+`GLIBC_2.17` on arm64 (each architecture's baseline glibc). The same shim pins
+`cfsetispeed` and `cfsetospeed`, which glibc 2.42 re-versioned on its own
+(arbitrary baud rates) — node-pty only ever passes `B38400`, which the compat
+aliases handle. glibc still ships
 those as compatibility aliases, so the reference resolves on both new build hosts
 and old targets.
 
@@ -58,7 +61,12 @@ resolve from libc's compat aliases at build time, it drops `libutil`/`libpthread
 from `DT_NEEDED`. On the target those libraries are where the symbols actually
 live, so the patch's `binding.gyp` `ldflags` force
 `-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0` back into `DT_NEEDED`.
-The shim is guarded by `#if defined(__linux__)`; macOS and Windows are untouched.
+The shim is guarded by `#if defined(__linux__) && defined(__GLIBC__)`.
+On Linux, `binding.gyp` probes the target C++ compiler through the patched
+`scripts/orca-glibc.py` before adding the glibc SONAME flags. The probe respects
+`CXX_target`/`CXX` and `CPPFLAGS`/`CXXFLAGS`, including wrappers and sysroots,
+and a failed compiler probe stops configuration. Musl builds use unversioned
+symbols and their normal linker dependencies; macOS and Windows are untouched.
 
 **2. Gate packaging (the regression guard).**
 [`config/scripts/verify-linux-glibc-floor.cjs`](../../config/scripts/verify-linux-glibc-floor.cjs)
@@ -127,6 +135,14 @@ than a first-connect error. CI runs it once per slot inside the matching contain
 a hole in the matrix; `--require-slots <slot>` checks one slot's files against their
 hashes and `--smoke` loads it under the pinned Node and spawns a PTY
 (`.github/workflows/node-server-tests.yml` runs both on every slot's runner).
+
+The prebuild script applies the slot's static floor gate only on glibc
+build hosts. Musl has no glibc symbol versions or `libutil.so.1` provider, so
+applying that gate would reject a valid musl addon. The decision uses the Node
+runtime report, independently of the forced `--slot` label; an unavailable
+Linux report stops the build. The desktop packaging gate is unchanged. Validate
+musl prebuilds by loading the emitted addon and spawning a shell in the matching
+musl container; skipping the glibc floor does not establish runtime compatibility.
 
 The opt-in `linux-x64-glibc217` compat slot (rung B, not part of the default matrix) is
 built in `manylinux2014_x86_64` (glibc 2.17, devtoolset C++20) with `-static-libstdc++`,
