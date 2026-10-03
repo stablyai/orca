@@ -72,6 +72,13 @@ export const GLOBAL_WORKSPACE_SESSION_FIELDS = (
   Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]
 ).filter((field) => WORKSPACE_SESSION_FIELD_OWNERSHIP[field] === 'global')
 
+export const PARKABLE_HOST_SESSION_FIELDS = (
+  Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]
+).filter((field) => {
+  const ownership = WORKSPACE_SESSION_FIELD_OWNERSHIP[field]
+  return ownership === 'worktreeKeyed' || ownership === 'tabKeyed' || ownership === 'paneKeyed'
+})
+
 /**
  * Global session fields that belong to the 'local' slice alone: `splitWorkspaceSessionByHost`
  * writes them only there and `mergeWorkspaceSessionsFromHosts` reads them only from there. A copy
