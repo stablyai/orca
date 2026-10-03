@@ -3,7 +3,7 @@
  * App-side on purpose: the CLI runs it through `orcad-local-serve-selection-entry.ts`, so the
  * CLI bundle never carries the materializers.
  *
- * Opt-in while orcad serve is new: `ORCA_SERVE_RUNTIME=orcad`. Anything that stops orcad from
+ * orcad by default; `ORCA_SERVE_RUNTIME=electron` opts out. Anything that stops orcad from
  * serving this machine (no slot for the target, no pinned Node, a native module it cannot load,
  * a host or packaging path it does not cover yet) falls back to Electron with one stderr line
  * saying why. Everything this writes stays inside the desktop's userData (design D7): the slot
@@ -19,6 +19,7 @@ import {
   parseOrcadNativePreflightReport
 } from '../../shared/orcad-native-preflight-report'
 import {
+  SERVE_RUNTIME_ELECTRON,
   SERVE_RUNTIME_ENV,
   type ServeRuntimeSelection
 } from '../../shared/orcad-local-serve-selection'
@@ -53,15 +54,25 @@ function electron(reason: string): ServeRuntimeSelection {
 export async function selectServeRuntime(
   input: ServeRuntimeSelectionInput
 ): Promise<ServeRuntimeSelection> {
-  if (input.env[SERVE_RUNTIME_ENV] !== 'orcad') {
+  const requested = input.env[SERVE_RUNTIME_ENV]
+  if (requested === SERVE_RUNTIME_ELECTRON) {
     return { kind: 'electron', reason: null }
   }
-  if (input.platform === 'win32') {
-    return electron('local orcad on Windows is not enabled in this build')
+  if (requested && requested !== 'orcad') {
+    return electron(`${SERVE_RUNTIME_ENV}=${requested} is neither orcad nor electron`)
   }
+  // Why: Electron serve exits before its window when it relaunches onto a terminal daemon orcad
+  // forked on Windows (orcad-serve-mode-switch-windows, test 2), so orcad is opt-in there.
+  if (!requested && input.platform === 'win32') {
+    return electron(
+      'local orcad serve is not the default on Windows yet (Electron serve cannot yet adopt the terminal daemon orcad started); set ORCA_SERVE_RUNTIME=orcad to opt in'
+    )
+  }
+  // Why: only packaged macOS serve can take a remote app update, through Electron's updater
+  // and this CLI's supervisor; orcad has no updater, so switching would drop that.
   if (input.usesMacUpdateHandoff) {
     return electron(
-      'orcad has no macOS app-update handoff yet; packaged macOS serve stays on Electron'
+      'packaged macOS serve stays on Electron so paired clients can still update it (orcad has no app updater)'
     )
   }
   const target = (input.hostTarget ?? (() => nativeSlotName(detectNativeHostAbi())))()

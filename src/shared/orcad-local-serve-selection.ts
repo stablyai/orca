@@ -4,6 +4,8 @@
  * `out/main/<ORCAD_LOCAL_SERVE_SELECTION_ENTRY>.js` under ELECTRON_RUN_AS_NODE and reads one line.
  */
 export const SERVE_RUNTIME_ENV = 'ORCA_SERVE_RUNTIME'
+/** `ORCA_SERVE_RUNTIME=electron` keeps `orca serve` on Electron; orcad is the default. */
+export const SERVE_RUNTIME_ELECTRON = 'electron'
 export const ORCAD_LOCAL_SERVE_SELECTION_ENTRY = 'orcad/orcad-local-serve-selection-entry'
 export const ORCAD_LOCAL_SERVE_SELECTION_FLAGS = {
   userData: '--user-data',
@@ -14,7 +16,7 @@ const RESULT_MARKER = 'ORCA_SERVE_RUNTIME'
 
 export type ServeRuntimeSelection =
   | { kind: 'orcad'; runtime: string; entry: string; version: string }
-  /** `reason` is null when orcad was not asked for, so nothing is printed. */
+  /** `reason` is null when Electron was asked for explicitly, so nothing is printed. */
   | { kind: 'electron'; reason: string | null }
 
 export function formatServeRuntimeSelection(selection: ServeRuntimeSelection): string {

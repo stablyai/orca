@@ -142,47 +142,45 @@ describe.skipIf(skip)('orca serve on orcad', () => {
     expect(result.stderr).toContain('The Orca desktop app')
   }, 90_000)
 
-  // POSIX: the client spawns /bin/sh, and a short /tmp root keeps the daemon socket path legal.
-  it.runIf(process.platform !== 'win32')(
-    'keeps a live terminal across a serve restart on the shared profile (D7)',
-    async () => {
-      const userData = realpathSync(mkdtempSync('/tmp/orca-serve-d7-'))
-      roots.push(userData)
-      const client = join(userData, 'daemon-client.cjs')
-      await buildDaemonSessionClient(client)
-      const session = async (op: 'create' | 'attach', marker: string) => {
-        const result = await runProcess({
-          program: runtime!,
-          args: [client, op, join(userData, 'daemon'), 'serve-d7', marker, userData],
-          env: serveEnv(userData),
-          timeoutMs: 30_000
-        })
-        expect(result.code, result.stderr).toBe(0)
-        return JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '{}')
+  // A short /tmp root keeps the POSIX daemon socket path legal; Windows uses a named pipe.
+  it('keeps a live terminal across a serve restart on the shared profile (D7)', async () => {
+    const userData = realpathSync(
+      mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'orca-serve-d7-'))
+    )
+    roots.push(userData)
+    const client = join(userData, 'daemon-client.cjs')
+    await buildDaemonSessionClient(client)
+    const session = async (op: 'create' | 'attach', marker: string) => {
+      const result = await runProcess({
+        program: runtime!,
+        args: [client, op, join(userData, 'daemon'), 'serve-d7', marker, userData],
+        env: serveEnv(userData),
+        timeoutMs: 30_000
+      })
+      expect(result.code, result.stderr).toBe(0)
+      return JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '{}')
+    }
+    const first = await serveOnce(userData)
+    let daemonPid: number | null = first
+    try {
+      const created = await session('create', 'BEFORE')
+      expect(created).toMatchObject({ isReattach: false, output: true })
+      await stopServe(userData)
+      // The same daemon, in the same \`<userData>/daemon\` Electron serve uses, is adopted.
+      expect(await serveOnce(userData)).toBe(first)
+      expect(await session('attach', 'AFTER')).toEqual({
+        pid: created.pid,
+        isReattach: true,
+        output: true
+      })
+    } finally {
+      await stopServe(userData)
+      if (daemonPid) {
+        await killAndAwaitExit([daemonPid])
+        daemonPid = null
       }
-      const first = await serveOnce(userData)
-      let daemonPid: number | null = first
-      try {
-        const created = await session('create', 'BEFORE')
-        expect(created).toMatchObject({ isReattach: false, output: true })
-        await stopServe(userData)
-        // The same daemon, in the same \`<userData>/daemon\` Electron serve uses, is adopted.
-        expect(await serveOnce(userData)).toBe(first)
-        expect(await session('attach', 'AFTER')).toEqual({
-          pid: created.pid,
-          isReattach: true,
-          output: true
-        })
-      } finally {
-        await stopServe(userData)
-        if (daemonPid) {
-          await killAndAwaitExit([daemonPid])
-          daemonPid = null
-        }
-      }
-    },
-    300_000
-  )
+    }
+  }, 300_000)
 })
 
 const running = new Map<string, ReturnType<typeof spawnProcess>>()

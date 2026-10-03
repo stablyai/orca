@@ -14,7 +14,7 @@ import {
   superviseForegroundServe
 } from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
-import { SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
+import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
 import { resolveLocalServeRuntime, serveWithOrcad } from './serve-orcad-launch'
 import { waitForRecipeJson } from './serve-recipe-json'
 
@@ -86,8 +86,8 @@ export type ServeOrcaAppArgs = {
 
 export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
-  // Why synchronous unless opted in: the default path must spawn Electron exactly as before.
-  if (process.env[SERVE_RUNTIME_ENV] !== 'orcad') {
+  // Why synchronous on the opt-out: it must spawn Electron exactly as before, without asking.
+  if (process.env[SERVE_RUNTIME_ENV] === SERVE_RUNTIME_ELECTRON) {
     return serveWithElectron(executable, args)
   }
   if (args.recipeJson && !args.projectRoot) {

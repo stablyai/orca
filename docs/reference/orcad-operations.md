@@ -66,6 +66,25 @@ the daemon shares the service cgroup and a combined-unit stop ends live terminal
 it is populated from `/proc/self/cgroup`, so it reports the isolation the daemon actually has
 rather than what the launcher intended.
 
+## `orca serve` on this machine
+
+`orca serve` runs on the local orcad slot by default. The CLI asks the app's
+`out/main/orcad/orcad-local-serve-selection-entry.js` (run as plain Node on the app's executable)
+which host to use. Any reason orcad cannot serve falls back to Electron serve with one
+`[serve] using Electron serve: <reason>` line on stderr. Those reasons are: no slot for this host,
+no template in the install, the pinned Node could not be fetched, or a failed native preflight.
+
+- `ORCA_SERVE_RUNTIME=electron` keeps Electron serve and skips the question. `orcad` (or unset) is
+  the default, and any other value falls back with a reason.
+- Packaged macOS stays on Electron: only Electron serve, supervised by the CLI, can take a remote
+  app update there, and orcad has no updater. Recipe-JSON serve has no handoff and uses orcad.
+- Windows defaults to Electron serve for now; `ORCA_SERVE_RUNTIME=orcad` opts in. Both hosts share
+  `<userData>\daemon` and so one daemon pipe, but Electron serve does not yet relaunch onto a daemon
+  orcad forked there. The `orcad-serve-mode-switch-windows` e2e job gates D7 on Windows and skips
+  that case until it does.
+
+The slot and its pinned Node live under the desktop's `<userData>/orcad-artifacts`.
+
 ## Bind policy
 
 `--bind <literal-ip>`, **default `127.0.0.1`**.

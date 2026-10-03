@@ -532,11 +532,14 @@ jobs:
           name: e2e-build-out
           path: out/
       # The packaged orcad slot the T6-11 launcher runs: its own node-pty under the pinned Node.
-      - name: Build this runner's orcad slot
+      # The template is what `orca serve`'s default selection materializes that slot from.
+      - name: Build this runner's orcad slot and template
         run: |
+          slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds
-          pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+          pnpm build:orcad-prebuilds --require-slots "$slot"
           pnpm build:orcad
+          node config/scripts/build-orcad-template.mjs --targets "$slot"
       - name: Switch serve hosts on one profile
         env:
           SKIP_BUILD: '1'
@@ -547,6 +550,56 @@ jobs:
         if: failure()
         with:
           name: orcad-serve-mode-switch-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # D7 on Windows: both hosts share <userData>\daemon and so one daemon pipe. Built here rather than
+  # from the Linux e2e build because the slot, template and addons are Windows-native.
+  orcad-serve-mode-switch-windows:
+    name: orca serve Electron/orcad mode switch on Windows (D7)
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - uses: ./.github/actions/prepare-orcad-prebuilds
+        with:
+          resolve-windows-cache: 'true'
+          restore-windows-cache: 'true'
+      - name: Build the e2e app, CLI, orcad slot and template
+        shell: bash
+        run: |
+          pnpm run build:relay
+          pnpm exec electron-vite build --mode e2e
+          pnpm run build:cli
+          pnpm build:orcad
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+          node config/scripts/build-orcad-template.mjs --targets win32-x64
+      - name: Switch serve hosts on one profile
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_ORCAD_SERVE: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+          ORCA_E2E_PRESERVE_PROFILE_LOGS_DIR: ${{ github.workspace }}\test-results\profile-logs
+          # A launch that dies before its window prints this trail into Playwright's call log.
+          ORCA_STARTUP_DIAGNOSTICS: '1'
+          ELECTRON_ENABLE_LOGGING: '1'
+          ELECTRON_ENABLE_STACK_DUMPING: '1'
+        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: orcad-serve-mode-switch-windows-traces
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore

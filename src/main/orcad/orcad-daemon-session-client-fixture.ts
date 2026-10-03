@@ -25,10 +25,13 @@ export async function buildDaemonSessionClient(outfile: string): Promise<void> {
         adapter.onData(event => { if (event.id === sessionId) output += event.data })
         const deadline = setTimeout(() => { console.error('timed out; output: ' + output); process.exit(98) }, 20_000)
         ;(async () => {
+          const win32 = process.platform === 'win32'
           const spawned = await adapter.spawn(op === 'create'
-            ? { sessionId, cols: 80, rows: 24, cwd, shellOverride: '/bin/sh' }
+            ? { sessionId, cols: 80, rows: 24, cwd, shellOverride: win32 ? 'cmd.exe' : '/bin/sh' }
             : { sessionId, cols: 80, rows: 24 })
-          adapter.write(spawned.id, "printf 'ORCA_SERVE_%s\\\\n' " + marker + "\\r")
+          // Both shells echo what is typed, so the typed form must not already read as the marker.
+          const typed = win32 ? 'echo ORCA_^SERVE_' + marker : "printf 'ORCA_SERVE_%s\\\\n' " + marker
+          adapter.write(spawned.id, typed + "\\r")
           while (!output.includes('ORCA_SERVE_' + marker)) await new Promise(r => setTimeout(r, 50))
           clearTimeout(deadline)
           await adapter.disconnectOnly()

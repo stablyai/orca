@@ -42,7 +42,7 @@ function input(overrides: Partial<ServeRuntimeSelectionInput> = {}): ServeRuntim
   const cachedNode = join(root, 'cached-node')
   writeFileSync(cachedNode, '#!/bin/sh\n')
   return {
-    env: { [SERVE_RUNTIME_ENV]: 'orcad' },
+    env: {},
     platform: 'linux',
     userDataPath: root,
     templateDirs: [join(root, 'missing-template'), template],
@@ -56,11 +56,21 @@ function input(overrides: Partial<ServeRuntimeSelectionInput> = {}): ServeRuntim
 }
 
 describe('orca serve runtime selection', () => {
-  it('stays on Electron, silently, unless orcad is asked for', async () => {
-    expect(await selectServeRuntime(input({ env: {} }))).toEqual({
-      kind: 'electron',
-      reason: null
-    })
+  it('stays on Electron, silently, when Electron is asked for', async () => {
+    const options = input({ env: { [SERVE_RUNTIME_ENV]: 'electron' } })
+    expect(await selectServeRuntime(options)).toEqual({ kind: 'electron', reason: null })
+    expect(options.materializeSlot).not.toHaveBeenCalled()
+  })
+
+  it('serves on orcad by default and when orcad is asked for by name', async () => {
+    for (const env of [{}, { [SERVE_RUNTIME_ENV]: 'orcad' }]) {
+      expect(await selectServeRuntime(input({ env }))).toMatchObject({ kind: 'orcad' })
+    }
+  })
+
+  it('serves on orcad on Windows only when orcad is asked for by name', async () => {
+    const options = input({ env: { [SERVE_RUNTIME_ENV]: 'orcad' }, platform: 'win32' })
+    expect(await selectServeRuntime(options)).toMatchObject({ kind: 'orcad' })
   })
 
   it('runs the local slot on its pinned Node, linked into userData beside it', async () => {
@@ -83,8 +93,13 @@ describe('orca serve runtime selection', () => {
   })
 
   it.each([
-    ['Windows', { platform: 'win32' as const }, 'local orcad on Windows is not enabled'],
-    ['packaged macOS', { usesMacUpdateHandoff: true }, 'no macOS app-update handoff'],
+    [
+      'an unknown runtime name',
+      { env: { [SERVE_RUNTIME_ENV]: 'bun' } },
+      'ORCA_SERVE_RUNTIME=bun is neither orcad nor electron'
+    ],
+    ['Windows by default', { platform: 'win32' as const }, 'not the default on Windows yet'],
+    ['packaged macOS', { usesMacUpdateHandoff: true }, 'so paired clients can still update it'],
     ['an unsupported host', { hostTarget: () => 'linux-riscv64-glibc' }, 'no orcad build exists'],
     ['an install without the template', { templateDirs: [] }, 'carries no orcad template'],
     [
