@@ -118,6 +118,7 @@ export class FolderWorkspacePersistenceOperations {
         | 'isArchived'
         | 'isUnread'
         | 'isPinned'
+        | 'snooze'
         | 'sortOrder'
         | 'manualOrder'
         | 'workspaceStatus'
@@ -173,6 +174,11 @@ export class FolderWorkspacePersistenceOperations {
     }
     if (updates.isPinned !== undefined) {
       workspace.isPinned = updates.isPinned
+    }
+    if (updates.snooze === null) {
+      delete workspace.snooze
+    } else if (updates.snooze !== undefined) {
+      workspace.snooze = updates.snooze
     }
     if (updates.sortOrder !== undefined && Number.isFinite(updates.sortOrder)) {
       workspace.sortOrder = updates.sortOrder

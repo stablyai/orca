@@ -47,6 +47,9 @@ export function mergeWorktreeMetaForWrite(
   )
     ? sourceContext
     : null
+  if (updated.snooze === null) {
+    delete updated.snooze
+  }
   updated.instanceId ||= randomUUID()
   return updated
 }

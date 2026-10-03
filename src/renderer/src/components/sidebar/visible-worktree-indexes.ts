@@ -1,10 +1,11 @@
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { isWorkspaceSnoozed } from '../../../../shared/workspace-snooze'
 
 type WorktreesByRepo = Record<string, Worktree[]>
 
 /**
- * Non-archived rows by id — the map `computeVisibleWorktrees` hands to the
+ * Non-archived, non-snoozed rows by id — the map `computeVisibleWorktrees` hands to the
  * lineage projection.
  *
  * Why cached: `getCyclicProjectedWorktreeLineageIds` keys its memo on this map's
@@ -12,7 +13,8 @@ type WorktreesByRepo = Record<string, Worktree[]>
  * and re-runs cycle detection on each PTY, tab and agent-status write.
  *
  * Why not the store's `getIndexedWorktreeMap`: this index excludes archived rows
- * (an archived parent resolving as a valid ancestor would inject a phantom row),
+ * and snoozed rows (an archived or snoozed parent resolving as a valid ancestor
+ * would inject a row the user hid),
  * and it keeps the last row for a two-host id collision rather than the first.
  */
 const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, Map<string, Worktree>>()
@@ -24,7 +26,7 @@ export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<s
   }
   const index = new Map<string, Worktree>()
   for (const worktree of getIndexedAllWorktrees(worktreesByRepo)) {
-    if (!worktree.isArchived) {
+    if (!worktree.isArchived && !isWorkspaceSnoozed(worktree)) {
       index.set(worktree.id, worktree)
     }
   }

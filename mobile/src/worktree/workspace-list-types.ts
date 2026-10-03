@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { WorkspaceSnooze } from '../../../src/shared/workspace-snooze'
 
 export type Worktree = {
   sectionListKey?: string
@@ -42,6 +43,7 @@ export type Worktree = {
   unread: boolean
   lastOutputAt?: number
   isPinned: boolean
+  snooze?: WorkspaceSnooze
   isActive?: boolean
   linkedPR: { number: number; state: string } | null
   linkedIssue?: number | null

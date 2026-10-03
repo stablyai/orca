@@ -1,6 +1,7 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import { isWorkspaceSnoozed } from '../../../../shared/workspace-snooze'
 export type { SidebarFilterState } from './visible-worktree-kinds'
 export {
   isAutomationGeneratedWorkspace,
@@ -67,6 +68,8 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 export type VisibleWorktreeOptions = {
   filterRepoIds: readonly string[]
   showSleepingWorkspaces: boolean
+  /** Session-only peek; snoozed rows stay hidden by default. */
+  showSnoozedWorkspaces?: boolean
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
   ptyIdsByTabId: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, { id: string }[]> | null
@@ -95,8 +98,9 @@ export function computeVisibleWorktrees(
 ): Worktree[] {
   let all: Worktree[] = getAllWorktreesFromState({ worktreesByRepo })
 
-  // Filter archived
-  all = all.filter((w) => !w.isArchived)
+  all = all.filter(
+    (w) => !w.isArchived && (opts.showSnoozedWorkspaces === true || !isWorkspaceSnoozed(w))
+  )
 
   // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
   // every other valid ancestor can bypass filters so children never orphan.

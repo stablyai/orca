@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import {
+  AlarmClock,
   CalendarClock,
   Check,
   FolderPlus,
@@ -49,6 +50,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
 }: SidebarFilterProps) {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
+  const showSnoozedWorkspaces = useAppStore((s) => s.showSnoozedWorkspaces)
+  const setShowSnoozedWorkspaces = useAppStore((s) => s.setShowSnoozedWorkspaces)
   // Surface the user-assigned shortcut here so the filter menu doubles as its
   // discovery point ('Unassigned' until they bind one in Settings → Shortcuts).
   const sleepingShortcut = useShortcutLabel('sidebar.sleepingWorkspaces.toggle')
@@ -244,6 +247,12 @@ const SidebarFilter = React.memo(function SidebarFilter({
             onChange={setAlwaysShowDefaultBranchWorkspace}
           />
         )}
+        <FilterToggleRow
+          icon={<AlarmClock className="size-3.5" />}
+          label={translate('auto.components.sidebar.SidebarFilter.hideSnoozed', 'Hide snoozed')}
+          checked={!showSnoozedWorkspaces}
+          onChange={(hideSnoozed) => setShowSnoozedWorkspaces(!hideSnoozed)}
+        />
         <FilterToggleRow
           icon={<GitBranch className="size-3.5" />}
           label={translate(

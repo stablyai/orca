@@ -34,6 +34,7 @@ export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters
 // Every sidebar filter, plus the single escape hatch that resets all of them.
 export function useSidebarWorktreeFilters() {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const showSnoozedWorkspaces = useAppStore((s) => s.showSnoozedWorkspaces)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
@@ -147,6 +148,7 @@ export function useSidebarWorktreeFilters() {
   const filterState = useMemo(
     () => ({
       showSleepingWorkspaces,
+      showSnoozedWorkspaces,
       filterRepoIds,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
@@ -159,6 +161,7 @@ export function useSidebarWorktreeFilters() {
     }),
     [
       showSleepingWorkspaces,
+      showSnoozedWorkspaces,
       filterRepoIds,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,

@@ -289,6 +289,29 @@ describe('Store', () => {
     ])
   })
 
+  it('persists a snooze across restart and clears it on a null update', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Later' })
+    const snooze = { snoozedAt: 100, wakeAt: 200 }
+    store.updateFolderWorkspace(workspace.id, { snooze })
+    store.setWorktreeMeta('wt1', { snooze })
+    store.flush()
+
+    const restored = await createStore()
+    expect(restored.getFolderWorkspace(workspace.id)?.snooze).toEqual(snooze)
+    expect(restored.getWorktreeMeta('wt1')?.snooze).toEqual(snooze)
+
+    restored.updateFolderWorkspace(workspace.id, { snooze: null })
+    restored.setWorktreeMeta('wt1', { snooze: null })
+    expect(restored.getFolderWorkspace(workspace.id)).not.toHaveProperty('snooze')
+    expect(restored.getWorktreeMeta('wt1')).not.toHaveProperty('snooze')
+  })
+
   it('persists the exact folder workspace path provided on create and update', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({

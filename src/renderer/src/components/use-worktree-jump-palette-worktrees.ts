@@ -22,6 +22,7 @@ import {
   isWorkspaceFromOtherDevice
 } from '@/components/sidebar/workspace-creator-visibility'
 import type { Worktree } from '../../../shared/worktree/types'
+import { isWorkspaceSnoozed } from '../../../shared/workspace-snooze'
 import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from './worktree-jump-palette-document-index'
 import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'
@@ -42,6 +43,7 @@ export function useWorktreeJumpPaletteWorktrees({
   hideDetachedHeadWorkspaces,
   hideWorkspacesFromOtherDevices,
   showSleepingWorkspaces,
+  showSnoozedWorkspaces,
   alwaysShowDefaultBranchWorkspace,
   ptyIdsByTabId,
   browserTabsByWorktree,
@@ -91,7 +93,8 @@ export function useWorktreeJumpPaletteWorktrees({
   const emptyQueryVisibleWorktrees = useMemo(
     () =>
       allWorktrees.filter((worktree) => {
-        if (worktree.isArchived) {
+        // Why only the empty-query list: a typed search is explicit intent, so it still finds snoozed rows.
+        if (worktree.isArchived || (!showSnoozedWorkspaces && isWorkspaceSnoozed(worktree))) {
           return false
         }
         if (filterPredicate && !filterPredicate.matchesWorktree(worktree)) {
@@ -148,6 +151,7 @@ export function useWorktreeJumpPaletteWorktrees({
       ptyIdsByTabId,
       repoMap,
       showSleepingWorkspaces,
+      showSnoozedWorkspaces,
       tabsByWorktree,
       worktreeIdsWithLiveAgent,
       worktreeIdsWithStructuredChat
