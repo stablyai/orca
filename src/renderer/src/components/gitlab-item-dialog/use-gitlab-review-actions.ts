@@ -7,6 +7,7 @@ import type { GitLabAssignableUser, GitLabWorkItem } from '../../../../shared/gi
 import { dedupeGitLabUsers, showGitLabMutationError } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { routedGitLab } from '@/runtime/gitlab-runtime-routing'
 
 export function useGitLabReviewActions(
   item: GitLabWorkItem | null,
@@ -36,7 +37,7 @@ export function useGitLabReviewActions(
     }
     setReviewerOptionsLoading(true)
     try {
-      const users = await window.api.gl.listAssignableUsers(repoSelector)
+      const users = await routedGitLab.listAssignableUsers(repoSelector)
       if (mountedRef.current) {
         setReviewerOptions(dedupeGitLabUsers(users))
       }
@@ -77,7 +78,7 @@ export function useGitLabReviewActions(
       }
       setReviewerUpdating(true)
       try {
-        const result = await window.api.gl.updateMRReviewers({
+        const result = await routedGitLab.updateMRReviewers({
           ...repoSelector,
           iid: item.number,
           reviewerIds,
@@ -156,7 +157,7 @@ export function useGitLabReviewActions(
     }
     setInlineCommentSubmitting(true)
     try {
-      const result = await window.api.gl.addMRInlineComment({
+      const result = await routedGitLab.addMRInlineComment({
         ...repoSelector,
         iid: item.number,
         projectRef: details.item.projectRef ?? item.projectRef ?? null,
@@ -214,7 +215,7 @@ export function useGitLabReviewActions(
       }
       setResolvingThreadId(threadId)
       try {
-        const res = await window.api.gl.resolveMRDiscussion({
+        const res = await routedGitLab.resolveMRDiscussion({
           ...repoSelector,
           iid: item.number,
           discussionId: threadId,
