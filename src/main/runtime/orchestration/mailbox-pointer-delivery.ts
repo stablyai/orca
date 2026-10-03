@@ -39,9 +39,6 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     }
     try {
       const leaf = this.deps.getLiveLeafForHandle(terminalHandle)
-      if (leaf.lastAgentStatus !== 'idle' || !leaf.lastAgentStatusObservedLive) {
-        return
-      }
       const mailboxHandle = this.deps.mailboxOwner.resolve(leaf, handle)
       if (mailboxHandle) {
         this.deliver(leaf, { mailboxHandle, reservedTypes })
