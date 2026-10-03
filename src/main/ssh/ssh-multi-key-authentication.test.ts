@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import {
   utils,
   type AnyAuthMethod,
@@ -24,6 +25,7 @@ vi.mock('fs', () => ({
 import { buildConnectConfig } from './ssh-connection-utils'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import { buildSshArgs } from './system-ssh-args'
+import { walkInitialAuthLadder } from './ssh-connection-test-fixtures'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 
@@ -172,6 +174,28 @@ describe('ordered SSH private-key authentication', () => {
     // Partial success: the host accepted the password and now offers only the challenge.
     expect(partialSuccessAuth(config, ['keyboard-interactive'])).toBe('keyboard-interactive')
     expect(partialSuccessAuth(config, ['keyboard-interactive'])).toBe('keyboard-interactive')
+  })
+
+  it('keeps the password challenge on an agent attempt that carries a key, because no key retry follows it', () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    // Real key bytes, so '/keys/explicit' counts as unencrypted and IdentitiesOnly builds its agent.
+    const keyBytes = Buffer.from(utils.generateKeyPairSync('ecdsa', { bits: 256 }).private)
+    mockReadFileSync.mockReturnValue(keyBytes)
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({
+        identityFile: [join('/home/testuser', '.ssh', 'id_ed25519'), '/keys/explicit']
+      })
+    )
+
+    // The password retry reuses this config, so holding the challenge back here would leave a
+    // keyboard-interactive password host with no attempt that ever offers it.
+    expect(walkInitialAuthLadder(config, ['publickey', 'keyboard-interactive'])).toEqual([
+      'none',
+      'publickey',
+      'agent',
+      'keyboard-interactive'
+    ])
   })
 
   it('stops re-offering methods the host no longer accepts after a partial success', () => {

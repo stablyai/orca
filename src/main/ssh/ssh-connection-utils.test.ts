@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 import { join } from 'node:path'
-import { BaseAgent, utils, type ParsedKey } from 'ssh2'
+import { BaseAgent, utils, type AuthenticationType, type ParsedKey } from 'ssh2'
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
@@ -32,6 +32,7 @@ import {
   resolveAgentSocket
 } from './ssh-connection-utils'
 import { resolveEffectiveProxy } from './ssh-proxy-command'
+import { walkInitialAuthLadder } from './ssh-connection-test-fixtures'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 
@@ -348,6 +349,10 @@ describe('findDefaultKeyFile', () => {
 })
 
 // ── buildConnectConfig ──────────────────────────────────────────────
+
+// What an OpenSSH host that collects its password through keyboard-interactive lists after 'none'.
+const PASSWORD_HOST_METHODS: AuthenticationType[] = ['publickey', 'keyboard-interactive']
+const UNENCRYPTED_KEY = Buffer.from(utils.generateKeyPairSync('ecdsa', { bits: 256 }).private)
 
 function makeTarget(overrides?: Partial<SshTarget>): SshTarget {
   return {
@@ -667,24 +672,79 @@ describe('buildConnectConfig', () => {
     expect(config.privateKey).toEqual(Buffer.from('custom-key'))
   })
 
-  it('uses agent auth without probing when resolved identityFile is a default path (expanded)', () => {
+  it('defers a default-path resolved identityFile to the no-agent retry', () => {
+    mockReadFileSync.mockReturnValue(UNENCRYPTED_KEY)
     const config = buildConnectConfig(
       makeTarget(),
       makeResolved({ identityFile: [testHomePath('.ssh', 'id_ed25519')] })
     )
     expect(config.agent).toBe('/tmp/agent.sock')
+    // No privateKey, so ssh2 cannot parse (and demand a passphrase for) the key before the agent
+    // has been tried, and no password challenge, so the deferred key is reached before any dialog.
     expect(config.privateKey).toBeUndefined()
-    expect(mockReadFileSync).not.toHaveBeenCalled()
+    expect(walkInitialAuthLadder(config, PASSWORD_HOST_METHODS)).toEqual(['none', 'agent'])
   })
 
-  it('does not probe default key files before agent auth', () => {
+  it('defers an existing default key file to the no-agent retry', () => {
     mockExistsSync.mockImplementation(
       (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
     )
+    mockReadFileSync.mockReturnValue(UNENCRYPTED_KEY)
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
-    expect(mockExistsSync).not.toHaveBeenCalled()
+    expect(walkInitialAuthLadder(config, PASSWORD_HOST_METHODS)).toEqual(['none', 'agent'])
+    // A host that does not list it can only demand it as a second factor, after the agent key
+    // partially succeeds; ssh2 reports that with the stale pre-agent list, so it stays offered.
+    expect(walkInitialAuthLadder(config, ['publickey'])).toEqual([
+      'none',
+      'agent',
+      'keyboard-interactive'
+    ])
+  })
+
+  it('keeps the challenge on a keyboard-interactive-only host, where the deferred key cannot help', () => {
+    mockExistsSync.mockImplementation(
+      (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
+    )
+    mockReadFileSync.mockReturnValue(UNENCRYPTED_KEY)
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(walkInitialAuthLadder(config, ['keyboard-interactive'])).toEqual([
+      'none',
+      'agent',
+      'keyboard-interactive'
+    ])
+  })
+
+  it('keeps the challenge when a deferred key file does not parse as a private key', () => {
+    mockExistsSync.mockImplementation(
+      (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
+    )
+    // ssh2 connect() throws on either before any auth, so the retry could never log in.
+    const unusableKeys = [
+      Buffer.from('not a private key'),
+      Buffer.from(utils.generateKeyPairSync('ecdsa', { bits: 256 }).public)
+    ]
+    for (const contents of unusableKeys) {
+      mockReadFileSync.mockReturnValue(contents)
+      const config = buildConnectConfig(makeTarget(), null)
+      expect(walkInitialAuthLadder(config, PASSWORD_HOST_METHODS)).toEqual([
+        'none',
+        'agent',
+        'keyboard-interactive'
+      ])
+    }
+  })
+
+  it('offers the keyboard-interactive challenge when the agent defers no key', () => {
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(config.privateKey).toBeUndefined()
+    expect(walkInitialAuthLadder(config, PASSWORD_HOST_METHODS)).toEqual([
+      'none',
+      'agent',
+      'keyboard-interactive'
+    ])
   })
 
   it('provides fallback key when no agent is available', () => {
