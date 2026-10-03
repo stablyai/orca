@@ -6,17 +6,17 @@ import {
 
 type RecordReaderStream = Pick<Readable, 'on' | 'pause' | 'resume' | 'setEncoding'>
 
-export type CodexAppServerRecordReader = {
+export type ProviderRecordReader = {
   pause: () => void
   resume: () => void
 }
 
-export function createCodexAppServerRecordReader(input: {
+export function createProviderRecordReader(input: {
   stdout: RecordReaderStream
   onRecord: (record: unknown, line: string) => void
   onRejected: (rejected: NdjsonRejectedRecord) => void
   onFatal: (error: Error) => void
-}): CodexAppServerRecordReader {
+}): ProviderRecordReader {
   let paused = false
   const framer = createIncrementalNdjsonFramer(input.onRecord, input.onRejected, {
     // The provider owns this local stdio stream, so valid agent payloads keep full fidelity.

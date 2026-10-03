@@ -10,7 +10,7 @@ import {
 } from '../../runtime/agent-session-older-build-lease.test-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { supervisedPosixLaunch } from '../../codex/codex-app-server-posix-supervisor'
+import { supervisedPosixLaunch } from '../../provider-process/provider-process-supervisor'
 import {
   resolveStructuredSessionRecovery,
   type StructuredSessionRecoveryResolutionDeps

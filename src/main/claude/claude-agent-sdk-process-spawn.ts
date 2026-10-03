@@ -1,6 +1,6 @@
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '../../shared/child-process/run-process'
-import { createProviderSpawnSpec } from '../codex/codex-app-server-posix-supervisor'
+import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 
 /** Derived rather than imported: only src/shared/child-process may name node:child_process. */
 type ClaudeCodeChild = ReturnType<typeof spawnProcess>

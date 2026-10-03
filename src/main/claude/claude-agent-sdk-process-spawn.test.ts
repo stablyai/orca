@@ -4,12 +4,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SpawnOptions as SdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import { resolveSpawn, type spawnProcess } from '../../shared/child-process/run-process'
 import type { ProcessSpec } from '../../shared/child-process/process-spec'
-import type * as ProviderSupervisor from '../codex/codex-app-server-posix-supervisor'
-import { createProviderSpawnSpec } from '../codex/codex-app-server-posix-supervisor'
+import type * as ProviderSupervisor from '../provider-process/provider-process-supervisor'
+import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 import { proveClaudeChildExitWithReaper } from './claude-child-exit-proof-ladder'
 
-vi.mock('../codex/codex-app-server-posix-supervisor', async (importOriginal) => {
+vi.mock('../provider-process/provider-process-supervisor', async (importOriginal) => {
   const actual = await importOriginal<typeof ProviderSupervisor>()
   return { ...actual, createProviderSpawnSpec: vi.fn(actual.createProviderSpawnSpec) }
 })
@@ -110,7 +110,7 @@ describe('claude agent SDK process spawn', () => {
     'stops Claude by the spawn spec\u2019s supervision on $platform, never the platform',
     async ({ platform, specSupervised }) => {
       const actual = await vi.importActual<typeof ProviderSupervisor>(
-        '../codex/codex-app-server-posix-supervisor'
+        '../provider-process/provider-process-supervisor'
       )
       vi.mocked(createProviderSpawnSpec).mockImplementationOnce((...args) => ({
         ...actual.createProviderSpawnSpec(...args),

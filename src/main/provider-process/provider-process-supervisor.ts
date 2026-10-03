@@ -1,4 +1,4 @@
-import type { CodexAppServerLaunch } from './codex-app-server-connection'
+import type { ProviderProcessLaunch } from './provider-process-launch'
 
 /** Time the provider gets to exit on its own after its stdin ends, before SIGTERM. */
 export const PROVIDER_STDIN_END_GRACE_MS = 1_000
@@ -139,7 +139,7 @@ function assertGraceWithin(name: string, graceMs: number, maxMs: number): void {
 }
 
 export function supervisedPosixLaunch(
-  launch: CodexAppServerLaunch,
+  launch: ProviderProcessLaunch,
   childEnv: NodeJS.ProcessEnv,
   {
     cwd = launch.cwd ?? process.cwd(),
@@ -174,7 +174,7 @@ export function supervisedPosixLaunch(
 }
 
 export function createProviderSpawnSpec(
-  launch: CodexAppServerLaunch,
+  launch: ProviderProcessLaunch,
   childEnv: NodeJS.ProcessEnv,
   platform: NodeJS.Platform
 ): {

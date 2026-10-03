@@ -10,7 +10,7 @@ export async function waitForProcessExitUntil(
     await Promise.race([exitPromise, timeout])
   } finally {
     // Why: this runs in a short-lived entry; a live grace timer delays the
-    // parent spawnSync even after the app-server process has already exited.
+    // parent spawnSync even after the provider process has already exited.
     if (timer !== undefined) {
       clearTimeout(timer)
     }

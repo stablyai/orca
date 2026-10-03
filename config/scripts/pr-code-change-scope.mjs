@@ -70,7 +70,7 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/codex-state-db',
   'src/main/sqlite/sync-database',
   'src/main/codex/codex-app-server-capability-signal',
-  'src/main/codex/codex-process-exit-deadline',
+  'src/main/provider-process/provider-process-exit-deadline',
   'src/main/codex/codex-session-backfill',
   'src/main/codex/codex-session-index-heal-state',
   'src/main/codex-cli/command',

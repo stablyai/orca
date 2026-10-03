@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { CodexAppServerLaunch } from './codex-app-server-connection'
+import type { ProviderProcessLaunch } from './provider-process-launch'
 import {
   createProviderSpawnSpec,
   POSIX_PROVIDER_SUPERVISOR_SCRIPT,
   PROVIDER_SIGTERM_GRACE_MS,
   PROVIDER_STDIN_END_GRACE_MS,
   supervisedPosixLaunch
-} from './codex-app-server-posix-supervisor'
+} from './provider-process-supervisor'
 
-const launch: CodexAppServerLaunch = {
+const launch: ProviderProcessLaunch = {
   command: '/opt/codex',
   args: ['app-server', '--flag'],
   cwd: '/work/repo',

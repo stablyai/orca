@@ -1,5 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { waitForProcessExitUntil } from './codex-process-exit-deadline'
+import { waitForProcessExitUntil } from '../provider-process/provider-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
@@ -7,7 +7,7 @@ import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
 } from './codex-app-server-process-tree-kill'
-import { createCodexAppServerRecordReader } from './codex-app-server-record-reader'
+import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -154,7 +154,7 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
   })
 
-  createCodexAppServerRecordReader({
+  createProviderRecordReader({
     stdout: child.stdout,
     onRecord: (parsed) => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {

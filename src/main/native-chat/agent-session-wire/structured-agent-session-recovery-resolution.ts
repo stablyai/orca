@@ -15,7 +15,7 @@ import {
   type AgentSessionOwnerProbe
 } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../codex/codex-app-server-posix-supervisor'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import { releaseUnprovenAgentSessionOwner } from '../../runtime/agent-session-lease-transitions'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 

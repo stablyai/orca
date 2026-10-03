@@ -10,7 +10,7 @@ import {
   PROVIDER_SUPERVISOR_MAX_STOP_MS,
   supervisedPosixLaunch,
   type ProviderSupervisorOptions
-} from './codex-app-server-posix-supervisor'
+} from './provider-process-supervisor'
 
 // The provider leads its own group; its grandchild shares that group and ignores SIGTERM.
 const PROVIDER = String.raw`
