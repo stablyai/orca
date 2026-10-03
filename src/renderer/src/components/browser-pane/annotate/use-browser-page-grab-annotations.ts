@@ -88,6 +88,7 @@ export function useBrowserPageGrabAnnotations({
   handleAddBrowserAnnotation: (comment: string, intent: BrowserAnnotationIntent) => void
   handleCancelPendingBrowserAnnotation: () => void
   handleGrabActionShortcut: (key: 'c' | 's') => void
+  cancelGrabSessionRef: MutableRefObject<() => void>
 } {
   const mountedRef = useMountedRef()
   const toolTargetIdRef = useRef(toolTargetId)
@@ -102,13 +103,25 @@ export function useBrowserPageGrabAnnotations({
   const grabRef = useRef(grab)
   const grabPayloadRef = useRef(grab.payload)
 
+  const cancelGrabSessionRef = useRef<() => void>(() => {})
   useLayoutEffect(() => {
     toolTargetIdRef.current = toolTargetId
     grabIntentRef.current = grabIntent
     pendingAnnotationPayloadRef.current = pendingAnnotationPayload
     grabRef.current = grab
     grabPayloadRef.current = grab.payload
+    // Why: only a main-frame document replacement invalidates the annotate session (iframe
+    // polling must keep it alive); the webview navigation handlers reach this reset through the
+    // ref the pane threads into the attach lifecycle, exiting grab mode fully instead of leaving
+    // a half-torn-down session only Esc can dismiss.
+    cancelGrabSessionRef.current = () => {
+      setPendingAnnotationPayload(null)
+      if (grab.state !== 'idle') {
+        grab.cancel()
+      }
+    }
   }, [grab, grabIntent, pendingAnnotationPayload, toolTargetId])
+
   // Why: Radix fires onOpenChange(false) before onSelect, so this flag lets onOpenChange skip the rearm that would clear the payload first.
   const grabMenuActionTakenRef = useRef(false)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -306,6 +319,7 @@ export function useBrowserPageGrabAnnotations({
 
   return {
     grabIntent,
+    cancelGrabSessionRef,
     startGrabIntent,
     pendingAnnotationPayload,
     setPendingAnnotationPayload,

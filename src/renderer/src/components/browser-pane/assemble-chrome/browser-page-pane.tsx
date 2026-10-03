@@ -224,7 +224,6 @@ export function BrowserPagePane({
     onUpdatePageState,
     onSetUrl,
     setAddressBarValue: nav.setAddressBarValue,
-    setPendingAnnotationPayload: grabAnnotations.setPendingAnnotationPayload,
     setBrowserOverlayViewport,
     setFindOpen,
     focusAddressBarNow,
@@ -242,7 +241,8 @@ export function BrowserPagePane({
     activeLoadFailureRef,
     retryGuestRecoveryRef,
     onUpdatePageStateRef,
-    onSetUrlRef
+    onSetUrlRef,
+    cancelGrabSessionRef: grabAnnotations.cancelGrabSessionRef
   })
   useBrowserPageWebviewUrlSync({
     browserTabId: browserTab.id,
