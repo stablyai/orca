@@ -30,7 +30,8 @@ type UsageProviderStoreState<SourceKey extends string> = {
 type UsageProviderScanProjection<
   SourceKey extends string,
   State extends UsageProviderStoreState<SourceKey>
-> = Pick<State, SourceKey | 'sessions' | 'dailyAggregates'>
+> = Pick<State, SourceKey | 'sessions' | 'dailyAggregates'> &
+  Partial<Omit<State, 'scanState' | 'worktreeFingerprint'>>
 
 type UsageProviderStoreLifecycleConfig<
   SourceKey extends string,
@@ -168,9 +169,7 @@ export abstract class UsageProviderStoreLifecycle<
             ? this.state[this.config.sourceKey]
             : this.config.createDefaultState()[this.config.sourceKey]
         )
-        this.state[this.config.sourceKey] = result[this.config.sourceKey]
-        this.state.sessions = result.sessions
-        this.state.dailyAggregates = result.dailyAggregates
+        Object.assign(this.state, result)
         this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null

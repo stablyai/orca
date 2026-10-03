@@ -29,7 +29,7 @@ if (!batchMatch) {
   throw new Error('FILE_SCAN_BATCH_SIZE not found; this benchmark is stale')
 }
 const FILE_SCAN_BATCH_SIZE = Number(batchMatch[1])
-const YIELD_SITES = (SCANNER_SOURCE.match(/await yieldToEventLoop\(\)/g) ?? []).length
+const YIELD_SITES = (SCANNER_SOURCE.match(/await yieldToEventLoop\([^)]*\)/g) ?? []).length
 if (YIELD_SITES === 0) {
   throw new Error('no yieldToEventLoop call sites found; this benchmark is stale')
 }

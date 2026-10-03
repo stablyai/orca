@@ -13,19 +13,22 @@ import type {
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import type { ClaudeUsagePersistedState } from './types'
+import type { ClaudeUsagePersistedState, ClaudeUsageSshHostSnapshot } from './types'
 import { scanClaudeUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
 import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-aggregation'
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'
 import { resolveAutomationRunUsage } from './claude-usage-automation-attribution'
+import { CLAUDE_USAGE_SCHEMA_VERSION } from './claude-usage-schema-version'
+import { loadKnownSshUsageWorktreesByTarget } from '../usage-worktree-metadata'
+import {
+  mergeClaudeUsageWithSshHosts,
+  scanClaudeUsageOnSshHosts,
+  type ClaudeUsageSshTransport
+} from './ssh-host-usage-scan'
 
-// Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
-// caches either lack ownership or used narrower keys and can under/over-count
-// after fork reclaim (#8006). v6 adds the 1-hour cache-write split, which older
-// caches never recorded, so their cost estimates stay stuck at the 5m rate (#15993).
-const SCHEMA_VERSION = 6
+const SCHEMA_VERSION = CLAUDE_USAGE_SCHEMA_VERSION
 
 // Why: capture the path after configureDevUserDataPath() but before app.setName()
 // mutates Electron's derived userData location, matching the persistence/store pattern.
@@ -38,6 +41,7 @@ function getDefaultState(): ClaudeUsagePersistedState {
     processedFiles: [],
     sessions: [],
     dailyAggregates: [],
+    sshHosts: {},
     scanState: {
       enabled: false,
       lastScanStartedAt: null,
@@ -78,7 +82,13 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   ClaudeUsagePersistedState,
   'hasAnyClaudeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(
+    store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
+    options: { sshTransport?: ClaudeUsageSshTransport } = {}
+  ) {
+    const { sshTransport } = options
+    // Why late-bound: `this.state` does not exist until super() returns.
+    let readSshHosts = (): Record<string, ClaudeUsageSshHostSnapshot> => ({})
     super(store, {
       tokenUsage: {
         provider: 'claude',
@@ -91,8 +101,26 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyClaudeData',
       jsonIndent: 2,
-      scan: scanClaudeUsageFilesViaWorker
+      scan: async (worktrees, previous) => {
+        if (!sshTransport) {
+          return scanClaudeUsageFilesViaWorker(worktrees, previous)
+        }
+        // Why in parallel: remote hosts scan their own transcripts, so the
+        // local worker and each relay sidecar do independent work.
+        const [local, sshHosts] = await Promise.all([
+          scanClaudeUsageFilesViaWorker(worktrees, previous),
+          scanClaudeUsageOnSshHosts({
+            transport: sshTransport,
+            worktreesByTarget: loadKnownSshUsageWorktreesByTarget(store, store.getRepos()),
+            previous: readSshHosts(),
+            onHostError: (targetId, error) =>
+              console.warn(`[claude-usage] SSH host ${targetId} scan failed:`, error)
+          })
+        ])
+        return { ...local, ...mergeClaudeUsageWithSshHosts(local, sshHosts), sshHosts }
+      }
     })
+    readSshHosts = () => this.state.sshHosts ?? {}
   }
 
   getSnapshot(
