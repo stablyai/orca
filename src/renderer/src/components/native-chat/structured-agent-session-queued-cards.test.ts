@@ -137,6 +137,24 @@ describe('queued message cards', () => {
     expect(cards.map((card) => card.messageId)).toEqual(['kept', 'refused'])
   })
 
+  // A card queued after a person's Stop runs when the stop lands, past the cards its pause holds.
+  it('a paused queue labels only the cards its host says it holds', () => {
+    const cards = projectQueuedMessageCards(
+      [draft('held', 1, { heldByPause: true }), draft('queued while stopping', 2)],
+      [],
+      { hasPendingPrompt: false, queuePaused: true }
+    )
+    expect(cards.map((card) => card.hold)).toEqual(['queue-paused', 'turn'])
+  })
+
+  it('a paused queue from a host that names no held card labels every card, as before', () => {
+    const cards = projectQueuedMessageCards([draft('a', 1), draft('b', 2)], [], {
+      hasPendingPrompt: false,
+      queuePaused: true
+    })
+    expect(cards.map((card) => card.hold)).toEqual(['queue-paused', 'queue-paused'])
+  })
+
   it('a paused queue outranks a pending prompt: an answer does not drain it', () => {
     const cards = projectQueuedMessageCards(
       [

@@ -173,6 +173,32 @@ describe('mobile structured queued messages', () => {
       )
     })
 
+    // Nothing is left to steer into while a Stop ends the turn: the send runs after it, as a card.
+    it('queues a send made while this phone reads Stopping', async () => {
+      sendRequest.mockImplementation(async (method) => {
+        if (method === 'agentSession.cancel') {
+          return new Promise<RpcResponse>(() => {})
+        }
+        if (method === 'agentSession.send') {
+          return mutationOk({
+            clientMessageId: 'client-1',
+            queued: { messageId: 'client-1', position: 1, state: 'waiting' }
+          })
+        }
+        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
+      })
+      await mountSession(CAPABLE, snapshotEvent({ runningTurn: true }))
+      act(() => hook!.cancel())
+      await vi.waitFor(() => expect(hook!.turnIndicator.stopping).toBe(true))
+
+      await act(async () => {
+        expect(await hook!.sendWithOutcome('run this after the stop')).toBe('queued')
+      })
+
+      expect(calls('agentSession.send')).toHaveLength(1)
+      expect(requestOf('agentSession.send').params.delivery).toBe('queue-if-active')
+    })
+
     it('keeps today’s request exactly against an incapable host', async () => {
       sendRequest.mockImplementation(async (method) => {
         if (method === 'agentSession.send') {

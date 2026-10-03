@@ -7,7 +7,7 @@
 // and no draft text ever rides an answer. A host-held draft is a card above
 // the composer, never a transcript bubble.
 
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
@@ -92,7 +92,7 @@ function draft(id: string): AgentSessionQueuedMessage {
   }
 }
 
-function render(queueFollowUps?: boolean) {
+function render(queueFollowUps?: boolean, hostStopping?: boolean) {
   return renderHook(() =>
     useStructuredAgentSession({
       sessionId: 'session-1',
@@ -100,7 +100,8 @@ function render(queueFollowUps?: boolean) {
       target: { kind: 'local' },
       isVisible: true,
       composerScopeKey: 'scope-1',
-      ...(queueFollowUps === undefined ? {} : { queueFollowUps })
+      ...(queueFollowUps === undefined ? {} : { queueFollowUps }),
+      ...(hostStopping === undefined ? {} : { hostStopping })
     })
   )
 }
@@ -156,6 +157,45 @@ describe('against a capable host', () => {
       capability: 'supported',
       enabled: false
     })
+  })
+
+  // Nothing is left to steer into while a Stop ends the turn: a send runs after it, as a card.
+  it('queues a send while the host reads stopping, with the setting off', () => {
+    render(false, true)
+    expect(mocks.outboxArgs.at(-1)?.queueDelivery).toEqual({
+      capability: 'supported',
+      enabled: true
+    })
+  })
+
+  it("queues a send while this client's own Stop is in flight, with the setting off", async () => {
+    const cancel = Promise.withResolvers<unknown>()
+    mocks.call.mockImplementation(async (_target, method) =>
+      method === 'agentSession.cancel' ? cancel.promise : null
+    )
+    const { result } = render(false)
+    let stopped: Promise<unknown> = Promise.resolve()
+    act(() => {
+      stopped = result.current.stop()
+    })
+    await waitFor(() => expect(mocks.outboxArgs.at(-1)?.queueDelivery?.enabled).toBe(true))
+    await act(async () => {
+      cancel.resolve({
+        ok: true,
+        replayed: false,
+        fence: 3,
+        cursor: { epoch: 'e', sequence: 1 },
+        value: { cancelled: true }
+      })
+      await stopped
+    })
+    expect(mocks.outboxArgs.at(-1)?.queueDelivery?.enabled).toBe(false)
+  })
+
+  it('sends immediately with the setting off once the session is not working', () => {
+    items = []
+    render(false, true)
+    expect(mocks.outboxArgs.at(-1)?.queueDelivery?.enabled).toBe(false)
   })
 
   it('Stop is a plain cancel: drafts stay as cards and no text lands in the composer', async () => {
@@ -270,6 +310,24 @@ describe('against a capable host', () => {
     queuedMessages = undefined
     const idleUnheld = render()
     expect(JSON.stringify(idleUnheld.result.current.messages)).toContain('awaiting the answer')
+  })
+
+  it('draws a send made while stopping as no bubble in the turn the Stop ends, with the setting off', () => {
+    outboxEntries = [
+      createStructuredAgentSessionOutboxEntry({
+        clientMessageId: 'while-stopping',
+        sessionId: 'session-1',
+        text: 'run this after the stop',
+        attachments: [],
+        queuedAt: 1
+      })
+    ]
+    const stopping = render(false, true)
+    expect(JSON.stringify(stopping.result.current.messages)).not.toContain(
+      'run this after the stop'
+    )
+    const working = render(false, false)
+    expect(JSON.stringify(working.result.current.messages)).toContain('run this after the stop')
   })
 
   it('shows host-held drafts as cards, never as transcript bubbles', () => {

@@ -105,7 +105,8 @@ describe("Stop's event", () => {
     await eventually(async () => expect(await rig.handoff(typed)).toBeDefined())
   })
 
-  it('a card queued after the Stop waits behind the cards it holds, then all send in order', async () => {
+  // Asked for after the Stop, it runs past the cards the Stop holds; they wait for Resume.
+  it('a card queued after the Stop runs past the cards it holds, which wait for Resume', async () => {
     const working = await rig.workingSend()
     const held = await queuedDraft('queued before the stop')
     await rig.stop()
@@ -113,18 +114,12 @@ describe("Stop's event", () => {
     const mail = await mailTurn()
     const later = await queuedDraft('queued during the mail turn')
     await rig.settleAccepted(mail, 'mail')
-    // The queue never reorders: the newer card waits behind the held one, with no caption of its own.
-    await expectHeld('stopped', held, later)
-    expect(await rig.drafts()).toEqual([
-      { messageId: held, state: 'waiting' },
-      { messageId: later, state: 'waiting' }
-    ])
+    await eventually(async () => expect((await rig.handoff(later))?.handedOverAt).toBeDefined())
+    await rig.settleAccepted(await rig.handoffId(later), 'later')
+    // The queue's own send is no person's turn: the cards the Stop holds still wait.
+    await expectHeld('stopped', held)
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
     await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
-    expect(await rig.handoff(later)).toBeUndefined()
-    await eventually(async () => expect((await rig.handoff(held))?.handedOverAt).toBeDefined())
-    await rig.settleAccepted(await rig.handoffId(held), 'held')
-    await eventually(async () => expect(await rig.handoff(later)).toBeDefined())
   })
 
   it("a person's accepted turn lifts it; a host turn and a later Stop do not", async () => {

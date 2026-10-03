@@ -61,6 +61,9 @@ export function projectQueuedMessageCards(
   const ordered = [...(queuedMessages ?? [])]
     .sort((left, right) => left.position - right.position)
     .filter((message) => message.state === 'returned' || !handedOff.has(message.messageId))
+  // A host that names the cards its pause holds lets the rest read as waiting their turn; an older
+  // host names none, and its pause holds every card.
+  const pauseNamesCards = ordered.some((message) => message.heldByPause === true)
   let behindReturned = false
   return ordered.map((message) => {
     const hold: QueuedMessageCardHold =
@@ -70,7 +73,7 @@ export function projectQueuedMessageCards(
           ? 'paused'
           : behindReturned
             ? 'behind-returned'
-            : session.queuePaused
+            : session.queuePaused && (!pauseNamesCards || message.heldByPause === true)
               ? 'queue-paused'
               : session.hasPendingPrompt
                 ? 'awaiting-answer'

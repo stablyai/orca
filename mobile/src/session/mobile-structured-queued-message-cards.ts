@@ -103,6 +103,9 @@ export function mobileQueuedMessageCards(
         : []
     )
   )
+  // A host that names the cards its pause holds lets the rest wait as usual; an older host names
+  // none, and its pause holds every card.
+  const pauseNamesCards = queuedMessages.some((draft) => draft.heldByPause === true)
   let behindReturned = false
   const cards: MobileQueuedMessageCard[] = []
   for (const draft of queuedMessages) {
@@ -117,7 +120,7 @@ export function mobileQueuedMessageCards(
           ? pausedCaption(draft.pausedReason)
           : behindReturned
             ? 'Waiting — a message ahead needs attention'
-            : facts.queuePaused
+            : facts.queuePaused && (!pauseNamesCards || draft.heldByPause === true)
               ? // The pause row says why and offers Resume; the card promises no send time.
                 null
               : facts.pendingPrompt

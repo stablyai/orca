@@ -447,7 +447,8 @@ describe('which cards a pause holds', () => {
     ])
   })
 
-  it("the queue's own consume refuses a newer card while an older one is held: nothing overtakes", async () => {
+  // A card asked for after a person's Stop runs when the stop lands, past the cards that Stop holds.
+  it("the queue's own consume takes a card queued after a Stop past the cards only it holds", async () => {
     const journal = await open()
     await queueDraft(journal, 'held')
     await userStop(journal)
@@ -470,8 +471,9 @@ describe('which cards a pause holds', () => {
           yieldsToPause: { hostInstance: HOST }
         }
       )
-    ).rejects.toBeInstanceOf(QueuedMessageNotConsumableError)
-    expect(journal.queuedMessages.get('newer')?.state).toBe('waiting')
+    ).resolves.toBeDefined()
+    expect(journal.queuedMessages.get('held')?.state).toBe('waiting')
+    expect(journal.queuedMessages.get('newer')?.state).not.toBe('waiting')
   })
 
   it("'cleared' holds the carried cards, not one typed after them", async () => {

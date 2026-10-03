@@ -66,6 +66,16 @@ describe('mobileQueuedMessageCards', () => {
     expect(card?.needsAttention).toBe(false)
   })
 
+  // A card queued after a person's Stop is not the pause's: it waits as any card does.
+  it('captions a card the host says its pause lets through as any waiting card', () => {
+    const cards = mobileQueuedMessageCards(
+      [draft({ messageId: 'held', heldByPause: true }), draft({ messageId: 'b', position: 2 })],
+      [],
+      { pendingPrompt: true, queuePaused: true }
+    )
+    expect(cards.map((card) => card.caption)).toEqual([null, 'Waiting for your answer'])
+  })
+
   it("keeps a card's own failed send and reads a prompt's wait as queued under a paused queue", () => {
     const cards = mobileQueuedMessageCards(
       [

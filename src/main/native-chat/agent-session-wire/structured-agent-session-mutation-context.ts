@@ -44,6 +44,9 @@ export type StructuredAgentSessionMutationContext = {
    *  journal commit (a conversation command). Draft-table changes need no call:
    *  the draft store notifies through the journal's own commit listener. */
   wakeQueuedDrain?: (sessionId: string) => void
+  /** The host's reading that a person's Stop is still ending the session's work, as the status
+   *  feed projects it from the journal as it stands. */
+  readStopping?: (sessionId: string) => boolean
   now: () => number
 }
 
@@ -56,18 +59,30 @@ export function mutateStructuredAgentSession<TValue>(
   prepareSession?: AgentSessionMutationRequest<TValue>['prepareSession']
 ): Promise<AgentSessionMutationResult<TValue>> {
   return context.serialize(envelope.sessionId, () =>
-    admitAndRunAgentSessionMutation({
-      store: context.deps.store,
-      adapter: context.deps.adapter,
-      logger: context.deps.logger,
-      callerKey: caller.callerKey,
-      envelope,
-      plan,
-      journal: () => context.sessions.get(envelope.sessionId)?.journal,
-      prepareSession,
-      publish: (journal) => context.publish(envelope.sessionId, journal),
-      providerChildPhase: () => context.sessions.get(envelope.sessionId)?.child?.phase,
-      now: () => context.now()
-    })
+    mutateStructuredAgentSessionOffLane(context, caller, envelope, plan, prepareSession)
   )
+}
+
+/** Admits the envelope and runs the plan without the session's serialize: for a plan that only
+ *  writes the journal, through its own ordered writer, and touches nothing the lane orders. */
+export function mutateStructuredAgentSessionOffLane<TValue>(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  envelope: AgentSessionMutationEnvelope,
+  plan: MutationPlan<TValue>,
+  prepareSession?: AgentSessionMutationRequest<TValue>['prepareSession']
+): Promise<AgentSessionMutationResult<TValue>> {
+  return admitAndRunAgentSessionMutation({
+    store: context.deps.store,
+    adapter: context.deps.adapter,
+    logger: context.deps.logger,
+    callerKey: caller.callerKey,
+    envelope,
+    plan,
+    journal: () => context.sessions.get(envelope.sessionId)?.journal,
+    prepareSession,
+    publish: (journal) => context.publish(envelope.sessionId, journal),
+    providerChildPhase: () => context.sessions.get(envelope.sessionId)?.child?.phase,
+    now: () => context.now()
+  })
 }
