@@ -16,6 +16,7 @@ import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-def
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
 import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
+import { persistedUIValuesEqual } from '../../../shared/persisted-ui-equality'
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,
@@ -42,7 +43,10 @@ export type PreparedLoadedProfileSettings = {
   migratedDisabledTuiAgents: GlobalSettings['disabledTuiAgents']
   migratedAgentYoloDefaults: Pick<
     GlobalSettings,
-    'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
+    | 'agentYoloDefaultsMigrated'
+    | 'agentYoloDefaultsBackfillRepaired'
   >
   migratedWindowsRuntimeDefault: GlobalSettings['localWindowsRuntimeDefault']
   migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime']
@@ -55,6 +59,18 @@ export type PreparedLoadedProfileSettings = {
   normalizedProjectGroups: ProjectGroup[]
 }
 
+/**
+ * Normalizes and prepares persisted profile settings during store hydration.
+ *
+ * Runs schema migrations and defaulting logic for terminal settings, agent launch configurations,
+ * task providers, and onboarding state. Marks the profile dirty via `markNeedsSave` if any persisted
+ * values need to be written back to disk.
+ *
+ * @param parsed - The raw persisted state loaded from disk.
+ * @param defaults - The default persisted state for fallback.
+ * @param markNeedsSave - Callback invoked when changes must be persisted back to disk.
+ * @returns The prepared and migrated profile settings.
+ */
 export function prepareLoadedProfileSettings(
   parsed: PersistedState,
   defaults: PersistedState,
@@ -136,8 +152,17 @@ export function prepareLoadedProfileSettings(
   const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
+    parsed.settings?.agentYoloDefaultsBackfillRepaired !== true ||
     parsed.settings?.agentDefaultArgs?.devin !==
       migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
+    !persistedUIValuesEqual(
+      parsed.settings?.agentDefaultArgs,
+      migratedAgentYoloDefaults.agentDefaultArgs
+    ) ||
+    !persistedUIValuesEqual(
+      parsed.settings?.agentDefaultEnv,
+      migratedAgentYoloDefaults.agentDefaultEnv
+    ) ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
     hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
   ) {
