@@ -102,6 +102,7 @@ function makeResult(
     worktreeId: 'wt-1',
     groupId: 'group-1',
     contentType: 'terminal',
+    isPinned: false,
     occupantAgent: null,
     title: 'Terminal',
     secondaryText: '',
