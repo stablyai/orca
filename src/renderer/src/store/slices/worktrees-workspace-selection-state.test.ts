@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   registerPersistentWebview,
   unregisterPersistentWebview
@@ -196,6 +197,42 @@ describe('markWorktreeVisited', () => {
       worktreesByRepo: { repo1: [wt] },
       lastVisitedAtByWorktreeId: { 'repo1::/a': 100, 'ssh-repo::/b': 200 }
     } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      'repo1::/a': 100,
+      'ssh-repo::/b': 200
+    })
+  })
+
+  it('pruneLastVisitedTimestamps drops entries and stale active pointer for repos removed from catalog', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    const repo1: Repo = { id: 'repo1', path: '/a', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+    store.setState({
+      repos: [repo1],
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'deleted-repo::/b',
+      activeWorkspaceKey: worktreeWorkspaceKey('deleted-repo::/b'),
+      lastVisitedAtByWorktreeId: { 'repo1::/a': 100, 'deleted-repo::/b': 200 }
+    })
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      'repo1::/a': 100
+    })
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().activeWorkspaceKey).toBeNull()
+  })
+
+  it('pruneLastVisitedTimestamps preserves not-yet-hydrated catalog repos while dropping removed repos', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    const repo1: Repo = { id: 'repo1', path: '/a', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+    const sshRepo: Repo = { id: 'ssh-repo', path: '/b', displayName: 'SSH Repo', badgeColor: '#000', addedAt: 0 }
+    store.setState({
+      repos: [repo1, sshRepo],
+      worktreesByRepo: { repo1: [wt] },
+      lastVisitedAtByWorktreeId: { 'repo1::/a': 100, 'ssh-repo::/b': 200, 'deleted-repo::/c': 300 }
+    })
     store.getState().pruneLastVisitedTimestamps()
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
       'repo1::/a': 100,
