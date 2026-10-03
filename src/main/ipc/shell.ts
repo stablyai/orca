@@ -17,6 +17,7 @@ import {
   resolveVsCodeRemoteSshLaunchSpec
 } from '../external-editor-launch'
 import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
+import { openPathWithSystemDefault } from '../system-default-open-path'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -129,7 +130,7 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
     return false
   }
   try {
-    const errorMessage = await shell.openPath(target.path)
+    const errorMessage = await openPathWithSystemDefault(target.path)
     return errorMessage.length === 0
   } catch {
     return false

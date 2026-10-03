@@ -18,7 +18,8 @@
 // renderer triggers the flow; main reads the URL from a build-time
 // constant or env var and does the POST itself.
 
-import { app, dialog, ipcMain, shell } from 'electron'
+import { app, dialog, ipcMain } from 'electron'
+import { openPathWithSystemDefault } from '../system-default-open-path'
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { arch as osArch, platform as osPlatform, release as osRelease, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -281,7 +282,7 @@ export function registerDiagnosticsHandlers(): void {
 
   ipcMain.handle('diagnostics:openBundlePreview', async (_event, bundleSubmissionId: unknown) => {
     const previewFilePath = getPendingPreviewFilePath(bundleSubmissionId)
-    const errorMessage = await shell.openPath(previewFilePath)
+    const errorMessage = await openPathWithSystemDefault(previewFilePath)
     if (errorMessage) {
       throw new Error('could not open review file')
     }

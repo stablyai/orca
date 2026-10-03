@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import type { CollectedBundle } from '../observability/bundle'
 import type * as NodeFs from 'node:fs'
 
@@ -12,6 +13,7 @@ const {
   writeFileSyncMock,
   showMessageBoxMock,
   openPathMock,
+  spawnProcessMock,
   collectDiagnosticBundleMock,
   deleteDiagnosticBundleMock,
   getDiagnosticsStatusMock,
@@ -23,6 +25,7 @@ const {
   writeFileSyncMock: vi.fn(),
   showMessageBoxMock: vi.fn(),
   openPathMock: vi.fn(),
+  spawnProcessMock: vi.fn(),
   collectDiagnosticBundleMock: vi.fn(),
   deleteDiagnosticBundleMock: vi.fn(),
   getDiagnosticsStatusMock: vi.fn(),
@@ -38,6 +41,8 @@ vi.mock('node:fs', async () => {
     writeFileSync: writeFileSyncMock
   }
 })
+
+vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: spawnProcessMock }))
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp', getVersion: () => '1.2.3-test' },
@@ -77,7 +82,19 @@ function makeBundle(overrides: Partial<CollectedBundle> = {}): CollectedBundle {
 }
 
 describe('diagnostics IPC handlers', () => {
+  let hostPlatform: PropertyDescriptor | undefined
+
+  afterEach(() => {
+    vi.useRealTimers()
+    if (hostPlatform) {
+      Object.defineProperty(process, 'platform', hostPlatform)
+    }
+  })
+
   beforeEach(() => {
+    hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    spawnProcessMock.mockReset()
     handleMock.mockReset()
     mkdirSyncMock.mockReset()
     readFileSyncMock.mockReset()
@@ -232,6 +249,48 @@ describe('diagnostics IPC handlers', () => {
       expect.stringContaining(`${bundle.bundleSubmissionId}.ndjson`)
     )
   })
+
+  it.each(['success', 'nonzero', 'missing', 'pending'] as const)(
+    'keeps the Linux preview gate accurate for a %s launcher',
+    async (outcome) => {
+      vi.useFakeTimers()
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      spawnProcessMock.mockImplementationOnce(() => {
+        const child = Object.assign(new EventEmitter(), { unref: vi.fn() })
+        queueMicrotask(() => {
+          if (outcome === 'missing') {
+            child.emit('error', new Error('spawn xdg-open ENOENT'))
+          } else if (outcome !== 'pending') {
+            child.emit('exit', outcome === 'success' ? 0 : 1, null)
+          }
+        })
+        return child
+      })
+      const bundle = makeBundle({ bundleSubmissionId: 'linuxbundleabcdefghijklmnop' })
+      collectDiagnosticBundleMock.mockReturnValue(bundle)
+      await handlers.get('diagnostics:collectBundle')!({}, 30)
+      const preview = handlers.get('diagnostics:openBundlePreview')!({}, bundle.bundleSubmissionId)
+      const assertion =
+        outcome === 'success'
+          ? expect(preview).resolves.toBeUndefined()
+          : expect(preview).rejects.toThrow()
+      await vi.advanceTimersByTimeAsync(1_500)
+      await assertion
+      expect(spawnProcessMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: [expect.stringContaining(`${bundle.bundleSubmissionId}.ndjson`)]
+        })
+      )
+      expect(openPathMock).not.toHaveBeenCalled()
+      if (outcome !== 'success') {
+        await expect(
+          handlers.get('diagnostics:uploadBundle')!({}, bundle.bundleSubmissionId)
+        ).rejects.toThrow(/open.*review file/)
+        expect(showMessageBoxMock).not.toHaveBeenCalled()
+        expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
+      }
+    }
+  )
 
   it('requires opening the retained review file before sending', async () => {
     const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
