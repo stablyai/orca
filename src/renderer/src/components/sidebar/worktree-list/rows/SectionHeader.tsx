@@ -17,7 +17,7 @@ import type {
 import type { GroupHeaderRow, WorktreeGroupBy } from '../grouping/row-types'
 import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 import { getWorkspaceStatusFromGroupKey } from '../../workspace-status'
-import { getVirtualRowTransform } from '../viewport/virtual-rows'
+import { getVirtualRowTransform, HOST_STICKY_GROUP_TOP_PX } from '../viewport/virtual-rows'
 import { resolveProjectGroupHeaderColor } from '../../project-header-color'
 import { getRepoHeaderCreateState } from '../../repo-header-create-state'
 import { ProjectHeaderActions } from '../../ProjectHeaderActions'
@@ -195,11 +195,17 @@ export function renderWorktreeSectionHeaderRow(args: {
           ? cn(
               'sticky z-20 bg-worktree-sidebar',
               // Why: when a host card is pinned, the group tier pins flush beneath it, not at the viewport top.
-              args.hasStickyHost ? 'top-[35px]' : '-top-px'
+              args.hasStickyHost ? undefined : '-top-px'
             )
           : 'absolute top-0'
       )}
-      style={isActiveStickyHeader ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
+      style={
+        isActiveStickyHeader
+          ? args.hasStickyHost
+            ? { top: HOST_STICKY_GROUP_TOP_PX }
+            : undefined
+          : { transform: getVirtualRowTransform(vItem.start) }
+      }
     >
       <div
         id={getWorktreeOptionId(row.key)}
