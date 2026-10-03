@@ -4,7 +4,6 @@ import {
   dedupeTabOrder,
   findGroupForTab,
   findTabAndWorktree,
-  pickNextActiveTab,
   sanitizeRecentTabIds
 } from '../tab-group-state'
 import { buildActiveSurfacePatch } from './tabs-surface'
@@ -18,6 +17,7 @@ import {
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
+import { pickTabCloseSuccessor } from './tab-close-successor'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -69,13 +69,10 @@ export function createTabsCloseActions(
         })
         get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
       }
-      // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
-      const nextActiveTabId =
-        group.activeTabId === tabId
-          ? wasLastTab
-            ? null
-            : pickNextActiveTab(dedupedGroupOrder, group.recentTabIds, tabId)
-          : group.activeTabId
+      let nextActiveTabId = group.activeTabId
+      if (group.activeTabId === tabId) {
+        nextActiveTabId = pickTabCloseSuccessor(group, dedupedGroupOrder, tabId)
+      }
       const nextRecentTabIds = sanitizeRecentTabIds(
         (group.recentTabIds ?? []).filter((id) => id !== tabId),
         remainingOrder

@@ -75,6 +75,9 @@ const useAppStoreMock = vi.fn(
       worktreesByRepo: typeof appStoreSnapshot.worktreesByRepo
       unifiedTabsByWorktree: Record<string, unknown[]>
       activeGroupIdByWorktree: Record<string, string>
+      groupsByWorktree: Record<string, never[]>
+      tabSelectionByGroupId: Record<string, never>
+      setTabSelection: () => void
       detectedAgentIds: string[] | null
       localDetectedAgentIdsByContext: Record<string, string[] | null>
       remoteDetectedAgentIds: Record<string, string[]>
@@ -104,6 +107,9 @@ const useAppStoreMock = vi.fn(
       worktreesByRepo: appStoreSnapshot.worktreesByRepo,
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
       activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
+      groupsByWorktree: {},
+      tabSelectionByGroupId: {},
+      setTabSelection: vi.fn(),
       detectedAgentIds: appStoreSnapshot.detectedAgentIds,
       localDetectedAgentIdsByContext: appStoreSnapshot.localDetectedAgentIdsByContext,
       remoteDetectedAgentIds: appStoreSnapshot.remoteDetectedAgentIds,
@@ -136,6 +142,9 @@ useAppStoreExport.getState = vi.fn(() => ({
   worktreesByRepo: appStoreSnapshot.worktreesByRepo,
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
   activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
+  groupsByWorktree: {},
+  tabSelectionByGroupId: {},
+  setTabSelection: vi.fn(),
   detectedAgentIds: appStoreSnapshot.detectedAgentIds,
   localDetectedAgentIdsByContext: appStoreSnapshot.localDetectedAgentIdsByContext,
   remoteDetectedAgentIds: appStoreSnapshot.remoteDetectedAgentIds,

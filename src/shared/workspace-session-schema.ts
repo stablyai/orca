@@ -21,6 +21,7 @@ import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { terminalTabIdSchema } from './terminal-tab-id-schema'
 import { terminalSurfaceTombstoneSchema } from './terminal-surface-tombstone-schema'
 import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
+import { tabClusterSchema } from './workspace-session-tab-cluster-schema'
 import { isTuiAgent } from './tui-agent-config'
 import { isWorkspaceKey } from './workspace-scope'
 import {
@@ -167,7 +168,8 @@ const tabGroupSchema = z.object({
   worktreeId: z.string(),
   activeTabId: z.string().nullable(),
   tabOrder: z.array(z.string()),
-  recentTabIds: z.array(z.string()).optional()
+  recentTabIds: z.array(z.string()).optional(),
+  tabClusters: z.array(tabClusterSchema).optional().catch(undefined)
 })
 
 const tabGroupSplitDirectionSchema = z.enum(['horizontal', 'vertical'])

@@ -1,6 +1,7 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from './tabs-layout'
 import { buildActiveSurfacePatch } from './tabs-surface'
+import { applyTransferredTabClusterMembership } from './tab-cluster-transfer'
 import {
   dedupeTabOrder,
   findGroupAndWorktree,
@@ -52,18 +53,28 @@ export function createTabsMoveActions(
           (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
           sourceOrder
         )
+        const pinnedTabIds = new Set(
+          (state.unifiedTabsByWorktree[worktreeId] ?? [])
+            .filter((candidate) => candidate.isPinned)
+            .map((candidate) => candidate.id)
+        )
         const nextGroups = (state.groupsByWorktree[worktreeId] ?? []).map((group) => {
           if (group.id === sourceGroup.id) {
-            return {
-              ...group,
-              activeTabId:
-                group.activeTabId === tabId
-                  ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
-                    pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
-                  : group.activeTabId,
-              tabOrder: sourceOrder,
-              recentTabIds: sourceRecentTabIds
-            }
+            return applyTransferredTabClusterMembership(
+              {
+                ...group,
+                activeTabId:
+                  group.activeTabId === tabId
+                    ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
+                      pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
+                    : group.activeTabId,
+                tabOrder: sourceOrder,
+                recentTabIds: sourceRecentTabIds
+              },
+              [tabId],
+              null,
+              pinnedTabIds
+            )
           }
           if (group.id === targetGroupId) {
             const sanitizedTargetRecent = sanitizeRecentTabIds(group.recentTabIds, targetOrder)

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { Tab, TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { Tab, TabCluster, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { createTestStore } from '../store/slices/store-test-helpers'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
 import {
   recordWebSessionBrowserPlacement,
@@ -293,6 +294,79 @@ describe('client-owned tab placement for paired worktrees', () => {
       HOST_GROUP,
       PREVIEW_GROUP
     ])
+  })
+
+  it('preserves client-local clusters and prunes vanished members across a host snapshot rebuild', () => {
+    const store = createTestStore()
+    const cluster: TabCluster = {
+      id: 'work',
+      name: 'Work',
+      color: 'blue',
+      collapsed: true,
+      tabIds: [T2, T3],
+      shownTabId: T2
+    }
+    store.setState(
+      splitClientState({
+        groupsByWorktree: {
+          [WT]: [
+            { id: HOST_GROUP, worktreeId: WT, activeTabId: T1, tabOrder: [T1] },
+            {
+              id: PREVIEW_GROUP,
+              worktreeId: WT,
+              activeTabId: T2,
+              tabOrder: [T2, T3],
+              tabClusters: [cluster]
+            }
+          ]
+        },
+        tabsByWorktree: {
+          [WT]: [
+            mirroredTerminalTab(T1, 'terminal-1', 0),
+            mirroredTerminalTab(T2, 'terminal-2', 1),
+            mirroredTerminalTab(T3, 'terminal-3', 2)
+          ]
+        },
+        unifiedTabsByWorktree: {
+          [WT]: [
+            terminalUnifiedTab(T1, HOST_GROUP, 0),
+            terminalUnifiedTab(T2, PREVIEW_GROUP, 1),
+            terminalUnifiedTab(T3, PREVIEW_GROUP, 2)
+          ]
+        }
+      })
+    )
+
+    store.setState((state) =>
+      applyWebSessionTabsSnapshot(
+        state,
+        makeSnapshot(
+          [
+            terminalSurface('host-tab-1', LEAF_ID, 'terminal-1', true),
+            terminalSurface('host-tab-2', SECOND_LEAF_ID, 'terminal-2')
+          ],
+          {
+            tabGroups: [
+              {
+                id: HOST_GROUP,
+                activeTabId: 'host-tab-1',
+                tabOrder: ['host-tab-2', 'host-tab-1']
+              }
+            ],
+            tabGroupLayout: { type: 'leaf', groupId: HOST_GROUP }
+          }
+        ),
+        ENV,
+        NOW
+      )
+    )
+
+    const next = store.getState()
+    const pane = groupById(next, PREVIEW_GROUP)
+    expect(pane?.tabOrder).toEqual([T2])
+    expect(pane?.tabClusters).toEqual([{ ...cluster, tabIds: [T2] }])
+    expect(next.unifiedTabsByWorktree[WT].find((tab) => tab.id === T2)?.groupId).toBe(PREVIEW_GROUP)
+    expect(next.layoutByWorktree[WT]).toEqual(SPLIT_LAYOUT)
   })
 
   it('adopts the host group order when the client holds no groups for the worktree', () => {

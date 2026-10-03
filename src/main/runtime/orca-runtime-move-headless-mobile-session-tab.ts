@@ -162,6 +162,9 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
+    const previousGroupsById = new Map(
+      (session.tabGroups?.[worktreeId] ?? []).map((group) => [group.id, group])
+    )
     this.setWorkspaceSessionForWorktree(worktreeId, {
       ...session,
       tabGroups: {
@@ -171,6 +174,9 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
           worktreeId,
           activeTabId: group.activeTabId,
           tabOrder: [...group.tabOrder],
+          ...(previousGroupsById.get(group.id)?.tabClusters
+            ? { tabClusters: previousGroupsById.get(group.id)?.tabClusters }
+            : {}),
           ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
         }))
       },

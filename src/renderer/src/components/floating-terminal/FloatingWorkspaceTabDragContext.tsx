@@ -1,7 +1,7 @@
 import { cloneElement } from 'react'
 import { DndContext, DragOverlay } from '@dnd-kit/core'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import TabDragPreview from '../tab-bar/TabDragPreview'
+import TabDragPreview from '../tab-group/TabDragPreview'
 import { TabDragProvider } from '../tab-group/tab-drag-context'
 import { useTabDragSplit, type HoveredTabInsertion } from '../tab-group/useTabDragSplit'
 

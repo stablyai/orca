@@ -112,6 +112,17 @@
   --color-workspace-status-progress: var(--workspace-status-progress);
   --color-tab-group-split-divider: var(--tab-group-split-divider);
   --color-tab-group-split-divider-strong: var(--tab-group-split-divider-strong);
+  --color-tab-cluster-grey: var(--tab-cluster-grey);
+  --color-tab-cluster-blue: var(--tab-cluster-blue);
+  --color-tab-cluster-red: var(--tab-cluster-red);
+  --color-tab-cluster-yellow: var(--tab-cluster-yellow);
+  --color-tab-cluster-green: var(--tab-cluster-green);
+  --color-tab-cluster-pink: var(--tab-cluster-pink);
+  --color-tab-cluster-purple: var(--tab-cluster-purple);
+  --color-tab-cluster-cyan: var(--tab-cluster-cyan);
+  --color-tab-cluster-orange: var(--tab-cluster-orange);
+  --color-tab-strip-selection-surface: var(--tab-strip-selection-surface);
+  --color-tab-strip-selection-ring: var(--tab-strip-selection-ring);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -258,6 +269,17 @@
      meet >=3:1 against `--card`, not only the hover/drag strong state. */
   --tab-group-split-divider: #868690;
   --tab-group-split-divider-strong: #71717a;
+  --tab-cluster-grey: var(--color-gray-500);
+  --tab-cluster-blue: var(--color-blue-600);
+  --tab-cluster-red: var(--color-red-600);
+  --tab-cluster-yellow: var(--color-yellow-600);
+  --tab-cluster-green: var(--color-green-600);
+  --tab-cluster-pink: var(--color-pink-600);
+  --tab-cluster-purple: var(--color-purple-600);
+  --tab-cluster-cyan: var(--color-cyan-600);
+  --tab-cluster-orange: var(--color-orange-600);
+  --tab-strip-selection-surface: color-mix(in srgb, var(--foreground) 12%, var(--background));
+  --tab-strip-selection-ring: color-mix(in srgb, var(--foreground) 35%, transparent);
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -375,6 +397,22 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;
+  --tab-cluster-grey: var(--color-gray-400);
+  --tab-cluster-blue: var(--color-blue-400);
+  --tab-cluster-red: var(--color-red-400);
+  --tab-cluster-yellow: var(--color-yellow-400);
+  --tab-cluster-green: var(--color-green-400);
+  --tab-cluster-pink: var(--color-pink-400);
+  --tab-cluster-purple: var(--color-purple-400);
+  --tab-cluster-cyan: var(--color-cyan-400);
+  --tab-cluster-orange: var(--color-orange-400);
+  --tab-strip-selection-surface: color-mix(in srgb, var(--foreground) 12%, var(--background));
+  --tab-strip-selection-ring: color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+
+.terminal-tab-strip [data-tab-highlighted='true'] {
+  background: var(--tab-strip-selection-surface);
+  box-shadow: inset 0 0 0 1px var(--tab-strip-selection-ring);
 }
 
 .plugin-security-chrome {

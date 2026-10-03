@@ -4,6 +4,7 @@ export type RecentlyClosedTabPosition = {
   tabBarIndex?: number
   groupId?: string
   groupIndex?: number
+  clusterId?: string
 }
 
 /** Reusable position lookup for one worktree. Bulk closes resolve a position per
@@ -53,6 +54,7 @@ export function createRecentlyClosedTabPositionIndex(
   const groupById = new Map<string, (typeof groups)[number]>()
   const tabOrderIndexByGroupId = new Map<string, Map<string, number>>()
   const groupOrderMatchesTabBarByGroupId = new Map<string, boolean>()
+  const clusterIdByTabIdByGroupId = new Map<string, Map<string, string>>()
   for (const group of groups) {
     if (groupById.has(group.id)) {
       continue
@@ -66,6 +68,15 @@ export function createRecentlyClosedTabPositionIndex(
       return tabById.get(tabId)?.entityId
     })
     tabOrderIndexByGroupId.set(group.id, indexByTabId)
+    const clusterIdByTabId = new Map<string, string>()
+    for (const cluster of group.tabClusters ?? []) {
+      for (const tabId of cluster.tabIds) {
+        if (!clusterIdByTabId.has(tabId)) {
+          clusterIdByTabId.set(tabId, cluster.id)
+        }
+      }
+    }
+    clusterIdByTabIdByGroupId.set(group.id, clusterIdByTabId)
     const tabBarGroupEntityIds = tabBarEntityIdsByGroupId.get(group.id) ?? []
     groupOrderMatchesTabBarByGroupId.set(
       group.id,
@@ -86,9 +97,14 @@ export function createRecentlyClosedTabPositionIndex(
       }
       const groupOrderMatchesTabBar =
         !group || (groupOrderMatchesTabBarByGroupId.get(group.id) ?? true)
+      const clusterId =
+        group && unifiedTab
+          ? clusterIdByTabIdByGroupId.get(group.id)?.get(unifiedTab.id)
+          : undefined
       return {
         ...(tabBarIndex >= 0 && groupOrderMatchesTabBar ? { tabBarIndex } : {}),
-        ...(group && groupIndex >= 0 ? { groupId: group.id, groupIndex } : {})
+        ...(group && groupIndex >= 0 ? { groupId: group.id, groupIndex } : {}),
+        ...(clusterId ? { clusterId } : {})
       }
     }
   }
@@ -124,6 +140,7 @@ export function restoreRecentlyClosedTabPosition(
     | 'unifiedTabsByWorktree'
     | 'setTabBarOrder'
     | 'reorderUnifiedTabs'
+    | 'moveTabsInStrip'
   >,
   worktreeId: string,
   entityId: string,
@@ -153,6 +170,21 @@ export function restoreRecentlyClosedTabPosition(
     (candidate) => candidate.id === unifiedTab.groupId
   )
   if (!group) {
+    return
+  }
+  const cluster = position.clusterId
+    ? group.tabClusters?.find((candidate) => candidate.id === position.clusterId)
+    : undefined
+  if (cluster) {
+    const remainingOrder = group.tabOrder.filter((tabId) => tabId !== unifiedTab.id)
+    const start = remainingOrder.indexOf(cluster.tabIds[0])
+    const end = remainingOrder.indexOf(cluster.tabIds.at(-1) ?? '') + 1
+    // A moved cluster still owns the reopened tab even when its old index is elsewhere.
+    const index = Math.max(start, Math.min(position.groupIndex, end))
+    getState().moveTabsInStrip(group.id, [unifiedTab.id], {
+      index,
+      clusterId: cluster.id
+    })
     return
   }
   if (typeof getState().reorderUnifiedTabs === 'function') {

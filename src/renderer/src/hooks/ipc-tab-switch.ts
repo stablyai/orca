@@ -7,6 +7,7 @@ import {
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
 import { sanitizeRecentTabIds } from '../store/slices/tab-group-state'
+import { getHiddenClusterTabIds } from '../store/slices/tabs/tab-cluster-model'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -22,23 +23,24 @@ type CycleContext = {
  * Returns null when there is no active worktree or the visible nav has at most
  * one tab (nothing to cycle).
  */
-function resolveCycleContext(): CycleContext | null {
+function resolveCycleContext(includeHidden = false): CycleContext | null {
   const store = useAppStore.getState()
   const worktreeId = store.activeWorktreeId
   if (!worktreeId) {
-    return null
-  }
-  // Why: walk the active group's visible order so drag-reordered tabs cycle
-  // in the sequence the user sees. See getActiveTabNavOrder for the stale
-  // legacy-order bug this replaces.
-  const allTabIds = getActiveTabNavOrder(store, worktreeId)
-  if (allTabIds.length <= 1) {
     return null
   }
   const activeGroupId = store.activeGroupIdByWorktree[worktreeId]
   const group = activeGroupId
     ? (store.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === activeGroupId)
     : undefined
+  const navTabs = getActiveTabNavOrder(store, worktreeId)
+  const hiddenTabIds = group && !includeHidden ? getHiddenClusterTabIds(group) : null
+  const allTabIds = hiddenTabIds?.size
+    ? navTabs.filter((entry) => !hiddenTabIds.has(entry.tabId ?? entry.id))
+    : navTabs
+  if (allTabIds.length <= 1) {
+    return null
+  }
   // Why: prefer the active group's unified tab id so split layouts disambiguate
   // which copy of a same-entity tab is focused. Match strictly against `tabId`
   // in that path; only fall back to backing-id matching when the group path
@@ -280,11 +282,11 @@ function shouldUseWorktreeTerminalFallback(
 }
 
 /**
- * Handle Ctrl+Tab MRU quick-toggle across every visible tab in the active group.
+ * Handle Ctrl+Tab MRU quick-toggle across every tab in the active group.
  * Returns true if a tab switch occurred, false otherwise.
  */
 export function handleSwitchRecentTab(): boolean {
-  const ctx = resolveCycleContext()
+  const ctx = resolveCycleContext(true)
   if (!ctx) {
     return false
   }
@@ -332,7 +334,7 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   const activeGroupNavTabs = getActiveTabNavOrder(store, worktreeId)
   const activeGroupTerminalTabs = activeGroupNavTabs.filter((entry) => entry.type === 'terminal')
   const worktreeTerminalTabs = getWorktreeTerminalTabOrder(store, worktreeId)
-  const terminalTabs = shouldUseWorktreeTerminalFallback(
+  const candidateTerminalTabs = shouldUseWorktreeTerminalFallback(
     store,
     worktreeId,
     activeGroupNavTabs,
@@ -341,6 +343,14 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   )
     ? worktreeTerminalTabs
     : activeGroupTerminalTabs
+  const groupId = store.activeGroupIdByWorktree?.[worktreeId]
+  const group = (store.groupsByWorktree?.[worktreeId] ?? []).find(
+    (candidate) => candidate.id === groupId
+  )
+  const hiddenTabIds = group ? getHiddenClusterTabIds(group) : null
+  const terminalTabs = hiddenTabIds?.size
+    ? candidateTerminalTabs.filter((entry) => !hiddenTabIds.has(entry.tabId ?? entry.id))
+    : candidateTerminalTabs
   if (terminalTabs.length === 0) {
     return false
   }
@@ -374,7 +384,6 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   if (next.id === store.activeTabId && store.activeTabType === 'terminal') {
     return false
   }
-  store.setActiveTab(next.id)
-  store.setActiveTabType('terminal', worktreeId)
+  activateCyclableTab(store, next)
   return true
 }

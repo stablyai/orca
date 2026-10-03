@@ -61,6 +61,7 @@ import {
   summarizeStateCollectionSizes
 } from '@/lib/renderer-memory-profile'
 import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
+import { installTabClusterInvariant } from './slices/tabs/tab-cluster-invariant'
 
 // Why dev-only: nothing in the app arms the churn probe, so a shipped build would
 // pay its wrapper frame on every write for a diagnostic it can never read. The
@@ -125,6 +126,8 @@ export const useAppStore = create<AppState>()(
     })
   )
 )
+
+installTabClusterInvariant(useAppStore)
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {

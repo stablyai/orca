@@ -1,6 +1,6 @@
-import { createElement, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
+import { Pin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { basename } from '@/lib/path'
@@ -8,7 +8,6 @@ import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
@@ -32,11 +31,18 @@ import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { cn } from '@/lib/utils'
+import type { TabStripInteractionProps } from './tab-strip-selection'
+import { TabClusterMemberIndicator } from './TabClusterMemberIndicator'
+import { EditorFileTabLeadingIcon } from './EditorFileTabLeadingIcon'
 
 export default function EditorFileTab({
   file,
   isActive,
   isPinned,
+  clusterColor,
+  isHighlighted = false,
+  onSelect,
   hasTabsToRight,
   hasTabsToLeft,
   tabCount,
@@ -52,7 +58,7 @@ export default function EditorFileTab({
   dragData,
   dropIndicator,
   includeTopTabBorder = true
-}: {
+}: TabStripInteractionProps & {
   file: OpenFile & { tabId?: string }
   isActive: boolean
   isPinned: boolean
@@ -74,7 +80,6 @@ export default function EditorFileTab({
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
-  const FileIcon = getFileTypeIcon(file.filePath)
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
@@ -85,10 +90,7 @@ export default function EditorFileTab({
     data: dragData
   })
 
-  const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
-  const isCheckDetails = file.mode === 'check-details'
-  const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   // Why: only deleted/renamed mean the file is gone from its path, which is
   // what strikethrough conveys. 'changed' keeps a normal label — its surface
   // is the changed-on-disk banner inside the editor.
@@ -223,7 +225,11 @@ export default function EditorFileTab({
   // Why: defer activation to pointer-up so dragging the tab (reorder / move into
   // another pane / split) does not switch the active tab mid-gesture.
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
-    onActivate,
+    onActivate: (modifiers) => {
+      if (!onSelect?.(modifiers)) {
+        onActivate()
+      }
+    },
     disabled: isRenaming
   })
   const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive)
@@ -234,14 +240,17 @@ export default function EditorFileTab({
       data-tab-id={file.tabId ?? file.id}
       data-active={isActive ? 'true' : 'false'}
       data-pinned={isPinned ? 'true' : 'false'}
+      data-tab-highlighted={isHighlighted ? 'true' : undefined}
       {...attributes}
       {...dragListeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={cn(
+        'group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none',
+        getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder }),
+        getDropIndicatorClasses(dropIndicator ?? null),
+        getTabRootStateClasses(isActive)
+      )}
       onPointerDown={(e) => {
-        onTabPointerDown(
-          e,
-          dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
-        )
+        onTabPointerDown(e, (event) => dragListeners?.onPointerDown?.(event))
       }}
       onDoubleClick={() => {
         if (isPreviewTab && onMakePermanent) {
@@ -266,27 +275,8 @@ export default function EditorFileTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-      {isConflictReview ? (
-        <ShieldAlert
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
-        />
-      ) : isCheckDetails ? (
-        <ListChecks
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isDiff ? (
-        <GitCompareArrows
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isMarkdownPreviewTab ? (
-        <Eye
-          className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : (
-        createElement(FileIcon, {
-          className: `w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
-        })
-      )}
+      {clusterColor ? <TabClusterMemberIndicator color={clusterColor} /> : null}
+      <EditorFileTabLeadingIcon filePath={file.filePath} mode={file.mode} isActive={isActive} />
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (

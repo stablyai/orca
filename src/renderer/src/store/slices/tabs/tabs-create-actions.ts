@@ -19,6 +19,7 @@ import {
 } from './tabs-tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
+import { getTabClusterForTab, normalizeTabGroupClusters } from './tab-cluster-model'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -112,6 +113,29 @@ export function createTabsCreateActions(
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent
+        const anchorCluster =
+          placement.anchorTabId && nextOrder.includes(placement.anchorTabId) && !created.isPinned
+            ? getTabClusterForTab(group.tabClusters, placement.anchorTabId)
+            : null
+        const nextGroup = normalizeTabGroupClusters(
+          {
+            ...group,
+            activeTabId: nextActiveTabId,
+            tabOrder: nextOrder,
+            recentTabIds: nextRecent,
+            tabClusters: anchorCluster
+              ? group.tabClusters?.map((cluster) =>
+                  cluster.id === anchorCluster.id
+                    ? { ...cluster, tabIds: [...cluster.tabIds, id] }
+                    : cluster
+                )
+              : group.tabClusters
+          },
+          new Set([
+            ...nextTabs.filter((tab) => tab.isPinned).map((tab) => tab.id),
+            ...(created.isPinned ? [id] : [])
+          ])
+        )
         return {
           unifiedTabsByWorktree: {
             ...state.unifiedTabsByWorktree,
@@ -119,12 +143,7 @@ export function createTabsCreateActions(
           },
           groupsByWorktree: {
             ...groupsByWorktree,
-            [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
-              ...group,
-              activeTabId: nextActiveTabId,
-              tabOrder: nextOrder,
-              recentTabIds: nextRecent
-            })
+            [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], nextGroup)
           },
           activeGroupIdByWorktree,
           layoutByWorktree: {

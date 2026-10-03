@@ -5,6 +5,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constant
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import { buildOwnedEditorFileId, runtimeOwnerKey } from './editor-file-ids'
+import { rekeyTabClusterMembers } from '../../tabs/tab-cluster-model'
 
 export function shouldHydrateWithOwnedEditorFileId(
   worktreeId: string,
@@ -184,20 +185,28 @@ export function migrateHydratedEditorTabsAndGroups(
             validTabIds
           )
         : group.recentTabIds
+      const tabClusters = rekeyTabClusterMembers(group.tabClusters, tabIdMigrations)
       if (
         validActiveTabId === group.activeTabId &&
         areStringArraysEqual(tabOrder, group.tabOrder) &&
-        areStringArraysEqual(recentTabIds, group.recentTabIds)
+        areStringArraysEqual(recentTabIds, group.recentTabIds) &&
+        tabClusters === group.tabClusters
       ) {
         return group
       }
       groupsChanged = true
-      return {
+      const nextGroup = {
         ...group,
         activeTabId: validActiveTabId,
         tabOrder,
         recentTabIds
       }
+      if (tabClusters) {
+        nextGroup.tabClusters = tabClusters
+      } else {
+        delete nextGroup.tabClusters
+      }
+      return nextGroup
     })
   }
 

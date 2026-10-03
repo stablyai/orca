@@ -9,6 +9,8 @@ import { useTabBarItemProjection } from './use-tab-bar-item-projection'
 import { renderTabBarSurface } from './tab-bar-surface'
 import { useTabBarItemActions } from './use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { useAppStore } from '@/store'
+import { useTabBarClusterInteractions } from './use-tab-bar-cluster-interactions'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const {
@@ -24,6 +26,11 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onPinFile
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
+  const group = useAppStore(
+    (state) =>
+      state.groupsByWorktree[worktreeId]?.find((item) => item.id === runtime.resolvedGroupId) ??
+      null
+  )
   const createMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -51,7 +58,16 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     unifiedTabs: runtime.unifiedTabs,
     unifiedTabByVisibleId: runtime.unifiedTabByVisibleId,
     generatedTabTitlesEnabled: runtime.generatedTabTitlesEnabled,
-    statusByRelativePath: runtime.statusByRelativePath
+    statusByRelativePath: runtime.statusByRelativePath,
+    group
+  })
+  const clusterInteractions = useTabBarClusterInteractions({
+    props,
+    groupId: runtime.resolvedGroupId,
+    group,
+    allItems: itemProjection.orderedItems,
+    visibleItems: itemProjection.visibleItems,
+    activeVisibleTabId: itemProjection.activeVisibleTabId
   })
   const togglePinned = (item: TabBarItem): void => {
     // pinTab/unpinTab mirror the change to the host for remote-server tabs.
@@ -68,7 +84,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   const itemActions = useTabBarItemActions({
     props,
     togglePinned,
-    toggleTabViewMode: runtime.toggleTabViewMode
+    toggleTabViewMode: runtime.toggleTabViewMode,
+    selectTab: clusterInteractions.selectTab
   })
   // Read here, not just where the rows render: the real tabs have to know when a row took over.
   const activeClientHostedBrowserRowId = useActiveClientHostedBrowserRowId({
@@ -95,6 +112,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     runtime,
     createMenu,
     itemProjection,
+    clusterInteractions,
     tabStripNavigation,
     tabStripDragScroll,
     activeClientHostedBrowserRowId,

@@ -3,10 +3,11 @@
  */
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import type { DragMoveEvent } from '@dnd-kit/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
-import type { TabDragItemData } from './useTabDragSplit'
+import type { TabClusterDragItemData, TabDragItemData } from './useTabDragSplit'
 import { shouldActivateTabDragFromDistanceSample } from './tab-drag-pointer-sensor'
 import {
   canDropTabForPaneColumnSplit,
@@ -120,6 +121,7 @@ function renderDragHook(
 beforeEach(() => {
   useAppStore.setState({
     activeWorktreeId: WT,
+    activeWorkspaceExecutionHostId: null,
     activeGroupIdByWorktree: { [WT]: 'group-1' },
     groupsByWorktree: {
       [WT]: [makeGroup('group-1', ['tab-1', 'tab-3']), makeGroup('group-2', ['tab-2'])]
@@ -271,6 +273,85 @@ describe('canDropTabIntoPaneBody', () => {
 })
 
 describe('useTabDragSplit', () => {
+  it.each(['strip', 'edge', 'mirrored-edge'])('handles a collapsed chip drag over %s', (target) => {
+    const groups = useAppStore.getState().groupsByWorktree[WT]
+    useAppStore.setState({
+      activeWorkspaceExecutionHostId: target === 'mirrored-edge' ? 'runtime:remote' : null,
+      groupsByWorktree: {
+        [WT]: groups.map((group) =>
+          group.id === 'group-1'
+            ? {
+                ...group,
+                tabClusters: [
+                  {
+                    id: 'cluster-1',
+                    name: 'Research',
+                    color: 'blue',
+                    collapsed: true,
+                    tabIds: ['tab-1', 'tab-3']
+                  }
+                ]
+              }
+            : group
+        )
+      }
+    })
+    addPanelGeometry('group-2', new DOMRect(500, 0, 400, 600), new DOMRect(500, 32, 400, 568))
+    const activeData: TabClusterDragItemData = {
+      kind: 'tab-cluster',
+      worktreeId: WT,
+      groupId: 'group-1',
+      clusterId: 'cluster-1',
+      name: 'Research',
+      color: 'blue',
+      collapsed: true
+    }
+    const event: DragMoveEvent = {
+      active: {
+        id: 'tab-cluster:group-1:cluster-1',
+        data: { current: activeData },
+        rect: { current: { initial: null, translated: null } }
+      },
+      over:
+        target !== 'edge'
+          ? {
+              id: 'tab-2',
+              data: { current: makeDragData('group-2', 'tab-2') },
+              rect: new DOMRect(500, 0, 100, 32),
+              disabled: false
+            }
+          : null,
+      collisions: [],
+      delta: { x: 0, y: 0 },
+      activatorEvent: new MouseEvent('pointerdown', {
+        clientX: target === 'strip' ? 580 : 880,
+        clientY: target === 'strip' ? 10 : 300
+      })
+    }
+    const onRender = vi.fn()
+    const drag = renderDragHook(onRender)
+    act(() => drag.onDragStart(event))
+    act(() => drag.onDragMove(event))
+    expect(onRender.mock.lastCall?.[0].activeDrag).toEqual(activeData)
+    if (target === 'strip') {
+      expect(onRender.mock.lastCall?.[0].hoveredTabInsertion).toEqual({
+        groupId: 'group-2',
+        visibleTabId: 'tab-2',
+        side: 'right'
+      })
+    } else if (target === 'mirrored-edge') {
+      expect(onRender.mock.lastCall?.[0].hoveredDropTarget).toBeNull()
+      expect(onRender.mock.lastCall?.[0].hoveredTabInsertion).toBeNull()
+    } else {
+      expect(onRender.mock.lastCall?.[0].hoveredDropTarget).toMatchObject({
+        groupId: 'group-2',
+        zone: 'right'
+      })
+    }
+    act(() => drag.onDragCancel())
+    expect(onRender.mock.lastCall?.[0].activeDrag).toBeNull()
+  })
+
   it('keeps the drag sensors across re-renders until enablement changes', () => {
     const sensorsByRender: ReturnType<typeof useTabDragSplit>['sensors'][] = []
     function Probe({ enabled }: { enabled: boolean }): null {

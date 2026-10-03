@@ -1,7 +1,15 @@
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { findGroupAndWorktree, findTabAndWorktree } from '../tab-group-state'
-import { findSiblingGroupId, updateSplitRatio } from './tabs-layout'
+import {
+  dedupeTabOrder,
+  findGroupAndWorktree,
+  findTabAndWorktree,
+  sanitizeRecentTabIds
+} from '../tab-group-state'
+import { collapseGroupLayout, findSiblingGroupId, updateSplitRatio } from './tabs-layout'
+import { mergeTabClusterRecords, normalizeTabGroupClusters } from './tab-cluster-model'
+import { applyTabOrderSortValues } from './tabs-tab-order'
+import { buildActiveSurfacePatch } from './tabs-surface'
 
 export function createTabsSecondaryActions(
   set: TabsSliceSet,
@@ -30,31 +38,88 @@ export function createTabsSecondaryActions(
     },
 
     mergeGroupIntoSibling: (worktreeId, groupId) => {
-      const state = get()
-      const groups = state.groupsByWorktree[worktreeId] ?? []
-      const sourceGroup = groups.find((candidate) => candidate.id === groupId)
-      const layout = state.layoutByWorktree[worktreeId]
-      if (!sourceGroup || !layout || groups.length <= 1) {
-        return null
-      }
-      const targetGroupId = findSiblingGroupId(layout, groupId)
-      if (!targetGroupId) {
-        return null
-      }
-
-      const orderedSourceTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-        (tab) => tab.groupId === groupId
-      )
-      for (const tabId of sourceGroup.tabOrder) {
-        const item = orderedSourceTabs.find((tab) => tab.id === tabId)
-        if (!item) {
-          continue
+      let mergedInto: string | null = null
+      set((state) => {
+        const groups = state.groupsByWorktree[worktreeId] ?? []
+        const sourceGroup = groups.find((candidate) => candidate.id === groupId)
+        const layout = state.layoutByWorktree[worktreeId]
+        if (!sourceGroup || !layout || groups.length <= 1) {
+          return state
         }
-        get().moveUnifiedTabToGroup(item.id, targetGroupId, { recordInteraction: false })
+        const targetGroupId = findSiblingGroupId(layout, groupId)
+        const targetGroup = groups.find((candidate) => candidate.id === targetGroupId)
+        if (!targetGroup) {
+          return state
+        }
+        const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+        const sourceTabs = tabs.filter((tab) => tab.groupId === groupId)
+        const sourceIds = new Set(sourceTabs.map((tab) => tab.id))
+        const sourceOrder = dedupeTabOrder([
+          ...sourceGroup.tabOrder.filter((id) => sourceIds.has(id)),
+          ...sourceTabs.map((tab) => tab.id)
+        ])
+        const pinnedTabIds = new Set(tabs.filter((tab) => tab.isPinned).map((tab) => tab.id))
+        const combinedOrder = dedupeTabOrder([...targetGroup.tabOrder, ...sourceOrder])
+        const tabOrder = [
+          ...combinedOrder.filter((id) => pinnedTabIds.has(id)),
+          ...combinedOrder.filter((id) => !pinnedTabIds.has(id))
+        ]
+        const activeTabId =
+          targetGroup.activeTabId ?? sourceGroup.activeTabId ?? tabOrder[0] ?? null
+        const merged = normalizeTabGroupClusters(
+          {
+            ...targetGroup,
+            tabOrder,
+            activeTabId,
+            recentTabIds: sanitizeRecentTabIds(
+              [...(sourceGroup.recentTabIds ?? []), ...(targetGroup.recentTabIds ?? [])],
+              tabOrder
+            ),
+            tabClusters: mergeTabClusterRecords(targetGroup.tabClusters, sourceGroup.tabClusters)
+          },
+          pinnedTabIds
+        )
+        const groupsByWorktree = {
+          ...state.groupsByWorktree,
+          [worktreeId]: groups
+            .filter((group) => group.id !== groupId)
+            .map((group) => (group.id === targetGroup.id ? merged : group))
+        }
+        const unifiedTabsByWorktree = {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: applyTabOrderSortValues(
+            tabs.map((tab) => (sourceIds.has(tab.id) ? { ...tab, groupId: targetGroup.id } : tab)),
+            tabOrder
+          )
+        }
+        const collapsed = collapseGroupLayout(
+          state.layoutByWorktree,
+          state.activeGroupIdByWorktree,
+          worktreeId,
+          groupId,
+          targetGroup.id
+        )
+        const recentQuickCommandIdByGroup = { ...state.recentQuickCommandIdByGroup }
+        delete recentQuickCommandIdByGroup[groupId]
+        const patch = {
+          groupsByWorktree,
+          unifiedTabsByWorktree,
+          ...collapsed,
+          recentQuickCommandIdByGroup
+        }
+        mergedInto = targetGroup.id
+        return {
+          ...patch,
+          ...(state.activeWorktreeId === worktreeId
+            ? buildActiveSurfacePatch({ ...state, ...patch }, worktreeId, targetGroup.id)
+            : {})
+        }
+      })
+      if (!mergedInto) {
+        return null
       }
-      get().closeEmptyGroup(worktreeId, groupId)
       get().recordFeatureInteraction?.('terminal-panes')
-      return targetGroupId
+      return mergedInto
     },
 
     setTabGroupSplitRatio: (worktreeId, nodePath, ratio) => {

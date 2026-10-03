@@ -2504,7 +2504,13 @@
           "CloseTerminalDialog": {
             "6b9a6975f8": "The terminal still has a running process. If you close the terminal, the process will be killed.",
             "78b79d854d": "Close Terminal?",
-            "ebd2fa844d": "Close"
+            "ebd2fa844d": "Close",
+            "stop_group_description_one": "Closing this group will stop {{count}} running terminal.",
+            "stop_group_description_other": "Closing this group will stop {{count}} running terminals."
+          },
+          "CloseTerminalGroupList": {
+            "show_terminals_one": "Show {{count}} running terminal",
+            "show_terminals_other": "Show {{count}} running terminals"
           },
           "MobileDriverOverlay": {
             "3eed73394f": "Your keyboard is paused"
@@ -2893,6 +2899,19 @@
           "reviewStatus": "See issue state, review status, and CI checks on every worktree",
           "startWorkspaceFromIssue": "Start a workspace from any GitHub issue or pull request, prefilled with its title and context"
         }
+      }
+    },
+    "tabCluster": {
+      "colors": {
+        "blue": "Blue",
+        "cyan": "Cyan",
+        "green": "Green",
+        "grey": "Grey",
+        "orange": "Orange",
+        "pink": "Pink",
+        "purple": "Purple",
+        "red": "Red",
+        "yellow": "Yellow"
       }
     },
     "workspace": {

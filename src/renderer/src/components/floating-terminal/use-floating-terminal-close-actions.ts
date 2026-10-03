@@ -35,7 +35,7 @@ export function useFloatingTerminalCloseActions({
   queueEditorCloseRequests
 }: FloatingTerminalCloseActionsInput) {
   const closeFloatingItems = useCallback(
-    (visibleIds: string[]) => {
+    (visibleIds: string[], terminalCloseReason: 'user' | 'cleanup' = 'cleanup') => {
       const state = useAppStore.getState()
       const currentGroupTabs = activeGroup
         ? (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
@@ -51,7 +51,11 @@ export function useFloatingTerminalCloseActions({
       const dirtyEditorFileIds: string[] = []
       for (const item of items) {
         if (item.contentType === 'terminal') {
-          closeTab(item.entityId, { reason: 'cleanup' })
+          if (terminalCloseReason === 'user') {
+            closeTerminalTab(item.entityId, { reason: 'user', skipRunningProcessConfirm: true })
+          } else {
+            closeTab(item.entityId, { reason: 'cleanup' })
+          }
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
@@ -71,6 +75,11 @@ export function useFloatingTerminalCloseActions({
       }
     },
     [activeGroup, closeBrowserTab, closeFile, closeTab, closeUnifiedTab, queueEditorCloseRequests]
+  )
+
+  const closeFloatingClusterConfirmed = useCallback(
+    (visibleIds: string[]) => closeFloatingItems(visibleIds, 'user'),
+    [closeFloatingItems]
   )
 
   const closeFloatingItemConfirmed = useCallback(
@@ -214,6 +223,7 @@ export function useFloatingTerminalCloseActions({
 
   return {
     closeFloatingItemConfirmed,
+    closeFloatingClusterConfirmed,
     closeOthers,
     closeToRight,
     closeToLeft,

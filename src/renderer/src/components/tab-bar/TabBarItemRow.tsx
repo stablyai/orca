@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { shallow } from 'zustand/shallow'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { TabClusterColor } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
@@ -13,6 +14,7 @@ import type { DropIndicator } from './drop-indicator'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { getTabDragLabel, resolveTerminalItemTab, type TabBarItem } from './tab-bar-item-model'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
+import type { TabStripActivationModifiers } from './tab-strip-selection'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.
 type TabBarItemRowProps = {
@@ -35,6 +37,9 @@ type TabBarItemRowProps = {
   canDuplicate: boolean
   /** This editor tab's own status, so a git status write re-renders only the tabs it changed. */
   gitStatus: GitFileStatus | null
+  /** Color of the tab group this tab belongs to, if any. */
+  clusterColor: TabClusterColor | undefined
+  isHighlighted: boolean
 }
 
 function TabBarItemRow({
@@ -54,7 +59,9 @@ function TabBarItemRow({
   isChatView,
   viewModeTabId,
   canDuplicate,
-  gitStatus
+  gitStatus,
+  clusterColor,
+  isHighlighted
 }: TabBarItemRowProps): React.JSX.Element {
   // Why: the tabs' labels come from `translate()`, which a skipped render would leave in the old language.
   useTranslation()
@@ -75,6 +82,10 @@ function TabBarItemRow({
     hasTabsToRight,
     hasTabsToLeft,
     tabCount,
+    clusterColor,
+    isHighlighted,
+    onSelect: (modifiers: TabStripActivationModifiers) =>
+      actions.selectTab(item.unifiedTabId, modifiers),
     onTogglePin: () => actions.togglePinned(item),
     dragData,
     dropIndicator,

@@ -1,4 +1,4 @@
-import type { TabGroup } from '../../../../shared/tab-types'
+import type { TabClusterColor, TabGroup } from '../../../../shared/tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TabSplitDirection } from '../../store/slices/tabs'
 
@@ -23,13 +23,40 @@ export type TabPaneDropData = {
   groupId: string
 }
 
+/** Sortable data of a tab-cluster chip; dragging it moves every member. */
+export type TabClusterDragItemData = {
+  kind: 'tab-cluster'
+  worktreeId: string
+  groupId: string
+  clusterId: string
+  name: string
+  color: TabClusterColor
+  collapsed: boolean
+}
+
+export type TabStripDragItemData = TabDragItemData | TabClusterDragItemData
+
+export function getTabClusterSortableId(groupId: string, clusterId: string): string {
+  return `tab-cluster:${groupId}:${clusterId}`
+}
+
+export function isTabClusterDragData(value: unknown): value is TabClusterDragItemData {
+  return (
+    value !== null && typeof value === 'object' && 'kind' in value && value.kind === 'tab-cluster'
+  )
+}
+
+export function isTabStripDragData(value: unknown): value is TabStripDragItemData {
+  return isTabDragData(value) || isTabClusterDragData(value)
+}
+
 export function canDropTabIntoPaneBody({
   activeDrag,
   groupsByWorktree,
   overGroupId,
   worktreeId
 }: {
-  activeDrag: TabDragItemData | null
+  activeDrag: TabStripDragItemData | null
   groupsByWorktree: Record<string, TabGroup[]>
   overGroupId: string
   worktreeId: string
@@ -43,15 +70,26 @@ export function canDropTabIntoPaneBody({
     return false
   }
 
+  if (isTabClusterDragData(activeDrag)) {
+    const sourceGroup = (groupsByWorktree[worktreeId] ?? []).find(
+      (group) => group.id === activeDrag.groupId
+    )
+    const cluster = sourceGroup?.tabClusters?.find((item) => item.id === activeDrag.clusterId)
+    return Boolean(
+      cluster?.tabIds.length &&
+      (activeDrag.groupId !== overGroupId ||
+        overGroup.tabOrder.some((id) => !cluster.tabIds.includes(id)))
+    )
+  }
   return activeDrag.groupId !== overGroupId || overGroup.tabOrder.length > 1
 }
 
 export function isTabDragData(value: unknown): value is TabDragItemData {
-  return Boolean(value) && typeof value === 'object' && (value as TabDragItemData).kind === 'tab'
+  return value !== null && typeof value === 'object' && 'kind' in value && value.kind === 'tab'
 }
 
 export function isPaneDropData(value: unknown): value is TabPaneDropData {
   return (
-    Boolean(value) && typeof value === 'object' && (value as TabPaneDropData).kind === 'pane-body'
+    value !== null && typeof value === 'object' && 'kind' in value && value.kind === 'pane-body'
   )
 }

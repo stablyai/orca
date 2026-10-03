@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useAppStore } from '@/store'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import CloseTerminalDialog from './CloseTerminalDialog'
@@ -21,12 +22,24 @@ export default function RunningTerminalCloseDialog(): React.JSX.Element {
   // Why: this queue is async (it opens after a probe) while the pinned queue is synchronous,
   // so both can be pending at once. Wait rather than stack two modal overlays and focus traps.
   const pinnedRequest = useAppStore((state) => state.pinnedTabCloseConfirm)
+  // Why: the dialog stays mounted while it fades out; without the last request its copy
+  // flips to the single-terminal default mid-animation.
+  const [lastRequest, setLastRequest] = useState(request)
+  if (request !== null && request !== lastRequest) {
+    setLastRequest(request)
+  }
+  const shown = request ?? lastRequest
 
   return (
     <CloseTerminalDialog
       open={request !== null && pinnedRequest === null}
-      copyKind={request?.copyKind ?? 'command'}
-      {...(request?.tabLabel ? { tabLabel: request.tabLabel } : {})}
+      copyKind={shown?.copyKind ?? 'command'}
+      tabLabel={shown?.tabLabel ?? ''}
+      terminals={shown?.groupTerminals?.map((terminal) => ({
+        key: terminal.terminalTabId,
+        label: terminal.tabLabel,
+        copyKind: terminal.copyKind
+      }))}
       // Why: a queued request swaps tabs in the already-open dialog, so the reopen reset
       // never runs; naming the subject is what clears the previous tab's opt-out tick.
       {...(request ? { subjectKey: request.terminalTabId } : {})}

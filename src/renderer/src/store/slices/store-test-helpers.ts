@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import type { AppState } from '../types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -52,6 +52,7 @@ import { createTaskCreationDraftsSlice } from './task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-hosts'
 import { translate } from '@/i18n/i18n'
+import { installTabClusterInvariant } from './tabs/tab-cluster-invariant'
 
 export const TEST_REPO = {
   id: 'repo1',
@@ -61,8 +62,10 @@ export const TEST_REPO = {
   addedAt: 0
 }
 
-export function createTestStore() {
-  return create<AppState>()((...a) => ({
+export type TestStore = UseBoundStore<StoreApi<AppState>>
+
+export function createTestStore(): TestStore {
+  const store = create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
     ...createSparsePresetsSlice(...a),
     ...createWorktreeSlice(...a),
@@ -109,12 +112,11 @@ export function createTestStore() {
     ...createRemoteServerUpdatesSlice(...a),
     ...createTerminalQuickCommandHostsSlice(...a)
   }))
+  installTabClusterInvariant(store)
+  return store
 }
 
-export function seedStore(
-  store: ReturnType<typeof createTestStore>,
-  state: Partial<AppState>
-): void {
+export function seedStore(store: TestStore, state: Partial<AppState>): void {
   // The cascade tests intentionally centralize the default repo fixture here
   // so the test files can stay under the enforced max-lines limit without
   // disabling the lint rule and hiding further growth.

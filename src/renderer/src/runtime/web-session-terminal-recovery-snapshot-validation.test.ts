@@ -190,6 +190,15 @@ describe('terminal recovery session-tabs snapshot validation', () => {
     await expectBoundaryVerdict(snapshot(), true)
   })
 
+  it('tolerates additive client-local cluster metadata on a pane without changing recovery', async () => {
+    await expectBoundaryVerdict(
+      withField(fullSnapshot, 'tabGroups.0.tabClusters', [
+        { id: 'work', name: 'Work', color: 'blue', collapsed: true, tabIds: ['host-tab'] }
+      ]),
+      true
+    )
+  })
+
   it.each(Object.keys(snapshot()))(
     'rejects a missing or mistyped required %s field',
     async (key) => {

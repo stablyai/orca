@@ -1,9 +1,7 @@
 import type { TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
-import {
-  pickNextActiveTab,
-  pushRecentTabId,
-  sanitizeRecentTabIds
-} from '../store/slices/tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from '../store/slices/tab-group-state'
+import { rekeyTabClusterMembers } from '../store/slices/tabs/tab-cluster-model'
+import { pickTabCloseSuccessor } from '../store/slices/tabs/tab-close-successor'
 
 /** A snapshot tab the client has not placed yet, plus the group it should join. */
 export type ClientOwnedAdoptedTab = {
@@ -107,8 +105,12 @@ export function reconcileClientOwnedTabPlacement(
             ...group,
             tabOrder: group.tabOrder.map(rekeyTabId),
             activeTabId: group.activeTabId ? rekeyTabId(group.activeTabId) : group.activeTabId,
-            recentTabIds: (group.recentTabIds ?? []).map(rekeyTabId)
+            recentTabIds: (group.recentTabIds ?? []).map(rekeyTabId),
+            tabClusters: rekeyTabClusterMembers(group.tabClusters, input.rekeyedTabIds)
           }
+    if (rekeyed !== group && !rekeyed.tabClusters) {
+      delete rekeyed.tabClusters
+    }
     working.set(group.id, {
       group: rekeyed,
       tabOrder: rekeyed.tabOrder.filter((tabId) => input.validUnifiedTabIds.has(tabId))
@@ -207,9 +209,7 @@ export function reconcileClientOwnedTabPlacement(
     const activeTabId =
       intentActive ??
       (displacedActive && repairOrder
-        ? (pickNextActiveTab(repairOrder, group.recentTabIds, displacedActive) ??
-          tabOrder[0] ??
-          null)
+        ? (pickTabCloseSuccessor(group, repairOrder, displacedActive) ?? tabOrder[0] ?? null)
         : (group.activeTabId ?? tabOrder[0] ?? null))
     const validActiveTabId =
       activeTabId && tabOrder.includes(activeTabId) ? activeTabId : (tabOrder[0] ?? null)

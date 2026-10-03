@@ -30,19 +30,29 @@ export function nextActiveIdAfterRemoval(
   return recent ?? ids.find((id) => !removedIds.has(id)) ?? null
 }
 
-/** Strip `removedIds` from a group's order, MRU stack and active id; returns the
- * same object when the group never referenced them. */
+/** Removed tabs cannot retain membership in the pane's clusters. */
 export function removeTabIdsFromGroup(group: TabGroup, removedIds: ReadonlySet<string>): TabGroup {
   const recentTabIds = group.recentTabIds ?? []
+  const removesClusterMembers =
+    group.tabClusters?.some((cluster) => cluster.tabIds.some((id) => removedIds.has(id))) ?? false
   const references =
     group.tabOrder.some((id) => removedIds.has(id)) ||
     recentTabIds.some((id) => removedIds.has(id)) ||
-    (group.activeTabId !== null && removedIds.has(group.activeTabId))
+    (group.activeTabId !== null && removedIds.has(group.activeTabId)) ||
+    removesClusterMembers
   if (!references) {
     return group
   }
   const tabOrder = group.tabOrder.filter((id) => !removedIds.has(id))
-  return {
+  const tabClusters = removesClusterMembers
+    ? group.tabClusters?.flatMap((cluster) => {
+        const tabIds = cluster.tabIds.filter((id) => !removedIds.has(id))
+        return tabIds.length > 0
+          ? [tabIds.length === cluster.tabIds.length ? cluster : { ...cluster, tabIds }]
+          : []
+      })
+    : group.tabClusters
+  const nextGroup = {
     ...group,
     activeTabId:
       group.activeTabId !== null && removedIds.has(group.activeTabId)
@@ -51,6 +61,12 @@ export function removeTabIdsFromGroup(group: TabGroup, removedIds: ReadonlySet<s
     tabOrder,
     recentTabIds: sanitizeRecentTabIds(recentTabIds, tabOrder)
   }
+  if (tabClusters?.length) {
+    nextGroup.tabClusters = tabClusters
+  } else {
+    delete nextGroup.tabClusters
+  }
+  return nextGroup
 }
 
 export function removeEmptyEditorGroups(

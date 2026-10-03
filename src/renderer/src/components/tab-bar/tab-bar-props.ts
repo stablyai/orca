@@ -14,6 +14,8 @@ export type TabBarProps = {
   expandedPaneByTabId: Record<string, boolean>
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
+  /** Closes unified tabs after group confirmation, retaining dirty-editor save prompts. */
+  onCloseTabs?: (tabIds: string[]) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void

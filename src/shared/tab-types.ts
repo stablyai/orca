@@ -79,6 +79,33 @@ export type Tab = {
   lastFocusedAt?: number
 }
 
+// ─── Tab Cluster ────────────────────────────────────────────────────
+// Why: Chrome-style named group inside ONE pane's strip; "TabGroup" already means a split pane.
+export const TAB_CLUSTER_COLORS = [
+  'grey',
+  'blue',
+  'red',
+  'yellow',
+  'green',
+  'pink',
+  'purple',
+  'cyan',
+  'orange'
+] as const
+export type TabClusterColor = (typeof TAB_CLUSTER_COLORS)[number]
+
+export type TabCluster = {
+  id: string
+  /** Empty string renders a color-only chip. */
+  name: string
+  color: TabClusterColor
+  collapsed: boolean
+  /** Member unified tab ids: unpinned, present in the pane, contiguous and in pane tabOrder order. */
+  tabIds: string[]
+  /** While collapsed: the member that was active when the group collapsed, kept visible after you leave it. */
+  shownTabId?: string
+}
+
 export type TabGroup = {
   id: string
   worktreeId: string
@@ -91,4 +118,6 @@ export type TabGroup = {
    *  sessions persisted before this field was added still hydrate cleanly —
    *  hydration seeds from activeTabId. */
   recentTabIds?: string[]
+  /** Named, collapsible tab clusters within this pane's strip. Absent when the pane has none. */
+  tabClusters?: TabCluster[]
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
 import { beginTabStripPointerGesture } from './tab-strip-pointer-gesture'
+import type { TabStripActivationModifiers } from './tab-strip-selection'
 
 /**
  * Defer tab activation to pointer-up and suppress it when the press turns into a
@@ -26,7 +27,7 @@ export function useTabStripPointerActivation({
   onActivate,
   disabled = false
 }: {
-  onActivate: () => void
+  onActivate: (modifiers: TabStripActivationModifiers) => void
   disabled?: boolean
 }): {
   onPointerDown: (
@@ -55,6 +56,11 @@ export function useTabStripPointerActivation({
       cleanupRef.current?.()
       const startX = event.clientX
       const startY = event.clientY
+      const modifiers: TabStripActivationModifiers = {
+        metaKey: event.metaKey === true,
+        ctrlKey: event.ctrlKey === true,
+        shiftKey: event.shiftKey === true
+      }
       const releaseTabStripPointerGesture = beginTabStripPointerGesture()
       // Why a press that starts under a guest forgives one window focus: an in-page <webview>
       // holding the keyboard leaves the embedder blurred, so this very press is what pulls focus
@@ -77,7 +83,7 @@ export function useTabStripPointerActivation({
         // Why: packaged Chromium can deliver a stale first pointermove after
         // focus; the final release position is the click/drag authority.
         if (!wasDrag) {
-          onActivateRef.current()
+          onActivateRef.current(modifiers)
         }
       }
       const onPointerCancel = (): void => {

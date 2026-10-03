@@ -86,14 +86,11 @@ describe('RunningTerminalCloseDialog', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('names the tab so a background close is not ambiguous', async () => {
+  it('confirms a running-terminal close without opting out', async () => {
     const onConfirm = vi.fn()
     const updateSettings = vi.fn().mockResolvedValue(undefined)
 
     await renderDialog({ onConfirm }, updateSettings)
-
-    expect(document.body.textContent).toContain('Stop running command?')
-    expect(document.body.textContent).toContain('dev server')
 
     await act(async () => {
       getButton('Stop and Close').click()
@@ -101,18 +98,6 @@ describe('RunningTerminalCloseDialog', () => {
 
     expect(updateSettings).not.toHaveBeenCalled()
     expect(onConfirm).toHaveBeenCalledTimes(1)
-  })
-
-  it('uses the agent copy for an agent pane', async () => {
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-
-    await renderDialog({ onConfirm: vi.fn(), copyKind: 'agent' }, updateSettings)
-
-    expect(document.body.textContent).toContain('Stop this agent?')
-    expect(document.body.textContent).toContain(
-      'This terminal will not resume automatically. Cancel and put the workspace to sleep to resume it later.'
-    )
-    expect(getButton('Stop Agent')).toBeTruthy()
   })
 
   // Why: this queue opens after an async probe while the pinned queue opens synchronously,
@@ -125,13 +110,13 @@ describe('RunningTerminalCloseDialog', () => {
 
     await renderDialog({ onConfirm: vi.fn() }, updateSettings)
 
-    expect(document.body.textContent).not.toContain('Stop running command?')
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
 
     await act(async () => {
       useAppStore.setState({ pinnedTabCloseConfirm: null })
     })
 
-    expect(document.body.textContent).toContain('Stop running command?')
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
   })
 
   it('does not carry the opt-out tick over to the next queued tab', async () => {
@@ -228,4 +213,51 @@ describe('RunningTerminalCloseDialog', () => {
 
     expect(nextOnConfirm).toHaveBeenCalledTimes(1)
   })
+
+  it.each(['confirm', 'cancel'] as const)(
+    'keeps a group close atomic when the user chooses %s',
+    async (decision) => {
+      const onConfirm = vi.fn()
+      const onCancel = vi.fn()
+      const updateSettings = vi.fn().mockResolvedValue(undefined)
+
+      await renderDialog(
+        {
+          terminalTabId: 'tab-cluster:development',
+          tabLabel: 'Development',
+          copyKind: 'agent',
+          groupTerminals: [
+            { terminalTabId: 'build', tabLabel: 'Build watcher', copyKind: 'command' },
+            { terminalTabId: 'agent', tabLabel: 'Review agent', copyKind: 'agent' }
+          ],
+          onConfirm,
+          onCancel
+        },
+        updateSettings
+      )
+
+      expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1)
+      expect(document.body.textContent).toContain('Development')
+      expect(document.body.textContent).not.toContain('Build watcher')
+      const disclosure = document.body.querySelector<HTMLButtonElement>('[aria-expanded]')
+      if (!disclosure) {
+        throw new Error('Missing running-terminal disclosure')
+      }
+      await act(async () => disclosure.click())
+
+      expect(document.body.querySelectorAll('li')).toHaveLength(2)
+      expect(document.body.textContent).toContain('Build watcher')
+      expect(document.body.textContent).toContain('Review agent')
+      expect(onConfirm).not.toHaveBeenCalled()
+      await act(async () => {
+        getButton(decision === 'confirm' ? 'Stop Agent' : 'Cancel').click()
+      })
+
+      expect(onConfirm).toHaveBeenCalledTimes(decision === 'confirm' ? 1 : 0)
+      expect(onCancel).toHaveBeenCalledTimes(decision === 'cancel' ? 1 : 0)
+      expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
+      expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+      expect(updateSettings).not.toHaveBeenCalled()
+    }
+  )
 })

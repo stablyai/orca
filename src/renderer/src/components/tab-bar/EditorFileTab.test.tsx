@@ -10,6 +10,7 @@ const appStoreMocks = vi.hoisted(() => ({
   openMarkdownPreview: vi.fn(),
   getState: vi.fn(() => ({
     settings: {},
+    tabSelectionByGroupId: {},
     unifiedTabsByWorktree: {
       'wt-1': [{ id: '/repo/untitled-5.md', groupId: 'group-1' }]
     },
@@ -62,6 +63,10 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  Folder: () => null,
+  FolderInput: () => null,
+  FolderMinus: () => null,
+  FolderPlus: () => null,
   ArrowDown: function ArrowDown(props: Record<string, unknown>) {
     return { type: 'ArrowDown', props }
   },
@@ -194,7 +199,10 @@ vi.mock('@/store/selectors', () => ({
 
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: { openMarkdownPreview: typeof vi.fn }) => unknown) =>
-    selector({ openMarkdownPreview: appStoreMocks.openMarkdownPreview })
+    selector({
+      ...appStoreMocks.getState(),
+      openMarkdownPreview: appStoreMocks.openMarkdownPreview
+    })
   useAppStore.getState = appStoreMocks.getState
   return { useAppStore }
 })

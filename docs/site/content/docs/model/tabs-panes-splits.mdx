@@ -14,12 +14,27 @@ Orca's pane system is designed for watching multiple agents work without losing 
 
 ## Tabs
 
-Each tab holds one thing: a terminal, an editor buffer, a browser, a diff, a PR. Tabs live inside a **tab group**.
+Each tab holds one thing: a terminal, an editor buffer, a browser, a diff, a PR. In these docs, a **tab group** means a pane with its own tab strip — not a named group within that strip.
 
 - Drag a tab up-down within a group to reorder.
 - Drag a tab onto another group to move it.
 - Close every editor file tab in the active worktree with `Cmd+Option+W` on macOS or `Ctrl+Alt+W` on Windows / Linux.
 - An active-tab color bar marks which pane is focused.
+
+### Grouping tabs
+
+Organize related tabs into named, colored groups within a pane:
+
+- **Highlight tabs** — `Cmd-click` on macOS or `Ctrl-click` on Windows / Linux toggles highlights without switching tabs. `Shift-click` highlights a range.
+- **Create or change a group** — right-click a highlighted tab and choose **Add Tab to New Group** (or, for example, **Add 3 Tabs to New Group**), **Add to Group**, or **Remove from Group**. Right-click an unhighlighted tab to act on that tab alone.
+- **Collapse / expand** — click the group chip. Collapse while on a group tab to keep it next to the label even after switching away — switch back to it or close it like any tab. Collapse while outside the group to hide all its tabs.
+- **Name and color** — double-click the chip, or right-click → **Rename Group**. Right-click the chip to choose a **Group Color**.
+- **Ungroup or close** — **Ungroup** keeps the tabs open; **Close Group** closes all the group's tabs, including hidden ones. If any of them is still running a command or agent, one warning covers the whole group and can expand to list those terminals; **Cancel** closes nothing.
+- **Drag tabs or groups** — drop a tab inside a group or onto its chip to join it. Drag the chip to move the whole group within the strip, to another pane's strip, or to a pane edge to create a split.
+
+The chip's right-click menu also offers **Move Group to New Split**, which moves the whole group into a new pane (dragging the chip onto a pane edge does the same). Both are unavailable for workspaces hosted on a [Remote Orca Server](/docs/remote-servers) — including every workspace in the browser client — and in the floating terminal panel. Moving a group into an existing pane still works there.
+
+Pinned tabs can't be grouped. Groups are per pane, persist across restarts, and aren't shown on mobile. Next / previous tab shortcuts and **Select Tab 1–9** (`Ctrl+1`–`Ctrl+9` on macOS, `Alt+1`–`Alt+9` on Windows / Linux) skip tabs hidden in collapsed groups.
 
 ### Switching tabs
 
