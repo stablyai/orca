@@ -62,6 +62,9 @@ export function parseFederatedLifecycle(
   | { kind: 'worker_report'; taskId: string; outcome: WorkerReportOutcome; result: string }
   | { kind: 'rejected'; code: string; reason: string } {
   if (message.type === 'heartbeat') {
+    // Stamped on the Run home as the relay item is imported: recordHeartbeat's contract is arrival
+    // time, and the relayed payload carries no worker timestamp precisely so a skewed remote clock
+    // cannot become this lane's freshness.
     return { kind: 'heartbeat', at: new Date().toISOString() }
   }
   if (message.type !== 'worker_done') {

@@ -84,6 +84,9 @@ export function failActiveDispatchForTask(
 }
 
 // Why: only bump status='dispatched' — a zombie heartbeat from a finished dispatch would mask a hung retry from the stale detector (§5.3.4).
+// CONTRACT: `at` is arrival time on this host, never a stamp the worker chose for itself. Both
+// readers (getStaleDispatches and worker-list freshness) subtract it from this host's clock, so a
+// relayed worker stamp would turn a federated lane's age into a measure of clock skew.
 export function recordHeartbeat(this: OrchestrationDb, dispatchId: string, at: string): void {
   this.db
     .prepare(
