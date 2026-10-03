@@ -7,6 +7,9 @@ import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
 export class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
   attachWindow(windowId: number): void {
+    if (this.retiredGraphWindowIds.has(windowId)) {
+      return
+    }
     if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {
       if (
         this.pendingHeadlessPromotionWindowId !== null &&
