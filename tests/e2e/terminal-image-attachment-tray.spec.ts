@@ -14,7 +14,7 @@ import {
 const recorder = `
 process.stdin.setRawMode(true)
 process.stdin.resume()
-process.stdout.write('\\x1b[?2004hREADY_IMAGE_TRAY\\r\\n')
+process.stdout.write('\\x1b[2J\\x1b[H\\x1b[?2004hREADY_IMAGE_TRAY\\r\\n')
 let count = 0
 let buffer = ''
 process.stdin.on('data', bytes => {
@@ -84,6 +84,16 @@ test('stages, previews, removes, cancels and explicitly adds clipboard images', 
     },
     { png, dataUrl }
   )
+  const terminalBounds = await page.locator('.xterm').first().boundingBox()
+  if (!terminalBounds) {
+    throw new Error('No terminal bounds')
+  }
+  const proofClip = {
+    ...terminalBounds,
+    width: Math.min(450, terminalBounds.width),
+    height: Math.min(300, terminalBounds.height)
+  }
+  await page.screenshot({ clip: proofClip, path: testInfo.outputPath('image-tray-before.png') })
   await setCodexAuthority(page, true)
   const tray = page.locator('[data-terminal-image-attachments]')
   const paste = async () => {
@@ -94,6 +104,7 @@ test('stages, previews, removes, cancels and explicitly adds clipboard images', 
   await paste()
   await expect(tray.locator('img')).toBeVisible()
   await tray.screenshot({ path: testInfo.outputPath('image-tray-preview.png') })
+  await page.screenshot({ clip: proofClip, path: testInfo.outputPath('image-tray-after.png') })
   await tray.getByRole('button', { name: 'Cancel', exact: true }).focus()
   const menuIgnored = await page.evaluate(() => {
     const event = new CustomEvent('orca-app-menu-paste', { cancelable: true, bubbles: true })
