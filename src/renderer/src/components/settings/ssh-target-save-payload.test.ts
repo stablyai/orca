@@ -136,7 +136,9 @@ describe('buildSshTargetSavePayload', () => {
     }
   })
 
-  it('clears a removed per-host proxy via explicit undefined in updates', () => {
+  it('sends no proxy keys for a brand-new target that has no proxy', () => {
+    // Why: with no saved target there is nothing to clear, so an update must not claim
+    // an explicit clear; the create input is where a new host's proxy travels.
     const result = buildSshTargetSavePayload({ ...EMPTY_FORM, host: 'appliance.example.com' })
 
     expect(result.ok).toBe(true)
@@ -144,23 +146,63 @@ describe('buildSshTargetSavePayload', () => {
       throw new Error(result.error)
     }
     expect(result.payload.target).not.toHaveProperty('httpProxyUrl')
-    // Why explicit undefined: updateTarget merges, so clearing must be explicit.
-    expect(result.payload.updates).toHaveProperty('httpProxyUrl', undefined)
-    expect(result.payload.updates).toHaveProperty('httpProxyBypassRules', undefined)
+    expect(result.payload.updates).not.toHaveProperty('httpProxyUrl')
+    expect(result.payload.updates).not.toHaveProperty('httpProxyBypassRules')
   })
 
   it('omits an unchanged proxy from updates so a sealed proxy survives unrelated saves', () => {
-    // Why: the form submits a full snapshot; persistence treats a present-but-empty
-    // proxy as the user clearing it, which would release a keychain-sealed ciphertext.
+    // Why the '' baseline: that is what listTargets() actually returns — the store
+    // persists '' for a target that never had a proxy, and a keychain-sealed proxy
+    // also reads back as ''. A baseline of undefined would not reproduce the bug.
     const result = buildSshTargetSavePayload(
       { ...EMPTY_FORM, host: 'appliance.example.com', label: 'Renamed' },
-      { httpProxyUrl: undefined, httpProxyBypassRules: undefined }
+      { httpProxyUrl: '', httpProxyBypassRules: '' }
     )
 
     expect(result.ok).toBe(true)
     if (!result.ok) {
       throw new Error(result.error)
     }
+    expect(result.payload.updates).not.toHaveProperty('httpProxyUrl')
+    expect(result.payload.updates).not.toHaveProperty('httpProxyBypassRules')
+  })
+
+  it('ships only the bypass rules when a sealed proxy URL is left untouched', () => {
+    // Why: sending httpProxyUrl: undefined alongside a bypass edit would read as an
+    // explicit clear at persistence and release the sealed proxy.
+    const result = buildSshTargetSavePayload(
+      {
+        ...EMPTY_FORM,
+        host: 'appliance.example.com',
+        httpProxyBypassRules: 'localhost;*.internal'
+      },
+      { httpProxyUrl: '', httpProxyBypassRules: '' }
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.payload.updates).not.toHaveProperty('httpProxyUrl')
+    expect(result.payload.updates.httpProxyBypassRules).toBe('localhost;*.internal')
+  })
+
+  it('does not re-send an unchanged configured proxy', () => {
+    const result = buildSshTargetSavePayload(
+      {
+        ...EMPTY_FORM,
+        host: 'appliance.example.com',
+        httpProxyUrl: 'http://proxy.lan:3128',
+        httpProxyBypassRules: 'localhost'
+      },
+      { httpProxyUrl: 'http://proxy.lan:3128', httpProxyBypassRules: 'localhost' }
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.payload.target.httpProxyUrl).toBe('http://proxy.lan:3128')
     expect(result.payload.updates).not.toHaveProperty('httpProxyUrl')
     expect(result.payload.updates).not.toHaveProperty('httpProxyBypassRules')
   })
