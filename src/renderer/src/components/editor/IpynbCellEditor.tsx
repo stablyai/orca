@@ -4,7 +4,10 @@ import type { editor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontStack } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
-import { installMonacoEditorFindShortcut } from './editor-shortcuts'
+import {
+  installMonacoEditorFindShortcut,
+  installMonacoEditorCommandPaletteShortcut
+} from './editor-shortcuts'
 import {
   IPYNB_CODE_CELL_PREVIEW_MAX_LINES,
   getIpynbCodeCellPreviewLines
@@ -226,8 +229,10 @@ function IpynbSourceEditor({
       '!suggestWidgetVisible && !findWidgetVisible && !parameterHintsVisible'
     )
     const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+    const cleanupCommandPaletteShortcut = installMonacoEditorCommandPaletteShortcut(editorInstance)
     return () => {
       cleanupFindShortcut()
+      cleanupCommandPaletteShortcut()
       editorInstance.dispose()
       model.dispose()
       editorRef.current = null
