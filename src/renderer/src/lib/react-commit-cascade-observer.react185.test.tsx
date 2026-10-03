@@ -49,9 +49,12 @@ const useCascadeStore = create<CascadeState>()(
 )
 
 /**
- * Layout effect, not passive: only the synchronous counter throws #185. A
- * useEffect loop leaves `pendingLanes: 0` at commit time (measured) because
- * passive effects flush after the callback, and React only console.errors it.
+ * Layout effect, not passive: only this shape leaves cascading lanes visible at
+ * commit time, so it is what pins the LANE half of the diagnostic. A passive
+ * (useEffect) loop also reads `pendingLanes: 0` here — but it throws #185 all
+ * the same, and believing otherwise is what cost the field its attribution; the
+ * re-entrancy half covers it, pinned in
+ * react-commit-cascade-passive-effect-blind-spot.react185.test.tsx.
  */
 function RunawayLayoutEffectPane(): React.JSX.Element {
   const ticks = useCascadeStore((state) => state.ticks)
@@ -107,6 +110,9 @@ describe('react commit cascade observer', () => {
     const payload = (cascadeCalls[0]?.[1] ?? {}) as Record<string, unknown>
     expect(payload.commits).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
     expect(payload.pendingLanes).toBeGreaterThan(0)
+    // Measured, not inferred: every counted commit held cascading lanes.
+    expect(payload.laneCommits).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
+    expect(payload.evidence).toBe('lanes')
     expect(payload.storeWrites).toBeGreaterThan(0)
     // The middleware boundary is elided, so this is the code that called `set`.
     expect(String(payload.driverFrame)).toContain('bump')
