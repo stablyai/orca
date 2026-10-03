@@ -118,6 +118,13 @@ export function useWorktreeStatusMutations(args: {
     [manualOrderCatalog, setSortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
   )
 
+  // NOT widened to a host-qualified target: worktreeMap is itself keyed by bare Worktree.id
+  // (getIndexedWorktreeMap keeps one row per id), so a lookup through it cannot disambiguate a
+  // collision any better than the legacy call this makes today. The drag/kanban chain feeding
+  // these (pointer-commit.ts, use-status-row-drag.ts, use-workspace-status-drop.ts, and further
+  // up) also only ever carries bare worktreeId strings, so a real fix needs to thread host
+  // identity from wherever a drag START first resolves its row, across that whole pipeline —
+  // out of scope here. Tracked in #21825.
   const pinWorktree = useCallback(
     (worktreeId: string) => {
       setWorktreesPinnedAndReveal([worktreeId], true)
