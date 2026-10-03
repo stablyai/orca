@@ -7,6 +7,7 @@ import { getBrowserClientHostId } from '../browser/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { installRendererUnresponsiveBreadcrumb } from '../crash-reporting/renderer-unresponsive-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import type { Store } from '../persistence'
 import { closeDashboardPopout } from './dashboard-popout-window'
@@ -15,6 +16,7 @@ import {
   WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
 } from './main-window-close-lifecycle'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
+import { installMainDocumentCallStackPolicy } from './main-document-call-stack-policy'
 import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
@@ -34,11 +36,29 @@ import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-re
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
+const MAIN_DOCUMENT_PATH = join(__dirname, '../renderer/index.html')
+
+function devServerUrl(): string | undefined {
+  return is.dev ? process.env.ELECTRON_RENDERER_URL || undefined : undefined
+}
+
+function installPackagedDocumentCallStackPolicy(mainWindow: BrowserWindow): () => void {
+  // Dev twin: the Vite server sends the same Document-Policy header.
+  if (devServerUrl()) {
+    return () => {}
+  }
+  try {
+    return installMainDocumentCallStackPolicy(mainWindow.webContents, MAIN_DOCUMENT_PATH).dispose
+  } catch (error) {
+    // Diagnostic-only: a missing opt-in must never block the window load.
+    console.warn('[window] Could not install the JS call-stack document policy', error)
+    return () => {}
+  }
+}
+
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
-  const load =
-    is.dev && process.env.ELECTRON_RENDERER_URL
-      ? mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-      : mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  const devUrl = devServerUrl()
+  const load = devUrl ? mainWindow.loadURL(devUrl) : mainWindow.loadFile(MAIN_DOCUMENT_PATH)
   // Observe each load promise so failures cannot leave recovery waiting silently.
   load.then(
     () => observer?.onLoaded?.(),
@@ -190,6 +210,8 @@ export function createMainWindow(
     reloadMainWindow: (observer) => loadMainWindow(mainWindow, observer),
     rendererWebContentsId
   })
+  const rendererUnresponsiveBreadcrumb = installRendererUnresponsiveBreadcrumb(mainWindow)
+  const disposeDocumentCallStackPolicy = installPackagedDocumentCallStackPolicy(mainWindow)
   // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
   installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
@@ -207,6 +229,8 @@ export function createMainWindow(
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
     focus.dispose()
+    rendererUnresponsiveBreadcrumb.dispose()
+    disposeDocumentCallStackPolicy()
     browserManager.setDictationShortcutForwardingPredicate(null)
     powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)
