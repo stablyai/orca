@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactElement } from 'react'
 import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { Play } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -22,6 +22,8 @@ type Props = {
   resumeActionStateBySessionId?: ReadonlyMap<string, { disabled: boolean; loading: boolean }>
   onResume?: (session: AiVaultSession) => void | Promise<void>
   onRefresh: () => void
+  header?: ReactElement
+  emptyState?: ReactElement
 }
 
 export function MobileAgentSessionHistoryList({
@@ -31,7 +33,9 @@ export function MobileAgentSessionHistoryList({
   showCurrentWorktreeBadges,
   resumeActionStateBySessionId,
   onResume,
-  onRefresh
+  onRefresh,
+  header,
+  emptyState
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -63,10 +67,14 @@ export function MobileAgentSessionHistoryList({
 
   return (
     <SectionList
+      style={styles.listViewport}
       sections={sections}
       keyExtractor={(card) => card.id}
       stickySectionHeadersEnabled={false}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={[styles.list, sections.length === 0 && styles.emptyList]}
+      ListHeaderComponent={header}
+      ListHeaderComponentStyle={styles.listHeader}
+      ListEmptyComponent={emptyState}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}

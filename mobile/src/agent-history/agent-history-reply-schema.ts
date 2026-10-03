@@ -27,11 +27,11 @@ export const agentHistoryHostStatusSchema = z.looseObject({
  * The session scan.
  *
  * Both members are required arrays: use-mobile-agent-history-state.ts:133-135 publishes them straight
- * into the ready screen state, where the list maps `sessions` and the issue banner counts `issues`
+ * into the ready screen state, where the list maps `sessions` and the banner presents `issues`
  * — a reply missing either left the screen `ready` over an undefined container and crashed on the
  * next render, which is the defect this reader exists to name.
  *
- * The rows stay unknown, and that is deliberate rather than unfinished. A row is an AiVaultSession,
+ * Session rows stay unknown because their agent vocabulary is echoed on resume. A row is an AiVaultSession,
  * whose `agent` is a 21-arm vocabulary that grows with every agent CLI Orca learns to scan — and
  * which this client echoes straight back to the host when it resumes a session. Declaring it would
  * either refuse a newer host's whole reply or silently drop the very sessions that host added, and
@@ -40,7 +40,15 @@ export const agentHistoryHostStatusSchema = z.looseObject({
  */
 export const agentHistorySessionScanSchema = z.looseObject({
   sessions: z.array(z.unknown()),
-  issues: z.array(z.unknown())
+  issues: z.array(
+    z.looseObject({
+      agent: z.string(),
+      path: z.string(),
+      message: z.string(),
+      kind: salvagedOptional('kind', z.string()),
+      executionHostId: salvagedOptional('executionHostId', z.string())
+    })
+  )
 })
 
 /**

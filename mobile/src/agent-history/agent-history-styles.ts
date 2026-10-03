@@ -85,6 +85,16 @@ export const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl
   },
+  listViewport: {
+    flex: 1
+  },
+  emptyList: {
+    flexGrow: 1
+  },
+  listHeader: {
+    marginHorizontal: -spacing.md,
+    marginTop: -spacing.sm
+  },
   groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -196,7 +206,11 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.bgPanel
   },
   noticeText: {
-    color: colors.statusAmber,
+    color: colors.textMuted,
+    fontSize: typography.metaSize
+  },
+  hostIssueText: {
+    color: colors.statusRed,
     fontSize: typography.metaSize
   },
   resumeBanner: {
