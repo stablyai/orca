@@ -86,3 +86,15 @@ it('remote errors stay errors, and an out-of-scope path cannot read the local fi
   ])
   expect(fsPathExists).not.toHaveBeenCalled()
 })
+// Why: hover probes paths glued across terminal rows, and one error row rejects the whole hover.
+it('reads a file used as a directory as missing, not as an error', async () => {
+  status(['files.pathsExist'])
+  runtimeEnvironmentCall.mockResolvedValue({
+    id: 'batch',
+    ok: true,
+    result: [{ error: "ENOTDIR: not a directory, realpath '/folder/file-0.ts/folder/file-1.ts'" }]
+  })
+  expect(await runtimePathsExist(context, ['/folder/file-0.ts/folder/file-1.ts'])).toEqual([
+    { exists: false }
+  ])
+})

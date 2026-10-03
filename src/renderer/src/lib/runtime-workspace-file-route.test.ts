@@ -58,7 +58,8 @@ describe('findRuntimeWorkspaceFileRoute', () => {
       {
         worktreeId: 'repo-b::/srv/repo-b',
         relativePath: 'src/index.ts',
-        executionHostId: 'runtime:runtime-a'
+        executionHostId: 'runtime:runtime-a',
+        rootPath: '/srv/repo-b'
       }
     )
   })
@@ -69,7 +70,8 @@ describe('findRuntimeWorkspaceFileRoute', () => {
     ).toEqual({
       worktreeId: 'repo-b::/srv/repo-b',
       relativePath: 'docs/guide.md',
-      executionHostId: 'runtime:runtime-a'
+      executionHostId: 'runtime:runtime-a',
+      rootPath: '/srv/repo-b'
     })
   })
 
@@ -77,7 +79,8 @@ describe('findRuntimeWorkspaceFileRoute', () => {
     expect(findRuntimeWorkspaceFileRoute(state(), 'runtime-a', '/srv/notes/todo.md')).toEqual({
       worktreeId: 'folder:notes',
       relativePath: 'todo.md',
-      executionHostId: 'runtime:runtime-a'
+      executionHostId: 'runtime:runtime-a',
+      rootPath: '/srv/notes'
     })
   })
 
@@ -107,7 +110,8 @@ describe('findRuntimeWorkspaceFileRoute', () => {
     expect(findWorkspaceFileRoute(sshState, 'ssh:ssh-1', '/srv/b/nested/file.ts')).toEqual({
       worktreeId: 'b',
       relativePath: 'nested/file.ts',
-      executionHostId: 'ssh:ssh-1'
+      executionHostId: 'ssh:ssh-1',
+      rootPath: '/srv/b'
     })
     expect(findWorkspaceFileRoute(sshState, 'ssh:ssh-2', '/srv/a/file.ts')).toBeNull()
   })

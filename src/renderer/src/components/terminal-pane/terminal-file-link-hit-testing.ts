@@ -58,15 +58,16 @@ export function openFilePathLinkAtBufferPosition(
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
-      const fileContext = getTerminalFileContext(
-        deps.worktreeId,
-        deps.worktreePath,
-        deps.runtimeEnvironmentId
-      )
       const mappedPath = mapTerminalFilePath(
         resolved.absolutePath,
         deps.worktreePath,
         terminalLinkWslDistro(deps.wslDistro, deps.runtimeEnvironmentId)
+      )
+      const fileContext = getTerminalFileContext(
+        deps.worktreeId,
+        deps.worktreePath,
+        deps.runtimeEnvironmentId,
+        mappedPath
       )
       const cacheKey = getTerminalPathExistsCacheKey({
         absolutePath: mappedPath,
