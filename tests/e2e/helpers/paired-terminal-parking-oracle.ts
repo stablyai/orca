@@ -1,15 +1,13 @@
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeTerminalRead } from '../../../src/shared/runtime-types'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import {
-  toHostSessionTabId,
-  toWebTerminalSurfaceTabId
-} from '../../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
 import {
   readPairedRetentionSample,
   startRendererLagProbe
 } from '../paired-runtime-retention-metrics'
 import { expect } from './orca-app'
+import { expectHostTerminalsUnmounted } from './paired-terminal-host-mount-oracle'
 import { verifyHiddenPairedTerminalOutputSuppression } from './paired-terminal-hidden-output-oracle'
 import { createPairedTerminalParkingFixture } from './paired-terminal-parking-fixture'
 import { verifyPairedTerminalTitleFanout } from './paired-terminal-title-fanout-oracle'
@@ -165,7 +163,9 @@ export async function runPairedTerminalParkingOracle(
                     (id) =>
                       verdicts.find((verdict) => verdict.worktreeId === id)?.ordinaryParkingCovers
                   ),
-                  parked: window.__terminalParkingDebug?.parkedTabIds().length,
+                  parked: (window.__terminalParkingDebug?.parkedTabIds() ?? []).filter((id) =>
+                    tabIds.includes(id)
+                  ).length,
                   retentionBudgetEnabled:
                     window.__store?.getState().settings?.terminalHiddenWorktreeRetentionBudget
                 }
@@ -196,6 +196,7 @@ export async function runPairedTerminalParkingOracle(
       page,
       remoteTabs.map((tab) => tab.tabId)
     )
+    console.log('[paired-retention-memory]', JSON.stringify({ baseline, after, maxLagMs }))
     expect(after.bufferCells).toBeLessThanOrEqual(baseline.bufferCells * MAX_RETAINED_CELL_FRACTION)
     expect(after.mountedTargetManagers).toBe(1)
     expect(maxLagMs).toBeLessThan(MAX_EVICTION_LAG_MS)
@@ -284,27 +285,4 @@ export async function runPairedTerminalParkingOracle(
     }
     fixture.dispose()
   }
-}
-
-async function expectHostTerminalsUnmounted(
-  hostPage: Page | undefined,
-  activeWorktreeId: string,
-  remoteTabs: RemoteTab[]
-): Promise<void> {
-  if (!hostPage) {
-    return
-  }
-  await expect
-    .poll(
-      () =>
-        hostPage.evaluate(
-          (tabIds) => ({
-            activeWorktreeId: window.__store?.getState().activeWorktreeId,
-            mountedCount: tabIds.filter((tabId) => window.__paneManagers?.has(tabId)).length
-          }),
-          remoteTabs.map(({ tabId }) => toHostSessionTabId(tabId))
-        ),
-      { timeout: 30_000 }
-    )
-    .toEqual({ activeWorktreeId, mountedCount: 0 })
 }

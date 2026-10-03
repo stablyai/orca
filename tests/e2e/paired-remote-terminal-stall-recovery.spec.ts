@@ -402,10 +402,13 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       }
       gate.hold([target])
     }, terminal)
-    const textarea = client.page.locator('.xterm-helper-textarea:visible').first()
-    await textarea.focus()
-    await client.page.keyboard.type('GO')
-    await client.page.keyboard.press('Enter')
+    // Start the fault without arming the client's command-response recovery.
+    await callRuntime(client.page, 'terminal.send', {
+      terminal,
+      text: 'GO',
+      enter: true,
+      client: { id: 'paired-stalled-stream-e2e', type: 'desktop' }
+    })
 
     await expect
       .poll(

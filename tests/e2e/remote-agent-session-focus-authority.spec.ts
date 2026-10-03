@@ -395,13 +395,21 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
     const renderedOrder = await readRenderedTabOrder(client.page)
     expectImmediatelyAfter(renderedOrder, predecessorWebTabId, legacyWebTabId)
     expectImmediatelyAfter(renderedOrder, legacyWebTabId, successorWebTabId)
-    const authoritativeTabs = await callClient<{
-      tabGroups?: { id: string; tabOrder: string[] }[]
-    }>(client.page, 'session.tabs.list', { worktree: `id:${session.worktreeId}` })
-    const authoritativeTabOrder =
-      authoritativeTabs.tabGroups?.find((group) => group.id === legacyGroup.id)?.tabOrder ?? []
-    expectImmediatelyAfter(authoritativeTabOrder, predecessorHostTabId, legacy.terminal.tabId)
-    expectImmediatelyAfter(authoritativeTabOrder, legacy.terminal.tabId, successorHostTabId)
+    await expect
+      .poll(
+        async () => {
+          const authoritativeTabs = await callClient<{
+            tabGroups?: { id: string; tabOrder: string[] }[]
+          }>(client.page, 'session.tabs.list', { worktree: `id:${session.worktreeId}` })
+          const order =
+            authoritativeTabs.tabGroups?.find((group) => group.id === legacyGroup.id)?.tabOrder ??
+            []
+          const anchorIndex = order.indexOf(predecessorHostTabId)
+          return anchorIndex === -1 ? [] : order.slice(anchorIndex, anchorIndex + 3)
+        },
+        { timeout: 15_000, message: 'Legacy placement did not reach the host tab order' }
+      )
+      .toEqual([predecessorHostTabId, legacy.terminal.tabId, successorHostTabId])
     const freshFocused = await launchAgent(client.page, {
       ...session,
       hostPage: orcaPage,
