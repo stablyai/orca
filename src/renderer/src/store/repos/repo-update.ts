@@ -21,6 +21,13 @@ import { getRuntimeTargetHostId } from '../runtime-target-host'
 import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 
+// Why: JSON drops undefined keys, so a clear must travel as null to reach a remote runtime.
+function toRemoteRepoUpdate(updates: RepoUpdate): Record<string, unknown> {
+  return 'worktreeBaseRef' in updates && updates.worktreeBaseRef === undefined
+    ? { ...updates, worktreeBaseRef: null }
+    : updates
+}
+
 export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -135,7 +142,7 @@ export function createRepoUpdateActions(
                   await callRuntimeRpc<{ repo: Repo }>(
                     target,
                     'repo.update',
-                    { repo: projectId, updates: sanitizedUpdates },
+                    { repo: projectId, updates: toRemoteRepoUpdate(sanitizedUpdates) },
                     { timeoutMs: 15_000 }
                   )
                 ).repo
@@ -208,7 +215,12 @@ export function createRepoUpdateActions(
               folderWorkspacePathStatuses: {}
             }
           })
-          return true
+          // Why: a host that predates the null clear sentinel ignores it and echoes the pin back; that is a failed clear.
+          return !(
+            'worktreeBaseRef' in sanitizedUpdates &&
+            sanitizedUpdates.worktreeBaseRef === undefined &&
+            updatedRepo?.worktreeBaseRef
+          )
         } catch (err) {
           console.error('Failed to update repo:', err)
           return false

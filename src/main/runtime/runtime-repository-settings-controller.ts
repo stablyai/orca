@@ -23,7 +23,6 @@ type RepositoryUpdates = Partial<
     | 'repoIcon'
     | 'upstream'
     | 'hookSettings'
-    | 'worktreeBaseRef'
     | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
@@ -37,6 +36,8 @@ type RepositoryUpdates = Partial<
     | 'projectGroupOrder'
   >
 > & {
+  /** `null` clears the pin; JSON drops an undefined key, so it is the wire form of a clear. */
+  worktreeBaseRef?: Repo['worktreeBaseRef'] | null
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
@@ -74,7 +75,13 @@ export class RuntimeRepositorySettingsController {
   async update(repoSelector: string, updates: RepositoryUpdates): Promise<Repo> {
     const store = this.requireStore()
     const repo = await this.deps.resolveRepo(repoSelector)
-    const sanitizedUpdates = omitUndefined(updates)
+    const { worktreeBaseRef, ...otherUpdates } = updates
+    const sanitizedUpdates = {
+      ...omitUndefined(otherUpdates),
+      ...(typeof worktreeBaseRef === 'string' || worktreeBaseRef === null
+        ? { worktreeBaseRef: worktreeBaseRef ?? undefined }
+        : {})
+    }
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
     }
