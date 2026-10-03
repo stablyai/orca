@@ -1,0 +1,198 @@
+name: Mobile shell fingerprint
+
+# Informative, never failing: does this change need a mobile store release, or does OTA deliver it?
+# See docs/reference/mobile-shell-fingerprint.md.
+#
+# Why these shell paths: every module in the four exported shell bundles comes from mobile/ or
+# src/shared/, and none is a test file or anything under mobile/rpc-foundation/. Mobile is its own
+# pnpm project, so the root lockfile never reaches the shell.
+# Why no paths on pull_request: a push that reverts the last shell edit must still run, or the
+# needs-mobile-release label outlives the change. The first step skips the work instead.
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile/**'
+      - 'src/shared/**'
+      - '.github/workflows/mobile-shell-fingerprint.yml'
+      - '!mobile/rpc-foundation/**'
+      - '!**/*.test.*'
+
+concurrency:
+  group: mobile-shell-fingerprint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shell-fingerprint:
+    name: Mobile shell fingerprint
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # A PR checks out its merge commit; HEAD^1 is the base it merges into.
+          fetch-depth: 2
+          # The repository is public: the tag lookup needs no token, and the label step brings its own.
+          persist-credentials: false
+
+      # Last matching pattern wins, as in GitHub's `paths` filter.
+      - name: Detect shell inputs
+        id: scope
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Mirrors on.push.paths; config/scripts/mobile-shell-fingerprint-workflow.test.mjs pins both.
+          shell_paths=(
+            'mobile/**'
+            'src/shared/**'
+            '.github/workflows/mobile-shell-fingerprint.yml'
+            '!mobile/rpc-foundation/**'
+            '!**/*.test.*'
+          )
+          # shellcheck disable=SC2053 # the right-hand side is a glob on purpose
+          touches_shell() {
+            local hit=false pattern
+            for pattern in "${shell_paths[@]}"; do
+              if [[ $pattern == '!'* ]]; then
+                if [[ $1 == ${pattern#!} ]]; then hit=false; fi
+              elif [[ $1 == $pattern ]]; then
+                hit=true
+              fi
+            done
+            [ "$hit" = true ]
+          }
+          # -z: git otherwise quotes non-ASCII paths, and a quoted path matches no pattern.
+          changes="$RUNNER_TEMP/shell-scope-changes"
+          git diff -z --name-only --no-renames HEAD^1 HEAD > "$changes"
+          while IFS= read -r -d '' file; do
+            if touches_shell "$file"; then
+              echo 'shell_inputs=true' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done < "$changes"
+          echo 'shell_inputs=false' >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/install-node-dependencies
+        if: steps.scope.outputs.shell_inputs != 'false'
+        with:
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.scope.outputs.shell_inputs != 'false'
+
+      - name: Fingerprint this commit
+        id: head
+        if: steps.scope.outputs.shell_inputs != 'false'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node mobile/scripts/mobile-shell-fingerprint.mjs compute --out "$RUNNER_TEMP/shell-head.json"
+
+      # Why HEAD^1 and not pull_request.base.sha: the event's base can lag the merge commit, which
+      # would blame commits already on main on this PR. On main the base is the newest
+      # mobile-android-v* tag by version: that is the tag the Android release workflow cuts when it
+      # publishes an APK, and it lives on a side branch, so ancestry cannot find it.
+      - name: Resolve comparison base
+        id: base
+        if: steps.scope.outputs.shell_inputs != 'false'
+        continue-on-error: true
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = pull_request ]; then
+            echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tag="$(git ls-remote --tags --refs origin 'refs/tags/mobile-android-v*' \
+            | sed 's#.*refs/tags/##' | sort -V | tail -n 1)"
+          test -n "$tag"
+          git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse "refs/tags/$tag^{commit}")" >> "$GITHUB_OUTPUT"
+
+      # The base gets its own frozen install: reusing this commit's node_modules would fingerprint
+      # the base with the head's dependencies, and dependency bumps are what most need a verdict.
+      - name: Fingerprint the base
+        id: base-fingerprint
+        if: steps.base.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/shell-base" "$BASE_SHA"
+          (cd "$RUNNER_TEMP/shell-base/mobile" && pnpm install --frozen-lockfile)
+          node mobile/scripts/mobile-shell-fingerprint.mjs compute \
+            --project "$RUNNER_TEMP/shell-base/mobile" --out "$RUNNER_TEMP/shell-base.json"
+
+      - name: Report the verdict
+        id: verdict
+        if: always()
+        shell: bash
+        env:
+          SINCE_TAG: ${{ steps.base.outputs.tag }}
+          SHELL_INPUTS: ${{ steps.scope.outputs.shell_inputs }}
+        run: |
+          set -euo pipefail
+          if [ "$SHELL_INPUTS" = false ]; then
+            echo '### Mobile shell: no shell inputs in this change — OTA delivers this' >> "$GITHUB_STEP_SUMMARY"
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          script=mobile/scripts/mobile-shell-fingerprint.mjs
+          since=()
+          if [ -n "$SINCE_TAG" ]; then since=(--since "$SINCE_TAG"); fi
+          node "$script" compare "$RUNNER_TEMP/shell-base.json" "$RUNNER_TEMP/shell-head.json" \
+            "${since[@]}" >> "$GITHUB_STEP_SUMMARY"
+          changed="$(node "$script" compare "$RUNNER_TEMP/shell-base.json" \
+            "$RUNNER_TEMP/shell-head.json" --json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).changed')"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      # Forks get a read-only token; an unknown verdict leaves the label as it was.
+      - name: Label the pull request
+        if: >-
+          always() && github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          (steps.verdict.outputs.changed == 'true' || steps.verdict.outputs.changed == 'false')
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGED: ${{ steps.verdict.outputs.changed }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_URL: repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}
+          PR_LABELS_URL: repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels
+        run: |
+          set -euo pipefail
+          # A newer push's run owns the label; never let this older verdict overwrite it.
+          if [ "$(gh api "$PR_URL" --jq .head.sha)" != "$EVENT_HEAD" ]; then
+            echo 'head moved, label left for the newer run'
+            exit 0
+          fi
+          # gh prints the API's error body on failure; keep it visible and let the step fail.
+          if [ "$CHANGED" = true ]; then
+            gh api -X POST "$PR_LABELS_URL" -f 'labels[]=needs-mobile-release' > /dev/null
+          elif ! response="$(gh api -X DELETE "$PR_LABELS_URL/needs-mobile-release" 2>&1)"; then
+            if [[ "$response" != *'Label does not exist'* ]]; then
+              echo "$response"
+              exit 1
+            fi
+            echo 'needs-mobile-release was not set'
+          fi
