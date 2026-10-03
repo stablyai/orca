@@ -50,34 +50,43 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
         // Why: drop store status for servers no longer saved so stale hosts don't
         // linger in the sidebar registry.
         useAppStore.getState().setRuntimeEnvironments(nextEnvironments)
+        // Keep mutation catalog updates, but do not start probes for a closed pane.
+        // mountedRef is per-open-session (useMountedRef re-arms it on every mount), so a
+        // reopened pane loads and probes from scratch rather than inheriting suppression.
+        if (!mountedRef.current) {
+          return
+        }
         if (verified) {
           await useAppStore.getState().readRuntimeHostStatusSnapshots()
+          if (!mountedRef.current) {
+            return
+          }
         }
-        if (mountedRef.current) {
-          setEnvironments(visibleEnvironments)
-          setDetailsByEnvironmentId((current) => {
-            const next: Record<string, RuntimeHostDetails> = {}
-            for (const environment of visibleEnvironments) {
-              next[environment.id] =
-                verified?.environmentId === environment.id
-                  ? {
-                      status: 'ready',
-                      runtimeStatus: verified.runtimeStatus,
-                      remoteControl: verified.runtimeStatus.remoteControl ?? null,
-                      compatibility: evaluateHostDetails(verified.runtimeStatus),
-                      error: null
-                    }
-                  : (current[environment.id] ?? {
-                      status: 'loading',
-                      runtimeStatus: null,
-                      remoteControl: null,
-                      compatibility: null,
-                      error: null
-                    })
-            }
-            return next
-          })
-        }
+        setEnvironments(visibleEnvironments)
+        setDetailsByEnvironmentId((current) => {
+          const next: Record<string, RuntimeHostDetails> = {}
+          for (const environment of visibleEnvironments) {
+            next[environment.id] =
+              verified?.environmentId === environment.id
+                ? {
+                    status: 'ready',
+                    runtimeStatus: verified.runtimeStatus,
+                    remoteControl: verified.runtimeStatus.remoteControl ?? null,
+                    compatibility: evaluateHostDetails(verified.runtimeStatus),
+                    error: null
+                  }
+                : // A host whose probe is skipped stays 'loading' (never checked), never
+                  // 'error' — a probe that did not run is not evidence the host is down.
+                  (current[environment.id] ?? {
+                    status: 'loading',
+                    runtimeStatus: null,
+                    remoteControl: null,
+                    compatibility: null,
+                    error: null
+                  })
+          }
+          return next
+        })
         await Promise.allSettled(
           visibleEnvironments
             .filter((environment) => environment.id !== verified?.environmentId)
