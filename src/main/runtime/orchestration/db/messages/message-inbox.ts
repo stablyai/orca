@@ -91,7 +91,11 @@ export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: { excludeTypes?: readonly string[]; limit?: number }
+  options?: {
+    excludeTypes?: readonly string[]
+    excludeRecordedHeartbeats?: boolean
+    limit?: number
+  }
 ): MessageRow[] {
   const conditions = [
     'to_handle = ?',
@@ -108,6 +112,16 @@ export function getUndeliveredUnreadMessages(
   if (options?.excludeTypes?.length) {
     conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
     params.push(...options.excludeTypes)
+  }
+  if (options?.excludeRecordedHeartbeats) {
+    // Why in SQL and not after the read: a recorded heartbeat is never delivered and never read, so
+    // it sits at the head of `sequence` forever; a post-LIMIT filter would eventually return a page
+    // that is entirely heartbeats and push nothing while a worker_done waits behind them (#14910).
+    // instr, not LIKE — the marker key contains `_`, which LIKE reads as a wildcard. A false hit
+    // only over-delivers, matching how getPersistedLifecycleRejection treats any top-level marker.
+    conditions.push(
+      `NOT (type = 'heartbeat' AND instr(COALESCE(payload, ''), '_orcaLifecycleRejection') = 0)`
+    )
   }
   const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
   if (options?.limit !== undefined) {
