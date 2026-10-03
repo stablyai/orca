@@ -1,4 +1,5 @@
 import type RepoCombobox from '@/components/repo/RepoCombobox'
+import type { LocalCapacityCause } from '@/lib/default-run-target-suggestion'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type {
   NeedsSetupProjectHostOption,
@@ -45,6 +46,8 @@ export type NewWorkspaceComposerCardProps = {
   onProjectChange: (value: string) => void
   projectHostSetupOptions?: ProjectHostSetupOption[]
   selectedProjectHostSetupId?: string | null
+  /** Why a runner was chosen, shown under the Run-on control; null when the user's target stands. */
+  runTargetSuggestionCauses?: LocalCapacityCause[] | null
   onProjectHostSetupChange?: (setupId: string) => void
   ephemeralVmRecipes?: EphemeralVmRecipeOption[]
   selectedEphemeralVmRecipeId?: string | null
