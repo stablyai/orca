@@ -5,6 +5,8 @@ import {
   type WorktreeHostConnection
 } from '@/lib/worktree-host-connection-phase'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { selectRepoTerminalThemeForWorktree } from '@/lib/repo-terminal-theme-selection'
+import type { RepoTerminalThemeOverrides } from '../../../../shared/repo-terminal-theme'
 import {
   selectRuntimeAwareSshError,
   selectRuntimeAwareSshTargetLabel,
@@ -13,6 +15,8 @@ import {
 
 export type TerminalPaneHostState = {
   nativeChatTranscriptIsLocalReadable: boolean
+  /** Host-aware project theme pick; folded here so it costs no extra store listener. */
+  repoTerminalTheme: RepoTerminalThemeOverrides | undefined
   sshReconnectEnvironmentId: string | null
   /** The failure detail behind the status; the overlay shows only a canned sentence without it. */
   sshReconnectError: string | null
@@ -27,9 +31,11 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   const nativeChatTranscriptIsLocalReadableResult =
     isNativeChatTranscriptLocalReadable(connectionId)
   const host = resolveWorktreeHostConnection(state, worktreeId, connectionId)
+  const repoTerminalTheme = selectRepoTerminalThemeForWorktree(state, worktreeId)
   if (!host.targetId) {
     return {
       nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
+      repoTerminalTheme,
       sshReconnectEnvironmentId: null,
       sshReconnectError: null,
       sshReconnectStatus: null,
@@ -41,6 +47,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   const { targetId: sshReconnectTargetId, environmentId: sshReconnectEnvironmentId } = host
   return {
     nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
+    repoTerminalTheme,
     sshReconnectEnvironmentId,
     sshReconnectError: selectRuntimeAwareSshError(
       state,
@@ -65,6 +72,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
 function isSameHostState(a: TerminalPaneHostState, b: TerminalPaneHostState): boolean {
   return (
     a.nativeChatTranscriptIsLocalReadable === b.nativeChatTranscriptIsLocalReadable &&
+    a.repoTerminalTheme === b.repoTerminalTheme &&
     a.sshReconnectEnvironmentId === b.sshReconnectEnvironmentId &&
     a.sshReconnectError === b.sshReconnectError &&
     a.sshReconnectStatus === b.sshReconnectStatus &&

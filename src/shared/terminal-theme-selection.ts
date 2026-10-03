@@ -4,7 +4,6 @@ import {
   parseCustomTerminalThemeSelection,
   terminalCustomThemeToXtermTheme
 } from './terminal-custom-themes'
-import type { TerminalOscColorQueryReplyColors } from './terminal-osc-color-reply'
 import { TERMINAL_THEME_CATALOG } from './terminal-themes'
 import type { TerminalThemeMap } from './terminal-themes/types'
 
@@ -49,32 +48,8 @@ export function lookupTerminalTheme(
       : undefined
   return custom
     ? terminalCustomThemeToXtermTheme(custom)
-    : (TERMINAL_THEME_CATALOG[selection] ?? null)
-}
-
-function themeColors(
-  selection: string,
-  settings: Pick<GlobalSettings, 'terminalCustomThemes'>
-): TerminalOscColorQueryReplyColors | null {
-  const theme = lookupTerminalTheme(settings, selection)
-  return theme ? { foreground: theme.foreground, background: theme.background } : null
-}
-
-/**
- * The foreground/background the host's saved settings paint a terminal with, for answering
- * OSC 10/11 before (or without) a renderer. Opacity is ignored: a colour query reports the
- * opaque theme colour.
- */
-export function resolveConfiguredTerminalColors(
-  settings: TerminalThemeSelectionSettings &
-    Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalColorOverrides'>,
-  systemPrefersDark: boolean
-): TerminalOscColorQueryReplyColors {
-  const { themeName, useLightVariant } = selectTerminalTheme(settings, systemPrefersDark)
-  const fallback = useLightVariant ? DEFAULT_TERMINAL_THEME_LIGHT : DEFAULT_TERMINAL_THEME_DARK
-  const base: TerminalOscColorQueryReplyColors =
-    themeColors(themeName, settings) ?? themeColors(fallback, settings) ?? {}
-  const foreground = settings.terminalColorOverrides?.foreground ?? base.foreground
-  const background = settings.terminalColorOverrides?.background ?? base.background
-  return { ...(foreground ? { foreground } : {}), ...(background ? { background } : {}) }
+    : // Why own-only: a repo pick from IPC/RPC like `constructor` must not resolve to an Object.prototype member.
+      Object.hasOwn(TERMINAL_THEME_CATALOG, selection)
+      ? TERMINAL_THEME_CATALOG[selection]
+      : null
 }

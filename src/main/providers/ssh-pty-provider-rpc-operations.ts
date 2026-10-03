@@ -3,6 +3,7 @@ import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { PtyOwnerRepoColors } from '../../shared/pty-owner-color-query-colors'
 
 type SshPtyProviderRpcContext = {
   mux: SshChannelMultiplexer
@@ -45,8 +46,13 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
       return result.appliedSeq ?? 0
     },
     // A notification, because an older relay drops unknown ones instead of failing.
-    setColorQueryReplyColors: (colors: TerminalOscColorQueryReplyColors): void => {
-      mux.notify('pty.setColorQueryReplyColors', { colors })
+    // `byRepoId` is this host's own projects only; omitted (never sent empty) while main has no
+    // map, so the relay keeps its last one. An older relay reads `colors` alone and stays global.
+    setColorQueryReplyColors: (
+      colors: TerminalOscColorQueryReplyColors,
+      byRepoId?: PtyOwnerRepoColors
+    ): void => {
+      mux.notify('pty.setColorQueryReplyColors', { colors, ...(byRepoId ? { byRepoId } : {}) })
     },
     acknowledgeDataEvent: (id: string, charCount: number): void => {
       mux.notify('pty.ackData', { id: toRelayPtyId(id), charCount })

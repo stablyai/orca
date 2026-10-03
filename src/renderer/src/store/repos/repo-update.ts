@@ -4,6 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
+import { normalizeRepoTerminalThemeOverrides } from '../../../../shared/repo-terminal-theme'
 import {
   findRepoForHost,
   getRepoHostIdentityForParts,
@@ -57,6 +58,15 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
       delete sanitized.ghAccount
     } else {
       sanitized.ghAccount = normalized
+    }
+  }
+  // Why: `null` is the clear sentinel; only malformed shapes are dropped.
+  if ('terminalTheme' in sanitized && sanitized.terminalTheme != null) {
+    const terminalTheme = normalizeRepoTerminalThemeOverrides(sanitized.terminalTheme)
+    if (!terminalTheme) {
+      delete sanitized.terminalTheme
+    } else {
+      sanitized.terminalTheme = terminalTheme
     }
   }
   if ('customWorktreeVisibilitySources' in sanitized) {
@@ -139,6 +149,10 @@ export function createRepoUpdateActions(
                     { timeoutMs: 15_000 }
                   )
                 ).repo
+          // Why: a null reply means the main store refused the write; merging would show a theme that never persisted.
+          if (!updatedRepo && 'terminalTheme' in sanitizedUpdates) {
+            return false
+          }
           set((s) => {
             const nextRepos = s.repos.map((r) => {
               const matchesOwner = ownerHasExplicitHost
@@ -153,6 +167,7 @@ export function createRepoUpdateActions(
               let mergedRepo: Repo = r
               const {
                 sourceControlAi,
+                terminalTheme,
                 externalWorktreeDiscoverySuppressedAt,
                 ghAccount,
                 externalWorktreeVisibility,
@@ -166,6 +181,12 @@ export function createRepoUpdateActions(
                 mergedRepo = repoWithoutSourceControlAi
               } else if (sourceControlAi !== undefined) {
                 mergedRepo = { ...mergedRepo, sourceControlAi }
+              }
+              if (terminalTheme === null) {
+                const { terminalTheme: _terminalTheme, ...repoWithoutTerminalTheme } = mergedRepo
+                mergedRepo = repoWithoutTerminalTheme
+              } else if (terminalTheme !== undefined) {
+                mergedRepo = { ...mergedRepo, terminalTheme }
               }
               if (externalWorktreeVisibility === null) {
                 const { externalWorktreeVisibility: _visibility, ...repoWithoutVisibility } =

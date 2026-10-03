@@ -16,6 +16,9 @@ import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
+import { RepositoryTerminalThemeSection } from './RepositoryTerminalThemeSection'
+import { getRepoTerminalThemeAvailability } from '@/lib/repo-terminal-theme-availability'
+import { getRepositoryPaneSectionSearchEntries } from './repository-pane-section-search-entries'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
@@ -37,11 +40,12 @@ export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
 type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,
-  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount'
+  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount' | 'terminalTheme'
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
   ghAccount?: GhAccountBinding | null
+  terminalTheme?: Repo['terminalTheme'] | null
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -178,39 +182,17 @@ export function RepositoryPane({
     }, 1500)
   }
 
-  const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject })
-  const identityEntryTitles = new Set([
-    translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
-    translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
-    translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
-    translate(
-      'auto.components.settings.repository.search.keepForkUpToDate',
-      'Keep Fork Up to Date'
-    ),
-    translate('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
-    translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
-    translate('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
-    translate('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
-    translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
-  ])
-  const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
-  const sparsePresetEntries = allEntries.filter((entry) =>
-    ['Sparse Checkout Presets'].includes(entry.title)
-  )
-  const hooksEntries = allEntries.filter((entry) =>
-    [
-      'Setup Script',
-      'Archive Script',
-      'Advanced',
-      'When to Run Setup',
-      'Custom GitHub Issue Command'
-    ].includes(entry.title)
-  )
-  const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
-  const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Shared Paths')
-  const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
-  const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
-  const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
+  const {
+    identityEntries,
+    sparsePresetEntries,
+    hooksEntries,
+    mcpEntries,
+    symlinkEntries,
+    sourceControlAiEntries,
+    terminalThemeEntries,
+    hostSetupEntries,
+    projectRuntimeEntries
+  } = getRepositoryPaneSectionSearchEntries(repo, { isLocalWindowsProject })
   const removeProjectLabel =
     confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
 
@@ -396,6 +378,15 @@ export function RepositoryPane({
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
       <RepositorySourceControlAiSection
         key="source-control-ai"
+        repo={repo}
+        updateRepo={updateSelectedRepo}
+      />
+    ) : null,
+    // Why not isFolder-gated: folder and SSH projects run terminals too.
+    getRepoTerminalThemeAvailability(repo) === 'available' &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, terminalThemeEntries)) ? (
+      <RepositoryTerminalThemeSection
+        key="terminal-theme"
         repo={repo}
         updateRepo={updateSelectedRepo}
       />

@@ -81,7 +81,10 @@ import {
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
-import { setPtyOwnerHostColors } from '../shared/pty-owner-color-query-colors'
+import {
+  getPtyOwnerColorsForWorktree,
+  setPtyOwnerColors
+} from '../shared/pty-owner-color-query-colors'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
 import { TerminalShellRecoveryBarrier } from '../main/daemon/terminal-shell-recovery-barrier'
 import { confirmPtyShellForeground } from '../main/daemon/pty-subprocess/pty-shell-foreground-confirmation'
@@ -1017,6 +1020,9 @@ export class PtyHandler {
     managed.startupIngress = new PtyStartupIngress({
       ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
       ownerBackend: managed.ownerBackend,
+      // Why per PTY: the client pushes this host's project colours by repo id; a spawned or
+      // revived PTY of a themed project answers OSC 10/11 with them, the rest with the host's.
+      resolveHostColors: () => getPtyOwnerColorsForWorktree(managed.worktreeId),
       write: (data) => managed.pty.write(data),
       onEmission: (emission) => recoveryBarrier.accept(emission)
     })
@@ -1191,8 +1197,10 @@ export class PtyHandler {
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
     // A notification, so a client newer than this relay is ignored rather than refused.
+    // `byRepoId` (this host's themed projects) is optional: absent keeps the last map, so an
+    // older client that never sends it leaves the relay answering host colours as before.
     this.dispatcher.onNotification('pty.setColorQueryReplyColors', (p) =>
-      setPtyOwnerHostColors(p.colors)
+      setPtyOwnerColors({ colors: p.colors, byRepoId: p.byRepoId })
     )
   }
 

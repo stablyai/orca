@@ -1,5 +1,18 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HeadlessEmulator } from './headless-emulator'
+import type { TerminalViewAttributes, TerminalViewRgb } from '../../shared/terminal-view-attributes'
+
+function pushedAttributes(background: TerminalViewRgb): TerminalViewAttributes {
+  return {
+    foreground: [0xd0, 0xd0, 0xd0],
+    background,
+    cursor: [0xff, 0x99, 0x00],
+    ansi: Array.from({ length: 256 }, (): TerminalViewRgb => [0xcc, 0x00, 0x00]),
+    colorSchemeMode: 'dark',
+    cursorStyle: 'bar',
+    cursorBlink: true
+  }
+}
 
 function expectedNativePath(posixPath: string): string {
   return posixPath
@@ -734,6 +747,74 @@ describe('HeadlessEmulator', () => {
 
       const snapshot = emulator.getSnapshot()
       expect(snapshot.modes.kittyKeyboardFlags).toBe(0)
+    })
+  })
+
+  describe('pushed view attributes', () => {
+    it('keeps OSC SET overlays while the base the PTY answered from is unchanged and drops them when a theme change moved it', async () => {
+      const onQueryReply = vi.fn()
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })
+      let base = pushedAttributes([0x1e, 0x1e, 0x2e])
+      emulator.installViewAttributeResponder(() => base)
+      emulator.applyPushedViewAttributes(base, null)
+      const query = (): Promise<void> =>
+        emulator.write('\x1b]4;1;?\x07', { forwardQueryReplies: true })
+
+      await emulator.write('\x1b]4;1;#00ff00\x07', { forwardQueryReplies: true })
+      // Same snapshot (e.g. a global push that leaves this PTY's repo palette alone).
+      emulator.applyPushedViewAttributes(pushedAttributes([0x1e, 0x1e, 0x2e]), base)
+      await query()
+      expect(onQueryReply).toHaveBeenLastCalledWith('\x1b]4;1;rgb:0000/ffff/0000\x1b\\')
+
+      const previous = base
+      base = pushedAttributes([0x10, 0x20, 0x30])
+      emulator.applyPushedViewAttributes(base, previous)
+      await query()
+      expect(onQueryReply).toHaveBeenLastCalledWith('\x1b]4;1;rgb:cccc/0000/0000\x1b\\')
+    })
+
+    it('keeps overlays set before main learned which base applies', async () => {
+      const onQueryReply = vi.fn()
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })
+      const globalBase = pushedAttributes([0xff, 0xff, 0xff])
+      let base = globalBase
+      emulator.installViewAttributeResponder(() => base)
+      emulator.applyPushedViewAttributes(globalBase, null)
+      await emulator.write('\x1b]4;1;#00ff00\x07', { forwardQueryReplies: true })
+
+      // Worktree recorded after creation, or the first repo map arriving: the visible pane
+      // painted this palette from its first frame, so nothing re-themed.
+      base = pushedAttributes([0x00, 0x2b, 0x36])
+      emulator.applyPushedViewAttributes(base, null)
+      await emulator.write('\x1b]4;1;?\x07', { forwardQueryReplies: true })
+      expect(onQueryReply).toHaveBeenLastCalledWith('\x1b]4;1;rgb:0000/ffff/0000\x1b\\')
+
+      // A later push that leaves this PTY's base alone keeps them too.
+      emulator.applyPushedViewAttributes(pushedAttributes([0x00, 0x2b, 0x36]), base)
+      await emulator.write('\x1b]4;1;?\x07', { forwardQueryReplies: true })
+      expect(onQueryReply).toHaveBeenLastCalledWith('\x1b]4;1;rgb:0000/ffff/0000\x1b\\')
+    })
+
+    it('keeps overlays when only cursor settings or the app mode change', async () => {
+      const onQueryReply = vi.fn()
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })
+      const base = pushedAttributes([0x00, 0x2b, 0x36])
+      emulator.installViewAttributeResponder(() => base)
+      emulator.applyPushedViewAttributes(base, null)
+      await emulator.write('\x1b]4;1;#00ff00\x07\x1b]11;#101010\x07', { forwardQueryReplies: true })
+
+      emulator.applyPushedViewAttributes({ ...base, cursorBlink: false }, base)
+      emulator.applyPushedViewAttributes(
+        { ...base, cursorBlink: false, cursorStyle: 'block' },
+        base
+      )
+      emulator.applyPushedViewAttributes({ ...base, colorSchemeMode: 'light' }, base)
+      await emulator.write('\x1b]4;1;?\x07\x1b]11;?\x07', { forwardQueryReplies: true })
+
+      expect(onQueryReply.mock.calls).toEqual([
+        ['\x1b]4;1;rgb:0000/ffff/0000\x1b\\'],
+        ['\x1b]11;rgb:1010/1010/1010\x1b\\']
+      ])
     })
   })
 

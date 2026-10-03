@@ -13,14 +13,33 @@ import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-inca
 import { notifyDaemonAuditListeners } from './daemon-listener-registry'
 import { DaemonPtyEventSubscriptions } from './daemon-pty-event-subscriptions'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
-import { supportsColorQueryReplyColors } from './daemon-protocol-version'
+import {
+  supportsColorQueryReplyColors,
+  supportsRepoColorQueryReplyColors
+} from './daemon-protocol-version'
+import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { PtyOwnerRepoColors } from '../../shared/pty-owner-color-query-colors'
 
 export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscriptions {
   private colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
+  private repoColorQueryReplyColors: PtyOwnerRepoColors | null = null
+  private colorQueryReplyColorsDelivery: 'owed' | 'sent' = 'owed'
 
-  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+  constructor(opts: DaemonPtyAdapterOptions) {
+    super(opts)
+    // Why: a push written just before a transport drop may never reach the daemon, which stays alive.
+    this.client.onDisconnected(() => {
+      this.colorQueryReplyColorsDelivery = 'owed'
+    })
+  }
+
+  setColorQueryReplyColors(
+    colors: TerminalOscColorQueryReplyColors,
+    byRepoId?: PtyOwnerRepoColors
+  ): void {
     this.colorQueryReplyColors = colors
+    this.repoColorQueryReplyColors = byRepoId ?? this.repoColorQueryReplyColors
     this.syncColorQueryReplyColors()
   }
 
@@ -44,15 +63,25 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     this.flushOwedProducerResumes()
     if (isFreshConnection) {
       this.resyncBackgroundedSessions()
-      // Why: a replacement daemon starts with no colours, and a disconnected push was dropped.
+    }
+    // Why not only fresh: a client-side drop keeps the event listener, yet the push it dropped is owed.
+    if (isFreshConnection || this.colorQueryReplyColorsDelivery === 'owed') {
       this.syncColorQueryReplyColors()
     }
   }
 
   private syncColorQueryReplyColors(): void {
-    if (this.colorQueryReplyColors && supportsColorQueryReplyColors(this.protocolVersion)) {
-      this.client.notify('setColorQueryReplyColors', { colors: this.colorQueryReplyColors })
+    if (!this.colorQueryReplyColors || !supportsColorQueryReplyColors(this.protocolVersion)) {
+      return
     }
+    // Idempotent on the daemon, so resending the whole state is always safe.
+    const sent = this.client.notify('setColorQueryReplyColors', {
+      colors: this.colorQueryReplyColors,
+      ...(this.repoColorQueryReplyColors && supportsRepoColorQueryReplyColors(this.protocolVersion)
+        ? { byRepoId: this.repoColorQueryReplyColors }
+        : {})
+    })
+    this.colorQueryReplyColorsDelivery = sent ? 'sent' : 'owed'
   }
 
   protected recordAuthenticatedIdentity(): void {

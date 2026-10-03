@@ -1,10 +1,11 @@
 /**
- * Phase 5 slice 2 (View-attribute bridge): payload contract for the
- * renderer→main `pty:terminalViewAttributes`
- * push, plus main/renderer mirrors of xterm's XParseColor color-spec grammar
+ * Phase 5 slice 2 (View-attribute bridge): payload contracts for the
+ * renderer→main `pty:terminalViewAttributes` (global) and
+ * `pty:repoTerminalViewAttributes` (per-repo theme) pushes, plus main/renderer mirrors of xterm's XParseColor color-spec grammar
  * so main's responder replies byte-identically to a visible renderer xterm.
  */
 import type { TerminalOscColorQueryReplyColors } from './terminal-osc-color-reply'
+import { normalizeTerminalThemeHostId } from './terminal-theme-execution-host'
 
 /** 8-bit-per-channel RGB triple — the same resolution xterm's theme service
  *  stores internally (`color.toColorRGB`). */
@@ -14,9 +15,9 @@ export const TERMINAL_VIEW_ANSI_COLOR_COUNT = 256
 
 export type TerminalViewCursorStyle = 'bar' | 'block' | 'underline'
 
-/** One app-global snapshot of the renderer's composed terminal appearance —
- *  per-pane font zoom never affects these, and terminalColorOverrides /
- *  cursor settings are global, so one push covers all PTYs. */
+/** One snapshot of the renderer's composed terminal appearance: the global
+ *  one, or a repo's with its terminalTheme override applied. Per-pane font
+ *  zoom never affects these, so one snapshot covers every PTY in its scope. */
 export type TerminalViewAttributes = {
   foreground: TerminalViewRgb
   background: TerminalViewRgb
@@ -109,10 +110,9 @@ function rgbEqual(a: TerminalViewRgb, b: TerminalViewRgb): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
 }
 
-/** Value equality over the whole snapshot. Lets main's store treat a
- *  re-push of identical attributes (fresh renderer process: second window,
- *  reload, macOS re-activation) as a no-op instead of a theme apply. */
-export function terminalViewAttributesEqual(
+/** Value equality over the colours an xterm theme apply rewrites; cursor
+ *  shape/blink and the app mode are not part of it. */
+export function terminalViewColorsEqual(
   a: TerminalViewAttributes,
   b: TerminalViewAttributes
 ): boolean {
@@ -123,9 +123,6 @@ export function terminalViewAttributesEqual(
     !rgbEqual(a.foreground, b.foreground) ||
     !rgbEqual(a.background, b.background) ||
     !rgbEqual(a.cursor, b.cursor) ||
-    a.colorSchemeMode !== b.colorSchemeMode ||
-    a.cursorStyle !== b.cursorStyle ||
-    a.cursorBlink !== b.cursorBlink ||
     a.ansi.length !== b.ansi.length
   ) {
     return false
@@ -136,6 +133,21 @@ export function terminalViewAttributesEqual(
     }
   }
   return true
+}
+
+/** Value equality over the whole snapshot. Lets main's store treat a
+ *  re-push of identical attributes (fresh renderer process: second window,
+ *  reload, macOS re-activation) as a no-op instead of a theme apply. */
+export function terminalViewAttributesEqual(
+  a: TerminalViewAttributes,
+  b: TerminalViewAttributes
+): boolean {
+  return (
+    a.colorSchemeMode === b.colorSchemeMode &&
+    a.cursorStyle === b.cursorStyle &&
+    a.cursorBlink === b.cursorBlink &&
+    terminalViewColorsEqual(a, b)
+  )
 }
 
 function isRgbChannel(value: unknown): value is number {
@@ -200,4 +212,56 @@ export function validateTerminalViewAttributes(payload: unknown): TerminalViewAt
     cursorStyle: candidate.cursorStyle,
     cursorBlink: candidate.cursorBlink
   }
+}
+
+/** Per-project snapshots keyed by execution host id, then repo id: the same repo id can live on
+ *  this host and on SSH hosts. A host or repo absent here is unthemed and answers from the
+ *  global snapshot. */
+export type RepoTerminalViewAttributesPayload = {
+  byHostId: Record<string, Record<string, TerminalViewAttributes>>
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+  const proto: unknown = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+function validateRepoTerminalViewAttributesEntries(
+  byRepoId: Record<string, unknown>
+): [string, TerminalViewAttributes][] {
+  const entries: [string, TerminalViewAttributes][] = []
+  for (const [repoId, entry] of Object.entries(byRepoId)) {
+    const attributes = repoId ? validateTerminalViewAttributes(entry) : null
+    if (attributes) {
+      entries.push([repoId, attributes])
+    }
+  }
+  return entries
+}
+
+/** IPC-boundary validation for `pty:repoTerminalViewAttributes`. Bad entries and unknown hosts
+ *  are dropped individually so one malformed theme cannot stale every other project; a host
+ *  left with no entry is omitted, as the resolver omits it. */
+export function validateRepoTerminalViewAttributes(
+  payload: unknown
+): RepoTerminalViewAttributesPayload | null {
+  if (!isPlainObject(payload) || !isPlainObject(payload.byHostId)) {
+    return null
+  }
+  const hosts: [string, Record<string, TerminalViewAttributes>][] = []
+  for (const [rawHostId, byRepoId] of Object.entries(payload.byHostId)) {
+    const hostId = normalizeTerminalThemeHostId(rawHostId)
+    if (!hostId || !isPlainObject(byRepoId)) {
+      continue
+    }
+    const entries = validateRepoTerminalViewAttributesEntries(byRepoId)
+    if (entries.length > 0) {
+      // Why fromEntries: it defines own keys, so a `__proto__` repo id cannot swap the prototype.
+      hosts.push([hostId, Object.fromEntries(entries)])
+    }
+  }
+  return { byHostId: Object.fromEntries(hosts) }
 }

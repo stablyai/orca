@@ -5,6 +5,7 @@ import {
   ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION,
   CODEX_NO_DAEMON_SHELL_LAUNCH_DAEMON_PROTOCOL_VERSION,
   COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION,
+  REPO_COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION,
   CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   CONTENT_ADDRESSED_SHELL_WRAPPER_DAEMON_PROTOCOL_VERSION,
@@ -17,12 +18,14 @@ import {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
   supportsColorQueryReplyColors,
+  supportsRepoColorQueryReplyColors,
   supportsMode2031UnsubscribeFact
 } from './daemon-protocol-version'
 
 describe('daemon protocol version', () => {
   it('ships bounded history transfer after the 2031-unsubscribe fact', () => {
-    expect(PROTOCOL_VERSION).toBe(39)
+    expect(PROTOCOL_VERSION).toBe(40)
+    expect(REPO_COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION).toBe(40)
     expect(COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION).toBe(38)
     expect(CODEX_NO_DAEMON_SHELL_LAUNCH_DAEMON_PROTOCOL_VERSION).toBe(37)
     expect(CONTENT_ADDRESSED_SHELL_WRAPPER_DAEMON_PROTOCOL_VERSION).toBe(36)
@@ -38,13 +41,18 @@ describe('daemon protocol version', () => {
     expect(AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toEqual(
-      Array.from({ length: 38 }, (_, index) => index + 1)
+      Array.from({ length: 39 }, (_, index) => index + 1)
     )
   })
 
   it('pushes host colours only to daemons that answer OSC 10/11 for life', () => {
     expect(supportsColorQueryReplyColors(37)).toBe(false)
     expect(supportsColorQueryReplyColors(38)).toBe(true)
+  })
+
+  it('sends project colours only to daemons that answer each session from them', () => {
+    expect(supportsRepoColorQueryReplyColors(39)).toBe(false)
+    expect(supportsRepoColorQueryReplyColors(40)).toBe(true)
   })
 
   it('withholds 2031-unsubscribe support only before its v29 boundary', () => {

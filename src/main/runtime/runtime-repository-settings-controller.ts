@@ -38,6 +38,7 @@ type RepositoryUpdates = Partial<
   >
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
+  terminalTheme?: Repo['terminalTheme'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
@@ -86,6 +87,9 @@ export class RuntimeRepositorySettingsController {
     }
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null
+    }
+    if ('terminalTheme' in updates && updates.terminalTheme === null) {
+      sanitizedUpdates.terminalTheme = null
     }
     const updated = store.updateRepo(repo.id, sanitizedUpdates)
     if (!updated) {
