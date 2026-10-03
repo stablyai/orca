@@ -20,6 +20,11 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import { runtimeWorktreeIdentityKey } from '../runtime-worktree-path-identity'
+import {
+  WorktreeTerminalLeftAsleepError,
+  type WorktreeTerminalSleepSnapshot
+} from '../worktree-terminal-spawn-sleep-disposition'
 
 describe('OrcaRuntimeService', () => {
   describe('deliberately parked pane activation (STA-3465)', () => {
@@ -306,6 +311,91 @@ describe('OrcaRuntimeService', () => {
 
       expect(spawn).not.toHaveBeenCalled()
       expect(activated.tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })
+    })
+
+    function hostSleepStates(
+      runtime: OrcaRuntimeService
+    ): Map<string, WorktreeTerminalSleepSnapshot> {
+      return (
+        runtime as unknown as {
+          terminalSleepStateByWorktreeId: Map<string, WorktreeTerminalSleepSnapshot>
+        }
+      ).terminalSleepStateByWorktreeId
+    }
+
+    function rememberHostSleep(
+      runtime: OrcaRuntimeService,
+      phase: WorktreeTerminalSleepSnapshot['phase']
+    ): void {
+      hostSleepStates(runtime).set(runtimeWorktreeIdentityKey(TEST_WORKTREE_ID), {
+        worktreeId: TEST_WORKTREE_ID,
+        generation: 2,
+        phase,
+        ptyIds: ['persisted-pty'],
+        terminalHandles: ['term-1'],
+        terminalHandlesByPtyId: { 'persisted-pty': ['term-1'] }
+      })
+    }
+
+    function shellSessionRuntime(): {
+      runtime: OrcaRuntimeService
+      spawn: ReturnType<typeof vi.fn>
+    } {
+      const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+        makeWorkspaceSessionWithHeadlessTerminal()
+      )
+      return makeParkedRuntime(runtimeStore)
+    }
+
+    it('still materializes a shell tab that has no host sleep record', async () => {
+      const { runtime, spawn } = shellSessionRuntime()
+
+      const activated = await automaticActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    it.each(['sleeping', 'partial', 'stopping'] as const)(
+      'refuses automatic recovery while the host sleep phase is %s',
+      async (phase) => {
+        const { runtime, spawn } = shellSessionRuntime()
+        rememberHostSleep(runtime, phase)
+
+        const activated = await automaticActivate(runtime)
+
+        expect(spawn).not.toHaveBeenCalled()
+        expect(activated.tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })
+        expect(
+          hostSleepStates(runtime).get(runtimeWorktreeIdentityKey(TEST_WORKTREE_ID))?.phase
+        ).toBe(phase)
+      }
+    )
+
+    it('still materializes a host-slept shell tab when the user opens it', async () => {
+      const { runtime, spawn } = shellSessionRuntime()
+      rememberHostSleep(runtime, 'sleeping')
+
+      const activated = await userActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    it('keeps a committed host sleep when an automatic spawn reaches the lock', async () => {
+      const { runtime } = shellSessionRuntime()
+      rememberHostSleep(runtime, 'sleeping')
+
+      await expect(
+        runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID, 'leave')
+      ).rejects.toBeInstanceOf(WorktreeTerminalLeftAsleepError)
+      expect(
+        hostSleepStates(runtime).get(runtimeWorktreeIdentityKey(TEST_WORKTREE_ID))?.phase
+      ).toBe('sleeping')
+
+      const release = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+      release()
+      expect(hostSleepStates(runtime).has(runtimeWorktreeIdentityKey(TEST_WORKTREE_ID))).toBe(false)
     })
   })
 

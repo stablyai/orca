@@ -141,6 +141,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             telemetry: launchOpts.telemetry,
             connectionId: workspace.connectionId,
             worktreeId: workspace.id,
+            ...(launchOpts.leaveWorktreeSleeping ? { leaveWorktreeSleeping: true } : {}),
             preAllocatedHandle,
             tabId,
             leafId,
