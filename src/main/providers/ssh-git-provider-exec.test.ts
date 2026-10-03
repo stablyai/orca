@@ -162,7 +162,8 @@ describe('SshGitProvider', () => {
       },
       {
         signal: controller.signal,
-        timeoutMs: 60_000
+        timeoutMs: 60_000,
+        beforeResolve: expect.any(Function)
       }
     )
   })
@@ -236,11 +237,19 @@ describe('SshGitProvider', () => {
 
     await provider.exec(args, '/home/user/repo')
 
-    expect(mux.request).toHaveBeenCalledWith('git.exec', {
-      args,
-      cwd: '/home/user/repo',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.exec',
+      {
+        args,
+        cwd: '/home/user/repo',
+        __streamResponse: true
+      },
+      {
+        signal: undefined,
+        timeoutMs: undefined,
+        beforeResolve: expect.any(Function)
+      }
+    )
   })
 
   it('cancels a queued non-interactive exec without canceling the active relay child', async () => {
