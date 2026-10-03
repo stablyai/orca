@@ -107,9 +107,7 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
   if (filePath.toLowerCase().endsWith('.tsv')) {
     return '\t'
   }
-  // Why: sniff the first non-empty line for tab vs comma to handle CSVs that
-  // were saved with a different extension. Semicolons/pipes are out of scope;
-  // this tool is a viewer, not a general data importer.
+  // Include semicolon spreadsheet exports without adding general importer heuristics.
   // Why: strip a leading UTF-8 BOM so it doesn't get counted as part of the
   // first cell's characters (and so BOM-prefixed TSVs still sniff correctly).
   let text = content
@@ -121,7 +119,12 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
   // (0 tabs vs 0 commas, tie goes to comma), misdetecting blank-leading TSVs.
   const firstLine = findFirstNonEmptyCsvSniffLine(text)
   const tabs = countDelimiterOutsideQuotes(firstLine, '\t')
+  const semicolons = countDelimiterOutsideQuotes(firstLine, ';')
   const commas = countDelimiterOutsideQuotes(firstLine, ',')
+  // Keep the existing comma/tab choice unless semicolon strictly wins.
+  if (semicolons > commas && semicolons > tabs) {
+    return ';'
+  }
   return tabs > commas ? '\t' : ','
 }
 
