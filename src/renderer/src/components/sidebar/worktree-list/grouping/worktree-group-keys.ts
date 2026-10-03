@@ -5,7 +5,14 @@ import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../../workspace-
 import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace-statuses'
 import type { AppState } from '../../../../store/types'
 import { ALL_GROUP_KEY, getPRGroupKey, getProjectGroupHeaderKey } from './group-keys'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { buildProjectGroupingIndex, getProjectGroupingForRepo } from './project-grouping'
+import {
+  buildMergedProjectGroupIndex,
+  buildProjectGroupHostIndex,
+  findProjectGroupByHost,
+  resolveMergedProjectGroupId
+} from './cross-host-project-group-merge'
 import type { ProjectGroupingModel } from './project-grouping'
 import type { WorktreeGroupBy } from './row-types'
 
@@ -61,11 +68,18 @@ export function getGroupKeysForWorktree(
   }
   const repo = repoMap.get(worktree.repoId)
   const groupIds: string[] = []
-  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  // Why: the sidebar renders one header per merged group, so a key built from a
+  // non-primary host copy's id would never match the row it means to reveal.
+  const mergedIndex = buildMergedProjectGroupIndex(projectGroups)
+  const repoHostId =
+    repo?.connectionId || repo?.executionHostId ? getRepoExecutionHostId(repo) : undefined
+  // Why host-scoped: parentGroupId names a group on the repo's own host, and a bare
+  // id can land on another host's unrelated group before merged-id resolution runs.
+  const groupHostIndex = buildProjectGroupHostIndex(projectGroups)
   const visited = new Set<string>()
   let currentGroupId = repo?.projectGroupId ?? null
   while (currentGroupId && !visited.has(currentGroupId)) {
-    const group = groupsById.get(currentGroupId)
+    const group = findProjectGroupByHost(groupHostIndex, currentGroupId, repoHostId)
     if (!group) {
       // Why: repos can arrive before their remote Project Group metadata; reveal
       // keys must match the top-level fallback rows buildRows actually renders.
@@ -74,7 +88,13 @@ export function getGroupKeysForWorktree(
     visited.add(currentGroupId)
     groupIds.unshift(currentGroupId)
     const parentId = group.parentGroupId ?? null
-    currentGroupId = parentId && groupsById.has(parentId) ? parentId : null
+    currentGroupId =
+      parentId && findProjectGroupByHost(groupHostIndex, parentId, repoHostId) ? parentId : null
   }
-  return [...groupIds.map((id) => getProjectGroupHeaderKey(id)), groupKey]
+  return [
+    ...groupIds.map((id) =>
+      getProjectGroupHeaderKey(resolveMergedProjectGroupId(mergedIndex, id, repoHostId))
+    ),
+    groupKey
+  ]
 }
