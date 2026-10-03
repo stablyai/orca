@@ -9,6 +9,8 @@ const {
   getOwnerRepoForRemoteMock,
   getSshGitProviderGenerationMock,
   isGitHubHostAuthenticatedMock,
+  resolveBranchHeadRemoteNameMock,
+  readLocalGitConfigSignatureMock,
   shouldProbeGitRemoteMock
 } = vi.hoisted(() => ({
   getEnterpriseGitHubRepoSlugMock: vi.fn(),
@@ -16,7 +18,21 @@ const {
   getOwnerRepoForRemoteMock: vi.fn(),
   getSshGitProviderGenerationMock: vi.fn(() => 0),
   isGitHubHostAuthenticatedMock: vi.fn(),
+  resolveBranchHeadRemoteNameMock: vi.fn(),
+  readLocalGitConfigSignatureMock: vi.fn(),
   shouldProbeGitRemoteMock: vi.fn(async () => true)
+}))
+
+vi.mock('./github-branch-head-remote', () => ({
+  // Keeps these tests expressed as "which remote holds the branch" while still
+  // exercising the real injection contract.
+  resolveBranchHeadRepository: async (
+    query: { branchName: string },
+    getRepositoryForRemote: (remoteName: string) => Promise<unknown>
+  ) => {
+    const remoteName = await resolveBranchHeadRemoteNameMock(query)
+    return remoteName ? getRepositoryForRemote(remoteName) : null
+  }
 }))
 
 vi.mock('../providers/ssh-git-dispatch', async (importOriginal) => ({
@@ -35,6 +51,10 @@ vi.mock('./github-enterprise-repository', async (importOriginal) => ({
   ...(await importOriginal<typeof GitHubEnterpriseRepository>()),
   getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock,
   isGitHubHostAuthenticated: isGitHubHostAuthenticatedMock
+}))
+
+vi.mock('./local-git-config-signature', () => ({
+  readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
 vi.mock('../git/remote-name-listing', () => ({
@@ -59,6 +79,8 @@ beforeEach(() => {
   getOwnerRepoForRemoteMock.mockReset().mockResolvedValue(null)
   getSshGitProviderGenerationMock.mockReset().mockReturnValue(0)
   isGitHubHostAuthenticatedMock.mockReset().mockResolvedValue(false)
+  resolveBranchHeadRemoteNameMock.mockReset().mockResolvedValue(null)
+  readLocalGitConfigSignatureMock.mockReset().mockResolvedValue(undefined)
   shouldProbeGitRemoteMock.mockReset().mockResolvedValue(true)
 })
 
@@ -306,6 +328,25 @@ describe('origin repository cache', () => {
     expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2)
   })
 
+  it('re-probes the Enterprise identity when the local git config signature changes', async () => {
+    vi.useFakeTimers()
+    const repository = { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com' }
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValue(repository)
+    readLocalGitConfigSignatureMock.mockResolvedValue('sig-1')
+
+    await expect(getGitHubApiRepositoryForRemote('/repo', 'origin')).resolves.toEqual(repository)
+    // Within the 30s TTL, an unchanged signature reuses the cached identity.
+    await expect(getGitHubApiRepositoryForRemote('/repo', 'origin')).resolves.toEqual(repository)
+    expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(1)
+
+    // A changed remote (new config signature) must invalidate before the TTL.
+    readLocalGitConfigSignatureMock.mockResolvedValue('sig-2')
+    vi.setSystemTime(Date.now() + 1_000)
+    await expect(getGitHubApiRepositoryForRemote('/repo', 'origin')).resolves.toEqual(repository)
+    expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+
   it('does not reuse a cached negative after the SSH provider reconnects', async () => {
     const repository = {
       owner: 'acme',
@@ -356,6 +397,65 @@ describe('origin repository cache', () => {
     await expect(oldProbe).resolves.toEqual(oldRepository)
     await expect(getOriginGitHubApiRepository('/repo', 'ssh-1')).resolves.toEqual(newRepository)
     expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('resolveGitHubApiRepositoryCandidates head repository', () => {
+  const CANONICAL = { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+  const FORK = { owner: 'dcieslak19973', repo: 'orca', host: 'github.com' }
+  const BRANCH = 'dcieslak19973/feature'
+
+  function stubRemotes(byRemote: Record<string, { owner: string; repo: string } | null>): void {
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (_path: string, remote: string) => byRemote[remote] ?? null
+    )
+  }
+
+  // Why: every caller that is not doing a branch lookup keeps origin.
+  it('keeps origin as the head repository when no branch is supplied', async () => {
+    stubRemotes({ origin: CANONICAL })
+
+    const { headRepo } = await resolveGitHubApiRepositoryCandidates('/repo')
+
+    expect(headRepo).toEqual(CANONICAL)
+    expect(resolveBranchHeadRemoteNameMock).not.toHaveBeenCalled()
+  })
+
+  // #12956: origin is the canonical repo and the branch lives on a
+  // differently-named fork remote, so the head owner must be the fork's.
+  it('uses the fork that holds the branch as the head repository', async () => {
+    stubRemotes({ origin: CANONICAL, fork: FORK })
+    resolveBranchHeadRemoteNameMock.mockResolvedValue('fork')
+
+    const { candidates, headRepo } = await resolveGitHubApiRepositoryCandidates(
+      '/repo',
+      null,
+      {},
+      BRANCH
+    )
+
+    expect(headRepo).toEqual(FORK)
+    // The query still runs against the canonical repo that owns the PR.
+    expect(candidates).toEqual([CANONICAL])
+  })
+
+  it('leaves the head repository unset when no single remote holds the branch', async () => {
+    stubRemotes({ origin: CANONICAL })
+    resolveBranchHeadRemoteNameMock.mockResolvedValue(null)
+
+    const { headRepo } = await resolveGitHubApiRepositoryCandidates('/repo', null, {}, BRANCH)
+
+    // Null selects the head-owner-agnostic lookup instead of filtering on a guess.
+    expect(headRepo).toBeNull()
+  })
+
+  it('leaves the head repository unset when the branch remote is not a GitHub repo', async () => {
+    stubRemotes({ origin: CANONICAL, gitea: null })
+    resolveBranchHeadRemoteNameMock.mockResolvedValue('gitea')
+
+    const { headRepo } = await resolveGitHubApiRepositoryCandidates('/repo', null, {}, BRANCH)
+
+    expect(headRepo).toBeNull()
   })
 })
 

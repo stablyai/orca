@@ -53,7 +53,8 @@ export async function resolvePRForBranchOutcome(input: {
   const { candidates, headRepo } = await resolveGitHubApiRepositoryCandidates(
     repoPath,
     connectionId,
-    localGitOptions
+    localGitOptions,
+    branchName
   )
   // Why: connection-backed gh runs without a repository cwd. A bare lookup
   // here can honor process GH_REPO/GH_HOST and return an unrelated PR.
