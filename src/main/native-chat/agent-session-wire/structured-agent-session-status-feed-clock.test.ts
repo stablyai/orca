@@ -14,6 +14,7 @@ import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wi
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const SESSION = 'clock-session'
 const THREAD = 'thread-1'
@@ -60,6 +61,7 @@ async function openFeed() {
     stateDirectory: join(root, SESSION)
   })
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
     getRecord: () => null,
     now: () => clock

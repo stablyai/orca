@@ -60,6 +60,7 @@ import {
   CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
 } from '../../shared/clipboard-text'
 import {
+  createFakeAgentBrowserChild,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -80,9 +81,9 @@ function succeedForContentEditable(data: unknown = { ok: true }): void {
           ? { value: 'true' }
           : data
       cb(null, JSON.stringify({ success: true, data: result }), '')
-      return {
+      return createFakeAgentBrowserChild({
         stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
-      }
+      })
     }
   )
 }

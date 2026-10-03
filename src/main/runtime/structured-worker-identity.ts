@@ -108,7 +108,7 @@ function persistedStructuredWorkerPaneKeyIsValid(
  *
  * NOT the runtime fence: the fence is an owner-generation counter that the host bumps during its
  * own transparent crash recovery, so fencing identity on it would make a recovered — but same —
- * worker fail `verifyDispatchCapability` forever and wedge release as `identity_unproven`. The
+ * worker fail its process check forever and wedge release as `identity_unproven`. The
  * session id is minted once per dispatch and survives that recovery, so it is the lineage.
  */
 export function structuredWorkerProcessIncarnation(sessionId: string): string {

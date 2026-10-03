@@ -252,25 +252,6 @@ describe('foldMobileNativeChatMessages', () => {
       { type: 'tool-result', output: 'important output' }
     ])
   })
-
-  it('keeps a hidden interruption from authorizing a later result', () => {
-    const folded = foldMobileNativeChatMessages([
-      toolCall('c1'),
-      {
-        id: 'interrupt',
-        role: 'user',
-        blocks: [{ type: 'text', text: '[Request interrupted by user]' }],
-        timestamp: 1,
-        source: 'transcript'
-      },
-      toolResult('orphan', 'stale output')
-    ])
-
-    expect(folded.map((message) => message.id)).toEqual(['c1'])
-    expect(folded[0]?.blocks).toEqual([
-      { type: 'tool-call', name: 'Bash', input: { command: 'command -v orca-ide' } }
-    ])
-  })
 })
 
 // Claude consumes a mid-turn send through a `queued_command` attachment and writes

@@ -10,6 +10,7 @@ import type {
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { TitleDisplayClear } from './runtime-worktree-status-projection'
 
 export type RuntimeMobileSessionProjectionHost = {
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
@@ -32,6 +33,8 @@ export type RuntimeMobileSessionProjectionHost = {
     getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null
   getTrackedTitle(ptyId: string | null): string | null
+  /** Display-only clear of a PTY's native title; every title/status read here is display. */
+  getTitleDisplayClear(ptyId: string | null): TitleDisplayClear | null
   issuePtyHandle(pty: RuntimePtyWorktreeRecord): string
   recordPty(
     ptyId: string,

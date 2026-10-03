@@ -52,6 +52,7 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
+  createFakeAgentBrowserChild,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -398,15 +399,14 @@ describe('AgentBrowserBridge', () => {
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
-          return
-        }
-        if (args.includes('snapshot')) {
+        } else if (args.includes('snapshot')) {
           releaseSnapshot = () => {
             cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
           }
-          return
+        } else {
+          cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
         }
-        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+        return createFakeAgentBrowserChild({})
       }
     )
 

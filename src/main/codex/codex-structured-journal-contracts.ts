@@ -8,6 +8,8 @@ import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-sess
 
 export type CodexJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
+  /** Names this connection in frame-row identities, so a later connection never revises its rows. */
+  acquisitionId?: string
   /** Keys restored lifecycle rows to the live identity; without it history restore skips them. */
   sessionId?: string
   now?: () => number

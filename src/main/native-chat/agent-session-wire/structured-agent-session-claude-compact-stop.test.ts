@@ -28,6 +28,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -70,6 +71,7 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     // The production router is what declares create support; the bare adapter only knows locations.
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
@@ -208,38 +210,34 @@ it('ends a hung /compact Claude will not interrupt by stopping it, and answers t
   })
 })
 
-it('ends a stopped /compact on its own interrupted result, and a late copy of that result does not end the next one', async () => {
+it('ends a stopped /compact on its own interrupted result, then ends its child; a late copy never reaches the next one', async () => {
   claude.routes.interrupt = () => ({})
   const first = await compact()
   const { connection, uuid: firstUuid } = await sent('/compact')
 
   await expect(stop(first)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
-  // The interrupt was taken: the command runs until Claude answers it.
-  expect((await commandState(first))?.state).toBe('running')
+  // The interrupt was taken: the child waits for Claude to end the command itself.
+  expect(connection.closed).toBe(false)
   frame(connection, result(firstUuid, INTERRUPTED))
-  await vi.waitFor(async () =>
-    expect(await commandState(first)).toMatchObject({
-      state: 'interrupted',
-      outcome: 'cancellation'
-    })
-  )
+  await vi.waitFor(() => expect(connection.closed).toBe(true))
+  expect(await commandState(first)).toMatchObject({
+    state: 'interrupted',
+    outcome: 'cancellation'
+  })
 
   const second = await compact()
-  await vi.waitFor(() =>
-    expect(
-      connection.sent.filter((message) => JSON.stringify(message).includes('/compact'))
-    ).toHaveLength(2)
-  )
-  const secondUuid = String(connection.sent.at(-1)?.uuid)
+  const next = await vi.waitFor(() => {
+    const started = claude.connections.at(-1)
+    expect(started).not.toBe(connection)
+    expect(started?.sent.some((message) => JSON.stringify(message).includes('/compact'))).toBe(true)
+    return started!
+  })
+  const secondUuid = String(next.sent.at(-1)?.uuid)
   frame(connection, result(firstUuid, INTERRUPTED))
-  frame(
-    connection,
-    result('an-earlier-send', { subtype: 'error_during_execution', is_error: true })
-  )
   expect((await commandState(second))?.state).toBe('running')
 
-  frame(connection, { type: 'system', subtype: 'compact_boundary', uuid: 'boundary' })
-  frame(connection, result(secondUuid))
+  frame(next, { type: 'system', subtype: 'compact_boundary', uuid: 'boundary' })
+  frame(next, result(secondUuid))
   await vi.waitFor(async () =>
     expect(await commandState(second)).toMatchObject({ state: 'completed', outcome: 'success' })
   )

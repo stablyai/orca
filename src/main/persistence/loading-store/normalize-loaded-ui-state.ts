@@ -78,6 +78,7 @@ export function normalizeLoadedUiState(
   const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
   const expandedCardPropsMigrated = parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
   const jiraIssueCardPropDefaulted = parsed.ui?._jiraIssueWorktreeCardPropertyDefaulted === true
+  const hostCardPropDefaulted = parsed.ui?._hostWorktreeCardPropertyDefaulted === true
   const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
   const deliberateUncheck =
     hadExperimentOn && Array.isArray(rawCardProps) && !rawCardProps.includes('inline-agents')
@@ -119,7 +120,12 @@ export function normalizeLoadedUiState(
       jiraIssueCardPropDefaulted || expandedCandidate.includes('jira-issue')
         ? expandedCandidate
         : [...expandedCandidate, 'jira-issue' as const]
-    const normalized = normalizeWorktreeCardProperties(jiraCandidate)
+    // Why: the host pill was unconditional before it became a property, so existing profiles get it back once rather than silently losing it.
+    const hostCandidate =
+      hostCardPropDefaulted || jiraCandidate.includes('host')
+        ? jiraCandidate
+        : [...jiraCandidate, 'host' as const]
+    const normalized = normalizeWorktreeCardProperties(hostCandidate)
     const changed =
       normalized.length !== rawCardProps.length ||
       normalized.some((property, index) => property !== rawCardProps[index])
@@ -129,7 +135,8 @@ export function normalizeLoadedUiState(
     migratedCardProps !== undefined ||
     !inlineAgentsMigrated ||
     !expandedCardPropsMigrated ||
-    !jiraIssueCardPropDefaulted
+    !jiraIssueCardPropDefaulted ||
+    !hostCardPropDefaulted
   ) {
     markNeedsSave()
   }
@@ -213,6 +220,7 @@ export function normalizeLoadedUiState(
     _inlineAgentsDefaultedForExperiment: true,
     _inlineAgentsDefaultedForAllUsers: true,
     _expandedWorktreeCardPropertiesDefaulted: true,
-    _jiraIssueWorktreeCardPropertyDefaulted: true
+    _jiraIssueWorktreeCardPropertyDefaulted: true,
+    _hostWorktreeCardPropertyDefaulted: true
   }
 }

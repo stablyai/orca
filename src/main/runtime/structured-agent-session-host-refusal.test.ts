@@ -18,22 +18,27 @@ import Database from '../sqlite/sync-database'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
-import { requireStructuredCleanupHost } from './rpc/methods/structured-agent-session-gate'
+import { requireStructuredHost } from './rpc/methods/structured-agent-session-gate'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../ai-vault/structured-session-ownership'
 import type { RpcContext } from './rpc/core'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 let root: string
+let log = recordingStructuredAgentSessionLogger()
+const openFailureLogs = () =>
+  log.entries.filter((entry) => entry.fields.scope === 'journal-database-open')
 
 // An in-process caller: the same build as the host, so the gate asks it for no capability.
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the cleanup gate reads only `clientKind` and `clientCapabilities`.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only `clientKind` and `clientCapabilities`.
 const IN_PROCESS = {} as RpcContext
 
 function install(): ReturnType<typeof ensureStructuredAgentSessionHost> {
   return ensureStructuredAgentSessionHost({
+    logger: log.logger,
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
@@ -46,7 +51,7 @@ function install(): ReturnType<typeof ensureStructuredAgentSessionHost> {
 /** The refusal as the gate throws it for every structured request. */
 function gateRefusal(): { reason: unknown; message: string } {
   try {
-    requireStructuredCleanupHost(IN_PROCESS)
+    requireStructuredHost(IN_PROCESS)
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
       return { reason: error.refusal.details?.reason, message: error.refusal.message }
@@ -64,6 +69,7 @@ async function digest(path: string): Promise<string> {
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-host-refusal-'))
+  log = recordingStructuredAgentSessionLogger()
 })
 
 afterEach(async () => {
@@ -107,7 +113,6 @@ describe('a process whose journal will not open', () => {
     earlier.pragma('user_version = 2')
     earlier.close()
     const before = await digest(path)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       await expect(install()).rejects.toMatchObject({
@@ -118,11 +123,11 @@ describe('a process whose journal will not open', () => {
       reason: 'journalCorrupt',
       message: 'Unable to load this chat.'
     })
-    expect(warn).toHaveBeenCalledOnce()
-    const logged = String(warn.mock.calls[0]?.[1])
+    expect(openFailureLogs()).toHaveLength(1)
+    const logged = String(openFailureLogs()[0]?.fields.error)
     expect(logged).toContain(path)
     expect(logged).toContain('unreleased development build')
-    expect(logged).toContain('move the file aside')
+    expect(logged).toContain('Moving the file aside')
     expect(await digest(path)).toBe(before)
   })
 
@@ -143,8 +148,6 @@ describe('a process whose journal will not open', () => {
 })
 
 describe('logging a journal that will not open', () => {
-  const OPEN_FAILED = '[structured-agent-session] opening the chat journal database failed'
-
   async function writeJunkJournal(): Promise<void> {
     const path = journalDatabasePath(root)
     await rm(`${path}-wal`, { force: true })
@@ -154,8 +157,6 @@ describe('logging a journal that will not open', () => {
 
   // Every chat request retries the open; the same failure each time is one log, not one per request.
   it('logs a repeated failure once, with its stack, and again after an open succeeds', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const openFailureLogs = () => warn.mock.calls.filter(([message]) => message === OPEN_FAILED)
     await install()
     await stopStructuredAgentSessionRuntime()
     await writeJunkJournal()
@@ -166,8 +167,11 @@ describe('logging a journal that will not open', () => {
       })
     }
     expect(openFailureLogs()).toHaveLength(1)
-    expect(openFailureLogs()[0]?.[1]).toBeInstanceOf(Error)
-    expect(openFailureLogs()[0]?.[1]).toHaveProperty('stack', expect.stringContaining('\n'))
+    expect(openFailureLogs()[0]?.fields.error).toBeInstanceOf(Error)
+    expect(openFailureLogs()[0]?.fields.error).toHaveProperty(
+      'stack',
+      expect.stringContaining('\n')
+    )
 
     await unlink(journalDatabasePath(root))
     await install()
@@ -353,19 +357,19 @@ describe('startup and other non-chat work without a structured host', () => {
     ).resolves.toBeUndefined()
     await expect(
       assertLegacyAiVaultResumeCommandAllowed('claude --resume 0f9c1d2e', async () => {
-        throw new Error('the record store would not open')
+        throw new Error('the host would not construct')
       })
-    ).rejects.toThrow('the record store would not open')
+    ).rejects.toThrow('the host would not construct')
     expect(gateRefusal().reason).toBe('journalCorrupt')
   })
 
   it('still fails on an install error that refuses nothing', async () => {
     const { runtime, refreshPtyRecords } = startupRuntime(async () => {
-      throw new Error('the record store would not open')
+      throw new Error('the host would not construct')
     })
 
     await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).rejects.toThrow(
-      'the record store would not open'
+      'the host would not construct'
     )
     expect(refreshPtyRecords).not.toHaveBeenCalled()
   })

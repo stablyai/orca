@@ -3,10 +3,13 @@ import type { AgentSessionOwnerVerdict } from './agent-session-wire'
 import { agentSessionOwnerVerdictAllowsFreshOperationId } from './agent-session-refusal-retry'
 import { parseAgentSessionWriteFailure } from './agent-session-write-failure'
 import {
-  admitStructuredAgentSessionOutboxEntry,
   createStructuredAgentSessionOutboxEntry,
   requeueStructuredAgentSessionSendRefusal
 } from './structured-agent-session-outbox'
+import {
+  admitStructuredAgentSessionOutboxEntry,
+  structuredAgentSessionEntryHeldForRetry
+} from './structured-agent-session-outbox-admission'
 import { disposeStructuredAgentSessionSendResult } from './structured-agent-session-send-disposition'
 
 const entry = createStructuredAgentSessionOutboxEntry({
@@ -49,7 +52,7 @@ describe("the owner's verdict decides a retry's operation id only as a floor", (
     expect(retried('exited')).toMatchObject({ clientMessageId: 'message-2', state: 'queued' })
   })
 
-  it('keeps later sends behind the message after an exited refusal', () => {
+  it('holds the message for its Retry after an exited refusal, and sends later ones past it', () => {
     const later = createStructuredAgentSessionOutboxEntry({
       clientMessageId: 'message-3',
       sessionId: 'session-1',
@@ -60,7 +63,6 @@ describe("the owner's verdict decides a retry's operation id only as a floor", (
     const disposition = disposeStructuredAgentSessionSendResult({
       entries: [entry, later],
       entry,
-      blockedClientMessageId: null,
       result: {
         ok: false,
         refusal: {
@@ -71,13 +73,12 @@ describe("the owner's verdict decides a retry's operation id only as a floor", (
       },
       createOperationId: () => 'message-2'
     })
-    expect(disposition.blockedClientMessageId).toBe('message-2')
-    expect(
-      admitStructuredAgentSessionOutboxEntry(
-        disposition.entries,
-        disposition.blockedClientMessageId
-      )
-    ).toMatchObject({ state: 'blocked', entry: { clientMessageId: 'message-2' } })
+    expect(disposition.entries[0]).toMatchObject({ clientMessageId: 'message-2', state: 'queued' })
+    expect(structuredAgentSessionEntryHeldForRetry(disposition.entries[0]!)).toBe(true)
+    expect(admitStructuredAgentSessionOutboxEntry(disposition.entries)).toMatchObject({
+      state: 'dispatch',
+      entry: { clientMessageId: 'message-3' }
+    })
   })
 
   it.each<AgentSessionOwnerVerdict | undefined>(['unverifiable', 'live', undefined])(

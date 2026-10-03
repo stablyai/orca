@@ -312,7 +312,14 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           // Why alongside: the same restart that hands those rows back also restores rows the user
           // already closed while this environment was down, so the closes it never heard have to be
           // replayed before its persisted records can put them on screen again.
-          void replayClientHostedBrowserCloseIntents(environmentId, get())
+          const {
+            clientHostedBrowserCloseIntentsByEnvironment,
+            clearClientHostedBrowserCloseIntents
+          } = get()
+          void replayClientHostedBrowserCloseIntents(environmentId, {
+            clientHostedBrowserCloseIntentsByEnvironment,
+            clearClientHostedBrowserCloseIntents
+          })
         }
       },
       (snapshot) => get().applyRuntimeHostStatusSnapshot(snapshot)

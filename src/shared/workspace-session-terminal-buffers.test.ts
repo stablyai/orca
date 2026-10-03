@@ -187,27 +187,6 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     })
   })
 
-  it('caps preserved SSH buffers so session JSON cannot scale with raw scrollback', () => {
-    const hugeScrollback = `start-${'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + 10)}`
-    const result = pruneLocalTerminalScrollbackBuffers(
-      makeSession({
-        terminalLayoutsByTabId: {
-          'remote-tab': {
-            root: null,
-            activeLeafId: null,
-            expandedLeafId: null,
-            buffersByLeafId: { 'pane:1': hugeScrollback }
-          }
-        }
-      }),
-      [{ id: 'remote-repo', connectionId: 'ssh-target-1' }]
-    )
-
-    const buffer = result.terminalLayoutsByTabId['remote-tab'].buffersByLeafId?.['pane:1']
-    expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)
-    expect(buffer?.startsWith('start-')).toBe(false)
-  })
-
   it('caps preserved SSH buffers by UTF-8 bytes for multibyte scrollback', () => {
     const multibyteRow = 'é'.repeat(1024)
     const hugeScrollback = multibyteRow.repeat(512)

@@ -9,7 +9,7 @@ import {
   codexTurnLifecycleRig,
   settledWithin
 } from './codex-structured-dispatch-test-support'
-import { CODEX_STOP_TURN_OPEN_WAIT_MS } from './codex-structured-prompt-ownership'
+import { CODEX_TURN_OPEN_WAIT_MS } from './codex-structured-turn-open-wait'
 
 type Rig = Awaited<ReturnType<typeof codexTurnLifecycleRig>>
 
@@ -137,7 +137,7 @@ describe("a no-turn Stop in the window between Codex's answer and its turn openi
       outcome = value
     })
 
-    await vi.advanceTimersByTimeAsync(CODEX_STOP_TURN_OPEN_WAIT_MS - 1)
+    await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 1)
     expect(outcome).toBe('held')
     await vi.advanceTimersByTimeAsync(1)
 

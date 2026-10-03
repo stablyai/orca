@@ -115,6 +115,16 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // their parent instead.
     directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
   },
+  qoder: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(
+        options.qoderProjectsDir ?? join(homedir(), '.qoder', 'projects'),
+        wslHomeDirs,
+        ['.qoder', 'projects']
+      ),
+    extensions: ['.jsonl'],
+    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+  },
   codebuddy: {
     rootDirs: (options, wslHomeDirs) => [
       options.codebuddyProjectsDir ?? CODEBUDDY_PROJECTS_DIR,

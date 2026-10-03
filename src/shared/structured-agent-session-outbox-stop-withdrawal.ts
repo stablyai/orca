@@ -1,32 +1,28 @@
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
+import { structuredAgentSessionEntryHeldForRetry } from './structured-agent-session-outbox-admission'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 
-/** Whether only the user's Retry sends this entry again: a refused one, the one the drain stopped
- *  on, one a Stop outlived, or one in doubt the unconfirmed probe leaves alone. `NativeChatDeliveryRetry` offers it. */
-function awaitsStructuredAgentSessionRetry(
-  entry: StructuredAgentSessionOutboxEntry,
-  blockedClientMessageId: string | null
-): boolean {
+/** Whether only the user's Retry sends this entry again: a rejected one, one whose send failed or
+ *  was refused, one a Stop outlived, or one in doubt the unconfirmed probe leaves alone.
+ *  `NativeChatDeliveryRetry` offers it. */
+function awaitsStructuredAgentSessionRetry(entry: StructuredAgentSessionOutboxEntry): boolean {
   return (
     entry.state === 'rejected' ||
-    entry.clientMessageId === blockedClientMessageId ||
+    structuredAgentSessionEntryHeldForRetry(entry) ||
     entry.outlivedStop === true ||
     (entry.state === 'unconfirmed' && entry.retryAfterUnknownSubmittedAt !== null)
   )
 }
 
 function unsentStructuredAgentSessionOutboxEntry(
-  submissions: readonly AgentJournalSubmission[],
-  blockedClientMessageId: string | null
+  submissions: readonly AgentJournalSubmission[]
 ): (entry: StructuredAgentSessionOutboxEntry) => boolean {
   const held = handedOffQueuedMessageIds(submissions)
   for (const submission of submissions) {
     held.add(submission.clientMessageId)
   }
-  return (entry) =>
-    !held.has(entry.clientMessageId) &&
-    !awaitsStructuredAgentSessionRetry(entry, blockedClientMessageId)
+  return (entry) => !held.has(entry.clientMessageId) && !awaitsStructuredAgentSessionRetry(entry)
 }
 
 /** A queue send that has gone out at least once and was not refused, in whatever state it now
@@ -63,10 +59,9 @@ function markedOutlivingStop(
 export function withdrawUnsentStructuredAgentSessionOutboxEntries(
   entries: readonly StructuredAgentSessionOutboxEntry[],
   submissions: readonly AgentJournalSubmission[],
-  blockedClientMessageId: string | null,
   inFlightClientMessageId: string | null
 ): StructuredAgentSessionOutboxEntry[] {
-  const unsent = unsentStructuredAgentSessionOutboxEntry(submissions, blockedClientMessageId)
+  const unsent = unsentStructuredAgentSessionOutboxEntry(submissions)
   return entries
     .filter(
       (entry) =>
@@ -80,8 +75,7 @@ export function withdrawUnsentStructuredAgentSessionOutboxEntries(
 /** Whether a Stop has something here to withdraw: a message that would still go out on its own. */
 export function hasUnsentStructuredAgentSessionOutboxEntry(
   entries: readonly StructuredAgentSessionOutboxEntry[],
-  submissions: readonly AgentJournalSubmission[],
-  blockedClientMessageId: string | null
+  submissions: readonly AgentJournalSubmission[]
 ): boolean {
-  return entries.some(unsentStructuredAgentSessionOutboxEntry(submissions, blockedClientMessageId))
+  return entries.some(unsentStructuredAgentSessionOutboxEntry(submissions))
 }

@@ -21,7 +21,7 @@ import {
 } from './federation-setup'
 import { FederationAttachStartParams } from './federation-start-schema'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
-import { prepareFederationAttachmentWorkerStart } from '../worker/worker-start-validation'
+import { prepareFederationConfiguredWorkerStart } from '../worker/worker-configured-agent-preflight'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -54,7 +54,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
       const createsWorktree = params.worktree === 'new-top-level'
-      const { agent, launch } = prepareFederationAttachmentWorkerStart({
+      const { agent, launch } = await prepareFederationConfiguredWorkerStart({
         params,
         createsWorktree,
         runtime
@@ -239,7 +239,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         if (!paneKey || !processIncarnation) {
           throw new Error('stable_pane_required')
         }
-        const capability = db.prepareRemoteAttachmentAuthority({
+        db.prepareRemoteAttachmentAuthority({
           dispatchId: params.dispatchId,
           paneKey,
           processIncarnation,
@@ -259,7 +259,6 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             taskSpec: params.taskSpec,
             coordinatorHandle: 'Run home (relayed by Orca)',
             workerHandle: terminalHandle,
-            dispatchCapability: capability,
             devMode: params.devMode,
             // Why the worker host's own setting: enforcement runs here, with this
             // host's code, against this host's cap.

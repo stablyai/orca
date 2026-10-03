@@ -7,6 +7,7 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
+import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
   encodeShellStartupFeatures,
@@ -127,7 +128,11 @@ const UNWRAPPED: ShellLaunchConfig = {
 export function getShellLaunchConfig(
   shellPath: string,
   features: readonly ShellStartupFeature[],
-  options: { hasStartupCommand?: boolean } = {}
+  options?: {
+    hasStartupCommand?: boolean
+    inheritedXdgDataDirs: string | undefined
+    shellArgs?: readonly string[]
+  }
 ): ShellLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
 
@@ -178,10 +183,9 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why: mirrors local-pty-shell-ready.ts; markerless fish stays unwrapped unless a
-  // startup command (e.g. Orca's Codex launch) needs the codex wrapper. The selection
-  // is baked into the init command, so fish needs no feature env var.
-  if (shellName === 'fish' && (features.includes('ready') || options.hasStartupCommand)) {
+  // Why: mirrors local-pty-shell-ready.ts; only these need the -C init, plain fish gets
+  // the env-only handoff below. The selection is baked in, so no feature env var.
+  if (shellName === 'fish' && (features.includes('ready') || options?.hasStartupCommand)) {
     return {
       args: [
         '-l',
@@ -190,6 +194,19 @@ export function getShellLaunchConfig(
       ],
       env: {},
       supportsReadyMarker: features.includes('ready')
+    }
+  }
+
+  // Why env only: mirrors local-pty-shell-ready.ts; a plain fish pane keeps fish's own argv.
+  if (shellName === 'fish' && ensureShellReadyWrappers()) {
+    return {
+      args: null,
+      env: getFishXdgDataDirsLaunchEnv(
+        getShellReadyWrapperRoot(),
+        options?.inheritedXdgDataDirs,
+        options?.shellArgs
+      ),
+      supportsReadyMarker: false
     }
   }
 

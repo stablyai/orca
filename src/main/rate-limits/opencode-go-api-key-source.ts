@@ -26,6 +26,13 @@ export type OpenCodeGoApiKeyTier =
 export type OpenCodeGoApiKeyResolution =
   | { status: 'found'; key: string; tier: OpenCodeGoApiKeyTier }
   | { status: 'missing' }
+  /** A credential database failed to read while OPENCODE_API_KEY was set. */
+  | { status: 'credential-database-unreadable' }
+
+export type OpenCodeCredentialDatabaseGoKeyRead =
+  | { status: 'found'; key: string }
+  | { status: 'missing' }
+  | { status: 'unreadable' }
 
 export function getOpenCodeAuthFilePath(
   environment: NodeJS.ProcessEnv = process.env,
@@ -86,6 +93,14 @@ export function readOpenCodeAuthFileGoKey(
   }
 }
 
+function isMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  )
+}
+
 function selectCredentialKey(database: Database.Database): string | null {
   if (!tableExists(database, 'credential')) {
     return null
@@ -122,14 +137,23 @@ function selectCredentialKey(database: Database.Database): string | null {
  * only there, so a fresh OpenCode 2 install has no `auth.json` entry at all.
  * The table itself is not a version marker — 1.18.x creates it too (verified
  * empty on a real 1.18.16 install), so probe it regardless of version.
- * @returns The key, or null when no database, table, or row carries one.
+ * @returns The key; `missing` when no database, table, or row carries one;
+ * `unreadable` when none had a key but discovery failed for a reason other than
+ * absence, or at least one database failed to open or query.
  */
-export async function readOpenCodeCredentialDatabaseGoKey(): Promise<string | null> {
+export async function readOpenCodeCredentialDatabaseGoKey(): Promise<OpenCodeCredentialDatabaseGoKeyRead> {
+  let sawUnreadable = false
   let paths: string[]
   try {
-    paths = [...(await listOpenCodeDatabases())].sort(compareOpenCodeClaimPriority)
+    const listed = await listOpenCodeDatabases(undefined, (path, error) => {
+      // A UNC location is never opened here (below), so failing to list it is no evidence either.
+      if (!isWslUncPath(path) && !isMissingPathError(error)) {
+        sawUnreadable = true
+      }
+    })
+    paths = [...listed].sort(compareOpenCodeClaimPriority)
   } catch {
-    return null
+    return { status: 'missing' }
   }
   for (const path of paths) {
     // A synchronous open against a 9p/UNC share can hang the main process, and
@@ -143,17 +167,18 @@ export async function readOpenCodeCredentialDatabaseGoKey(): Promise<string | nu
       database.pragma('query_only = ON')
       const key = selectCredentialKey(database)
       if (key) {
-        return key
+        return { status: 'found', key }
       }
     } catch {
-      // A locked, WAL-index-less, or foreign-schema database is not an error
-      // here; it just holds no key we can read.
+      // A locked, WAL-index-less, or foreign-schema database may still hold the
+      // key; a later database can still supply one.
+      sawUnreadable = true
       continue
     } finally {
       database?.close()
     }
   }
-  return null
+  return { status: sawUnreadable ? 'unreadable' : 'missing' }
 }
 
 /**
@@ -165,10 +190,12 @@ export async function readOpenCodeCredentialDatabaseGoKey(): Promise<string | nu
  * so its presence is not a 2.x marker, and a 2.x install that never ran the
  * legacy import has no `auth.json` at all.
  * The stored key outranks the env var because OpenCode applies it after env,
- * and the env var is shared with the Zen provider.
+ * and the env var is shared with the Zen provider — so an unreadable database
+ * stops before the env var rather than risk reporting the wrong key's usage.
  * @param input.settingsOverride - The key a user pasted into Orca's settings.
  * @param input.environment - Process environment to read; injectable for tests.
- * @returns The first key found and the tier it came from, or `missing`.
+ * @returns The first key found and the tier it came from, `missing`, or
+ * `credential-database-unreadable`.
  */
 export async function resolveOpenCodeGoApiKey(input: {
   settingsOverride?: string
@@ -184,10 +211,13 @@ export async function resolveOpenCodeGoApiKey(input: {
     return { status: 'found', key: fromAuthFile, tier: 'opencode-auth-file' }
   }
   const fromDatabase = await readOpenCodeCredentialDatabaseGoKey()
-  if (fromDatabase) {
-    return { status: 'found', key: fromDatabase, tier: 'opencode-credential-database' }
+  if (fromDatabase.status === 'found') {
+    return { status: 'found', key: fromDatabase.key, tier: 'opencode-credential-database' }
   }
   const fromEnvironment = trimmedKey(environment[OPENCODE_API_KEY_ENV])
+  if (fromEnvironment && fromDatabase.status === 'unreadable') {
+    return { status: 'credential-database-unreadable' }
+  }
   if (fromEnvironment) {
     return { status: 'found', key: fromEnvironment, tier: 'environment' }
   }

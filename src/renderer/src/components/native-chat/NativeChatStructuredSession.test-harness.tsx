@@ -75,7 +75,7 @@ export function createStructuredSessionMocks() {
     launchLifecycle: nullable<StructuredAgentSessionLaunchLifecycle>(),
     launchFailure: nullable<AgentSessionWriteRefusal>(),
     launchResumes: false,
-    retryLaunch: vi.fn<(...args: never[]) => unknown>(),
+    retryLaunch: vi.fn<(worktreeId: string, sessionId: string) => unknown>(),
     controllerProps: nullable<{ transportEnabled?: boolean }>(),
     mode: 'static' as 'static' | 'outbox',
     status: 'ready' as 'idle' | 'loading' | 'ready' | 'error',
@@ -174,8 +174,8 @@ export function createStructuredSessionMocks() {
             loadOlder: mocks.loadOlder,
             prompts: mocks.promptItems,
             outbox: outbox.outbox,
+            failedHere: outbox.failedHere,
             submissions: mocks.submissions,
-            blockedClientMessageId: outbox.blockedClientMessageId,
             send: outbox.send,
             retry: outbox.retry,
             isWorking: mocks.isWorking,
@@ -231,6 +231,11 @@ export function createStructuredSessionMocks() {
     },
     structuredAgentSessionLaunch: () => ({
       retryStructuredAgentSessionLaunch: mocks.retryLaunch,
+      relaunchFailedStructuredAgentSessionForMessage: (worktreeId: string, sessionId: string) => {
+        if (mocks.launchLifecycle === 'failed') {
+          mocks.retryLaunch(worktreeId, sessionId)
+        }
+      },
       getStructuredAgentSessionLaunchLifecycle: () => mocks.launchLifecycle,
       getStructuredAgentSessionLaunchResumes: () => mocks.launchResumes,
       useStructuredAgentSessionLaunchSelection: () => null,

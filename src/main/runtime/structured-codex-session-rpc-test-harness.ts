@@ -12,6 +12,7 @@ import type {
   CodexAppServerConnectionHandlers,
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
+import { refuseUnroutedSteer } from '../codex/codex-structured-dispatch-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
@@ -27,6 +28,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export const SESSION = 'session-integration-1'
 export const THREAD = 'thread-integration'
@@ -98,6 +100,9 @@ function fakeCodex(): FakeCodex {
             ],
             nextCursor: null
           }
+        }
+        if (method === 'turn/steer') {
+          return refuseUnroutedSteer(undefined)
         }
         return {}
       },
@@ -202,6 +207,7 @@ export async function openStructuredCodexRpcHarness(
     })
   })
   const hostConfig = (): Parameters<typeof ensureStructuredAgentSessionHost>[0] => ({
+    logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',

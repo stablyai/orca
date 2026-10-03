@@ -7,7 +7,7 @@ import {
 } from './config-toml-line-scan'
 import { parseTomlTableHeaderPath } from './config-toml-key-path'
 import { findProjectTrustLevelEntries } from './config-toml-project-trust-level'
-import { parseHookStateTomlHeaderKey } from './config-toml-syntax'
+import { CODEX_HOOK_TRUST_KEY, parseHookStateTomlHeaderKey } from './config-toml-syntax'
 import {
   codexHookSourcePathsEqual,
   getCodexExplicitHomeHookSourcePath,
@@ -105,9 +105,6 @@ export function isRuntimeHookTrustTomlSection(header: string): boolean {
   // Its `["hooks"."state"]` spelling is the same table (#22592).
   return !!table && !table.isArray && table.segments[0] === 'hooks' && table.segments[1] === 'state'
 }
-
-// Why: Codex's `{source}:{event}:{group}:{handler}` for any label, incl. session_end/interrupt.
-const CODEX_HOOK_TRUST_KEY = /^(.+):[a-z_]+:(?:0|[1-9]\d*):(?:0|[1-9]\d*)$/
 
 // Why: user-layer keys name the home's own hooks.json/config.toml; plugin/project keys don't.
 export function classifyHookTrustKey(key: string, homeDir: string): 'home-scoped' | 'shared' {

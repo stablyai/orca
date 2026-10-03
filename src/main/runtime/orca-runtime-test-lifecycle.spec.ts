@@ -1,4 +1,6 @@
 import * as mocks from './orca-runtime-test-mocks.spec'
+import { awaitBackgroundRemovalsInRuntimeTests } from './orca-runtime-background-removal-test-support'
+import { _resetPendingWorktreeRemovalsForTests } from '../worktree-background-removal'
 
 const { MOCK_GIT_WORKTREES, RuntimeBrowserCommands, _resetTerminalViewAttributesForTest } = mocks
 const { addGitHubIssueCommentMock, addGitHubPRReviewCommentMock } = mocks
@@ -57,7 +59,11 @@ const { sshProviderGenerations, unregisterSshGitProviderMock, updateGitHubIssueM
 const { updateGitHubPRDetailsMock, updateGitHubPRStateMock, updateGitHubPRTitleMock } = mocks
 const { updateGitLabIssueMock, updateGitLabMRMock, updateGitLabMRReviewersMock, vi } = mocks
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prototype carries the removal method the wrapper replaces.
+awaitBackgroundRemovalsInRuntimeTests(mocks.OrcaRuntimeService.prototype as never)
+
 function resetRuntimeTestMocks(): void {
+  _resetPendingWorktreeRemovalsForTests()
   // Why: constructing the browser commands is what pulls the Chromium cluster in, so
   // production installs this at the Electron entry. A Node host installs none and the
   // browser RPCs reject rather than silently succeeding.

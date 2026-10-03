@@ -3,6 +3,7 @@ import { RelayDispatcher } from './dispatcher'
 import { AiVaultHandler } from './ai-vault-handler'
 import { SshChannelMultiplexer } from '../main/ssh/ssh-channel-multiplexer'
 import { createSessionSearchClient } from '../shared/ai-vault-search-client'
+import { AI_VAULT_AGENTS } from '../shared/ai-vault-types'
 import { fakeSearchService } from '../shared/ai-vault-search-test-fixture'
 import { setSessionSearchService } from '../main/ai-vault-search/session-search-service-registry'
 
@@ -52,7 +53,14 @@ describe('session search over real relay frames', () => {
     expect(JSON.stringify(raw)).not.toContain('/host/transcript')
     expect(JSON.stringify(raw)).not.toContain('/host/codex')
     expect(JSON.stringify(raw)).not.toContain('resumeCommand')
-    expect(service.search).toHaveBeenLastCalledWith({ query: 'needle', limit: 20 }, undefined)
+    expect(service.search).toHaveBeenLastCalledWith(
+      {
+        query: 'needle',
+        limit: 20,
+        filters: { agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'qoder') }
+      },
+      undefined
+    )
     expect(service.reconcile).not.toHaveBeenCalled()
     expect(await client.searchStatus()).toMatchObject({ enabled: true, generation: 7 })
     await expect(mux.request('aiVault.searchSessions', { query: 42 })).rejects.toThrow()

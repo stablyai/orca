@@ -1,4 +1,5 @@
 import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ZcodePlanSite } from '../../../shared/zcode-plan-sites'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
 import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
@@ -61,7 +62,20 @@ export type MiniMaxResolvedConfig = {
   error: string | null
 }
 
+export type ZcodePlanRateLimitConfig = {
+  site: ZcodePlanSite
+  apiKey: string
+}
+
+export type ZcodePlanResolvedConfig = {
+  config: ZcodePlanRateLimitConfig
+  error: string | null
+}
+
 export type GeminiCliOAuthEnabledResolver = () => boolean
+
+/** Whether the user is actually showing Antigravity usage, so the `agy` probe is worth spawning. */
+export type AntigravityUsageEnabledResolver = () => boolean
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
 export type ActiveProviderState = {
   provider: ActiveRateLimitProvider

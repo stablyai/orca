@@ -7,7 +7,7 @@ import {
 } from './claude-structured-dispatch-waiters'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import {
   claudeDispatchContentKey,
@@ -18,7 +18,10 @@ import {
 } from './claude-structured-dispatch-content'
 import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
 import { DISPATCH_REJECTED_QUEUE_FULL } from '../../shared/structured-agent-session-dispatch-rejection'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  type SubmissionRejectionFact
+} from '../../shared/agent-session-failure'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
 import {
   claudeUnwrittenUserMessageError,
@@ -37,10 +40,25 @@ export function settleCancelledClaudeDispatchWaiters(
   cancelledUuids: readonly string[],
   onSettledLate?: ClaudeLateDispatchSettlement
 ): void {
-  const cancelled = new Set(cancelledUuids)
-  const activeWaiters = session.dispatchWaiters.filter((waiter) => cancelled.has(waiter.sentUuid))
+  rejectClaudeDispatchWaiters(
+    session,
+    cancelledUuids,
+    agentSessionFailureFact('cancelled'),
+    onSettledLate
+  )
+}
+
+/** Settles sends the CLI proved it will never run, each with the fact that says why. */
+export function rejectClaudeDispatchWaiters(
+  session: ClaudeSession,
+  uuids: readonly string[],
+  fact: SubmissionRejectionFact,
+  onSettledLate?: ClaudeLateDispatchSettlement
+): void {
+  const named = new Set(uuids)
+  const activeWaiters = session.dispatchWaiters.filter((waiter) => named.has(waiter.sentUuid))
   const retiredWaiters = session.retiredDispatchWaiters.filter((waiter) =>
-    cancelled.has(waiter.sentUuid)
+    named.has(waiter.sentUuid)
   )
   for (const waiter of activeWaiters) {
     forgetWaiter(session, waiter)
@@ -54,14 +72,31 @@ export function settleCancelledClaudeDispatchWaiters(
       onSettledLate?.({
         clientMessageId: waiter.clientMessageId,
         state: 'rejected',
-        ...claudeDispatchRejection(agentSessionFailureFact('cancelled'))
+        ...claudeDispatchRejection(fact)
       })
     }
   }
 }
 
-/** Nothing expires a waiter, so the child's death is what ends every live one.
- *  Retired rather than dropped: their identities stay joinable, bounded by
+/** Releases sends the CLI took and let go without an echo or a verdict: each may have run, so each
+ *  settles as doubt, never re-sent. Retired, not dropped, so a late replay still accepts it. */
+export function releaseClaudeDispatchWaitersInDoubt(
+  session: ClaudeSession,
+  waiters: readonly ClaudeDispatchWaiter[],
+  reason: string,
+  onSettledLate?: ClaudeLateDispatchSettlement
+): void {
+  for (const waiter of waiters) {
+    retireWaiter(session, waiter)
+    waiter.resolve(null)
+    if (waiter.clientMessageId) {
+      onSettledLate?.({ clientMessageId: waiter.clientMessageId, state: 'unknown', reason })
+    }
+  }
+}
+
+/** Nothing expires a waiter; the child's death ends every one its echo, a lifecycle frame or the
+ *  CLI's idle has not. Retired rather than dropped: their identities stay joinable, bounded by
  *  `MAX_RETIRED_DISPATCH_WAITERS`. */
 export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
   failClaudeStartup(session, new Error('claude stream-json ended before startup completed'))

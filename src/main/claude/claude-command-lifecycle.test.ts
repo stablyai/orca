@@ -10,7 +10,13 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
+import {
+  DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
+  DISPATCH_DOUBT_PROVIDER_IDLE
+} from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
+import { claudeDispatchRejection } from './claude-structured-dispatch-content'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type { ClaudeLateDispatchOutcome } from './claude-structured-session-state'
 import {
@@ -96,6 +102,8 @@ async function replayCapture(
     omitFrame?: (frame: Record<string, unknown>) => boolean
     /** Frames to deliver right after a captured one, in the capture's own uuids. */
     afterFrame?: (frame: Record<string, unknown>) => Record<string, unknown>[]
+    /** Deliver this in place of a captured frame, as a CLI reporting another state would. */
+    rewriteFrame?: (frame: Record<string, unknown>) => Record<string, unknown>
     /** Stop after the control request settles; its tail answers the CLI's own control path. */
     stopAfterControl?: boolean
   } = {}
@@ -161,7 +169,7 @@ async function replayCapture(
     if (options.omitFrame?.(frame)) {
       return
     }
-    const mapped = mapUuids(frame)
+    const mapped = mapUuids(options.rewriteFrame?.(frame) ?? frame)
     if (Array.isArray(mapped.capabilities) && options.withoutCapabilities) {
       mapped.capabilities = mapped.capabilities.filter(
         (capability) => !options.withoutCapabilities!.includes(String(capability))
@@ -366,6 +374,30 @@ describe('a queued send the CLI withdraws without Orca hearing why', () => {
   })
 })
 
+/** The auth-failed capture's turn output: without it, its send started and got no echo. */
+function isTurnOutput(frame: Record<string, unknown>): boolean {
+  return frame.type === 'user' || frame.type === 'assistant' || frame.type === 'result'
+}
+
+function isLifecycleFrame(frame: Record<string, unknown>, state?: string): boolean {
+  return frame.type === 'command_lifecycle' && (state === undefined || frame.state === state)
+}
+
+function isIdleFrame(frame: Record<string, unknown>): boolean {
+  return frame.subtype === 'session_state_changed' && frame.state === 'idle'
+}
+
+/** The uuid a capture recorded for one of its sends, as its own frames name it. */
+function capturedUuid(name: string, clientMessageId: string): string {
+  const dispatch = loadCapture(name).find(
+    (event) => event.kind === 'dispatch' && event.clientMessageId === clientMessageId
+  )
+  return dispatch?.kind === 'dispatch' ? dispatch.sentUuid : ''
+}
+
+const ENDED_IN_DOUBT = { state: 'unknown', reason: DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED }
+const IDLE_IN_DOUBT = { state: 'unknown', reason: DISPATCH_DOUBT_PROVIDER_IDLE }
+
 describe('a send the CLI started, then cancelled', () => {
   it('stays accepted when its turn failed after the echo', async () => {
     const replay = await replayCapture('auth-failed')
@@ -373,28 +405,220 @@ describe('a send the CLI started, then cancelled', () => {
     expect(replay.settlementsFor('client-A')).toEqual([acceptedAs(replay.liveUuid('client-A'))])
   })
 
-  it('is not read as withdrawn when the cancelled frame came before any echo', async () => {
-    // The auth-failed capture with the turn's output removed: started, then cancelled.
-    const replay = await replayCapture('auth-failed', {
-      omitFrame: (frame) =>
-        frame.type === 'user' || frame.type === 'assistant' || frame.type === 'result'
-    })
+  it('is released as doubt, never withdrawn, when the cancelled frame came before any echo', async () => {
+    const replay = await replayCapture('auth-failed', { omitFrame: isTurnOutput })
 
-    expect(replay.settlementsFor('client-A')).toEqual([])
+    expect(replay.settlementsFor('client-A')).toEqual([ENDED_IN_DOUBT])
+    expect(replay.adapter.holdsDispatch('session-1')).toBe(false)
   })
 
   it('stays started when a redelivered command re-emits queued before its cancelled frame', async () => {
     const replay = await replayCapture('auth-failed', {
-      omitFrame: (frame) =>
-        frame.type === 'user' || frame.type === 'assistant' || frame.type === 'result',
+      omitFrame: isTurnOutput,
       afterFrame: (frame) =>
-        frame.type === 'command_lifecycle' && frame.state === 'started'
-          ? [{ ...frame, state: 'queued' }]
-          : []
+        isLifecycleFrame(frame, 'started') ? [{ ...frame, state: 'queued' }] : []
     })
 
+    expect(replay.settlementsFor('client-A')).toEqual([ENDED_IN_DOUBT])
+  })
+
+  it('is still accepted when its echo lands after the doubt', async () => {
+    const replay = await replayCapture('auth-failed', { omitFrame: isTurnOutput })
+    const uuid = replay.liveUuid('client-A')
+
+    replay.connection.handlers.onMessage?.({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'text', text: 'late echo' }] },
+      parent_tool_use_id: null,
+      session_id: PROVIDER_SESSION_ID,
+      uuid
+    })
+
+    expect(replay.settlementsFor('client-A')).toEqual([ENDED_IN_DOUBT, acceptedAs(uuid)])
+  })
+
+  it.each(['discarded', 'refused'])(
+    'is released as doubt when its turn ends %s after it started',
+    async (state) => {
+      const replay = await replayCapture('auth-failed', {
+        omitFrame: isTurnOutput,
+        rewriteFrame: (frame) =>
+          isLifecycleFrame(frame, 'cancelled') ? { ...frame, state } : frame
+      })
+
+      expect(replay.settlementsFor('client-A')).toEqual([ENDED_IN_DOUBT])
+    }
+  )
+})
+
+// batch-lead's client-C is a steer: written while A's turn runs, queued, then started as its own
+// turn once A completed. Its queued-while-Stopped case is interrupt-lost's client-B, above.
+describe('a steer a Stop interrupts after it started', () => {
+  it('is released as doubt, never withdrawn, when the Stop lands before its echo', async () => {
+    const steer = capturedUuid('batch-lead', 'client-C')
+    let started = false
+    let routes: ControlPoint['routes'] | undefined
+    const replay = await replayCapture('batch-lead', {
+      atControl: async (point) => {
+        routes = point.routes
+        point.deliverInFlight()
+      },
+      // The Stop lands between the steer's start and its echo: nothing after its start arrives.
+      omitFrame: () => started,
+      afterFrame: (frame) => {
+        started ||= isLifecycleFrame(frame, 'started') && frame.command_uuid === steer
+        return []
+      }
+    })
+    const uuid = replay.liveUuid('client-C')
+    expect(replay.adapter.holdsDispatch('session-1')).toBe(true)
+
+    // Answered as interrupt-lost's was, with nothing left queued; then that capture's tail for a
+    // started command a Stop ended (its result dropped: one naming the steer would accept it).
+    routes!.interrupt = () => ({ still_queued: [], cancelled: [] })
+    await replay.adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })
+    for (const frame of [
+      {
+        type: 'command_lifecycle',
+        command_uuid: uuid,
+        state: 'cancelled',
+        uuid: 'steer-cancelled'
+      },
+      { type: 'system', subtype: 'session_state_changed', state: 'idle', uuid: 'steer-idle' }
+    ]) {
+      replay.connection.handlers.onMessage?.({ ...frame, session_id: PROVIDER_SESSION_ID })
+    }
+
+    expect(replay.connection.calls.filter((call) => call.subtype === 'interrupt')).toEqual([
+      { subtype: 'interrupt', params: { cancelQueued: true } }
+    ])
+    expect(replay.settlementsFor('client-C')).toEqual([ENDED_IN_DOUBT])
+    expect(replay.adapter.holdsDispatch('session-1')).toBe(false)
+  })
+})
+
+describe('a send the CLI ended before starting it', () => {
+  it.each([
+    // The CLI ended its session with the send still queued.
+    ['discarded', 'notDelivered', false],
+    // Declined before it queued, so no `queued` frame precedes it.
+    ['refused', 'providerRejected', true]
+  ] as const)('settles a %s send as not sent, saying why', async (state, kind, neverQueued) => {
+    const followUp = capturedUuid('cancel-async', 'client-B')
+    const replay = await replayCapture('cancel-async', {
+      omitFrame: (frame) =>
+        neverQueued && isLifecycleFrame(frame, 'queued') && frame.command_uuid === followUp,
+      rewriteFrame: (frame) =>
+        isLifecycleFrame(frame, 'cancelled') && frame.command_uuid === followUp
+          ? { ...frame, state }
+          : frame
+    })
+
+    expect(replay.settlementsFor('client-B')).toEqual([
+      { state: 'rejected', ...claudeDispatchRejection(agentSessionFailureFact(kind)) }
+    ])
+    expect(replay.settlementsFor('client-A')).toEqual([acceptedAs(replay.liveUuid('client-A'))])
+  })
+})
+
+describe('a send the CLI holds', () => {
+  it('holds its child from the idle sweep until the CLI idles, then is released as doubt', async () => {
+    // Started, then its turn threw: no echo and no terminal state, as the schema allows.
+    const replay = await replayCapture('auth-failed', {
+      omitFrame: (frame) =>
+        isTurnOutput(frame) || isLifecycleFrame(frame, 'cancelled') || isIdleFrame(frame)
+    })
+    expect(replay.adapter.holdsDispatch('session-1')).toBe(true)
+    expect(replay.settlementsFor('client-A')).toEqual([])
+
+    replay.connection.handlers.onMessage?.({
+      type: 'system',
+      subtype: 'session_state_changed',
+      state: 'idle',
+      uuid: 'idle-after-throw',
+      session_id: PROVIDER_SESSION_ID
+    })
+
+    expect(replay.settlementsFor('client-A')).toEqual([IDLE_IN_DOUBT])
+    expect(replay.adapter.holdsDispatch('session-1')).toBe(false)
+  })
+
+  // 2.1.280's end-of-turn cleanup can report idle before it re-reads its queue.
+  it('leaves a queued send the CLI idles before starting to open its turn and be accepted', async () => {
+    const replay = await replayCapture('auth-failed', {
+      afterFrame: (frame) =>
+        isLifecycleFrame(frame, 'queued')
+          ? [
+              {
+                type: 'system',
+                subtype: 'session_state_changed',
+                state: 'idle',
+                uuid: 'idle-before-start',
+                session_id: frame.session_id
+              }
+            ]
+          : []
+    })
+    const uuid = replay.liveUuid('client-A')
+
+    expect(replay.settlementsFor('client-A')).toEqual([acceptedAs(uuid)])
+    expect(replay.turnStates.get(uuid)).toBe('completed')
+  })
+
+  it('holds the child for a send the CLI has only queued, and does not release it at idle', async () => {
+    const replay = await replayCapture('auth-failed', {
+      omitFrame: (frame) =>
+        isTurnOutput(frame) ||
+        isLifecycleFrame(frame, 'started') ||
+        isLifecycleFrame(frame, 'cancelled')
+    })
+
+    expect(replay.idles).toEqual(['session-1'])
+    expect(replay.adapter.holdsDispatch('session-1')).toBe(true)
     expect(replay.settlementsFor('client-A')).toEqual([])
   })
+
+  it('holds a queued send until the CLI withdraws it', async () => {
+    const held: boolean[] = []
+    const replay = await replayCapture('cancel-async', {
+      atControl: async (point) => {
+        // The lead was echoed already; only the queued follow-up is left.
+        held.push(point.adapter.holdsDispatch('session-1'))
+        point.deliverInFlight()
+        held.push(point.adapter.holdsDispatch('session-1'))
+      }
+    })
+
+    expect(held).toEqual([true, false])
+    expect(replay.settlementsFor('client-B')).toEqual([WITHDRAWN])
+  })
+
+  it('holds a queued send until it starts and is echoed', async () => {
+    const held: boolean[] = []
+    const replay = await replayCapture('batch-lead', {
+      // Without its turn's end or the idle, only the start and echo can let it go.
+      omitFrame: (frame) =>
+        frame.type === 'result' || isLifecycleFrame(frame, 'completed') || isIdleFrame(frame),
+      atControl: async (point) => {
+        point.deliverInFlight()
+        // The batch lead is withdrawn; the send behind it is only queued.
+        held.push(point.adapter.holdsDispatch('session-1'))
+      }
+    })
+
+    expect(held).toEqual([true])
+    expect(replay.adapter.holdsDispatch('session-1')).toBe(false)
+    expect(replay.settlementsFor('client-C')).toEqual([acceptedAs(replay.liveUuid('client-C'))])
+  })
+
+  it.each(['interrupt-lost', 'cancel-async', 'batch-lead', 'auth-failed'])(
+    'holds nothing once the %s capture has run to its idle',
+    async (name) => {
+      const replay = await replayCapture(name)
+
+      expect(replay.adapter.holdsDispatch('session-1')).toBe(false)
+    }
+  )
 })
 
 describe('the CLI reporting its session idle', () => {

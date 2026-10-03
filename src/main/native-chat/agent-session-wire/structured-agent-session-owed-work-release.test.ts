@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { AgentHookServer, _internals } from '../../agent-hooks/server'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,
@@ -31,6 +32,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 const SWEEP_MS = 5
@@ -44,9 +46,11 @@ let claude: ReturnType<typeof fakeClaude>
 let landInit: () => void
 let lifecycle: Promise<void>[]
 let clock: number
+const server = new AgentHookServer()
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-owed-work-release-'))
+  _internals.resetCachesForTests()
   resetHostTestOperationIds()
   claude = fakeClaude()
   lifecycle = []
@@ -73,6 +77,8 @@ beforeEach(async () => {
     },
     // As the runtime wires it: an admitted prompt's outcome reaches the journal out of band.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
+    onChildWorkEvidence: (sessionId, evidence) =>
+      host.publishChildWorkEvidence(sessionId, evidence),
     // Initialize answers only when the test says so.
     openConnection: async (launch, handlers) => {
       const connection = await claude.openConnection(launch, handlers)
@@ -88,13 +94,22 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     idleSweep: { intervalMs: SWEEP_MS, idleMs: IDLE_MS },
-    now: () => clock
+    now: () => clock,
+    // The host's status row and child records, as the runtime wires them.
+    statusSink: {
+      publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
+      forget: (subject) => server.dropStructuredStatus(subject),
+      publishChildWork: (subject, evidence, provider) =>
+        server.ingestStructuredChildWork(subject, evidence, provider),
+      readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
+    }
   })
 })
 
@@ -263,8 +278,9 @@ describe('a chat whose settled lead still has background work running', () => {
     })
     frame({ type: 'result', subtype: 'success', uuid: 'result-1', is_error: false, result: 'ok' })
     await host.flushStreamedEvents(SESSION)
-    expect(adapter.backgroundTaskState(SESSION)?.tasks).toEqual([
-      expect.objectContaining({ id: 'task-1' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(page.ok ? page.page.backgroundTasks?.children : null).toEqual([
+      expect.objectContaining({ providerId: 'task-1', membership: 'live' })
     ])
   }
 

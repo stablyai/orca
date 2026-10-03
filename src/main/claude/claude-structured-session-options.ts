@@ -13,6 +13,7 @@ import {
   type ListedModel
 } from './claude-structured-model-catalog'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 /**
@@ -240,6 +241,12 @@ function wireClaudeModels(models: readonly ListedModel[]): WireClaudeModel[] {
   return models.map(wireClaudeModel)
 }
 
+/** The built-in models a running child lists when the CLI gives it none; a chat at rest with no
+ *  catalog lists the same. */
+export function claudeFallbackModelOptions(): WireClaudeModel[] {
+  return wireClaudeModels(seedModels())
+}
+
 /** The listing, with what the CLI runs when no effort is sent on each model the child applies —
  *  a default only a running child knows, and only while this session has no effort pick. */
 function catalogClaudeModels(session: ClaudeSession, discovered: ListedModel[]): WireClaudeModel[] {
@@ -326,12 +333,13 @@ export function claudeStructuredSessionOptionsFrom(
 ): AgentSessionOptionsResult {
   const discovered = listedModels(catalog ? { models: catalog } : null)
   writeClaudeCatalogThrough(session, discovered)
-  const models = discovered.length > 0 ? discovered : seedModels()
+  const listed = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
-  const model = currentModelId(models, current.id)
-  if (!models.some((entry) => entry.id === model)) {
-    models.push({ id: model, label: model, isDefault: false, efforts: [], resolvedModel: null })
-  }
+  const model = currentModelId(listed, current.id)
+  const models = structuredAgentSessionOptionModels(listed, model, (row) => ({
+    ...row,
+    resolvedModel: null
+  }))
   const effort =
     session.options.get('effort') ??
     session.reportedOptions.effort ??

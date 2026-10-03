@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { RpcDispatcher } from '../dispatcher'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { AI_VAULT_METHODS } from './ai-vault'
@@ -52,7 +53,11 @@ describe('session search runtime RPC', () => {
       expect(text.includes('/host/transcript.jsonl')).toBe(clientKind === undefined)
       expect(text.includes('resumeCommand')).toBe(clientKind === undefined)
       expect(service.search).toHaveBeenCalledExactlyOnceWith(
-        { query: 'needle', limit: 20 },
+        {
+          query: 'needle',
+          limit: 20,
+          filters: { agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'qoder') }
+        },
         undefined
       )
       const status = await rpc.dispatch(
@@ -60,6 +65,27 @@ describe('session search runtime RPC', () => {
         { clientKind }
       )
       expect(status).toMatchObject({ ok: true, result: { enabled: true, generation: 7 } })
+    }
+  )
+  it.each([undefined, 'runtime', 'mobile'] as const)(
+    'preserves explicitly supported Qoder filters for client kind %s',
+    async (clientKind) => {
+      const service = fakeSearchService()
+      setSessionSearchService(service)
+      expect(
+        await dispatcher().dispatch(
+          request({
+            query: 'needle',
+            supportsQoderHistory: true,
+            filters: { agents: ['qoder', 'codex'] }
+          }),
+          { clientKind }
+        )
+      ).toMatchObject({ ok: true })
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'needle', limit: 20, filters: { agents: ['qoder', 'codex'] } },
+        undefined
+      )
     }
   )
   it('maps the old runtime dispatcher refusal and rejects malformed responses', async () => {

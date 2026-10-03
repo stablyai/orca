@@ -1,4 +1,5 @@
-import { normalizeAgentStatusPayload } from './agent-status-types'
+import { readAgentProcessIdentity } from './agent-process-presence'
+import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import { extractAgentProviderSession } from './agent-session-resume'
 import {
@@ -24,12 +25,22 @@ import {
 } from './agent-hook-listener/opencode-session-registry'
 import { readString } from './agent-hook-listener/tool-input-preview'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
+const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
+  'prompt_input_exit',
+  'logout',
+  'other',
+  'bypass_permissions_disabled'
+])
+
 export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: { deferCompactOwnershipToClient?: boolean } = {}
+  options: {
+    deferCompactOwnershipToClient?: boolean
+    previousOpenCodeMainAgent?: AgentMainAgentStatus
+  } = {}
 ): AgentHookEventPayload | null {
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
   if (!envelope) {
@@ -55,7 +66,7 @@ export function normalizeHookPayload(
     source === 'codex' && readString(hookPayloadRecord, 'agent_id')
       ? null
       : extractAgentProviderSession(source, hookPayloadRecord)
-  // Why (#21359): the shared OpenCode server stamps every post with its own
+  // Why (#21359): an OpenCode 1 `serve` process stamps every post with its own
   // frozen pane. When the binder has mapped this session to its real pane,
   // the stamp is replaced before anything downstream (status lookup, dispatch,
   // fences) can act on the wrong owner. Unbound sessions keep the stamp.
@@ -68,7 +79,8 @@ export function normalizeHookPayload(
       worktreeId: stampedWorktreeId,
       launchToken: stampedLaunchToken
     },
-    sessionId: providerSession?.id
+    sessionId: providerSession?.id,
+    body: record
   })
   // Why after the resolve: tracking the stamped token first would let a stale
   // shared-server stamp overwrite the pane's live token; the resolved envelope
@@ -136,6 +148,40 @@ export function normalizeHookPayload(
     }
   }
 
+  // Why: presence needs the agent's own process; without it the hook cannot speak for liveness.
+  const agentProcess =
+    source === 'claude' ? readAgentProcessIdentity(record.agentProcess) : undefined
+  const agentPresence = agentProcess ? { agent: source, process: agentProcess } : undefined
+  const sessionEndReason = readString(hookPayloadRecord, 'reason')
+  if (
+    eventName === 'SessionEnd' &&
+    agentPresence &&
+    !readString(hookPayloadRecord, 'agent_id') &&
+    // Why: only reasons that end the process; /clear and /resume keep it running, and an unknown
+    // reason is left to the process check rather than guessed.
+    sessionEndReason !== undefined &&
+    CLAUDE_EXIT_SESSION_END_REASONS.has(sessionEndReason)
+  ) {
+    const payload =
+      previousStatus?.payload ??
+      normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
+    if (!payload) {
+      return null
+    }
+    return {
+      paneKey,
+      source,
+      launchToken,
+      tabId,
+      worktreeId,
+      connectionId: null,
+      providerSession: providerSession ?? undefined,
+      hookEventName: 'SessionEnd',
+      agentPresence: { ...agentPresence, ended: true as const },
+      payload
+    }
+  }
+
   const extractedPrompt = extractPromptText(hookPayloadRecord)
   const promptText = extractedPrompt.text
   const dispatched = normalizeProviderEvent({
@@ -146,7 +192,8 @@ export function normalizeHookPayload(
     paneKey,
     hookPayload: hookPayloadRecord,
     envelope: record,
-    extractedPrompt
+    extractedPrompt,
+    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
   })
   const providerSessionOnly =
     (source === 'pi' || source === 'prime-agent') &&
@@ -168,6 +215,7 @@ export function normalizeHookPayload(
   return {
     paneKey,
     source,
+    agentPresence,
     launchToken,
     tabId,
     worktreeId,

@@ -43,16 +43,6 @@ describe('orchestration.send Dispatch authority', () => {
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_attacker' ? 'tab_attacker:leaf_attacker' : harness.coordinatorPaneKey
       )
-      if (!legacyAuthority) {
-        ctx = {
-          runtime,
-          orchestrationCapability: db.mintDispatchCapability({
-            dispatchId: attacker.id,
-            paneKey: 'tab_attacker:leaf_attacker',
-            processIncarnation: 'runtime_test:term_attacker:1'
-          })
-        }
-      }
 
       const result = (await send({
         from: 'term_attacker',

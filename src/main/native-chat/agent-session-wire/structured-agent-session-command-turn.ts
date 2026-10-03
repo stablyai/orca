@@ -29,6 +29,7 @@ import {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
 import {
   agentJournalTurnBody,
@@ -119,11 +120,15 @@ export function isStructuredAgentSessionCommandTurnId(turnId: string): boolean {
 
 const STOP_NOTE_PREFIX = 'stop:'
 
-/** A Stop's note, on the turn it named. The key says what it is, so a later Stop can read it. */
-export function structuredAgentSessionStopNoteIdentity(
-  clientOperationId: string
-): AgentJournalItemIdentity {
-  return { provider: 'orca', clientMessageId: `${STOP_NOTE_PREFIX}${clientOperationId}` }
+/** A Stop's note, keyed by the turn it stopped (or, with no turn, by its operation). */
+export function structuredAgentSessionStopNoteIdentity(stopKey: string): AgentJournalItemIdentity {
+  return { provider: 'orca', clientMessageId: `${STOP_NOTE_PREFIX}${stopKey}` }
+}
+
+/** Whether a journal row is a Stop's note. */
+export function isStructuredAgentSessionStopNote(itemId: string): boolean {
+  const identity = parseAgentJournalItemKey(itemId)
+  return identity?.provider === 'orca' && identity.clientMessageId.startsWith(STOP_NOTE_PREFIX)
 }
 
 /** Whether an earlier Stop already asked the running command `turnId` names to end. Read from the
@@ -133,15 +138,14 @@ export function structuredAgentSessionCommandWasStopped(
   turnId: string
 ): boolean {
   const { itemId } = structuredAgentSessionCommandTurn(turnId.slice('compact:'.length))
-  return journal.snapshot().items.some((item) => {
-    const identity = parseAgentJournalItemKey(item.itemId)
-    return (
-      item.turnScope?.kind === 'turn' &&
-      item.turnScope.turnItemId === itemId &&
-      identity?.provider === 'orca' &&
-      identity.clientMessageId.startsWith(STOP_NOTE_PREFIX)
+  return journal
+    .snapshot()
+    .items.some(
+      (item) =>
+        item.turnScope?.kind === 'turn' &&
+        item.turnScope.turnItemId === itemId &&
+        isStructuredAgentSessionStopNote(item.itemId)
     )
-  })
 }
 
 export type StructuredAgentSessionCommandHandoverContext = {
@@ -153,7 +157,8 @@ export type StructuredAgentSessionCommandHandoverContext = {
   /** Who a failure the handover meets names, as the start's own row does. */
   failureTextContext?: AgentSessionFailureWordsContext
   record: () => AgentSessionRecord | null
-  flushStreamedEvents: () => Promise<void>
+  /** The session's child records, the same read the strip and conversation-command admission use. */
+  childWork: () => readonly AgentChildWorkView[] | undefined
   now: () => number
 }
 
@@ -164,8 +169,7 @@ export async function handOverStructuredAgentSessionCommand(
   body: AgentJournalMessageItem
 ): Promise<void> {
   const { clientMessageId } = submission
-  // Provider frames already received decide whether a turn is running.
-  await ctx.flushStreamedEvents()
+  // Provider frames already received decide whether a turn is running: each landed at its call.
   const blocked = commandBlocked(ctx, body)
   if (blocked) {
     await ctx.journal.resolveDispatch({
@@ -313,7 +317,7 @@ function commandBlocked(
   if (!record) {
     return agentSessionFailureFact('hostFault')
   }
-  const refusal = conversationCommandBlocked(ctx, record, 'handover')
+  const refusal = conversationCommandBlocked(ctx, record, ctx.childWork(), 'handover')
   return refusal
     ? agentSessionFailureFact('commandRefused', { refusal: agentSessionRefusalReference(refusal) })
     : null

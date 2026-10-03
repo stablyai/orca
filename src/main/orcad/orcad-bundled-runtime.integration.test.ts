@@ -4,13 +4,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
+import { orcadNodeRuntimeRelativePath } from '../../shared/orcad-artifacts'
 import { shellEscape } from '../ssh/ssh-connection-utils'
 
+const TARGET = 'darwin-arm64'
+const SHA = NODE_RUNTIME_ASSETS[TARGET].executableSha256
+let root = ''
 let directory = ''
 const children = new Set<ReturnType<typeof spawnProcess>>()
 
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), 'orca-handoff-'))
+  root = await mkdtemp(join(tmpdir(), 'orca-handoff-'))
+  directory = join(root, 'slot')
+  await mkdir(directory)
   await build({
     stdin: {
       contents: `
@@ -55,8 +62,11 @@ beforeEach(async () => {
     target: 'node18',
     format: 'cjs'
   })
-  await writeFile(join(directory, '.build-target'), 'darwin-arm64\n')
-  const runtime = join(directory, 'bun-runtime')
+  await writeFile(join(directory, '.server-target'), `${TARGET}\n`)
+  await writeFile(join(directory, '.runtime-node'), `${SHA}\n`)
+  // A stand-in runtime at the shared-store path; handoff never hashes, it checks the marker.
+  const runtime = join(directory, ...orcadNodeRuntimeRelativePath(TARGET, SHA))
+  await mkdir(join(runtime, '..'), { recursive: true })
   await writeFile(
     runtime,
     `#!/bin/sh\nORCA_TEST_HANDOFF_CHILD=1 exec ${shellEscape(process.execPath)} "$@"\n`
@@ -69,7 +79,7 @@ afterEach(async () => {
     child.kill('SIGKILL')
   }
   children.clear()
-  await rm(directory, { recursive: true, force: true })
+  await rm(root, { recursive: true, force: true })
 })
 
 function launch(
@@ -110,7 +120,7 @@ function launch(
 
 describe.skipIf(process.platform === 'win32')('bundled handoff process lifecycle', () => {
   it('refuses a partial installation before launching its adjacent runtime', async () => {
-    await rm(join(directory, '.build-target'))
+    await rm(join(directory, '.server-target'))
     const result = await runProcess({
       program: process.execPath,
       args: [join(directory, 'orcad.js')],
@@ -175,7 +185,7 @@ describe.skipIf(process.platform === 'win32')('bundled handoff process lifecycle
   )
 
   it('hands off a symlinked entry to its adjacent runtime', async () => {
-    const aliases = join(directory, 'aliases')
+    const aliases = join(root, 'aliases')
     await mkdir(aliases)
     const entry = join(aliases, 'orcad.js')
     await symlink(join(directory, 'orcad.js'), entry)

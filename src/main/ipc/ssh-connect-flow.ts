@@ -106,12 +106,15 @@ async function doConnect(
   const existingSession = activeSessions.get(targetId)
   const existingState = connectionManager!.getState(targetId)
   const existingMux = existingSession?.getMux()
+  // Why: plain SSH mode (runtime rung D) is live without a mux; a refresh must not kill its shells.
+  const existingTransportLive = existingMux
+    ? !existingMux.isDisposed()
+    : existingSession?.getPlainSshSession?.() != null
   if (
     existingSession?.getState() === 'ready' &&
     existingState?.status === 'connected' &&
     connectionManager!.getConnection(targetId) &&
-    existingMux &&
-    !existingMux.isDisposed() &&
+    existingTransportLive &&
     !relayStateOverrides.has(targetId) &&
     !relayLostBackoff.has(targetId)
   ) {

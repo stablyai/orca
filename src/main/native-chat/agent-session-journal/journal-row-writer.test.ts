@@ -12,6 +12,7 @@ import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-sess
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
+import { JournalWriteQueue } from './journal-write-queue'
 import {
   openTestJournalHostDatabase,
   readTestJournalRows,
@@ -60,10 +61,11 @@ describe('journal row writer', () => {
   function writerHarness() {
     const committedRows: JournalRow[] = []
     let sequence = 1
+    const queue = new JournalWriteQueue(SESSION_ID)
     const writer = new JournalRowWriter({
       sessionId: SESSION_ID,
       now: () => 1,
-      serialize: (run) => run(),
+      serialize: (run) => queue.serialize(run),
       database: () => database,
       readOnly: () => readOnly,
       highestFence: () => 0,

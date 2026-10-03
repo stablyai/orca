@@ -8,8 +8,7 @@ import type Database from '../../sqlite/sync-database'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import {
   consumedSubmissionWasRejected,
-  journalDispatchRowNewlyRejects,
-  rejectedDraftSettlement
+  journalDispatchRowNewlyRejects
 } from './journal-dispatch-settlement'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
@@ -34,20 +33,6 @@ export function queuedMessageSettlementOwed(
       row.consumedAs !== null &&
       consumedSubmissionWasRejected(submissions.get(row.consumedAs))
   )
-}
-
-/** A dispatched draft's consumed submission settled so that the draft is owed a
- *  return to waiting (a withdrawal, not a refusal): what a queue pause must still
- *  count as a card it holds back while that settlement is owed. */
-export function owedBackToWaiting(submissions: Submissions): (consumedRef: string) => boolean {
-  return (consumedRef) => {
-    const submission = submissions.get(consumedRef)
-    return (
-      submission !== undefined &&
-      consumedSubmissionWasRejected(submission) &&
-      rejectedDraftSettlement(submission).state === 'waiting'
-    )
-  }
 }
 
 /** Applies each owed settlement, and withdraws each waiting draft an applied echo proves

@@ -84,18 +84,27 @@ export function shareStructuredAgentLaunchPromptDispatch(
 
 function mutateEntry(
   entry: StructuredAgentSessionOutboxEntry,
-  update: StructuredAgentSessionLaunchPromptMutation
+  update: StructuredAgentSessionLaunchPromptMutation,
+  options: { onlyIfSaved?: boolean } = {}
 ): boolean {
-  return mutateStructuredAgentSessionLaunchPrompt(entry.sessionId, entry.clientMessageId, update)
+  return mutateStructuredAgentSessionLaunchPrompt(
+    entry.sessionId,
+    entry.clientMessageId,
+    update,
+    options
+  )
 }
 
 async function dispatchStructuredLaunchPrompt(
   entry: StructuredAgentSessionOutboxEntry,
   receipt: LaunchReceipt
 ): Promise<boolean> {
+  // Why: an unsaved stage must leave the entry queued; a held 'dispatching' copy is never drained.
   if (
-    !mutateEntry(entry, (current) =>
-      stageStructuredAgentSessionOutboxEntryForSend(current, Date.now())
+    !mutateEntry(
+      entry,
+      (current) => stageStructuredAgentSessionOutboxEntryForSend(current, Date.now()),
+      { onlyIfSaved: true }
     )
   ) {
     return false

@@ -28,6 +28,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import { ensureStructuredAgentSessionAgent } from './structured-agent-session-agent-start'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_NOW as NOW,
@@ -39,8 +40,12 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
+const CHAT_CLOSED = agentSessionFailureWords(agentSessionFailureFact('chatClosed'), {
+  surface: 'rejection'
+})
 
 let root: string
 let store: AgentSessionRecordStore
@@ -79,6 +84,7 @@ const spawnStartingChild: StructuredAgentSessionAdapter['acquire'] = async (inpu
 
 function startHost(): void {
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire,
@@ -119,7 +125,7 @@ beforeEach(async () => {
   store = await openTestAgentSessionRecordStore(root)
   startHost()
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
-  await host.close(SESSION)
+  await host.close(SESSION, 'evict')
 })
 
 afterEach(async () => {
@@ -712,6 +718,98 @@ describe('how a stopped child ends the start its loop was waiting on', () => {
 
     await eventually(async () => expect((await submission(second))?.dispatchState).toBe('accepted'))
     expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'user-stop', reason: null })
+    expect(await statusRows()).toEqual([])
+  })
+
+  /** The close's stop alone: a close that aborts after it leaves the conversation indexed. */
+  function closeStopOnly() {
+    return host['serialize'](SESSION, () =>
+      stopStructuredAgentSessionAgentUnderSerialize(host['lifetimeContext'](), SESSION, {
+        cause: 'user-close'
+      })
+    )
+  }
+
+  /** A message queued behind a starting child when the close's stop cut it. `beforeStart` runs
+   *  after the stop and before the loop looks again. */
+  async function closedWhileStarting(beforeStart: () => void = () => undefined) {
+    const start = deferred<void>()
+    adapterExtras = {
+      awaitStarted: vi.fn(() => start.promise),
+      closeSession: vi.fn(async () => true)
+    }
+    await restartHost()
+    acquire.mockImplementationOnce(spawnStartingChild)
+    const first = await accept('first')
+    await eventually(() => expect(adapterExtras.awaitStarted).toHaveBeenCalledTimes(1))
+    await closeStopOnly()
+    const starts = acquire.mock.calls.length
+    beforeStart()
+    start.resolve()
+    await settleLoop()
+    return { first, starts }
+  }
+
+  it('closes what was queued when the user closed the chat, and starts no child for it', async () => {
+    const { first, starts } = await closedWhileStarting()
+
+    expect(await submission(first)).toMatchObject({
+      dispatchState: 'rejected',
+      ...CHAT_CLOSED
+    })
+    expect(acquire).toHaveBeenCalledTimes(starts)
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(await statusRows()).toEqual([])
+  })
+
+  it('starts no child when closing what was queued fails, and closes it on the next wake', async () => {
+    const { first, starts } = await closedWhileStarting(() => {
+      const journal = conversation()!.journal
+      const reject = journal.rejectQueuedSubmissions.bind(journal)
+      vi.spyOn(journal, 'rejectQueuedSubmissions').mockImplementation(async (...args) => {
+        if (args[1].rejection.kind === 'chatClosed') {
+          vi.mocked(journal.rejectQueuedSubmissions).mockImplementation(reject)
+          throw new Error('disk full')
+        }
+        return reject(...args)
+      })
+    })
+
+    expect((await submission(first))?.dispatchState).toBe('pending')
+    expect(acquire).toHaveBeenCalledTimes(starts)
+    expect(dispatch).not.toHaveBeenCalled()
+
+    const second = await accept('second')
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('accepted'))
+    expect(await submission(first)).toMatchObject({
+      dispatchState: 'rejected',
+      ...CHAT_CLOSED
+    })
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('goes on with a message sent in a later epoch, whose sequence restarts at or below the close', async () => {
+    await closedWhileStarting()
+    const session = conversation()!
+    await session.journal.rollEpoch(
+      'corruption',
+      structuredAgentSessionConversationFence(store, SESSION)
+    )
+
+    const second = await accept('second')
+
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('accepted'))
+    expect(session.lastEndedChild).toMatchObject({ cause: 'user-close' })
+    expect((await submission(second))!.acceptedSequence).toBeLessThanOrEqual(
+      session.lastEndedChild!.endedAt.sequence
+    )
+  })
+
+  it('goes on with a message sent after the close, never failing it', async () => {
+    const second = await stoppedWhileStarting(closeStopOnly)
+
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('accepted'))
+    expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'user-close' })
     expect(await statusRows()).toEqual([])
   })
 

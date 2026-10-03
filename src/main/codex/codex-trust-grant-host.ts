@@ -28,6 +28,8 @@ type CodexTrustGrantRequestInput = {
   managedCommand: string
   expectedTrustKeys: string[]
   useDefaultCodexHome?: boolean
+  /** Overrides the native deadline; WSL keeps its own. */
+  timeoutMs?: number
 }
 
 export type ResolvedCodexTrustGrantHost = {
@@ -81,7 +83,7 @@ export function resolveNativeCodexTrustGrantHost(): ResolvedCodexTrustGrantHost 
           ...(useDefaultCodexHome
             ? { envToDelete: ['CODEX_HOME'] }
             : { env: { CODEX_HOME: input.runtimeHomePath } }),
-          timeoutMs: NATIVE_GRANT_TIMEOUT_MS
+          timeoutMs: input.timeoutMs ?? NATIVE_GRANT_TIMEOUT_MS
         },
         hooksListCwd: input.runtimeHomePath,
         expectedTrustKeys: input.expectedTrustKeys,

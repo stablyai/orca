@@ -29,6 +29,7 @@ import {
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -95,6 +96,7 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire: vi.fn(async ({ fence }) => ({
@@ -129,7 +131,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
-  await host.close(SESSION)
+  await host.close(SESSION, 'evict')
   await rm(root, { recursive: true, force: true })
 })
 
@@ -202,7 +204,7 @@ describe('settling a send the provider proves it received after the ack window',
       return true
     })
 
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     await expect(settlement).resolves.toBeUndefined()
     await host.revealSession(SESSION)
     expect(await submissions()).toMatchObject([{ dispatchState: 'accepted' }])

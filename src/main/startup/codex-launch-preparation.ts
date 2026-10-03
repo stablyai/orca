@@ -20,13 +20,15 @@ export async function prepareCodexRuntimeHomeForLaunch(
     if (target?.runtime === 'wsl' || !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)) {
       return false
     }
-    // Why (flag ON, system default): the hook entry must exist — appended last
-    // and trusted by codex's own app-server grant — in the real ~/.codex before
-    // the pane spawns. An incapable grant flips the lane gate so the launch
-    // below falls back to the managed home instead of a status-blind pane.
+    // Why (flag ON, system default): the hook entry must exist, appended last, in
+    // the real ~/.codex before the pane spawns. This never waits on Codex's
+    // approval: until it lands, the lane gate sends the launch below to the
+    // managed home instead of a pane that would ask the user to review it.
+    // Add-only: another build's entry is left for app start to convert.
     await ensureRealHomeCodexHookState({
       hooksEnabled: isAgentStatusHooksEnabledForAgent(state.store?.getSettings(), 'codex'),
-      userDataPath: app.getPath('userData')
+      userDataPath: app.getPath('userData'),
+      writePolicy: 'add-missing-only'
     })
     return true
   }

@@ -15,6 +15,7 @@ vi.mock('./structured-agent-session-restart-restore', () => ({
 }))
 
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 // The restore pool is mocked; the host database only fills the deps' shape.
 const stateDirectory = mkdtempSync(join(tmpdir(), 'orca-readable-restorer-'))
@@ -36,11 +37,12 @@ describe('StructuredAgentSessionReadableRestorer', () => {
       openDeps: {
         store: { getRecord: () => null, listRecords: () => records },
         journalDatabase: openTestJournalHostDatabase(stateDirectory),
-        adapter: {}
+        adapter: {},
+        logger: recordingStructuredAgentSessionLogger().logger
       },
       supportsRecord: () => true,
-      reconcile: async () => null,
-      resolveRecovery: async () => undefined,
+      reconcile: async () => true,
+      resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
       onReadable: () => undefined

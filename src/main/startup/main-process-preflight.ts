@@ -1,3 +1,5 @@
+import { antigravityHookService } from '../antigravity/hook-service'
+import { getRelocatedDaemonHost } from '../daemon/daemon-host-relocation'
 import { app, ipcMain, powerMonitor, session } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import os from 'node:os'
@@ -33,6 +35,7 @@ import {
 } from '../updater'
 import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
+import { configureLinuxDevShmUsage } from './linux-dev-shm-policy'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup-diagnostics'
 import { startEventLoopStallProbe } from './event-loop-stall-probe'
 import {
@@ -57,6 +60,7 @@ import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { installMainProcessTreeKillGate } from '../own-chromium-tree-kill-guard'
 import { setSecretStore } from '../../shared/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
+import { selectLinuxKeyringBackend } from './select-linux-keyring-backend'
 import { setPtyHostBindings } from '../ipc/pty-host-bindings'
 import { electronRuntimeDesktopSurface } from '../host/electron-runtime-desktop-surface'
 import { setRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
@@ -207,6 +211,10 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why captured now: after the dev/E2E override above, and before app.setName('Orca') (whenReady)
   // changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
   initDataPath()
+  antigravityHookService.setWindowsRuntimePathProvider(
+    () => getRelocatedDaemonHost()?.execPath ?? process.execPath
+  )
+
   // Why: Electron resolves the macOS safeStorage Keychain service name from the app name before
   // ready. Dev pins userData above, so applying its name here cannot shift the captured path.
   if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {
@@ -270,6 +278,11 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // installing here changes no timing, in particular not the pre-ready Keychain service-name
   // resolution. The app-environment port and the userData capture install earlier still, next to
   // the path decision they depend on.
+  // Why immediately before the store is installed, and not later: Electron reads
+  // `--password-store` when it builds its os_crypt config during browser main parts,
+  // so a switch appended after that is ignored and the desktop keeps writing plaintext.
+  // Safe here — nothing above resolves a credential, and the probe inside is bounded.
+  selectLinuxKeyringBackend()
   setSecretStore(new ElectronSecretStore())
   // Why at process level, not per-window: pty.ts registers against injected surfaces so
   // it can load without electron, and an Electron main process always has ipcMain —
@@ -358,6 +371,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   optOutOfHiddenPageWakeUpThrottling()
   configureElectronNetworkCompatibility()
   enableRendererHeapHeadroom()
+  configureLinuxDevShmUsage()
   maybeApplyGpuFallbackForThisLaunch()
   if (!state.gpuFallbackActiveThisLaunch) {
     enableMainProcessGpuFeatures()

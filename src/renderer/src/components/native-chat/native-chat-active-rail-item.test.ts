@@ -122,4 +122,31 @@ describe('active rail item', () => {
       })
     ).toBe('u2')
   })
+
+  // A rejected send the journal recorded keeps its place but opens no turn.
+  it('lights a prompt in no turn by its own id', () => {
+    const slots: NativeChatRailSlot[] = [
+      ...TURNS,
+      { turnKey: undefined, message: { id: 'rejected', role: 'user' } }
+    ]
+    expect(
+      findActiveNativeChatRailItem({
+        slots,
+        virtualItems: rows(11),
+        scrollTop: 800,
+        clientHeight: VIEWPORT,
+        scrollHeight: 1100,
+        previousActiveId: null
+      })
+    ).toBe('rejected')
+    expect(
+      findActiveNativeChatRailItem({
+        slots,
+        virtualItems: rows(11),
+        scrollTop: 1010,
+        ...MID_SCROLL,
+        scrollHeight: 2000
+      })
+    ).toBe('rejected')
+  })
 })

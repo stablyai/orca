@@ -239,4 +239,23 @@ describe('a message the provider answered after the running turn', () => {
     ])
     expect(membership.liveTurnKey).toBe('B')
   })
+
+  // A message shown as not sent stays in the outbox, below every journal row.
+  it.each([
+    ['states each row turn', THREAD],
+    ['states no turn scope', null]
+  ] as const)(
+    'puts a message shown as not sent in no turn, never the live one (host %s)',
+    (_host, scope) => {
+      const items = [user('u1', scope), turn('t1', 'u1', scope), user('u2', scope)]
+      const messages = [
+        ...rows(items),
+        { id: 'held', role: 'user' as const, unsent: true as const }
+      ]
+      const membership = nativeChatTurnMembership(messages, { items, submissions: [] })
+      expect(membership.turnKeys).toEqual(['u1', 'u2', undefined])
+      // The send whose turn has not opened yet is live, not the message below it.
+      expect(membership.liveTurnKey).toBe('u2')
+    }
+  )
 })

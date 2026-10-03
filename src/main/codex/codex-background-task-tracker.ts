@@ -73,13 +73,15 @@ export class CodexBackgroundTaskTracker {
           : [])
     ]
     const frame = readCodexBackgroundTaskFrame(event, this.primaryThreadId)
-    if (frame?.kind === 'subagent') {
-      this.executions.register(
-        frame.agentThreadId,
-        frame.label,
-        frame.parentTurnId,
-        frame.spawnerThreadId
-      )
+    if (frame?.kind === 'subagents') {
+      for (const child of frame.children) {
+        this.executions.register(
+          child.agentThreadId,
+          child.label,
+          child.parentTurnId,
+          child.spawnerThreadId
+        )
+      }
     } else if (frame?.kind === 'thread-closed') {
       this.executions.closeThread(frame.threadId)
     } else if (frame && frame.threadId !== this.primaryThreadId) {

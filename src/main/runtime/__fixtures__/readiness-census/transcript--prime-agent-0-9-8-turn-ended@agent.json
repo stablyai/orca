@@ -1,0 +1,53 @@
+{
+  "description": "prime-agent recording at 120x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-40: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "41-56: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "57: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "58-61: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "62-64: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "65-75: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "76-82: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "83: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "84-96: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "97: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "98-100: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "101: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "102-114: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "115: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "116-121: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "122: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "123-125: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "126-128: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "129-154: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "155-157: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "158-172: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "173-177: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start"
+    ],
+    "clockless": [
+      "0-40: verdict=pending:closed wait=pending",
+      "41-56: verdict=ready-strong wait=ready@start",
+      "57: verdict=pending:closed wait=pending",
+      "58-61: verdict=ready-strong wait=ready@start",
+      "62-64: verdict=pending:closed wait=pending",
+      "65-75: verdict=ready-strong wait=ready@start",
+      "76-82: verdict=pending:closed wait=pending",
+      "83: verdict=ready-strong wait=ready@start",
+      "84-96: verdict=pending:closed wait=pending",
+      "97: verdict=ready-strong wait=ready@start",
+      "98-100: verdict=pending:closed wait=pending",
+      "101: verdict=ready-strong wait=ready@start",
+      "102-114: verdict=pending:closed wait=pending",
+      "115: verdict=ready-strong wait=ready@start",
+      "116-121: verdict=pending:closed wait=pending",
+      "122: verdict=ready-strong wait=ready@start",
+      "123-125: verdict=pending:closed wait=pending",
+      "126-128: verdict=ready-strong wait=ready@start",
+      "129-154: verdict=pending:closed wait=pending",
+      "155-157: verdict=ready-strong wait=ready@start",
+      "158-172: verdict=pending:closed wait=pending",
+      "173-177: verdict=ready-strong wait=ready@start"
+    ]
+  }
+}

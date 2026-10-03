@@ -1,4 +1,8 @@
 import type { AgentSessionBackgroundTask } from '../../shared/agent-session-wire'
+import {
+  boundCodexCommandDescription,
+  codexChildCommandDescription
+} from '../../shared/codex-child-command-description'
 import type { CodexBackgroundTaskEvent } from './codex-background-task-frames'
 import { readRecord, readString } from './codex-item-field-readers'
 import { readCodexThreadItem } from './codex-structured-item-translation'
@@ -6,7 +10,6 @@ import { MAX_CODEX_ITEM_STREAM_METADATA_BYTES } from './codex-item-stream-retent
 import type { CodexAbandonedCommand } from './codex-prompt-registry'
 
 const MAX_SETTLED_COMMANDS = 128
-const MAX_DESCRIPTION_CHARS = 512
 
 type Command = { threadId: string; task: AgentSessionBackgroundTask; bytes: number }
 
@@ -14,35 +17,6 @@ type Command = { threadId: string; task: AgentSessionBackgroundTask; bytes: numb
 export type CodexBackgroundCommandChange =
   | { type: 'started'; threadId: string; task: AgentSessionBackgroundTask }
   | { type: 'ended'; threadId: string; taskId: string }
-
-/** The label's reserved share of the description. Reserved, not merely capped:
- *  a label free to spend the whole budget clips away the command it qualifies,
- *  leaving a command row naming an agent and no command — the failure this
- *  qualification exists to remove, in the other direction. `bytes` is counted
- *  before qualification, so this share is also what a published row may exceed
- *  the admitted count by. */
-const MAX_LABEL_CHARS = 96
-
-/** Every cut in this file goes through here, clipped the way `boundSubagentField`
- *  clips the same provider string on the agent row: never mid surrogate pair,
- *  since a lone surrogate is lossy through any non-JSON UTF-8 hop. A composed
- *  row is cut a SECOND time, so a clip that is safe only where the label is
- *  bounded is not safe. No ordinal, because a row's identity is its `id`. */
-function boundText(value: string, max: number): string {
-  if (value.length <= max) {
-    return value
-  }
-  const keep = max - 1
-  const last = value.charCodeAt(keep - 1)
-  const end = last >= 0xd800 && last <= 0xdbff ? keep - 1 : keep
-  return `${value.slice(0, end)}…`
-}
-
-/** Resolved on read, and capped at the bound the admitted description already respects. */
-function qualifiedDescription(label: string, description: string | undefined): string {
-  const name = boundText(label, MAX_LABEL_CHARS)
-  return boundText(description ? `${name} — ${description}` : name, MAX_DESCRIPTION_CHARS)
-}
 
 export class CodexBackgroundCommandTracker {
   private readonly commands = new Map<string, Command>()
@@ -115,7 +89,7 @@ export class CodexBackgroundCommandTracker {
         // a label registered after the command still lands.
         const label = threadId === this.primaryThreadId ? null : childLabel?.(threadId)
         return label
-          ? { ...task, description: qualifiedDescription(label, task.description) }
+          ? { ...task, description: codexChildCommandDescription(label, task.description) }
           : task
       })
   }
@@ -189,7 +163,7 @@ export class CodexBackgroundCommandTracker {
     }
     const key = JSON.stringify([event.threadId, item.id])
     const completed = event.method === 'item/completed' || item.status !== 'inProgress'
-    const description = boundText(readString(item, 'command') ?? '', MAX_DESCRIPTION_CHARS)
+    const description = boundCodexCommandDescription(readString(item, 'command') ?? '')
       .replace(/\s+/g, ' ')
       .trim()
     const value = {

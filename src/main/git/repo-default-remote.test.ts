@@ -16,11 +16,8 @@ describe('getDefaultRemote', () => {
 
   it('prefers the configured remote for the resolved default branch', async () => {
     gitExecFileAsyncMock.mockImplementation(async (argv: string[]) => {
-      if (argv[0] === 'symbolic-ref') {
-        return { stdout: 'refs/remotes/origin/main\n' }
-      }
-      if (argv[0] === 'rev-parse') {
-        return { stdout: 'abc123\n' }
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n' }
       }
       if (argv[0] === 'config') {
         return { stdout: 'upstream\n' }
@@ -67,9 +64,7 @@ describe('getDefaultRemote', () => {
   })
 
   it('normalizes a non-Error remote rejection', async () => {
-    for (let probe = 0; probe < 5; probe += 1) {
-      gitExecFileAsyncMock.mockRejectedValueOnce(new Error('missing ref'))
-    }
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('missing ref'))
     gitExecFileAsyncMock.mockRejectedValueOnce('transport failed')
 
     await expect(getDefaultRemote('/repo')).rejects.toThrow(

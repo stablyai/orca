@@ -6,13 +6,16 @@ import { terminalTitleBlocksExplicitAgentStatus } from './runtime-worktree-statu
 
 export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
   /** Apply one observed OSC title (raw form) to the PTY and leaf records.
-   *  Returns true when the PTY record's title or status changed. */
+   *  Returns true when what the PTY shows changed: its record, or its display-only clear. */
   protected applyTrackedPtyTitle(
     ptyId: string,
     rawTitle: string,
     normalizedTitle: string,
     meta?: TerminalTitleFactMeta
   ): boolean {
+    if (meta?.staleWorkingTitleClear) {
+      return this.applyStaleWorkingTitleClear(ptyId, rawTitle, normalizedTitle)
+    }
     // Why: status is detected from the RAW title (mirrors the renderer tracker),
     // so working/idle transitions are unaffected by normalization; the records
     // store the NORMALIZED title so rotating Grok/Pi/Gemini frames collapse to
@@ -25,10 +28,12 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
     const recordedTitle = identityOnlyTitle ? null : normalizedTitle
     const agentStatus = identityOnlyTitle ? null : detectAgentStatusFromTitle(rawTitle)
+    // Why before retiring the clear: the lifecycle counts a turn from the status the clear showed.
     this.recordAgentPromptLifecycleState(ptyId, agentStatus)
     let ptyRecordChanged = false
     const pty = this.ptysById.get(ptyId)
     if (pty) {
+      pty.titleDisplayClear = null
       const prevStatus = pty.lastAgentStatus
       const prevTitle = pty.lastOscTitle
       const observedAt = this.nextTitleObservationSequence()
@@ -152,12 +157,48 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     return ptyRecordChanged
   }
 
+  /**
+   * The stale-working timer's clear: it only guesses that the agent may have exited behind a
+   * working title. Of what a genuine title does, it skips the title/status evidence that
+   * readiness and delivery read (records, waiters, mailbox, delivery), and still re-derives the
+   * process evidence that guess is about: the foreground agent and the exit/completion check.
+   * Display takes the cleared title from `titleDisplayClear`; the caller publishes it.
+   */
+  private applyStaleWorkingTitleClear(
+    ptyId: string,
+    rawTitle: string,
+    normalizedTitle: string
+  ): boolean {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty) {
+      return false
+    }
+    const nativeStatus = pty.lastAgentStatus
+    const clearedStatus = detectAgentStatusFromTitle(rawTitle)
+    const observedAt = this.nextTitleObservationSequence()
+    const previousTitle = pty.titleDisplayClear?.title ?? pty.lastOscTitle
+    pty.titleDisplayClear = { title: normalizedTitle, observedAt, observedAtEpochMs: Date.now() }
+    if (nativeStatus === 'working' && clearedStatus === null) {
+      this.confirmPtyAgentExit(ptyId, true)
+    }
+    if (nativeStatus === clearedStatus) {
+      return previousTitle !== normalizedTitle
+    }
+    const foregroundRefresh = this.ptyForegroundAgent.refresh(ptyId, observedAt)
+    if (this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)) {
+      this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)
+      return false
+    }
+    return true
+  }
+
   /** Cancel the per-PTY title tracker (stale-title timer included) on PTY
    *  teardown so it cannot fire into pruned records. */
   protected disposePtyTitleTracker(ptyId: string): void {
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
     this.ptyForegroundAgent.clearDelayedSnapshot(ptyId)
+    this.openCodeRunLifetime.forgetPty(ptyId)
     this.mobileSessionTabsAgentStatusHeartbeat.removePty(ptyId)
     this.clientEvents.clearPtyTitleGate(ptyId)
   }
@@ -178,6 +219,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.lastOscTitle = null
       pty.lastOscTitleAt = null
       pty.lastOscTitleEpochMs = null
+      pty.titleDisplayClear = null
       pty.lastAgentStatus = null
       // Why: the prior process's first-party status would otherwise veto idle for its
       // replacement — a stale `working` keeps tui-idle unresolved on the new generation.

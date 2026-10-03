@@ -1,9 +1,9 @@
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError,
-  stopAgentSessionProviderRoot,
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/structured-agent-session-provider-exit-proof'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 import {

@@ -36,7 +36,10 @@ async function main() {
     format: 'esm',
     // The whole point: one file, so the app bundle emits one deferred chunk for it.
     splitting: false,
-    minify: true,
+    // Metro transforms this module again; preserve enum assignments for its export analysis.
+    minifyWhitespace: true,
+    minifyIdentifiers: true,
+    minifySyntax: false,
     // The floor the shell's WebViews hold, the same pair the terminal engine is built for.
     target: ['chrome74', 'safari15'],
     write: false,

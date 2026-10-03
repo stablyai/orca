@@ -27,8 +27,8 @@ export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   /** Fixed by the caller that opened this launch so coalesced prompts use one delivery mode. */
   promptDelivery: StructuredAgentLaunchOptions['promptDelivery']
   callers: StructuredLaunchCallerGroup
-  /** The host's refusal behind the last failed attempt, worded beside Retry; the toast stays
-   *  generic. Absent when the failure named none. */
+  /** The host's refusal behind the last failed attempt, worded beside Retry. Absent when the
+   *  failure named none. */
   failure?: AgentSessionWriteRefusal
   selection: StructuredLaunchSelection
 }

@@ -283,18 +283,27 @@ export function useNativeChatTranscriptWindow({
       return
     }
     finishReaderTakeover()
-    if (virtualizer.scrollElement) {
+    // With no windowed row it would resolve the end from its own rows' height, 0, though rows
+    // drawn after the window (a message shown as not sent) still fill the container.
+    if (virtualizer.scrollElement && slots.length > 0) {
       virtualizer.scrollToEnd({ behavior: 'auto' })
       return
     }
-    // No virtualizer yet (a container without layout): the document's own bottom
-    // is the same offset the virtualizer would resolve for the last row.
+    // No virtualizer yet (a container without layout), or no windowed row: the document's own
+    // bottom is the same offset the virtualizer would resolve for the last row.
     const previous = container.scrollTop
     container.scrollTop = container.scrollHeight
     if (container.scrollTop !== previous) {
       programmaticScrollMarks.mark(container.scrollTop)
     }
-  }, [finishReaderTakeover, isVisible, programmaticScrollMarks, scrollRef, virtualizer])
+  }, [
+    finishReaderTakeover,
+    isVisible,
+    programmaticScrollMarks,
+    scrollRef,
+    slots.length,
+    virtualizer
+  ])
 
   const restoreScrollOffset = useCallback(
     (offset: number) => {

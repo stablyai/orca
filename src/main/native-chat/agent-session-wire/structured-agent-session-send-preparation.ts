@@ -24,6 +24,7 @@ import {
 } from './structured-agent-session-mutation-admission'
 import { rewindRefusal } from './structured-rewind-refusal'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** Why the record refuses any send right now, whoever owns it; null when a send may run. */
 export function structuredAgentSessionSendBlock(
@@ -53,37 +54,79 @@ export function structuredAgentSessionSendBlock(
   return null
 }
 
-/** The conversation a send or a Stop writes to, opened when this host holds it closed. */
+/** The conversation a send or a Stop writes to, opened when this host holds it closed. Once it
+ *  answers, every write issued before it has settled, so a mutation reads a whole fold. */
 export async function openConversationForWrite(
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>,
-  envelope: AgentSessionMutationEnvelope
+  envelope: AgentSessionMutationEnvelope,
+  logger: StructuredAgentSessionLogger
 ): Promise<AgentSessionMutationSessionPreparation> {
+  let session: StructuredAgentSessionHostSession | null
   try {
-    if (await openConversation(envelope.sessionId)) {
-      return { ok: true }
-    }
-    return { ok: false, refusal: AGENT_SESSION_NOT_ATTACHED }
+    session = await openConversation(envelope.sessionId)
   } catch (error) {
-    console.warn('[agent-session] opening the conversation for a write failed:', error)
+    logger.warn('opening the conversation for a write failed', {
+      scope: 'open-for-write',
+      sessionId: envelope.sessionId,
+      error
+    })
     return { ok: false, refusal: journalOpenRefusal(error) }
   }
+  if (!session) {
+    return { ok: false, refusal: AGENT_SESSION_NOT_ATTACHED }
+  }
+  // Writes wait behind a restore's owed import. A failed import settled them too (they failed
+  // with it), so it is reported and never refuses the mutation: its own writes fail as they would.
+  if (session.journal.importPending) {
+    await session.journal.whenImported().catch((error: unknown) => {
+      logger.warn('the import owed before a write failed', {
+        scope: 'open-for-write',
+        sessionId: envelope.sessionId,
+        error
+      })
+    })
+  }
+  return { ok: true }
 }
 
 /** The conversation a write lands in, opened when this host holds it closed. */
 export function openForWrite(
-  context: Pick<StructuredAgentSessionMutationContext, 'openConversation'>,
+  context: Pick<StructuredAgentSessionMutationContext, 'openConversation' | 'deps'>,
   envelope: AgentSessionMutationEnvelope
 ): () => Promise<AgentSessionMutationSessionPreparation> {
-  return () => openConversationForWrite(context.openConversation, envelope)
+  return () => openConversationForWrite(context.openConversation, envelope, context.deps.logger)
+}
+
+/** For an operation the running child performs, which starts none: the conversation, then any
+ *  stop an earlier attempt left owed, so it never reaches a child that takes no input. */
+export function openForProviderWrite(
+  context: Pick<
+    StructuredAgentSessionMutationContext,
+    'openConversation' | 'finishOwedStop' | 'deps'
+  >,
+  envelope: AgentSessionMutationEnvelope
+): () => Promise<AgentSessionMutationSessionPreparation> {
+  return async () => {
+    const opened = await openConversationForWrite(
+      context.openConversation,
+      envelope,
+      context.deps.logger
+    )
+    return opened.ok ? context.finishOwedStop(envelope.sessionId) : opened
+  }
 }
 
 /** For an operation only the provider can perform: the conversation, then its agent. */
 export function openWithAgent(
-  context: Pick<StructuredAgentSessionMutationContext, 'openConversation' | 'ensureAgent'>,
+  context: Pick<StructuredAgentSessionMutationContext, 'openConversation' | 'ensureAgent' | 'deps'>,
   envelope: AgentSessionMutationEnvelope
 ): () => Promise<AgentSessionMutationSessionPreparation> {
   return async () => {
-    const opened = await openConversationForWrite(context.openConversation, envelope)
+    const opened = await openConversationForWrite(
+      context.openConversation,
+      envelope,
+      context.deps.logger
+    )
     return opened.ok ? context.ensureAgent(envelope.sessionId) : opened
   }
 }
@@ -95,7 +138,11 @@ export function sendPreparation(
   envelope: AgentSessionMutationEnvelope
 ): () => Promise<AgentSessionMutationSessionPreparation> {
   return async () => {
-    const opened = await openConversationForWrite(context.openConversation, envelope)
+    const opened = await openConversationForWrite(
+      context.openConversation,
+      envelope,
+      context.deps.logger
+    )
     const phase = context.deps.store.getRecord(envelope.sessionId)?.rewind?.phase
     return opened.ok && (phase === 'prepared' || phase === 'provider-succeeded')
       ? context.ensureAgent(envelope.sessionId)

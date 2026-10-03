@@ -11,6 +11,12 @@
     "retrying": "재시도 중…"
   },
   "settings": {
+    "terminal": {
+      "optionLayoutAlt": "ABC 또는 U.S. — Option 키가 Alt/Esc 시퀀스를 전송합니다",
+      "optionLayoutCompose": "이 배열에서는 Option 키로 @, €, [, ] 같은 문자를 입력합니다",
+      "optionLayoutUnknown": "알 수 없는 배열 — Option 키로 문자를 입력합니다(안전한 기본값)",
+      "optionShortcutHint": "Option 단축키에는 둘 다, 악센트 문자와 기호에는 끄기, 각 Option 키를 다른 용도로 쓰려면 왼쪽 또는 오른쪽을 선택하세요."
+    },
     "appearance": {
       "language": {
         "title": "언어",
@@ -900,6 +906,17 @@
         "symlink": "심볼릭 링크는 첨부할 수 없습니다.",
         "permissionDenied": "액세스가 거부되었습니다.",
         "unsupported": "지원되지 않는 파일 형식입니다."
+      },
+      "dropTempCopyFailure": {
+        "changed": "Orca가 복사하는 동안 파일이 변경되었습니다. 다시 드롭해 보세요.",
+        "outOfSpace": "드롭한 파일을 복사할 디스크 공간이 부족합니다.",
+        "storageUnavailable": "Orca가 드롭한 파일을 위한 저장 공간을 만들지 못했습니다.",
+        "storageNotPrivate": "드롭한 파일을 위한 Orca 저장 공간을 다른 사용자가 읽을 수 있어 아무것도 복사하지 않았습니다.",
+        "timedOut": "복사하는 데 너무 오래 걸렸습니다. 다시 드롭해 보세요.",
+        "busy": "아직 복사 중인 드롭이 너무 많습니다. 잠시 후 다시 시도하세요.",
+        "tooLarge": "너무 커서 복사할 수 없어 Orca가 에이전트에 전달하지 못했습니다.",
+        "storageFull": "드롭한 파일을 위한 Orca 저장 공간이 가득 차서 Orca가 에이전트에 전달하지 못했습니다.",
+        "generic": "다시 드롭해 보세요."
       }
     },
     "hooks": {
@@ -934,7 +951,10 @@
         "nativeDropPathsTooLarge": "드롭 경로 목록이 너무 큽니다.",
         "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects.",
         "nativeDropUnresolvedPathsDescription": "먼저 디스크에 저장한 다음 저장된 파일을 삭제하세요.",
-        "nativeDropUnresolvedPaths": "Orca가 삭제된 파일의 경로를 읽을 수 없습니다."
+        "nativeDropUnresolvedPaths": "Orca가 삭제된 파일의 경로를 읽을 수 없습니다.",
+        "nativeDropTempCopyFailed": "Orca가 드롭한 파일 {{count}}개를 복사하지 못했습니다.",
+        "nativeDropTempCopyFailed_one": "Orca가 드롭한 파일 {{count}}개를 복사하지 못했습니다.",
+        "nativeDropTempCopyFailed_other": "Orca가 드롭한 파일 {{count}}개를 복사하지 못했습니다."
       },
       "useIpcEvents": {
         "0e3cf53060": "브라우저 탭 {{value0}}을(를) 찾을 수 없습니다",
@@ -3889,7 +3909,7 @@
             "compact": "압축",
             "footerDetailAria": "사용량 푸터 세부 정보",
             "detailedTooltip": "막대, 레이블, 백분율을 포함한 전체 사용량",
-            "compactTooltip": "압축된 사용: 가장 좁은 창만 사용"
+            "compactTooltip": "간략한 사용량: 제공자별 요약 하나"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} 업데이트 중",
@@ -5361,6 +5381,7 @@
           "bdd23b4e07": "GitHub 이슈",
           "44713a5d04": "Linear 이슈",
           "jiraIssues": "Jira 이슈",
+          "host": "호스트",
           "cc17bd443b": "상세한",
           "0f9b959b31": "PR",
           "e029a2d775": "상태",
@@ -5438,6 +5459,7 @@
           "74522ee457": "이름 바꾸기 실패",
           "02e19349f4": "자동 이름 바꾸기 실패: 보기 오류",
           "691ccfd622": "삭제 중…",
+          "deleteFailed": "삭제 실패",
           "35ccfe2475": "프로젝트 {{value0}}",
           "1d66d84f0b": "문자열",
           "57eaa61b55": "하위 워크스페이스 숨기기",
@@ -7071,7 +7093,7 @@
             "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
             "shellEnvToggleLabel": "셸 환경 사용 전환",
             "structuredTitle": "업데이트된 구조화된 기본 채팅 사용",
-            "structuredCopy": "Codex와 Claude를 위한 호스트 소유의 구조화된 채팅 런타임을 선택하세요. 끄기는 기존 터미널 지원 채팅 경로를 유지합니다.",
+            "structuredCopy": "새 Codex 및 Claude 에이전트를 구조화된 채팅으로 엽니다. 끄면 터미널 지원 채팅으로 엽니다. 이미 있는 채팅은 그대로 유지됩니다.",
             "structuredScope": "현재는 로컬 세션만 가능합니다. WSL 및 원격 실행 호스트(SSH 포함)는 계속해서 터미널 채팅을 사용하며 Orca가 프로세스 시작 시간을 읽을 수 없으면 Windows는 이 채팅을 사용합니다.",
             "structuredToggleLabel": "업데이트된 구조화된 기본 채팅 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
@@ -7116,9 +7138,9 @@
           "80c454e8a6": "이를 공급자의 캐시 TTL과 일치시킵니다."
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "리치 에디터 모드 및 agent 전달 작업에서 로컬 markdown 메모 컨트롤을 표시합니다.",
+          "f80603d293": "모든 markdown 보기에서 markdown 메모 컨트롤을 표시하고 agent 전달 작업에 해당 메모를 포함합니다.",
           "4edc104f0f": "Markdown 리뷰 노트",
-          "5f02e6fb21": "리치 에디터 모드에서 로컬 markdown 리뷰 노트 컨트롤을 표시합니다.",
+          "5f02e6fb21": "markdown 파일에서 로컬 markdown 리뷰 노트 컨트롤을 표시합니다.",
           "51161d1647": "파일을 편집할 때 미니맵 개요를 표시합니다.",
           "6690b1ffb9": "미니맵",
           "5a1ea6eaa2": "숨겨진",
@@ -15767,6 +15789,7 @@
             "4300f38145": "{{value0}}{{value1}}에서 다운로드 중",
             "31375046b7": "{{value0}}에서 다운로드",
             "acbe79fd01": "페이지 요소 가져오기({{value0}})",
+            "cc4a071d3a": "페이지 요소에 주석 달기({{value0}})",
             "572046436a": "원격 브라우저",
             "b313a7275b": "원격 브라우저 열기",
             "5f66313863": "주석",
@@ -16500,6 +16523,7 @@
             "done": "완료",
             "idle": "유휴",
             "unverifiable": "최근 업데이트 없음",
+            "unconfirmed": "확인하지 못함",
             "permission": "주의 필요"
           },
           "filtersSection": "필터",
@@ -17154,9 +17178,6 @@
             "failed": "채팅을 시작할 수 없습니다.",
             "unknown": "채팅 연결을 확인할 수 없습니다.",
             "retry": "다시 시도"
-          },
-          "NativeChatStructuredSessionStatus": {
-            "starting": "{{value0}}이(가) 아직 시작 중입니다. 준비될 때까지 메시지는 대기합니다. 중단하려면 이 채팅을 닫으세요."
           }
         }
       },
@@ -17314,10 +17335,77 @@
       }
     },
     "native-chat": {
+      "contextMenu": {
+        "copyOrcaSessionId": "Orca 세션 ID 복사",
+        "orcaSessionIdCopied": "Orca 세션 ID를 복사했습니다",
+        "orcaSessionIdCopyFailed": "Orca 세션 ID를 복사하지 못했습니다",
+        "orcaSessionIdTooltip": "이 채팅에 대한 Orca의 ID로, 에이전트 CLI 자체의 세션 ID와는 별개입니다. 에이전트는 Orca를 통해 서로를 가리킬 때 이 ID를 사용합니다."
+      },
+      "failureWords": {
+        "theAgent": "에이전트",
+        "providerStartFailed": "{{agent}}이(가) 시작을 마치기 전에 중지되었습니다.",
+        "runCommandAgain": "/{{command}}을(를) 다시 실행하세요.",
+        "sendToTryAgain": "다시 시도하려면 메시지를 보내세요.",
+        "couldNotStart": "{{agent}}을(를) 시작하지 못했습니다.",
+        "couldNotRestart": "{{agent}}을(를) 다시 시작하지 못했습니다.",
+        "notSignedIn": "{{agent}}이(가) 선택한 계정으로 로그인되어 있지 않습니다.",
+        "signInFirst": "먼저 로그인하세요.",
+        "signInThenRunCommand": "로그인한 다음 /{{command}}을(를) 다시 실행하세요.",
+        "signInThenSend": "로그인한 다음 메시지를 다시 보내세요.",
+        "historyTooLarge": "이 대화의 기록이 너무 커서 여기에서 복원할 수 없습니다.",
+        "managedAccountEnvOverride": "이 Claude 실행은 자체 Anthropic 로그인 변수를 설정합니다. 관리되는 Claude 계정을 사용하려면 해당 변수를 제거하세요.",
+        "accountSwitchInProgress": "Claude 계정 전환이 진행 중입니다. 완료된 후 다시 시도하세요.",
+        "managedAccountUnsupported": "WSL에 Claude 계정이 추가되어 있는 동안에는 Claude 채팅에 Windows Claude 계정이 필요합니다.",
+        "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",
+        "chooseClaudeAccountThenRunCommand": "Claude 계정 설정에서 선택하거나 추가한 다음 /{{command}}을(를) 다시 실행하세요.",
+        "chooseClaudeAccountThenSend": "Claude 계정 설정에서 선택하거나 추가한 다음 메시지를 다시 보내세요.",
+        "providerExitedRow": "이 응답이 진행되는 동안 {{agent}}이(가) 중지되었습니다. 이 대화에서 계속할 수 있습니다.",
+        "providerExitedRejection": "이 메시지가 전송되기 전에 {{agent}}이(가) 중지되었습니다.",
+        "providerRejected": "공급자가 이 메시지를 받아들이지 않았습니다.",
+        "providerRejectedQuoted": "공급자가 이 메시지를 받아들이지 않았습니다: {{detail}}.",
+        "attachmentEmpty": "이 메시지의 이미지가 비어 있어 메시지가 전송되지 않았습니다.",
+        "attachmentTooLarge": "이 메시지의 이미지가 너무 커서 메시지가 전송되지 않았습니다.",
+        "attachmentLargerThan": "이 메시지의 이미지가 {{size}}MB보다 커서 메시지가 전송되지 않았습니다.",
+        "attachmentTooMany": "이 메시지에 이미지가 너무 많아 전송되지 않았습니다.",
+        "attachmentAtMost": "{{agent}}은(는) 메시지 하나에 이미지를 최대 {{limit}}개까지 받을 수 있어 이 메시지가 전송되지 않았습니다.",
+        "attachmentTotalTooLarge": "이 메시지의 이미지 전체 크기가 너무 커서 메시지가 전송되지 않았습니다.",
+        "attachmentTotalMoreThan": "이 메시지의 이미지 합계가 {{size}}MB를 넘어 메시지가 전송되지 않았습니다.",
+        "attachmentUnsupportedType": "{{agent}}은(는) PNG, JPEG, GIF, WebP 이미지만 받을 수 있어 이 메시지가 전송되지 않았습니다.",
+        "attachmentNotAFile": "이 메시지의 이미지가 파일이 아니어서 메시지가 전송되지 않았습니다.",
+        "attachmentNoSource": "이 메시지의 이미지에 보낼 파일이 없어 메시지가 전송되지 않았습니다.",
+        "attachmentInvalid": "이 메시지의 첨부 파일은 에이전트에 보낼 수 없습니다.",
+        "attachmentUnreadable": "이 메시지의 첨부 파일을 읽을 수 없어 메시지가 전송되지 않았습니다.",
+        "emptyMessage": "이 메시지가 비어 있어 전송되지 않았습니다.",
+        "queueFull": "에이전트를 기다리는 메시지가 너무 많아 이 메시지는 전송되지 않았습니다.",
+        "writeFailed": "Orca가 이 메시지를 에이전트에 전달하지 못해 전송되지 않았습니다.",
+        "cancelled": "이 메시지는 에이전트가 처리를 시작하기 전에 철회되었습니다.",
+        "chatClosed": "이 메시지가 전송되기 전에 채팅이 닫혔습니다.",
+        "hostRestarted": "이 메시지가 전송되기 전에 Orca가 다시 시작되었습니다.",
+        "notDelivered": "이 메시지는 전달되지 않았습니다.",
+        "notDeliveredSendAgain": "이 메시지는 전달되지 않았습니다. 계속하려면 다시 보내세요.",
+        "commandRefused": "이 명령이 실행되지 않았습니다.",
+        "commandRefusedTryAgain": "이 명령이 실행되지 않았습니다. 다시 시도하세요.",
+        "compactionFailed": "압축에 실패했습니다.",
+        "compactionFailedQuoted": "압축에 실패했습니다: {{detail}}.",
+        "compactionUnconfirmed": "압축 완료가 확인되지 않았습니다.",
+        "cancelUnconfirmed": "취소가 확인되지 않았습니다.",
+        "stopRefused": "{{agent}}이(가) 중지되지 않았습니다.",
+        "stopRefusedQuoted": "{{agent}}이(가) 중지되지 않았습니다: {{detail}}.",
+        "noTurnToStop": "{{agent}}에 중지할 실행 중인 턴이 없었습니다.",
+        "answerUnconfirmed": "응답이 기록되었지만 에이전트가 확인하지 않았습니다.",
+        "hostFault": "Orca에 문제가 발생하여 이 작업이 완료되지 않았습니다.",
+        "hostFaultTryAgain": "Orca에 문제가 발생하여 이 작업이 완료되지 않았습니다. 다시 시도하세요.",
+        "hostStopped": "{{agent}}이(가) 시작을 마치지 못해 Orca가 중지했습니다.",
+        "providerRateLimited": "{{agent}}이(가) 속도 제한에 걸려 다시 시도하고 있습니다.",
+        "providerRetrying": "{{agent}}에 일시적인 문제가 발생하여 다시 시도하고 있습니다.",
+        "providerRetryingQuoted": "{{agent}}이(가) 다시 시도하고 있습니다: {{detail}}.",
+        "previousExitUnverifiable": "이전에 실행된 {{agent}}이(가) 아직 실행 중일 수 있습니다. 중지되면 메시지가 전송됩니다."
+      },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
         "notDoneSend": "메시지가 전송되지 않았습니다.",
         "tryAgainComposerSend": "다시 보내세요.",
+        "messageNotSaved": "메시지를 저장할 수 없습니다.",
         "notDoneStop": "에이전트가 중지되지 않았습니다.",
         "notDoneStopTask": "백그라운드 작업이 중지되지 않았습니다.",
         "notDoneStopTasks": "백그라운드 작업이 중지되지 않았습니다.",
@@ -17328,15 +17416,17 @@
         "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
         "capacity": "Orca가 지난 하루 동안 너무 많은 요청을 받았습니다.",
         "outcomeUnknown": "Orca가 무슨 일이 있었는지 확인하지 못했습니다. 채팅을 확인하세요.",
+        "sendOutcomeLost": "Orca가 메시지가 에이전트에 전달되었는지 확인하지 못했습니다. 채팅을 확인하고 필요하면 다시 보내세요.",
         "questionChanged": "이 질문은 이미 답변되었거나 변경되었습니다.",
         "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
         "historyUnusable": "이 채팅을 불러올 수 없습니다.",
         "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
         "savedByNewerOrca": "채팅이 최신 버전의 Orca에서 저장되었습니다.",
         "updateOrcaToKeepUsing": "계속 사용하려면 Orca를 업데이트하세요.",
-        "unsupported": "이 채팅을 실행 중인 Orca가 이 기능을 지원하지 않습니다. Orca를 업데이트한 후 다시 시도하세요.",
+        "unsupported": "이 채팅을 실행 중인 컴퓨터에 최신 버전의 Orca가 필요합니다. 해당 컴퓨터에서 Orca를 업데이트한 후 다시 시도하세요.",
+        "notAvailable": "이 채팅에서는 사용할 수 없습니다.",
         "unreachable": "Orca가 에이전트에 연결하지 못했습니다.",
-        "recordFailed": "Orca가 이 채팅의 기록에 저장하지 못했습니다.",
+        "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
         "conversationCleared": "이 대화는 지워졌습니다.",
         "openCurrentConversation": "계속하려면 현재 대화를 여세요.",
         "clearUnfinished": "마지막 /clear가 완료되지 않았습니다.",
@@ -17355,14 +17445,14 @@
         "optionRejected": "에이전트가 이 설정을 받아들이지 않았습니다.",
         "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
         "agentRefused": "에이전트가 이를 거부했습니다.",
-        "ownerUnproven": "Orca가 이 채팅의 이전 에이전트가 중지되었는지 아직 확인하지 못했습니다.",
+        "ownerUnproven": "이 채팅의 이전 에이전트가 아직 실행 중일 수 있습니다.",
         "reopenChat": "다시 확인하려면 채팅을 다시 여세요.",
         "terminalAgentHoldsChat": "이 채팅은 아직 터미널 에이전트에서 열려 있습니다.",
         "quitTerminalAgent": "여기에서 채팅을 계속하려면 해당 에이전트를 종료하세요.",
         "hostReconciling": "Orca가 다시 시작된 후 이 채팅을 아직 확인하고 있습니다.",
         "waitMoment": "잠시 기다리세요.",
         "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
-        "chatNotFound": "이 채팅을 실행하는 Orca에 이 채팅의 기록이 없습니다.",
+        "chatNotFound": "Orca에서 이 채팅을 찾을 수 없습니다.",
         "startNewChat": "계속하려면 새 채팅을 시작하세요.",
         "tryAgain": "다시 시도하세요."
       },
@@ -17393,8 +17483,6 @@
         "chooseInAgentPicker": "에이전트 선택기에서 선택…",
         "toggleOption": "{{value0}} 전환",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueIsDefault": "기본값",
-        "valueNotReported": "미보고",
         "sentNotConfirmed": "에이전트에 전송됨 — 확인되지 않음",
         "setWhenSessionStarts": "세션을 시작할 때 설정하세요.",
         "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
@@ -17413,8 +17501,8 @@
         "commands": "명령어",
         "skills": "스킬",
         "loadingSkills": "스킬 로딩 중…",
-        "skillsUnavailableHost": "이 호스트에서는 스킬을 사용할 수 없습니다",
-        "skillsLoadFailed": "이 호스트에서 스킬을 불러올 수 없습니다",
+        "skillsUnavailableHost": "SSH 채팅에서는 스킬을 사용할 수 없습니다",
+        "skillsLoadFailed": "스킬을 불러올 수 없습니다",
         "retrySkills": "재시도",
         "skillCommandCollision": "스킬 이름이기도 합니다 - 에이전트가 결정합니다",
         "skillMultipleSources": "{{sourceCount}}개 소스 - 에이전트가 해결합니다",
@@ -17505,10 +17593,12 @@
       },
       "status": {
         "responding": "Agent이 응답 중입니다.",
-        "working": "일하고 있는…",
+        "working": "작업 중…",
         "thinking": "생각",
         "workingFor": "{{value0}} 작업 중",
         "workedFor": "{{value0}} 작업 완료",
+        "interruptedAfter": "{{value0}} 후 중단됨",
+        "failedAfter": "{{value0}} 후 실패",
         "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
@@ -17518,13 +17608,13 @@
       },
       "state": {
         "loading": {
+          "label": "채팅 로드 중",
           "title": "대화 로드 중…",
           "subtitle": "agent 기록을 읽는 중입니다."
         },
         "error": {
           "title": "대화를 로드할 수 없습니다.",
-          "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요.",
-          "retryingSubtitle": "스크립트를 읽을 수 없습니다. Orca가 계속 다시 불러오기를 시도합니다."
+          "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요."
         },
         "reconnecting": "이 채팅에 다시 연결하는 중…",
         "pairHost": "호스트를 페어링하여 에이전트 채팅 기록을 확인하세요.",
@@ -17601,7 +17691,9 @@
       "notices": {
         "compaction": "컨텍스트가 압축됨",
         "details": "세부",
-        "plan": "계획"
+        "plan": "계획",
+        "historyRepaired": "이 채팅 기록의 일부를 불러올 수 없습니다.",
+        "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다."
       },
       "providerFrame": {
         "byteLength": "{{value0}}바이트"
@@ -17620,9 +17712,9 @@
         "detailsUnavailable": "이 세션에서는 작업 세부정보를 사용할 수 없습니다.",
         "countAgentsOne": "에이전트 1명",
         "countAgentsMany": "{{value0}} 에이전트",
-        "countShellOne": "껍질 1개",
-        "countShellMany": "{{value0}} 껍질",
-        "countShellCommandOne": "1개의 쉘 명령",
+        "countShellOne": "셸 1개",
+        "countShellMany": "셸 {{value0}}개",
+        "countShellCommandOne": "셸 명령 1개",
         "countMonitorsOne": "모니터 1개",
         "countMonitorsMany": "{{value0}} 모니터",
         "countWorkflowsOne": "워크플로우 1개",
@@ -17630,18 +17722,18 @@
         "countTasksOne": "작업 1개",
         "countTasksMany": "{{value0}} 작업",
         "headerTotal": "{{value0}} 백그라운드 작업",
-        "stateWorking": "일하고 있는",
+        "stateWorking": "작업 중",
         "stateMonitoring": "모니터링",
         "stateWaiting": "대기 중",
         "stateBlocked": "막힌",
         "stateDone": "완료",
         "stateIdle": "중지됨",
-        "stateUnverifiable": "검증할 수 없는",
+        "stateUnverifiable": "최근 업데이트 없음",
+        "stateUnverifiableCount": "{{value0}} 최근 업데이트 없음",
         "reasonWaiting": "승인이 필요합니다",
-        "reasonUnverifiable": "연락 없음",
         "reasonBlocked": "실패한",
         "groupAgents": "에이전트",
-        "groupShell": "껍데기",
+        "groupShell": "셸",
         "groupMonitors": "모니터",
         "groupWorkflows": "워크플로",
         "groupTasks": "작업"
@@ -17655,21 +17747,19 @@
         "asked": "질문:",
         "questionCount": "{{value0}} 질문"
       },
-      "structuredSessionLaunchFailed": "{{value0}} 채팅을 열 수 없습니다.",
-      "structuredSessionLaunchFailedDescription": "Orca는 구조화된 {{value0}} 채팅을 열 수 없습니다. 자세한 내용은 로그를 참조하세요.",
       "subagents": {
         "state": {
           "completed": "완전한",
-          "working": "일하고 있는",
+          "working": "작업 중",
           "idle": "idle",
           "failed": "실패한",
           "stopped": "중지됨",
-          "unverifiable": "검증할 수 없는",
+          "unverifiable": "최근 업데이트 없음",
           "workingCount": "{{value0}} 작업 중",
           "idleCount": "{{value0}} 유휴",
           "failedCount": "{{value0}} 실패",
           "stoppedCount": "{{value0}} 중지됨",
-          "unverifiableCount": "{{value0}} 확인할 수 없음"
+          "unverifiableCount": "{{value0}} 최근 업데이트 없음"
         },
         "startedOne": "서브에이전트 1명 추방",
         "startedN": "{{value0}} 하위 에이전트가 시작되었습니다.",
@@ -17679,8 +17769,7 @@
         "unnamed": "하위 에이전트"
       },
       "conversationCommand": {
-        "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리십시오.",
-        "unconfirmed": "대화 동작이 확인되지 않았습니다."
+        "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리십시오."
       },
       "drop": {
         "title": "이 채팅에 첨부하려면 드롭하세요.",
@@ -17915,7 +18004,7 @@
             "unknown": "체크하지 않음"
           },
           "agent": {
-            "working": "일하고 있는",
+            "working": "작업 중",
             "permission": "당신을 기다리고 있습니다",
             "idle": "게으른"
           },
@@ -17992,6 +18081,12 @@
           "unknown": "알 수 없는 호스트",
           "candidateName": "{{value1}}의 {{value0}}"
         }
+      },
+      "creation": {
+        "worktreeReadyToast": "작업 트리 {{name}} 준비 완료",
+        "workspaceReadyToast": "워크스페이스 {{name}} 준비 완료",
+        "goToWorktree": "작업 트리로 이동",
+        "goToWorkspace": "워크스페이스로 이동"
       }
     },
     "agentSessionContinuation": {
@@ -18319,6 +18414,17 @@
     },
     "fileLoad": {
       "hostUnresolved": "호스트가 이 파일의 워크스페이스를 찾을 수 없습니다. 삭제되었거나 호스트가 아직 이에 대해 알지 못할 수도 있습니다. 다시 시도하거나 탭 표시줄에서 이 탭을 닫으세요."
+    },
+    "markdownPreview": {
+      "tooLarge": "파일이 미리보기 한도 {{limit}}보다 큽니다. 소스를 보려면 파일을 여세요.",
+      "tooLargeInDiff": "파일이 미리보기 한도 {{limit}}보다 큽니다. 차이를 보려면 소스 모드로 전환하세요.",
+      "blockTooLarge": "이 블록은 너무 커서 렌더링할 수 없습니다. 소스 보기에서 읽으세요.",
+      "largeNotice": "큰 미리보기입니다. 전체 문서를 복사하려면 소스 보기를 사용하세요. PDF 내보내기는 사용할 수 없습니다.",
+      "processingFailed": "이 문서는 미리보기 제한을 초과합니다. 전체 파일을 읽으려면 소스 보기를 여세요.",
+      "preparing": "미리보기 준비 중…",
+      "searching": "검색 중…",
+      "searchFailed": "검색을 완료하지 못했습니다. 다시 시도하세요.",
+      "refreshFailed": "미리보기 업데이트에 실패했습니다. 이전 버전을 표시합니다. 현재 내용은 소스 보기에서 확인하세요."
     }
   },
   "featureTips": {
@@ -18406,7 +18512,12 @@
     "genericDetail": "이는 종종 그래픽 드라이버 또는 설치 문제입니다. 새로고침하여 다시 시도하거나 Orca를 종료하고 다시 시작하세요.",
     "title": "Orca가 계속 로드되지 않습니다.",
     "stalledMessage": "충돌 후 다시 로드하는 동안 앱 창이 응답을 멈췄습니다.",
-    "crashLoopMessage": "앱 창이 반복적으로 충돌하고 자동으로 다시 로드되지 않았습니다."
+    "crashLoopMessage": "앱 창이 반복적으로 충돌하고 자동으로 다시 로드되지 않았습니다.",
+    "tryAgain": "다시 시도",
+    "launchFailedMessage": "Orca가 창을 그리는 프로세스를 시작하지 못했습니다.",
+    "launchFailedDetail": "Orca가 {{recoveryCount}}번 다시 시도했지만 성공하지 못했습니다.",
+    "processLimitDetail": "사용자 계정이 프로세스 수 한도에 도달하여 시스템이 새 프로세스 생성을 거부했습니다. 폭주한 터미널, 개발 서버 또는 에이전트가 원인인 경우가 많습니다. 일부를 종료한 다음 다시 시도를 클릭하세요.",
+    "launchFailedGenericDetail": "시스템이 시작을 거부했습니다. 메모리를 확보하거나 다른 앱을 종료한 다음 다시 시도를 클릭하세요. 계속 발생하면 Orca를 다시 설치하세요."
   },
   "sessionSearch": {
     "panel": {

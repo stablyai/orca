@@ -12,7 +12,8 @@ import { taskText, taskUsageTotalTokens } from './claude-background-task-frames'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { deriveToolInputPreview } from '../../shared/agent-hook-listener/tool-input-preview'
 import {
-  claudeToolResults,
+  claudeRecord,
+  claudeToolResultId,
   claudeToolUses,
   readClaudeMessageEnvelope,
   type ClaudeToolUse
@@ -91,7 +92,11 @@ export function claudeChildOperation(
   }
   const toolTraffic =
     claudeToolUses(envelope).length > 0 ||
-    claudeToolResults(envelope).some((result) => result.toolUseId !== parentRef)
+    envelope.content.some((value) => {
+      const part = claudeRecord(value)
+      const toolUseId = claudeToolResultId(part)
+      return toolUseId !== null && toolUseId !== parentRef
+    })
   if (!toolTraffic) {
     return []
   }

@@ -31,7 +31,9 @@ describe('agent hook spool', () => {
     )
     expect(spoolLine).toBeDefined()
     expect(spoolLine!.match(/printf/g)).toHaveLength(1)
-    expect(spoolLine).toContain('"$spool_now" "$payload"')
+    expect(spoolLine).toContain(
+      '"$spool_now" "$(spool_json_escape "${orca_agent_process:-}")" "$payload"'
+    )
   })
 
   it('waits for a newline before replaying a complete-looking final record', () => {

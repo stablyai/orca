@@ -25,6 +25,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const { copy } = vi.hoisted(() => ({ copy: { mismatched: false } }))
 
@@ -93,6 +94,7 @@ async function relaunchWithMismatchedCopy(): Promise<StructuredAgentSessionHost>
   })
   const store = await openTestAgentSessionRecordStore(relaunched)
   const host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
     journalDatabase: openTestJournalHostDatabase(relaunched),

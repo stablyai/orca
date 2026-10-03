@@ -7,19 +7,32 @@
 
 import {
   refuse,
+  type AgentSessionModelOption,
   type AgentSessionOptionResult,
   type AgentSessionOptionsResult
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
 import { decodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { journalOpenReadRefusal } from '../agent-session-journal/journal-open-failure'
 import { isClaudeStructuredOptionKey } from '../../claude/claude-structured-options'
 import { isCodexTurnOptionKey } from '../../codex/codex-structured-turn-start'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+import { structuredAgentSessionOptionModels } from './structured-agent-session-option-models'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 
 type RestingOptions = Pick<AgentSessionOptionsResult, 'models' | 'fastModeSupport' | 'current'>
+
+/** With no catalog for the account, the list a running child falls back to: Claude's built-in
+ *  models. A Codex child has no such list, so none: the client fills the current model from its
+ *  own unknown-model defaults, unchanged from before this list was shared. */
+function restingFallbackModels(
+  provider: AgentSessionRecord['provider']
+): AgentSessionModelOption[] | null {
+  return provider === 'claude' ? claudeFallbackModelOptions() : null
+}
 
 async function readStructuredAgentSessionOptionsAtRest(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'modelCatalog'>,
@@ -32,14 +45,20 @@ async function readStructuredAgentSessionOptionsAtRest(
   const catalog = (await deps.modelCatalog
     ?.read({ agent: record.provider, sessionId })
     .catch(() => null)) ?? { origin: 'unknown' as const }
-  const models = catalog.origin === 'unknown' ? [] : catalog.models
+  const listed =
+    catalog.origin === 'unknown' ? restingFallbackModels(record.provider) : catalog.models
+  const models = listed ?? []
   const saved = record.options ?? {}
   const fastMode =
     saved.fastMode === undefined
       ? null
       : decodeStructuredAgentSessionOptionValue('fastMode', saved.fastMode)
-  // An unknown model is one the client already treats as unconfirmed.
-  const model = saved.model ?? models.find((entry) => entry.isDefault)?.id ?? ''
+  // An unknown model is one the client already treats as unconfirmed. Only a real listing names the
+  // account's default; a built-in list's default is a guess, so with none the client keeps its own.
+  const model =
+    saved.model ??
+    (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id) ??
+    ''
   // As a live child answers: the pick, else what Claude runs for this model when none is sent.
   // A live Codex child answers only the effort its thread reported, never the model's default.
   const effort =
@@ -48,7 +67,7 @@ async function readStructuredAgentSessionOptionsAtRest(
       ? models.find((entry) => entry.id === model)?.defaultEffort
       : undefined)
   return {
-    models,
+    models: listed ? structuredAgentSessionOptionModels(listed, model, (row) => row) : [],
     ...(catalog.origin !== 'unknown' && catalog.fastModeSupport
       ? { fastModeSupport: catalog.fastModeSupport }
       : {}),
@@ -98,7 +117,7 @@ export async function readStructuredAgentSessionOptions(
   const { adapter, store } = context.deps
   const live = await context.serialize(sessionId, async () => {
     const session = await context.openConversation(sessionId).catch((error: unknown) => {
-      throw journalOpenReadRefusal(error)
+      throw journalOpenReadRefusal(error, context.deps.logger, sessionId)
     })
     const child = session?.child
     if (!child) {

@@ -9,45 +9,36 @@ import {
 } from './config-toml-line-scan'
 import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-path'
 
-const TUI_STRUCTURED_PREFIX = 'tui.'
-
-// Why: promoted [tui] settings are keyed by structured path (tui.<key>) so their
+// Why: promoted table settings are keyed by structured path (<table>.<key>) so their
 // baseline/update entries can never collide with a top-level key of the same name.
-export function tuiStructuredKey(key: string): string {
-  return `${TUI_STRUCTURED_PREFIX}${key}`
+export function tableStructuredKey(table: string, key: string): string {
+  return `${table}.${key}`
 }
 
-export function isTuiStructuredKey(structuredKey: string): boolean {
-  return structuredKey.startsWith(TUI_STRUCTURED_PREFIX)
-}
-
-export function tuiKeyFromStructuredKey(structuredKey: string): string {
-  return structuredKey.slice(TUI_STRUCTURED_PREFIX.length)
-}
-
-// Why: promoted updates arrive keyed by structured path; the preamble and [tui]
-// regions are disjoint, so a mixed batch (e.g. /model + a status-line change)
-// composes in one rewrite — top-level keys land in the preamble, tui.<key>
-// entries wherever the [tui] placement rule puts them.
+// Why: promoted updates arrive keyed by structured path; the preamble and each
+// table's region are disjoint, so a mixed batch (e.g. /model + a status-line
+// change) composes in one rewrite — top-level keys land in the preamble,
+// <table>.<key> entries wherever the table placement rule puts them.
 export function upsertPromotedSettingsInContent(
   content: string,
   updates: Map<string, string>
 ): string {
   const topLevelUpdates = new Map<string, string>()
-  const tuiUpdates = new Map<string, string>()
-  for (const [key, raw] of updates) {
-    if (isTuiStructuredKey(key)) {
-      tuiUpdates.set(tuiKeyFromStructuredKey(key), raw)
-    } else {
-      topLevelUpdates.set(key, raw)
+  const tableUpdates = new Map<string, Map<string, string>>()
+  for (const [structuredKey, raw] of updates) {
+    const dot = structuredKey.indexOf('.')
+    if (dot === -1) {
+      topLevelUpdates.set(structuredKey, raw)
+      continue
     }
+    const table = structuredKey.slice(0, dot)
+    const keys = tableUpdates.get(table) ?? new Map<string, string>()
+    tableUpdates.set(table, keys.set(structuredKey.slice(dot + 1), raw))
   }
-  let result = content
-  if (topLevelUpdates.size > 0) {
-    result = upsertTopLevelSettingsInContent(result, topLevelUpdates)
-  }
-  if (tuiUpdates.size > 0) {
-    result = upsertTuiSettingsInContent(result, tuiUpdates)
+  let result =
+    topLevelUpdates.size > 0 ? upsertTopLevelSettingsInContent(content, topLevelUpdates) : content
+  for (const [table, keys] of tableUpdates) {
+    result = upsertTableSettingsInContent(result, table, keys)
   }
   return result
 }
@@ -114,19 +105,14 @@ type TablePlacementScan = {
 }
 
 /**
- * Upserts promoted `[tui]` keys (keyed by bare name) into the system config,
- * placing each per the design's total placement rule: replace an existing key
- * in place keeping its form; else insert bare into the first `[tui]` body; else
- * dotted in the preamble beside existing dotted `tui.*` keys; else create one
- * `[tui]` table at EOF for every key that reaches that branch. Rendering follows
- * the destination — bare inside a table, dotted in the preamble — so no `tui`
- * table is ever defined twice.
+ * Upserts keys (by bare name) into a single-segment table, placing each per the
+ * design's total placement rule: replace an existing key in place keeping its
+ * form; else insert bare into the first `[<table>]` body; else dotted in the
+ * preamble beside existing dotted `<table>.*` keys; else create one `[<table>]`
+ * table at EOF for every key that reaches that branch. Rendering follows the
+ * destination — bare inside a table, dotted in the preamble — so no table is
+ * ever defined twice.
  */
-export function upsertTuiSettingsInContent(content: string, updates: Map<string, string>): string {
-  return upsertTableSettingsInContent(content, 'tui', updates)
-}
-
-/** Same placement rule as `upsertTuiSettingsInContent`, for any single-segment table. */
 export function upsertTableSettingsInContent(
   content: string,
   table: string,

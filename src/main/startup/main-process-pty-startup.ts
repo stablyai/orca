@@ -22,6 +22,7 @@ import {
   isAgentStatusHooksEnabledForAgent
 } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
+import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
 import {
   indexPersistedPaneKeyPtyIds,
   isLocalExecutionHost,
@@ -123,6 +124,12 @@ export async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
 }
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
+  agentHookServer.setTmuxManagedPtyResolver(
+    createLocalTmuxManagedPtyResolver({
+      getPtyId: getPtyIdForPaneKey,
+      listProcesses: async () => (await getDaemonProvider()?.listProcesses()) ?? []
+    })
+  )
   logStartupMilestone('first-window-startup-services-start')
   const startupServices = startFirstWindowStartupServices({
     // Why: both desktop and headless serve must adopt the same persistent provider before creating terminals or a renderer.

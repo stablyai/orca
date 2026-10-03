@@ -202,6 +202,10 @@
       "reason": "The page creates no Android notification channel and the native file already returns early off Android, so what this sibling changes is the import of expo-notifications, whose import-time read breaks the document for the reason push-token.web.ts beside it gives."
     },
     {
+      "file": "src/navigation/host-stack.web.tsx",
+      "reason": "expo-router's Stack renders @react-navigation/native-stack's web view on the page, which flips each screen's display and ignores the animation option, so pushing the session from the worktree list and Back were instant cuts where the native stack slides. This one keeps a popped screen mounted until it has slid out."
+    },
+    {
       "file": "src/app-update/use-wall-app-update.web.ts",
       "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
     }

@@ -87,10 +87,9 @@ export function isSandboxedSftpNamespaceError(error: unknown): boolean {
 }
 
 /**
- * SFTP is not optional for a bundled-ssh2 relay install — `SshConnection.sftp()` is the
- * only transfer route on that transport, and the exec-based `tar`/`cat` transfers are
- * bound to the system-SSH transport, not selectable per operation. So a sandboxed SFTP
- * subsystem is a clean failure with an actionable message, not a degraded mode.
+ * POSIX hosts fall back to exec-channel stdin when SFTP is sandboxed (ssh-relay-install-transfers).
+ * A Windows host over bundled ssh2 has no such fallback, so there it is a clean failure with an
+ * actionable message, not a degraded mode.
  */
 export function describeSandboxedSftpFailure(error: unknown, remotePath: string): Error {
   const detail = error instanceof Error ? error.message : String(error)

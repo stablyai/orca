@@ -6,6 +6,7 @@ import {
   closeLocalWatcherForWorktreePathMock,
   computeWorktreePathMock,
   deleteWorktreeHistoryDirMock,
+  describeCreatedWorktree,
   ensurePathWithinWorkspaceMock,
   findExistingWorktreeSymlinkPathsMock,
   forgetLocalWatcherRemovalSnapshotMock,
@@ -330,10 +331,10 @@ describe('OrcaRuntimeService', () => {
     }
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
-    vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
+    vi.mocked(describeCreatedWorktree).mockResolvedValue(createdWorktree)
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+        return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('refs/heads/runtime-wsl^{commit}')) {
         throw new Error('missing local branch')
@@ -353,6 +354,7 @@ describe('OrcaRuntimeService', () => {
       return { stdout: '', stderr: '' }
     })
 
+    const inventoryCallsBefore = vi.mocked(listWorktrees).mock.calls.length
     try {
       const result = await runtime.createManagedWorktree({
         repoSelector: 'id:repo-1',
@@ -368,11 +370,18 @@ describe('OrcaRuntimeService', () => {
         path: createdWorktree.path,
         branch: 'refs/heads/runtime-wsl'
       })
-      expect(gitSpy).toHaveBeenCalledWith(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
-        cwd: TEST_REPO_PATH,
-        timeout: 15_000,
-        wslDistro: 'Ubuntu'
-      })
+      expect(gitSpy).toHaveBeenCalledWith(
+        [
+          'for-each-ref',
+          '--format=%(refname)%00%(symref)',
+          'refs/remotes/origin/HEA[D]',
+          'refs/remotes/origin/mai[n]',
+          'refs/remotes/origin/maste[r]',
+          'refs/heads/mai[n]',
+          'refs/heads/maste[r]'
+        ],
+        { cwd: TEST_REPO_PATH, timeout: 15_000, wslDistro: 'Ubuntu' }
+      )
       expect(getBranchConflictKind).toHaveBeenCalledWith(
         TEST_REPO_PATH,
         'runtime-wsl',
@@ -446,7 +455,13 @@ describe('OrcaRuntimeService', () => {
         branchName: 'contributor/runtime-wsl',
         remoteUrl: 'git@github.com:contributor/orca.git'
       })
-      expect(listWorktrees).toHaveBeenCalledWith(TEST_REPO_PATH, { wslDistro: 'Ubuntu' })
+      expect(describeCreatedWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'runtime-wsl',
+        { wslDistro: 'Ubuntu' }
+      )
+      expect(listWorktrees).toHaveBeenCalledTimes(inventoryCallsBefore)
     } finally {
       gitSpy.mockRestore()
     }

@@ -437,13 +437,16 @@ async function reconcileWithToken(runtime: RuntimeService, token: string): Promi
     fetchPromise: Promise.resolve({ ok: true })
   })
 }
-function createSideEffectRuntime(): {
+function createSideEffectRuntime(
+  checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
+): {
   runtime: RuntimeService
   batches: TerminalSideEffectBatch[]
 } {
   const batches: TerminalSideEffectBatch[] = []
   const runtime = new OrcaRuntimeService(store, undefined, {
-    onTerminalSideEffects: (batch) => batches.push(batch)
+    onTerminalSideEffects: (batch) => batches.push(batch),
+    checkHookAgentPresence
   })
   return { runtime, batches }
 }

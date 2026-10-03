@@ -7,8 +7,6 @@ import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-sess
  * and release re-proves identity through it — so the custody row written at terminal creation would
  * name a pane no release path could match. Copy that identity across.
  *
- * `capability_hash` stays null, so this grants nothing: it records which pane the Dispatch owns.
- *
  * No transaction: composes inside `failWorkerStart`'s.
  */
 export function recordFailedStartDispatchIdentity(
@@ -24,7 +22,7 @@ export function recordFailedStartDispatchIdentity(
       `UPDATE dispatch_contexts
          SET assignee_handle = ?, assignee_pane_key = ?, assignee_orca_session_id = ?,
              process_incarnation = ?, host_scope = ?
-       WHERE id = ? AND status = 'failed' AND capability_hash IS NULL`
+       WHERE id = ? AND status = 'failed' AND process_incarnation IS NULL`
     )
     .run(
       resource.terminal_handle,

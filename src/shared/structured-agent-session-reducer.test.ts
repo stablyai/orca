@@ -158,6 +158,50 @@ describe('structured agent session reducer', () => {
     ])
   })
 
+  it('decodes child rows once as they arrive: a malformed row is dropped, and a repeat keeps identity', () => {
+    const view = {
+      id: 'child-1',
+      providerId: 'task-1',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: 1,
+      observedAt: 2,
+      stoppable: true,
+      invocation: { invocationId: 'spawn-1', generation: 1 }
+    }
+    // A row a newer host shapes differently: no invocation, which equality would dereference.
+    const { invocation: _invocation, ...malformed } = { ...view, id: 'child-2' }
+    const roster = { state: 'monitoring', tasks: [], children: [view, malformed] }
+    const batch = (backgroundTasks: unknown, sequence: number) =>
+      reduceStructuredAgentSession(state, {
+        type: 'event',
+        event: {
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: {
+            cursor: { epoch: 'epoch-a', sequence },
+            items: sequence > 0 ? [item(`item-${sequence}`, sequence)] : [],
+            removedItemIds: [],
+            submissions: []
+          },
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a wire frame as it arrives, before the client decodes it.
+          backgroundTasks: structuredClone(backgroundTasks) as never
+        }
+      })
+    let state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: { type: 'snapshot', sessionId: 'session-a', fence: 1, page: hydrationPage([]) }
+    })
+    state = batch(roster, 0)
+    expect(state.backgroundTasks?.children).toEqual([view])
+    const kept = state.backgroundTasks
+    // The same roster again, beside a journal change: the roster keeps its identity.
+    state = batch(roster, 1)
+    expect(state.items.map(({ itemId }) => itemId)).toEqual(['item-1'])
+    expect(state.backgroundTasks).toBe(kept)
+  })
+
   it("keeps a failed read's refusal beside its text until the read recovers", () => {
     const refusal = {
       code: 'agent_session_journal_unreadable',

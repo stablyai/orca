@@ -319,8 +319,8 @@ describe('getSubmoduleStatus', () => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       // Clean worktree: the inner status stream returns nothing.
-      if (args.includes('--name-status')) {
-        return Promise.resolve({ stdout: 'M\tlib/main.dart\n' })
+      if (args.includes('--raw')) {
+        return Promise.resolve({ stdout: ':100644 100644 a b M\0lib/main.dart\0' })
       }
       if (args[0] === 'ls-files') {
         return Promise.resolve({ stdout: `160000 ${OLD_OID} 0\tflutter_mine\n` })
@@ -346,8 +346,8 @@ describe('getSubmoduleStatus', () => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       // Clean submodule worktree: the staged parent gitlink still has files to show.
-      if (args.includes('--name-status')) {
-        return Promise.resolve({ stdout: 'M\tlib/main.dart\n' })
+      if (args.includes('--raw')) {
+        return Promise.resolve({ stdout: ':100644 100644 a b M\0lib/main.dart\0' })
       }
       if (args[0] === 'ls-files') {
         return Promise.resolve({ stdout: `160000 ${NEW_OID} 0\tflutter_mine\n` })
@@ -374,8 +374,10 @@ describe('getSubmoduleStatus', () => {
     const NEW_OID = 'b'.repeat(40)
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
-      if (args.includes('--name-status')) {
-        return Promise.resolve({ stdout: 'M\tlib/a.dart\nM\tlib/b.dart\n' })
+      if (args.includes('--raw')) {
+        return Promise.resolve({
+          stdout: ':100644 100644 a b M\0lib/a.dart\0:100644 100644 a b M\0lib/b.dart\0'
+        })
       }
       if (args[0] === 'ls-files') {
         return Promise.resolve({ stdout: `160000 ${NEW_OID} 0\tflutter_mine\n` })

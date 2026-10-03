@@ -28,7 +28,6 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-background-task-wire'
 import {
   AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LENGTH,
   AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS,
@@ -38,6 +37,7 @@ import {
   type AgentSessionRestartTask
 } from '../../../shared/agent-session-restart-activity'
 import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
@@ -148,14 +148,14 @@ function pendingPrompts(items: readonly AgentJournalRenderItem[]): AgentSessionR
   return prompts
 }
 
-/** The live rows of the provider's roster, by the same liveness rule the sidebar's fold counts. */
+/** The live child records, by the same liveness rule the sidebar's fold counts. */
 function liveTasks(
-  roster: readonly AgentSessionBackgroundTask[] | null | undefined
+  childWork: readonly AgentChildWorkView[] | undefined
 ): AgentSessionRestartTask[] {
-  return (roster ?? [])
-    .filter((task) => isLiveChildWork(task))
+  return (childWork ?? [])
+    .filter((child) => isLiveChildWork(child))
     .slice(0, AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS)
-    .map((task) => ({ kind: task.kind, label: boundedLabel(task.description ?? task.name) }))
+    .map((child) => ({ kind: child.kind, label: boundedLabel(child.description ?? child.name) }))
 }
 
 type WorkingCandidateSession = {
@@ -170,8 +170,8 @@ export function structuredAgentSessionWorkingAtStop(input: {
   sessionId: string
   session: WorkingCandidateSession | undefined
   getRecord: (sessionId: string) => AgentSessionRecord | null
-  /** The provider's live child roster, the same one the status feed publishes. */
-  backgroundTasks: (sessionId: string) => readonly AgentSessionBackgroundTask[] | null | undefined
+  /** The session's child records, the same read the status feed publishes. */
+  childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   trigger: AgentSessionResumeTrigger
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
   teardownId: string
@@ -187,10 +187,10 @@ export function structuredAgentSessionWorkingAtStop(input: {
   const handedOver = snapshot.submissions.filter(
     (submission) => !isQueuedAgentJournalSubmission(submission)
   )
-  const roster = input.backgroundTasks(sessionId)
+  const childWork = input.childWork(sessionId)
   const status = structuredAgentSessionShownStatus(
     { items: snapshot.items, submissions: handedOver },
-    roster,
+    childWork,
     session.child.fence
   )
   if (status.state === 'done') {
@@ -208,7 +208,7 @@ export function structuredAgentSessionWorkingAtStop(input: {
     // and carries them in `tasks`, which is how the dialog tells the two apart.
     state: status.mainAgent.state,
     prompts: pendingPrompts(snapshot.items),
-    tasks: liveTasks(roster)
+    tasks: liveTasks(childWork)
   }
   return {
     sessionId,

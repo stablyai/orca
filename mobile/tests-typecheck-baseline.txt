@@ -115,7 +115,6 @@ src/transport/mobile-relay-rpc-session.test.ts
 src/transport/mobile-relay-runtime-failover.test.ts
 src/transport/pairing-relay-candidate.test.ts
 src/transport/pre-profile-pairing-coordinator.test.ts
-src/transport/relay-host-signed-out-verdict.test.ts
 src/transport/rpc-client-synthesized-close-diagnostics.test.ts
 src/transport/rpc-operation.test.ts
 src/transport/rpc-session-liveness-watchdog.test.ts

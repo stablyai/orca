@@ -17,6 +17,9 @@ export function escapeTomlBasicString(value: string): string {
     .replaceAll('\t', '\\t')
 }
 
+// Why: Codex's hook_key is `{source}:{event}:{group}:{handler}` for any label (unchanged 0.141-0.158).
+export const CODEX_HOOK_TRUST_KEY = /^(.+):[a-z_]+:(?:0|[1-9]\d*):(?:0|[1-9]\d*)$/
+
 export function parseHookStateTomlHeaderKey(line: string): string | null {
   return parseTomlTableHeaderLeafKey(line, ['hooks', 'state'])
 }

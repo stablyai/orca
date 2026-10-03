@@ -89,8 +89,13 @@ function findCaseInsensitiveMatchRanges(
 
     const matchEnd = matchStart + normalizedQuery.length
     matches.push({
-      start: normalizedText.originalStartByNormalizedOffset[matchStart] ?? text.length,
-      end: normalizedText.originalEndByNormalizedOffset[matchEnd - 1] ?? text.length
+      start: normalizedText.identityOffsets
+        ? matchStart
+        : (normalizedText.originalStartByNormalizedOffset[matchStart] ?? text.length),
+      end:
+        normalizedText.identityOffsets && matchEnd > 0
+          ? matchEnd
+          : (normalizedText.originalEndByNormalizedOffset[matchEnd - 1] ?? text.length)
     })
     // Why: advance by at least 1 to guarantee forward progress even if a
     // future locale edge-case produces a zero-length normalizedQuery.
@@ -141,9 +146,20 @@ function isWholeWordMatch(text: string, start: number, end: number): boolean {
 
 function buildLocaleLowercaseIndex(text: string): {
   text: string
+  identityOffsets: boolean
   originalStartByNormalizedOffset: number[]
   originalEndByNormalizedOffset: number[]
 } {
+  // ASCII has no contextual casing or multi-unit characters, so every offset stays identical.
+  if (!/[\u0080-\uffff]/.test(text)) {
+    return {
+      text: text.toLocaleLowerCase(),
+      identityOffsets: true,
+      originalStartByNormalizedOffset: [],
+      originalEndByNormalizedOffset: []
+    }
+  }
+
   let normalized = ''
   const originalStartByNormalizedOffset: number[] = []
   const originalEndByNormalizedOffset: number[] = []
@@ -163,7 +179,12 @@ function buildLocaleLowercaseIndex(text: string): {
     originalOffset = originalEnd
   }
 
-  return { text: normalized, originalStartByNormalizedOffset, originalEndByNormalizedOffset }
+  return {
+    text: normalized,
+    identityOffsets: false,
+    originalStartByNormalizedOffset,
+    originalEndByNormalizedOffset
+  }
 }
 
 // Why: react-markdown owns the preview DOM. Injecting <mark> by splitting its
@@ -272,7 +293,8 @@ export function clearMarkdownPreviewSearchHighlights(
 export function applyMarkdownPreviewSearchHighlights(
   instanceId: MarkdownPreviewSearchInstance,
   root: HTMLElement,
-  query: string
+  query: string,
+  options: { documentOnly?: boolean } = {}
 ): Range[] {
   const ranges: Range[] = []
 
@@ -280,6 +302,14 @@ export function applyMarkdownPreviewSearchHighlights(
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         if (!(node.parentElement instanceof HTMLElement)) {
+          return NodeFilter.FILTER_REJECT
+        }
+        if (
+          options.documentOnly &&
+          node.parentElement.closest(
+            '.markdown-annotation-controls,[data-orca-export-hide],.code-block-copy-btn,.mermaid-block'
+          )
+        ) {
           return NodeFilter.FILTER_REJECT
         }
         if (!node.textContent?.trim()) {
@@ -320,7 +350,8 @@ export function applyMarkdownPreviewSearchHighlights(
 export function setActiveMarkdownPreviewSearchMatch(
   instanceId: MarkdownPreviewSearchInstance,
   matches: readonly Range[],
-  activeIndex: number
+  activeIndex: number,
+  options: { scrollIntoView?: boolean } = {}
 ): void {
   const active = activeIndex >= 0 ? matches[activeIndex] : undefined
 
@@ -337,7 +368,7 @@ export function setActiveMarkdownPreviewSearchMatch(
     paintActiveHighlight(api)
   }
 
-  if (active) {
+  if (active && options.scrollIntoView !== false) {
     // The Range's start container is a Text node; scroll its element into view.
     active.startContainer.parentElement?.scrollIntoView({ block: 'center', inline: 'nearest' })
   }

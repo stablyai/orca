@@ -44,6 +44,7 @@ import {
 import type { StructuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 type LiveSession = StructuredAgentSessionRestartOfferSession
 
@@ -77,6 +78,7 @@ export function createStructuredAgentSessionRestartResume(
     store: AgentSessionRecordStore
     adapter: StructuredAgentSessionAdapter
     recoveryCapsule?: AgentSessionRecoveryCapsule
+    logger: StructuredAgentSessionLogger
   },
   sessions: ReadonlyMap<string, LiveSession>,
   surfaces: StructuredAgentSessionRestartResumeSurfaces
@@ -87,7 +89,7 @@ export function createStructuredAgentSessionRestartResume(
   const witnesses = createStructuredAgentSessionRestartWitnesses({
     sessions,
     getRecord: deps.store.getRecord,
-    backgroundTasks: (sessionId) => deps.adapter.backgroundTaskState?.(sessionId)?.tasks,
+    childWork: surfaces.readChildWork,
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
     teardownId: randomUUID(),
     now: surfaces.now,
@@ -96,6 +98,7 @@ export function createStructuredAgentSessionRestartResume(
   const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
     sessions,
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
+    logger: deps.logger,
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
   })
@@ -111,6 +114,7 @@ export function createStructuredAgentSessionRestartResume(
     adapter: deps.adapter,
     retryable: (marker) => derive([marker], 'may-be-held').candidates.length === 1,
     reveal: (markers) => revealMarkers(markers),
+    logger: deps.logger,
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
   })
@@ -123,6 +127,7 @@ export function createStructuredAgentSessionRestartResume(
       reveal: async (sessionId) => {
         await surfaces.revealSession(sessionId).catch(() => null)
       },
+      logger: deps.logger,
       now: surfaces.now,
       enqueue: enqueueRecoveryOperation
     })
@@ -139,6 +144,7 @@ export function createStructuredAgentSessionRestartResume(
 
   const continuationHost: StructuredAgentSessionContinuationHost = {
     ...surfaces,
+    logger: deps.logger,
     sessions,
     conversationFence: (sessionId) =>
       deps.store.getRecord(sessionId)
@@ -206,7 +212,10 @@ export function createStructuredAgentSessionRestartResume(
         await enqueueRecoveryOperation(() =>
           deps.recoveryCapsule!.rollbackResume(operationId, surfaces.now())
         ).catch(() => {
-          console.warn('[structured-agent-session] restart offer rollback failed')
+          deps.logger.warn('rolling back a restart offer reservation failed', {
+            scope: 'restart-offer-rollback',
+            operationId
+          })
         })
       }
       throw error
@@ -280,7 +289,9 @@ export function createStructuredAgentSessionRestartResume(
       remainingCandidates = await list()
       remainingFailures = await failures.list()
     } catch {
-      console.warn('[structured-agent-session] restart offer refresh failed after action')
+      deps.logger.warn('refreshing restart offers after an action failed', {
+        scope: 'restart-offer-refresh'
+      })
     }
     return {
       resumed,

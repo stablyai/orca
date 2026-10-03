@@ -26,10 +26,10 @@ import {
   type StructuredLaunchCaller
 } from '@/lib/structured-agent-session-launch-callers'
 import * as launchDraft from './structured-agent-session-launch-draft'
-import { trackStructuredLaunchFailureToast } from './structured-agent-session-launch-failure-toast'
 import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
 import {
   deleteStructuredLaunchStateIfCurrent,
+  getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchState,
   getStructuredLaunchStateBySessionId,
   markStructuredAgentSessionLaunchCancelled,
@@ -139,7 +139,8 @@ function trackLaunchSettlement(
         }
         return
       }
-      // The host's message is for its log; the Retry line words the refusal itself.
+      // The host's message is for the log; the chat's Retry line alone says the failure.
+      console.warn('[native-chat] structured launch failed', error)
       const failure = structuredLaunchFailure(error)
       if (failure) {
         state.failure = failure
@@ -187,7 +188,6 @@ function restartStructuredLaunchState(state: StructuredLaunchState): void {
     wasVisibilityUnknown ? reconcileUnknownLaunch(state) : launchAndReconcile(state)
   )
   trackLaunchSettlement(state, state.promise)
-  trackStructuredLaunchFailureToast(state.intent.agent, state.promise)
   notifyStructuredLaunchListeners()
 }
 
@@ -266,7 +266,6 @@ function structuredAgentLaunchState(
   setStructuredLaunchState(state)
   notifyStructuredLaunchListeners()
   trackLaunchSettlement(state, state.promise)
-  trackStructuredLaunchFailureToast(state.intent.agent, state.promise)
   return {
     state,
     caller
@@ -314,4 +313,15 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
   }
   restartStructuredLaunchState(state)
   return true
+}
+
+/** A message queued on a chat whose start never published relaunches it; the message goes out on
+ *  publish. Shared by the chat's composer and by messages sent from elsewhere. */
+export function relaunchFailedStructuredAgentSessionForMessage(
+  worktreeId: string,
+  sessionId: string
+): void {
+  if (getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId) === 'failed') {
+    retryStructuredAgentSessionLaunch(worktreeId, sessionId)
+  }
 }

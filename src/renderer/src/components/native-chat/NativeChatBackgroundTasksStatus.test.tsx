@@ -281,7 +281,7 @@ describe('background-task row reasons', () => {
     return screen.getAllByRole('listitem')
   }
 
-  // `unverifiable` is the SSH verdict for "no contact"; a row that hides it reads
+  // `unverifiable` is the SSH verdict for lost contact; a row that hides it reads
   // like a working child. `blocked` is the same class of loss.
   it('names the reason on every attention state, not only on waiting', () => {
     const rows = expandedRows([
@@ -291,7 +291,7 @@ describe('background-task row reasons', () => {
       { id: 'a4', kind: 'agent', description: 'busy child', state: 'working' }
     ])
     expect(rows).toHaveLength(4)
-    expect(rows[0].textContent).toContain('ssh child · no contact')
+    expect(rows[0].textContent).toContain('ssh child · no recent update')
     expect(rows[1].textContent).toContain('flaky child · failed')
     expect(rows[2].textContent).toContain('approval child · needs approval')
     // A running row has nothing to explain.

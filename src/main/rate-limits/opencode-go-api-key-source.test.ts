@@ -1,7 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WslTranscriptFsAccess from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-error'
 import Database from '../sqlite/sync-database'
 import {
   getOpenCodeAuthFilePath,
@@ -16,6 +18,17 @@ const AUTH_FILE_KEY = 'auth-file-placeholder-key'
 const DATABASE_KEY = 'database-placeholder-key'
 
 const ENVIRONMENT_KEYS = ['XDG_DATA_HOME', 'OPENCODE_API_KEY', 'OPENCODE_DB'] as const
+
+// Lets a test fail the data-directory listing with an error the host filesystem cannot portably produce.
+const readdirFailure = vi.hoisted((): { error: unknown } => ({ error: null }))
+vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
+  const actual = await importOriginal<typeof WslTranscriptFsAccess>()
+  return {
+    ...actual,
+    wslGatedReaddir: (...args: Parameters<typeof actual.wslGatedReaddir>) =>
+      readdirFailure.error ? Promise.reject(readdirFailure.error) : actual.wslGatedReaddir(...args)
+  }
+})
 
 describe('resolveOpenCodeGoApiKey', () => {
   let dataHome: string
@@ -57,6 +70,7 @@ describe('resolveOpenCodeGoApiKey', () => {
   })
 
   afterEach(() => {
+    readdirFailure.error = null
     for (const key of ENVIRONMENT_KEYS) {
       const value = originalEnvironment[key]
       if (value === undefined) {
@@ -128,6 +142,84 @@ describe('resolveOpenCodeGoApiKey', () => {
         active: 0,
         created: 2
       },
+      { value: JSON.stringify({ type: 'key', key: DATABASE_KEY }), active: 1, created: 1 }
+    ])
+    process.env.OPENCODE_DB = path
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({
+      status: 'found',
+      key: DATABASE_KEY,
+      tier: 'opencode-credential-database'
+    })
+  })
+
+  it('does not fall back to OPENCODE_API_KEY when the credential database is unreadable', async () => {
+    process.env.OPENCODE_API_KEY = ENVIRONMENT_KEY
+    const path = join(dataHome, 'opencode-unreadable.db')
+    writeFileSync(path, 'not a sqlite database')
+    process.env.OPENCODE_DB = path
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({
+      status: 'credential-database-unreadable'
+    })
+  })
+
+  it('does not fall back to OPENCODE_API_KEY when the data directory cannot be listed', async () => {
+    process.env.OPENCODE_API_KEY = ENVIRONMENT_KEY
+    delete process.env.OPENCODE_DB
+    readdirFailure.error = Object.assign(new Error('permission denied'), { code: 'EACCES' })
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({
+      status: 'credential-database-unreadable'
+    })
+  })
+
+  it('still falls back to OPENCODE_API_KEY when the data directory does not exist', async () => {
+    process.env.OPENCODE_API_KEY = ENVIRONMENT_KEY
+    delete process.env.OPENCODE_DB
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({
+      status: 'found',
+      key: ENVIRONMENT_KEY,
+      tier: 'environment'
+    })
+  })
+
+  it('still falls back to OPENCODE_API_KEY when the WSL gate refuses the listing', async () => {
+    process.env.OPENCODE_API_KEY = ENVIRONMENT_KEY
+    delete process.env.OPENCODE_DB
+    readdirFailure.error = new WslTranscriptFsError('timeout', 'slow')
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({
+      status: 'found',
+      key: ENVIRONMENT_KEY,
+      tier: 'environment'
+    })
+  })
+
+  it('reports missing for an unreadable database when no env key could be misused', async () => {
+    const path = join(dataHome, 'opencode-unreadable.db')
+    writeFileSync(path, 'not a sqlite database')
+    process.env.OPENCODE_DB = path
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({ status: 'missing' })
+  })
+
+  it('still falls back to OPENCODE_API_KEY when a readable database holds no Go key', async () => {
+    process.env.OPENCODE_API_KEY = ENVIRONMENT_KEY
+    const { path } = writeCredentialDatabase([])
+    process.env.OPENCODE_DB = path
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({
+      status: 'found',
+      key: ENVIRONMENT_KEY,
+      tier: 'environment'
+    })
+  })
+
+  it('prefers a database key over OPENCODE_API_KEY', async () => {
+    process.env.OPENCODE_API_KEY = ENVIRONMENT_KEY
+    const { path } = writeCredentialDatabase([
       { value: JSON.stringify({ type: 'key', key: DATABASE_KEY }), active: 1, created: 1 }
     ])
     process.env.OPENCODE_DB = path

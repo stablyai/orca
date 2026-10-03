@@ -1,7 +1,9 @@
-import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { resolveOpenCodeConfigDirectory } from '../shared/opencode-config-directory'
 import { isInstalledOpenCodePluginCurrent } from '../shared/opencode-installed-plugin'
+import { writeCanonicalOpenCodePluginAtomically } from '../shared/opencode-plugin-atomic-write'
+import { writeOpenCodeTuiPlugin } from '../shared/opencode-tui-plugin-install'
 
 const RELAY_HOOKS_DIR = '.orca-relay'
 
@@ -11,21 +13,21 @@ export function installOpenCodePluginInCanonicalConfig(
   source: string,
   agent: OpenCodeAgent,
   environment: NodeJS.ProcessEnv | Record<string, string>,
-  homeDir: string
+  homeDir: string,
+  onlyIfInstalled = false
 ): boolean {
   try {
     const configDir = resolveOpenCodeConfigDirectory(environment, homeDir)
     const pluginFileName =
       agent === 'opencode2' ? 'orca-opencode2-status.js' : 'orca-opencode-status.js'
     const pluginPath = join(configDir, 'plugins', pluginFileName)
+    if (onlyIfInstalled && !existsSync(pluginPath)) {
+      return false
+    }
     mkdirSync(join(configDir, 'plugins'), { recursive: true })
+    writeOpenCodeTuiPlugin(join(configDir, 'plugins'), pluginFileName, source)
     if (!isInstalledOpenCodePluginCurrent(pluginPath, source)) {
-      try {
-        unlinkSync(pluginPath)
-      } catch {
-        // The file may not exist on the first install.
-      }
-      writeFileSync(pluginPath, source)
+      writeCanonicalOpenCodePluginAtomically(pluginPath, source)
     }
     return true
   } catch (err) {

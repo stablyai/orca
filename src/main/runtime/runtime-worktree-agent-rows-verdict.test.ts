@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import type {
@@ -19,6 +20,7 @@ import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-w
 import { indexedStatusFeedSession } from '../native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -75,6 +77,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
 function publishedSummary(journal: AgentSessionJournal): AgentSessionStatusSummary {
   const session = indexedStatusFeedSession({ journal })
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, session]]),
     getRecord: () => agentSessionRecordFixture(),
     now: () => 1_000
@@ -89,9 +92,14 @@ function publishedSummary(journal: AgentSessionJournal): AgentSessionStatusSumma
   return summary
 }
 
-function ingest(summary: AgentSessionStatusSummary) {
+/** `children` is child-work evidence the host's records admit under the row before it re-folds. */
+function ingest(summary: AgentSessionStatusSummary, children: AgentChildWorkEvidence[] = []) {
   const store = new AgentHookServer()
   store.ingestStructuredStatus(summary, SUBJECT)
+  if (children.length > 0) {
+    store.ingestStructuredChildWork(SUBJECT, children, 'codex')
+    store.ingestStructuredStatus({ ...summary, updatedAt: summary.updatedAt + 1 }, SUBJECT)
+  }
   const hookSnapshots = store.getStatusSnapshot()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attaching agent rows reads and writes only `worktreeId`, `status`, `hasHostSidebarActivity` and `agents`.
   const row = {
@@ -183,12 +191,20 @@ describe('a request that failed reads as failed through the feed, the ingest and
       { kind: 'turn', turnId: 'turn-1', state: 'completed', outcome: 'failure', completedAt: 5 },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    const summary: AgentSessionStatusSummary = {
-      ...publishedSummary(journal),
-      backgroundTasks: [{ id: 'child-1', kind: 'agent', state: 'working' }]
-    }
-
-    const { status, ps } = ingest(summary)
+    // The row folds the host's live child records, never the summary's task list.
+    const { status, ps } = ingest(publishedSummary(journal), [
+      {
+        type: 'live',
+        observedAt: 1_000,
+        child: {
+          handle: { idKind: 'task_id', id: 'child-1' },
+          kind: 'agent',
+          residency: 'background',
+          state: 'working',
+          stoppable: true
+        }
+      }
+    ])
     expect(status).toMatchObject({
       state: 'working',
       mainAgent: { state: 'done', outcome: 'failure' }

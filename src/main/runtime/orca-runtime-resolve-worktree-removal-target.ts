@@ -1,7 +1,10 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRemoveManagedWorktree } from './orca-runtime-remove-managed-worktree'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
+import type {
+  RemoveManagedWorktreeOptions,
+  RuntimeWorktreeRemovalTarget
+} from './runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from './runtime-worktree-removal-target'
 import type { RuntimeStore } from './runtime-store-contract'
 import { splitWorktreeId } from '../../shared/worktree/id'
@@ -10,7 +13,10 @@ import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../worktree-removal-repo
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
 import { closeClientHostedBrowserPagesForWorktree } from './worktree-browser-client-page-close'
-import type { ForceDeleteWorktreeBranchResult } from '../../shared/worktree/create-types'
+import type {
+  ForceDeleteWorktreeBranchResult,
+  RemoveWorktreeResult
+} from '../../shared/worktree/create-types'
 import type { RuntimeTerminalRename } from '../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
@@ -22,6 +28,16 @@ import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../shared/execution-host'
+import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import {
+  resumeInterruptedWorktreeRemovals,
+  retryFailedWorktreeRemoval,
+  waitForPendingWorktreeRemoval
+} from '../worktree-background-removal'
+import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
+import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-table'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -36,6 +52,82 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
         this.resolveExplicitWorktreeIdScoped(worktreeId, hostId),
       ...(requiredHostId ? { requiredHostId } : {})
     })
+  }
+
+  /** Runs the same delete again for each local removal a quit or crash interrupted. */
+  finishInterruptedWorktreeRemovals(): void {
+    const store = this.store
+    if (!store) {
+      return
+    }
+    resumeInterruptedWorktreeRemovals((record) =>
+      interruptedLocalWorktreeRemovalJob(record, this.localRemovalJobHost(store))
+    )
+  }
+
+  /** The removal a request for this worktree waits on: the one still running. */
+  protected joinPendingWorktreeRemoval(
+    worktreeId: string,
+    options: RemoveManagedWorktreeOptions
+  ): Promise<RemoveWorktreeResult> | undefined {
+    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(options.hostId)?.id)
+  }
+
+  /**
+   * Delete on the leftover of a local delete that failed after Git dropped the registration, while
+   * Git's listing still does not register the path: runs that removal again. True when it did.
+   */
+  protected retryFailedLocalRemoval(
+    route: { kind: string },
+    target: { id: string; path: string },
+    registeredWorktrees: readonly GitWorktreeInfo[],
+    options: RemoveManagedWorktreeOptions
+  ): boolean {
+    const store = this.store
+    if (route.kind !== 'local' || !store) {
+      return false
+    }
+    const hostId = parseExecutionHostId(options.hostId)?.id
+    const allowUnverifiedPtyStop = options.allowUnverifiedPtyStop === true
+    return retryFailedRemovalUnlessRegistered(target.id, target.path, registeredWorktrees, () =>
+      retryFailedWorktreeRemoval(target.id, hostId, (record) =>
+        interruptedLocalWorktreeRemovalJob(record, {
+          ...this.localRemovalJobHost(store),
+          stopPtys: () =>
+            this.stopPtysForDestructiveWorktreeRemoval(record.worktreeId, {
+              allowUnverifiedStop: allowUnverifiedPtyStop
+            })
+        })
+      )
+    )
+  }
+
+  protected localRemovalJobHost(store: RuntimeStore) {
+    return {
+      store,
+      acquireWatcherRemoval: this.acquireFileWatcherRemoval,
+      closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
+      preservedBranchCleanup: this.preservedBranchCleanup,
+      purge: ({ worktreeId, repoId }) =>
+        this.purgeRemovedWorktree(store, worktreeId, repoId, LOCAL_EXECUTION_HOST_ID),
+      onRemoved: ({ worktreeId, worktreePath }) =>
+        this.emitWorktreeLifecycle({ kind: 'removed', worktreeId, path: worktreePath }),
+      publish: (repoId) => this.publishWorktreeRemovalChange(repoId)
+    }
+  }
+
+  // Host state every removal path drops once Git has let go of the checkout.
+  protected purgeRemovedWorktree(
+    store: RuntimeStore,
+    worktreeId: string,
+    repoId: string,
+    removalHostId?: ExecutionHostId
+  ): void {
+    this.clearOptimisticReconcileToken(worktreeId)
+    this.removeWorktreeMetadataAndHistory(store, worktreeId, removalHostId)
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repoId)
+    invalidateAuthorizedRootsCache()
   }
 
   protected removeWorktreeMetadataAndHistory(

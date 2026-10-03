@@ -156,12 +156,7 @@ export function writeClaudeBackgroundTaskRow(
   }
   beforeAppend?.()
   const identity = claudeBackgroundTaskIdentity(id, row.generation)
-  // Generation is translator-local and resets when a provider stream is
-  // recreated. Keep unresolved writes from distinct provider runs queued side
-  // by using the provider's parent tool identity as the coalescing discriminator.
-  const coalescingKey = JSON.stringify(['claude-background-task', id, row.toolUseId ?? null])
   const appendOptions = {
-    coalescingKey,
     turnScope: turnScope(),
     ...(lifecycle ? { lifecycle: true } : {})
   }

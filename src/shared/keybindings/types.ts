@@ -83,6 +83,7 @@ export type KeybindingActionId =
   | 'browser.hardReload'
   | 'browser.focusAddressBar'
   | 'browser.grabElement'
+  | 'browser.annotateElement'
   | 'editor.find'
   | 'editor.replace'
   | 'editor.save'

@@ -70,7 +70,7 @@ async function twoCardsBehindWork() {
 describe("a newer Orca's journal", () => {
   it('shows the cards, and refuses a queued send, Send-now and Delete with the update words', async () => {
     const { first, second, cards } = await twoCardsBehindWork()
-    await reopenOnNewerOrcaDatabase(() => rig.host.close(HOST_TEST_SESSION))
+    await reopenOnNewerOrcaDatabase(() => rig.host.close(HOST_TEST_SESSION, 'evict'))
     expect(await readOnlyQueue()).toEqual({ cards, pause: null })
 
     // The waiting cards would queue this send behind them; the journal takes no new draft.

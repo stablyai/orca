@@ -7,8 +7,8 @@ import { safeParseWorkspaceSession } from '../../shared/workspace-session-schema
 import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
 import {
   openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore,
-  testAgentSessionStoreFilePath
+  readPersistedTestAgentSessionStore,
+  seedTestAgentSessionRecordStore
 } from './agent-session-record-store-test-harness'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 
@@ -123,9 +123,9 @@ describe('structured session rollback compatibility', () => {
     await expect(readFile(join(journalDir, 'journal.log'), 'utf8')).resolves.toBe(
       'durable-journal-fixture\n'
     )
-    expect(JSON.parse(await readFile(testAgentSessionStoreFilePath(root), 'utf8'))).toMatchObject({
-      visibleSessionIds: [SESSION]
-    })
+    expect((await readPersistedTestAgentSessionStore(root)).sessionTabs).toEqual([
+      { tabId: expect.any(String), sessionId: SESSION }
+    ])
 
     await reloaded.setSessionTabVisibility(SESSION, false)
     const afterClose = await openTestAgentSessionRecordStore(root)

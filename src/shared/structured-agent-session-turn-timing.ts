@@ -9,7 +9,8 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycleState
 } from './agent-session-journal-types'
-import { readAgentJournalTurn } from './agent-session-turn-record'
+import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
+import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
 import { structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
 
@@ -30,6 +31,8 @@ export type StructuredAgentTurnTiming = {
   /** Host clock when the lifecycle row was appended; with `startedAt` it gives
    *  the host-side lag a client must subtract to anchor a live counter. */
   observedAt: number
+  /** The turn's verdict, the provider's or the host-observed end's; absent when unknown. */
+  verdict?: AgentTurnOutcome
 }
 
 function readTiming(
@@ -56,6 +59,7 @@ function readTiming(
     durationMs !== undefined && Number.isFinite(durationMs) && durationMs >= 0
       ? durationMs
       : undefined
+  const verdict = agentTurnVerdict({ state, outcome: readAgentJournalTurnOutcome(turn) })
   // A send queued behind the previous turn counts from that turn's end (recorded, else its row's
   // last host revision), never past this turn's own start: the provider opens it only after.
   const queuedUntil =
@@ -69,7 +73,8 @@ function readTiming(
     ...(requested !== undefined && queuedUntil !== undefined && queuedUntil > requested
       ? { queuedUntil }
       : {}),
-    observedAt: item.observedAt
+    observedAt: item.observedAt,
+    ...(verdict ? { verdict } : {})
   }
 }
 
@@ -193,7 +198,11 @@ function settledTurnsOf(
       userItemId,
       workedSeconds === null || timing === null
         ? null
-        : { startedAt: timing.startedAt, workedSeconds }
+        : {
+            startedAt: timing.startedAt,
+            workedSeconds,
+            ...(timing.verdict ? { verdict: timing.verdict } : {})
+          }
     )
   }
   for (const submission of submissions) {

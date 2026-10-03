@@ -34,8 +34,7 @@ const {
   callMock,
   getCliStatusMock,
   getDefaultUserDataPathMock,
-  getManagedAgentHookStatusesMock,
-  prepareManagedCodexHomeBeforeShellLaunchMock
+  getManagedAgentHookStatusesMock
 } = vi.hoisted(() => ({
   applyAgentStatusHooksEnabledMock: vi.fn(),
   callMock: vi.fn(),
@@ -52,8 +51,7 @@ const {
     })
   ),
   getDefaultUserDataPathMock: vi.fn(),
-  getManagedAgentHookStatusesMock: vi.fn(),
-  prepareManagedCodexHomeBeforeShellLaunchMock: vi.fn()
+  getManagedAgentHookStatusesMock: vi.fn()
 }))
 
 vi.mock('../runtime-client', () => {
@@ -81,10 +79,6 @@ vi.mock('../runtime-client', () => {
 vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock,
   getManagedAgentHookStatuses: getManagedAgentHookStatusesMock
-}))
-
-vi.mock('../../main/codex/managed-home-shell-preflight', () => ({
-  prepareManagedCodexHomeBeforeShellLaunch: prepareManagedCodexHomeBeforeShellLaunchMock
 }))
 
 import { main } from '../index'
@@ -131,7 +125,6 @@ describe('agent hooks CLI handler', () => {
     callMock.mockReset()
     getCliStatusMock.mockClear()
     getManagedAgentHookStatusesMock.mockReturnValue([])
-    prepareManagedCodexHomeBeforeShellLaunchMock.mockReset()
     process.exitCode = undefined
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -408,27 +401,25 @@ describe('agent hooks CLI handler', () => {
         expect(getCliStatusMock).not.toHaveBeenCalled()
         expect(callMock).not.toHaveBeenCalled()
         expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
-        expect(prepareManagedCodexHomeBeforeShellLaunchMock).not.toHaveBeenCalled()
         expect(readFileSync(join(userDataPath, 'orca-data.json'), 'utf8')).toBe(before)
       }
     }
   )
 
-  it('prepares managed Codex trust with the current hooks setting', async () => {
-    const state = getDefaultPersistedState(userDataPath)
-    state.settings.agentStatusHooksEnabled = false
-    writeDataFile(userDataPath, state)
-    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+  it('does nothing for a native pane, so an old shell wrapper still exits 0', async () => {
+    const home = '/Users/jin/Library/Application Support/orca/codex-runtime-home/home'
+    vi.stubEnv('CODEX_HOME', home)
+    vi.stubEnv('ORCA_CODEX_HOME', home)
+    vi.stubEnv('WSL_DISTRO_NAME', '')
 
     await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
 
-    expect(prepareManagedCodexHomeBeforeShellLaunchMock).toHaveBeenCalledWith({
-      userDataPath,
-      hooksEnabled: false
-    })
+    expect(callMock).not.toHaveBeenCalled()
+    expect(getCliStatusMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBeUndefined()
   })
 
-  it('forwards WSL pane routing to the runtime exactly once without using the host installer', async () => {
+  it('forwards WSL pane routing to the runtime exactly once', async () => {
     const home = '/home/jin/.local/share/orca/codex-runtime-home/home'
     vi.stubEnv('CODEX_HOME', home)
     vi.stubEnv('ORCA_CODEX_HOME', home)
@@ -442,7 +433,6 @@ describe('agent hooks CLI handler', () => {
       { codexHome: home, orcaCodexHome: home, wslDistro: 'Ubuntu-24.04' },
       { timeoutMs: 50_000 }
     )
-    expect(prepareManagedCodexHomeBeforeShellLaunchMock).not.toHaveBeenCalled()
   })
 
   it('fails open when WSL runtime preparation is unavailable', async () => {
@@ -452,69 +442,7 @@ describe('agent hooks CLI handler', () => {
     callMock.mockRejectedValue(new Error('method_not_found'))
 
     await expect(main(['agent', 'hooks', 'prepare-codex'], userDataPath)).resolves.toBeUndefined()
-    expect(prepareManagedCodexHomeBeforeShellLaunchMock).not.toHaveBeenCalled()
-  })
-
-  it('honors Codex-specific disablement when the runtime is unavailable', async () => {
-    const state = getDefaultPersistedState(userDataPath)
-    state.settings.disabledTuiAgents = ['codex']
-    writeDataFile(userDataPath, state)
-    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
-
-    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
-
-    expect(prepareManagedCodexHomeBeforeShellLaunchMock).toHaveBeenCalledWith({
-      userDataPath,
-      hooksEnabled: false
-    })
-  })
-
-  it('uses the active profile settings instead of stale legacy settings', async () => {
-    const profileId = 'work-profile'
-    const legacy = getDefaultPersistedState(userDataPath)
-    legacy.settings.agentStatusHooksEnabled = true
-    writeDataFile(userDataPath, legacy)
-    const profile = getDefaultPersistedState(userDataPath)
-    profile.settings.agentStatusHooksEnabled = false
-    writeDataFile(join(userDataPath, 'profiles', profileId), profile)
-    writeFileSync(
-      join(userDataPath, 'orca-profile-index.json'),
-      JSON.stringify({
-        activeProfileId: profileId,
-        profiles: [{ id: profileId }]
-      }),
-      'utf-8'
-    )
-    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
-
-    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
-
-    expect(prepareManagedCodexHomeBeforeShellLaunchMock).toHaveBeenCalledWith({
-      userDataPath,
-      hooksEnabled: false
-    })
-  })
-
-  it('honors live hook and Codex-specific disablement before persistence settles', async () => {
-    const state = getDefaultPersistedState(userDataPath)
-    state.settings.agentStatusHooksEnabled = true
-    writeDataFile(userDataPath, state)
-    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
-    callMock.mockResolvedValue({
-      result: {
-        settings: { agentStatusHooksEnabled: true, disabledTuiAgents: ['codex'] }
-      }
-    })
-
-    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
-
-    expect(prepareManagedCodexHomeBeforeShellLaunchMock).toHaveBeenCalledWith({
-      userDataPath,
-      hooksEnabled: false
-    })
-    expect(callMock).toHaveBeenCalledExactlyOnceWith('settings.get', undefined, {
-      timeoutMs: 1_000
-    })
+    expect(process.exitCode).toBeUndefined()
   })
 
   it('updates an established SQLite profile without rewriting its JSON export', async () => {

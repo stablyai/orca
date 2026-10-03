@@ -15,6 +15,7 @@ import { CLAUDE_SPAWN_TOKEN_ENV } from '../claude/claude-structured-owner-identi
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import { AgentHookServer, _internals } from '../agent-hooks/server'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
@@ -26,6 +27,7 @@ import {
   stopStructuredAgentSessionRuntime,
   waitForStructuredAgentSessionRecovery
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const SESSION = 'claude-integration-1'
 const PROVIDER_SESSION = claudeSessionIdForOrcaSession(SESSION)
@@ -138,6 +140,7 @@ let shellEnv: NodeJS.ProcessEnv
 let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
 /** What the host handed its status sink as child work. */
 let childWork: Parameters<NonNullable<StructuredAgentSessionStatusSink['publishChildWork']>>[]
+let hookServer: AgentHookServer
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
@@ -218,6 +221,8 @@ beforeEach(async () => {
   claude = fakeClaude(PROVIDER_SESSION)
   cleanups = new Map()
   childWork = []
+  _internals.resetCachesForTests()
+  hookServer = new AgentHookServer()
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
@@ -230,6 +235,7 @@ beforeEach(async () => {
     publishStructuredAgentSessionTab: vi.fn(),
     ensureStructuredAgentSessionHost: () =>
       ensureStructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         stateDirectory: root,
         hostId: 'local',
         claimKeyId: 'key-1',
@@ -243,10 +249,15 @@ beforeEach(async () => {
         resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
         resolveClaudeAuthPolicy: () => claudeAuthPolicy,
         openClaudeConnection: claude.openConnection,
+        // Production's sink wiring onto a real hook server, whose records a Stop reaches.
         statusSink: {
-          publish: () => {},
-          forget: () => {},
-          publishChildWork: (...args) => childWork.push(args)
+          publish: (summary, subject) => hookServer.ingestStructuredStatus(summary, subject),
+          forget: (subject) => hookServer.dropStructuredStatus(subject),
+          publishChildWork: (...args) => {
+            childWork.push(args)
+            hookServer.ingestStructuredChildWork(...args)
+          },
+          readChildWork: (subject) => hookServer.getStructuredChildWorkViews(subject)
         }
       }).then(() => undefined),
     registerSubscriptionCleanup: (id: string, dispose: () => void) => cleanups.set(id, dispose),
@@ -504,7 +515,7 @@ describe('a structured Claude session over agentSession.*', () => {
       }
       const host = getStructuredAgentSessionHost()
       // The lease follows the root, so the host lets go.
-      await host?.close(SESSION)
+      await host?.close(SESSION, 'evict')
       expect(host?.hasSession(SESSION)).toBe(false)
 
       // The user comes back and sends: that send is what starts Claude again.
@@ -656,16 +667,22 @@ describe('a structured Claude session over agentSession.*', () => {
     })
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
 
-    claude.live().handlers.onMessage?.({
-      type: 'system',
-      subtype: 'background_tasks_changed',
-      session_id: PROVIDER_SESSION,
-      uuid: 'background-roster',
-      tasks: [
-        { task_id: 'task-one', task_type: 'local_agent', description: 'First task' },
-        { task_id: 'task-two', task_type: 'local_bash', description: 'Second task' }
-      ]
-    })
+    for (const [taskId, taskType, description] of [
+      ['task-one', 'local_agent', 'First task'],
+      ['task-two', 'local_bash', 'Second task']
+    ]) {
+      claude.live().handlers.onMessage?.({
+        type: 'system',
+        subtype: 'task_started',
+        session_id: PROVIDER_SESSION,
+        uuid: `started-${taskId}`,
+        task_id: taskId,
+        task_type: taskType,
+        description,
+        is_backgrounded: true
+      })
+    }
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
     const itemsBeforeTaskStop = itemsOf(stream)
     const targetedStopFields = {
       turnId: 'background-tasks',
@@ -682,6 +699,16 @@ describe('a structured Claude session over agentSession.*', () => {
       { subtype: 'stop_task', params: { taskId: 'task-two' } }
     ])
     expect(itemsOf(stream)).toEqual(itemsBeforeTaskStop)
+    // The acknowledged stop ends the record it reached, and only that one.
+    const subject = childWork.at(-1)![0]
+    expect(
+      hookServer
+        .getStructuredChildWorkViews(subject)
+        .map((view) => [view.providerId, view.membership, view.outcome])
+    ).toEqual([
+      ['task-one', 'live', undefined],
+      ['task-two', 'settled', 'cancelled']
+    ])
 
     const staleStopFields = {
       turnId: 'background-tasks',
@@ -755,15 +782,35 @@ describe('a structured Claude session over agentSession.*', () => {
       provider: 'claude',
       leafUuid: 'assistant-leaf'
     })
+    // A Claude Stop ends its child once Claude ends the stopped turn, so the chat rests; the next
+    // open resumes the conversation.
     const old = claude.live()
-    const resumed = await ok<{ fence: number }>('agentSession.ensure', ensureParams(created.fence))
-    expect(resumed.fence).toBe(created.fence + 1)
+    old.handlers.onMessage?.({
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      session_id: PROVIDER_SESSION,
+      uuid: 'interrupted-result'
+    })
+    await vi.waitFor(() => expect(leaseOf(SESSION).claimStatus).toBe('released'))
     expect(old.closed).toBe(true)
-    // Claude owns where the conversation continues; the stored leaf is the last completed turn.
+    const rested = leaseOf(SESSION)
+    const resumed = await ok<{ fence: number }>(
+      'agentSession.ensure',
+      ensureParams(rested.runtimeFence)
+    )
+    expect(resumed.fence).toBe(rested.runtimeFence + 1)
+    expect(claude.live()).not.toBe(old)
+    // Claude owns where the conversation continues; the stored leaf is the stopped turn's, which
+    // Claude ended with its own result.
     expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
     expect(claude.live().launch.options).not.toHaveProperty('resumeSessionAt')
     const lastCompletedTurn = {
-      handle: { provider: 'claude', sessionId: PROVIDER_SESSION, leafUuid: 'assistant-leaf' },
+      handle: {
+        provider: 'claude',
+        sessionId: PROVIDER_SESSION,
+        leafUuid: 'provider-opened-assistant'
+      },
       origin: 'resumed'
     }
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(

@@ -7,6 +7,7 @@ import { QuickOpenPathRanker } from '../../../shared/quick-open-path-search'
 import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 
 const CACHE_LIMIT = 8
 const CACHE_TTL_MS = 30_000
@@ -21,6 +22,40 @@ type CacheEntry = {
 }
 
 const inventoryCache = new Map<string, CacheEntry>()
+let expiryTimer: ReturnType<typeof setTimeout> | null = null
+let expiryTimerDeadline = Number.POSITIVE_INFINITY
+
+function scheduleInventoryExpiry(): void {
+  if (inventoryCache.size === 0) {
+    return
+  }
+  let deadline = Number.POSITIVE_INFINITY
+  for (const entry of inventoryCache.values()) {
+    if (entry.settled) {
+      deadline = Math.min(deadline, entry.expiresAt)
+    }
+  }
+  if (!Number.isFinite(deadline) || (expiryTimer !== null && deadline >= expiryTimerDeadline)) {
+    return
+  }
+  if (expiryTimer !== null) {
+    clearTimeout(expiryTimer)
+  }
+  const now = Date.now()
+  const delay = Math.min(MAX_TIMER_DELAY_MS, Math.max(0, deadline - now))
+  expiryTimerDeadline = now + delay
+  expiryTimer = setTimeout(() => {
+    expiryTimer = null
+    expiryTimerDeadline = Number.POSITIVE_INFINITY
+    const now = Date.now()
+    for (const [key, entry] of inventoryCache) {
+      if (entry.settled && entry.expiresAt <= now) {
+        inventoryCache.delete(key)
+      }
+    }
+    scheduleInventoryExpiry()
+  }, delay)
+}
 
 function cacheKey(
   target: EnvironmentTarget,
@@ -36,6 +71,11 @@ function cacheKey(
 }
 
 export function clearLegacyQuickOpenInventoryCacheForTests(): void {
+  if (expiryTimer !== null) {
+    clearTimeout(expiryTimer)
+    expiryTimer = null
+    expiryTimerDeadline = Number.POSITIVE_INFINITY
+  }
   inventoryCache.clear()
 }
 
@@ -84,6 +124,7 @@ async function loadLegacyQuickOpenInventory(
     .then((result) => {
       entry.settled = true
       entry.expiresAt = Date.now() + CACHE_TTL_MS
+      scheduleInventoryExpiry()
       return result
     })
     .catch((error) => {
@@ -101,6 +142,7 @@ async function loadLegacyQuickOpenInventory(
     settled: false
   }
   inventoryCache.set(key, entry)
+  scheduleInventoryExpiry()
   while (inventoryCache.size > CACHE_LIMIT) {
     const oldest = inventoryCache.keys().next().value as string | undefined
     if (!oldest) {

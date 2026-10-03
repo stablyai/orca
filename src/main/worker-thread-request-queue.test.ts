@@ -35,9 +35,12 @@ class FakeWorker {
 
   unref(): void {}
 
+  /** Set to hold termination open, as a native call in the worker does. */
+  exit: Promise<number> = Promise.resolve(1)
+
   async terminate(): Promise<number> {
     this.terminated = true
-    return 1
+    return this.exit
   }
 
   postMessage(request: Request): void {
@@ -65,10 +68,14 @@ const TIMEOUT_MS = 1_000
 const IDLE_TEARDOWN_MS = 60_000
 const MAX_CONSECUTIVE_DEATHS = 3
 
-function makeQueue(workers: FakeWorker[]): WorkerThreadRequestQueue<Request, Response> {
+function makeQueue(
+  workers: FakeWorker[],
+  options: { awaitRetirement?: boolean; makeWorker?: () => FakeWorker } = {}
+): WorkerThreadRequestQueue<Request, Response> {
   return new WorkerThreadRequestQueue<Request, Response>({
+    awaitRetirement: options.awaitRetirement,
     factory: () => {
-      const worker = new FakeWorker()
+      const worker = options.makeWorker?.() ?? new FakeWorker()
       workers.push(worker)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeWorker implements every Worker member LazyWorkerThreadHost touches (on/off/removeAllListeners/unref/terminate/postMessage); the rest of the Worker surface is never reached.
       return worker as unknown as Worker
@@ -319,5 +326,62 @@ describe('WorkerThreadRequestQueue', () => {
     expect(labels(workers[3])).toEqual(['d'])
     workers[3].respond()
     expect(await behind).toMatchObject({ label: 'd' })
+  })
+
+  describe('awaitRetirement', () => {
+    function stalledExit(): { worker: FakeWorker; finish: (code: number) => void } {
+      const worker = new FakeWorker()
+      let finish: (code: number) => void = () => {}
+      worker.exit = new Promise((resolve) => {
+        finish = resolve
+      })
+      return { worker, finish }
+    }
+
+    it('fails calls closed until the timed-out worker exits, then spawns again', async () => {
+      vi.useFakeTimers()
+      const workers: FakeWorker[] = []
+      const stalled = stalledExit()
+      const queue = makeQueue(workers, {
+        awaitRetirement: true,
+        makeWorker: () => (workers.length === 0 ? stalled.worker : new FakeWorker())
+      })
+
+      const first = settle(send(queue, 'stuck'))
+      await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
+      expect(await first).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
+
+      // No second thread beside one still inside a native call (#24572).
+      for (const label of ['a', 'b', 'c']) {
+        expect(await settle(send(queue, label))).toMatchObject({
+          message: 'unavailable: previous worker still exiting'
+        })
+      }
+      expect(workers).toHaveLength(1)
+
+      stalled.finish(1)
+      await vi.advanceTimersByTimeAsync(0)
+      const recovered = send(queue, 'recovered')
+      expect(workers).toHaveLength(2)
+      workers[1].respond()
+      await expect(recovered).resolves.toMatchObject({ label: 'recovered' })
+      queue.dispose()
+    })
+
+    it('does not latch spawning off when termination rejects', async () => {
+      vi.useFakeTimers()
+      const workers: FakeWorker[] = []
+      const queue = makeQueue(workers, { awaitRetirement: true })
+      const first = settle(send(queue, 'stuck'))
+      workers[0].terminate = () => Promise.reject(new Error('terminate failed'))
+      await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
+      expect(await first).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
+
+      const next = send(queue, 'next')
+      expect(workers).toHaveLength(2)
+      workers[1].respond()
+      await expect(next).resolves.toMatchObject({ label: 'next' })
+      queue.dispose()
+    })
   })
 })

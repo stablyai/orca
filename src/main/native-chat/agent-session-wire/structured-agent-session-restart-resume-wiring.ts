@@ -1,8 +1,7 @@
 // Binds the restart-resume surface to the host's own capabilities.
 //
 // Its own file because the bindings carry real decisions — which caller key the continuation sends
-// under, that the verdict comes from the settlement waiter rather than the send result, and where a
-// failed journal note is reported — and those belong next to the collaborator that consumes them
+// under, that the verdict comes from the settlement waiter rather than the send result, — and those belong next to the collaborator that consumes them
 // rather than buried in the host constructor.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -11,6 +10,7 @@ import type {
   AgentSessionMutationResult,
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import type { SendSettlementWaitOptions } from './structured-agent-session-send-settlement'
 
@@ -29,7 +29,8 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
     sessionId: string,
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
-  onNoteFailed: (sessionId: string, error: unknown) => void
+  /** The session's child records, the host's one read of them. */
+  readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   now: () => number
 }
 
@@ -60,7 +61,7 @@ type RestartResumeHostBindings = {
 export function structuredAgentSessionRestartResumeSurfaces(
   host: RestartResumeHostBindings,
   now: () => number
-): StructuredAgentSessionRestartResumeSurfaces {
+): Omit<StructuredAgentSessionRestartResumeSurfaces, 'readChildWork'> {
   return {
     revealSession: host.revealSession,
     send: (params) =>
@@ -76,8 +77,6 @@ export function structuredAgentSessionRestartResumeSurfaces(
         until: 'handed-over',
         budgetMs: MAX_TIMER_DELAY_MS
       }),
-    onNoteFailed: () =>
-      console.warn('[structured-agent-session] restart continuation attribution failed'),
     now
   }
 }

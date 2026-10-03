@@ -1,6 +1,7 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePromptClaim } from './claude-structured-prompt-replies'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
+import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
 import { settleCancelledClaudeDispatchWaiters } from './claude-structured-dispatch'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import type { ClaudeSession } from './claude-structured-session-state'
@@ -51,6 +52,8 @@ export async function cancelClaudeTurn(
     }
     return { cancelled: true }
   } catch (error) {
+    // The CLI refused. Any other error leaves the interrupt's effect unknown. Either way the Stop
+    // ends the child next, so its Stop event stands.
     if (error instanceof ClaudeControlRequestError) {
       return { cancelled: false }
     }
@@ -58,28 +61,38 @@ export async function cancelClaudeTurn(
   }
 }
 
+/** Stops each task the host named. An acknowledged stop ends the task's record: the CLI answers
+ *  success for a task it no longer knows without sending that task any frame. */
 export async function stopClaudeBackgroundTasks(
   session: ClaudeSession,
   timeoutMs: number | undefined,
-  isCurrent: ClaudeTurnCancellationGuard = () => true,
-  taskId?: string
+  isCurrent: ClaudeTurnCancellationGuard,
+  taskIds: readonly string[]
 ): Promise<{ cancelled: boolean }> {
-  const stoppableTaskIds = session.backgroundTasks.stoppableTaskIds
-  const taskIds =
-    taskId === undefined ? stoppableTaskIds : stoppableTaskIds.includes(taskId) ? [taskId] : []
   let cancelled = false
+  // A failed request for one task still leaves the others to stop; it is reported after them. A
+  // timeout ends the loop: a CLI that is not answering would make each id wait out its own
+  // deadline while the session's other actions queue behind this one.
+  let failure: { error: unknown } | undefined
   for (const taskId of taskIds) {
     if (!isCurrent()) {
       break
     }
     try {
       await session.connection.stopTask(taskId, { timeoutMs })
+      session.childWork.stopAcknowledged(taskId)
       cancelled = true
     } catch (error) {
-      if (!(error instanceof ClaudeControlRequestError)) {
+      if (error instanceof ClaudeControlRequestTimeoutError) {
         throw error
       }
+      if (!(error instanceof ClaudeControlRequestError)) {
+        failure ??= { error }
+      }
     }
+  }
+  if (failure) {
+    throw failure.error
   }
   return { cancelled }
 }

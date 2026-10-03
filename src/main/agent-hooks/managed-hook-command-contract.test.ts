@@ -233,9 +233,8 @@ describe('managed hook command contract', () => {
         // Native PowerShell hooks evaluate these variables without Grok's dollar-byte scanner.
         const scannedCommand =
           platform === 'win32' &&
-          ((agent === 'codex' && command.startsWith('if (Test-Path')) ||
-            ((agent === 'qoder' || agent === 'codebuddy') &&
-              command.startsWith('$scriptPath = Join-Path')))
+          (agent === 'qoder' || agent === 'codebuddy') &&
+          command.startsWith('$scriptPath = Join-Path')
             ? command
                 .replaceAll('$LASTEXITCODE', '')
                 .replaceAll('$env:', '')

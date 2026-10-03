@@ -22,8 +22,9 @@ import { resumeActivityLabel } from './native-chat-resume-activity-label'
  * hidden when empty).
  *
  * No state dot, deliberately. Every `AgentDotState` would mislead: `idle` and `unverifiable` both
- * presuppose a live pane, `interrupted` renders red like an error, `done` green, `working` a
- * spinner. A missing dot beats a dot that says these agents are running.
+ * presuppose a live pane, `interrupted` claims a stop or a newer message ended the turn, `failed`
+ * a fault, `done` a finish, `working` a spinner. A missing dot beats a dot that says these agents
+ * are running.
  *
  * Under the name, what the chat was doing when Orca went away — mid-reply, waiting on the user,
  * subagents or monitoring — so rows the sidebar showed as working for different reasons differ.

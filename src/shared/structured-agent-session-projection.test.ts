@@ -124,6 +124,23 @@ describe('structured agent session status projection', () => {
     })
   })
 
+  it('names the call a tool row output answers, so a run pairs it by id', () => {
+    const projected = projectStructuredItemToNativeChat(
+      item('wait', 1, {
+        kind: 'tool-call',
+        name: 'wait_agent',
+        callId: 'call-wait',
+        input: null,
+        state: 'completed',
+        output: { head: 'CHILD_REPLY', digest: 'd', byteLength: 11, truncated: false }
+      })
+    )
+    expect(projected?.blocks).toEqual([
+      expect.objectContaining({ type: 'tool-call', callId: 'call-wait' }),
+      { type: 'tool-result', output: 'CHILD_REPLY', isError: false, callId: 'call-wait' }
+    ])
+  })
+
   it('projects running, attention, and completed lifecycle states', () => {
     const running = item('running', 1, {
       kind: 'status',
@@ -801,7 +818,7 @@ describe('the turn verdict on the status summary', () => {
     })
   })
 
-  it('reports no verdict for a settled turn the provider never judged', () => {
+  it('reports no verdict for a completed turn the provider never judged', () => {
     const completed = item('turn-completed', 2, {
       kind: 'turn',
       turnId: 'turn-1',
@@ -810,5 +827,42 @@ describe('the turn verdict on the status summary', () => {
     expect(projectStructuredAgentSessionStatusSummary([user, completed])).not.toHaveProperty(
       'turnOutcome'
     )
+  })
+
+  // With no verdict from the provider, the lifecycle the host settled is what the row reports.
+  it.each([
+    ['interrupted', 'interruption'],
+    ['unverifiable', 'unconfirmed']
+  ] as const)(
+    'reads an %s turn the provider never judged as its host-observed end',
+    (state, outcome) => {
+      const ended = item('turn-ended', 2, { kind: 'turn', turnId: 'turn-1', state })
+      expect(projectStructuredAgentSessionStatusSummary([user, ended])).toMatchObject({
+        status: 'idle',
+        turnOutcome: outcome
+      })
+    }
+  )
+
+  it("keeps the provider's own verdict over what the host observed of the end", () => {
+    for (const outcome of ['cancellation', 'failure', 'success'] as const) {
+      const judged = item('turn-judged', 2, {
+        kind: 'turn',
+        turnId: 'turn-1',
+        state: 'interrupted',
+        outcome
+      })
+      expect(projectStructuredAgentSessionStatusSummary([user, judged])).toMatchObject({
+        turnOutcome: outcome
+      })
+    }
+  })
+
+  it('keeps the observed end off the request the completion feed announces', () => {
+    const ended = item('turn-ended', 2, { kind: 'turn', turnId: 'turn-1', state: 'interrupted' })
+    expect(projectStructuredAgentSessionStatusState([user, ended]).latestRequest).toMatchObject({
+      turnState: 'interrupted',
+      outcome: null
+    })
   })
 })

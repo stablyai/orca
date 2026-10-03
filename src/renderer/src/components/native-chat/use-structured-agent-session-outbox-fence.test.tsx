@@ -4,8 +4,8 @@
 // starts an agent. There, only a Retry or a new send goes out. An older host, which restarts the
 // agent inside the send and refuses it unrecorded when that fails, keeps the resend on a new fence.
 
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
@@ -16,7 +16,12 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
+import { enqueueStructuredAgentSessionLaunchPrompt } from './structured-agent-session-outbox-storage'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+
+// Why: every hook here shares the session outbox store; one left mounted would drain the next test's.
+afterEach(cleanup)
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -56,16 +61,16 @@ function sentId(call: number): string {
   return String(id)
 }
 
-function render() {
+function render(fence: number | null = 1) {
   return renderHook(
-    ({ fence }) =>
+    (props) =>
       useStructuredAgentSessionOutbox({
         sessionId: 'session-1',
         target: LOCAL_TARGET,
-        fence,
+        fence: props.fence,
         submissions: []
       }),
-    { initialProps: { fence: 1 } }
+    { initialProps: { fence } }
   )
 }
 
@@ -101,12 +106,12 @@ describe('an outbox on a host that accepts a send before any agent has it', () =
     expect(mocks.call).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a blocked head blocked across a fence change; only Retry sends it', async () => {
+  it('keeps a failed send held across a fence change; only Retry sends it', async () => {
     mocks.call.mockRejectedValueOnce(new Error('send failed')).mockResolvedValue({ ok: true })
     const { result, rerender } = render()
 
     act(() => expect(result.current.send('hello')).toBe(true))
-    await waitFor(() => expect(result.current.blockedClientMessageId).not.toBeNull())
+    await waitFor(() => expect(result.current.outbox[0]?.lastFailure).toBeDefined())
     rerender({ fence: 2 })
     await settle()
     expect(mocks.call).toHaveBeenCalledTimes(1)
@@ -115,6 +120,36 @@ describe('an outbox on a host that accepts a send before any agent has it', () =
 
     act(() => result.current.retry(result.current.outbox[0]!.clientMessageId))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+  })
+
+  it('leaves a launch prompt whose staging save failed queued, so the chat still sends it', async () => {
+    mocks.call.mockImplementation(async (_target, _method, params) =>
+      pendingResult(params.envelope.clientOperationId)
+    )
+    const staged = enqueueStructuredAgentSessionLaunchPrompt('session-1', 'launch notes')
+    if (!staged) {
+      throw new Error('fixture outbox entry was not persisted')
+    }
+    const { result, rerender } = render(null)
+
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded')
+    })
+    const delivery = await act(async () =>
+      settleStructuredAgentLaunchPrompt({
+        launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        options: { prompt: 'launch notes' },
+        stagedEntry: staged
+      })
+    )
+    setItem.mockRestore()
+    expect(delivery).toEqual({ delivered: false, failureNotified: false })
+    expect(mocks.call).not.toHaveBeenCalled()
+    expect(result.current.outbox).toMatchObject([{ state: 'queued' }])
+
+    rerender({ fence: 1 })
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+    expect(sentId(0)).toBe(staged.clientMessageId)
   })
 })
 

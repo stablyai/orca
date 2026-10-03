@@ -220,4 +220,30 @@ describe('native chat transcript virtualizer contract', () => {
 
     expect(virtualizerMock.scrollToOffset).not.toHaveBeenCalled()
   })
+
+  // Rows drawn after the window (a message shown as not sent) still fill the container.
+  it('follows the bottom of the container when no row is windowed', () => {
+    const container = document.createElement('div')
+    Object.defineProperty(container, 'scrollHeight', { configurable: true, value: 2000 })
+    virtualizerMock.scrollElement.current = container
+    const noSlots: NativeChatMessageSlot[] = []
+    const { result, rerender } = renderHook(
+      ({ slots }) =>
+        useNativeChatTranscriptWindow({
+          scrollRef: { current: container },
+          slots,
+          isVisible: true,
+          revealIndex: -1
+        }),
+      { initialProps: { slots: noSlots } }
+    )
+
+    result.current.scrollToEnd()
+    expect(virtualizerMock.scrollToEnd).not.toHaveBeenCalled()
+    expect(container.scrollTop).toBe(2000)
+
+    rerender({ slots: [slot('a')] })
+    result.current.scrollToEnd()
+    expect(virtualizerMock.scrollToEnd).toHaveBeenCalledOnce()
+  })
 })

@@ -76,7 +76,8 @@ vi.mock('@/lib/new-workspace', () => ({
 
 vi.mock('sonner', () => ({
   toast: {
-    error: vi.fn()
+    error: vi.fn(),
+    success: vi.fn()
   }
 }))
 
@@ -540,42 +541,6 @@ describe('staged background worktree creation', () => {
       { activateCreatedTabs: false, backendStartupTerminalSpawned: true }
     )
     expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
-    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
-    })
-  })
-
-  it('reveals a backend-owned startup after the user switches workspaces', async () => {
-    let resolveCreate!: (result: {
-      worktree: { id: string; repoId: string }
-      startupTerminal: { tabId: string; spawned: true }
-    }) => void
-    store.createWorktree.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveCreate = resolve
-      })
-    )
-
-    const started = continueBackgroundWorktreeCreation('creation-1', makeRequest(), {
-      revealCreationSurface: false
-    })
-
-    expect(started).toBe(true)
-    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
-    // Why: selecting a real workspace clears only the pending surface pointer;
-    // completion should still finish the task-launch handoff once it is ready.
-    store.activePendingCreationId = null
-    resolveCreate({
-      worktree: { id: 'wt-1', repoId: 'repo-1' },
-      startupTerminal: { tabId: 'agent-tab', spawned: true }
-    })
-    await flushAsyncWorktreeCreation()
-
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      sidebarRevealBehavior: 'auto',
-      backendStartupTerminalSpawned: true
-    })
-    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
       cleanupVm: false
     })

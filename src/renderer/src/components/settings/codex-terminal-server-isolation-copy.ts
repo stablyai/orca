@@ -15,6 +15,20 @@ export function getCodexTerminalServerIsolationDescription(): string {
   )
 }
 
+export function getCodexSharedServerWarningTitle(): string {
+  return translate(
+    'settings.agents.codexSharedServerWarning.title',
+    'Warn when a Codex tab shares a server'
+  )
+}
+
+export function getCodexSharedServerWarningDescription(): string {
+  return translate(
+    'settings.agents.codexSharedServerWarning.description',
+    'Shows a notice on a Codex you started yourself when it shares a server with other tabs, because its agent status may be wrong.'
+  )
+}
+
 export function getCodexTerminalServerIsolationSearchKeywords(): string[] {
   return searchKeywords([
     {

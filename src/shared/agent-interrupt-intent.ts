@@ -18,6 +18,14 @@ export function isAgentInterruptInputIntent(intent: unknown): intent is AgentInt
   return intent === 'plain-escape' || intent === 'ctrl-c'
 }
 
+// Ctrl+C can copy text or leave a Codex side chat without cancelling the main turn.
+export function shouldIgnoreInterruptIntent(
+  agentType: AgentType | undefined,
+  intent: AgentInterruptInputIntent
+): boolean {
+  return intent === 'ctrl-c' && (agentType === 'codex' || agentType === 'droid')
+}
+
 // Why: these TUIs also close an overlay on a bare Escape (Claude's /btw composer, OMP/Pi's
 // focused-child and settings views). The keypress is ambiguous at the source and nothing outside
 // the TUI can disambiguate it, so it is never evidence a turn ended — only the provider's own

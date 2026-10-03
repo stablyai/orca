@@ -8,12 +8,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session-background-task-wire'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
@@ -37,6 +37,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 const PROVIDER_ROW = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1' }
@@ -46,7 +47,8 @@ let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let events: StructuredAgentSessionEventSink | undefined
-let backgroundTasks: AgentSessionBackgroundTaskState | null
+/** The session's child records, as the host's store serves them to every surface. */
+let records: AgentChildWorkView[]
 let chat: StructuredAgentSessionState
 let listed: AgentSessionStatusSummary | undefined
 
@@ -54,13 +56,14 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-main-agent-working-'))
   resetHostTestOperationIds()
   events = undefined
-  backgroundTasks = null
+  records = []
   chat = EMPTY_STRUCTURED_AGENT_SESSION
   listed = undefined
   // Written, and the provider has neither opened a turn for it nor answered it.
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire: async (input) => {
@@ -88,9 +91,9 @@ beforeEach(async () => {
       releaseAcquisition: vi.fn(async () => true),
       cancelTurn: vi.fn(async () => ({ cancelled: true })),
       answerPrompt: vi.fn(async () => undefined),
-      setOption: vi.fn(async () => undefined),
-      backgroundTaskState: () => backgroundTasks
+      setOption: vi.fn(async () => undefined)
     },
+    statusSink: { publish: () => {}, forget: () => {}, readChildWork: () => records },
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',
@@ -163,7 +166,11 @@ function listReads(): { mainAgent: string; row: string } {
   if (!summary?.status) {
     return { mainAgent: 'none', row: 'none' }
   }
-  const status = structuredAgentSessionAgentStatus({ ...summary, status: summary.status })
+  const status = structuredAgentSessionAgentStatus({
+    ...summary,
+    status: summary.status,
+    childWork: summary.children
+  })
   return { mainAgent: status.mainAgent.state, row: status.state }
 }
 
@@ -197,14 +204,24 @@ describe('the main agent read by the chat and by a session list', () => {
     expect(listReads().mainAgent).toBe('working')
 
     await provider(1, { kind: 'turn', turnId: 'turn-1', state: 'completed', outcome: 'success' })
-    backgroundTasks = {
-      state: 'monitoring',
-      tasks: [{ id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working' }]
-    }
-    host.publishBackgroundTaskState(SESSION)
+    records = [
+      {
+        id: 'child-1',
+        providerId: 'task-1',
+        kind: 'agent',
+        name: 'deep_review',
+        state: 'working',
+        membership: 'live',
+        firstObservedAt: NOW,
+        observedAt: NOW,
+        stoppable: false,
+        invocation: { invocationId: 'task-1', generation: 1 }
+      }
+    ]
+    host.publishChildWorkEvidence(SESSION, [])
     await host.flushStreamedEvents(SESSION)
 
-    expect(chat.backgroundTasks?.tasks).toHaveLength(1)
+    expect(chat.backgroundTasks?.children).toHaveLength(1)
     // The row reads Working for the subagent; the main agent, and so Stop, does not.
     expect(listReads()).toEqual({ mainAgent: 'done', row: 'working' })
     expect(chatReadsWorking()).toBe(false)

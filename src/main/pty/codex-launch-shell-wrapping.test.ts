@@ -61,7 +61,10 @@ describe.skipIf(process.platform === 'win32')('Orca Codex launch shells carry th
 
     expect(
       wrapperText(
-        getShellLaunchConfig(shell, codexLaunchFeatures(shell), { hasStartupCommand: true })
+        getShellLaunchConfig(shell, codexLaunchFeatures(shell), {
+          hasStartupCommand: true,
+          inheritedXdgDataDirs: undefined
+        })
       )
     ).toContain(marker)
   })

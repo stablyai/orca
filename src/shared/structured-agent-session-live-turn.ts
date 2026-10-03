@@ -142,7 +142,7 @@ export function isStructuredAgentSessionThinking(
     ) {
       newestContentIsReasoning = false
     }
-    // Plain status copy is activity chrome, not newer transcript content.
+    // A status row is a notice, not newer transcript content.
   }
   return false
 }

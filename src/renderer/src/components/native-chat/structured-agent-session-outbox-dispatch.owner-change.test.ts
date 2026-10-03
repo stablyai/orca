@@ -3,10 +3,10 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  admitStructuredAgentSessionOutboxEntry,
   createStructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import { admitStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox-admission'
 import { requeueInterruptedStructuredAgentSessionDispatches } from './structured-agent-session-outbox-dispatch'
 
 function dispatching(
@@ -33,8 +33,8 @@ describe('requeue after an owner change', () => {
       [dispatching('stopped', { outlivedStop: true })],
       1
     )
-    expect(admitStructuredAgentSessionOutboxEntry([stopped], null).state).toBe('blocked')
+    expect(admitStructuredAgentSessionOutboxEntry([stopped]).state).toBe('blocked')
     const [plain] = requeueInterruptedStructuredAgentSessionDispatches([dispatching('plain')], 1)
-    expect(admitStructuredAgentSessionOutboxEntry([plain], null).state).toBe('dispatch')
+    expect(admitStructuredAgentSessionOutboxEntry([plain]).state).toBe('dispatch')
   })
 })

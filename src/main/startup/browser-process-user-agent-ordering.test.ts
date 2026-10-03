@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
   const app = {
     isPackaged: false,
     exit: vi.fn(),
+    // Real `app` always carries this; preflight reads it to decide the Linux keyring backend.
+    commandLine: { hasSwitch: vi.fn(() => false), appendSwitch: vi.fn() },
     getVersion: vi.fn(() => '1.0.0'),
     getPath: vi.fn(() => '/canonical-user-data'),
     get userAgentFallback(): string {

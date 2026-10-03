@@ -29,6 +29,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 // As Claude Code 2.1.280 advertises them on a turn's system/init frame.
@@ -82,6 +83,7 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
     journalDatabase: openTestJournalHostDatabase(root),
@@ -111,7 +113,7 @@ function eventually(assertion: () => unknown): Promise<unknown> {
 }
 
 function envelope(
-  method: 'agentSession.send' | 'agentSession.cancel',
+  method: 'agentSession.send' | 'agentSession.cancel' | 'agentSession.queuedMessageSend',
   fields: Record<string, unknown>
 ) {
   return {
@@ -314,5 +316,64 @@ it('withdraws a host-queued follow-up but leaves a newer turn running when the S
   const rows = (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
     item.body.kind === 'status' ? [item.body.text] : []
   )
-  expect(rows).toContain('The provider had already finished this turn.')
+  expect(rows).not.toContain('The provider had already finished this turn.')
 }, 15_000)
+
+it('a card sent now into the running turn comes back paused when Stop withdraws it, and is not sent again', async () => {
+  const connection = claude.connections[0]!
+  const turnId = await openFirstTurn(connection)
+  const body = hostTestMessage('And then this.')
+  const delivery = 'queue-if-active' as const
+  const queuedSend = await host.send(CALLER, {
+    envelope: envelope('agentSession.send', { body, delivery }),
+    body,
+    delivery,
+    userSend: true
+  })
+  if (!queuedSend.ok || !('queued' in queuedSend.value)) {
+    throw new Error('expected a queued receipt')
+  }
+  const cardId = queuedSend.value.queued.messageId
+  const sentNow = await host.queuedMessageSend(CALLER, {
+    envelope: envelope('agentSession.queuedMessageSend', { messageId: cardId }),
+    messageId: cardId
+  })
+  expect(sentNow).toMatchObject({ ok: true })
+  // Folded into the running turn: Claude holds it until that turn ends.
+  await eventually(() => expect(connection.sent).toHaveLength(2))
+  queued.push(String(connection.sent.at(-1)!.uuid))
+  const sends = async () =>
+    (await host.journalSnapshot(SESSION)).submissions
+      .filter((entry) => entry.queuedMessageId === cardId)
+      .map((entry) => ({ origin: entry.origin, state: entry.dispatchState, reason: entry.reason }))
+  await eventually(async () => expect((await sends())[0]?.state).toBe('pending'))
+
+  expect(await stop(turnId)).toMatchObject({ ok: true, value: { cancelled: true } })
+  connection.handlers.onMessage?.({
+    type: 'result',
+    subtype: 'error_during_execution',
+    session_id: PROVIDER_SESSION_ID,
+    uuid: 'interrupted-result'
+  })
+
+  // Inside the test's budget, so a re-send fails on this diff rather than the timeout.
+  await vi.waitFor(async () => {
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect({
+      pause: page.ok ? (page.page.queuePause ?? null) : 'history refused',
+      cards: page.ok ? (page.page.queuedMessages ?? []).map((card) => card.state) : [],
+      sends: await sends()
+    }).toEqual({
+      pause: { reason: 'stopped' },
+      cards: ['waiting'],
+      sends: [{ origin: 'client', state: 'rejected', reason: DISPATCH_REJECTED_CANCELLED }]
+    })
+  }, 5_000)
+  // A drain ignoring the pause re-sends only after the stopped turn ends: watch past that.
+  await eventually(async () => expect(await liveTurnId()).toBeNull())
+  await new Promise((resolve) => setTimeout(resolve, 2_500))
+  expect(connection.sent).toHaveLength(2)
+  expect(await sends()).toEqual([
+    { origin: 'client', state: 'rejected', reason: DISPATCH_REJECTED_CANCELLED }
+  ])
+}, 20_000)

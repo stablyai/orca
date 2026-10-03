@@ -4,6 +4,7 @@ import type {
 } from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
@@ -29,6 +30,7 @@ import type {
   AgentJournalThreadGoal,
   AgentJournalTurnOutcome
 } from './agent-session-journal-types'
+import type { AgentTurnOutcome } from './agent-turn-outcome'
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
@@ -225,9 +227,6 @@ export type AgentSessionStatusSummary = {
   /** With `hostExecutionOwned`: whether that child has proven its start. `starting` is a
    *  published session whose provider has not yet answered startup; absent on older hosts. */
   hostExecutionPhase?: 'starting' | 'ready'
-  /** The current provider child, distinct from the conversation and from replacement children.
-   *  Absent on older hosts and whenever this host has no live child. */
-  hostExecutionChild?: { generation: string | null; fence: number }
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
@@ -237,15 +236,22 @@ export type AgentSessionStatusSummary = {
   toolInput?: string
   /** Preview of the newest assistant prose, so a settled row says what the agent said. */
   lastAssistantMessage?: string
-  /** The provider's verdict on the newest settled root turn. Present only while `status` is
-   *  `idle`: a running or attention-blocked turn has no verdict yet, and a stale one must not
-   *  ride along. Absent means UNKNOWN, never success. Optional for mixed-version hosts; the
-   *  agent-status row publishes it as `mainAgent.outcome`. */
-  turnOutcome?: AgentJournalTurnOutcome
+  /** The verdict on the latest request: the provider's, or, when it gave none, what the host
+   *  observed of the turn's end. Present only while `status` is `idle`: a running or
+   *  attention-blocked turn has no verdict yet, and a stale one must not ride along. Absent means
+   *  UNKNOWN, never success. Optional for mixed-version hosts; an older client reads an arm it
+   *  does not know as no verdict. The agent-status row publishes it as `mainAgent.outcome`. */
+  turnOutcome?: AgentTurnOutcome
   /** Live provider-owned background tasks, so session lists can render
    *  subagent children without holding a journal reader open. Optional for
-   *  mixed-version hosts. */
+   *  mixed-version hosts. Derived from `children` on hosts that publish it. */
   backgroundTasks?: AgentSessionBackgroundTask[]
+  /** The host's running child records for this session, as views: live ones, and a finished one
+   *  whose own work still runs (it reads monitoring); finished children ride the background-task
+   *  channel only. Absent from older hosts; decode with `decodeAgentChildWorkViews`. Usage is
+   *  omitted, and an evidence clock that only ticked does not republish: per-tick freshness rides
+   *  the background-task channel. */
+  children?: AgentChildWorkView[]
   providerSession?: AgentProviderSessionMetadata
   updatedAt: number
   /** When the session's own agent entered `status`, dated by its own lifecycle edges and never by
@@ -274,8 +280,9 @@ export type AgentSessionStatusEvent =
  * per finish, subscribes here. Re-broadcasting the summary on every status change therefore
  * repeats a state, not a completion.
  *
- * `outcome` is A0's provider verdict and is never inferred — a turn the host only observed ending
- * carries no outcome and produces no event at all, because absent means UNKNOWN, not success.
+ * `outcome` is the journal's recorded verdict (the provider's, a stop, or the host's supersede) and
+ * is never inferred — a turn the host only observed ending carries no outcome and produces no event
+ * at all, because absent means UNKNOWN, not success.
  */
 export type AgentSessionTurnCompletion = {
   /** Host-and-workspace scope; a bare provider turn id is not globally unique. */

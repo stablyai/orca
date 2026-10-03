@@ -45,7 +45,7 @@ describe('remote agent-session launch routing', () => {
     expect(legacy).not.toHaveBeenCalled()
   })
 
-  it.each(['kimi', 'muse', 'codebuddy'] as const)(
+  it.each(['kimi', 'muse', 'codebuddy', 'cursor'] as const)(
     'falls back to legacy when an older host lacks the %s resume capability',
     async (agent) => {
       const hostAuthority = vi.fn().mockResolvedValue('structured')

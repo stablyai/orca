@@ -46,9 +46,21 @@ export function createSessionSearchClient(
   return {
     searchSessions: async (request) => {
       const parsed = AiVaultSearchRequestSchema.parse(request)
+      let hostRequest = parsed
       let raw: unknown
       try {
-        raw = await call('aiVault.searchSessions', parsed)
+        // IPC and its all-hosts merge are this build; each remote leg negotiates its own host.
+        if (transport !== 'ipc' && parsed.filters?.agents?.includes('qoder')) {
+          const status = AiVaultSearchStatusSchema.parse(await call('aiVault.searchStatus', {}))
+          if (status.supportsQoderHistory !== true) {
+            const agents = parsed.filters.agents.filter((agent) => agent !== 'qoder')
+            if (agents.length === 0) {
+              return { kind: 'unavailable', reason: 'unsupported-agent' }
+            }
+            hostRequest = { ...parsed, filters: { ...parsed.filters, agents } }
+          }
+        }
+        raw = await call('aiVault.searchSessions', { ...hostRequest, supportsQoderHistory: true })
       } catch (error) {
         if (isUnknownSessionSearchMethod(error)) {
           return { kind: 'unavailable', reason: 'no-service' }

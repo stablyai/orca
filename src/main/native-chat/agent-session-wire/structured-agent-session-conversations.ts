@@ -1,5 +1,6 @@
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /**
  * The host's open conversations. A journal handle becomes a conversation's when it is set here,
@@ -17,11 +18,12 @@ export class StructuredAgentSessionConversations extends Map<
   StructuredAgentSessionHostSession
 > {
   private readonly activity = new Map<string, number>()
+  private readonly closeObservers = new Set<(sessionId: string) => void>()
 
   constructor(
     private readonly delivery: {
       deliver: (sessionId: string, journal: AgentSessionJournal) => void
-      onDeliveryError: (sessionId: string, error: unknown) => void
+      logger: StructuredAgentSessionLogger
       /** A conversation became held: state that waited on it (queued drafts) re-derives. */
       onOpened?: (sessionId: string) => void
       now: () => number
@@ -46,7 +48,11 @@ export class StructuredAgentSessionConversations extends Map<
         try {
           this.delivery.deliver(sessionId, journal)
         } catch (error) {
-          this.delivery.onDeliveryError(sessionId, error)
+          this.delivery.logger.warn('delivering a journal commit failed', {
+            scope: 'journal-delivery',
+            sessionId,
+            error
+          })
         }
       })
     })
@@ -58,7 +64,18 @@ export class StructuredAgentSessionConversations extends Map<
 
   override delete(sessionId: string): boolean {
     this.activity.delete(sessionId)
-    return super.delete(sessionId)
+    const deleted = super.delete(sessionId)
+    if (deleted) {
+      for (const observer of this.closeObservers) {
+        observer(sessionId)
+      }
+    }
+    return deleted
+  }
+
+  /** Told when a conversation leaves the map, so state kept per conversation dies with it. */
+  observeClose(observer: (sessionId: string) => void): void {
+    this.closeObservers.add(observer)
   }
 
   touch(sessionId: string): void {

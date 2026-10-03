@@ -6,6 +6,7 @@ import {
   type ClaudeRuntimeAuthPreparation,
   type CodexAccountSelectionTarget,
   type MiniMaxResolvedConfig,
+  type ZcodePlanResolvedConfig,
   type NormalizedCodexAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget,
   type ProviderRateLimits,
@@ -211,6 +212,18 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         },
         error: toErrorMessage(error)
       }
+    }
+  }
+
+  protected resolveZcodePlanConfig(): ZcodePlanResolvedConfig {
+    try {
+      return {
+        config: this.zcodePlanConfigResolver?.() ?? { site: 'zai', apiKey: '' },
+        error: null
+      }
+    } catch (error) {
+      // Why: an undecryptable saved key must not abort every provider's refresh; surface it as ZCode-only state instead.
+      return { config: { site: 'zai', apiKey: '' }, error: toErrorMessage(error) }
     }
   }
 }

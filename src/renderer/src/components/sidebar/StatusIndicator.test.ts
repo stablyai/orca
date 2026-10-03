@@ -72,11 +72,16 @@ describe('StatusIndicator', () => {
     expect(classNames).toContain('bg-emerald-500')
   })
 
-  it('renders interrupted distinctly from done', () => {
+  it("renders a user's Stop muted, distinct from done and from a failure", () => {
     const classNames = renderDotClassNames('interrupted')
 
-    expect(classNames).toContain('bg-red-500')
+    expect(classNames).toContain('bg-muted-foreground')
     expect(classNames).not.toContain('bg-emerald-500')
+    expect(classNames).not.toContain('bg-red-500')
+  })
+
+  it('renders failed as a red dot', () => {
+    expect(renderDotClassNames('failed')).toContain('bg-red-500')
   })
 
   it.each([

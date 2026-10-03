@@ -23,6 +23,26 @@ export function createMiniMaxCredentialsApi(): NonNullable<
   }
 }
 
+export function createZcodePlanCredentialsApi(): PreloadApi['zcodePlanCredentials'] {
+  const status = {
+    detailsUnavailable: true,
+    apiKeyConfigured: false,
+    zcodeCliConfigured: false,
+    apiKeyProtection: null
+  }
+  const unsupported = () =>
+    Promise.reject(
+      new Error(
+        'GLM Coding Plan keys can only be changed in the desktop app on the computer running Orca.'
+      )
+    )
+  return {
+    getStatus: () => Promise.resolve(status),
+    saveApiKey: unsupported,
+    clearApiKey: unsupported
+  }
+}
+
 export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['cursorAccounts']> {
   // Why an explanation and not a bare `signedIn: false`: Cursor's session lives on
   // the machine running Orca, and this bridge cannot read it. The host may well be

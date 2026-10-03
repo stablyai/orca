@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createGenerationStore, MAX_CACHED_HOSTS } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
-import type {
-  createExpoGenerationFileSystem,
-  GenerationFileSystem
-} from './generation-store-file-system'
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
@@ -13,12 +9,6 @@ import {
   FAKE_GENERATION_ROOT,
   type FakeGenerationFileSystem as FakeFileSystem
 } from './generation-file-system-fake'
-
-// The adapter is deliberately untested at runtime — it would need a device filesystem — so this is
-// the check that it still answers the port the store is written against.
-type AdapterIsPort =
-  ReturnType<typeof createExpoGenerationFileSystem> extends GenerationFileSystem ? true : false
-const adapterSatisfiesPort: AdapterIsPort = true
 
 const ROOT = FAKE_GENERATION_ROOT
 const HOST = deriveHostCacheKey('host-a')
@@ -580,10 +570,6 @@ describe('generation store', () => {
     for (const host of hosts) {
       expect((await store.readActiveGeneration(host))?.buildId).toBe(BUILD)
     }
-  })
-
-  it('keeps the adapter aligned with the port', () => {
-    expect(adapterSatisfiesPort).toBe(true)
   })
 })
 

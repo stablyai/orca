@@ -23,7 +23,7 @@ import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
 } from './structured-agent-session-adapter'
-import { validatePendingPrompt } from './structured-agent-session-prompt-state'
+import { settledPrompt, validatePendingPrompt } from './structured-agent-session-prompt-state'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 export type AgentSessionPromptRequest = {
@@ -70,13 +70,31 @@ function readPromptChoice(
     : { response: { kind: 'answers', answers }, selectedOptionId }
 }
 
+/** The item is already resolved with the choice this request makes: the answer holds, so say so. */
+function resolvedWithSameChoice(
+  ctx: AgentSessionTurnContext,
+  input: AgentSessionPromptRequest
+): AgentSessionPromptResult | null {
+  const settled = settledPrompt(ctx, input.itemId)
+  if (settled?.prompt.kind !== input.kind || settled.prompt.resolution.state !== 'resolved') {
+    return null
+  }
+  const { item, prompt } = settled
+  const choice = readPromptChoice(prompt, input)
+  return choice?.selectedOptionId === prompt.resolution.selectedOptionId
+    ? { itemId: item.itemId, revision: item.revision, resolution: prompt.resolution }
+    : null
+}
+
 export async function performPrompt(
   ctx: AgentSessionTurnContext,
   input: AgentSessionPromptRequest
 ): Promise<TurnOutcome<AgentSessionPromptResult>> {
   const validated = validatePendingPrompt(ctx, input)
   if (!validated.ok) {
-    return validated
+    // A re-click after a lost reply is a new operation; the prompt's state answers it.
+    const held = resolvedWithSameChoice(ctx, input)
+    return held ? { ok: true, value: held } : validated
   }
   const { prompt } = validated
   const choice = readPromptChoice(prompt, input)

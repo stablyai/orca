@@ -96,8 +96,7 @@ describe('asynchronous profile-state database snapshots', () => {
     expect(existsSync(targetPath)).toBe(false)
   })
 
-  // Node's incremental backup callback is not part of Bun's worker snapshot contract.
-  it.skipIf(!!process.versions.bun).each(['same connection', 'another connection'] as const)(
+  it.each(['same connection', 'another connection'] as const)(
     'keeps a consistent complete revision while writes occur from %s',
     async (connection) => {
       const { directory, databasePath, db, targetPath } = fixture()
@@ -246,24 +245,21 @@ describe('asynchronous profile-state database snapshots', () => {
     expectNoTemporaryFiles(directory)
   })
 
-  it.skipIf(!!process.versions.bun)(
-    'fails clearly when native backup is unsupported without replacing the destination',
-    async () => {
-      const { directory, db, targetPath } = fixture()
-      writeFileSync(targetPath, 'previous recovery artifact')
-      const getBuiltinModule = process.getBuiltinModule.bind(process)
-      vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
-        id === 'node:sqlite' ? {} : getBuiltinModule(id)
-      )
+  it('fails clearly when native backup is unsupported without replacing the destination', async () => {
+    const { directory, db, targetPath } = fixture()
+    writeFileSync(targetPath, 'previous recovery artifact')
+    const getBuiltinModule = process.getBuiltinModule.bind(process)
+    vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
+      id === 'node:sqlite' ? {} : getBuiltinModule(id)
+    )
 
-      await expect(writeProfileStateDatabaseSnapshotAsync(db, targetPath)).rejects.toThrow(
-        'Asynchronous SQLite backup is unavailable'
-      )
+    await expect(writeProfileStateDatabaseSnapshotAsync(db, targetPath)).rejects.toThrow(
+      'Asynchronous SQLite backup is unavailable'
+    )
 
-      expect(readFileSync(targetPath, 'utf8')).toBe('previous recovery artifact')
-      expectNoTemporaryFiles(directory)
-    }
-  )
+    expect(readFileSync(targetPath, 'utf8')).toBe('previous recovery artifact')
+    expectNoTemporaryFiles(directory)
+  })
 
   it.each(['', 'invalid\0path'])('rejects the invalid target %j', async (path) => {
     const { db } = fixture()

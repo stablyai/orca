@@ -15,6 +15,8 @@ import {
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { blockOf } from './claude-background-task-row-test-support'
+import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 // The frames below are the ones the reported session actually carried: two real
 // failures that printed THREE red rows whose visible text was the wire opcode,
@@ -143,7 +145,7 @@ function persistedTarget(
 ): StructuredAgentSessionEventTarget {
   const journal =
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test double implements the journal methods exercised by the deferred sink.
-    {
+    withJournalQueueMembers({
       appendItem: async (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         persisted.set(agentJournalItemKey(identity), body)
         return { cursor: { epoch: 'test', sequence: persisted.size }, itemId: '', revision: 1 }
@@ -162,7 +164,7 @@ function persistedTarget(
       }) satisfies StructuredAgentSessionLinkageJournal['visitItemsWithLinkage'],
       itemBody: (itemId: string) => persisted.get(itemId) ?? null,
       epoch: 'test'
-    } as unknown as AgentSessionJournal
+    }) as unknown as AgentSessionJournal
   return { journal, fence: 1, publish: vi.fn() }
 }
 
@@ -179,6 +181,7 @@ describe('claude journal translation — background task rows', () => {
       return appendItem(...args)
     })
     const deferred = createDeferredStructuredAgentSessionEventSink({
+      ...testEventSinkLogging(),
       watermarks: {
         pauseQueuedOperations: 1,
         maxQueuedOperations: 4,
@@ -252,7 +255,7 @@ describe('claude journal translation — background task rows', () => {
 
   it('coalesces an unbound overflow patch and aliased final notification', async () => {
     const persisted = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const translator = createClaudeJournalTranslator({
       sink: deferred.sink,
       fallbackIdPrefix: 'test'
@@ -292,7 +295,7 @@ describe('claude journal translation — background task rows', () => {
 
   it('reconciles an aliased notification after a parentless overflow patch was persisted', async () => {
     const persisted = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind(persistedTarget(persisted))
     const first = createClaudeJournalTranslator({ sink: deferred.sink, fallbackIdPrefix: 'first' })
     fillLiveTaskRows(first)
@@ -353,7 +356,7 @@ describe('claude journal translation — background task rows', () => {
 
   it('resolves a queued restart identity after the sink rebinds', async () => {
     const persisted = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind(persistedTarget(persisted))
 
     const first = createClaudeJournalTranslator({ sink: deferred.sink, fallbackIdPrefix: 'first' })
@@ -371,7 +374,7 @@ describe('claude journal translation — background task rows', () => {
     first.dispose()
     await deferred.drained()
 
-    const restarted = createDeferredStructuredAgentSessionEventSink()
+    const restarted = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const second = createClaudeJournalTranslator({
       sink: restarted.sink,
       fallbackIdPrefix: 'second'
@@ -397,7 +400,7 @@ describe('claude journal translation — background task rows', () => {
 
   it('keeps pending writes from distinct runs when a translator is recreated', async () => {
     const persisted = new Map<string, AgentJournalItemBody>()
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
 
     const first = createClaudeJournalTranslator({ sink: deferred.sink, fallbackIdPrefix: 'first' })
     spawnToolCall(first, 'toolu-first')
@@ -519,7 +522,7 @@ describe('claude journal translation — background task rows', () => {
     const { translator, fallbackRows, taskRowIds, taskRowTexts } = harness()
     playFailedBackgroundCommand(translator)
 
-    // ABLATION: drop `message:system:task_*` from CLAUDE_TYPED_TRANSLATOR_KINDS
+    // ABLATION: drop `message:system:task_*` from TYPED_TRANSLATOR_KINDS
     // and this is `['claude · message:system:task_updated', 'claude ·
     // message:system:task_notification']` — the reported bug exactly.
     expect(fallbackRows()).toEqual([])

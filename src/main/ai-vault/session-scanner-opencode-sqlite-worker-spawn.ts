@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
@@ -15,24 +14,18 @@ import {
   openCodeWslClient,
   openCodeWslPath
 } from './session-scanner-opencode-wsl-client'
+import { findForeignSqliteReaderEntry } from '../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
 
 // Why: resolve the built worker entry + own the process-wide shared client so
 // the client class stays free of Electron (require'd lazily here) and the
 // scanner call sites depend only on the two routing functions below.
 
-const WORKER_ENTRY_FILENAME = 'session-scanner-opencode-sqlite-worker-entry.js'
-
+// The shared foreign SQLite reader worker runs OpenCode reads too.
 export function resolveOpenCodeSqliteWorkerEntryPath(
   runtimeDir = __dirname,
   pathExists: (path: string) => boolean = existsSync
 ): string {
-  const candidates = [
-    join(runtimeDir, WORKER_ENTRY_FILENAME),
-    // Rollup factors this launcher into out/main/chunks when the outer scanner
-    // worker and main entry both import it; worker entries remain in out/main.
-    join(runtimeDir, '..', WORKER_ENTRY_FILENAME)
-  ]
-  return candidates.find(pathExists) ?? candidates[0]!
+  return findForeignSqliteReaderEntry(runtimeDir, pathExists)
 }
 
 function defaultWorkerFactory(): Worker {

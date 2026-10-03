@@ -60,6 +60,11 @@ export class ClaudeOpenTurn {
   }
 
   /** The open turn's row, where a fact about the running turn lands. */
+  /** The submission that opened the open turn, when known (`ClaudeCurrentTurn.openedBy`). */
+  get openedBy(): string | null {
+    return this.current?.openedBy ?? null
+  }
+
   get identity(): AgentJournalItemIdentity | null {
     return this.current ? claudeCurrentTurnIdentity(this.current) : null
   }
@@ -105,12 +110,17 @@ export class ClaudeOpenTurn {
 
   /** Open a turn, ending whichever one was still open. A new turn starting is the
    *  only end the previous one gets when its result never arrives; settling it
-   *  later would sweep THIS turn. */
+   *  later would sweep THIS turn. The replaced turn is recorded superseded: a newer
+   *  request ended it, whoever sent that request. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.settleChildren(this.groupKey)
-      this.publish(this.current, { state: 'interrupted', completedAt: observedAt })
+      this.publish(this.current, {
+        state: 'interrupted',
+        completedAt: observedAt,
+        outcome: 'superseded'
+      })
     }
     this.current = turn
     this.publish(turn)
@@ -123,7 +133,11 @@ export class ClaudeOpenTurn {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.settleChildren(this.groupKey)
-      this.publish(this.current, { state: 'interrupted', completedAt: turn.startedAt })
+      this.publish(this.current, {
+        state: 'interrupted',
+        completedAt: turn.startedAt,
+        outcome: 'superseded'
+      })
     }
     this.current = turn
     this.deps.sink.setActivity?.(null)
@@ -195,7 +209,7 @@ export class ClaudeOpenTurn {
       { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) },
       { publish: false, options: item.options }
     )
-    // Preserve first-work evidence when completion arrives before the journal drains.
+    // Keyed apart, so this never replaces the start's publication while it still waits to run.
     this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
   }
 }

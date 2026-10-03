@@ -37,7 +37,6 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   structuredSessionOperationId: vi.fn(),
   useStructuredAgentSessionOutbox: () => ({
     outbox: [],
-    blockedClientMessageId: null,
     error: null,
     send: vi.fn(),
     retry: vi.fn()

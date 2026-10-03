@@ -285,6 +285,7 @@ export function createAgentCompletionCoordinator(
     consumePendingStampedTailForAgent,
     consumeStampedTailForCurrentCoordinator,
     clearOriginStampedTail: () => identityScope.clearOriginStampedTail(),
+    clearProcessExitCompletion: () => identityScope.clearProcessExitCompletion(),
     recordWorkingBoundary,
     dropPendingTitle
   })

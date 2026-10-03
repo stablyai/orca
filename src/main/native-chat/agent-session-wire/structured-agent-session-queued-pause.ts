@@ -1,20 +1,11 @@
-// Whether the queue is paused, and why — DERIVED, never stored as a flag. The
-// queue is paused when:
-//   - 'stopped': the user's last Stop took effect (its recorded journal
-//     position) and no turn a person asked for has started since — or
-//     'cleared', the same for a /clear's replacement, whose carried cards
-//     start paused; or
-//   - 'restarted': a waiting draft was written by another host process and no
-//     turn a person asked for has started since this conversation opened.
-// A person's turn is a submission whose recorded origin is `client` (a send over
-// the client send RPC, or a card they sent now) that the provider accepted.
-// Orchestration mail, a restart continuation, a host-sent launch prompt and the
-// queue's own drain are `host` and never lift it. An explicit Resume lifts any.
+// Whether the queue is paused, and why — derived from the journal and the cards
+// (`queued-message-pause.ts`), never stored. A Stop's event and a Resume are journal
+// rows; an explicit Resume lifts any pause.
 
 import { randomUUID } from 'node:crypto'
-import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { QueuePauseFact } from '../agent-session-journal/queued-message-pause-table'
+import type { DerivedQueuePause } from '../agent-session-journal/queued-message-pause'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** A per-process id, minted once per host process like the runtime's own
  *  `runtimeId` (`orca-runtime-runtime-id.ts`); a draft written by another
@@ -31,78 +22,50 @@ export function rotateStructuredAgentSessionHostInstanceForTests(): string {
   return hostInstance
 }
 
-type PauseJournal = Pick<AgentSessionJournal, 'queuedMessages' | 'cursor' | 'wroteBeforeOpen'>
+type PauseJournal = Pick<AgentSessionJournal, 'queuedMessages'>
 
-// Both read the reducer's latest accepted person turn (its submission row), so a
-// derivation on every publish costs no scan of the submissions.
-
-function stopEnded(journal: PauseJournal, stop: QueuePauseFact): boolean {
-  const latest = journal.queuedMessages.latestPersonTurnSequence()
-  // Sent after the Stop: a send made before it no longer lifts it, even if its turn starts later.
-  return stop.epoch !== journal.cursor().epoch ? latest > 0 : latest > stop.sequence
-}
-
-function restartPending(journal: PauseJournal): boolean {
-  return journal.queuedMessages
-    .list()
-    .some((row) => row.state === 'waiting' && row.hostInstance !== hostInstance)
-}
-
-function restartEnded(journal: PauseJournal): boolean {
-  const latest = journal.queuedMessages.latestPersonTurnSequence()
-  return latest > 0 && !journal.wroteBeforeOpen(latest)
-}
-
-/** The queue's pause, derived; null when the queue sends on its own. */
-export function structuredQueuePause(journal: PauseJournal): AgentSessionQueuePause | null {
-  const stop = journal.queuedMessages.pause()
-  if (stop && !stopEnded(journal, stop)) {
-    return { reason: stop.reason }
-  }
-  if (restartPending(journal) && !restartEnded(journal)) {
-    return { reason: 'restarted' }
-  }
-  return null
+/** The queue's pauses in force, derived; none when the queue sends on its own. */
+export function structuredQueuePauses(journal: PauseJournal): DerivedQueuePause[] {
+  return journal.queuedMessages.pauses(hostInstance)
 }
 
 /**
- * Every journal publish: retire what a person's started turn already ended — the
- * Stop fact it superseded, and a restart's rows, adopted into this instance. The
- * derivation already reads them as lifted; the write keeps that answer when the
- * handle reopens (the restart's "since this conversation opened" moves) and spares
- * later derivations the submission scan. Bookkeeping: a failure is reported.
+ * Every journal publish: a restart's rows are adopted into this instance once a person's turn
+ * started. The derivation already reads them as lifted; the write keeps that answer when the
+ * handle reopens (its "since this conversation opened" moves). Bookkeeping: a failure is reported.
  */
-export async function retireEndedQueuePause(
+export async function adoptEndedRestartPause(
   sessionId: string,
-  journal: PauseJournal
+  journal: PauseJournal,
+  logger: StructuredAgentSessionLogger
 ): Promise<void> {
   try {
-    const stop = journal.queuedMessages.pause()
-    const retireStop = stop !== null && stopEnded(journal, stop) ? stop : null
-    const adopt = restartPending(journal) && restartEnded(journal)
-    if (retireStop === null && !adopt) {
-      return
+    const { queuedMessages } = journal
+    const restarted = queuedMessages
+      .list()
+      .some((row) => row.state === 'waiting' && row.hostInstance !== hostInstance)
+    if (restarted && queuedMessages.restartEnded()) {
+      await queuedMessages.adopt(hostInstance)
     }
-    await journal.queuedMessages.liftPause({
-      stop: retireStop,
-      adoptInto: adopt ? hostInstance : null
-    })
   } catch (error) {
-    console.warn("[agent-session] a started turn's queue-pause retirement skipped:", {
+    logger.warn("adopting a restart's queued cards after a started turn failed", {
+      scope: 'queue-pause-adoption',
       sessionId,
-      error: error instanceof Error ? error.message : String(error)
+      error
     })
   }
 }
 
-/** Resume: ends whichever pause holds the queue. Returns whether it was paused. */
-export async function resumeStructuredQueue(journal: PauseJournal): Promise<boolean> {
-  if (structuredQueuePause(journal) === null) {
+/** Resume: a journal row that ends a Stop's or a /clear's pause, and adoption of a restart's
+ *  rows. Returns whether the queue was paused. */
+export async function resumeStructuredQueue(
+  journal: Pick<AgentSessionJournal, 'queuedMessages' | 'appendQueueResume'>,
+  fence: number
+): Promise<boolean> {
+  if (structuredQueuePauses(journal).length === 0) {
     return false
   }
-  await journal.queuedMessages.liftPause({
-    stop: journal.queuedMessages.pause(),
-    adoptInto: hostInstance
-  })
+  await journal.appendQueueResume(fence)
+  await journal.queuedMessages.adopt(hostInstance)
   return true
 }

@@ -6,6 +6,7 @@ import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const SESSION = 'status-session'
 const journals = createTrackedJournalOpener()
@@ -20,7 +21,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-it('publishes each provider child even when a replacement has the same startup phase', async () => {
+it('publishes the provider child startup phase, not which child it is', async () => {
   const journal = await journals.open({
     identity: {
       sessionId: SESSION,
@@ -42,6 +43,7 @@ it('publishes each provider child even when a replacement has the same startup p
   setChild({ phase: 'starting', generation: 'child-1', fence: 1 })
   const events: AgentSessionStatusEvent[] = []
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions,
     getRecord: () => null,
     now: () => 1
@@ -49,28 +51,18 @@ it('publishes each provider child even when a replacement has the same startup p
   const dispose = feed.subscribe({ id: 'list-1', emit: (event) => events.push(event) })
   expect(events.at(-1)).toMatchObject({
     type: 'snapshot',
-    sessions: [
-      {
-        hostExecutionOwned: true,
-        hostExecutionPhase: 'starting',
-        hostExecutionChild: { generation: 'child-1', fence: 1 }
-      }
-    ]
+    sessions: [{ hostExecutionOwned: true, hostExecutionPhase: 'starting' }]
   })
+  const published = events.length
   setChild({ phase: 'starting', generation: 'child-2', fence: 2 })
   feed.publish(SESSION, journal)
-  expect(events.at(-1)).toMatchObject({
-    session: {
-      hostExecutionPhase: 'starting',
-      hostExecutionChild: { generation: 'child-2', fence: 2 }
-    }
-  })
+  // A replacement child no session list can tell apart is not re-sent to every subscriber.
+  expect(events).toHaveLength(published)
   setChild({ phase: 'ready', generation: 'child-2', fence: 2 })
   feed.publish(SESSION, journal)
   expect(events.at(-1)).toMatchObject({ session: { hostExecutionPhase: 'ready' } })
   setChild(null)
   feed.publish(SESSION, journal)
   expect(events.at(-1)).not.toMatchObject({ session: { hostExecutionPhase: expect.any(String) } })
-  expect(events.at(-1)).not.toMatchObject({ session: { hostExecutionChild: expect.any(Object) } })
   dispose()
 })

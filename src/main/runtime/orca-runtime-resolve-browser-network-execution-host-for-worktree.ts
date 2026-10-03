@@ -25,6 +25,8 @@ import { getExplicitWorktreeIdSelector } from './runtime-worktree-selection'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 import { WorktreeIdRequiresFullPathError } from './runtime-worktree-lineage-resolution'
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
+import type { Worktree } from '../../shared/worktree/types'
+import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
 
 export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
   protected resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
@@ -88,13 +90,15 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
   }
 
   protected async resolveTerminalWorkspaceLaunchScope(
-    selector: string
+    selector: string,
+    createdWorktree?: Worktree
   ): Promise<TerminalWorkspaceLaunchScope> {
-    return (await this.resolveTerminalWorkspaceLaunchTarget(selector)).scope
+    return (await this.resolveTerminalWorkspaceLaunchTarget(selector, createdWorktree)).scope
   }
 
   protected async resolveTerminalWorkspaceLaunchTarget(
-    selector: string
+    selector: string,
+    createdWorktree?: Worktree
   ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
     const floatingTerminalSelector =
       selector === FLOATING_TERMINAL_WORKTREE_ID ||
@@ -124,7 +128,9 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
     const parsed = parseWorkspaceKey(workspaceSelector)
     const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree =
+      resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
+      (await this.resolveWorktreeSelector(worktreeSelector))
     // Why: `getRepo(id)` is host-blind and the same repo id can exist on local, SSH and runtime
     // hosts. Reading `connectionId` off an arbitrary row reports "local" for a remote worktree and
     // spawns its PTY on the client with the remote cwd (#11163). Loss of a usable answer is

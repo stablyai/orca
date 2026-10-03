@@ -1,0 +1,15 @@
+{
+  "description": "cursor recording at 80x24 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-7: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "8-9: now=ready-strong edge=ready-strong quiet=ready-strong wait=ready@start",
+      "10: now=blocked:agent-approval-prompt edge=blocked:agent-approval-prompt quiet=blocked:agent-approval-prompt wait=blocked:agent-approval-prompt@start"
+    ],
+    "clockless": [
+      "0-7: verdict=pending:closed wait=pending",
+      "8-9: verdict=ready-strong wait=ready@start",
+      "10: verdict=blocked:agent-approval-prompt wait=blocked:agent-approval-prompt@start"
+    ]
+  }
+}

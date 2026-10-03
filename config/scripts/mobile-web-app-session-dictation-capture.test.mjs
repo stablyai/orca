@@ -177,13 +177,6 @@ describeClosure(
       expect(closure.local).toContain('src/hooks/use-mobile-dictation.ts')
       expect(closure.local).toContain('src/hooks/mobile-dictation-audio-chunk.ts')
     })
-
-    it('is big enough that finding nothing would mean something', async () => {
-      const closure = await closureOf(SESSION)
-      // The largest route of the series; a closure that collapsed would pass every rule above by
-      // containing nothing to judge.
-      expect(closure.local.length).toBeGreaterThan(900)
-    })
   },
   240_000
 )

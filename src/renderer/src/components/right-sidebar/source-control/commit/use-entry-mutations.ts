@@ -7,6 +7,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
 import {
   bulkDiscardRuntimeGitPaths,
+  bulkUnstageRuntimeGitPaths,
   discardRuntimeGitPath,
   stageRuntimeGitPath,
   unstageRuntimeGitPath,
@@ -80,8 +81,14 @@ export function useSourceControlEntryMutations({
   )
 
   const handleUnstage = useCallback(
-    (filePath: string): Promise<void> =>
-      runEntryMutation('unstage', filePath, unstageRuntimeGitPath),
+    (filePath: string, oldPath?: string): Promise<void> =>
+      runEntryMutation(
+        'unstage',
+        filePath,
+        oldPath
+          ? (context, path) => bulkUnstageRuntimeGitPaths(context, [path, oldPath])
+          : unstageRuntimeGitPath
+      ),
     [runEntryMutation]
   )
 

@@ -170,9 +170,9 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
-  it('does not infer Ctrl+C for Droid', () => {
+  it.each(['codex', 'droid'] as const)('does not infer Ctrl+C for %s', (agentType) => {
     vi.useFakeTimers()
-    let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'droid' })
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
     const inferInterrupt = vi.fn()
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,

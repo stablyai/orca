@@ -201,7 +201,14 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary).toMatchObject({ hasLiveWorking: false, hasLiveMonitoring: true })
   })
 
-  it('separates interrupted outcomes from clean completion', () => {
+  it.each([
+    ['success', { hasLiveDone: true }],
+    ['failure', { hasFailed: true, hasLiveDone: false }],
+    // A user's Stop reads interrupted; a turn anything else cut short is a fault, like a failure.
+    ['cancellation', { hasInterrupted: true, hasLiveDone: false }],
+    ['interruption', { hasFailed: true, hasInterrupted: false, hasLiveDone: false }],
+    ['unconfirmed', { hasUnconfirmed: true, hasLiveDone: false }]
+  ] as const)('flags a %s outcome apart from the others', (outcome, flags) => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const summary = selectWorktreeAgentActivitySummary(
@@ -212,7 +219,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
           [paneKey]: makeAgentStatusEntry({
             paneKey,
             state: 'done',
-            interrupted: true
+            mainAgent: { state: 'done', outcome, stateStartedAt: 1_000 }
           })
         },
         migrationUnsupportedByPtyId: {},
@@ -222,7 +229,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       'repo::/wt-1'
     )
 
-    expect(summary).toMatchObject({ hasInterrupted: true, hasLiveDone: false })
+    expect(summary).toMatchObject(flags)
   })
 
   it('separates a failed outcome from clean completion and from a cancellation', () => {

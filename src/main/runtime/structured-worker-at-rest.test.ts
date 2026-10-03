@@ -189,7 +189,7 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
     const handle = resource.terminal_handle
     const recipients = () => listAddressableStructuredWorkers(db)
     // At rest, its dispatch abandoned: still a recipient, as a terminal worker left running is.
-    db.abandonWorkerDispatch(dispatch.id)
+    db.abandonWorkerDispatch(dispatch.id, 'epoch_test')
     const worktreeGroup = () =>
       resolveGroupAddress('@worktree:wt_1', 'term_sender', recipients(), () => 'idle')
     expect(worktreeGroup()).toEqual([handle])

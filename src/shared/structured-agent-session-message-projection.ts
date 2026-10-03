@@ -2,8 +2,10 @@ import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-ses
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { agentJournalItemPosition } from './agent-session-journal-position'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
+import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
 import type { NativeChatMessage } from './native-chat-types'
 import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
+import { structuredAgentSessionEntryHeldForRetry } from './structured-agent-session-outbox-admission'
 import { reconcileStructuredAgentSessionOutboxWithQueue } from './structured-agent-session-draft-hand-off'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 
@@ -47,7 +49,8 @@ export function projectStructuredAgentSessionMessages(
     }
   }
   return [
-    ...delivered,
+    // After the held sends leave: they are drawn after the conversation, never inside a run.
+    ...collapseProviderRetryRuns(delivered),
     ...held,
     ...optimistic
       .filter((entry) => !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)))
@@ -60,6 +63,9 @@ export function projectStructuredAgentSessionMessages(
           source: 'transcript',
           timestamp: entry.queuedAt,
           blocks: entry.body.blocks,
+          ...(entry.state === 'rejected' || structuredAgentSessionEntryHeldForRetry(entry)
+            ? { unsent: true as const }
+            : {}),
           // A send the journal recorded before refusing it keeps its place there.
           ...(recorded ? { journalPosition: agentJournalItemPosition(recorded) } : {})
         }

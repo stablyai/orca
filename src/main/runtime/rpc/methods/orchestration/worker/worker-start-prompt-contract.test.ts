@@ -213,7 +213,6 @@ describe('orchestration worker-start prompt contract', () => {
     expect(persisted.getTask(harness.taskId)?.status).toBe('dispatched')
     expect(persisted.getDispatchContextById(dispatchId)).toMatchObject({
       status: 'dispatched',
-      capability_hash: expect.any(String),
       capability_revoked_at: null
     })
     expect(persisted.getWorkerDispatch(dispatchId)).toMatchObject({
@@ -276,7 +275,6 @@ describe('orchestration worker-start prompt contract', () => {
     expect(await pending).toMatchObject({ ok: true, result: { state: 'outcome_unknown' } })
     expect(harness.db.findActiveDispatchForAssignee(harness.handle)).toMatchObject({
       status: 'pending',
-      capability_hash: expect.any(String),
       capability_revoked_at: null
     })
     expect(harness.submittedTurns()).toBe(1)
@@ -305,7 +303,7 @@ describe('orchestration worker-start prompt contract', () => {
     expect(harness.db.getQuestion(questionId)?.status).toBe('pending')
   })
 
-  it('reports a swallowed Enter as start_unknown while keeping the worker and its capability', async () => {
+  it('reports a swallowed Enter as start_unknown while keeping the worker reportable', async () => {
     vi.useFakeTimers()
     const harness = await createPromptContractHarness('swallowed')
     const pending = harness.dispatcher.dispatch(harness.request)
@@ -343,9 +341,8 @@ describe('orchestration worker-start prompt contract', () => {
     expect(persisted.getDispatchContextById(dispatchId)).toMatchObject({
       status: 'pending',
       last_failure: null,
-      // The capability survives so a worker that recovers can still report; worker-report
+      // Lifecycle stays open so a worker that recovers can still report; worker-report
       // settlement reconnects a start_unknown worker through 'ready'.
-      capability_hash: expect.any(String),
       capability_revoked_at: null
     })
     expect(persisted.getWorkerDispatch(dispatchId)).toMatchObject({

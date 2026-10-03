@@ -146,10 +146,12 @@ describe('a malformed row', () => {
       .snapshot()
       .items.map((entry) => entry.body)
       .find((entry) => entry.kind === 'status')
-    expect(disclosure).toMatchObject({ kind: 'status' })
-    expect(disclosure && 'text' in disclosure ? disclosure.text : '').toContain(
-      '1 journal line could not be read'
-    )
+    // Named for the client to word, with English for a client that can't.
+    expect(disclosure).toEqual({
+      kind: 'status',
+      text: "Part of this chat's history couldn't be loaded.",
+      presentation: 'history-repaired'
+    })
   })
 })
 

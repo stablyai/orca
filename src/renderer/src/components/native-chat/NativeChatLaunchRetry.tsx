@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
 import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session-refusal-notice'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
+import { joinSentences } from '../../../../shared/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 
 export function NativeChatLaunchRetry({
@@ -41,8 +42,7 @@ export function NativeChatLaunchRetry({
   return (
     <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-1 text-xs text-destructive">
       <span className="min-w-0 break-words">
-        {message}
-        {cause ? ` ${cause}` : null}
+        {cause ? joinSentences([message, cause]) : message}
       </span>
       <Button type="button" variant="ghost" size="xs" onClick={onRetry}>
         <RotateCcw className="size-3" />

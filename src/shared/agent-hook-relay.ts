@@ -1,3 +1,4 @@
+import type { AgentProcessPresence } from './agent-process-presence'
 // Why: defines the wire shape carried by the JSON-RPC `agent.hook` notification
 // the relay sends to Orca. Consumed by `src/relay/agent-hook-server.ts` (which
 // produces it after the shared listener parses an HTTP POST) and by
@@ -77,6 +78,7 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
   paneKey: string
+  agentPresence?: AgentProcessPresence
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
   tabId?: string
@@ -121,7 +123,20 @@ export type AgentHookRelayEnvelope = {
   version?: string
   /** Pre-normalized status payload from the relay's `normalizeHookPayload`.
    *  Orca's `ingestRemote` validates it again at the SSH trust boundary. */
+  evidenceAgeMs?: number
   payload: ParsedAgentStatusPayload
+}
+
+/** Older clients ignore the null payload; newer clients clear only the selected projection. */
+export type AgentHookUnavailableEnvelope = {
+  source: 'opencode' | 'opencode2'
+  paneKey: string
+  tabId?: string
+  worktreeId?: string
+  launchToken?: string
+  connectionId: null
+  statusUnavailable: true
+  payload: null
 }
 
 /** JSON-RPC notification method name carried over the relay control channel. */

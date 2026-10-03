@@ -19,7 +19,7 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
 import { classifyDispatchRejection } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { readAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
 import { isMacPlatform } from './native-chat-shortcut'
@@ -47,7 +47,7 @@ export function queuedMessageCardCaption(card: QueuedMessageCard): string | null
           { kind: 'rejected', reason },
           // The card's own Send is the retry, so the words leave out sending again.
           { retryControl: true },
-          readAgentSessionFailureFact(card.returnedRejection)
+          readWholeAgentSessionFailureFact(card.returnedRejection)
         )
       )
     }

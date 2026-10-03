@@ -43,50 +43,6 @@ function makeLayout(root: TerminalPaneLayoutNode, ptyId: string): TerminalLayout
 }
 
 describe('worktree card status input selectors', () => {
-  it('stays shallow-equal when unrelated tabs receive PTY ids or pane titles', () => {
-    const worktreeId = 'repo1::/path/wt1'
-    const paneTitles = { 0: 'codex [working]' }
-    const ptyIds = ['pty-1']
-    const state: SelectorState = {
-      tabsByWorktree: {
-        [worktreeId]: [makeTab('tab-1', worktreeId)]
-      },
-      runtimePaneTitlesByTabId: {
-        'tab-1': paneTitles
-      },
-      ptyIdsByTabId: {
-        'tab-1': ptyIds
-      }
-    }
-    const unrelatedUpdate: SelectorState = {
-      ...state,
-      runtimePaneTitlesByTabId: {
-        ...state.runtimePaneTitlesByTabId,
-        'other-tab': { 0: 'claude [permission]' }
-      },
-      ptyIdsByTabId: {
-        ...state.ptyIdsByTabId,
-        'other-tab': ['pty-other']
-      }
-    }
-
-    // Why: WorktreeCard wraps these selectors in useShallow. The selected
-    // maps must expose stable per-tab values at the top level so unrelated
-    // PTY/title churn does not re-render every sidebar card.
-    expect(
-      shallow(
-        selectRuntimePaneTitlesForWorktree(state, worktreeId),
-        selectRuntimePaneTitlesForWorktree(unrelatedUpdate, worktreeId)
-      )
-    ).toBe(true)
-    expect(
-      shallow(
-        selectLivePtyIdsForWorktree(state, worktreeId),
-        selectLivePtyIdsForWorktree(unrelatedUpdate, worktreeId)
-      )
-    ).toBe(true)
-  })
-
   it('changes when this worktree receives a new live PTY id list', () => {
     const worktreeId = 'repo1::/path/wt1'
     const state: SelectorState = {

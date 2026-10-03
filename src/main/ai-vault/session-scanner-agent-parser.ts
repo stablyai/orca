@@ -1,3 +1,4 @@
+import { parseQoderSessionFile } from './session-scanner-qoder-parser'
 import { parseCodebuddySessionFile } from './session-scanner-codebuddy-parser'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
@@ -88,6 +89,8 @@ export async function parseAgentSessionFile(
   signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   switch (candidate.agent) {
+    case 'qoder':
+      return parseQoderSessionFile(candidate.file, platform, messages)
     case 'codebuddy':
       return parseCodebuddySessionFile(candidate.file, platform, messages)
     case 'claude':

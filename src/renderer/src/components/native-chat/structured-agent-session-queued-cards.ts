@@ -9,10 +9,11 @@ import {
   structuredAgentSessionEntryAsksToQueue,
   type StructuredAgentSessionQueueDelivery
 } from '../../../../shared/structured-agent-session-outbox-delivery'
+import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import {
   admitStructuredAgentSessionOutboxEntry,
-  type StructuredAgentSessionOutboxEntry
-} from '../../../../shared/structured-agent-session-outbox'
+  structuredAgentSessionEntryHeldForRetry
+} from '../../../../shared/structured-agent-session-outbox-admission'
 
 /** Why a card is not on its way right now; decides the caption under the text. */
 export type QueuedMessageCardHold =
@@ -103,23 +104,24 @@ export function newestSteerableQueuedMessageCard(
  * read from what its request carries — otherwise it paints
  * in the transcript until the queued answer retires it. A plain send stays a bubble. From
  * the entry the drain is stopped on (read through the drain's own rule), nothing is on its
- * way: those stay bubbles so their text is visible beside the Retry row.
+ * way, nor is one held for its Retry: those stay bubbles so their text is visible beside the
+ * Retry row.
  */
 export function outboxOutsideQueuedCards(
   outbox: readonly StructuredAgentSessionOutboxEntry[],
   heldIds: readonly string[],
   isWorking: boolean,
-  blockedClientMessageId: string | null,
   host: StructuredAgentSessionQueueDelivery
 ): readonly StructuredAgentSessionOutboxEntry[] {
   const held = new Set(heldIds)
-  const admission = admitStructuredAgentSessionOutboxEntry(outbox, blockedClientMessageId)
+  const admission = admitStructuredAgentSessionOutboxEntry(outbox)
   const stalledFrom = admission.state === 'blocked' ? outbox.indexOf(admission.entry) : -1
   const next = outbox.filter((entry, index) => {
     const onItsWay =
       isWorking &&
       (stalledFrom === -1 || index < stalledFrom) &&
       (entry.state === 'queued' || entry.state === 'dispatching') &&
+      !structuredAgentSessionEntryHeldForRetry(entry) &&
       structuredAgentSessionEntryAsksToQueue(entry, host)
     return !held.has(entry.clientMessageId) && !onItsWay
   })

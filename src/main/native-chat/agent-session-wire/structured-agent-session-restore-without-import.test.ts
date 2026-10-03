@@ -38,6 +38,8 @@ import { createStructuredAgentSessionConversationLifetime } from './structured-a
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import { createStructuredAgentSessionRestartOfferWithdrawal } from './structured-agent-session-restart-offer-withdrawal'
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const { readOnlyOpens, openReadOnly } = vi.hoisted(() => ({
   readOnlyOpens: new Array<string>(),
@@ -216,7 +218,7 @@ type LifetimeHost = Parameters<typeof createStructuredAgentSessionConversationLi
 function conversations(): StructuredAgentSessionConversations {
   return new StructuredAgentSessionConversations({
     deliver: () => undefined,
-    onDeliveryError: () => undefined,
+    logger: recordingStructuredAgentSessionLogger().logger,
     now: () => clock
   })
 }
@@ -228,12 +230,18 @@ async function restore(sessionIds: readonly string[]) {
     getRecord: (sessionId: string) => recordFor(sessionId),
     listRecords: () => sessionIds.map(recordFor)
   } as unknown as AgentSessionRecordStore
-  const deps = { store, adapter: {}, journalDatabase: openTestJournalHostDatabase(root) }
+  const log = recordingStructuredAgentSessionLogger()
+  const deps = {
+    store,
+    adapter: {},
+    journalDatabase: openTestJournalHostDatabase(root),
+    logger: log.logger
+  }
   await restoreStructuredAgentSessionsOnRestart({
     openDeps: deps,
     records: sessionIds.map(recordFor),
-    reconcile: async () => null,
-    resolveRecovery: async () => undefined,
+    reconcile: async () => true,
+    resolveRecovery: async () => true,
     serialize: async (_sessionId, task) => task(),
     hasSession: (sessionId) => sessions.has(sessionId),
     onReadable: (sessionId, opened) => {
@@ -250,10 +258,11 @@ async function restore(sessionIds: readonly string[]) {
       serialize: async (_sessionId, task) => task(),
       open,
       deliveryActive: () => false,
-      closeStatus: () => undefined
+      closeStatus: () => undefined,
+      readChildWork: () => undefined
     })
   const lifetime = lifetimeOver(sessions, async (sessionId) => sessions.get(sessionId) ?? null)
-  return { sessions, lifetime, lifetimeOver }
+  return { sessions, lifetime, lifetimeOver, log }
 }
 
 function texts(items: readonly { body: unknown }[]): string {
@@ -376,6 +385,7 @@ describe('startup restore of chats still in their per-chat files', () => {
 
     const { sessions } = await restore(['chat-a'])
     const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
+      logger: createStructuredAgentSessionLogger(),
       sessions,
       now: () => clock,
       enqueue: (operation) => operation()
@@ -425,12 +435,11 @@ describe('startup restore of chats still in their per-chat files', () => {
     'refuses a read of the chat restore %s when its copy meets damage, never with the storage text',
     async (reach) => {
       await seedLegacyChat('chat-a')
-      const { sessions, lifetime, lifetimeOver } = await restore(['chat-a'])
+      const { sessions, lifetime, lifetimeOver, log } = await restore(['chat-a'])
       const restored = sessions.get('chat-a')!
       await rm(legacyDirFor('chat-a'), { recursive: true, force: true })
       await mkdir(legacyDirFor('chat-a'), { recursive: true })
       await writeFile(legacyFile('chat-a'), 'not a database, and never was one')
-      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       const reader =
         reach === 'listed' ? lifetime : lifetimeOver(conversations(), async () => restored)
 
@@ -441,6 +450,12 @@ describe('startup restore of chats still in their per-chat files', () => {
         message: 'agent_session_journal_unreadable',
         refusal: { details: { reason: 'journalCorrupt' } }
       })
+      // The storage text the reader never sees goes to the host's log.
+      expect(log.entries.filter((entry) => entry.fields.scope === 'open-for-read')).toEqual([
+        expect.objectContaining({
+          fields: { scope: 'open-for-read', sessionId: 'chat-a', error: expect.any(Error) }
+        })
+      ])
     }
   )
 
@@ -459,6 +474,38 @@ describe('startup restore of chats still in their per-chat files', () => {
     expect(stored.slice(0, rows.length)).toEqual(rows)
     expect(stored).toHaveLength(rows.length + 1)
     expect(importCount()).toBe(1)
+  })
+
+  it("copies a chat before a Stop's event, which lands before the turn's end and the kill after it", async () => {
+    const rows = await seedLegacyChat('chat-a')
+    const { sessions } = await restore(['chat-a'])
+    const journal = sessions.get('chat-a')!.journal
+    expect(journal.importPending).toBe(true)
+    const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+
+    // In the Stop's order: its event, then the stopped turn's end, then a row the kill writes.
+    const [stopped, ended, killed] = await Promise.all([
+      journal.appendStopEvent({ reason: 'user-stop' }, 1),
+      journal.appendItem(
+        { provider: 'codex', threadId: 'thread-chat-a', turnId: 't', ordinal: 9 },
+        { kind: 'turn', turnId: 't', state: 'interrupted', startedAt: 1 },
+        scope
+      ),
+      journal.appendItem(
+        { provider: 'codex', threadId: 'thread-chat-a', turnId: 't', ordinal: 10 },
+        { kind: 'status', text: 'the agent ended' },
+        scope
+      )
+    ])
+
+    expect(readTestJournalRows(hostDb(), 'chat-a', rows[0]!.epoch).slice(0, rows.length)).toEqual(
+      rows
+    )
+    expect([stopped.sequence, ended.cursor.sequence, killed.cursor.sequence]).toEqual([
+      rows.length + 1,
+      rows.length + 2,
+      rows.length + 3
+    ])
   })
 
   it("copies a chat before its first queued message, which lands as that chat's draft", async () => {

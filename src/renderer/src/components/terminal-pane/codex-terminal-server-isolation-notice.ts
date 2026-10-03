@@ -49,6 +49,14 @@ function didNoticeInputsChange(state: CodexNoticeState, previous: CodexNoticeSta
   )
 }
 
+const NOTICE_TOAST_ID = 'codex-terminal-server-isolation-notice'
+
+/** For a pane whose Codex shares the server anyway: its banner says so, and this toast would contradict it. */
+export function retireCodexTerminalServerIsolationNotice(): void {
+  useAppStore.getState().markCodexTerminalServerIsolationNoticeSeen()
+  toast.dismiss(NOTICE_TOAST_ID)
+}
+
 function showCodexTerminalServerIsolationNotice(): void {
   // Why mark before showing: seen means shown, so a quit or reload never repeats it.
   useAppStore.getState().markCodexTerminalServerIsolationNoticeSeen()
@@ -59,7 +67,7 @@ function showCodexTerminalServerIsolationNotice(): void {
     ),
     {
       // Why a stable id: a late sync that resets the flag can't stack a second toast.
-      id: 'codex-terminal-server-isolation-notice',
+      id: NOTICE_TOAST_ID,
       description: translate(
         'terminal.codexTerminalServerIsolationNotice.description',
         'This makes agent status more reliable. You can turn it back on in Settings.'

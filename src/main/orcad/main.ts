@@ -39,7 +39,10 @@ try {
     ) {
       void runOrcadProfilePreflight(process.argv[3], {
         nativeFeatures: flag === ORCAD_PROFILE_PREFLIGHT_FLAG
-      }).catch(failStartup)
+      })
+        // Why exit: the owner reads to EOF, so a lingering native handle must not hold the probe open.
+        .then(() => process.stdout.write('', () => process.exit(0)))
+        .catch(failStartup)
     } else {
       void preflightBundledOrcadStartup()
         .then(() => {

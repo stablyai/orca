@@ -89,9 +89,10 @@ export async function launchStructuredWorktreeSession(
     if (launch) {
       primaryTabId = launch.tab.id
     }
-  } catch {
+  } catch (error) {
     // Why: nothing awaits this creation's caller, so an escaped throw would strand the panel
-    // mid-create. Report it the way a failed launch already does; the launch layer toasts it.
+    // mid-create.
+    console.error('worktree create: structured chat tab failed to open', args.worktreeId, error)
     return { ...settled, activation, primaryTabId }
   } finally {
     unsubscribe()

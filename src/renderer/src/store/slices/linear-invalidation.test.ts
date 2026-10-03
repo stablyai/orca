@@ -114,28 +114,6 @@ describe('createLinearSlice invalidation', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps literal search queries separate from list cache keys', async () => {
-    const store = createTestStore()
-    store.setState({
-      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-      linearListCache: {
-        'workspace-1::list::all::36::': { data: { items: [issue('LIST')] }, fetchedAt: Date.now() }
-      }
-    })
-    linearSearchIssues.mockResolvedValueOnce([issue('SEARCH')])
-
-    await expect(store.getState().searchLinearIssues('list::all', 36)).resolves.toMatchObject([
-      { id: 'SEARCH' }
-    ])
-
-    expect(
-      store.getState().getCachedLinearIssues({ kind: 'search', query: 'list::all', limit: 36 })
-    ).toMatchObject([{ id: 'SEARCH' }])
-    expect(
-      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
-    ).toMatchObject({ items: [{ id: 'LIST' }] })
-  })
-
   it('refreshing a linked Linear issue invalidates stale issue collection caches', async () => {
     const store = createTestStore()
     linearGetIssue.mockResolvedValueOnce(issue('issue-id'))

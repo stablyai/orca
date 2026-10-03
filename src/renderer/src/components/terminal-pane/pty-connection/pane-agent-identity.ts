@@ -120,12 +120,30 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   ): void => {
     const dropStatus = session.deferredCommandFinishedStatusDrop
     const reconcile = session.deferredConfirmedShellReconcile
-    session.deferredCommandFinishedStatusDrop = null
     session.deferredConfirmedShellReconcile = null
-    dropStatus?.()
-    if (options.confirmedShell) {
-      reconcile?.()
+    if (options.confirmedShell || !dropStatus) {
+      session.deferredCommandFinishedStatusDrop = null
+      if (options.confirmedShell) {
+        dropStatus?.()
+        reconcile?.()
+      }
+      return
     }
+    // Why: only a pane whose agent process the host can check keeps its row on an unanswered read;
+    // every other pane keeps today's cleanup until the renderer reads the owner record (step 2).
+    // The drop stays armed while main answers, so a new command start still cancels it.
+    const dropUnlessVerifiable = (verifiable: boolean): void => {
+      if (session.deferredCommandFinishedStatusDrop !== dropStatus) {
+        return
+      }
+      session.deferredCommandFinishedStatusDrop = null
+      if (!verifiable) {
+        dropStatus()
+      }
+    }
+    void Promise.resolve(window.api?.agentStatus?.hasVerifiableAgentProcess?.(session.cacheKey))
+      .then((verifiable) => dropUnlessVerifiable(verifiable === true))
+      .catch(() => dropUnlessVerifiable(false))
   }
   const isRemotePtyId = (id: string): boolean =>
     Boolean(isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id))

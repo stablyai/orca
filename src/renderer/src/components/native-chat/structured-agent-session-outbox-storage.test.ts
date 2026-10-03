@@ -7,8 +7,13 @@ import {
 } from '../../../../shared/structured-agent-session-outbox'
 import {
   hasUndeliveredStructuredAgentSessionOutbox,
+  appendStructuredAgentSessionOutboxMessage,
+  commitStructuredAgentSessionOutbox,
+  getStructuredAgentSessionOutbox,
+  mutateStructuredAgentSessionLaunchPrompt,
   readOutbox,
   resetUndeliveredStructuredAgentSessionOutboxForTests,
+  subscribeToStructuredAgentSessionOutbox,
   subscribeToUndeliveredStructuredAgentSessionOutbox,
   writeOutbox
 } from './structured-agent-session-outbox-storage'
@@ -204,5 +209,79 @@ describe("a saved message's last failure", () => {
       },
       { kind: 'rejected', reason: 'Nope.' }
     ])
+  })
+})
+
+describe('the session outbox store', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('shows an open chat a message queued from elsewhere', () => {
+    const listener = vi.fn()
+    const release = subscribeToStructuredAgentSessionOutbox('session-1', () => [], listener)
+
+    const queued = appendStructuredAgentSessionOutboxMessage('session-1', 'review notes')
+
+    expect(listener).toHaveBeenCalledOnce()
+    expect(getStructuredAgentSessionOutbox('session-1')).toEqual([queued])
+    expect(readOutbox('session-1')).toEqual([queued])
+    release()
+  })
+
+  it('queues behind an in-flight send without disturbing it', () => {
+    writeOutbox('session-1', [{ ...entry('session-1', 'in-flight'), state: 'dispatching' }])
+
+    appendStructuredAgentSessionOutboxMessage('session-1', 'review notes')
+
+    expect(readOutbox('session-1', { recoverDispatching: false }).map((e) => e.state)).toEqual([
+      'dispatching',
+      'queued'
+    ])
+  })
+
+  it('keeps the open outbox when a required save fails', () => {
+    const release = subscribeToStructuredAgentSessionOutbox('session-1', () => [], vi.fn())
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('quota')
+    })
+
+    expect(appendStructuredAgentSessionOutboxMessage('session-1', 'review notes')).toBeNull()
+    expect(getStructuredAgentSessionOutbox('session-1')).toEqual([])
+    setItem.mockRestore()
+    release()
+  })
+
+  it('releases the held copy with its last subscriber', () => {
+    const release = subscribeToStructuredAgentSessionOutbox(
+      'session-1',
+      () => [{ ...entry('session-1', 'loaded'), state: 'unconfirmed' }],
+      vi.fn()
+    )
+    expect(getStructuredAgentSessionOutbox('session-1')[0]?.state).toBe('unconfirmed')
+
+    release()
+
+    expect(getStructuredAgentSessionOutbox('session-1')).toEqual([])
+  })
+
+  it('lets a launch settlement read its own send as unconfirmed and leaves other sends alone', () => {
+    const release = subscribeToStructuredAgentSessionOutbox('session-1', () => [], vi.fn())
+    commitStructuredAgentSessionOutbox('session-1', [
+      { ...entry('session-1', 'launch'), state: 'dispatching' },
+      { ...entry('session-1', 'composer'), state: 'dispatching' }
+    ])
+    const seen: string[] = []
+
+    mutateStructuredAgentSessionLaunchPrompt('session-1', 'launch', (current) => {
+      seen.push(current.state)
+      return null
+    })
+
+    expect(seen).toEqual(['unconfirmed'])
+    expect(getStructuredAgentSessionOutbox('session-1')).toMatchObject([
+      { clientMessageId: 'composer', state: 'dispatching' }
+    ])
+    release()
   })
 })

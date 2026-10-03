@@ -10,6 +10,7 @@
     "../src/renderer/src/lib/skill-freshness-display-status.ts",
     "../src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts",
     "../src/renderer/src/components/native-chat/structured-agent-question-projection.ts",
+    "../src/renderer/src/components/native-chat/native-chat-subagent-delegation.ts",
     "../src/preload/**/*",
     "../src/shared/**/*",
     "../src/relay/**/*",

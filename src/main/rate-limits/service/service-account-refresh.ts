@@ -38,6 +38,15 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     })
   }
 
+  invalidateZcodeCredentialState(): void {
+    this.zcodeFetchGeneration += 1
+    // Why: saving/forgetting the plan key can race an in-flight fetch; clear the visible snapshot before any old-key result returns.
+    this.updateState({
+      ...this.state,
+      zcode: this.withFetchingStatus(null, 'zcode')
+    })
+  }
+
   async refreshForCodexAccountChange(
     outgoingAccountId?: string | null,
     target?: CodexAccountSelectionTarget

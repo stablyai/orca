@@ -139,7 +139,7 @@ describe('ready-for-review required check reuse', () => {
     expect(detector.steps[0].with['sparse-checkout']).toContain(
       '/config/scripts/pr-ready-check-reuse.mjs'
     )
-    for (const job of ['native_cache_changed', ...PR_CHECK_JOBS]) {
+    for (const job of PR_CHECK_JOBS) {
       expect(detector.outputs[job]).toBe(
         `\${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.${job} }}`
       )

@@ -22,6 +22,10 @@ import {
   claudeApiRetryRowBody,
   createClaudeApiRetryRuns
 } from './claude-api-retry-row'
+import {
+  CLAUDE_INFORMATIONAL_FRAME_KIND,
+  claudeInformationalRowBody
+} from './claude-informational-row'
 
 export function claudeProviderFrameKind(message: Record<string, unknown>): string {
   const type = claudeText(message.type) ?? 'unknown'
@@ -51,11 +55,12 @@ export function isSettledClaudeResultKind(kind: string): boolean {
  * would only be noise.
  */
 export function claudeResultFailure(
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
+  leftToStop = false
 ): { text: string | null } | null {
   // A cancellation is not a fault and earns no error row; the outcome classifier
   // owns that distinction so this reader cannot drift from the turn's verdict.
-  if (claudeResultOutcome(message) !== 'failure') {
+  if (claudeResultOutcome(message, leftToStop) !== 'failure') {
     return null
   }
   const result = claudeText(message.result)?.trim()
@@ -142,6 +147,21 @@ export function createClaudeProviderFrameFallback(
           clientMessageId: `provider-retry:claude:${acquisitionId}:${retryRun(retrying)}`
         } as const
         const body = claudeApiRetryRowBody(retrying)
+        sink.appendItem(identity, body, stamp?.(identity, body) ?? { turnScope: turnScope() })
+        sink.publish()
+        return true
+      }
+      if (kind === CLAUDE_INFORMATIONAL_FRAME_KIND) {
+        // Never the frame as a row: a warning in its own words, any other level nothing.
+        const body = claudeInformationalRowBody(claudeRecord(payload) ?? {})
+        if (!body) {
+          return false
+        }
+        beforeAppend?.()
+        const identity = {
+          provider: 'orca',
+          clientMessageId: `provider-frame:claude:${acquisitionId}:${sequence}`
+        } as const
         sink.appendItem(identity, body, stamp?.(identity, body) ?? { turnScope: turnScope() })
         sink.publish()
         return true

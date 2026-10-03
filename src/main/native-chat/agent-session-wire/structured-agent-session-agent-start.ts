@@ -29,6 +29,10 @@ import { attachStructuredAgentSessionUnderSerialize } from './structured-agent-s
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
 import {
+  finishOwedStructuredAgentSessionWindDownUnderSerialize,
+  type StructuredAgentSessionLifetimeContext
+} from './structured-agent-session-host-lifetime'
+import {
   structuredAgentSessionResumeOperationId,
   structuredAgentSessionResumeParams
 } from './structured-agent-session-resume-eligibility'
@@ -49,6 +53,48 @@ export type StructuredAgentSessionResumeOutcome =
 const AGENT_START_CALLER_KEY = 'trusted-local:agent-start'
 
 /**
+ * Every operation that reaches the provider finishes a stop an earlier attempt left owed first: the
+ * child that stop could not prove gone takes no input, and none may start beside it. Still
+ * unproven, the operation is refused with the exit `unverifiable`, never assumed `exited`.
+ */
+export async function finishOwedStructuredAgentSessionStop(
+  context: StructuredAgentSessionLifetimeContext,
+  sessionId: string
+): Promise<StructuredAgentSessionResumeOutcome> {
+  if (await finishOwedStructuredAgentSessionWindDownUnderSerialize(context, sessionId)) {
+    return { ok: true }
+  }
+  return {
+    ok: false,
+    refusal: refuse(
+      'agent_session_ownership_unknown',
+      { reason: 'previousExitUnverifiable', ownerVerdict: 'unverifiable' },
+      "Orca could not prove this chat's previous agent process exited."
+    )
+  }
+}
+
+/** The same, for an operation the running child performs, which starts none: only an exit still
+ *  unproven, its child still on record, holds it back. A proven exit owes only bookkeeping, which
+ *  gates no such operation: its retry was reported, and the operation goes on as with none owed. */
+export async function finishOwedStructuredAgentSessionStopForProviderWrite(
+  context: StructuredAgentSessionLifetimeContext,
+  sessionId: string
+): Promise<StructuredAgentSessionResumeOutcome> {
+  const settled = await finishOwedStructuredAgentSessionStop(context, sessionId)
+  return settled.ok || context.sessions.get(sessionId)?.child ? settled : { ok: true }
+}
+
+export function isStructuredAgentSessionPreviousExitUnverifiable(
+  refusal: AgentSessionWireRefusal
+): boolean {
+  return (
+    refusal.code === 'agent_session_ownership_unknown' &&
+    refusal.details?.reason === 'previousExitUnverifiable'
+  )
+}
+
+/**
  * Gives the session a provider child if it has none, for a caller inside its serialize — which is
  * what makes "if it has none" exact: two askers run this in turn, and the second finds the first
  * one's child. A failed start leaves the next asker to make its own.
@@ -58,6 +104,10 @@ export async function ensureStructuredAgentSessionAgent(
   sessionId: string,
   startedFor?: string
 ): Promise<StructuredAgentSessionResumeOutcome> {
+  const settled = await finishOwedStructuredAgentSessionStop(context, sessionId)
+  if (!settled.ok) {
+    return settled
+  }
   if (context.sessions.get(sessionId)?.child) {
     return { ok: true }
   }
@@ -79,7 +129,11 @@ export function ensureStructuredAgentSessionAgentForOperation(
 ): Promise<StructuredAgentSessionResumeOutcome> {
   return ensureStructuredAgentSessionAgent(context, sessionId).catch((error: unknown) => {
     // The error is Orca's own and goes to the log; the refusal says only that the start failed.
-    console.warn('[agent-session] starting the agent for an operation failed:', error)
+    context.deps.logger.warn('starting the agent for an operation failed', {
+      scope: 'operation-agent-start',
+      sessionId,
+      error
+    })
     return {
       ok: false,
       refusal: refuseUnclassified(

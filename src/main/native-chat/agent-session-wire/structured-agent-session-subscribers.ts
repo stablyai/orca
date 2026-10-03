@@ -103,7 +103,8 @@ export class AgentSessionSubscribers {
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
     }
-    return () => this.close(input.sessionId, input.id)
+    const { sessionId, id } = subscriber
+    return () => this.close(sessionId, id)
   }
 
   close(sessionId: string, id: string): void {
@@ -203,6 +204,24 @@ export class AgentSessionSubscribers {
         hostNow
       })
       subscriber.fence = fence
+    }
+  }
+
+  /** Re-sends the `/` surface to each subscriber whose view of it is out of date. */
+  republishCommands(): void {
+    const hostNow = this.now()
+    for (const sessionId of this.bySession.keys()) {
+      for (const subscriber of this.subscribers(sessionId)) {
+        if ((this.hooks.readCommands?.(sessionId) ?? null) !== subscriber.commands) {
+          this.emit(subscriber, {
+            type: 'batch',
+            sessionId,
+            batch: emptyAgentSessionBatch(subscriber.cursor),
+            fence: subscriber.fence,
+            hostNow
+          })
+        }
+      }
     }
   }
 

@@ -6,14 +6,16 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { ensureStructuredAgentSessionAgentForOperation } from './structured-agent-session-agent-start'
 import { recordStructuredAgentSessionOptionIntent } from './structured-agent-session-options-read'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const SESSION = 'session-1'
 
 describe('an operation whose agent start throws', () => {
   it('is refused as a failed restart, with the error only in the log', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const log = recordingStructuredAgentSessionLogger()
     const cause = new Error('EACCES: permission denied, open /Users/me/.orca/leases.json')
     const context = {
+      deps: { logger: log.logger },
       sessions: new Map(),
       reconcileLeases: () => Promise.reject(cause)
     }
@@ -31,8 +33,9 @@ describe('an operation whose agent start throws', () => {
         message: "The agent couldn't restart."
       }
     })
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('starting the agent'), cause)
-    warn.mockRestore()
+    expect(log.entries.map((entry) => entry.fields)).toEqual([
+      { scope: 'operation-agent-start', sessionId: SESSION, error: cause }
+    ])
   })
 })
 

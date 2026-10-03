@@ -50,7 +50,7 @@ describe('a Claude child proving its start', () => {
     expect(claude.child(STALLED).calls).toEqual(['get_settings'])
 
     let closed = false
-    void host.close(STALLED).then(() => {
+    void host.close(STALLED, 'evict').then(() => {
       closed = true
     })
     await vi.waitFor(() => expect(closed).toBe(true))

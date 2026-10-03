@@ -17,6 +17,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 /** pid -> the NUL-separated environment block `/proc/<pid>/environ` serves. */
 const fakeProc = vi.hoisted(() => ({ environs: new Map<number, string>() }))
@@ -135,6 +136,7 @@ describe('a process that inherited a spawn token', () => {
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
 
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory,
       hostId: HOST_ID,
       claimKeyId: 'key-1',
@@ -142,6 +144,8 @@ describe('a process that inherited a spawn token', () => {
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveEnvironment: async () => ({})
     })
+    // The installed host reads the record the seed wrote, so the check below has a lease to act on.
+    expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     await host.reconcileRestartLeases()
     // Install work that is not awaited would have run by now; nothing here waits on a timer.
     await new Promise((resolve) => setTimeout(resolve, 50))

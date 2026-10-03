@@ -141,14 +141,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -697,6 +697,7 @@ describe('connectPanePty', () => {
 
     dataCallbackRef.current?.('\x1b]133;D;0\x07')
     await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await flushAsyncTicks()
 
     expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
@@ -860,7 +861,7 @@ describe('connectPanePty', () => {
           prompt: 'stop quickly',
           updatedAt: 1_000,
           stateStartedAt: 900,
-          agentType: 'codex',
+          agentType: 'custom-agent',
           terminalTitle: 'Codex',
           stateHistory: []
         }

@@ -1,0 +1,15 @@
+{
+  "description": "omp recording at 60x24 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-303: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "304-305: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "306-364: now=pending:closed edge=ready-strong quiet=ready-strong wait=ready@start",
+      "365-707: now=ready-strong edge=ready-strong quiet=ready-strong wait=ready@start"
+    ],
+    "clockless": [
+      "0-303: verdict=pending:closed wait=pending",
+      "304-707: verdict=ready-strong wait=ready@start"
+    ]
+  }
+}

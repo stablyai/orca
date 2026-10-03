@@ -25,6 +25,7 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
 function eventually(assertion: () => unknown): Promise<unknown> {
@@ -70,6 +71,7 @@ async function relaunchAfterCrashMidTurn(
     throw new Error('claude: command not found')
   })
   const host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: { ...adapter(), acquire },
     journalDatabase: openTestJournalHostDatabase(relaunched),

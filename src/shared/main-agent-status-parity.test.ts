@@ -461,7 +461,7 @@ describe('mainAgent status parity across lanes', () => {
     it.each(storiesFor('structured'))('%s', (_name, lane) => {
       const row = structuredAgentSessionAgentStatus({
         status: lane.status,
-        backgroundTasks: lane.backgroundTasks,
+        childWork: lane.backgroundTasks,
         turnOutcome: lane.turnOutcome
       })
       expect(row).toEqual(lane.expect)

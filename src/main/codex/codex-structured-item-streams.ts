@@ -1,4 +1,3 @@
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRowAttribution
@@ -118,10 +117,8 @@ export function createCodexStructuredItemStreams(
     if (!translated.body) {
       return true
     }
-    return appendCodexItemAndPublish(deps.sink, state.identity, translated.body, {
-      coalescingKey: `checkpoint:${agentJournalItemKey(state.identity)}`,
-      ...attributionOf(key)
-    }).accepted
+    return appendCodexItemAndPublish(deps.sink, state.identity, translated.body, attributionOf(key))
+      .accepted
   }
 
   const persist = (key: string, text: string, force: boolean): boolean => {

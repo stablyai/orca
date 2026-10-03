@@ -7,19 +7,12 @@ export const ORCAD_ENTRY_POINT = 'src/main/orcad/main.ts'
 export const ORCAD_CHILD_ENTRY_POINTS = {
   watcher: 'src/main/ipc/parcel-watcher-process-entry.ts',
   daemon: 'src/main/daemon/daemon-entry.ts',
-  ptyGate: 'src/main/daemon/pty-subprocess/windows-bun-pty-gate-entry.ts',
   writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',
-  backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
+  backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
+  foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
 }
 
-export const ORCAD_EXTERNAL_MODULES = [
-  'electron',
-  'node-pty',
-  '@parcel/watcher',
-  'fsevents',
-  'bun:ffi',
-  'bun:sqlite'
-]
+export const ORCAD_EXTERNAL_MODULES = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']
 
 // Native binaries are staged separately from every JavaScript entry.
 export const externalNativeAddons = {

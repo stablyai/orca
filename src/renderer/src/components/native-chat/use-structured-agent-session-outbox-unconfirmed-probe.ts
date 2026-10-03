@@ -1,13 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
-import { writeOutbox } from './structured-agent-session-outbox-storage'
+import {
+  commitStructuredAgentSessionOutbox,
+  getStructuredAgentSessionOutbox
+} from './structured-agent-session-outbox-storage'
 
 const UNCONFIRMED_PROBE_BASE_DELAY_MS = 1_000
 /** No attempt ceiling: a transport outage outlives any fixed budget, and giving up
  *  restores the wedge this fixes. Growth caps the rate at one status query per 16s.
- *  A refusal that blocks the head still ends probing until a manual Retry (or, on an older
- *  host, a fence change), because the entry leaves `unconfirmed`. */
+ *  A refusal still ends probing until a manual Retry, because the entry leaves `unconfirmed`. */
 const UNCONFIRMED_PROBE_MAX_DELAY_MS = 16_000
 
 /** Re-queues the entry holding the outbox in `unconfirmed`, with backoff, until the journal answers it. */
@@ -16,10 +18,8 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
   outbox: readonly StructuredAgentSessionOutboxEntry[]
   submissions: readonly AgentJournalSubmission[]
   owner: { attached: boolean; ownerChange: number | null; targetKey: string }
-  outboxRef: { current: StructuredAgentSessionOutboxEntry[] }
-  setOutbox: Dispatch<SetStateAction<StructuredAgentSessionOutboxEntry[]>>
 }): void {
-  const { outbox, outboxRef, owner, sessionId, setOutbox, submissions } = args
+  const { outbox, owner, sessionId, submissions } = args
   const probeAttemptsRef = useRef({ id: null as string | null, attempts: 0 })
   useLayoutEffect(() => {
     probeAttemptsRef.current = { id: null, attempts: 0 }
@@ -57,24 +57,18 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
     const timer = setTimeout(
       () => {
         probeAttemptsRef.current = { id: probeId, attempts: attempts + 1 }
-        const next = outboxRef.current.map((entry) =>
-          entry.clientMessageId === probeId ? { ...entry, state: 'queued' as const } : entry
-        )
-        outboxRef.current = next
-        setOutbox(next)
-        writeOutbox(sessionId, next)
+        const next = getStructuredAgentSessionOutbox(sessionId).map((entry) => {
+          if (entry.clientMessageId !== probeId) {
+            return entry
+          }
+          // A saved failure would hold it for a Retry instead of resending it.
+          const { lastFailure: _probed, ...probed } = entry
+          return { ...probed, state: 'queued' as const }
+        })
+        commitStructuredAgentSessionOutbox(sessionId, next)
       },
       Math.min(UNCONFIRMED_PROBE_BASE_DELAY_MS * 2 ** attempts, UNCONFIRMED_PROBE_MAX_DELAY_MS)
     )
     return () => clearTimeout(timer)
-  }, [
-    outboxRef,
-    owner.attached,
-    owner.ownerChange,
-    owner.targetKey,
-    probeId,
-    probeSettled,
-    sessionId,
-    setOutbox
-  ])
+  }, [owner.attached, owner.ownerChange, owner.targetKey, probeId, probeSettled, sessionId])
 }

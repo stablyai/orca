@@ -370,7 +370,7 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
 
 it('leaves a command whose start failed not sent, beside one start-failure row (B3)', async () => {
   await attach()
-  await state.host.close(SESSION)
+  await state.host.close(SESSION, 'evict')
   state.acquire.mockRejectedValue(new Error('not signed in'))
   const params = compactParams()
 
@@ -748,4 +748,24 @@ it('never lets a provider echo alias the command entry', async () => {
   expect((await journal()).items.some((item) => item.itemId === agentJournalItemKey(echo))).toBe(
     true
   )
+})
+
+it('refuses a /compact pressed again under a new id while one runs, and runs one pressed after it ended', async () => {
+  await attach()
+  await state.host.conversationCommand(CALLER, compactParams())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+
+  expect(await state.host.conversationCommand(CALLER, compactParams())).toMatchObject({
+    ok: false,
+    refusal: { details: { reason: 'turnActive' } }
+  })
+  expect(compact).toHaveBeenCalledOnce()
+
+  finish({ outcome: 'success' })
+  await vi.waitFor(async () =>
+    expect(await state.host.conversationCommand(CALLER, compactParams())).toMatchObject({
+      ok: true
+    })
+  )
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledTimes(2))
 })

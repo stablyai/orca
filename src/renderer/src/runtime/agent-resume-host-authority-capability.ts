@@ -2,6 +2,7 @@ import type { ResumableTuiAgent } from '../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
@@ -23,6 +24,7 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   claude: undefined,
   codebuddy: AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
   codex: undefined,
+  cursor: AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
   qoder: AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
   gemini: undefined,
   antigravity: undefined,

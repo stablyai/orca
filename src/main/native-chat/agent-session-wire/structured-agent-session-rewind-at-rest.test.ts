@@ -26,6 +26,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const caller = { callerKey: 'desktop' }
 const KEPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'kept', ordinal: 0 }
@@ -78,6 +79,7 @@ function adapter(): StructuredAgentSessionAdapter {
 
 function openHost(): StructuredAgentSessionHost {
   return new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
     journalDatabase: openTestJournalHostDatabase(directory),
@@ -197,6 +199,29 @@ describe('an interrupted Codex rewind on a chat at rest (R16)', () => {
     // The recovered history, then the new message — nothing the rewind dropped, nothing lost.
     expect(texts).toEqual(['verified history', 'after the rewind'])
     expect(snapshot.submissions.at(-1)?.dispatchState).toBe('accepted')
+  })
+
+  it('is settled by the start a /clear makes, and the clear commits', async () => {
+    await interruptedRewindAtRest()
+    const before = acquires
+
+    const cleared = await host.conversationCommand(caller, {
+      command: 'clear',
+      envelope: {
+        sessionId: SESSION,
+        clientOperationId: hostTestOperationId(),
+        expectedRuntimeFence: fence(),
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.conversationCommand',
+          sessionId: SESSION,
+          fields: { command: 'clear' }
+        })
+      }
+    })
+    expect(cleared).toMatchObject({ ok: true, value: { phase: 'committed', state: 'completed' } })
+    expect(acquires - before).toBe(1)
+    expect(recoverRewind).toHaveBeenCalledOnce()
+    expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
   })
 })
 

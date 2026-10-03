@@ -11,6 +11,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const mocks = vi.hoisted(() => ({ failWiring: vi.fn(() => false) }))
 
@@ -32,6 +33,7 @@ let root: string
 
 function install(): ReturnType<typeof ensureStructuredAgentSessionHost> {
   return ensureStructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
@@ -57,12 +59,13 @@ describe('an install that fails after opening the chat journal', () => {
     mocks.failWiring.mockReturnValueOnce(true)
 
     await expect(install()).rejects.toThrow('model catalog wiring failed')
-    const failed = open.mock.results[0]?.value
+    const failed = await open.mock.results[0]?.value
     expect(failed).toBeInstanceOf(JournalHostDatabase)
     expect(failed.isClosed).toBe(true)
 
     await expect(install()).resolves.toBeDefined()
     expect(open).toHaveBeenCalledTimes(2)
-    expect(open.mock.results[1]?.value.isClosed).toBe(false)
+    const reopened = await open.mock.results[1]?.value
+    expect(reopened?.isClosed).toBe(false)
   })
 })

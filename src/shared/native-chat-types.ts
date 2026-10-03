@@ -96,6 +96,8 @@ export type NativeChatToolResultBlock = {
   type: 'tool-result'
   output: string
   isError?: boolean
+  /** The call this result answers, when the producer knows it; otherwise pairing is positional. */
+  callId?: string
   /** Present only for edit tools whose result reported resolved hunks. */
   editPatch?: NativeChatEditPatch
 }
@@ -210,6 +212,9 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   sentAs?: AgentJournalMessageSendMode
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
+  /** Shown as not sent, waiting for the user's Retry: in no turn, so a newer turn's bar and clock
+   *  never land on it, and drawn after the conversation. */
+  unsent?: true
   /** Set only by the structured projection, on rows the journal holds, and ranks
    *  them ahead of time. Terminal-backed messages never carry it, and worker reads strip it. */
   journalPosition?: AgentJournalPosition

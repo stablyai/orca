@@ -17,6 +17,7 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const NOW = 1_788_727_031_330
 const roots: string[] = []
@@ -119,8 +120,10 @@ describe('Claude root-exit stop', () => {
     const deps = {
       store,
       adapter,
-      journalDatabase: openTestJournalHostDatabase(root),
-      claimKeyId: 'key-1'
+      // The one database the store and the journal share, as the runtime installs them.
+      journalDatabase: openTestJournalHostDatabase(stateDirectory),
+      claimKeyId: 'key-1',
+      logger: createStructuredAgentSessionLogger()
     }
     const runtimeState = new StructuredAgentSessionHostRuntimeState(deps)
 
@@ -134,7 +137,8 @@ describe('Claude root-exit stop', () => {
           now: () => NOW + 30 * 60_000,
           publishStatus
         },
-        'session-1'
+        'session-1',
+        { cause: 'evict' }
       )
     ).resolves.toBeUndefined()
 

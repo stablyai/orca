@@ -158,6 +158,18 @@ describe('the turn Codex answered a send into but has not opened', () => {
     expect(echoes.answeredUnopenedTurn('thread-1', NONE_OPEN)).toBeNull()
   })
 
+  it('skips a turn a wait left unopened, and still names an earlier one', () => {
+    const echoes = createCodexDispatchEchoes()
+    echoes.arm('client-1')
+    echoes.bindTurn('client-1', 'thread-1', 'turn-1')
+    echoes.arm('client-2')
+    echoes.bindTurn('client-2', 'thread-1', 'turn-2')
+
+    echoes.leftUnopened('thread-1', 'turn-2')
+
+    expect(echoes.answeredUnopenedTurn('thread-1', NONE_OPEN)).toBe('turn-1')
+  })
+
   it('is none for a send not yet answered, or answered on another thread', () => {
     const echoes = createCodexDispatchEchoes()
     echoes.arm('client-1')

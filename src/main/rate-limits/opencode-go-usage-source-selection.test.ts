@@ -145,6 +145,28 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(result.status).toBe('ok')
   })
 
+  it('reports an unreadable credential database instead of using an env key', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'credential-database-unreadable' })
+
+    const result = await fetchOpenCodeGoUsage({ cookie: '   ' })
+
+    expect(fetchWithApiKeyMock).not.toHaveBeenCalled()
+    expect(fetchWithCookieMock).not.toHaveBeenCalled()
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(result.error).toContain("Could not read OpenCode's credential database")
+  })
+
+  it('uses the configured cookie when the credential database is unreadable', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'credential-database-unreadable' })
+    fetchWithCookieMock.mockResolvedValue(cookieResult('ok'))
+
+    const result = await fetchOpenCodeGoUsage({ cookie: COOKIE })
+
+    expect(fetchWithApiKeyMock).not.toHaveBeenCalled()
+    expect(result.status).toBe('ok')
+  })
+
   it('stays unavailable when neither a key nor a cookie is configured', async () => {
     resolveApiKeyMock.mockResolvedValue({ status: 'missing' })
 

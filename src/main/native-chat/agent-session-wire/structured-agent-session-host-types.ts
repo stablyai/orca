@@ -10,11 +10,14 @@ import type { JournalHostDatabase } from '../agent-session-journal/journal-host-
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredAgentSessionAdapter,
-  StructuredAgentSessionProviderChildPhase
+  StructuredAgentSessionChildEndCause,
+  StructuredAgentSessionProviderChildPhase,
+  StructuredAgentSessionStopCause
 } from './structured-agent-session-adapter'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 import type { AgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
@@ -35,6 +38,15 @@ export type StructuredAgentSessionProviderChildIdentity = {
   readonly fence: number
 }
 
+/** A wind-down still owed, with the stop that owes it: a retry finishes that stop. */
+export type StructuredAgentSessionOwedWindDown = StructuredAgentSessionProviderChildIdentity & {
+  readonly cause: StructuredAgentSessionStopCause
+  /** Where the journal stood when the stop was asked for; the child's end is ordered there. */
+  readonly requestedAt: AgentJournalCursor
+  /** Where it stood once the newest pass failed: a message accepted by then waited through a retry. */
+  readonly failedAt?: AgentJournalCursor
+}
+
 /** The provider process behind a conversation. Written only in
  *  `structured-agent-session-provider-child`. */
 export type StructuredAgentSessionProviderChild = StructuredAgentSessionProviderChildIdentity & {
@@ -50,12 +62,7 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
  *  `stopAgentSessionProviderRoot`; an observed exit's root is gone by definition. */
 export type StructuredAgentSessionStopVerdict = { rootGone: boolean }
 
-export type StructuredAgentSessionChildEndCause =
-  | 'user-stop'
-  | 'host-stop'
-  | 'exit'
-  | 'attach-failed'
-  | 'evict'
+export type { StructuredAgentSessionChildEndCause }
 
 /** How the conversation's last child ended. In memory only: the delivery loop reads it to tell a
  *  Stop from a failure. */
@@ -71,7 +78,8 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     duringStartup: boolean
     startedFor?: string
     /** Where the conversation's journal stood when the child ended, to order the end against a
-     *  message's acceptance. */
+     *  message's acceptance. A stop's end stands where it was asked for: a message accepted while
+     *  retries proved the exit waited on it, and came after it. */
     endedAt: AgentJournalCursor
   }
 
@@ -87,7 +95,7 @@ export type StructuredAgentSessionHostSession = {
   /** The wind-down this host still owes for a child it started: settling that generation's work
    *  and handing the lease back. Outlives `child`, which ends the moment the adapter proves the
    *  exit — an eviction that aborts after that point must still finish it on the next close. */
-  owesProviderChildWindDown?: StructuredAgentSessionProviderChildIdentity
+  owesProviderChildWindDown?: StructuredAgentSessionOwedWindDown
   lastEndedChild?: StructuredAgentSessionEndedChild
 }
 
@@ -119,7 +127,9 @@ export type StructuredAgentSessionHostDeps = {
   idleSweep?: { intervalMs?: number; idleMs?: number }
   /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */
   hasOpenDispatch?: (record: AgentSessionRecord) => boolean
-  onEventSinkError?: (input: { sessionId: string; error: unknown }) => void
+  /** Where every failure the host carries on past is reported. Required: a host without one would
+   *  drop exactly the failures nobody sees in the UI. */
+  logger: StructuredAgentSessionLogger
   /** Every status projection this host publishes. `replay` marks a re-projection of state the host
    *  already knew (restore, an arriving subscriber) rather than a fresh journal edge. */
   onSessionStatusChanged?: (

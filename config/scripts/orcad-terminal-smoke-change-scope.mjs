@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { classifyBunProfileChanges, collectBunProfileInputs } from './bun-profile-change-scope.mjs'
+import { classifyNodeServerChanges, collectNodeServerInputs } from './node-server-change-scope.mjs'
 import { ORCAD_CHILD_ENTRY_POINTS, ORCAD_ENTRY_POINT } from './orcad-entry-build.mjs'
 
 const ENTRY_POINTS = [
   ORCAD_ENTRY_POINT,
   ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
   'src/cli/index.ts',
-  'config/scripts/build-orcad-bun.mjs',
+  'config/scripts/build-orcad-node.mjs',
+  'config/scripts/build-orcad-prebuilds.mjs',
   'config/scripts/build-orcad.mjs',
   'config/scripts/ensure-native-runtime.mjs',
   'config/scripts/rebuild-native-deps.mjs',
@@ -19,7 +20,7 @@ const ENTRY_POINTS = [
 ]
 
 export function collectOrcadTerminalSmokeInputs() {
-  return collectBunProfileInputs({ entryPoints: ENTRY_POINTS })
+  return collectNodeServerInputs({ entryPoints: ENTRY_POINTS })
 }
 
 export async function classifyOrcadTerminalSmokeChanges(
@@ -42,8 +43,8 @@ export async function classifyOrcadTerminalSmokeChanges(
   if (forced) {
     return { shouldRun: true, reason: `Smoke input changed: ${forced}` }
   }
-  // Retain the Bun gate's native, worker, toolchain and failed-analysis safeguards.
-  return classifyBunProfileChanges(changedFiles, collect)
+  // Retain the headless-server gate's native, worker, toolchain and failed-analysis safeguards.
+  return classifyNodeServerChanges(changedFiles, collect)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -101,6 +101,8 @@ export type BrowserAnnotationPayload = Omit<BrowserGrabPayload, 'screenshot'> & 
 // Grab operation lifecycle
 // ---------------------------------------------------------------------------
 
+export type GrabIntent = 'copy' | 'annotate'
+
 /** Why a grab operation was cancelled before the user selected an element. */
 export type BrowserGrabCancelReason = 'user' | 'tab-inactive' | 'navigation' | 'evicted' | 'timeout'
 

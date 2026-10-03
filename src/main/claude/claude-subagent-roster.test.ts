@@ -14,6 +14,8 @@ import {
   type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { ClaudeSubagentRoster } from './claude-subagent-roster'
+import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const TURN_1 = 'claude-session:turn-1'
 
@@ -455,14 +457,15 @@ describe('ClaudeSubagentRoster — through the real sink queue', () => {
   it('lands every revision, not just the one that was already in flight', async () => {
     const appended: AgentJournalItemBody[] = []
     let published = 0
-    const journal = {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a double for the journal members this path calls; the helper adds the in-order ones.
+    const journal = withJournalQueueMembers({
       appendItem: async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         appended.push(body)
         return { cursor: { epoch: 'e', sequence: appended.length } }
       },
       appendTombstone: async () => ({ epoch: 'e', sequence: 0 })
-    } as unknown as AgentSessionJournal
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    }) as unknown as AgentSessionJournal
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({
       journal,
       fence: 1,
@@ -476,8 +479,7 @@ describe('ClaudeSubagentRoster — through the real sink queue', () => {
       currentTurnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
 
-    // The first append is in flight while the rest are submitted, so a publish
-    // sharing the row's coalescing key would evict them.
+    // The first append is in flight while the rest are submitted; each must still land.
     roster.observeSystemFrame(started({ task_id: 'task-1', description: 'One' }))
     roster.observeSystemFrame(started({ task_id: 'task-2', description: 'Two' }))
     roster.observeSystemFrame(

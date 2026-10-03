@@ -1,3 +1,4 @@
+import { DEDICATED_E2E_SPECS } from './ci-e2e-job-selection.mjs'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -22,7 +23,8 @@ it('gives every removed SSH spec a dedicated owner even for test-only edits', ()
   const changedRun = workflow.jobs['changed-e2e'].steps.find(
     (step) => step.name === 'Run changed E2E specs'
   ).run
-  const excluded = [...changedRun.matchAll(/\. != "([^"]+)"/g)].map((match) => match[1])
+  expect(changedRun).toContain('node config/scripts/ci-e2e-job-selection.mjs')
+  const excluded = DEDICATED_E2E_SPECS
   const owned = runners.flatMap(runnerSpecs)
   expect(owned.length).toBeGreaterThan(25)
   expect(new Set(owned).size).toBe(owned.length)

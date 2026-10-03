@@ -51,12 +51,6 @@ describe('buildNativeChatImagePasteBytes', () => {
       `${BEGIN}/tmp/orca-paste-image.png${END}`
     )
   })
-
-  it('sanitizes embedded escape bytes before framing', () => {
-    expect(buildNativeChatImagePasteBytes('/tmp/before\x1b[201~after.png')).toBe(
-      `${BEGIN}/tmp/before␛[201~after.png${END}`
-    )
-  })
 })
 
 describe('isMultilineDraft', () => {

@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type {
@@ -16,10 +16,10 @@ import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore,
-  seedTestAgentSessionStoreFromNewerBuild,
-  testAgentSessionStoreFilePath
+  seedTestAgentSessionStoreFromNewerBuild
 } from './agent-session-record-store-test-harness'
 import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-retention'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -41,9 +41,6 @@ const FOLDER: AgentSessionExecutionLocation = {
 const MATCHED: AgentSessionOwnerProbe = { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
 const UNUSED: AgentSessionOwnerProbe = { outcome: 'reservation-unused' }
-const BAD_OP_STORE = '{"schemaVersion":0,"hostId":"","records":{},"operations":{"x":0}}'
-const BAD_KEY_STORE =
-  '{"schemaVersion":1,"hostId":"","records":{},"operations":{},"retiredClaimKeys":[0]}'
 
 let counter = 0
 
@@ -288,22 +285,6 @@ describe('acquisition path', () => {
 })
 
 describe('concurrent claims', () => {
-  it('lets only one store instance reserve a session from the same disk snapshot', async () => {
-    const [first, second] = await Promise.all([open(), open()])
-    const results = await Promise.allSettled([
-      first.reserveOwner(reserveRequest()),
-      second.reserveOwner(reserveRequest())
-    ])
-
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
-    const refused = results.find((result) => result.status === 'rejected')
-    expect((refused as PromiseRejectedResult).reason.message).toBe('agent_session_conflict')
-
-    const persisted = await open()
-    expect(persisted.getRecord('session-alpha')?.lease.runtimeFence).toBe(1)
-    expect(persisted.listOperationRows()).toHaveLength(1)
-  })
-
   it('lets exactly one of two concurrent reservations win and never spawns the loser', async () => {
     const store = await open()
     await establishOwner(store)
@@ -378,18 +359,16 @@ describe('concurrent claims', () => {
     const store = await open()
     await establishOwner(store)
     const before = store.getRecord('session-alpha')
-    // Losing both committed copies must not reset the live store to empty authority.
-    await rm(directory, { recursive: true, force: true })
-    await expect(
-      store.setJournalCheckpoint({
-        sessionId: 'session-alpha',
-        fence: 1,
-        checkpoint: { epoch: 9, sequence: 9 },
-        now: NOW
-      })
-    ).rejects.toThrow()
-    expect(store.getRecord('session-alpha')).toEqual(before)
-    expect(store.getRecord('session-alpha')?.lease.journalCheckpoint).toBeNull()
+    const persistedBefore = await readPersistedTestAgentSessionStore(directory)
+    // The row write fails inside the commit, as a full disk or an I/O error would.
+    openTestJournalHostDatabase(directory).db.exec(
+      "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
+    )
+    await expect(store.setConversationName('session-alpha', 'renamed')).rejects.toThrow(
+      'disk I/O error'
+    )
+    expect(store.getRecord('session-alpha')).toBe(before)
+    expect(await readPersistedTestAgentSessionStore(directory)).toEqual(persistedBefore)
   })
 })
 
@@ -503,15 +482,14 @@ describe('restart reconciliation', () => {
     expect(record?.lease.provenHandleLinkId).toBe('link-1')
   })
 
-  it('never applies a stale restart probe to a replacement owner', async () => {
-    const writer = await open()
-    await establishOwner(writer)
-    const reconciler = await open()
+  it('never applies a stale restart probe to a lease another reconcile already settled', async () => {
+    await establishOwner(await open())
+    const store = await open()
     let releaseProbe!: (probe: AgentSessionOwnerProbe) => void
     let markProbeStarted!: () => void
     const probeStarted = new Promise<void>((resolve) => (markProbeStarted = resolve))
     const probeResult = new Promise<AgentSessionOwnerProbe>((resolve) => (releaseProbe = resolve))
-    const reconciliation = reconciler.reconcileOnRestart({
+    const stale = store.reconcileOnRestart({
       probe: async () => {
         markProbeStarted()
         return probeResult
@@ -520,45 +498,16 @@ describe('restart reconciliation', () => {
     })
 
     await probeStarted
-    await writer.evictProvenDeadOwner({
-      sessionId: 'session-alpha',
-      expectedFence: 1,
-      probe: { outcome: 'pid-absent' },
-      now: NOW + 100
-    })
-    const replacement = await writer.reserveOwner(
-      reserveRequest({
-        expectedFence: 2,
-        probe: UNUSED,
-        spawnToken: 'spawn-b',
-        operation: {
-          callerKey: 'client-1',
-          operationId: operationId(NOW + 200),
-          fingerprint: 'fp-2'
-        },
-        now: NOW + 200
-      })
-    )
-    await writer.commitProcessIdentity({
-      sessionId: 'session-alpha',
-      fence: replacement.record.lease.runtimeFence,
-      process: processIdentity({ pid: 5252, spawnToken: 'spawn-b' }),
-      now: NOW + 300
-    })
-    await writer.proveOwner({
-      sessionId: 'session-alpha',
-      fence: replacement.record.lease.runtimeFence,
-      link: handleLink({ linkId: 'link-2', origin: 'resumed', mintedAtFence: 3 }),
-      now: NOW + 300
-    })
+    const settled = await store.reconcileOnRestart({ probe: async () => MATCHED, now: NOW + 500 })
+    expect(settled.get('session-alpha')?.lease).toMatchObject({ claimStatus: 'live' })
 
     releaseProbe({ outcome: 'pid-absent' })
-    expect(await reconciliation).toEqual(new Map())
+    expect(await stale).toEqual(new Map())
     const persisted = await readPersistedTestAgentSessionStore(directory)
     expect(persisted.records['session-alpha'].lease).toMatchObject({
-      runtimeFence: 3,
+      runtimeFence: 1,
       claimStatus: 'live',
-      ownerProcess: { pid: 5252, spawnToken: 'spawn-b' },
+      ownerProcess: { pid: 4242, spawnToken: 'spawn-a' },
       unreconciled: false
     })
   })
@@ -757,7 +706,7 @@ describe('host and workspace isolation', () => {
   })
 })
 
-describe('claim keys, checkpoints, and unreadable rows', () => {
+describe('claim keys and unreadable rows', () => {
   it('keeps a retired claim key verifiable for the retention window', async () => {
     const store = await open()
     await store.retireClaimKey('key-1', NOW)
@@ -768,40 +717,6 @@ describe('claim keys, checkpoints, and unreadable rows', () => {
       store.isClaimKeyVerifiable('key-1', NOW + AGENT_SESSION_CLAIM_KEY_RETENTION_MS + 1)
     ).toBe(false)
     expect(store.isClaimKeyVerifiable('key-unknown', NOW)).toBe(true)
-  })
-
-  it('refuses a journal checkpoint that moves backwards', async () => {
-    const store = await open()
-    await establishOwner(store)
-    await store.setJournalCheckpoint({
-      sessionId: 'session-alpha',
-      fence: 1,
-      checkpoint: { epoch: 2, sequence: 10 },
-      now: NOW
-    })
-    await expect(
-      store.setJournalCheckpoint({
-        sessionId: 'session-alpha',
-        fence: 1,
-        checkpoint: { epoch: 2, sequence: 9 },
-        now: NOW
-      })
-    ).rejects.toThrow('agent_session_checkpoint_stale')
-    await expect(
-      store.setJournalCheckpoint({
-        sessionId: 'session-alpha',
-        fence: 1,
-        checkpoint: { epoch: 1, sequence: 999 },
-        now: NOW
-      })
-    ).rejects.toThrow('agent_session_checkpoint_stale')
-    const advanced = await store.setJournalCheckpoint({
-      sessionId: 'session-alpha',
-      fence: 1,
-      checkpoint: { epoch: 3, sequence: 0 },
-      now: NOW
-    })
-    expect(advanced.lease.journalCheckpoint).toEqual({ epoch: 3, sequence: 0 })
   })
 
   it.each([
@@ -824,55 +739,15 @@ describe('claim keys, checkpoints, and unreadable rows', () => {
     expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
   })
 
-  it('recovers the previous committed state when the primary file is corrupt', async () => {
-    const first = await open()
-    await establishOwner(first)
-    // A second commit leaves the first as the backup.
-    await first.setJournalCheckpoint({
-      sessionId: 'session-alpha',
-      fence: 1,
-      checkpoint: { epoch: 1, sequence: 1 },
-      now: NOW
-    })
-    await writeFile(testAgentSessionStoreFilePath(directory), '{ truncated')
-
-    const reopened = await open()
-    expect(reopened.recoveredFromBackup).toBe(true)
-    expect(reopened.getRecord('session-alpha')?.lease.runtimeFence).toBe(1)
-
-    // The next transaction completes. It used to reject forever: the latch that guarded against
-    // the lost commit's fence had no exit, so a profile in this state could never write again.
-    await expect(reopened.retireClaimKey('key-2', NOW)).resolves.not.toThrow()
-    // Safety is kept by recording a FLOOR the next grant must clear, not by rewriting the current
-    // fence: `live` means a handle proven at exactly that number, so moving it would invalidate the
-    // record. The floor dominates the highest fence the lost commit could have granted (1 + 1).
-    const recovered = reopened.getRecord('session-alpha')
-    expect(recovered?.lease.runtimeFence).toBe(1)
-    expect(recovered?.lease.minimumNextFence).toBe(3)
-  })
-
-  it.each([
-    ['corrupt', ['{ truncated']],
-    ['missing required collections', ['{"schemaVersion":1,"hostId":"local"}']],
-    ['invalid operation row', [BAD_OP_STORE]],
-    ['invalid retired key', [BAD_KEY_STORE]],
-    ['corrupt in both committed copies', ['{ truncated', '{ also truncated']]
-  ])('fails closed when the store is %s', async (_name, copies) => {
-    const filePath = testAgentSessionStoreFilePath(directory)
-    await mkdir(dirname(filePath), { recursive: true })
-    await writeFile(filePath, copies[0])
-    if (copies[1]) {
-      await writeFile(`${filePath}.bak`, copies[1])
-    }
-    await expect(open()).rejects.toThrow('agent_session_store_corrupt')
-  })
-
-  it('refuses to write a store written by a newer schema', async () => {
+  it('refuses to write a store a newer Orca wrote, with the refusal clients print as "update"', async () => {
     await seedTestAgentSessionStoreFromNewerBuild(directory)
     const store = await open()
     expect(store.readOnly).toBe(true)
-    await expect(store.reserveOwner(reserveRequest())).rejects.toThrow(
-      'agent_session_legacy_required'
-    )
+    await expect(store.reserveOwner(reserveRequest())).rejects.toMatchObject({
+      refusal: {
+        code: 'agent_session_journal_unreadable',
+        details: { reason: 'journalWrittenByNewerOrca' }
+      }
+    })
   })
 })

@@ -20,6 +20,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 /** The error a real CLI's exit reaches the adapter as: Orca's message, the stderr as a log detail. */
 export function scriptedClaudeExitError(diagnostic: string): Error {
@@ -223,6 +224,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
       await mkdir(join(root, 'claude-home'), { recursive: true })
       const directory = root
       return ensureStructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         stateDirectory: directory,
         hostId: 'local',
         claimKeyId: 'key-1',

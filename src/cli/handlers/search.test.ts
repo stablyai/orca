@@ -102,7 +102,11 @@ describe('orca search over the runtime RPC', () => {
     const { call } = await runSearch([['query', 'resize race']])
 
     expect(call).toHaveBeenCalledTimes(1)
-    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', { query: 'resize race', limit: 20 })
+    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
+      query: 'resize race',
+      limit: 20,
+      supportsQoderHistory: true
+    })
   })
 
   const flagCases: [string, CliFlags, Record<string, unknown>][] = [
@@ -157,7 +161,10 @@ describe('orca search over the runtime RPC', () => {
   it.each(flagCases)('sends %s', async (_name, flags, params) => {
     const { call } = await runSearch(flags)
 
-    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', params)
+    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
+      ...params,
+      supportsQoderHistory: true
+    })
   })
 
   it('calls the status RPC for --index-status', async () => {

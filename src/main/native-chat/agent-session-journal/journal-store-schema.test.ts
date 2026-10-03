@@ -18,6 +18,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
+import { journalRepairDisclosure } from './journal-repair-disclosure'
 import { journalDatabasePath } from './journal-host-database'
 import type { AgentSessionJournal } from './journal-store'
 import {
@@ -109,6 +110,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
+const REPAIR_TEXT = journalRepairDisclosure().body.text
 describe('axis 1: the database shape', () => {
   // A newer build's database opens read-only: its chats read, and nothing here writes to it.
   it('reads a database a newer build stamped, refuses every write, and writes nothing', async () => {
@@ -242,9 +244,7 @@ describe('axis 2: the row body shape', () => {
     expect(items.some((entry) => entry.body.kind === 'message')).toBe(true)
     // …and the skip is visible in the timeline instead of silently swallowed.
     expect(
-      items.some(
-        (entry) => entry.body.kind === 'status' && entry.body.text.includes('could not be read')
-      )
+      items.some((entry) => entry.body.kind === 'status' && entry.body.text === REPAIR_TEXT)
     ).toBe(true)
   })
 
@@ -264,9 +264,7 @@ describe('axis 2: the row body shape', () => {
     expect(
       reopened
         .snapshot()
-        .items.filter(
-          (entry) => entry.body.kind === 'status' && entry.body.text.includes('could not be read')
-        )
+        .items.filter((entry) => entry.body.kind === 'status' && entry.body.text === REPAIR_TEXT)
     ).toHaveLength(1)
   })
 

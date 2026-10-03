@@ -19,6 +19,7 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -66,6 +67,7 @@ describe('abandoning a structured agent-session host', () => {
       setOption: async () => undefined
     }
     const host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
       probeOwner: async () => ({
@@ -80,7 +82,7 @@ describe('abandoning a structured agent-session host', () => {
     expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
     // The conversation stays and its provider child does not, so the next send makes the delivery
     // loop start one — the shape the refusal-oracle spec ends on.
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     gate = new Promise<void>((resolve) => {
       openGate = resolve
     })

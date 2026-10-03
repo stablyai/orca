@@ -10,7 +10,6 @@ export type ClaudePermissionCallbackDeps = {
   sessionId: string
   prompts: ClaudePromptRegistry
   emit: (event: ClaudeStructuredSessionEvent) => void
-  currentTurnId?: () => string | null
 }
 
 function denySafeResult(toolUseId: string | undefined): PermissionResult {
@@ -52,8 +51,7 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
         toolUseId: options.toolUseID,
         input,
         suggestions: options.suggestions ?? [],
-        settle,
-        turnId: deps.currentTurnId?.() ?? null
+        settle
       })
       if (!prompt) {
         settle(denySafeResult(options.toolUseID))

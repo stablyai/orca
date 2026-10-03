@@ -1,4 +1,13 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -26,7 +35,14 @@ const MODULE_SCOPE_ENV_WRITE =
 // No file may write at module scope. The replacement is a fixture option, which reaches the app
 // launch without touching the worker every other spec shares.
 const SCANNED_EXTENSIONS = ['.ts', '.tsx']
-const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '__fixtures__'])
+const IGNORED_DIRECTORIES = new Set([
+  'node_modules',
+  'dist',
+  'out',
+  'build',
+  '__fixtures__',
+  '.cross-version-checkouts'
+])
 
 function collectE2eFiles(root: string): string[] {
   const found: string[] = []
@@ -59,6 +75,21 @@ describe('e2e worker env isolation', () => {
 
   it('no e2e file writes process.env at module scope', () => {
     expect(offenders).toEqual([])
+  })
+
+  it('checks current source while excluding extracted release copies', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-e2e-env-scan-'))
+    try {
+      const cached = join(root, '.cross-version-checkouts')
+      mkdirSync(cached)
+      writeFileSync(join(cached, 'old.ts'), "process.env.ORCA_E2E_X = '1'\n")
+      const source = join(root, 'current.ts')
+      writeFileSync(source, "process.env.ORCA_E2E_X = '1'\n")
+      expect(collectE2eFiles(root)).toEqual([source])
+      expect(findModuleScopeEnvWrites(source)).toHaveLength(1)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('detects the shape it is meant to catch', () => {

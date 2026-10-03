@@ -15,6 +15,8 @@ vi.mock('./ssh-relay-gc-tombstone', () => ({
 }))
 vi.mock('./ssh-relay-install-lock', () => ({
   RELAY_INSTALL_LOCK_NAME: '.install-lock',
+  INSTALL_LOCK_STALE_MS: 20 * 60_000,
+  INSTALL_LOCK_STALE_SECONDS: 20 * 60,
   isRelayInstallLockStale: vi.fn().mockResolvedValue(false)
 }))
 
@@ -44,6 +46,9 @@ function scriptHost(options: {
     }
     if (command.includes('.install-lock')) {
       return 'OPEN'
+    }
+    if (command.includes('.store-lock') && command.includes('mkdir')) {
+      return 'OK'
     }
     if (command.includes('.install-complete')) {
       return 'COMPLETE'
@@ -200,5 +205,25 @@ describe('orcad GC', () => {
     })
 
     expect(removed).toEqual(['orcad-0.0.9+dead'])
+  })
+
+  it('collects the runtime store only when the caller names its runtime pins', async () => {
+    const removed: string[] = []
+    scriptHost({ listing: [], removed })
+    const options = {
+      conn,
+      host,
+      remoteHome: '/home/u',
+      currentDirAbsPath: '/home/u/.orca-remote/orcad-0.2.0+bb',
+      record: emptyOrcadActivationRecord()
+    }
+    const inventories = (): number =>
+      mockExec.mock.calls.filter(([, command]) => String(command).includes('RUNTIME_STORE')).length
+
+    await gcOldOrcadVersions(options)
+    expect(inventories()).toBe(0)
+
+    await gcOldOrcadVersions({ ...options, nodeRuntimePins: ['a'.repeat(64)] })
+    expect(inventories()).toBe(1)
   })
 })

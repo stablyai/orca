@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentHookServer } from '../../agent-hooks/server'
@@ -12,6 +13,7 @@ import {
   StructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusSink
 } from './structured-agent-session-status-feed'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const SESSION = 'reenter-session'
 const journals = createTrackedJournalOpener()
@@ -52,7 +54,7 @@ async function createFeed() {
     string,
     {
       journal: AgentSessionJournal
-      params: { location: AgentSessionExecutionLocation; provider: 'codex' }
+      params: { location: AgentSessionExecutionLocation; provider: AgentSessionHandleProvider }
     }
   >([[SESSION, session]])
   const server = new AgentHookServer()
@@ -61,6 +63,7 @@ async function createFeed() {
     forget: vi.fn((subject) => server.dropStructuredStatus(subject))
   }
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions,
     getRecord: () => null,
     now: () => 1_000,

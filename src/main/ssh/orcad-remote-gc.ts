@@ -1,13 +1,12 @@
 /**
- * orcad's garbage collection, and the half of §06 falsifier 1 that says who owns it.
+ * orcad's garbage collection, and who owns it (design D10; to be tracked in
+ * docs/reference/remote-server-install-model.md).
  *
- * **Each model GCs only its own namespace, permanently.** orcad removes `orcad-<v>/`
- * directories; the relay removes `relay-<v>/` directories; neither ever removes the other's,
- * and no plan item makes one the winner. That is not a migration compromise — the two models
- * serve different users on the same machine (SSH target vs paired peer), so there is no
- * moment at which one of them is entitled to clean up after the other. A pass that deleted
- * the sibling's tree would be reaching across the execution boundary the whole design exists
- * to keep intact.
+ * **Each model GCs only its own namespace.** orcad removes `orcad-<v>/` directories; the relay
+ * removes `relay-<v>/` directories; neither ever removes the other's. The converged server's
+ * migration sweep takes over legacy directories only in the release after it has listed them
+ * as diagnostics, and only on an `exited` verdict. A pass that deleted the sibling's tree
+ * would be reaching across the execution boundary the whole design exists to keep intact.
  *
  * On top of the ownership rule, orcad pins three directories that are idle-looking but
  * load-bearing: the active version, the rollback target, and whichever version the LIVE
@@ -25,6 +24,7 @@ import {
   parseOrcadLiveness
 } from './orcad-remote-launch'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import { gcRemoteNodeRuntimeStore } from './remote-node-runtime-store-gc'
 
 export type OrcadGcOptions = {
   conn: SshConnection
@@ -41,6 +41,11 @@ export type OrcadGcOptions = {
    * would remove the tree under a running process.
    */
   liveDaemonVersion?: string | null
+  /**
+   * executableSha256 of every runtime pin this client runs. Also the gate for the shared
+   * runtime store pass: without it this client cannot say which runtime is current.
+   */
+  nodeRuntimePins?: readonly string[]
   signal?: AbortSignal
 }
 
@@ -75,4 +80,11 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<void>
       }
     }
   )
+  // Why after the version pass: removing version dirs is what drops their runtime references.
+  if (options.nodeRuntimePins?.length) {
+    await gcRemoteNodeRuntimeStore(options.conn, options.host, options.remoteHome, {
+      currentPins: options.nodeRuntimePins,
+      signal: options.signal
+    })
+  }
 }

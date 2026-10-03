@@ -19,6 +19,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const THREAD = 'thread-runtime-child-work'
 const CHILD = 'thread-runtime-reviewer'
@@ -70,6 +71,7 @@ describe('structured Codex child work through the production runtime', () => {
       NonNullable<StructuredAgentSessionStatusSink['publishChildWork']>
     >[] = []
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',

@@ -10,6 +10,7 @@ import {
   type StructuredAgentSessionStatusSink
 } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const SESSION = 'status-session'
 const EVIDENCE: AgentChildWorkEvidence[] = [{ type: 'session-ended', observedAt: 5 }]
@@ -38,6 +39,7 @@ async function feedWith(sink: StructuredAgentSessionStatusSink) {
   })
   const session = indexedStatusFeedSession({ journal })
   return new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, session]]),
     getRecord: () => null,
     now: () => 1_000,

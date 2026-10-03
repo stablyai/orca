@@ -170,9 +170,9 @@ export function markCodexProjectTrusted(
 ): Promise<void> {
   // Why: Codex checks the cwd's own entry before the repo root, so no git-layout logic is needed.
   const absPath = canonicalize(workspacePath)
-  // Why (#16441): hook installs now await a codex app-server grant, so an
-  // unqueued write here can land inside their capture->restore window and be
-  // reverted. Same runtime-before-system lock order the installer takes.
+  // Why (#16441): hook installs read and rewrite these files across awaits, so
+  // an unqueued write here could land between their read and their write and be
+  // lost. Same runtime-before-system lock order the installer takes.
   const write = configFiles.reduceRight<() => Promise<void>>(
     (inner, configFile) => () => runExclusivelyForCodexTrustConfig(configFile, inner),
     async () => {
