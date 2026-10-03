@@ -5,6 +5,8 @@
   "extends": "./tsconfig.json",
   "exclude": [
     "node_modules",
+    // The automation runner has a dedicated strict Node typecheck in CI.
+    "experiments/android-automation",
     // These four are Node-side, not React Native: they import the desktop main process or
     // src/shared/child-process, whose modules are written against @types/node. This program's libs
     // are React Native's, where `setTimeout` answers a number rather than a NodeJS.Timeout, so

@@ -1,0 +1,22 @@
+{
+  "inspectedDate": "2026-09-25",
+  "chromiumTag": "133.0.6943.137",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/chromium/chromium/133.0.6943.137/android_webview/browser/aw_devtools_server.cc",
+      "sha256": "48b6a7ca96a396c2aa57a1ce1492a3c06b94f6a97da36cb427455215af12a969"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/chromium/chromium/133.0.6943.137/content/browser/android/devtools_auth.cc",
+      "sha256": "bfc57f32c974fee1c4b079ba05db6d7a59aa1e9b2f23f74d113834196a616fbf"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/chromium/chromium/133.0.6943.137/android_webview/glue/java/src/com/android/webview/chromium/SharedStatics.java",
+      "sha256": "bd1477c5e6a5ae8f8c2a11b7c4a5d8c98907f8256e8156a4c26b405ac06d4b6b"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/chromium/chromium/133.0.6943.137/android_webview/glue/java/src/com/android/webview/chromium/WebViewChromiumAwInit.java",
+      "sha256": "90fbe531ef19035e49bc6fa6fb9b221bdbb3bef07edf996d97d2a9dba3936441"
+    }
+  ]
+}

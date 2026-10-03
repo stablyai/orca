@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application android:networkSecurityConfig="@xml/network_security_config" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="Automation proof" android:allowBackup="false">
+    <activity android:name=".Launcher" android:exported="true" />
+    <activity android:name=".RouteActivity" android:process=":route" android:exported="false" android:windowSoftInputMode="stateAlwaysHidden|adjustNothing" />
+  </application>
+</manifest>
