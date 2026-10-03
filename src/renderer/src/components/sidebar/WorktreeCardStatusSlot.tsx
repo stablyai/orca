@@ -152,9 +152,8 @@ export function WorktreeCardStatusSlot({
     newCardStyle && isUnread
       ? translate('workspace.activity.unreadLabel', '{{status}} · Unread', { status: reviewLabel })
       : reviewLabel
-  // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
-  const showNewCardUnreadAlert =
-    newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
+  // Why: an unread result can coexist with another agent's active status.
+  const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus
   const reviewStaleRef = reviewStale ? observeOffscreenAnimation : undefined
   const reviewStatusIconClassName = cn(
     compactReviewAndBranchStatusIconClassName,
