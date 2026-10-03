@@ -61,4 +61,31 @@ describe('RuntimeProjectGroupController.deleteFolderWorkspace', () => {
     expect(deps.removeFolderWorkspace).toHaveBeenCalledWith('ws-1')
     warn.mockRestore()
   })
+
+  it('does not resolve the delete before the removed state cleanup lands', async () => {
+    let releaseCleanup!: () => void
+    const cleanupParked = new Promise<void>((resolve) => {
+      releaseCleanup = resolve
+    })
+    const deps = createController(() => 'ssh-1')
+    deps.cleanupRemovedFolderWorkspaceState.mockReturnValue(cleanupParked)
+
+    const deletion = deps.controller.deleteFolderWorkspace('ws-1')
+    let settledEarly = false
+    void deletion.then(
+      () => {
+        settledEarly = true
+      },
+      () => {}
+    )
+    // One macrotask is past the PTY teardown await: the cleanup has fired and
+    // the catalog row is removed, while the cleanup itself is still parked. A
+    // delete that resolves here is the bug — the ack must wait for the purge
+    // (and the Codex pretrust deletion inside it).
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(deps.removeFolderWorkspace).toHaveBeenCalledWith('ws-1')
+    expect(settledEarly).toBe(false)
+    releaseCleanup()
+    await expect(deletion).resolves.toEqual({ deleted: true })
+  })
 })

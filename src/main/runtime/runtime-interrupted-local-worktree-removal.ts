@@ -195,7 +195,9 @@ async function finishInterruptedLocalWorktreeRemoval(
     await gate.finish(removed)
   }
   await cleanupRemovedWorktreePushTarget(finishArgs)
-  args.finishRemoval(result, true, record.head)
+  // Awaited like the registered branch: the removal may only be reported
+  // after the purge — and the Codex pretrust deletion inside it — landed.
+  await args.finishRemoval(result, true, record.head)
   return result
 }
 

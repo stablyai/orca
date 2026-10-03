@@ -136,4 +136,53 @@ describe('worktree removal cleans up the Codex pretrust Orca wrote', () => {
     await removalAck
     expect(readFileSync(configPath, 'utf-8')).not.toContain(`[projects."${PROJECT}"]`)
   })
+
+  it('hands the folder-workspace forgetting dep the purge promise, not void', async () => {
+    // Why parked: the wired dep used to void the purge promise, so the folder
+    // delete had nothing to await and a forgotten workspace could report
+    // before the recorded entry was deleted.
+    let releasePurge!: () => void
+    const purgeParked = new Promise<void>((resolve) => {
+      releasePurge = resolve
+    })
+    const store = {
+      getWorktreeMeta: () => ({}),
+      getRepos: () => [] as never[],
+      removeWorktreeMeta: () => {},
+      getRepo: () => undefined,
+      getSettings: () => ({})
+    }
+    const runtime = new OrcaRuntimeService(store as never)
+    const purgeSpy = vi
+      .spyOn(
+        runtime as unknown as {
+          removeWorktreeMetadataAndHistory: (store: unknown, worktreeId: string) => Promise<void>
+        },
+        'removeWorktreeMetadataAndHistory'
+      )
+      .mockReturnValue(purgeParked)
+    const cleanupRemovedFolderWorkspaceState = (
+      runtime as unknown as {
+        projectGroups: {
+          deps: {
+            cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void | Promise<void>
+          }
+        }
+      }
+    ).projectGroups.deps.cleanupRemovedFolderWorkspaceState
+
+    const cleanup = cleanupRemovedFolderWorkspaceState('folder:ws-1')
+    expect(purgeSpy).toHaveBeenCalledWith(expect.anything(), 'folder:ws-1')
+
+    // Voiding the promise made this resolve instantly; the dep must hand the
+    // caller the still-pending purge to await.
+    let settledEarly = false
+    void Promise.resolve(cleanup).then(() => {
+      settledEarly = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(settledEarly).toBe(false)
+    releasePurge()
+    await cleanup
+  })
 })
