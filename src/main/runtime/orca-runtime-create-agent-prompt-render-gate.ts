@@ -6,18 +6,22 @@ import {
   CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS
 } from './orca-runtime-core'
 import type { RuntimeTerminalWait, RuntimeTerminalWaitCondition } from '../../shared/runtime-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithWriteTerminalAgentPrompt {
   protected createAgentPromptRenderGate(
     ptyId: string,
-    pasteIngestMs: number
+    pasteIngestMs: number,
+    promptAgent?: TuiAgent | null
   ): {
     arm: () => void
     wait: () => Promise<void>
     dispose: () => void
   } | null {
     const pty = this.ptysById.get(ptyId)
-    if (!['claude', 'codex'].includes(pty?.launchAgent ?? pty?.foregroundAgent ?? '')) {
+    const agent =
+      promptAgent === undefined ? (pty?.launchAgent ?? pty?.foregroundAgent) : promptAgent
+    if (!['claude', 'codex'].includes(agent ?? '')) {
       return null
     }
     let armed = false

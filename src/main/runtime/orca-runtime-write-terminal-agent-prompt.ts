@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission } from './orca-runtime-resolve-authoritative-terminal-wait-permission'
 import type { RuntimeAgentPromptWriteOptions } from './runtime-terminal-contracts'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeTerminalPromptDelivery, RuntimeTerminalSend } from '../../shared/runtime-types'
 import {
   assertAgentPromptRequestActive,
@@ -27,7 +28,8 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     ptyId: string,
     generation: number,
     pastePayload: string,
-    options: RuntimeAgentPromptWriteOptions
+    options: RuntimeAgentPromptWriteOptions,
+    promptAgent?: TuiAgent | null
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
@@ -35,15 +37,15 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
+    const agent =
+      promptAgent === undefined ? (pty?.foregroundAgent ?? pty?.launchAgent) : promptAgent
     // OMP treats a large bracketed paste as a menu unless submit arrives in the same PTY write.
     // Once a foreground agent is known, it is the process that will consume the bytes;
     // launchAgent is only the fallback during startup before process detection settles.
-    const submitWithPaste = agentPromptSubmitJoinsPasteFrame(
-      pty?.foregroundAgent ?? pty?.launchAgent
-    )
+    const submitWithPaste = agentPromptSubmitJoinsPasteFrame(agent)
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
-    const renderGate = this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+    const renderGate = this.createAgentPromptRenderGate(ptyId, pasteIngestMs, agent)
     const waitTextCache: AgentPromptWaitTextCache = {}
     const preSubmitBaseline = submitWithPaste
       ? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
@@ -80,7 +82,6 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         renderGate.dispose()
       }
     } else {
-      const agent = this.getPtyAgent(ptyId)
       const submitDelayMs = options.promptForSchedule
         ? resolveAgentPromptSubmitDelayForAgent(writeHostPlatform, options.promptForSchedule, agent)
         : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
@@ -107,7 +108,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
     }
-    const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
+    const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(agent)
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({
         baseline,
@@ -118,13 +119,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       return { submits: 1 }
     }
     const binding = this.getTerminalPromptRequestBinding(handle)
-    const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
-    const launchAgent = this.ptysById.get(ptyId)?.launchAgent
-    const settlementAgent = isTerminalSendSettlementAgent(foregroundAgent)
-      ? foregroundAgent
-      : isTerminalSendSettlementAgent(launchAgent)
-        ? launchAgent
-        : null
+    const settlementAgent = isTerminalSendSettlementAgent(agent) ? agent : null
     const inputAccepted: RuntimeTerminalPromptDelivery = {
       requestId: options.requestId,
       stages: ['input_accepted'],

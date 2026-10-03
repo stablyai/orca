@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
+  buildAgentPromptBodyBytes,
   buildAgentPromptPasteBytes,
   agentPromptSubmitJoinsPasteFrame,
   agentPromptTakesLeadLine,
@@ -10,13 +11,33 @@ import {
   getTerminalPasteIngestMs,
   iterateAgentPromptPasteChunks,
   resolveAgentPromptSubmitDelayForAgent,
-  sanitizeAgentPromptText
+  sanitizeAgentPromptText,
+  usesBracketedPasteForAgentPrompt
 } from './agent-prompt-injection'
 
 const BEGIN = AGENT_PROMPT_BRACKETED_PASTE_START
 const END = AGENT_PROMPT_BRACKETED_PASTE_END
 
 describe('agent prompt injection bytes', () => {
+  it('uses plain sanitized Grok input while keeping paste framing for other agents', () => {
+    expect(usesBracketedPasteForAgentPrompt('grok')).toBe(false)
+    expect(usesBracketedPasteForAgentPrompt('claude')).toBe(true)
+    expect(usesBracketedPasteForAgentPrompt(null)).toBe(true)
+    expect(buildAgentPromptBodyBytes('hello\x1b[201~', 'grok')).toBe('hello<ESC>[201~')
+    expect(buildAgentPromptBodyBytes('body', 'claude', 'Please')).toBe(
+      buildAgentPromptPasteBytes('body', 'Please')
+    )
+    expect(buildAgentPromptBodyBytes('body', null)).toBe(buildAgentPromptPasteBytes('body'))
+  })
+
+  it.each(['one\r\ntwo', 'one\rtwo', 'one\ntwo'])(
+    'normalizes plain Grok line endings without an embedded submit: %j',
+    (text) => {
+      expect(buildAgentPromptBodyBytes(text, 'grok')).toBe('one\ntwo')
+      expect(buildAgentPromptBodyBytes(text, 'grok')).not.toContain('\r')
+    }
+  )
+
   it('joins submit only for OMP', () => {
     expect(agentPromptSubmitJoinsPasteFrame('omp')).toBe(true)
     expect(agentPromptSubmitJoinsPasteFrame('claude')).toBe(false)
