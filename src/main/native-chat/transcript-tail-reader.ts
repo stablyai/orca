@@ -6,6 +6,7 @@ import type {
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
+  decodeAntigravityTranscriptLine,
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
@@ -35,6 +36,9 @@ export type NativeChatLineDecoder = (line: string, fallbackId: string) => Native
 
 export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  if (transcriptAgent === 'antigravity') {
+    return decodeAntigravityTranscriptLine
+  }
   if (transcriptAgent === 'claude') {
     return decodeClaudeTranscriptLine
   }

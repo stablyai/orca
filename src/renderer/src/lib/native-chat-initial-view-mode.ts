@@ -27,11 +27,15 @@ export function decideInitialAgentTabViewMode(args: {
   /** The unsent launch context, when `promptDelivery` is `'draft'`. */
   launchDraftText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
+  providerSessionId?: string | null
 }): Tab['viewMode'] {
   if (!agentTabsDefaultToNativeChat(args)) {
     return undefined
   }
   if (!isNativeChatSupportedAgent(args.agent)) {
+    return undefined
+  }
+  if (args.agent === 'antigravity' && !args.providerSessionId?.trim()) {
     return undefined
   }
   if (
@@ -59,6 +63,7 @@ export function initialAgentTabViewModeProps(
     promptDelivery?: NativeChatLaunchPromptDelivery
     launchDraftText?: string
     nativeChatTranscriptIsLocalReadable?: boolean
+    providerSessionId?: string | null
   } = {}
 ): { viewMode?: Tab['viewMode'] } {
   const viewMode = decideInitialAgentTabViewMode({
@@ -67,7 +72,8 @@ export function initialAgentTabViewModeProps(
     agent: options.agent,
     promptDelivery: options.promptDelivery,
     launchDraftText: options.launchDraftText,
-    nativeChatTranscriptIsLocalReadable: options.nativeChatTranscriptIsLocalReadable
+    nativeChatTranscriptIsLocalReadable: options.nativeChatTranscriptIsLocalReadable,
+    providerSessionId: options.providerSessionId
   })
   return viewMode ? { viewMode } : {}
 }

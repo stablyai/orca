@@ -330,3 +330,45 @@ The honest summary is that this is a screen-shaped problem being solved with lin
 rule over the derived tail can be made much better than what ships today, but the durable fix is to
 ask the terminal emulator what the bottom row of the screen actually is, rather than inferring it
 from a byte stream that was written with cursor addressing. Attempt seven does that.
+
+## Native Windows command approval — 1.2.7 (2026-09-20)
+
+`antigravity-windows-command-approval.txt` records an actual authenticated tool
+turn, stopped while the four-choice “Run this command?” dialog owns the screen.
+`antigravity-windows-command-cancelled.txt` records another harmless command turn
+and Escape dismissing that dialog back to the empty composer. Both used the
+repository PTY recorder on native Windows at 120×40, with account information
+hidden. The command executable's OS username is replaced with a same-length
+placeholder in the transcript and sidecar. Both pass the transcript secret scan.
+
+The approval screen ends with the navigation hint and `esc to cancel`; its four
+choices distinguish it from ordinary working output. The runtime regression
+previously timed out without a blocked reason. The approval publisher recognizes that captured menu; the current agent-state
+rules hold readiness while it owns the screen. The cancelled capture reads as
+an idle composer, held to the current three-second quiescence gate.
+
+These are historical Windows recordings, not live proof of the current port.
+Current macOS/Windows/WSL Allow/Deny flows and narrower widths still need live
+verification. Do not infer permission from `PreToolUse`: agy can
+execute an already-allowed tool without waiting for a user decision.
+
+`antigravity-windows-command-allow-key.txt` additionally records the pending menu,
+sending the single key `1` (no Enter), successful harmless command execution and
+return to the empty composer. This verifies the existing Chat approval card's
+one-time acceptance key on native Windows 1.2.7. The recorder metadata confirms
+completion; the capture was transferred as raw UTF-8 bytes without newline
+normalization and its username was replaced with a same-length placeholder.
+
+## Native macOS command approval — 1.2.14 (2026-10-02)
+
+`antigravity-macos-1-2-14-command-approval.txt` captures an actual authenticated
+Claude Sonnet turn requesting `cat proof.txt` in a disposable folder. It is the
+authoritative restored main PTY grid at 159×69, with ANSI retained and identifying
+username, hostname and task-profile suffix scrubbed; the sidecar distinguishes
+this grid snapshot from raw PTY event bytes. Existing replay tests recognize the
+four-choice menu and return `hold`. No predicate was changed for this capture.
+
+The owning hook-server row was absent during this run. This proves the current
+CLI permission screen, not automatic Chat association, an actionable Chat card,
+or successful Allow/Deny delivery. Those require live verification after the
+separately owned POSIX hook transport successor lands.

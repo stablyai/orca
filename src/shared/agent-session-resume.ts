@@ -229,7 +229,7 @@ export function extractAgentProviderSession(
     }
     case 'antigravity': {
       const id = readSessionId(payload, ['conversationId'])
-      return id ? { key: 'conversation_id', id } : null
+      return id ? withTranscriptPath({ key: 'conversation_id', id }, payload) : null
     }
     case 'opencode':
     case 'opencode2':

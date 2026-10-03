@@ -110,7 +110,7 @@ export const LIFECYCLE_CLOCK_SKEW_SLACK_MS = 2_000
  * is never a dropped Stop, so a trailing assistant row (a tool call mid-run) cannot end it.
  */
 function hookDeliversTurnEnd(agent: AgentType): boolean {
-  return agent === 'omp'
+  return agent === 'omp' || agent === 'antigravity'
 }
 
 function liveStatusOverride(

@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-02T09:43:00Z",
+  "platform": "darwin",
+  "command": ["agy", "--model", "claude-sonnet-4-6"],
+  "cols": 159,
+  "rows": 69,
+  "captureKind": "authoritative-main-buffer-snapshot",
+  "note": "Installed authenticated agy 1.2.14; actual Claude turn paused at cat proof.txt approval in disposable folder. ANSI restored main PTY grid, not a synthetic fixture. Username/hostname/task profile suffix scrubbed; no hook row or UI approval proof claimed."
+}

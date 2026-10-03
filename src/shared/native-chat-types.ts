@@ -204,6 +204,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Epoch ms when the message was produced, or null when the source could not
    *  supply one (e.g. some scrape segments). Null sorts before any timestamp. */
   timestamp: number | null
+  /** Provider step order breaks ties when its transcript clock has coarse precision. */
+  transcriptPosition?: number
   source: NativeChatSource
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */

@@ -38,6 +38,8 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // Shrink leaves the cursor one column short; also present in the pre-Qoder serializer.
   'qoder-no-account': 2,
   'qoder-ready': 2,
+  // Prior efbf651c7bb2 also clamps the restored right-margin cursor (120→119); I1/I3 hold.
+  'antigravity-windows-command-approval': 4,
   // Codex 0.157 header border restores with an extra attribute bit (STA-8628 fixtures).
   'codex-0157-config-override-embedded-warning': 22,
   'codex-0157-effort-override-embedded-warning': 4,
@@ -242,6 +244,14 @@ describe('serialize round trip over captured PTY transcripts', () => {
         console.log(`${transcript.name} ${JSON.stringify(counts)}`)
       }
       expect(blocking).toEqual([])
+      if (SEEDS === 2 && transcript.name === 'antigravity-windows-command-approval') {
+        expect(failureSignatures).toEqual([
+          'shrink-grow/false/1/30:ee4f2be236723b8d30e4c58413e1e2200e8c209cfc2b32c35b7caf0f6569c5bd',
+          'shrink-grow/false/2/35:ee4f2be236723b8d30e4c58413e1e2200e8c209cfc2b32c35b7caf0f6569c5bd',
+          'shrink-grow/true/1/30:ee4f2be236723b8d30e4c58413e1e2200e8c209cfc2b32c35b7caf0f6569c5bd',
+          'shrink-grow/true/2/35:ee4f2be236723b8d30e4c58413e1e2200e8c209cfc2b32c35b7caf0f6569c5bd'
+        ])
+      }
       if (SEEDS === 2 && transcript.name === 'hermes-tui-ready') {
         expect(failureSignatures).toEqual([
           'jitter/false/2/34:0db2561506ff28d2e83276b07bc8684541957f61e488b6f8081627e8cad80c63',

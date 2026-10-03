@@ -1,4 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import {
+  AntigravityScreenPermissionPublisher,
+  antigravityHookRowMatchesPty
+} from './antigravity-screen-permission-publisher'
 import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './orca-runtime-capture-provider-terminal-buffer'
 import type { RuntimeTerminalProjection } from './orca-runtime-core'
 import { buildPreview } from './terminal-tail-state'
@@ -7,6 +11,7 @@ import type {
   RuntimeVisibleTerminalState
 } from './runtime-terminal-state-records'
 import {
+  TUI_IDLE_QUIESCENCE_MS,
   VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './orca-runtime-postlude'
@@ -17,6 +22,43 @@ import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { withTimeout } from './runtime-async-boundaries'
 
 export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
+  protected readonly antigravityScreenPermissions = new AntigravityScreenPermissionPublisher({
+    baseline: (ptyId) => {
+      const pty = this.ptysById.get(ptyId)
+      if (!pty?.connected || pty.connectionId || !pty.paneKey) {
+        return null
+      }
+      const terminalHandle = this.getAgentStatusTerminalHandleForPaneKey(pty.paneKey)
+      const row = this.getAgentProviderSessionRowsForPaneFn?.(pty.paneKey)?.find(
+        (candidate) =>
+          candidate.providerSessionOnly !== true && candidate.agentType === 'antigravity'
+      )
+      // Native hooks identify the pane; the runtime owns its live terminal binding.
+      return row && terminalHandle && antigravityHookRowMatchesPty(row.connectionId, pty)
+        ? { ...row, terminalHandle }
+        : null
+    },
+    readScreen: async (ptyId) => {
+      const screen = await this.readVisibleTerminalState(ptyId)
+      const lines = this.readScreenRuledLines(ptyId)
+      return screen && lines ? { ...screen, lines } : null
+    },
+    quietRemainingMs: (ptyId) => {
+      const lastOutputAt = this.ptysById.get(ptyId)?.lastOutputAt
+      return lastOutputAt == null
+        ? 0
+        : Math.max(0, TUI_IDLE_QUIESCENCE_MS - (Date.now() - lastOutputAt))
+    },
+    isCurrent: (ptyId, screen) =>
+      this.ptysById.get(ptyId)?.connected === true &&
+      this.getPtyLivenessVerdict(ptyId)?.status !== 'unverifiable' &&
+      screen.generation === this.getPtyLifecycleGeneration(ptyId) &&
+      screen.sequence >= this.getPtyOutputSequence(ptyId) &&
+      (!screen.headlessWriteChain ||
+        screen.headlessWriteChain === this.headlessTerminals.get(ptyId)?.writeChain),
+    publish: (event) => this.onTerminalScreenPermission?.(event) ?? false
+  })
+
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
     const providerModeUnknown =

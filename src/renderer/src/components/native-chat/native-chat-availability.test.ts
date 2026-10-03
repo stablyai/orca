@@ -90,20 +90,22 @@ describe('canToggleNativeChat', () => {
     ).toBe(false)
   })
 
-  // Why: omp discloses no hook transcript path either, so its session file is
-  // only reachable when this process can read the agent's disk.
-  it('rejects Model-A SSH omp but accepts it local and runtime-owned', () => {
-    const forConnection = (connectionId: string | null): boolean =>
-      canToggleNativeChat({
-        experimentalNativeChatEnabled: true,
-        contentType: 'terminal',
-        launchAgent: 'omp',
-        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
-      })
-    expect(forConnection('ssh-target-1')).toBe(false)
-    expect(forConnection(null)).toBe(true)
-    expect(forConnection('runtime-ssh-env-1')).toBe(true)
-  })
+  // Direct SSH has no transcript transport, even when a hook names the remote file.
+  it.each(['omp', 'antigravity'] as const)(
+    'rejects Model-A SSH %s but accepts it local and runtime-owned',
+    (agent) => {
+      const forConnection = (connectionId: string | null): boolean =>
+        canToggleNativeChat({
+          experimentalNativeChatEnabled: true,
+          contentType: 'terminal',
+          launchAgent: agent,
+          nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+        })
+      expect(forConnection('ssh-target-1')).toBe(false)
+      expect(forConnection(null)).toBe(true)
+      expect(forConnection('runtime-ssh-env-1')).toBe(true)
+    }
+  )
 
   it('lets an existing Model-A SSH Grok chat toggle back to terminal', () => {
     expect(

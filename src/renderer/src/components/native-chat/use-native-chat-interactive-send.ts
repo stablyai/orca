@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId, sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
 import {
@@ -21,6 +21,9 @@ import {
   type NativeChatSendHandle
 } from './native-chat-runtime-send'
 import { inferQuestionAnsweredFromCurrentStatus } from '../terminal-pane/agent-question-answered-inference'
+import { createNativeChatAntigravityInterrupt } from './native-chat-antigravity-interrupt'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 
 // ESC is the agent-TUI interrupt/cancel key over the PTY (matches how the
 // composer forwards Escape). Used to cancel a question or deny an approval.
@@ -60,16 +63,34 @@ export function useNativeChatInteractiveSend(
   // unmount so a detached setTimeout chain can't keep writing PTY bytes after
   // the view is gone / the user switched away.
   const inFlightRef = useRef<NativeChatSendHandle | null>(null)
+  const interruptRef = useRef<ReturnType<typeof createNativeChatAntigravityInterrupt> | null>(null)
   const cancelInFlight = useCallback(() => {
     inFlightRef.current?.cancel()
     inFlightRef.current = null
   }, [])
   // Why: a split can be rebound without unmounting this view. Cancel during
   // commit so no delayed answer write can race the replacement PTY.
-  useLayoutEffect(
-    () => cancelInFlight,
-    [agent, cancelInFlight, paneKey, targetPtyId, terminalTabId]
-  )
+  useLayoutEffect(() => {
+    const interrupt = createNativeChatAntigravityInterrupt({
+      paneKey,
+      getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
+      writeAccepted: () =>
+        targetPtyId
+          ? window.api.pty.writeAccepted(targetPtyId, ESC, 'driving')
+          : Promise.resolve(false),
+      inferInterrupt: (request) =>
+        window.api.agentStatus.inferInterrupt(request).catch((error) => {
+          console.warn('[agent-interrupt] native Chat inference failed:', error)
+          return false
+        })
+    })
+    interruptRef.current = interrupt
+    return () => {
+      cancelInFlight()
+      interrupt.dispose()
+      interruptRef.current = null
+    }
+  }, [agent, cancelInFlight, paneKey, targetPtyId, terminalTabId])
 
   const sendRaw = useCallback(
     (raw: string) => {
@@ -159,8 +180,21 @@ export function useNativeChatInteractiveSend(
   // Stop/cancel: drop any pending answer writes, then send ESC to interrupt.
   const cancel = useCallback(() => {
     cancelInFlight()
-    sendRaw(ESC)
-  }, [cancelInFlight, sendRaw])
+    const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
+    if (
+      agent === 'antigravity' &&
+      targetPtyId &&
+      !isRemoteRuntimePtyId(targetPtyId) &&
+      !parseAppSshPtyId(targetPtyId) &&
+      getActiveRuntimeTarget(settings).kind === 'local'
+    ) {
+      void interruptRef.current?.cancel().catch((error) => {
+        console.warn('[agent-interrupt] native Chat cancellation failed:', error)
+      })
+    } else {
+      sendRaw(ESC)
+    }
+  }, [agent, cancelInFlight, sendRaw, targetPtyId, terminalTabId])
 
   return { sendAnswer, sendRaw, cancelPending: cancelInFlight, cancel }
 }
