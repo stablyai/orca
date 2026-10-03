@@ -1,5 +1,14 @@
+import { normalizeCompatibleAgentTitleForOwner } from '../../shared/agent-title-owner'
+import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { RuntimeTerminalRename } from '../../shared/runtime-terminal-contracts'
+import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import {
+  getLatestAgentCandidateTitle,
+  getLeafDisplayRecord,
+  getPtyDisplayRecord,
+  type TitleDisplayClear
+} from './runtime-worktree-status-projection'
 
 type StickyTitleTab = {
   type: string
@@ -56,6 +65,60 @@ export function readStickyMobileTerminalTitle(
     return { kind: 'sticky', title: custom }
   }
   return { kind: 'unset' }
+}
+
+export function projectedLeafOscTitle(
+  leaf: RuntimeLeafRecord,
+  clear: TitleDisplayClear | null
+): string | null {
+  const display = getLeafDisplayRecord(leaf, clear)
+  return getLatestAgentCandidateTitle(
+    { title: display.paneTitle, updatedAt: display.paneTitleUpdatedAt },
+    { title: display.lastOscTitle, updatedAt: display.lastOscTitleAt }
+  )
+}
+
+export function projectedPtyOscTitle(
+  pty: RuntimePtyWorktreeRecord,
+  clear: TitleDisplayClear | null
+): string | null {
+  const display = getPtyDisplayRecord(pty, clear)
+  return getLatestAgentCandidateTitle(
+    { title: display.title, updatedAt: display.titleUpdatedAt },
+    { title: display.lastOscTitle, updatedAt: display.lastOscTitleAt }
+  )
+}
+
+/** Mobile strip title: a user rename, then a clear, then the live OSC chain. */
+export function projectStickyMobileTerminalTitle(input: {
+  tab: { customTitle?: string | null; title: string }
+  pty: ManualTitlePty | null
+  trackerOnlyTitle: string | null
+  oscTitle: string | null
+  syncedTitle: string | null | undefined
+  ownerAgent: Parameters<typeof normalizeCompatibleAgentTitleForOwner>[1]
+  ownerOptions: Parameters<typeof normalizeCompatibleAgentTitleForOwner>[2]
+}): string {
+  const sticky = readStickyMobileTerminalTitle(input.tab, input.pty)
+  if (sticky.kind === 'sticky') {
+    return sticky.title
+  }
+  const liveTitle =
+    sticky.kind === 'cleared'
+      ? (input.trackerOnlyTitle ?? input.oscTitle ?? 'Terminal')
+      : (input.trackerOnlyTitle ?? input.oscTitle ?? input.syncedTitle ?? input.tab.title)
+  const agentTitle = normalizeCompatibleAgentTitleForOwner(
+    liveTitle,
+    input.ownerAgent,
+    input.ownerOptions
+  )
+  return resolveTerminalTabTitle(
+    sticky.kind === 'cleared'
+      ? { ...input.tab, customTitle: null, title: agentTitle }
+      : { ...input.tab, title: agentTitle },
+    true,
+    agentTitle
+  )
 }
 
 function ptyForTerminalTab(
