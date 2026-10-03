@@ -435,4 +435,43 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       vi.useRealTimers()
     }
   })
+
+  // #9092: a rebound subscribe still opening its stream when a second deadline latches must stay
+  // revivable by system resume / network online instead of needing a manual Reconnect.
+  it('parks a rebound subscribe whose stream open fails after its deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const { transport } = await attachStalePane()
+      const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+      const { retryAllRemoteRuntimePtyRecoveriesNow } =
+        await import('./remote-runtime-pty-recovery-state')
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+
+      // The stream open for the rebound handle hangs through the whole new recovery window.
+      const streamOpen: { reject: ((error: Error) => void) | null } = { reject: null }
+      runtimeSubscribe.mockImplementation(
+        () =>
+          new Promise((_resolve, reject) => {
+            streamOpen.reject = reject
+          })
+      )
+      handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+        hostSnapshot('terminal-rotated', 3, 'epoch-2'),
+        'env-1'
+      )
+      await vi.waitFor(() => expect(streamOpen.reject).not.toBeNull())
+      expect(transport.getRecoveryState?.().phase).toBe('recovering')
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 1)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+
+      streamOpen.reject?.(new Error('Could not connect to the remote Orca runtime.'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

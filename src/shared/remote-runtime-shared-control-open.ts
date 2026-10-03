@@ -68,9 +68,11 @@ export function openSharedControlSocket(
   const liveness = callbacks.liveness
   const monitor = startRemoteRuntimeSocketLiveness({
     ping: () => {
-      if (ws.readyState === 1) {
-        ws.ping()
+      if (ws.readyState !== 1) {
+        return false
       }
+      ws.ping()
+      return true
     },
     onDead: () => {
       if (callbacks.getCurrentSocket() !== ws) {
