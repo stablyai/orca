@@ -92,6 +92,25 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
   } as AppState
 }
 
+function createEditFile(
+  id: string,
+  filePath: string,
+  runtimeEnvironmentId?: string | null,
+  worktreeId = 'wt-1'
+): AppState['openFiles'][number] {
+  return {
+    id,
+    filePath,
+    relativePath: filePath.slice(1),
+    worktreeId,
+    language: 'typescript',
+    runtimeEnvironmentId,
+    mode: 'edit',
+    isDirty: false,
+    isPreview: false
+  }
+}
+
 function createRepo(id: string, connectionId: string | null): AppState['repos'][number] {
   return {
     id,
@@ -506,5 +525,104 @@ describe('buildWorkspaceSessionPayload', () => {
 
     expect(payload.activeFileIdByWorktree).toEqual({})
     expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-2': 'terminal' })
+  })
+
+  // Why (issue #23967): the session mirror keys local files by raw path while hydration recasts
+  // every persisted row to an owned id, so each launch can re-append a row hydration already
+  // folds as corruption (#17370 keeps the first record per owner). Persisting one row per
+  // (path, worktree, runtime) tuple is lossless for restore and stops the file from growing.
+  it('folds repeated open-file rows for the same (path, worktree, runtime) tuple', () => {
+    const ownedId = 'editor:wt-1:env-a:%2Ftmp%2Fdemo.ts'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          createEditFile(ownedId, '/tmp/demo.ts', 'env-a'),
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', 'env-a'),
+          createEditFile('editor:wt-1:env-b:%2Ftmp%2Fdemo.ts', '/tmp/demo.ts', 'env-b'),
+          createEditFile('/tmp/other.ts', '/tmp/other.ts', 'env-a'),
+          createEditFile('editor:wt-1:env-a:%2Ftmp%2Fother.ts', '/tmp/other.ts', 'env-a')
+        ],
+        activeFileIdByWorktree: { 'wt-1': ownedId }
+      })
+    )
+
+    expect(
+      payload.openFilesByWorktree?.['wt-1'].map((row) => [row.filePath, row.runtimeEnvironmentId])
+    ).toEqual([
+      ['/tmp/demo.ts', 'env-a'],
+      ['/tmp/demo.ts', 'env-b'],
+      ['/tmp/other.ts', 'env-a']
+    ])
+    expect(payload.activeFileIdByWorktree).toEqual({ 'wt-1': ownedId })
+  })
+
+  // Why: the fold keeps the first row per tuple, and the mirror's raw-path duplicate can be the
+  // selected one — folding its id away used to drop the active pointer (and with it the 'editor'
+  // tab-type marker), so the next launch reopened the worktree on a terminal tab.
+  it('remaps the active file id to the retained row when the selected duplicate is folded', () => {
+    const ownedId = 'editor:wt-1:env-a:%2Ftmp%2Fdemo.ts'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          createEditFile(ownedId, '/tmp/demo.ts', 'env-a'),
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', 'env-a')
+        ],
+        activeFileIdByWorktree: { 'wt-1': '/tmp/demo.ts' },
+        activeTabTypeByWorktree: { 'wt-1': 'editor' }
+      })
+    )
+
+    expect(payload.openFilesByWorktree?.['wt-1'].map((row) => row.filePath)).toEqual([
+      '/tmp/demo.ts'
+    ])
+    expect(payload.activeFileIdByWorktree).toEqual({ 'wt-1': ownedId })
+    expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-1': 'editor' })
+  })
+
+  // Why: raw-path ids are the absolute filePath string, so the same id can name a live row in a
+  // second worktree while the first worktree's fold removed its own copy of that id — remapping
+  // across the fold's worktree boundary hijacked the live worktree's pointer onto a foreign row
+  // (and the whitelist then dropped it, losing the selection and the 'editor' marker).
+  it('does not remap an active id that is still live in its own worktree', () => {
+    const ownedId = 'editor:wt-1:env-a:%2Ftmp%2Fdemo.ts'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          createEditFile(ownedId, '/tmp/demo.ts', 'env-a'),
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', 'env-a'),
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', undefined, 'wt-2')
+        ],
+        activeFileIdByWorktree: { 'wt-2': '/tmp/demo.ts' },
+        activeTabTypeByWorktree: { 'wt-2': 'editor' }
+      })
+    )
+
+    expect(payload.openFilesByWorktree?.['wt-2'].map((row) => row.filePath)).toEqual([
+      '/tmp/demo.ts'
+    ])
+    expect(payload.activeFileIdByWorktree).toEqual({ 'wt-2': '/tmp/demo.ts' })
+    expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-2': 'editor' })
+  })
+
+  // Why: hydration gives the local row a raw-path id and the remote row an owned id, and the
+  // mirror re-appends a raw-path duplicate of the remote tuple — the local row's id then is both
+  // live (its own tuple) and a removed key (the remote tuple's fold), and the pointer naming the
+  // local row must stay on it instead of sliding to the remote row.
+  it('prefers a live row over the fold mapping when both claim the active id', () => {
+    const ownedId = 'editor:wt-1:env-a:%2Ftmp%2Fdemo.ts'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', undefined),
+          createEditFile(ownedId, '/tmp/demo.ts', 'env-a'),
+          createEditFile('/tmp/demo.ts', '/tmp/demo.ts', 'env-a')
+        ],
+        activeFileIdByWorktree: { 'wt-1': '/tmp/demo.ts' },
+        activeTabTypeByWorktree: { 'wt-1': 'editor' }
+      })
+    )
+
+    expect(payload.activeFileIdByWorktree).toEqual({ 'wt-1': '/tmp/demo.ts' })
+    expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-1': 'editor' })
   })
 })
