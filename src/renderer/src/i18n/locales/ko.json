@@ -17827,6 +17827,10 @@
         "queuePausedCleared": "대화를 지워서 대기열이 일시 중지되었습니다",
         "queuePaused": "대기열이 일시 중지되었습니다",
         "resume": "재개"
+      },
+      "pairedStop": {
+        "unsupported": "이 호스트는 Chat에서 Antigravity 중지를 지원하지 않습니다. Terminal에서 중단하세요.",
+        "failed": "Chat에서 Antigravity를 중지하지 못했습니다"
       }
     },
     "tab": {

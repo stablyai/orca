@@ -17827,6 +17827,10 @@
         "queuePausedCleared": "会話を消去したため、キューを一時停止しました",
         "queuePaused": "キューは一時停止中です",
         "resume": "再開"
+      },
+      "pairedStop": {
+        "unsupported": "このホストは Chat からの Antigravity の停止に対応していません。Terminal で中断してください。",
+        "failed": "Chat から Antigravity を停止できませんでした"
       }
     },
     "tab": {

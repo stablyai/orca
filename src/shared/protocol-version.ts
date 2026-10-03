@@ -12,6 +12,7 @@ export {
   AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY
 } from './agent-session-resume-runtime-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
+import { ANTIGRAVITY_CHAT_INTERRUPT_CAPABILITY } from './antigravity-chat-interrupt'
 import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import {
@@ -341,6 +342,7 @@ export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  ANTIGRAVITY_CHAT_INTERRUPT_CAPABILITY,
   ANTIGRAVITY_NATIVE_CHAT_RUNTIME_CAPABILITY,
   ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,

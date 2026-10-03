@@ -1,3 +1,10 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { createPairedAntigravityInterrupt } from './native-chat-paired-antigravity-interrupt'
+import {
+  getRemoteRuntimeTerminalHandle,
+  getRemoteRuntimePtyEnvironmentId
+} from '@/runtime/runtime-terminal-stream'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import { isRemoteRuntimePtyId, sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
@@ -42,7 +49,8 @@ export type NativeChatInteractiveSend = {
   /** Stop delayed writes without interrupting the agent. */
   cancelPending: () => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
-  cancel: () => void
+  /** False leaves the working indicator owned by the execution host. */
+  cancel: () => void | false
 }
 
 /**
@@ -64,6 +72,10 @@ export function useNativeChatInteractiveSend(
   // the view is gone / the user switched away.
   const inFlightRef = useRef<NativeChatSendHandle | null>(null)
   const interruptRef = useRef<ReturnType<typeof createNativeChatAntigravityInterrupt> | null>(null)
+  const pairedInterruptRef = useRef<{
+    ptyId: string
+    interrupt: ReturnType<typeof createPairedAntigravityInterrupt>
+  } | null>(null)
   const cancelInFlight = useCallback(() => {
     inFlightRef.current?.cancel()
     inFlightRef.current = null
@@ -84,10 +96,24 @@ export function useNativeChatInteractiveSend(
           return false
         })
     })
+    const environmentId = targetPtyId ? getRemoteRuntimePtyEnvironmentId(targetPtyId) : null
+    const terminal = targetPtyId ? getRemoteRuntimeTerminalHandle(targetPtyId) : null
+    const pairedInterrupt =
+      environmentId && terminal
+        ? createPairedAntigravityInterrupt({
+            environmentId,
+            terminal,
+            getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey]
+          })
+        : null
+    pairedInterruptRef.current =
+      pairedInterrupt && targetPtyId ? { ptyId: targetPtyId, interrupt: pairedInterrupt } : null
     interruptRef.current = interrupt
     return () => {
       cancelInFlight()
       interrupt.dispose()
+      pairedInterrupt?.dispose()
+      pairedInterruptRef.current = null
       interruptRef.current = null
     }
   }, [agent, cancelInFlight, paneKey, targetPtyId, terminalTabId])
@@ -178,9 +204,37 @@ export function useNativeChatInteractiveSend(
   )
 
   // Stop/cancel: drop any pending answer writes, then send ESC to interrupt.
-  const cancel = useCallback(() => {
+  const cancel = useCallback((): void | false => {
     cancelInFlight()
     const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
+    if (agent === 'antigravity' && targetPtyId && isRemoteRuntimePtyId(targetPtyId)) {
+      if (pairedInterruptRef.current?.ptyId !== targetPtyId) {
+        return false
+      }
+      void pairedInterruptRef.current.interrupt
+        .cancel()
+        .then((result) => {
+          if (!result.accepted && result.reason === 'unsupported') {
+            toast.error(
+              translate(
+                'components.native-chat.pairedStop.unsupported',
+                'This host does not support Antigravity Chat Stop. Use Terminal to interrupt.'
+              )
+            )
+          }
+        })
+        .catch((error) => {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'components.native-chat.pairedStop.failed',
+                  'Antigravity Chat Stop failed'
+                )
+          )
+        })
+      return false
+    }
     if (
       agent === 'antigravity' &&
       targetPtyId &&

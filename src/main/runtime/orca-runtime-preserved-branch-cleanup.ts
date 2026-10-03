@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import type { AntigravityScreenPermissionObservation } from '../agent-hooks/server/server-ingest-antigravity-screen'
+import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import { OrcaRuntimeWithTerminalDrivers } from './orca-runtime-terminal-drivers'
 import { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
 import type { IPtyProvider } from '../providers/types'
@@ -58,6 +59,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly onTerminalScreenPermission:
     | ((event: AntigravityScreenPermissionObservation) => boolean)
+    | null
+
+  protected readonly inferAgentInterruptFn:
+    | ((request: AgentInterruptInferenceRequest) => boolean)
     | null
 
   protected readonly onTerminalAgentStatus:

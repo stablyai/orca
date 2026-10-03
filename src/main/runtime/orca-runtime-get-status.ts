@@ -30,6 +30,7 @@ import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
+import { ANTIGRAVITY_CHAT_INTERRUPT_CAPABILITY } from '../../shared/antigravity-chat-interrupt'
 import type {
   AutomationsChangedPayload,
   RuntimeClientEvent
@@ -59,6 +60,10 @@ function supportsDurableTerminalPromptDelivery(): boolean {
 }
 
 export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+  supportsAntigravityChatInterrupt(): boolean {
+    return Boolean(this.inferAgentInterruptFn && this.ptyController?.writeWithSettlement)
+  }
+
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
   }
@@ -81,6 +86,8 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
     const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
       (capability) =>
+        (capability !== ANTIGRAVITY_CHAT_INTERRUPT_CAPABILITY ||
+          this.supportsAntigravityChatInterrupt()) &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
         // Why: the nested-runtime E2E needs a real legacy transport without maintaining an old binary fixture.
         (process.env.ORCA_E2E_DISABLE_RUNTIME_SHARED_CONTROL !== '1' ||

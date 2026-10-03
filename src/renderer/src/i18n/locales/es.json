@@ -15205,6 +15205,10 @@
         "queuePausedCleared": "Cola en pausa después de que borraste la conversación",
         "queuePaused": "Cola en pausa",
         "resume": "Reanudar"
+      },
+      "pairedStop": {
+        "unsupported": "Este host no admite detener Antigravity desde Chat. Usa Terminal para interrumpirlo.",
+        "failed": "No se pudo detener Antigravity desde Chat"
       }
     },
     "tab": {

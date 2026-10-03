@@ -17891,6 +17891,10 @@
         "queuePausedCleared": "File d'attente en pause après l'effacement de la conversation",
         "queuePaused": "File d'attente en pause",
         "resume": "Reprendre"
+      },
+      "pairedStop": {
+        "unsupported": "Cet hôte ne permet pas d’arrêter Antigravity depuis Chat. Utilisez Terminal pour interrompre la tâche.",
+        "failed": "Impossible d’arrêter Antigravity depuis Chat"
       }
     },
     "tab": {

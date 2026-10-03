@@ -18054,6 +18054,10 @@
         "queuePausedCleared": "Queue paused after you cleared the conversation",
         "queuePaused": "Queue paused",
         "resume": "Resume"
+      },
+      "pairedStop": {
+        "unsupported": "This host does not support Antigravity Chat Stop. Use Terminal to interrupt.",
+        "failed": "Antigravity Chat Stop failed"
       }
     },
     "tab": {

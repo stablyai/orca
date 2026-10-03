@@ -292,12 +292,14 @@ export function NativeChatResolvedView({
   const turnTiming = useNativeChatTerminalTurnTiming(paneKey, session.messages, turnActive)
 
   const stopAgent = useCallback(() => {
+    if (interactiveSend.cancel() === false) {
+      return
+    }
     setWorkingInterrupted(true)
     // Why: Stop after a submitted turn drops the delayed-write handle once it
     // settles, so cancelPendingSends no longer sees the optimistic id. Clear
     // the echo cache here so a cancelled prompt cannot stick as a ghost bubble.
     clear()
-    interactiveSend.cancel()
   }, [interactiveSend, clear])
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,

@@ -1,4 +1,5 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { AntigravityChatInterrupt } from '../../../../shared/antigravity-chat-interrupt'
 import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript,
@@ -220,5 +221,13 @@ export const NATIVE_CHAT_METHODS = [
       runtime.cleanupSubscriptionsByPrefix(`nativeChat:${connection}:`)
       return { unsubscribed: true }
     }
+  }),
+  defineMethod({
+    name: 'nativeChat.interruptAntigravity',
+    params: AntigravityChatInterrupt,
+    handler: async (params, { runtime, signal }) =>
+      signal?.aborted
+        ? { accepted: false, inferred: false, reason: 'refused' }
+        : runtime.interruptAntigravityChat(params)
   })
 ]

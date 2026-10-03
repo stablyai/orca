@@ -43,6 +43,7 @@ import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-id
 import { registerConptyDa1OverrideInstaller } from './terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
 import { RuntimeMachineName } from './runtime-machine-name'
+import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
@@ -60,6 +61,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       prepareClaudeAuth?: PrepareClaudeAuth
       onPtyStopped?: (ptyId: string) => void
       onTerminalScreenPermission?: (event: AntigravityScreenPermissionObservation) => boolean
+      inferAgentInterrupt?: (request: AgentInterruptInferenceRequest) => boolean
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
       // Why: agent status mostly arrives via hooks (agent-hooks/server), not OSC
@@ -221,6 +223,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       this.stats = stats
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
+    this.inferAgentInterruptFn = deps?.inferAgentInterrupt ?? null
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))

@@ -17844,6 +17844,10 @@
         "queuePausedCleared": "清除对话后，队列已暂停",
         "queuePaused": "队列已暂停",
         "resume": "继续"
+      },
+      "pairedStop": {
+        "unsupported": "此主机不支持在 Chat 中停止 Antigravity。请在 Terminal 中中断。",
+        "failed": "在 Chat 中停止 Antigravity 失败"
       }
     },
     "tab": {

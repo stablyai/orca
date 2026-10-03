@@ -99,7 +99,10 @@ function yieldBetweenTerminalInputChunks(): Promise<void> {
   return new Promise<void>((resolve) => setImmediate(resolve))
 }
 
-async function waitForTerminalWriteDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
+export async function waitForTerminalWriteDelay(
+  delayMs: number,
+  signal?: AbortSignal
+): Promise<void> {
   if (!signal) {
     await new Promise((resolve) => setTimeout(resolve, delayMs))
     return

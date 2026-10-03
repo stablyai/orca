@@ -20,8 +20,46 @@ import { visibleNonBlankTerminalLines } from './terminal-tail-read'
 import type { RuledScreen } from './screen-input-veto'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { withTimeout } from './runtime-async-boundaries'
+import { createAntigravityChatInterruptHost } from './antigravity-chat-interrupt-host'
+import { writeRefused } from '../../shared/pty-write-settlement'
+import type { AntigravityChatInterruptRequest } from '../../shared/antigravity-chat-interrupt'
 
 export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
+  private readonly antigravityChatInterrupt = createAntigravityChatInterruptHost({
+    supported: () => this.supportsAntigravityChatInterrupt(),
+    readBinding: (terminal) => {
+      const live = this.getLivePtyForHandle(terminal)
+      const leaf = live ? null : this.getLiveLeafForHandle(terminal).leaf
+      const pty = live?.pty ?? (leaf?.ptyId ? this.ptysById.get(leaf.ptyId) : null)
+      if (
+        !pty?.connected ||
+        pty.connectionId ||
+        !pty.paneKey ||
+        this.getDriver(pty.ptyId).kind === 'mobile' ||
+        this.getPtyLivenessVerdict(pty.ptyId)?.status === 'unverifiable' ||
+        this.getPtyLivenessVerdict(pty.ptyId)?.status === 'exited'
+      ) {
+        return null
+      }
+      const row = this.getAgentProviderSessionRowsForPaneFn?.(pty.paneKey)?.find(
+        (candidate) => candidate.agentType === 'antigravity' && !candidate.providerSessionOnly
+      )
+      return row &&
+        (!row.terminalHandle || row.terminalHandle === terminal) &&
+        antigravityHookRowMatchesPty(row.connectionId, pty)
+        ? { ptyId: pty.ptyId, generation: this.getPtyLifecycleGeneration(pty.ptyId), row }
+        : null
+    },
+    write: async (binding) =>
+      this.ptyController?.writeWithSettlement?.(binding.ptyId, '\x1b', 'driving') ??
+      writeRefused('provider_cannot_settle'),
+    infer: (request) => this.inferAgentInterruptFn?.(request) ?? false
+  })
+
+  interruptAntigravityChat(request: AntigravityChatInterruptRequest) {
+    return this.antigravityChatInterrupt(request)
+  }
+
   protected readonly antigravityScreenPermissions = new AntigravityScreenPermissionPublisher({
     baseline: (ptyId) => {
       const pty = this.ptysById.get(ptyId)

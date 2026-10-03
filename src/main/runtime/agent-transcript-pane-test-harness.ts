@@ -1,4 +1,5 @@
 // One pane builder for every suite that replays a captured agent transcript through the runtime.
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -9,6 +10,7 @@ const TRANSCRIPT_PANE_WORKTREE_ID = 'wt-1'
 export const TRANSCRIPT_PANE_PTY_ID = 'pty-1'
 
 export type TranscriptPaneOptions = {
+  writeWithSettlement?: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   paneTitle: string
   foregroundProcess: string | null
   data: string
@@ -40,6 +42,7 @@ export async function createTranscriptPane(
   runtime.setPtyController({
     spawn: vi.fn().mockResolvedValue({ id: TRANSCRIPT_PANE_PTY_ID, incarnationId: 'inc-1' }),
     write: () => true,
+    ...(options.writeWithSettlement ? { writeWithSettlement: options.writeWithSettlement } : {}),
     kill: () => true,
     getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {
