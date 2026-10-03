@@ -78,6 +78,30 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     modelingUnit: 'cjkchar'
   },
   {
+    // Why: the recommended Parakeet multilingual set is European-only; Korean users need a local offline transducer (#10103).
+    id: 'zipformer-korean-2024-06-24',
+    label: 'Zipformer Korean',
+    description:
+      'Korean only. Offline int8 transducer from k2-fsa; accurate dictation on modest CPUs.',
+    type: 'transducer',
+    provider: 'local',
+    language: 'ko',
+    sizeBytes: 329_740_690,
+    downloadUrl:
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-zipformer-korean-2024-06-24.tar.bz2',
+    archiveSha256: '24bd409318f389cd2de0e295eb1acf91f4e8dfcc0d650490dd2a01f5b50d2c77',
+    archiveFormat: 'tar.bz2',
+    files: [
+      'encoder-epoch-99-avg-1.int8.onnx',
+      'decoder-epoch-99-avg-1.int8.onnx',
+      'joiner-epoch-99-avg-1.int8.onnx',
+      'tokens.txt'
+    ],
+    sampleRate: 16000,
+    streaming: false,
+    modelingUnit: 'bpe'
+  },
+  {
     id: 'zipformer-streaming-korean',
     label: 'Zipformer Streaming KO',
     description: 'Korean only. Low-latency real-time streaming.',
