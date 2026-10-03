@@ -231,7 +231,7 @@ export function useWorktreeCardSecondaryDetails({
     issue: metaIssue,
     linearIssue: metaLinearIssue,
     jiraIssue: metaJiraIssue,
-    review: newCardStyle ? null : metaReview,
+    review: metaReview,
     comment: metaComment,
     automationProvenance: metaAutomationProvenance,
     cliProvenance: metaCliProvenance
