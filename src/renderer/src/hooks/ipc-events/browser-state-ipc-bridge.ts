@@ -8,6 +8,7 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { focusBrowserGuestForKeyboard } from '@/components/browser-pane/host-guest/browser-guest-keyboard-focus'
 
 /**
  * A client-hosted page is a local Electron webview on this desktop that happens to belong to a
@@ -106,6 +107,12 @@ export function registerBrowserStateIpcBridge(
       if (targetWorktreeId) {
         store.focusBrowserTabInWorktree(targetWorktreeId, browserPageId)
       }
+    })
+  )
+  unsubs.push(
+    window.api.browser.onGuestKeyboardFocusRequest(({ requestId, webContentsId }) => {
+      const focused = focusBrowserGuestForKeyboard(document, webContentsId)
+      void window.api.browser.respondGuestKeyboardFocus({ requestId, focused })
     })
   )
   unsubs.push(

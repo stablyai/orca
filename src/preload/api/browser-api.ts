@@ -13,6 +13,10 @@ import type {
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
 import type {
+  BrowserGuestKeyboardFocusRequest,
+  BrowserGuestKeyboardFocusResponse
+} from '../../shared/browser-guest-keyboard-focus'
+import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
   BrowserAwaitGrabSelectionArgs,
@@ -78,6 +82,10 @@ export type BrowserApi = {
   ) => () => void
   onWebAuthnAccountRequestClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse) => Promise<boolean>
+  onGuestKeyboardFocusRequest: (
+    callback: (request: BrowserGuestKeyboardFocusRequest) => void
+  ) => () => void
+  respondGuestKeyboardFocus: (response: BrowserGuestKeyboardFocusResponse) => Promise<boolean>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string

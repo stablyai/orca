@@ -4,6 +4,10 @@ import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
+import type {
+  BrowserGuestKeyboardFocusRequest,
+  BrowserGuestKeyboardFocusResponse
+} from '../../shared/browser-guest-keyboard-focus'
 import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { browserClientPageRendererRequests } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
@@ -49,6 +53,18 @@ export const browserGuestRegistrationAndDownloadsApi = {
   },
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse): Promise<boolean> =>
     ipcRenderer.invoke('browser:respondWebAuthnAccount', response),
+  onGuestKeyboardFocusRequest: (
+    callback: (request: BrowserGuestKeyboardFocusRequest) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      request: BrowserGuestKeyboardFocusRequest
+    ): void => callback(request)
+    ipcRenderer.on('browser:guest-keyboard-focus-requested', listener)
+    return () => ipcRenderer.removeListener('browser:guest-keyboard-focus-requested', listener)
+  },
+  respondGuestKeyboardFocus: (response: BrowserGuestKeyboardFocusResponse): Promise<boolean> =>
+    ipcRenderer.invoke('browser:respondGuestKeyboardFocus', response),
   openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:openDevTools', args),
   setViewportOverride: (args: {

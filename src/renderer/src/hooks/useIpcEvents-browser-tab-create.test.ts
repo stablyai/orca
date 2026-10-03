@@ -219,7 +219,8 @@ describe('useIpcEvents browser tab create routing', () => {
             activateViewListenerRef.current = listener
             return () => {}
           },
-          onPaneFocus: () => () => {}
+          onPaneFocus: () => () => {},
+          onGuestKeyboardFocusRequest: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),

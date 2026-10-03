@@ -27,6 +27,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     onNavigationUpdate: () => noopUnsubscribe,
     onActivateView: () => noopUnsubscribe,
     onPaneFocus: () => noopUnsubscribe,
+    onGuestKeyboardFocusRequest: () => noopUnsubscribe,
     onOpenLinkInOrcaTab: () => noopUnsubscribe,
     cancelDownload: () => Promise.resolve(false),
     setGrabMode: () =>

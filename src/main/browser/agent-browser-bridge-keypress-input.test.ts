@@ -44,6 +44,15 @@ vi.mock('./cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
 
+const { requestGuestKeyboardFocusMock } = vi.hoisted(() => ({
+  requestGuestKeyboardFocusMock:
+    vi.fn<(guest: unknown) => Promise<'focused' | 'not-on-screen' | 'unanswered'>>()
+}))
+
+vi.mock('./browser-guest-keyboard-focus', () => ({
+  requestBrowserGuestKeyboardFocus: requestGuestKeyboardFocusMock
+}))
+
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
   createSucceedWith,
@@ -90,6 +99,8 @@ describe('AgentBrowserBridge keypress input', () => {
     wc = mockWebContents(100)
     wc.debugger.sendCommand.mockResolvedValue({})
     webContentsFromIdMock.mockImplementation((id: number) => (id === 100 ? wc : null))
+    requestGuestKeyboardFocusMock.mockReset()
+    requestGuestKeyboardFocusMock.mockResolvedValue('focused')
   })
 
   it('dispatches a printable key over CDP without spawning agent-browser', async () => {
@@ -121,6 +132,50 @@ describe('AgentBrowserBridge keypress input', () => {
         location: 0
       }
     ])
+  })
+
+  it('focuses the page before dispatching so the key cannot land in a focused terminal', async () => {
+    await bridge.keypress('Escape', undefined, 'tab-1')
+
+    expect(requestGuestKeyboardFocusMock).toHaveBeenCalledExactlyOnceWith(wc)
+    const [firstDispatchOrder] = wc.debugger.sendCommand.mock.invocationCallOrder
+    expect(requestGuestKeyboardFocusMock.mock.invocationCallOrder[0]).toBeLessThan(
+      firstDispatchOrder
+    )
+  })
+
+  it('refuses to dispatch when the page cannot take keyboard focus', async () => {
+    requestGuestKeyboardFocusMock.mockResolvedValue('not-on-screen')
+
+    await expect(bridge.keypress('Escape', undefined, 'tab-1')).rejects.toMatchObject({
+      code: 'browser_error',
+      message: expect.stringContaining('not on screen')
+    })
+    expect(keyEventCalls(wc)).toEqual([])
+  })
+
+  it('still dispatches when no embedder answers the focus request', async () => {
+    requestGuestKeyboardFocusMock.mockResolvedValue('unanswered')
+
+    await expect(bridge.keypress('Escape', undefined, 'tab-1')).resolves.toEqual({
+      pressed: 'Escape'
+    })
+    expect(keyEventCalls(wc)).toHaveLength(2)
+  })
+
+  it('focuses the page before handing an unmapped key to agent-browser', async () => {
+    succeedWith({ pressed: 'MediaPlayPause' })
+
+    await bridge.keypress('MediaPlayPause', undefined, 'tab-1')
+
+    const pressCallIndex = execFileMock.mock.calls.findIndex(([, commandArgs]) =>
+      isStringArray(commandArgs) ? commandArgs.includes('press') : false
+    )
+    expect(pressCallIndex).toBeGreaterThanOrEqual(0)
+    expect(requestGuestKeyboardFocusMock).toHaveBeenCalledExactlyOnceWith(wc)
+    expect(requestGuestKeyboardFocusMock.mock.invocationCallOrder[0]).toBeLessThan(
+      execFileMock.mock.invocationCallOrder[pressCallIndex]
+    )
   })
 
   it('types & as shifted 7 instead of colliding with the ArrowUp virtual key code', async () => {

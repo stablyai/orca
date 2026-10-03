@@ -192,7 +192,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
-          onPaneFocus: () => () => {}
+          onPaneFocus: () => () => {},
+          onGuestKeyboardFocusRequest: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -458,7 +459,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
-          onPaneFocus: () => () => {}
+          onPaneFocus: () => () => {},
+          onGuestKeyboardFocusRequest: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
