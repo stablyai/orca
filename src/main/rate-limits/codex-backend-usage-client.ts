@@ -13,7 +13,11 @@ import {
 } from './codex-backend-auth'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 import { mapCodexRateLimitWindow } from './codex-rate-limit-window-mapper'
-import { mapBackendRateLimitResetCredits } from './codex-reset-credit-client'
+import {
+  isConfirmedZeroRateLimitResetCredits,
+  mapBackendRateLimitResetCredits,
+  mergeRateLimitResetCredits
+} from './codex-reset-credit-client'
 
 type BackendRateLimitWindow = {
   used_percent?: number
@@ -114,7 +118,13 @@ export async function supplementCodexSessionWindow(
     if (!backend) {
       return limits
     }
-    const rateLimitResetCredits = backend.rateLimitResetCredits ?? limits.rateLimitResetCredits
+    // A confirmed zero is trustworthy, so keep it as-is: a positive fallback count
+    // from usage metadata must not Math.max over it (#22781).
+    const rateLimitResetCredits =
+      backend.rateLimitResetCredits &&
+      !isConfirmedZeroRateLimitResetCredits(limits.rateLimitResetCredits)
+        ? mergeRateLimitResetCredits(limits.rateLimitResetCredits, backend.rateLimitResetCredits)
+        : limits.rateLimitResetCredits
     if (!backend.session) {
       return rateLimitResetCredits === limits.rateLimitResetCredits
         ? limits

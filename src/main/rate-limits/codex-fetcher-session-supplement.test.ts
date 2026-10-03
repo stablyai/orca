@@ -132,15 +132,25 @@ describe('Codex backend session supplement credits', () => {
     vi.unstubAllGlobals()
   })
 
-  it('reuses complete zero-credit metadata from a weekly-only usage response', async () => {
-    vi.mocked(fetch).mockResolvedValue(usageResponse({ available_count: 0 }))
+  it('verifies an unconfirmed zero-credit count from a weekly-only usage response', async () => {
+    // #22781: a bare 0 without confirming details is re-checked against the dedicated
+    // endpoint instead of being trusted outright.
+    vi.mocked(fetch).mockImplementation(async (url) => {
+      if (String(url).endsWith('/wham/rate-limit-reset-credits')) {
+        return {
+          ok: true,
+          json: async () => ({ available_count: 0, credits: [] })
+        } as Response
+      }
+      return usageResponse({ available_count: 0 })
+    })
 
     await expect(fetchWeeklyOnly()).resolves.toMatchObject({
       session: null,
       weekly: { usedPercent: 22, windowMinutes: 10_080 },
       rateLimitResetCredits: { availableCount: 0, nextExpiresAt: null }
     })
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 
   it.each([
@@ -182,5 +192,17 @@ describe('Codex backend session supplement credits', () => {
       'https://chatgpt.com/backend-api/wham/usage',
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits'
     ])
+  })
+
+  it('preserves a confirmed zero when usage metadata reports a positive count', async () => {
+    // CodeRabbit follow-up on #22781: a zero confirmed by an explicitly empty details
+    // list is trustworthy — the session supplement must not Math.max a positive
+    // fallback count from usage metadata over it.
+    vi.mocked(fetch).mockResolvedValue(usageResponse({ available_count: 2 }))
+
+    await expect(fetchWeeklyOnly({ availableCount: 0, credits: [] })).resolves.toMatchObject({
+      rateLimitResetCredits: { availableCount: 0, credits: [] }
+    })
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })
