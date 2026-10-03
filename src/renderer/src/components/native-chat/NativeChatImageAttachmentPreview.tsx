@@ -10,12 +10,14 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 type Props = {
   attachment: NativeChatComposerImageAttachment
   onRemove: (id: string) => void
+  removeDisabled?: boolean
 }
 
 /** Thumbnail for a pending image, with an in-app full-size preview on click. */
 export function NativeChatImageAttachmentPreview({
   attachment,
-  onRemove
+  onRemove,
+  removeDisabled = false
 }: Props): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false)
   const [isNearViewport, setIsNearViewport] = useState(false)
@@ -93,6 +95,7 @@ export function NativeChatImageAttachmentPreview({
         <button
           type="button"
           onClick={() => onRemove(attachment.id)}
+          disabled={removeDisabled}
           aria-label={translate(
             'components.native-chat.composer.removeAttachment',
             'Remove attachment'

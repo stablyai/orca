@@ -25,10 +25,12 @@ type PasteTerminalClipboardDeps = {
   protectedMultilineTextPasteOptions?: TerminalPasteTextOptions
   onTextPasteError?: (error: unknown) => void
   onImagePasteError?: (error: unknown) => void
+  stageImage?: (path: string) => boolean
 }
 
 export type TerminalClipboardPasteResult =
   | { status: 'pasted'; kind: 'image-path' | 'text' }
+  | { status: 'staged'; kind: 'image-path' }
   | {
       status: 'skipped'
       reason:
@@ -49,7 +51,8 @@ export async function pasteTerminalClipboard({
   forceBracketedMultilineTextPaste = false,
   protectedMultilineTextPasteOptions,
   onTextPasteError,
-  onImagePasteError
+  onImagePasteError,
+  stageImage
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
   let text = ''
   try {
@@ -82,6 +85,11 @@ export async function pasteTerminalClipboard({
     const filePath = await saveClipboardImageAsTempFile({ connectionId, runtimeEnvironmentId })
     if (!filePath) {
       return { status: 'skipped', reason: 'empty' }
+    }
+    if (stageImage) {
+      return stageImage(filePath)
+        ? { status: 'staged', kind: 'image-path' }
+        : { status: 'skipped', reason: 'image-paste-rejected' }
     }
     const result = await pasteText(filePath, {
       // Why: a generated clipboard-image path is terminal image injection, not

@@ -18784,6 +18784,13 @@
       "confirmStopDescription": "This closes any open Codex sessions that share it, including ones outside Orca.",
       "cancel": "Cancel",
       "runs": "Runs"
+    },
+    "imageAttachments": {
+      "attach": "Add to Codex",
+      "cancel": "Cancel",
+      "codexPreview": "Codex image preview · Not yet attached",
+      "failed": "Could not attach image. Check the session and try again.",
+      "noSubmit": "Add images, then send from Codex. Other CLIs use their existing paste flow."
     }
   },
   "fileExplorer": {
