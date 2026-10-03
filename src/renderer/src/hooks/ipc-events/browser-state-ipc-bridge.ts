@@ -1,4 +1,5 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
@@ -127,7 +128,7 @@ export function registerBrowserStateIpcBridge(
         browserPageId,
         sourcePage.worktreeId
       )
-      store.createBrowserTab(sourcePage.worktreeId, url, {
+      const newTab = store.createBrowserTab(sourcePage.worktreeId, url, {
         title: url,
         activate: activate ?? true,
         ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
@@ -141,6 +142,10 @@ export function registerBrowserStateIpcBridge(
             }
           : {})
       })
+      if ((activate ?? true) && newTab.activePageId) {
+        // Tab activation alone can leave keyboard input on the opener guest.
+        requestBrowserFocus({ pageId: newTab.activePageId, target: 'webview' })
+      }
     })
   )
 }
