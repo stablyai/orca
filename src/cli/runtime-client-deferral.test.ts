@@ -40,7 +40,8 @@ vi.mock('./runtime/environments', async (importOriginal) => {
 // null-vs-undefined coverage the rest of the table cannot.
 vi.mock('../main/agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock,
-  getManagedAgentHookStatuses: vi.fn(() => [])
+  getManagedAgentHookStatuses: vi.fn(() => []),
+  readManagedAgentHookStatuses: vi.fn(async () => [])
 }))
 
 vi.mock('./runtime-client', () => {

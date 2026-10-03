@@ -133,15 +133,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return [...homes.values()]
   }
 
-  // Why: the real-home hook installer flips this gate off when the trust-grant
-  // client reports the host incapable, keeping that host byte-identical to the
-  // managed lane instead of shipping status-blind panes.
-  protected realHomeLaneGate: () => boolean = () => true
-
-  setRealHomeLaneGate(gate: () => boolean): void {
-    this.realHomeLaneGate = gate
-  }
-
   // Why: real-home routing applies only to the host system-default selection.
   // Managed accounts run in their own homes; custom CODEX_HOMEs stay on the
   // mirror until cleanup can be tracked across old homes.
@@ -153,14 +144,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   }
 
   isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
+    return this.isHostSystemDefaultRealHomeSelected(launchEnv)
   }
 
   // Why: launch prep evaluates the real-home lane AFTER clearing an unusable
   // managed selection; read-only siblings need that same verdict with the
   // selection ignored rather than cleared.
   protected wouldSystemDefaultRouteToRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return !hasCustomCodexHomeOverrideForLaunch(launchEnv) && this.realHomeLaneGate()
+    return !hasCustomCodexHomeOverrideForLaunch(launchEnv)
   }
 
   reconcileLegacySharedHomeForRetainedPanes(): void {

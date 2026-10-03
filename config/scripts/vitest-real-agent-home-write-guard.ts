@@ -29,7 +29,8 @@ const INHERITED_STATE_ENV = [
   'ORCA_USER_DATA_PATH',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
-  'CLAUDE_CONFIG_DIR'
+  'CLAUDE_CONFIG_DIR',
+  'ORCA_CODEX_HOOK_FLAGS'
 ]
 // Why: an Orca terminal points this at the live app's CLI, which a test's child shell would run.
 const INHERITED_LIVE_CLI_ENV = ['ORCA_CODEX_LAUNCH_PREFLIGHT']

@@ -57,8 +57,12 @@ const GIT_COMPAT_PREFIXES = [
 
 // Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
 // depends on it, its app-server transport, or the contract itself changes. The same
-// job pins --no-daemon for Orca's codex shell wrapper and the project-trust key.
+// job pins --no-daemon for Orca's codex shell wrapper, the project-trust key, and the
+// status hook's session flag.
 const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
+  'src/main/codex/codex-hook-session-',
+  'src/main/codex/codex-app-server-client',
+  'src/main/codex/codex-hook-definition',
   'src/main/agent-trust-presets',
   'src/main/codex/config-toml-trust',
   'src/main/pty/codex-no-daemon-binary-contract',
@@ -105,6 +109,8 @@ const SHELL_PREFIXES = [
   'src/main/runtime/structured-session-child-identity-env',
   'src/renderer/src/components/terminal-pane/fish-color-scheme',
   'src/shared/fish-',
+  // Why: the codex function's text is what the shell contract suites run in real shells.
+  'src/shared/codex-shell-function',
   'src/shared/pty-reply-echo-shapes',
   'src/shared/startup-shell-portability',
   'src/shared/posix-command-path-lookup',

@@ -3,9 +3,9 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { VerifiedCodexResumeSource } from '../codex/codex-session-resume-preparation'
 
 /**
- * Turning Codex off in the per-agent hook settings removes Orca's Codex hook
- * entry. Launch prep and session resume must read that same opt-out, or the
- * next Codex launch writes the entry straight back.
+ * Launch prep and session resume must read the per-agent Codex hook opt-out
+ * for the managed homes they prepare, and must never write the real ~/.codex:
+ * Orca's hook rides each launch as a session flag, whatever the setting.
  */
 const SYSTEM_HOME = '/home/user/.codex'
 const ACCOUNT_HOME = '/accounts/one/.codex'
@@ -17,10 +17,7 @@ const mocks = vi.hoisted(() => {
     prepareForCodexLaunchAsync: vi.fn(async (): Promise<string | null> => null),
     isHostSystemDefaultRealHomeSelected: vi.fn(() => false),
     prepareRuntimeHomeForLaunch: vi.fn(async () => ({ state: 'ok' as const })),
-    installForLaunchPrep: vi.fn(async () => {}),
-    refreshRuntimeUserHooksForLaunchPrep: vi.fn(async () => {}),
-    ensureRealHomeCodexHookState: vi.fn(async () => 'installed' as const),
-    awaitRealHomeCodexHookTrust: vi.fn(async () => 'installed' as const),
+    removeRealHomeCodexHookEntries: vi.fn(async () => 'removed' as const),
     prepareCodexSessionResume: vi.fn()
   }
 })
@@ -29,14 +26,12 @@ vi.mock('electron', () => ({ app: { getPath: vi.fn(() => '/tmp/orca-user-data') 
 vi.mock('../agent-trust-presets', () => ({ markCodexProjectTrusted: vi.fn(async () => {}) }))
 vi.mock('../codex/hook-service', () => ({
   codexHookService: {
-    prepareRuntimeHomeForLaunch: mocks.prepareRuntimeHomeForLaunch,
-    installForLaunchPrep: mocks.installForLaunchPrep,
-    refreshRuntimeUserHooksForLaunchPrep: mocks.refreshRuntimeUserHooksForLaunchPrep
+    prepareRuntimeHomeForLaunch: mocks.prepareRuntimeHomeForLaunch
   }
 }))
+// Why: the only module that writes ~/.codex; launch prep must never reach it.
 vi.mock('../codex/codex-real-home-hook-install', () => ({
-  awaitRealHomeCodexHookTrust: mocks.awaitRealHomeCodexHookTrust,
-  ensureRealHomeCodexHookState: mocks.ensureRealHomeCodexHookState
+  removeRealHomeCodexHookEntries: mocks.removeRealHomeCodexHookEntries
 }))
 // Why: the real predicate, without loading every agent's hook service.
 vi.mock(
@@ -124,16 +119,13 @@ describe('Codex launch prep honours the per-agent hook opt-out', () => {
 
   it.each(HOOK_SETTINGS)(
     'real ~/.codex launch with $name: hooks on = $codexHooksOn',
-    async ({ settings, codexHooksOn }) => {
+    async ({ settings }) => {
       mocks.settings = settings
       mocks.isHostSystemDefaultRealHomeSelected.mockReturnValue(true)
 
       await expect(prepareCodexRuntimeHomeForLaunch()).resolves.toBeNull()
 
-      expect(mocks.ensureRealHomeCodexHookState).toHaveBeenCalledTimes(1)
-      expect(mocks.ensureRealHomeCodexHookState).toHaveBeenCalledWith(
-        expect.objectContaining({ hooksEnabled: codexHooksOn, writePolicy: 'add-missing-only' })
-      )
+      expect(mocks.removeRealHomeCodexHookEntries).not.toHaveBeenCalled()
       expect(mocks.prepareRuntimeHomeForLaunch).not.toHaveBeenCalled()
     }
   )
@@ -146,7 +138,7 @@ describe('Codex launch prep honours the per-agent hook opt-out', () => {
 
       await expect(prepareCodexRuntimeHomeForLaunch()).resolves.toBe(ACCOUNT_HOME)
 
-      expect(mocks.ensureRealHomeCodexHookState).not.toHaveBeenCalled()
+      expect(mocks.removeRealHomeCodexHookEntries).not.toHaveBeenCalled()
       expect(mocks.prepareRuntimeHomeForLaunch).toHaveBeenCalledWith(
         ACCOUNT_HOME,
         undefined,
@@ -157,19 +149,15 @@ describe('Codex launch prep honours the per-agent hook opt-out', () => {
 
   it.each(HOOK_SETTINGS)(
     'resume into the real ~/.codex with $name: hooks on = $codexHooksOn',
-    async ({ settings, codexHooksOn }) => {
+    async ({ settings }) => {
       mocks.settings = settings
 
-      await resumeFrom(SYSTEM_HOME)
+      await expect(resumeFrom(SYSTEM_HOME)).resolves.toMatchObject({
+        codexHomePath: SYSTEM_HOME
+      })
 
-      expect(mocks.ensureRealHomeCodexHookState).toHaveBeenCalledTimes(1)
-      expect(mocks.ensureRealHomeCodexHookState).toHaveBeenCalledWith(
-        expect.objectContaining({ hooksEnabled: codexHooksOn, writePolicy: 'add-missing-only' })
-      )
-      // Why: a resume has no managed home to fall back to, so it waits on a running approval.
-      expect(mocks.awaitRealHomeCodexHookTrust).toHaveBeenCalledOnce()
-      expect(mocks.installForLaunchPrep).not.toHaveBeenCalled()
-      expect(mocks.refreshRuntimeUserHooksForLaunchPrep).not.toHaveBeenCalled()
+      expect(mocks.removeRealHomeCodexHookEntries).not.toHaveBeenCalled()
+      expect(mocks.prepareRuntimeHomeForLaunch).not.toHaveBeenCalled()
     }
   )
 
@@ -178,17 +166,17 @@ describe('Codex launch prep honours the per-agent hook opt-out', () => {
     async ({ settings, codexHooksOn }) => {
       mocks.settings = settings
 
-      await resumeFrom(ACCOUNT_HOME)
+      await expect(resumeFrom(ACCOUNT_HOME)).resolves.toMatchObject({
+        codexHomePath: ACCOUNT_HOME
+      })
 
-      expect(mocks.ensureRealHomeCodexHookState).not.toHaveBeenCalled()
-      expect(mocks.awaitRealHomeCodexHookTrust).not.toHaveBeenCalled()
-      if (codexHooksOn) {
-        expect(mocks.installForLaunchPrep).toHaveBeenCalledWith(ACCOUNT_HOME)
-        expect(mocks.refreshRuntimeUserHooksForLaunchPrep).not.toHaveBeenCalled()
-      } else {
-        expect(mocks.installForLaunchPrep).not.toHaveBeenCalled()
-        expect(mocks.refreshRuntimeUserHooksForLaunchPrep).toHaveBeenCalledWith(ACCOUNT_HOME)
-      }
+      expect(mocks.removeRealHomeCodexHookEntries).not.toHaveBeenCalled()
+      expect(mocks.prepareRuntimeHomeForLaunch).toHaveBeenCalledOnce()
+      expect(mocks.prepareRuntimeHomeForLaunch).toHaveBeenCalledWith(
+        ACCOUNT_HOME,
+        undefined,
+        codexHooksOn
+      )
     }
   )
 })

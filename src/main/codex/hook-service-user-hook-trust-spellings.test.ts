@@ -3,10 +3,16 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import {
+  codexHookSourcePathsEqual,
+  computeTrustedHash,
   escapeTomlString,
   getCodexExplicitHomeHookSourcePath,
+  parseTrustKey,
+  readHookTrustEntries,
   upsertHookTrustEntriesInContent
 } from './config-toml-trust'
+import { CODEX_HOOK_EVENT_LABEL } from './codex-hook-identity'
+import { getManagedCommand, getManagedScriptPath } from './codex-hook-definition'
 import { parseHookStateTomlHeaderKey } from './config-toml-syntax'
 import { getTomlSections } from './config-toml-runtime-owned-sections'
 import { hookTrustHeader, setupCodexHookHomes } from './hook-service-test-harness'
@@ -85,6 +91,43 @@ function expectNoDuplicateTables(toml: string): void {
   expect(new Set(hookKeys).size).toBe(hookKeys.length)
 }
 
+// Why: Orca's status hook rides each launch as a session flag, never a managed-home
+// entry. Trust tables carry no command, so check every key against a live user hook.
+function expectNoOrcaEntry(managedCodexHome: string): void {
+  const managedHooksPath = join(managedCodexHome, 'hooks.json')
+  const hooksText = readFileSync(managedHooksPath, 'utf-8')
+  expect(hooksText).not.toContain('codex-hook.')
+  const runtimeHooks: { hooks: Record<string, { hooks?: { command?: string }[] }[]> } =
+    JSON.parse(hooksText)
+  const userHookPositions = new Set<string>()
+  for (const [eventName, definitions] of Object.entries(runtimeHooks.hooks)) {
+    definitions.forEach((definition, groupIndex) => {
+      definition.hooks?.forEach((_hook, handlerIndex) => {
+        userHookPositions.add(`${CODEX_HOOK_EVENT_LABEL[eventName]}:${groupIndex}:${handlerIndex}`)
+      })
+    })
+  }
+  const managedCommand = getManagedCommand(getManagedScriptPath())
+  const trustSourcePath = getCodexExplicitHomeHookSourcePath(managedHooksPath)
+  for (const [key, state] of readHookTrustEntries(join(managedCodexHome, 'config.toml'))) {
+    const parsed = parseTrustKey(key)
+    if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, trustSourcePath)) {
+      continue
+    }
+    const { eventLabel, groupIndex, handlerIndex } = parsed
+    expect(userHookPositions).toContain(`${eventLabel}:${groupIndex}:${handlerIndex}`)
+    expect(state.trustedHash).not.toBe(
+      computeTrustedHash({
+        sourcePath: trustSourcePath,
+        eventLabel,
+        groupIndex,
+        handlerIndex,
+        command: managedCommand
+      })
+    )
+  }
+}
+
 describe('CodexHookService user-hook trust spellings', () => {
   describe.each(HOOK_STATE_SPELLINGS)('%s ~/.codex trust', (_name, spell) => {
     it.each([true, false])(
@@ -93,17 +136,18 @@ describe('CodexHookService user-hook trust spellings', () => {
         const { trustedHash } = seedTrustedSystemUserHook(spell, enabled)
 
         const service = new CodexHookService()
-        expect((await service.install()).state).toBe('installed')
-        // Why: the second launch mirrors onto a runtime that already holds the entry.
-        expect((await service.install()).state).toBe('installed')
+        expect((await service.refreshRuntimeUserHooks()).state).not.toBe('error')
+        // Why: the second launch mirrors onto a runtime that already holds the mirrored hook.
+        expect((await service.refreshRuntimeUserHooks()).state).not.toBe('error')
 
         const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
         const managedHooksPath = join(managedCodexHome, 'hooks.json')
         const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
         expect(runtimeToml).toContain(
-          `${hookTrustHeader(`${managedHooksPath}:stop:1:0`)}\nenabled = ${enabled}\ntrusted_hash = "${trustedHash}"`
+          `${hookTrustHeader(`${managedHooksPath}:stop:0:0`)}\nenabled = ${enabled}\ntrusted_hash = "${trustedHash}"`
         )
         expectNoDuplicateTables(runtimeToml)
+        expectNoOrcaEntry(managedCodexHome)
       }
     )
   })
@@ -115,21 +159,22 @@ describe('CodexHookService user-hook trust spellings', () => {
       const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
       const managedHooksPath = join(managedCodexHome, 'hooks.json')
       mkdirSync(managedCodexHome, { recursive: true })
-      const runtimeKey = `${getCodexExplicitHomeHookSourcePath(managedHooksPath)}:stop:1:0`
+      const runtimeKey = `${getCodexExplicitHomeHookSourcePath(managedHooksPath)}:stop:0:0`
       writeFileSync(
         join(managedCodexHome, 'config.toml'),
         `${spell(runtimeKey)}\nenabled = true\ntrusted_hash = "sha256:stale"\n`,
         'utf-8'
       )
 
-      expect((await new CodexHookService().install()).state).toBe('installed')
+      expect((await new CodexHookService().refreshRuntimeUserHooks()).state).not.toBe('error')
 
       const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
       expect(runtimeToml).toContain(
-        `${hookTrustHeader(`${managedHooksPath}:stop:1:0`)}\nenabled = false\ntrusted_hash = "${trustedHash}"`
+        `${hookTrustHeader(`${managedHooksPath}:stop:0:0`)}\nenabled = false\ntrusted_hash = "${trustedHash}"`
       )
       expect(runtimeToml).not.toContain('sha256:stale')
       expectNoDuplicateTables(runtimeToml)
+      expectNoOrcaEntry(managedCodexHome)
     }
   )
 })

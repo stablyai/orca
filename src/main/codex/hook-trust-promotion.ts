@@ -171,8 +171,8 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
   // upgrading to a build with promotion, or a corrupted snapshot), a mirrored
   // copy of since-revoked system trust is indistinguishable from a genuine
   // in-Orca approval. Promoting would resurrect trust the user revoked in
-  // ~/.codex, so skip this launch — install() writes the first snapshot and
-  // promotion starts on the next one.
+  // ~/.codex, so skip this launch — the managed-home refresh writes the first
+  // snapshot and promotion starts on the next one.
   const provenance = readHookTrustProvenance(runtimeHomePath)
   if (!provenance) {
     return
@@ -183,7 +183,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
   }
   // Why: promotion inspects the hooks.json layout Codex actually approved
   // against — the one still on disk from the previous launch — so it must run
-  // before install() rewrites the runtime hooks.json.
+  // before the managed-home refresh rewrites the runtime hooks.json.
   const runtimeConfig = readHooksJson(runtimeHooksPath)
   const systemConfig = readHooksJson(systemHooksPath)
   if (!runtimeConfig?.hooks || !systemConfig?.hooks) {

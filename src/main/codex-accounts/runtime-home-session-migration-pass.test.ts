@@ -105,8 +105,6 @@ describe('host system default session migration pass preparation', () => {
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
-    // Why: an unusable hook lane is the migration-eligible route onto the mirror.
-    service.setRealHomeLaneGate(() => false)
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       false
     )
@@ -144,8 +142,6 @@ describe('host system default session migration pass preparation', () => {
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
-    // Why: an unusable hook lane is the migration-eligible route onto the mirror.
-    service.setRealHomeLaneGate(() => false)
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       false
     )

@@ -11,8 +11,46 @@ if test "$__orca_codex_type" = file
     if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"
       command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     end
-    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '^(agents|queue|--no-daemon|--remote|--remote=.*)$' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
-      set argv --no-daemon $argv
+    set -l orca_codex_entry
+    set -l orca_codex_user_hooks
+    set -l orca_codex_prev
+    for orca_codex_arg in $argv
+      if string match -qr -- '^(--config=|-c=?)\s*hooks[.=\s]' $orca_codex_arg; or begin; contains -- "$orca_codex_prev" -c --config; and string match -qr -- '^\s*hooks[.=\s]' $orca_codex_arg; end
+        set orca_codex_user_hooks 1
+      end
+      set orca_codex_prev $orca_codex_arg
+    end
+    if test -n "$ORCA_CODEX_HOOK_FLAGS"; and test -d "$ORCA_CODEX_HOOK_FLAGS"
+      # Why a variable: fish before 3.4 has no quoted command substitution. Fish before 3.1 has no
+      # string collect; its error is silenced, and the empty version then carries nothing.
+      set -l orca_codex_version (command codex --version 2>/dev/null </dev/null | string collect 2>/dev/null)
+      if test -n "$orca_codex_version"; and not string match -q -- '*/*' "$orca_codex_version"
+        set orca_codex_entry "$ORCA_CODEX_HOOK_FLAGS/$orca_codex_version"
+      end
+      if test -n "$orca_codex_entry"; and not test -f "$orca_codex_entry.flag"
+        # Why: Orca derives this binary's entry, so a later launch carries it.
+        # Why sh: fish itself warns when a redirection fails, and 2>/dev/null cannot silence it.
+        set -l orca_codex_path (command -s codex)
+        command sh -c 'printf "%s\n" "$1" >"$2"' sh "$orca_codex_path" "$orca_codex_entry.request" 2>/dev/null
+        set orca_codex_entry
+      else if test -n "$orca_codex_entry"; and test -z "$orca_codex_user_hooks"
+        set -l orca_codex_home $CODEX_HOME
+        test -n "$orca_codex_home"; or set orca_codex_home $HOME/.codex
+        set -l orca_codex_flag
+        if not command grep -qF -e 'agent-hooks/codex-hook.' -e 'agent-hooks\\\\codex-hook.' $orca_codex_home/hooks.json 2>/dev/null; and read orca_codex_flag <"$orca_codex_entry.flag"; and test -n "$orca_codex_flag"
+          set argv -c $orca_codex_flag $argv
+        end
+      end
+    end
+    # Why probe on a miss only: the entry records whether its version accepts the flag, and 0.155 and older exit 2 on it.
+    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '^(agents|queue|--no-daemon|--remote|--remote=.*)$' $argv
+      if test -n "$orca_codex_entry"
+        if test -e "$orca_codex_entry.no-daemon"
+          set argv --no-daemon $argv
+        end
+      else if command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
+        set argv --no-daemon $argv
+      end
     end
     command codex $argv
   end

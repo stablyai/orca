@@ -107,13 +107,14 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       const config = readFileSync(join(account.managedHomePath, 'config.toml'), 'utf8')
       expect(config).toContain('model = "fixture-model"')
       expect(config).not.toContain('[hooks.state')
-      expect((await hookService.install(account.managedHomePath)).state).toBe('installed')
-      expect(readFileSync(join(account.managedHomePath, 'hooks.json'), 'utf8')).toContain(
-        process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
+      // Why not_installed: Orca's hook rides each launch as a session flag, and none was derived here.
+      expect((await hookService.refreshRuntimeUserHooks(account.managedHomePath)).state).toBe(
+        'not_installed'
       )
-      expect(
-        readHookTrustEntries(join(account.managedHomePath, 'config.toml')).size
-      ).toBeGreaterThan(0)
+      expect(readFileSync(join(account.managedHomePath, 'hooks.json'), 'utf8')).not.toContain(
+        'codex-hook.'
+      )
+      expect(readHookTrustEntries(join(account.managedHomePath, 'config.toml')).size).toBe(0)
     }
 
     const discoveryHomes = service.getHostCodexHomePathsForSessionDiscovery()

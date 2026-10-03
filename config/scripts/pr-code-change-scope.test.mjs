@@ -141,25 +141,16 @@ describe('per-job path classification', () => {
   })
 
   it('runs the Codex index-heal contract only when the heal or its transport changes', () => {
-    expectClassification(['src/main/codex/codex-session-index-heal.ts'], {
-      codex_index_heal_contract: true,
-      package: true,
-      package_windows: true
-    })
-    expectClassification(['src/main/sqlite/sync-database.ts'], {
-      codex_index_heal_contract: true,
-      package: true,
-      package_windows: true
-    })
-    expectClassification(['src/main/codex/codex-app-server-session.ts'], {
-      codex_index_heal_contract: true,
-      package: true,
-      package_windows: true
-    })
     expectClassification(['src/main/codex/codex-index-heal-binary-contract.test.ts'], {
       codex_index_heal_contract: true
     })
-    for (const file of ['src/main/agent-trust-presets.ts', 'src/main/codex/config-toml-trust.ts']) {
+    for (const file of [
+      'src/main/codex/codex-session-index-heal.ts',
+      'src/main/sqlite/sync-database.ts',
+      'src/main/codex/codex-app-server-session.ts',
+      'src/main/agent-trust-presets.ts',
+      'src/main/codex/config-toml-trust.ts'
+    ]) {
       expectClassification([file], {
         codex_index_heal_contract: true,
         package: true,
@@ -280,6 +271,15 @@ describe('per-job path classification', () => {
       package_windows: true
     })
     expectClassification(['src/main/shell-startup-launch-intent-fixtures.ts'], {
+      shell_contracts: true,
+      package: true,
+      package_windows: true
+    })
+  })
+
+  it('runs shell contracts when only the codex shell function changes', () => {
+    expectClassification(['src/shared/codex-shell-function.ts'], {
+      codex_index_heal_contract: true,
       shell_contracts: true,
       package: true,
       package_windows: true

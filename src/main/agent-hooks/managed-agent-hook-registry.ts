@@ -22,9 +22,9 @@ import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 
-// Why (#16441): Codex's installer awaits a codex app-server trust-grant session
-// instead of blocking the main thread on spawnSync. Widening the tuple keeps the
-// other thirteen agent services synchronous — the shared loop already awaits.
+// Why async: Codex's installer awaits its file sweeps of ~/.codex and the managed
+// home. Widening the tuple keeps the other agent services synchronous — the shared
+// loop already awaits.
 export type ManagedAgentHookInstallOptions = { userInitiated?: boolean; cliVersion?: string }
 export type ManagedAgentHookInstaller = readonly [
   HookInstallAgent,
@@ -32,6 +32,8 @@ export type ManagedAgentHookInstaller = readonly [
     options?: ManagedAgentHookInstallOptions
   ) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
 ]
+export type ManagedAgentHookSettingSync = readonly [HookInstallAgent, (enabled: boolean) => void]
+export type ManagedAgentHookStatusPreparer = readonly [HookInstallAgent, () => Promise<void>]
 export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
 export type ManagedAgentHookRemover = readonly [
   HookInstallAgent,
@@ -46,7 +48,7 @@ export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => Age
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
   ['claude', (options) => claudeHookService.install({ claudeVersion: options?.cliVersion })],
   ['openclaude', () => openClaudeHookService.install()],
-  ['codex', () => codexHookService.install()],
+  ['codex', () => codexHookService.installSessionFlags()],
   ['gemini', () => geminiHookService.install()],
   ['qoder', () => qoderHookService.install()],
   ['qoder-cn', () => qoderCnHookService.install()],
@@ -66,6 +68,17 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['zcode', () => zcodeHookService.install()],
   ['dsh', () => dshHookService.install()],
   ['jcode', () => jcodeHookService.install()]
+]
+
+// Why: runs on every change of the setting, on or off, even when the agent's CLI
+// is not found and its installer is skipped, for state a later launch reads.
+export const MANAGED_AGENT_HOOK_SETTING_SYNCS: readonly ManagedAgentHookSettingSync[] = [
+  ['codex', (enabled) => codexHookService.syncSessionFlags(enabled)]
+]
+
+// Why: a status that depends on the agent CLI's version learns it first in the CLI's process.
+export const MANAGED_AGENT_HOOK_STATUS_PREPARERS: readonly ManagedAgentHookStatusPreparer[] = [
+  ['codex', () => codexHookService.learnStatusVersion()]
 ]
 
 // Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a

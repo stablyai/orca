@@ -95,7 +95,10 @@ export function removeStaleRuntimeHookTrustEntries(
     if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
-    if (expectedHashes.get(normalizeHookTrustKeyForLookup(key)) === state.trustedHash) {
+    const expectedHash = expectedHashes.get(normalizeHookTrustKeyForLookup(key))
+    // Why a defined hash: conflicting duplicate tables read as no hash, and an
+    // unexpected key must not match that and survive.
+    if (expectedHash !== undefined && expectedHash === state.trustedHash) {
       continue
     }
     staleKeys.push(key)

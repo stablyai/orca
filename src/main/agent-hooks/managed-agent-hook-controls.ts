@@ -13,6 +13,8 @@ import { probeClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
+  MANAGED_AGENT_HOOK_SETTING_SYNCS,
+  MANAGED_AGENT_HOOK_STATUS_PREPARERS,
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS,
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
@@ -245,6 +247,37 @@ export async function removeManagedAgentHooksAsync(
   )
 }
 
+function syncAgentHookSetting(
+  enabled: boolean,
+  settings: ManagedHookSettings,
+  options: InstallOptions
+): void {
+  const disabled = new Set<string>(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
+  const allowed = options.agents ? new Set<string>(options.agents) : null
+  for (const [agent, sync] of MANAGED_AGENT_HOOK_SETTING_SYNCS) {
+    if (allowed && !allowed.has(agent)) {
+      continue
+    }
+    try {
+      sync(enabled && !disabled.has(agent) && (options.shouldContinue?.(agent) ?? true))
+    } catch (error) {
+      console.error(`[agent-hooks] Failed to apply the ${agent} hooks setting:`, error)
+    }
+  }
+}
+
+/** Statuses for a process that has not watched the agents run, such as the CLI's. */
+export async function readManagedAgentHookStatuses(): Promise<AgentHookInstallStatus[]> {
+  await Promise.all(
+    MANAGED_AGENT_HOOK_STATUS_PREPARERS.map(([agent, prepare]) =>
+      prepare().catch((error: unknown) => {
+        console.error(`[agent-hooks] Failed to read ${agent} hook status:`, error)
+      })
+    )
+  )
+  return getManagedAgentHookStatuses()
+}
+
 export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
   return MANAGED_AGENT_HOOK_STATUS_READERS.map(([agent, getStatus]) => {
     try {
@@ -260,6 +293,7 @@ export async function applyAgentStatusHooksEnabled(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  syncAgentHookSetting(enabled, settings, options)
   if (!enabled) {
     return await removeManagedAgentHooks()
   }

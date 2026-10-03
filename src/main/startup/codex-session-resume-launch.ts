@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { CodexSessionResumePreparation } from '../codex/codex-session-resume-home'
@@ -6,15 +5,15 @@ import { prepareCodexSessionResume } from '../codex/codex-session-resume-prepara
 import { prepareLegacySharedCodexSessionResume } from '../codex/codex-legacy-session-resume'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 import { codexHookService } from '../codex/hook-service'
-import {
-  awaitRealHomeCodexHookTrust,
-  ensureRealHomeCodexHookState
-} from '../codex/codex-real-home-hook-install'
+import { syncCodexHookFlagsWithin } from '../codex/codex-hook-flag-sync'
 import { ensureCodexDaemonSocketGuard } from '../codex/codex-config-mirror'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { mainProcessState as state } from './main-process-state'
+
+// Why bounded: a resume waits for its flag after a Codex update or at a cold restore, never long.
+const RESUME_FLAG_WAIT_MS = 3_000
 
 export async function prepareCodexSessionResumeForLaunch(args: {
   providerSession: AgentProviderSessionMetadata
@@ -26,6 +25,9 @@ export async function prepareCodexSessionResumeForLaunch(args: {
   if (args.target.runtime === 'wsl' || !runtimeHome || !store) {
     return null
   }
+  const flagsSettled = isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
+    ? syncCodexHookFlagsWithin(RESUME_FLAG_WAIT_MS)
+    : Promise.resolve()
   const systemHomePath = getSystemCodexHomePath()
   // Why: codexSessionSourceHome is import-only; treating it as CODEX_HOME would mutate history sources and bypass account auth.
   const trustedHomes = [systemHomePath, ...runtimeHome.getHostCodexHomePathsForSessionDiscovery()]
@@ -87,19 +89,10 @@ export async function prepareCodexSessionResumeForLaunch(args: {
         normalizeRuntimePathForComparison(systemHomePath)
       const hooksEnabled = isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
       try {
-        if (isSystemHome) {
-          await ensureRealHomeCodexHookState({
-            hooksEnabled,
-            userDataPath: app.getPath('userData'),
-            writePolicy: 'add-missing-only'
-          })
-          // Why: beside an unapproved entry Codex opens a blocking hook-review screen,
-          // and only the grant's own settle cannot race Codex's approval write.
-          await awaitRealHomeCodexHookTrust()
-        } else if (hooksEnabled) {
-          await codexHookService.installForLaunchPrep(resumeHome)
-        } else {
-          await codexHookService.refreshRuntimeUserHooksForLaunchPrep(resumeHome)
+        // Why nothing for the real home: the resumed launch carries Orca's hook
+        // as a session flag. A managed home only mirrors the user's own hooks.
+        if (!isSystemHome) {
+          await codexHookService.prepareRuntimeHomeForLaunch(resumeHome, undefined, hooksEnabled)
         }
       } catch (error) {
         // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
@@ -112,6 +105,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
       return resumeHome
     }
   })
+  await flagsSettled
   return preparation.outcome === 'resume'
     ? {
         ...preparation,

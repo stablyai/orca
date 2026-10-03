@@ -117,16 +117,45 @@ if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
-    local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}"
+    local __orca_codex_arg __orca_codex_prev= __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}"
+    local __orca_codex_user_hooks= __orca_codex_value= __orca_codex_version= __orca_codex_entry= __orca_codex_flag=
     if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
     for __orca_codex_arg in "$@"; do
       case "$__orca_codex_arg" in agents|queue|--no-daemon|--remote|--remote=*) __orca_codex_isolate=0 ;; esac
+      __orca_codex_value=
+      case "$__orca_codex_prev" in -c|--config) __orca_codex_value="$__orca_codex_arg" ;; esac
+      case "$__orca_codex_arg" in
+        --config=*) __orca_codex_value="${__orca_codex_arg#--config=}" ;;
+        -c?*) __orca_codex_value="${__orca_codex_arg#-c}"; __orca_codex_value="${__orca_codex_value#=}" ;;
+      esac
+      __orca_codex_value="${__orca_codex_value#"${__orca_codex_value%%[![:space:]]*}"}"
+      case "$__orca_codex_value" in hooks[.=[:space:]]*) __orca_codex_user_hooks=1 ;; esac
+      __orca_codex_prev="$__orca_codex_arg"
     done
-    # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
+    if [[ -n "${ORCA_CODEX_HOOK_FLAGS:-}" && -d "${ORCA_CODEX_HOOK_FLAGS}" ]]; then
+      __orca_codex_version="$(command codex --version 2>/dev/null </dev/null)"
+      if [[ -n "$__orca_codex_version" && "$__orca_codex_version" != */* ]]; then
+        __orca_codex_entry="${ORCA_CODEX_HOOK_FLAGS}/${__orca_codex_version}"
+      fi
+      if [[ -n "$__orca_codex_entry" && ! -f "${__orca_codex_entry}.flag" ]]; then
+        # Why: Orca derives this binary's entry, so a later launch carries it.
+        { printf '%s\n' "$(unset -f codex 2>/dev/null; unalias codex 2>/dev/null; command -v codex 2>/dev/null)" >|"${__orca_codex_entry}.request"; } 2>/dev/null || :
+        __orca_codex_entry=
+      elif [[ -n "$__orca_codex_entry" && -z "$__orca_codex_user_hooks" ]] &&
+        ! command grep -qF -e 'agent-hooks/codex-hook.' -e 'agent-hooks\\codex-hook.' "${CODEX_HOME:-$HOME/.codex}/hooks.json" 2>/dev/null &&
+        read -r __orca_codex_flag <"${__orca_codex_entry}.flag" && [[ -n "$__orca_codex_flag" ]]; then
+        set -- -c "$__orca_codex_flag" "$@"
+      fi
+    fi
+    # Why probe on a miss only: the entry records whether its version accepts the flag, and 0.155 and older exit 2 on it.
     if [[ "$__orca_codex_isolate" != 0 ]]; then
-      case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
+      if [[ -n "$__orca_codex_entry" ]]; then
+        if [[ -e "${__orca_codex_entry}.no-daemon" ]]; then set -- --no-daemon "$@"; fi
+      else
+        case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
+      fi
     fi
     command codex "$@"
   }

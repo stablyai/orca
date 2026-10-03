@@ -18,8 +18,11 @@ vi.mock('../../main/persistence/profile-state/profile-state-access', () => {
 vi.mock('../profile-state-location', () => {
   throw new Error('Profile location loaded during online preparation')
 })
-vi.mock('../../main/codex/codex-hook-local-install', () => {
-  throw new Error('The Codex installer loaded in the pane CLI')
+vi.mock('../../main/codex/codex-hook-service-implementation', () => {
+  throw new Error('The Codex hook service loaded in the pane CLI')
+})
+vi.mock('../../main/codex/codex-hook-session-trust', () => {
+  throw new Error('The Codex hook flag derivation loaded in the pane CLI')
 })
 
 afterEach(() => {

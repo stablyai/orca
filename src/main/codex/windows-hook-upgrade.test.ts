@@ -15,7 +15,7 @@ vi.mock('os', async (importOriginal) => ({
 }))
 
 import { CodexHookService } from './hook-service'
-import { CODEX_EVENTS, CODEX_EVENT_LABEL, getManagedCommand } from './codex-hook-definition'
+import { CODEX_EVENTS, CODEX_EVENT_LABEL } from './codex-hook-definition'
 import { readHooksJson, wrapWindowsHookCommand } from '../agent-hooks/installer-utils'
 import {
   computeTrustedHash,
@@ -26,7 +26,7 @@ import {
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
 describe.skipIf(process.platform !== 'win32')('Unicode Windows hook upgrade', () => {
-  it('replaces all encoded commands and trust hashes while preserving user hooks on reinstall', async () => {
+  it("drops an older build's encoded Orca entries and trust from a managed home, keeping user hooks", async () => {
     const home = join(homes.tmpHome, '测试 用户')
     mkdirSync(home)
     homedirMock.mockReturnValue(home)
@@ -65,28 +65,23 @@ describe.skipIf(process.platform !== 'win32')('Unicode Windows hook upgrade', ()
       }))
     )
     const service = new CodexHookService()
-    expect(service.getStatus().state).not.toBe('installed')
+    // Why twice: a second refresh must find nothing Orca-owned left to remove.
     for (let pass = 0; pass < 2; pass++) {
-      expect((await service.install()).state).toBe('installed')
-      expect(service.getStatus().state).toBe('installed')
+      await service.refreshRuntimeUserHooks(runtimeHome)
       const hooks = readHooksJson(configPath)?.hooks
       const trust = readFileSync(tomlPath, 'utf8')
       for (const event of CODEX_EVENTS) {
         const commands = hooks?.[event]?.flatMap((group) => group.hooks ?? []) ?? []
-        expect(
-          commands.filter((hook) => hook.command === getManagedCommand(scriptPath))
-        ).toHaveLength(1)
-        expect(commands.some((hook) => hook.command === oldCommand)).toBe(false)
+        expect(commands.some((hook) => hook.command?.includes('codex-hook.'))).toBe(false)
         const entry = {
           sourcePath: getCodexExplicitHomeHookSourcePath(configPath),
           eventLabel: CODEX_EVENT_LABEL[event],
           groupIndex: 0,
           handlerIndex: 0,
-          command: getManagedCommand(scriptPath),
+          command: oldCommand,
           timeoutSec: 10
         }
-        expect(trust).toContain(computeTrustedHash(entry))
-        expect(trust).not.toContain(computeTrustedHash({ ...entry, command: oldCommand }))
+        expect(trust).not.toContain(computeTrustedHash(entry))
       }
       expect(
         hooks?.Stop?.some((group) => group.hooks?.some((hook) => hook.command === 'user-hook'))

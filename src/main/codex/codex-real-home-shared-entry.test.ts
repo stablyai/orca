@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   computeTrustKey,
   normalizeHookTrustKeyForLookup,
+  readHookTrustEntries,
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
@@ -12,9 +13,10 @@ import { writeCodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import { getCodexHookTrustSignature } from './codex-hook-identity'
 import { setupCodexHookHomes } from './hook-service-test-harness'
 
-const { getPathMock, homedirMock } = vi.hoisted(() => ({
+const { getPathMock, homedirMock, deriveCodexHookFlagEntryMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
-  homedirMock: vi.fn<() => string>()
+  homedirMock: vi.fn<() => string>(),
+  deriveCodexHookFlagEntryMock: vi.fn(async () => null)
 }))
 
 vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
@@ -22,42 +24,68 @@ vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
   return { ...actual, homedir: homedirMock }
 })
+// Why: deriving the flags spawns the machine's real codex.
+vi.mock('./codex-hook-session-trust', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  deriveCodexHookFlagEntry: deriveCodexHookFlagEntryMock
+}))
 
 import { CodexHookService, getCodexManagedHookInstallMaterial } from './hook-service'
-import {
-  _internals as realHomeInternals,
-  ensureRealHomeCodexHookState
-} from './codex-real-home-hook-install'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import {
   resolveStartupManagedHookAction,
   shouldInstallStartupManagedAgentHook
 } from '../agent-hooks/managed-agent-hook-controls'
 
-// Why this file: every Orca on one HOME shares the current entry in ~/.codex.
-// Opening any pane once stripped it (4139 -> 18 bytes) and its trust; only the
-// user's explicit opt-out may remove it now.
+// Why this file: opening any pane once stripped ~/.codex (4139 -> 18 bytes).
+// Orca's hook now rides each launch as a session flag, so launch prep and pane
+// spawns never touch ~/.codex; only app start (hooks on) and the opt-out strip
+// an older build's entry there, keeping the user's approvals on their hooks.
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 const USER_HOOK = { type: 'command', command: 'user-stop-hook.sh' }
+const USER_HASH = 'sha256:user-approved-stop'
+const ORCA_HASH = 'sha256:codex-granted-stop'
 
 function systemCodexHome(): string {
   return join(homes.tmpHome, '.codex')
 }
 
-/** The real home as the real-home lane (or another Orca) leaves it, trust and ledger included. */
-function seedSharedEntry(): void {
+function systemHooksPath(): string {
+  return join(systemCodexHome(), 'hooks.json')
+}
+
+function systemTomlPath(): string {
+  return join(systemCodexHome(), 'config.toml')
+}
+
+function stopTrustKey(groupIndex: number, command: string): string {
+  return normalizeHookTrustKeyForLookup(
+    computeTrustKey({
+      sourcePath: systemHooksPath(),
+      eventLabel: 'stop',
+      groupIndex,
+      handlerIndex: 0,
+      command
+    })
+  )
+}
+
+/**
+ * ~/.codex as an older Orca left it: its entry ahead of the user's approved
+ * hook, with Orca's trust and ledger.
+ */
+function seedOlderBuildEntry(): void {
   const material = getCodexManagedHookInstallMaterial()
-  const hooksPath = join(systemCodexHome(), 'hooks.json')
   mkdirSync(systemCodexHome(), { recursive: true })
   writeFileSync(
-    hooksPath,
+    systemHooksPath(),
     `${JSON.stringify(
       {
         hooks: {
           Stop: [
-            { hooks: [USER_HOOK] },
-            { hooks: [{ type: 'command', command: material.command, timeout: 10 }] }
+            { hooks: [{ type: 'command', command: material.command, timeout: 10 }] },
+            { hooks: [USER_HOOK] }
           ]
         }
       },
@@ -65,23 +93,31 @@ function seedSharedEntry(): void {
       2
     )}\n`
   )
-  const entry: CodexTrustEntry = {
-    sourcePath: hooksPath,
+  const orcaEntry: CodexTrustEntry = {
+    sourcePath: systemHooksPath(),
     eventLabel: 'stop',
-    groupIndex: 1,
+    groupIndex: 0,
     handlerIndex: 0,
     command: material.command,
     timeoutSec: 10,
-    trustedHash: 'sha256:codex-granted-stop'
+    trustedHash: ORCA_HASH
   }
-  writeFileSync(join(systemCodexHome(), 'config.toml'), 'model = "user-model"\n')
-  upsertHookTrustEntries(join(systemCodexHome(), 'config.toml'), [entry])
+  const userEntry: CodexTrustEntry = {
+    sourcePath: systemHooksPath(),
+    eventLabel: 'stop',
+    groupIndex: 1,
+    handlerIndex: 0,
+    command: USER_HOOK.command,
+    trustedHash: USER_HASH
+  }
+  writeFileSync(systemTomlPath(), 'model = "user-model"\n')
+  upsertHookTrustEntries(systemTomlPath(), [orcaEntry, userEntry])
   writeCodexTrustGrantLedgerHome(systemCodexHome(), {
     binary: null,
     entries: {
-      [normalizeHookTrustKeyForLookup(computeTrustKey(entry))]: {
-        signature: getCodexHookTrustSignature(entry),
-        trustedHash: 'sha256:codex-granted-stop'
+      [normalizeHookTrustKeyForLookup(computeTrustKey(orcaEntry))]: {
+        signature: getCodexHookTrustSignature(orcaEntry),
+        trustedHash: ORCA_HASH
       }
     }
   })
@@ -96,9 +132,26 @@ function snapshotRealCodexHome(): Map<string, { bytes: string; mtimeMs: number }
   )
 }
 
-describe('the shared real-home Codex entry', () => {
-  it('survives a pane spawn under a managed account, with no .bak', async () => {
-    seedSharedEntry()
+function expectOrcaEntryStrippedAndUserTrustMoved(): void {
+  const hooks = JSON.parse(readFileSync(systemHooksPath(), 'utf-8'))
+  expect(hooks.hooks.Stop).toEqual([{ hooks: [USER_HOOK] }])
+  const toml = readFileSync(systemTomlPath(), 'utf-8')
+  expect(toml).toContain('model = "user-model"')
+  expect(toml).not.toContain(ORCA_HASH)
+  const trust = new Map(
+    [...readHookTrustEntries(systemTomlPath())].map(([key, state]) => [
+      normalizeHookTrustKeyForLookup(key),
+      state
+    ])
+  )
+  expect(trust.get(stopTrustKey(0, USER_HOOK.command))?.trustedHash).toBe(USER_HASH)
+  expect(trust.has(stopTrustKey(1, USER_HOOK.command))).toBe(false)
+  expect(trust.size).toBe(1)
+}
+
+describe('the real ~/.codex under session-flag hooks', () => {
+  it('is untouched by a pane spawn under a managed account, with no .bak', async () => {
+    seedOlderBuildEntry()
     const before = snapshotRealCodexHome()
     const accountHome = join(homes.userDataDir, 'codex-accounts', 'account-1', 'home')
     mkdirSync(accountHome, { recursive: true })
@@ -109,40 +162,34 @@ describe('the shared real-home Codex entry', () => {
       true
     )
 
-    expect(status.state).toBe('installed')
+    expect(status.state).not.toBe('error')
     expect(snapshotRealCodexHome()).toEqual(before)
+    // The account home mirrors the user's hook without Orca's entry.
+    const accountHooks = readFileSync(join(accountHome, 'hooks.json'), 'utf-8')
+    expect(JSON.parse(accountHooks).hooks.Stop).toEqual([{ hooks: [USER_HOOK] }])
+    expect(accountHooks).not.toContain('codex-hook.')
   })
 
-  it('survives launch prep on the real-home lane with hooks off', async () => {
-    seedSharedEntry()
-    realHomeInternals.resetForTesting('installed')
+  it('is untouched by launch prep of the shared managed home with hooks on or off', async () => {
+    seedOlderBuildEntry()
     const before = snapshotRealCodexHome()
+    const service = new CodexHookService()
 
-    expect(
-      await ensureRealHomeCodexHookState({
-        hooksEnabled: false,
-        userDataPath: homes.userDataDir,
-        writePolicy: 'add-missing-only'
-      })
-    ).toBe('removed')
+    await service.prepareRuntimeHomeForLaunch(getOrcaManagedCodexHomePath(), undefined, true)
+    await service.prepareRuntimeHomeForLaunch(getOrcaManagedCodexHomePath(), undefined, false)
+    await service.refreshRuntimeUserHooksForLaunchPrep()
 
     expect(snapshotRealCodexHome()).toEqual(before)
   })
 
-  it('survives a startup with hooks off and its first pane launch prep', async () => {
-    seedSharedEntry()
+  it('is untouched by a startup with hooks off and its first pane launch prep', async () => {
+    seedOlderBuildEntry()
     const before = snapshotRealCodexHome()
     const settings = { agentStatusHooksEnabled: false, disabledTuiAgents: [] }
 
-    // Startup: the real-home install and the managed installs are both skipped.
+    // Startup: the managed installs, including installSessionFlags, are skipped.
     expect(resolveStartupManagedHookAction(settings)).toBe('skip')
     expect(shouldInstallStartupManagedAgentHook(settings, 'codex')).toBe(false)
-    // First pane: both lanes run with hooks off.
-    await ensureRealHomeCodexHookState({
-      hooksEnabled: false,
-      userDataPath: homes.userDataDir,
-      writePolicy: 'add-missing-only'
-    })
     await new CodexHookService().prepareRuntimeHomeForLaunch(
       getOrcaManagedCodexHomePath(),
       undefined,
@@ -150,17 +197,36 @@ describe('the shared real-home Codex entry', () => {
     )
 
     expect(snapshotRealCodexHome()).toEqual(before)
+    expect(deriveCodexHookFlagEntryMock).not.toHaveBeenCalled()
   })
 
-  it("is removed, with Orca's trust, only by the user's explicit opt-out", async () => {
-    seedSharedEntry()
+  it("loses an older build's entry and trust at app start, keeping the user's approval", async () => {
+    seedOlderBuildEntry()
+
+    await new CodexHookService().installSessionFlags()
+
+    expectOrcaEntryStrippedAndUserTrustMoved()
+  })
+
+  it('leaves a ~/.codex with no Orca entry byte-identical at app start', async () => {
+    mkdirSync(systemCodexHome(), { recursive: true })
+    writeFileSync(
+      systemHooksPath(),
+      `${JSON.stringify({ hooks: { Stop: [{ hooks: [USER_HOOK] }] } })}\n`
+    )
+    writeFileSync(systemTomlPath(), 'model = "user-model"\n')
+    const before = snapshotRealCodexHome()
+
+    await new CodexHookService().installSessionFlags()
+
+    expect(snapshotRealCodexHome()).toEqual(before)
+  })
+
+  it("loses an older build's entry and trust on the user's explicit opt-out", async () => {
+    seedOlderBuildEntry()
 
     await new CodexHookService().remove()
 
-    const hooks = JSON.parse(readFileSync(join(systemCodexHome(), 'hooks.json'), 'utf-8'))
-    expect(hooks.hooks.Stop).toEqual([{ hooks: [USER_HOOK] }])
-    const toml = readFileSync(join(systemCodexHome(), 'config.toml'), 'utf-8')
-    expect(toml).toContain('model = "user-model"')
-    expect(toml).not.toContain(':stop:1:0')
+    expectOrcaEntryStrippedAndUserTrustMoved()
   })
 })

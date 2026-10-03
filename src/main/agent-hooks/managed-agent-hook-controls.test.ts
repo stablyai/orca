@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   statusCodex: vi.fn(),
   refreshClaude: vi.fn(),
   refreshCodex: vi.fn(),
+  syncCodex: vi.fn(),
+  prepareCodexStatus: vi.fn(async () => {}),
   probeClaudeVersion: vi.fn()
 }))
 
@@ -43,11 +45,14 @@ vi.mock('./managed-agent-hook-registry', () => ({
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: [
     ['claude', mocks.refreshClaude],
     ['codex', mocks.refreshCodex]
-  ]
+  ],
+  MANAGED_AGENT_HOOK_SETTING_SYNCS: [['codex', mocks.syncCodex]],
+  MANAGED_AGENT_HOOK_STATUS_PREPARERS: [['codex', mocks.prepareCodexStatus]]
 }))
 
 import {
   applyAgentStatusHooksEnabled,
+  readManagedAgentHookStatuses,
   installManagedAgentHooks,
   removeManagedAgentHooksAsync,
   resolveStartupManagedHookAction,
@@ -276,6 +281,51 @@ describe('managed agent hook controls', () => {
     )
 
     expect(mocks.removeClaude).not.toHaveBeenCalled()
+  })
+
+  // Why: a codex installed later must still find Codex hooks on when it first misses.
+  it("syncs Codex's hooks on even when the codex CLI is not found", async () => {
+    mocks.detect.mockResolvedValue({})
+
+    await applyAgentStatusHooksEnabled(true, { agentCmdOverrides: {} })
+
+    expect(mocks.syncCodex).toHaveBeenCalledWith(true)
+    expect(mocks.installCodex).not.toHaveBeenCalled()
+  })
+
+  it('syncs Codex off for the global switch, a disabled Codex, or a newer update that turned it off', async () => {
+    mocks.detect.mockResolvedValue({})
+
+    await applyAgentStatusHooksEnabled(false)
+    await applyAgentStatusHooksEnabled(true, {
+      agentCmdOverrides: {},
+      disabledTuiAgents: ['codex']
+    })
+    await applyAgentStatusHooksEnabled(
+      true,
+      { agentCmdOverrides: {} },
+      { shouldContinue: (agent) => agent !== 'codex' }
+    )
+
+    expect(mocks.syncCodex.mock.calls).toEqual([[false], [false], [false]])
+  })
+
+  it('learns what status depends on before reading it', async () => {
+    const order: string[] = []
+    mocks.prepareCodexStatus.mockImplementation(async () => {
+      // Why after a tick: the CLI's version probe answers asynchronously.
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      order.push('prepare')
+    })
+    mocks.statusCodex.mockImplementation(() => {
+      order.push('status')
+      return status('codex', 'installed')
+    })
+    mocks.statusClaude.mockReturnValue(status('claude', 'installed'))
+
+    await readManagedAgentHookStatuses()
+
+    expect(order).toEqual(['prepare', 'status'])
   })
 
   it('removes every managed hook when the global setting is off', async () => {

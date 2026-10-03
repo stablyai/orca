@@ -17,10 +17,7 @@ import {
 } from '../codex/codex-pane-account-registry'
 import { reconcileRetainedCodexHookHomes } from '../codex/retained-codex-hook-state'
 import { codexHookService } from '../codex/hook-service'
-import {
-  isAgentStatusHooksEnabled,
-  isAgentStatusHooksEnabledForAgent
-} from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
 import {
@@ -149,14 +146,10 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
         const livePtyIds = await listLiveDaemonPtyIds()
         if (livePtyIds) {
           reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
-          const settings = state.store?.getSettings()
-          // Why (#16441): each retained home can run a codex app-server grant
-          // session. Awaiting them here delayed the first window by N sessions;
-          // a retained shell cannot invoke Codex before this provider serves.
+          // Why not awaited (#16441): a retained shell cannot invoke Codex before this provider serves.
           if (hasRetainedManagedHostPane) {
             void reconcileRetainedCodexHookHomes({
               hookService: codexHookService,
-              hooksEnabled: isAgentStatusHooksEnabledForAgent(settings, 'codex'),
               runtimeHomePaths: state.codexRuntimeHome.getRetainedHostCodexHookHomePaths(livePtyIds)
             }).catch((error) =>
               console.warn('[codex-hook-service] retained Codex home reconcile failed:', error)

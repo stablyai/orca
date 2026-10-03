@@ -521,6 +521,34 @@ jobs:
             pnpm exec vitest run --config config/vitest.config.ts \
             src/main/pty/codex-no-daemon-binary-contract.test.ts
 
+      # Why both pins and latest: the flag's approval is a hash Codex computes, so a
+      # Codex release that changes it must redden here before users meet a review screen.
+      - name: Verify Codex hook session-flag contract (pinned)
+        env:
+          ORCA_CODEX_HOOK_FLAG_CONTRACT_REQUIRED: '1'
+        run: |
+          set -euo pipefail
+          for install in codex-cli:"$CODEX_CLI_VERSION" codex-cli-no-daemon:"$CODEX_NO_DAEMON_CLI_VERSION"; do
+            ORCA_CODEX_HOOK_FLAG_CONTRACT_BINARY="$RUNNER_TEMP/${install%%:*}/node_modules/.bin/codex" \
+              ORCA_CODEX_HOOK_FLAG_CONTRACT_VERSION="${install#*:}" \
+              pnpm exec vitest run --config config/vitest.config.ts \
+              src/main/codex/codex-hook-session-flag-binary-contract.test.ts
+          done
+
+      - name: Install latest Codex CLI
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/codex-cli-latest" "@openai/codex@latest"
+
+      - name: Verify Codex hook session-flag contract (latest)
+        env:
+          ORCA_CODEX_HOOK_FLAG_CONTRACT_REQUIRED: '1'
+        run: |
+          set -euo pipefail
+          ORCA_CODEX_HOOK_FLAG_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-latest/node_modules/.bin/codex" \
+            pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/codex/codex-hook-session-flag-binary-contract.test.ts
+
       # Why the no-daemon install: it is the newest pinned Codex, and its project
       # lookup decides whether a worktree launch stops at the trust prompt.
       - name: Verify Codex project-trust contract
@@ -674,6 +702,7 @@ jobs:
             src/main/daemon/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
+            src/main/pty/codex-shell-hook-flag.test.ts \
             src/main/pty/codex-shell-launch-preflight.test.ts \
             src/main/pty/codex-shell-no-daemon.test.ts \
             src/main/pty/omp-shell-wrapper-alias-safety.test.ts \

@@ -18,7 +18,7 @@ import { getCodexManagedHookInstallMaterial } from './codex-hook-definition'
 import { getSystemCodexHomePath } from './codex-home-paths'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 
-/** The opt-out's removal of every Orca entry from the real ~/.codex/hooks.json, with its trust. */
+/** App start's and the opt-out's removal of every Orca entry from the real ~/.codex/hooks.json, with its trust. */
 export async function sweepRealHomeCodexHook(): Promise<'removed' | 'unavailable'> {
   const hooksJsonPath = getRealHomeHooksJsonPath()
   // Why: single read — the pre-write generation guard must compare against

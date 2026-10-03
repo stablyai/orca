@@ -32,8 +32,8 @@ function getLegacyCodexProfileTomlPath(): string {
 }
 
 export function cleanupLegacySystemManagedHooks(): Promise<void> {
-  // Why: shares the real-home lane with ensureRealHomeCodexHookState; both
-  // write the user's ~/.codex/hooks.json and its trust in config.toml.
+  // Why: shares one queue with removeRealHomeCodexHookEntries; both write the
+  // user's ~/.codex/hooks.json and its trust in config.toml.
   return runExclusivelyForCodexTrustConfig(
     getSystemCodexConfigTomlPath(),
     sweepLegacySystemManagedHooks
@@ -43,9 +43,9 @@ export function cleanupLegacySystemManagedHooks(): Promise<void> {
 /**
  * Removes only retired Orca command forms from the user's ~/.codex/hooks.json.
  *
- * Why never the current entry or its trust: every Orca instance on this HOME
- * shares that entry, and this runs on every install, including launch prep for
- * any pane. Removing it is reserved for an explicit opt-out.
+ * Why only retired forms: it finds their trust through those entries, and
+ * removeRealHomeCodexHookEntries, which runs right after it, strips the
+ * current form with its own trust.
  */
 async function sweepLegacySystemManagedHooks(): Promise<void> {
   const legacyConfigPath = getSystemConfigPath()

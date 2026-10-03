@@ -94,7 +94,6 @@ export abstract class CodexRuntimeHomeState {
   ): { kind: 'ready'; homePath: string } | { kind: 'skip' }
   abstract getSelectedHostCodexHomeRoute(): CodexPaneHomeRoute
   abstract getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[]
-  abstract setRealHomeLaneGate(gate: () => boolean): void
   abstract isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean
   abstract isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean
   abstract reconcileLegacySharedHomeForRetainedPanes(): void

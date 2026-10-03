@@ -58,14 +58,18 @@ export type CodexHookTrustGrantSessionResult =
     }
   | { outcome: 'verify-failed'; reason: string; reasonClass: CodexTrustGrantSessionVerifyClass }
 
-type CodexHookListing = {
+export type CodexHookListing = {
   key: string
   command: string | null
   currentHash: string
   trustStatus: string
+  /** Codex's config source, e.g. `user` or `sessionFlags`; null when absent. */
+  source: string | null
+  /** Whether Codex will run the hook; null when this Codex does not report it. */
+  enabled: boolean | null
 }
 
-function collectHookListings(result: unknown): CodexHookListing[] {
+export function collectHookListings(result: unknown): CodexHookListing[] {
   const data =
     result && typeof result === 'object' && Array.isArray((result as { data?: unknown }).data)
       ? ((result as { data: unknown[] }).data as { hooks?: unknown }[])
@@ -92,7 +96,9 @@ function collectHookListings(result: unknown): CodexHookListing[] {
         key: hook.key,
         command: typeof hook.command === 'string' ? hook.command : null,
         currentHash: hook.currentHash,
-        trustStatus: hook.trustStatus
+        trustStatus: hook.trustStatus,
+        source: typeof hook.source === 'string' ? hook.source : null,
+        enabled: typeof hook.enabled === 'boolean' ? hook.enabled : null
       })
     }
   }
