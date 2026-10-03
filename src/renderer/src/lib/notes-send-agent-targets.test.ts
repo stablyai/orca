@@ -704,6 +704,64 @@ describe('notes send agent targets', () => {
     ])
   })
 
+  // Why: the runtime refuses a lone quarter-circle frame because it is generic activity,
+  // not identity (STA-4028) — so the menu must not offer that pane as an eligible target (#24286).
+  it('skips a manual pane whose only title evidence is a lone quarter-circle spinner', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: { [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Terminal 2' })] },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: {
+          [MANUAL_TAB_ID]: { 1: '\u25d1 Check package version in package.json' }
+        }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([])
+  })
+
+  it('lists a pane whose quarter-circle title also carries the agent identity', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: { [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Terminal 2' })] },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: '\u25d0 Claude Code' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: makePaneKey(MANUAL_TAB_ID, LEAF_B),
+        status: 'eligible'
+      })
+    ])
+  })
+
+  // Why: the renderer sees only title evidence, so it stays deliberately stricter than the
+  // runtime for a spinner-only pane. Launch-token verification is runtime-only, so a pane Orca
+  // launched whose sole title is a lone quarter-circle frame is not offered here (#24286).
+  it('does not offer a launched pane whose only title evidence is a lone quarter-circle spinner', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Terminal 2', launchAgent: 'claude' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: {
+          [LAUNCH_TAB_ID]: { 1: '\u25d1 Check package version in package.json' }
+        }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([])
+  })
+
   it('lists a chat before its first turn, which the shared sidebar targets leave out', () => {
     const chatTabId = 'structured-agent-session-claude_1'
     const targets = deriveNotesSendAgentTargets(

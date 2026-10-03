@@ -1,5 +1,6 @@
 import type { AgentStatus } from './agent-status'
 import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
+import { isQuarterCircleSpinnerOnlyAgentTitle } from '../../../shared/agent-title-status'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 
 const EXPLICIT_IDLE_SEND_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
@@ -14,7 +15,10 @@ export function detectAgentSendTitleStatus(title: string | null | undefined): Ag
 
   const status = classifyTitleActivity(title)
   if (status !== 'idle') {
-    return status
+    // Why: title-only evidence cannot prove identity for a lone quarter-circle frame (STA-4028);
+    // the runtime may still accept that pane via launch, foreground-process, or ready-prompt
+    // evidence the renderer cannot see, so this is a deliberate conservative narrowing (#24286).
+    return isQuarterCircleSpinnerOnlyAgentTitle(title) ? null : status
   }
 
   // Why: selected-target sends are immediate. A bare agent name proves identity,
