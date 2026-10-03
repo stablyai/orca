@@ -65,6 +65,8 @@ export type RpcContext = {
   runtime: OrcaRuntimeService
   // Why: lets long-poll handlers release immediately on client disconnect instead of running down timeoutMs. See design doc §3.1.
   signal?: AbortSignal
+  // Transfers retain their connection lifetime after the initiating request settles.
+  retainConnectionLifetime?: () => { signal: AbortSignal; dispose: () => void }
   // Why: per-WebSocket key so the server reaps a closing socket's subscriptions without touching sibling sockets sharing the deviceToken.
   connectionId?: string
   // An unsubscribe cannot retire a registration created after its dispatch began.

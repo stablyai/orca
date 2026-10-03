@@ -4,6 +4,9 @@ import { type Mock, vi } from 'vitest'
 // so each test file's own `vi.mock` factories can hand the objects back verbatim.
 
 const CLIENT_EXPORTS = [
+  'listActionsRuns',
+  'listActionsWorkflows',
+  'getWorkflowRunDetails',
   'getPRForBranch',
   'getIssue',
   'getWorkItem',

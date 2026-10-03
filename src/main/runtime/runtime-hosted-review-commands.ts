@@ -48,10 +48,17 @@ type RuntimeHostedReviewCommandsDeps = {
 export class RuntimeHostedReviewCommands {
   constructor(private readonly deps: RuntimeHostedReviewCommandsDeps) {}
 
-  async getRepoSlug(repoSelector: string): Promise<GitHubOwnerRepo | null> {
+  /** Resolve GitHub identity with the selected repository’s SSH/WSL route and optional verified-origin requirement. */
+  async getRepoSlug(
+    repoSelector: string,
+    probeOptions?: { requireVerifiedSshProbe?: boolean }
+  ): Promise<GitHubOwnerRepo | null> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const options = this.deps.getExecutionOptions(repo)
     const connectionId = hostedReviewSshConnectionId(getRepoHostedReviewExecutionHostId(repo))
+    if (probeOptions?.requireVerifiedSshProbe) {
+      return getRepoSlug(repo.path, connectionId, { ...options, ...probeOptions })
+    }
     return options
       ? getRepoSlug(repo.path, connectionId, options)
       : getRepoSlug(repo.path, connectionId)

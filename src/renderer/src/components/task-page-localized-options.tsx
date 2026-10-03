@@ -39,7 +39,7 @@ export type SourceOption = {
 export type JiraPresetId = 'assigned' | 'reported' | 'all' | 'done'
 export type JiraPreset = { id: JiraPresetId; label: string }
 
-export type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
+export type GitHubModeButton = { id: GitHubTaskKind | 'project' | 'actions'; label: string }
 
 export type LinearMode = 'issues' | 'projects' | 'views' | 'in-orca'
 export type {
@@ -144,7 +144,8 @@ export const getJiraPresets = createLocalizedCatalog((): JiraPreset[] => [
 export const getGitHubModeButtons = createLocalizedCatalog((): GitHubModeButton[] => [
   { id: 'issues', label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues') },
   { id: 'prs', label: translate('auto.components.TaskPage.137e2a8a01', 'PRs') },
-  { id: 'project', label: translate('auto.components.TaskPage.727069bee5', 'Projects') }
+  { id: 'project', label: translate('auto.components.TaskPage.727069bee5', 'Projects') },
+  { id: 'actions', label: translate('actions.title', 'Actions') }
 ])
 
 export const getLinearModeOptions = createLocalizedCatalog(

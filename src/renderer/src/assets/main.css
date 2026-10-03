@@ -101,6 +101,8 @@
   --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
   --color-ai-action-accent: var(--ai-action-accent);
+  --color-status-info: var(--status-info);
+  --color-status-warning-foreground: var(--status-warning-foreground);
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
@@ -185,6 +187,8 @@
   --agent-question: var(--color-orange-600);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  --status-info: var(--color-blue-600);
+  --status-warning-foreground: var(--color-yellow-700);
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
@@ -304,6 +308,8 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --status-info: var(--color-blue-400);
+  --status-warning-foreground: var(--status-warning);
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);

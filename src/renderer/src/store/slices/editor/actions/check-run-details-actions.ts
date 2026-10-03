@@ -1,3 +1,4 @@
+import { loadActionsDetailTab } from '@/store/github/actions-detail-tabs'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { translate } from '@/i18n/i18n'
@@ -16,6 +17,7 @@ import { findWorktreeById, getRepoIdFromWorktreeId } from '../../worktree-helper
 import type { OpenFile } from '../types/open-file'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 
+/** Keep Actions detail tabs on their owner-bound loader while retaining existing GitHub and GitLab check paths. */
 export function createCheckRunDetailsActions(
   set: EditorSet,
   get: EditorGet
@@ -24,10 +26,12 @@ export function createCheckRunDetailsActions(
   'openCheckRunDetails' | 'patchOpenCheckRunDetails' | 'reloadOpenCheckRunDetailsTab'
 > {
   return {
+    /** Open or focus the stable detail tab while retaining its Actions owner context and current snapshot. */
     openCheckRunDetails: (worktreeId, contextKey, check, state) => {
       const id = buildCheckRunDetailsTabId(worktreeId, check)
       const label = getCheckRunDetailsTabLabel(check)
       const checkRunDetails: OpenCheckRunDetailsState = {
+        actionsContext: state.actionsContext,
         contextKey,
         check,
         requestId: state.requestId,
@@ -87,6 +91,7 @@ export function createCheckRunDetailsActions(
     },
 
     // Why: sidebar detail fetches can finish after the full-details tab is open; update the snapshot without stealing focus.
+    /** Update an existing matching tab without stealing focus or overwriting a newer request generation. */
     patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
       const id = buildCheckRunDetailsTabId(worktreeId, check)
       set((s) => {
@@ -110,6 +115,7 @@ export function createCheckRunDetailsActions(
         const githubRepository = state.githubRepository ?? current.githubRepository ?? null
         const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
         const nextCheckRunDetails: OpenCheckRunDetailsState = {
+          actionsContext: state.actionsContext ?? current.actionsContext,
           contextKey,
           check,
           requestId: state.requestId ?? current.requestId,
@@ -140,6 +146,7 @@ export function createCheckRunDetailsActions(
       })
     },
 
+    /** Use the owner-bound Actions loader when present; otherwise retain the provider-specific check reload path. */
     reloadOpenCheckRunDetailsTab: async (fileId) => {
       const state = get()
       const file = state.openFiles.find((candidate) => candidate.id === fileId)
@@ -147,8 +154,13 @@ export function createCheckRunDetailsActions(
       if (!file || file.mode !== 'check-details' || !checkRunDetails) {
         return
       }
+      if (checkRunDetails.actionsContext) {
+        await loadActionsDetailTab(get, fileId)
+        return
+      }
       const { contextKey, check } = checkRunDetails
       const requestId = createCheckRunDetailsRequestId()
+      /** Apply detail results with this request ID so a slower generation cannot overwrite a newer tab state. */
       const patch = (next: CheckRunDetailsTabPatch): void => {
         get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, { ...next, requestId })
       }

@@ -6,6 +6,8 @@ export type RpcDispatchStreamingOptions = {
   authenticatedCallerFingerprint?: string
   connectionId?: string
   signal?: AbortSignal
+  // Transfers retain their connection lifetime after the initiating request settles.
+  retainConnectionLifetime?: () => { signal: AbortSignal; dispose: () => void }
   clientId?: string
   pairedDeviceId?: string
   clientKind?: 'mobile' | 'runtime'

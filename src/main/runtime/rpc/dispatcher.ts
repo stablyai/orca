@@ -58,6 +58,7 @@ export class RpcDispatcher {
     })
   }
 
+  /** Validate and execute a unary RPC with caller identity and retained connection lifetime in its context. */
   async dispatch(request: RpcRequest, options?: DispatchCallOptions): Promise<RpcResponse> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
@@ -109,6 +110,7 @@ export class RpcDispatcher {
         context: {
           runtime: this.runtime,
           signal: options?.signal,
+          retainConnectionLifetime: options?.retainConnectionLifetime,
           connectionId: options?.connectionId,
           // Session tabs always need this fence. COMPAT(terminal request-addressed unsubscribe): terminal only for phones without `requestId`.
           subscriptionRegistrationVersion: isRegistrationFencedUnsubscribe(request.method)

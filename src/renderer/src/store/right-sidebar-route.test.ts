@@ -10,6 +10,10 @@ describe('normalizeRightSidebarRoute', () => {
   })
 
   it('still normalizes invalid tabs to Explorer files', () => {
+    expect(normalizeRightSidebarRoute('actions')).toEqual({
+      rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'files'
+    })
     expect(normalizeRightSidebarRoute('missing')).toEqual({
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files'

@@ -20,7 +20,8 @@ describe('task-page-localized-options', () => {
     expect(getGitHubModeButtons().map((button) => button.label)).toEqual([
       'Issues',
       'PRs',
-      'Projects'
+      'Projects',
+      'Actions'
     ])
 
     await i18n.changeLanguage('ko')
@@ -29,7 +30,12 @@ describe('task-page-localized-options', () => {
       '열기',
       '나에게 할당됨'
     ])
-    expect(getGitHubModeButtons().map((button) => button.label)).toEqual(['이슈', 'PR', '프로젝트'])
+    expect(getGitHubModeButtons().map((button) => button.label)).toEqual([
+      '이슈',
+      'PR',
+      '프로젝트',
+      'Actions'
+    ])
 
     await i18n.changeLanguage('en')
 
@@ -40,7 +46,8 @@ describe('task-page-localized-options', () => {
     expect(getGitHubModeButtons().map((button) => button.label)).toEqual([
       'Issues',
       'PRs',
-      'Projects'
+      'Projects',
+      'Actions'
     ])
   })
 

@@ -23,6 +23,12 @@ describe('github RPC methods', () => {
       ok: true,
       result: { owner: 'acme', repo: 'orca' }
     })
+    await dispatcher.dispatch(
+      makeRequest('github.repoSlug', { repo: 'repo-1', requireVerifiedSshProbe: true })
+    )
+    expect(runtime.getRepoSlug).toHaveBeenLastCalledWith('repo-1', {
+      requireVerifiedSshProbe: true
+    })
   })
 
   it('fetches GitHub rate limits on the runtime server', async () => {
