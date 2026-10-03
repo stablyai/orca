@@ -119,9 +119,13 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   // createdAt) per session for display; listProcesses drops that detail for
   // the IPtyProvider contract. Keep both in parallel rather than widening
   // the provider surface.
-  async listSessions(): Promise<SessionInfo[]> {
-    await this.ensureConnected()
-    const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+  async listSessions(opts?: { deadlineMs?: number }): Promise<SessionInfo[]> {
+    await this.ensureConnected(opts?.deadlineMs)
+    const result = await this.client.request<ListSessionsResult>(
+      'listSessions',
+      undefined,
+      remainingDaemonRequestTimeoutMs(opts?.deadlineMs)
+    )
     return result.sessions
       .filter((s) => s.isAlive)
       .map((session) => ({

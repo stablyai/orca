@@ -83,6 +83,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
   const replaceDaemonPidFileMock = vi.fn(() => true)
   const getDaemonCommandLineMock = vi.fn(async (_pid: number): Promise<string | null> => null)
   const unlinkOwnedDaemonPidFileMock = vi.fn(() => true)
+  const unlinkOwnedDaemonTokenFileMock = vi.fn(() => true)
   const launchedStartedAtMs = { current: 1_000_000 }
 
   const readLaunchedDaemonIdentity = (): LaunchedDaemonIdentity | null => {
@@ -180,6 +181,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
     replaceDaemonPidFileMock,
     getDaemonCommandLineMock,
     unlinkOwnedDaemonPidFileMock,
+    unlinkOwnedDaemonTokenFileMock,
     launchedStartedAtMs,
     readLaunchedDaemonIdentity,
     daemonClientMock,
