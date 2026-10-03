@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
+import { ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type {
@@ -30,6 +30,8 @@ import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { useSettledMobileNativeChatInputLock } from './use-mobile-native-chat-input-lease'
+import { useMobileNativeChatPromptJump } from './use-mobile-native-chat-prompt-jump'
+import { MobileNativeChatJumpControl } from './MobileNativeChatJumpControl'
 import { MobileNativeChatTurnActivity } from './MobileNativeChatTurnStatus'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -219,6 +221,7 @@ export function MobileNativeChatView({
   const {
     listRef,
     showJumpToTail,
+    atTail,
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,
@@ -230,6 +233,31 @@ export function MobileNativeChatView({
     recordScrollMetrics
   } = useMobileNativeChatTailFollow<NativeChatMessage>({ hasItems: data.length > 0 })
 
+  // Per-turn status rows: one live indicator while the turn runs, then a settled
+  // "Worked for N" row. The structured lane owns them; the bridge lane keeps its
+  // three-dot indicator.
+  const turns = useMobileNativeChatTurnDisclosure({
+    messages: data,
+    enabled: structuredActivityUi,
+    isWorking: agentWorking === true,
+    workingStartedAt,
+    settledTurns,
+    turnJournal,
+    thinking: turnIndicator?.thinking === true,
+    activityText: turnIndicator?.activityText ?? null,
+    scopeKey: sendSurfaceId
+  })
+  const promptJump = useMobileNativeChatPromptJump({
+    listRef,
+    data: turns.listMessages,
+    loadedMessages: folded,
+    atBottom: atTail,
+    onLeaveTail: detachFromTail,
+    onReturnToTail: jumpToTail,
+    scopeKey: sendSurfaceId
+  })
+  const { onScrollToLatest } = promptJump
+
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
       const accepted = await onSend(text)
@@ -240,10 +268,10 @@ export function MobileNativeChatView({
       // or a stale "Message not sent" sits above the delivered message.
       onClearSendError?.()
       // Always jump to the newest message when the user sends.
-      jumpToTail()
+      onScrollToLatest()
       return true
     },
-    [onSend, onClearSendError, jumpToTail]
+    [onSend, onClearSendError, onScrollToLatest]
   )
 
   const loadEarlier = useCallback(() => {
@@ -263,20 +291,6 @@ export function MobileNativeChatView({
     [hasMore, loadingEarlier, loadEarlier, recordScrollMetrics]
   )
 
-  // Per-turn status rows: one live indicator while the turn runs, then a settled
-  // "Worked for N" row. The structured lane owns them; the bridge lane keeps its
-  // three-dot indicator.
-  const turns = useMobileNativeChatTurnDisclosure({
-    messages: data,
-    enabled: structuredActivityUi,
-    isWorking: agentWorking === true,
-    workingStartedAt,
-    settledTurns,
-    turnJournal,
-    thinking: turnIndicator?.thinking === true,
-    activityText: turnIndicator?.activityText ?? null,
-    scopeKey: sendSurfaceId
-  })
   const hasPendingStructuredInteraction =
     structuredActivityUi && (ask != null || permission != null || question != null)
 
@@ -302,6 +316,7 @@ export function MobileNativeChatView({
         activityText={turns.activeActivityText}
       />
     ) : null
+  const listFooter = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
@@ -327,11 +342,16 @@ export function MobileNativeChatView({
               // instead of being swallowed by the dismiss gesture.
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
-              onScrollBeginDrag={beginUserScroll}
+              onScrollBeginDrag={() => {
+                promptJump.cancelPendingJump()
+                beginUserScroll()
+              }}
               onScrollEndDrag={endUserDrag}
               onMomentumScrollBegin={beginMomentum}
               onMomentumScrollEnd={endMomentum}
               scrollEventThrottle={32}
+              onViewableItemsChanged={promptJump.onViewableItemsChanged}
+              onScrollToIndexFailed={promptJump.onScrollToIndexFailed}
               onContentSizeChange={pinToTailAfterContentResize}
               onLayout={pinToTail}
               ListHeaderComponent={
@@ -349,11 +369,7 @@ export function MobileNativeChatView({
                   </Pressable>
                 ) : null
               }
-              ListFooterComponent={mobileNativeChatListFooter(
-                liveStatus,
-                turns.waitingRows,
-                renderItem
-              )}
+              ListFooterComponent={listFooter}
               ListEmptyComponent={
                 emptyState ? (
                   <View style={styles.center}>
@@ -364,16 +380,7 @@ export function MobileNativeChatView({
               }
             />
           </GestureDetector>
-          {/* Jump-to-latest control. */}
-          {showJumpToTail ? (
-            <Pressable
-              accessibilityLabel="Scroll to latest"
-              style={[styles.fab, styles.fabBottom]}
-              onPress={jumpToTail}
-            >
-              <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
+          <MobileNativeChatJumpControl showJumpToTail={showJumpToTail} {...promptJump} />
         </GestureHandlerRootView>
       )}
       {queuedCards}
