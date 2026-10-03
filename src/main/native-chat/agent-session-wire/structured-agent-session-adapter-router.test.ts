@@ -189,6 +189,17 @@ describe('StructuredAgentSessionAdapterRouter.stopEndsSession', () => {
     expect(router.stopEndsSession('session-1')).toBe(true)
   })
 
+  it("reports the live owner's work in flight, and none with no live owner", async () => {
+    const claude = adapterOf(vi.fn(async () => true))
+    claude.liveWork = () => ({ turnId: 'turn-1' })
+    const codex = adapterOf(vi.fn(async () => false))
+    const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+
+    expect(router.liveWork('session-1')).toBeUndefined()
+    await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
+    expect(router.liveWork('session-1')).toEqual({ turnId: 'turn-1' })
+  })
+
   it("waits on the session's live owner to wind the Stop down, and on nothing with none", async () => {
     const claude = adapterOf(vi.fn(async () => true))
     claude.awaitStoppedRequestEnd = vi.fn(async () => undefined)

@@ -46,6 +46,9 @@ export async function createQueuedMessageTestRig(
     idleSweep?: { idleMs: number; intervalMs: number }
     /** The provider's Stop ends its child, as Claude's does. */
     stopEndsSession?: true
+    /** The provider reports what its child has in flight (`liveWork`), as both real ones do;
+     *  without it the host reads the journal's rows alone. */
+    liveView?: true
   } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
@@ -68,6 +71,9 @@ export async function createQueuedMessageTestRig(
   }))
   const closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>> = vi.fn(
     async () => true
+  )
+  const liveWork: Mock<NonNullable<StructuredAgentSessionAdapter['liveWork']>> = vi.fn(
+    () => undefined
   )
   let events: StructuredAgentSessionEventSink | undefined
   const store = await openTestAgentSessionRecordStore(root)
@@ -106,6 +112,7 @@ export async function createQueuedMessageTestRig(
         compact,
         cancelTurn,
         ...(options.stopEndsSession ? { stopEndsSession: () => true } : {}),
+        ...(options.liveView ? { liveWork } : {}),
         answerPrompt: vi.fn(async () => undefined),
         setOption: vi.fn(async () => undefined)
       },
@@ -321,6 +328,7 @@ export async function createQueuedMessageTestRig(
     dispatch,
     cancelTurn,
     closeSession,
+    liveWork,
     awaitStarted,
     compact,
     finishCompact,

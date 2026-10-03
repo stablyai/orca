@@ -9,7 +9,7 @@ import {
   codexTurnLifecycleRig,
   settledWithin
 } from './codex-structured-dispatch-test-support'
-import { CODEX_TURN_OPEN_WAIT_MS } from './codex-structured-turn-open-wait'
+import { CODEX_TURN_OPEN_WAIT_MS, codexLiveWork } from './codex-structured-turn-open-wait'
 
 type Rig = Awaited<ReturnType<typeof codexTurnLifecycleRig>>
 
@@ -143,5 +143,58 @@ describe("a no-turn Stop in the window between Codex's answer and its turn openi
 
     expect(outcome).toEqual(REFUSED)
     expect(rig.interrupts()).toEqual([])
+  })
+})
+
+// What a host stop reads, in its own step and with no wait, to judge whether it ends work.
+describe("Codex's live view of what its child has in flight", () => {
+  const liveWork = (rig: Rig) => rig.adapter.liveWork('session-1')
+
+  it('is nothing at rest', async () => {
+    const rig = await codexTurnLifecycleRig()
+
+    expect(liveWork(rig)).toBeUndefined()
+  })
+
+  it('is a send with no turn yet from the answer until its turn opens, then that turn', async () => {
+    const rig = await codexTurnLifecycleRig()
+    await answeredColdSend(rig)
+
+    expect(liveWork(rig)).toEqual({ turnId: null })
+    rig.turns.start()
+    expect(liveWork(rig)).toEqual({ turnId: 'turn-1' })
+  })
+
+  // Codex carries a command out as a turn of its own, whose rows join the command's turn.
+  it("names a turn carrying a command by the command's journal turn", () => {
+    const work = codexLiveWork({
+      threadId: CODEX_TEST_THREAD_ID,
+      activeTurnIds: new Set(['provider-turn']),
+      dispatchEchoes: { answeredUnopenedTurn: () => null },
+      translator: {
+        commandJournalTurnId: (turnId) => (turnId === 'provider-turn' ? 'command-turn' : turnId)
+      }
+    })
+
+    expect(work).toEqual({ turnId: 'command-turn' })
+  })
+
+  it('is nothing once the turn ends', async () => {
+    const rig = await codexTurnLifecycleRig()
+    await answeredColdSend(rig)
+    rig.turns.start()
+
+    rig.turns.end('completed')
+
+    expect(liveWork(rig)).toBeUndefined()
+  })
+
+  it('is nothing once the answered turn ends without opening', async () => {
+    const rig = await codexTurnLifecycleRig()
+    await answeredColdSend(rig)
+
+    rig.turns.end('interrupted')
+
+    expect(liveWork(rig)).toBeUndefined()
   })
 })

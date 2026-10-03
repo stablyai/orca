@@ -2,22 +2,13 @@
 // the turn-end rule reads (`journal-stop-turn-end.ts`), and whether a person's still decides.
 
 import type { JournalReducerState } from './journal-reducer'
-import {
-  latestAcceptedSendUnopened,
-  personStopDecidesTurn,
-  type JournalLatestStop
-} from './journal-stop-turn-end'
+import { personStopDecidesTurn, type JournalLatestStop } from './journal-stop-turn-end'
 
 export class JournalStopMarks {
   constructor(private readonly deps: { state: () => JournalReducerState }) {}
 
   latest(): JournalLatestStop | null {
     return this.deps.state().queuePauseMarks.latestStop
-  }
-
-  /** `latestAcceptedSendUnopened`: the latest accepted send's turn row may still be on its way. */
-  latestAcceptedSendUnopened(): boolean {
-    return latestAcceptedSendUnopened(this.deps.state())
   }
 
   /** `personStopDecidesTurn`: a person's Stop decides how turn `turnId` ends. */

@@ -287,6 +287,7 @@ export function createCodexJournalTranslator(
     beginCommand: (command) => commands.begin(command),
     forgetCommand: (turnId) => commands.forget(turnId),
     commandProviderTurnId: (turnId) => commands.providerTurnId(turnId),
+    commandJournalTurnId: (providerTurnId) => commands.journalTurnId(providerTurnId),
     cancelPrompt: (journalItemId) => prompts.cancel(journalItemId),
     resolvePrompt: (journalItemId) => prompts.resolve(journalItemId),
     flush: () => {

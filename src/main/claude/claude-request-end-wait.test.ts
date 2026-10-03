@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   awaitClaudeRequestEnd,
   CLAUDE_STOP_GRACE_MS,
+  claudeLiveWork,
   claudeStoppedRequestEndWait,
   settleClaudeTurnEndWaiters
 } from './claude-request-end-wait'
@@ -88,5 +89,20 @@ describe("a Stop's wait for Claude to wind down what it has in flight", () => {
     expect(await settledWithin(waiting, 999)).toBe(false)
     expect(await settledWithin(waiting, 1)).toBe(true)
     expect(await settledWithin(wait('session-2', Date.now()), 0)).toBe(true)
+  })
+})
+
+// What a host stop reads, in its own step and with no wait, to judge whether it ends work.
+describe("Claude's live view of what its child has in flight", () => {
+  it('is its open turn', () => {
+    expect(claudeLiveWork(session('turn-1'))).toEqual({ turnId: 'turn-1' })
+  })
+
+  it('is a send with no turn yet before its echo', () => {
+    expect(claudeLiveWork(claudeWith(null, 1).claude)).toEqual({ turnId: null })
+  })
+
+  it('is nothing at rest', () => {
+    expect(claudeLiveWork(session(null))).toBeUndefined()
   })
 })

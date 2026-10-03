@@ -349,6 +349,15 @@ describe('a Codex turn a conversation command claims', () => {
     expect(translator.commandProviderTurnId('ordinary')).toBe('ordinary')
   })
 
+  it("maps the provider turn carrying the command to the command's journal turn", () => {
+    const { translator, emit } = harness()
+    translator.beginCommand(COMMAND)
+    emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
+
+    expect(translator.commandJournalTurnId(PROVIDER_TURN)).toBe(COMMAND.turnId)
+    expect(translator.commandJournalTurnId('ordinary')).toBe('ordinary')
+  })
+
   it('claims the same provider turn when the refused start is retried', () => {
     const { writes, translator, emit } = harness(1)
     translator.beginCommand(COMMAND)
