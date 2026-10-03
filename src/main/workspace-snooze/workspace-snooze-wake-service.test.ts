@@ -113,6 +113,31 @@ describe('WorkspaceSnoozeWakeService', () => {
     warn.mockRestore()
   })
 
+  it('warns instead of rejecting when listing fails, and retries next pass', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const wake = vi.fn(async () => {})
+    const listSnoozed = vi
+      .fn<() => SnoozedWorkspace[]>()
+      .mockImplementationOnce(() => {
+        throw new Error('store unavailable')
+      })
+      .mockImplementation(() => [due])
+    const service = new WorkspaceSnoozeWakeService({
+      listSnoozed,
+      wake,
+      now: () => 10_000,
+      tickMs: TICK_MS
+    })
+
+    await expect(service.wakeDue()).resolves.toBeUndefined()
+    expect(wake).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledOnce()
+
+    await service.wakeDue()
+    expect(wake).toHaveBeenCalledWith(due, 10_000)
+    warn.mockRestore()
+  })
+
   it('coalesces calls made during a pass into one follow-up pass', async () => {
     const { service, wake } = createHarness([due])
     let release!: () => void

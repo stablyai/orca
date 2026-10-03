@@ -16,8 +16,13 @@ const state = vi.hoisted(() => ({
   rpcStarted: false,
   browserProvider: vi.fn(async () => null),
   register: vi.fn(async () => ({ ok: true, registrationId: 'headless-registration' })),
-  send: vi.fn(async () => ({ ok: true, results: [] }))
+  send: vi.fn(async () => ({ ok: true, results: [] })),
+  updateFolderWorkspace: vi.fn(async () => null)
 }))
+const snoozeState = vi.hoisted(() => {
+  const folderWorkspaces: { id: string; snooze?: { snoozedAt: number; wakeAt?: number } }[] = []
+  return { folderWorkspaces }
+})
 vi.mock('./orcad-app-paths', () => ({
   resolveOrcadInstallRoot: () => state.root,
   resolveOrcadPath: () => state.root,
@@ -44,6 +49,11 @@ vi.mock('./orcad-profile-state-startup', () => ({
   createOrcadProfileStateStartup: async () => ({
     store: {
       getSettings: () => ({}),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      getFolderWorkspaces: () => snoozeState.folderWorkspaces,
+      getFolderWorkspace: (id: string) =>
+        snoozeState.folderWorkspaces.find((entry) => entry.id === id),
       flushFinalOrThrowAsync: async () => {},
       freezeWritesAsync: async () => {}
     },
@@ -78,6 +88,10 @@ vi.mock('../runtime/orca-runtime', () => ({
     rehydrateClientHostedBrowserPages() {}
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
+    async updateManagedWorktreeMeta() {
+      return null
+    }
+    updateFolderWorkspace = state.updateFolderWorkspace
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {
@@ -126,6 +140,7 @@ vi.mock('../runtime/push/push-gateway-client', () => ({
 
 afterEach(() => {
   rmSync(state.root, { recursive: true, force: true })
+  snoozeState.folderWorkspaces = []
   vi.clearAllMocks()
 })
 
@@ -188,4 +203,21 @@ it('releases admission when host setup fails before a runtime exists', async () 
   await expect(startOrcad()).rejects.toThrow('browser setup failed')
   expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
   acquireProfileStateMaintenance(state.root).release()
+})
+
+it('wakes overdue snoozed workspaces on startup without a desktop process', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-snooze-'))
+  state.controller = new RuntimeMobileNotificationController()
+  state.registry = new DeviceRegistry(state.root)
+  snoozeState.folderWorkspaces = [{ id: 'folder-1', snooze: { snoozedAt: 1, wakeAt: 2 } }]
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  try {
+    expect(state.updateFolderWorkspace).toHaveBeenCalledWith(
+      'folder-1',
+      expect.objectContaining({ snooze: null, isUnread: true })
+    )
+  } finally {
+    await host.stop()
+  }
 })

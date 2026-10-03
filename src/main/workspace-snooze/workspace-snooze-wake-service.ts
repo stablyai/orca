@@ -78,7 +78,15 @@ export class WorkspaceSnoozeWakeService {
 
   private async runPass(): Promise<void> {
     const now = this.now()
-    const due = this.deps.listSnoozed().filter((ws) => isWorkspaceSnoozeDue(ws.snooze, now))
+    let snoozed: SnoozedWorkspace[]
+    try {
+      snoozed = this.deps.listSnoozed()
+    } catch (error) {
+      // Why warn and not throw: callers fire passes with `void`, and the next pass retries the read.
+      console.warn('[workspace-snooze] Failed to list snoozed workspaces:', error)
+      return
+    }
+    const due = snoozed.filter((ws) => isWorkspaceSnoozeDue(ws.snooze, now))
     for (const workspace of due) {
       try {
         await this.deps.wake(workspace, now)

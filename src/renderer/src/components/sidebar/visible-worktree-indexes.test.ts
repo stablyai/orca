@@ -130,8 +130,8 @@ describe('visible worktree indexes', () => {
     const sortedIds = [parent.id, child.id]
     const lineageById = { [child.id]: makeLineage(child, parent) }
 
-    const firstAncestors = getLineageAncestorIndex(worktreesByRepo)
-    const secondAncestors = getLineageAncestorIndex(worktreesByRepo)
+    const firstAncestors = getLineageAncestorIndex(worktreesByRepo, false)
+    const secondAncestors = getLineageAncestorIndex(worktreesByRepo, false)
     expect(secondAncestors).toBe(firstAncestors)
     expect(getSortedWorktreeRankIndex(sortedIds)).toBe(getSortedWorktreeRankIndex(sortedIds))
     expect([...getSortedWorktreeRankIndex(sortedIds)]).toEqual([
@@ -163,7 +163,7 @@ describe('visible worktree indexes', () => {
     // phantom ancestor row.
     expect(computeVisibleWorktreeIds(worktreesByRepo, sortedIds, opts)).toEqual([child.id])
     expect(computeVisibleWorktreeIds(worktreesByRepo, sortedIds, opts)).toEqual([child.id])
-    expect(getLineageAncestorIndex(worktreesByRepo).has(parent.id)).toBe(false)
+    expect(getLineageAncestorIndex(worktreesByRepo, false).has(parent.id)).toBe(false)
   })
 
   it('keeps the last row for a two-host id collision, as the per-call map did', () => {
@@ -175,6 +175,6 @@ describe('visible worktree indexes', () => {
     const remote: Worktree = { ...makeWorktree('shared'), hostId: 'ssh:box', path: '/tmp/remote' }
     const worktreesByRepo = { repo1: [local, remote] }
 
-    expect(getLineageAncestorIndex(worktreesByRepo).get('shared')?.path).toBe('/tmp/remote')
+    expect(getLineageAncestorIndex(worktreesByRepo, false).get('shared')?.path).toBe('/tmp/remote')
   })
 })

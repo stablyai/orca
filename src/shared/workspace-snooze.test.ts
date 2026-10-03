@@ -31,4 +31,9 @@ describe('workspace snooze', () => {
     }
     expect(parseStoredWorkspaceSnooze(snooze)).toEqual(snooze)
   })
+
+  it('keeps a wake condition added by a newer version so a re-save preserves it', () => {
+    const snooze = { snoozedAt: 1, wakeAt: 100, afterCalendarEvent: { eventId: 'e-1' } }
+    expect(parseStoredWorkspaceSnooze(snooze)).toEqual(snooze)
+  })
 })

@@ -26,8 +26,11 @@ export function isWorkspaceSnoozeDue(snooze: WorkspaceSnooze, now: number): bool
   return snooze.wakeAt !== undefined && snooze.wakeAt <= now
 }
 
+// Why loose: a stored record gets re-persisted, so stripping would erase a newer writer's condition.
+const StoredWorkspaceSnoozeSchema = WorkspaceSnoozeSchema.loose()
+
 /** Parses a persisted value, dropping anything malformed so a bad record reads as awake. */
 export function parseStoredWorkspaceSnooze(raw: unknown): WorkspaceSnooze | undefined {
-  const parsed = WorkspaceSnoozeSchema.safeParse(raw)
+  const parsed = StoredWorkspaceSnoozeSchema.safeParse(raw)
   return parsed.success ? parsed.data : undefined
 }

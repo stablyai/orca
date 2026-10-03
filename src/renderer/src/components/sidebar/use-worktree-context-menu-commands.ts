@@ -150,14 +150,17 @@ export function useWorktreeContextMenuCommands(args: {
   )
   const handleSnooze = useCallback(
     (wakeAt: number) => {
-      const targets = args.activeContextWorktrees
+      // Why skip snoozed rows: re-snoozing them would overwrite the wake time they already have.
+      const targets = args.activeContextWorktrees.filter((row) => !isWorkspaceSnoozed(row))
       runAfterMenuClose(() => snoozeWorkspaces(targets, wakeAt))
     },
     [args.activeContextWorktrees, runAfterMenuClose]
   )
   const handlePickSnoozeTime = useCallback(() => {
     args.openModal('snooze-workspace', {
-      targets: args.activeContextWorktrees.map(({ id, hostId }) => ({ id, hostId }))
+      targets: args.activeContextWorktrees
+        .filter((row) => !isWorkspaceSnoozed(row))
+        .map(({ id, hostId }) => ({ id, hostId }))
     })
   }, [args])
   const handleWakeSnoozed = useCallback(() => {

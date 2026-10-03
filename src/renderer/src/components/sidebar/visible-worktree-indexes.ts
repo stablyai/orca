@@ -5,32 +5,44 @@ import { isWorkspaceSnoozed } from '../../../../shared/workspace-snooze'
 type WorktreesByRepo = Record<string, Worktree[]>
 
 /**
- * Non-archived, non-snoozed rows by id — the map `computeVisibleWorktrees` hands to the
- * lineage projection.
+ * Non-archived rows by id, the map `computeVisibleWorktrees` hands to the lineage
+ * projection. Snoozed rows are included only while the snooze peek is on.
  *
  * Why cached: `getCyclicProjectedWorktreeLineageIds` keys its memo on this map's
  * identity, so a per-call Map is a guaranteed miss that re-walks every workspace
  * and re-runs cycle detection on each PTY, tab and agent-status write.
  *
  * Why not the store's `getIndexedWorktreeMap`: this index excludes archived rows
- * and snoozed rows (an archived or snoozed parent resolving as a valid ancestor
- * would inject a row the user hid),
- * and it keeps the last row for a two-host id collision rather than the first.
+ * and, with the peek off, snoozed rows (a hidden parent resolving as a valid ancestor
+ * would inject a row the user hid), and it keeps the last row for a two-host id
+ * collision rather than the first.
+ *
+ * Why peek-aware: with the peek on, a snoozed parent is visible, and its children
+ * must still resolve it as their parent.
  */
-const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, Map<string, Worktree>>()
+const lineageAncestorIndexCaches = {
+  withSnoozed: new WeakMap<WorktreesByRepo, Map<string, Worktree>>(),
+  withoutSnoozed: new WeakMap<WorktreesByRepo, Map<string, Worktree>>()
+}
 
-export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<string, Worktree> {
-  const cached = lineageAncestorIndexCache.get(worktreesByRepo)
+export function getLineageAncestorIndex(
+  worktreesByRepo: WorktreesByRepo,
+  showSnoozedWorkspaces: boolean
+): Map<string, Worktree> {
+  const cache = showSnoozedWorkspaces
+    ? lineageAncestorIndexCaches.withSnoozed
+    : lineageAncestorIndexCaches.withoutSnoozed
+  const cached = cache.get(worktreesByRepo)
   if (cached) {
     return cached
   }
   const index = new Map<string, Worktree>()
   for (const worktree of getIndexedAllWorktrees(worktreesByRepo)) {
-    if (!worktree.isArchived && !isWorkspaceSnoozed(worktree)) {
+    if (!worktree.isArchived && (showSnoozedWorkspaces || !isWorkspaceSnoozed(worktree))) {
       index.set(worktree.id, worktree)
     }
   }
-  lineageAncestorIndexCache.set(worktreesByRepo, index)
+  cache.set(worktreesByRepo, index)
   return index
 }
 

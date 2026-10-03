@@ -98,13 +98,12 @@ export function computeVisibleWorktrees(
 ): Worktree[] {
   let all: Worktree[] = getAllWorktreesFromState({ worktreesByRepo })
 
-  all = all.filter(
-    (w) => !w.isArchived && (opts.showSnoozedWorkspaces === true || !isWorkspaceSnoozed(w))
-  )
+  const showSnoozed = opts.showSnoozedWorkspaces === true
+  all = all.filter((w) => !w.isArchived && (showSnoozed || !isWorkspaceSnoozed(w)))
 
   // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
   // every other valid ancestor can bypass filters so children never orphan.
-  const lineageAncestorById = getLineageAncestorIndex(worktreesByRepo)
+  const lineageAncestorById = getLineageAncestorIndex(worktreesByRepo, showSnoozed)
 
   if (opts.hideWorkspacesFromOtherDevices) {
     all = all.filter(
