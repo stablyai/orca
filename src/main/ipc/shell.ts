@@ -17,6 +17,7 @@ import {
   resolveVsCodeRemoteSshLaunchSpec
 } from '../external-editor-launch'
 import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
+import { authorizeExternalPath, isPathAllowed, PATH_ACCESS_DENIED_MESSAGE } from './filesystem-auth'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -226,7 +227,12 @@ export function registerShellHandlers(store: Store): void {
       if (result.canceled || result.filePaths.length === 0) {
         return null
       }
-      return result.filePaths[0]
+      // Why: a native-dialog pick is the user's own grant moment — register the
+      // picked path with the filesystem authorization model so gated operations
+      // accept it without widening renderer authority beyond the literal pick.
+      const dirPath = result.filePaths[0]
+      authorizeExternalPath(dirPath)
+      return dirPath
     }
   )
 
@@ -239,7 +245,9 @@ export function registerShellHandlers(store: Store): void {
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
-    return result.filePaths[0]
+    const attachmentPath = result.filePaths[0]
+    authorizeExternalPath(attachmentPath)
+    return attachmentPath
   })
 
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,
@@ -254,7 +262,9 @@ export function registerShellHandlers(store: Store): void {
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
-    return result.filePaths[0]
+    const imagePath = result.filePaths[0]
+    authorizeExternalPath(imagePath)
+    return imagePath
   })
 
   ipcMain.handle(
@@ -269,6 +279,7 @@ export function registerShellHandlers(store: Store): void {
       }
 
       const filePath = result.filePaths[0]
+      authorizeExternalPath(filePath)
       const extension = extname(filePath).toLowerCase()
       const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
       if (!mimeType) {
@@ -296,7 +307,9 @@ export function registerShellHandlers(store: Store): void {
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
-    return result.filePaths[0]
+    const audioPath = result.filePaths[0]
+    authorizeExternalPath(audioPath)
+    return audioPath
   })
 
   // Why: copying a picked image next to the markdown file lets us insert a
@@ -309,6 +322,12 @@ export function registerShellHandlers(store: Store): void {
       const dest = normalize(args.destPath)
       if (!isAbsolute(src) || !isAbsolute(dest)) {
         throw new Error('Both source and destination must be absolute paths')
+      }
+      // Why: keep this handler inside the same authorization model as the fs
+      // handlers, or the renderer gets an arbitrary read-into-allowed-roots
+      // copy primitive that bypasses resolveAuthorizedPath entirely.
+      if (!isPathAllowed(src, store) || !isPathAllowed(dest, store)) {
+        throw new Error(PATH_ACCESS_DENIED_MESSAGE)
       }
       // Why: COPYFILE_EXCL prevents silently overwriting an existing file.
       // The renderer-side deconfliction loop already picks a unique name, so

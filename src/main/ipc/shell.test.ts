@@ -3,6 +3,7 @@ import { normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const {
+  copyFileMock,
   getSpawnArgsForWindowsMock,
   handleMock,
   openPathMock,
@@ -12,6 +13,7 @@ const {
   spawnMock,
   statMock
 } = vi.hoisted(() => ({
+  copyFileMock: vi.fn(),
   getSpawnArgsForWindowsMock: vi.fn(),
   handleMock: vi.fn(),
   openPathMock: vi.fn(),
@@ -38,8 +40,19 @@ vi.mock('electron', () => ({
 
 vi.mock('node:fs/promises', () => ({
   constants: { COPYFILE_EXCL: 1 },
-  copyFile: vi.fn(),
+  copyFile: copyFileMock,
   stat: statMock
+}))
+
+vi.mock('./filesystem-allowed-roots', () => ({
+  getAllowedRoots: () => ['/allowed/workspace']
+}))
+
+vi.mock('./registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: vi.fn(),
+  isPathAllowedByCanonicalRegisteredRoot: vi.fn(async () => false),
+  isRegisteredWorktreePath: vi.fn(() => false),
+  ensureAuthorizedRootsCache: vi.fn(async () => undefined)
 }))
 
 vi.mock('node:child_process', () => ({
@@ -56,6 +69,7 @@ vi.mock('../win32-utils', () => ({
 }))
 
 import { EXTERNAL_EDITOR_CLI_COMMAND, registerShellHandlers } from './shell'
+import { PATH_ACCESS_DENIED_MESSAGE } from './filesystem-auth'
 import { resolveExternalEditorLaunchSpec } from '../external-editor-launch'
 import type { SshTarget } from '../../shared/ssh-types'
 
@@ -761,6 +775,106 @@ describe('registerShellHandlers', () => {
 
       await expect(handler({}, pathToFileURL(filePath).toString())).resolves.toBeUndefined()
       expect(openPathMock).toHaveBeenCalledWith(normalize(filePath))
+    })
+  })
+
+  describe('shell:copyFile filesystem authorization', () => {
+    const settings = { activeRuntimeEnvironmentId: null as string | null }
+    const store = { getSettings: () => settings }
+
+    beforeEach(() => {
+      handleMock.mockReset()
+      showOpenDialogMock.mockReset()
+      copyFileMock.mockReset()
+      copyFileMock.mockResolvedValue(undefined)
+      settings.activeRuntimeEnvironmentId = null
+    })
+
+    function getCopyHandler(): (event: unknown, ...args: unknown[]) => Promise<unknown> {
+      registerShellHandlers(store as never)
+      const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === 'shell:copyFile')
+      if (!call) {
+        throw new Error('shell:copyFile handler not registered')
+      }
+      return call[1] as (event: unknown, ...args: unknown[]) => Promise<unknown>
+    }
+
+    it('rejects a copy whose source is outside the allowed roots', async () => {
+      const handler = getCopyHandler()
+
+      await expect(
+        handler(
+          {},
+          {
+            srcPath: '/Users/kaylee/Downloads/secret-notes.txt',
+            destPath: normalize('/allowed/workspace/notes/secret-notes.txt')
+          }
+        )
+      ).rejects.toThrow(PATH_ACCESS_DENIED_MESSAGE)
+      expect(copyFileMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects a copy whose destination is outside the allowed roots', async () => {
+      const handler = getCopyHandler()
+
+      await expect(
+        handler(
+          {},
+          {
+            srcPath: normalize('/allowed/workspace/notes/draft.md'),
+            destPath: '/Users/kaylee/Downloads/draft.md'
+          }
+        )
+      ).rejects.toThrow(PATH_ACCESS_DENIED_MESSAGE)
+      expect(copyFileMock).not.toHaveBeenCalled()
+    })
+
+    it('copies files inside the allowed roots', async () => {
+      const handler = getCopyHandler()
+
+      await expect(
+        handler(
+          {},
+          {
+            srcPath: normalize('/allowed/workspace/notes/draft.md'),
+            destPath: normalize('/allowed/workspace/notes/draft copy.md')
+          }
+        )
+      ).resolves.toBeUndefined()
+      expect(copyFileMock).toHaveBeenCalledWith(
+        normalize('/allowed/workspace/notes/draft.md'),
+        normalize('/allowed/workspace/notes/draft copy.md'),
+        1
+      )
+    })
+
+    it('accepts a source the user picked through the native image dialog', async () => {
+      const pickedPath = '/Users/kaylee/Downloads/stacked-notes-diagram.png'
+      showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [pickedPath] })
+      registerShellHandlers(store as never)
+      const pickCall = handleMock.mock.calls.find((c: unknown[]) => c[0] === 'shell:pickImage')
+      if (!pickCall) {
+        throw new Error('shell:pickImage handler not registered')
+      }
+      await expect((pickCall[1] as (event: unknown) => Promise<unknown>)({})).resolves.toBe(
+        pickedPath
+      )
+
+      const copyHandler = getCopyHandler()
+      await expect(
+        copyHandler(
+          {},
+          {
+            srcPath: pickedPath,
+            destPath: normalize('/allowed/workspace/notes/diagram.png')
+          }
+        )
+      ).resolves.toBeUndefined()
+      expect(copyFileMock).toHaveBeenCalledWith(
+        normalize(pickedPath),
+        normalize('/allowed/workspace/notes/diagram.png'),
+        1
+      )
     })
   })
 })
