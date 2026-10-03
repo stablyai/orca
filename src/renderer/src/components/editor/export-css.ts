@@ -140,5 +140,18 @@ html, body {
 @media print {
   pre, code, table, img, svg { page-break-inside: avoid; }
   h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
+
+  /* Why: width is capped by max-width, but nothing capped height, so a diagram
+     taller than the page box fit nowhere — page-break-inside kept it whole and
+     the heading's page-break-after dragged the heading along, leaving the page
+     they vacated blank. vh resolves to the page area in paged media; the margin
+     below 100 leaves room for that heading and the block's own spacing.
+     object-fit: contain preserves aspect ratio for tall raster images with
+     explicit widths under the height cap. */
+  .orca-export-root img,
+  .orca-export-root svg {
+    max-height: 90vh;
+    object-fit: contain;
+  }
 }
 `
