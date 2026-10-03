@@ -195,6 +195,26 @@ describe('diagnoseConnection', () => {
     })
   })
 
+  it('does not blame the host when a dial timer fires after suspension', () => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://100.88.90.25:6768',
+        state: 'connecting',
+        activePath: 'tailscale',
+        entries: [
+          {
+            ...event(
+              'WebSocket connect interrupted',
+              'App suspended for 2h44m; connection state unknown, re-dialing'
+            ),
+            level: 'warn',
+            code: 'suspended-dial'
+          }
+        ]
+      }).likelyCause
+    ).toBe('No single failure cause can be determined from the recorded events.')
+  })
+
   it('keys reportability to the current structured incident', () => {
     const args = {
       endpoint: 'ws://192.168.1.2:6768',
