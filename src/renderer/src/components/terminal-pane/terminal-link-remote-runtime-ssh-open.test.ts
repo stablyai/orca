@@ -232,7 +232,8 @@ describe('handleOscLink', () => {
     expect(openFileMock).not.toHaveBeenCalled()
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-1' }),
-      '/home/me/repo/report.html'
+      '/home/me/repo/report.html',
+      expect.any(Function)
     )
   })
 
@@ -280,6 +281,56 @@ describe('handleOscLink', () => {
         filePath: '/home/me/repo/report.html',
         relativePath: 'report.html'
       }),
+      { forceContentReload: true }
+    )
+  })
+
+  it('downloads plain-click SSH binaries the editor cannot display, then opens them', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+
+    openDetectedFilePath('/home/me/repo/renders/clip.mp4', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-1' }),
+      '/home/me/repo/renders/clip.mp4',
+      expect.any(Function)
+    )
+  })
+
+  it('marks a plain-click SSH binary download stale once a newer click starts', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    const sshDeps = { worktreeId: 'wt-1', worktreePath: '/home/me/repo' }
+
+    openDetectedFilePath('/home/me/repo/renders/clip.mp4', null, null, sshDeps)
+    await flushAsyncWork()
+    const isRequestCurrent = vi.mocked(downloadAndOpenRemoteTerminalFile).mock.calls[0]?.[2]
+    expect(isRequestCurrent?.()).toBe(true)
+
+    openDetectedFilePath('/home/me/repo/src/main.ts', null, null, sshDeps)
+    expect(isRequestCurrent?.()).toBe(false)
+  })
+
+  it('keeps plain-click SSH images in the editor viewer', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+
+    openDetectedFilePath('/home/me/repo/renders/frame.png', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(downloadAndOpenRemoteTerminalFile).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/home/me/repo/renders/frame.png' }),
       { forceContentReload: true }
     )
   })

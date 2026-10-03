@@ -17,6 +17,7 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
+import { hasOsViewerOnlyFileExtension } from '../../../../shared/binary-file-extensions'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -212,7 +213,11 @@ export function openDetectedFilePath(
     if (openWithSystemDefault && !canOpenWithSystemDefault) {
       // Why: the popover names Shift+Cmd/Ctrl "Download & open with default app", and the OS
       // cannot launch a remote path, so the direct gesture must reach the same download.
-      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
+      await downloadAndOpenRemoteTerminalFile(
+        fileContext,
+        mappedFilePath,
+        () => requestId === latestOpenDetectedFilePathRequestId
+      )
       return
     }
 
@@ -229,6 +234,23 @@ export function openDetectedFilePath(
       if (plan.status === 'doc-preview') {
         activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
         openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
+        return
+      }
+    }
+
+    // Why: the editor can only say "Binary file — cannot display" for these, so an ordinary
+    // click takes the Shift+Cmd/Ctrl route to the app the OS registers for the file type.
+    if (!openWithSystemDefault && hasOsViewerOnlyFileExtension(mappedFilePath)) {
+      if (!canOpenWithSystemDefault) {
+        await downloadAndOpenRemoteTerminalFile(
+          fileContext,
+          mappedFilePath,
+          () => requestId === latestOpenDetectedFilePathRequestId
+        )
+        return
+      }
+      const openedWithSystemDefault = await window.api.shell.openFilePath(mappedFilePath)
+      if (openedWithSystemDefault || requestId !== latestOpenDetectedFilePathRequestId) {
         return
       }
     }

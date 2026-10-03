@@ -262,6 +262,86 @@ describe('handleOscLink', () => {
     })
   })
 
+  it('opens binaries the editor cannot display with the system default app on a plain click', async () => {
+    setPlatform('Macintosh')
+
+    openDetectedFilePath('/tmp/media/clip.mp4', null, null, deps)
+    await flushAsyncWork()
+
+    expect(openFilePathMock).toHaveBeenCalledTimes(1)
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/media/clip.mp4')
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(activateAndRevealWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the editor when the OS has no app for an undisplayable binary', async () => {
+    setPlatform('Macintosh')
+    openFilePathMock.mockResolvedValueOnce(false)
+
+    openDetectedFilePath('/tmp/dist/assets.7z', null, null, deps)
+    await flushAsyncWork()
+
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/dist/assets.7z')
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/dist/assets.7z' }),
+      { forceContentReload: true }
+    )
+  })
+
+  it('does not fall back to the editor for a binary click a newer click superseded', async () => {
+    setPlatform('Macintosh')
+    const firstOpen = createDeferred<boolean>()
+    openFilePathMock.mockImplementationOnce(() => firstOpen.promise)
+
+    openDetectedFilePath('/tmp/media/first.mov', null, null, deps)
+    await flushAsyncWork()
+    openDetectedFilePath('/tmp/src/second.ts', null, null, deps)
+    await flushAsyncWork()
+    firstOpen.resolve(false)
+    await flushAsyncWork()
+
+    expect(openFileMock).toHaveBeenCalledTimes(1)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/src/second.ts' }),
+      { forceContentReload: true }
+    )
+  })
+
+  it('never hands executables or loadable code to the OS on a plain click', async () => {
+    setPlatform('Macintosh')
+
+    for (const filePath of ['/tmp/bin/tool.exe', '/tmp/bin/app.jar', '/tmp/bin/lib.dylib']) {
+      openDetectedFilePath(filePath, null, null, deps)
+      await flushAsyncWork()
+    }
+
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledTimes(3)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/bin/tool.exe' }),
+      { forceContentReload: true }
+    )
+  })
+
+  it('keeps images and PDFs in the editor viewers', async () => {
+    setPlatform('Macintosh')
+
+    openDetectedFilePath('/tmp/docs/shot.png', null, null, deps)
+    await flushAsyncWork()
+    openDetectedFilePath('/tmp/docs/spec.pdf', null, null, deps)
+    await flushAsyncWork()
+
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/docs/shot.png' }),
+      { forceContentReload: true }
+    )
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/docs/spec.pdf' }),
+      { forceContentReload: true }
+    )
+  })
+
   it('cancels a pending Monaco reveal frame when another file open starts', async () => {
     setPlatform('Macintosh')
     const cancelAnimationFrame = vi.fn()
