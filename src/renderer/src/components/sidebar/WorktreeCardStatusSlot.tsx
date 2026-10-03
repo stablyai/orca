@@ -137,10 +137,8 @@ export function WorktreeCardStatusSlot({
         : statusLabel
   const passiveStatusAnnouncement =
     newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
-  // Why: working and permission already own the new-card status lane, but
-  // unread state should still surface to assistive technology and reappear afterward.
-  const showNewCardUnreadAlert =
-    newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
+  // Why: an unread result can coexist with another agent's active status.
+  const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus
   const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />
