@@ -63,13 +63,13 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     }
     const onPointerDown = (event: PointerEvent): void => {
       clearTerminalTabUnread(tabId)
-      clearWorktreeUnread(worktreeId)
       const paneElement =
         event.target instanceof Element ? event.target.closest('.pane[data-leaf-id]') : null
       const leafId = paneElement?.getAttribute('data-leaf-id')
       if (leafId) {
         clearTerminalPaneUnread(makePaneKey(tabId, leafId))
       }
+      clearWorktreeUnread(worktreeId)
     }
     container.addEventListener('pointerdown', onPointerDown, { capture: true })
     return () => container.removeEventListener('pointerdown', onPointerDown, { capture: true })
