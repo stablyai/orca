@@ -35,6 +35,7 @@ import {
   type StructuredAgentSessionStopWindDown
 } from './structured-agent-session-turns-cancel'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { serializeStructuredAgentSessionCommand } from './structured-agent-session-command-entry'
 
 type ChatStopOutcome = TurnOutcome<AgentSessionCancelResult>
 
@@ -155,8 +156,9 @@ export function mutateWithChatStop<TValue>(
     },
     openForWrite(context, envelope)
   )
-  // Queued in the mutation's own tick, so a send made meanwhile lands behind the child's end.
-  void context.serialize(sessionId, async () => {
+  // Queued in the mutation's own tick, through the same command entry, so a send made meanwhile
+  // lands behind the child's end, startup's wait included.
+  void serializeStructuredAgentSessionCommand(context, sessionId, async () => {
     if (windDown) {
       await endStoppedStructuredAgentSession(
         { sessionId, adapter: context.deps.adapter },

@@ -41,6 +41,7 @@ import {
   withAgentSessionSpan,
   type AgentSessionCreatePhaseRecorder
 } from '../../observability/agent-session-instrumentation'
+import { serializeStructuredAgentSessionCommand } from './structured-agent-session-command-entry'
 
 export type StructuredAgentSessionAttachOptions = {
   recordPhase?: AgentSessionCreatePhaseRecorder
@@ -76,7 +77,9 @@ export function attachStructuredAgentSession(
   // evicts, so no child is spawned behind the eviction and orphaned.
   const run = (recordPhase?: AgentSessionCreatePhaseRecorder) =>
     context.tasks.trackAttach(
-      context.serialize(sessionId, () => runAttach(context, callerKey, params, { recordPhase }))
+      serializeStructuredAgentSessionCommand(context, sessionId, () =>
+        runAttach(context, callerKey, params, { recordPhase })
+      )
     )
   if (params.envelope.expectedRuntimeFence !== null) {
     return run()

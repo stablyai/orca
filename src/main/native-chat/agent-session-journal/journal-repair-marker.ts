@@ -56,10 +56,13 @@ export function deleteJournalRepairedSuffix(input: {
   /** First sequence left free once the suffix is gone. */
   contentFrom: number
   now: number
+  /** The chat's status for what is left, inside the same transaction. */
+  writeStatus: (db: Database.Database) => void
 }): number {
   return input.database.transaction((db) => {
     const deleted = deleteJournalRowSuffix(db, input.sessionId, input.epoch, input.fromSeq)
     db.prepare(UPSERT_REPAIR).run(input.sessionId, input.epoch, input.contentFrom, input.now)
+    input.writeStatus(db)
     return deleted
   })
 }

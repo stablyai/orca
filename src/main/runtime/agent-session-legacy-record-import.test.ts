@@ -16,6 +16,10 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
 import { journalPragmaNumber } from '../native-chat/agent-session-journal/journal-database'
+import {
+  JOURNAL_DB_OLDEST_RELEASED_VERSION,
+  JOURNAL_DB_SCHEMA_VERSION
+} from '../native-chat/agent-session-journal/journal-database-schema'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { legacyAgentSessionStorePath } from './agent-session-record-store-file'
@@ -138,7 +142,7 @@ describe('copying the records file into the chat database', () => {
     const { database, store, reports } = await install()
 
     expect(reports).toEqual([])
-    expect(journalPragmaNumber(database.db, 'user_version')).toBe(4)
+    expect(journalPragmaNumber(database.db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
     expect(store.getRecord(ALPHA)).toEqual(unreconciled(alpha))
     expect(store.getRecord(BETA)).toEqual(unreconciled(beta))
     expect(store.listOperationRows()).toEqual([OPERATION])
@@ -175,7 +179,7 @@ describe('copying the records file into the chat database', () => {
         error: expect.objectContaining({ message: 'agent_session_store_corrupt' })
       }
     ])
-    expect(journalPragmaNumber(database.db, 'user_version')).toBe(4)
+    expect(journalPragmaNumber(database.db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
     expect(store.listRecords()).toEqual([])
     expect(await readFile(legacyPath(), 'utf-8')).toBe(adHoc)
   })
@@ -312,7 +316,9 @@ describe('a primary the backup stands in for', () => {
     const { database, store, reports } = await install()
 
     expect(reports).toMatchObject([{ kind: 'unavailable' }])
-    expect(journalPragmaNumber(database.db, 'user_version')).toBe(3)
+    expect(journalPragmaNumber(database.db, 'user_version')).toBe(
+      JOURNAL_DB_OLDEST_RELEASED_VERSION
+    )
     expect(store.listRecords()).toEqual([])
   })
 
@@ -324,7 +330,9 @@ describe('a primary the backup stands in for', () => {
     const { database, store, reports } = await install()
 
     expect(reports).toMatchObject([{ kind: 'unavailable' }])
-    expect(journalPragmaNumber(database.db, 'user_version')).toBe(3)
+    expect(journalPragmaNumber(database.db, 'user_version')).toBe(
+      JOURNAL_DB_OLDEST_RELEASED_VERSION
+    )
     expect(store.listRecords()).toEqual([])
   })
 })
@@ -396,7 +404,7 @@ describe('the tab index from before the table', () => {
 
     const { database, store } = await install()
 
-    expect(journalPragmaNumber(database.db, 'user_version')).toBe(4)
+    expect(journalPragmaNumber(database.db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
     expect(store.listRecords().map(({ sessionId }) => sessionId)).toEqual([BETA, ALPHA])
     // Restore then takes the profile's tabs, beside the tab the owed-era chat left.
     expect(store.getVisibleSessionTabIndex()).toEqual({ present: false, sessionIds: [BETA] })

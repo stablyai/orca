@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import Database from '../sqlite/sync-database'
 import { journalPragmaNumber } from '../native-chat/agent-session-journal/journal-database'
+import { JOURNAL_DB_SCHEMA_VERSION } from '../native-chat/agent-session-journal/journal-database-schema'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { legacyAgentSessionStorePath } from './agent-session-record-store-file'
@@ -149,7 +150,7 @@ it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
 
     expect(relaunched.legacyRecordImportOwed()).toBe(false)
     expect(second.unverifiable()).toBe(false)
-    expect(databaseVersion()).toBe(4)
+    expect(databaseVersion()).toBe(JOURNAL_DB_SCHEMA_VERSION)
     expect(relaunched.deps.store.getRecord(IMPORTED)).not.toBeNull()
     expect(relaunched.deps.store.getRecord(CREATED_WHILE_OWED)).not.toBeNull()
   }
@@ -166,7 +167,7 @@ it('installs over a file no read will make usable, reports it once, and leaves i
     { kind: 'unusable', error: expect.objectContaining({ message: 'agent_session_store_corrupt' }) }
   ])
   expect((await host()).legacyRecordImportOwed()).toBe(false)
-  expect(databaseVersion()).toBe(4)
+  expect(databaseVersion()).toBe(JOURNAL_DB_SCHEMA_VERSION)
   await stopStructuredAgentSessionRuntime()
   expect(await readFile(legacyAgentSessionStorePath(root), 'utf-8')).toBe('{ truncated')
 })

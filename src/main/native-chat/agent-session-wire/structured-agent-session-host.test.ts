@@ -592,7 +592,7 @@ describe('restart', () => {
     const restoreReads = listRecords.mock.calls.length
     await host.restoreReadableSessions()
 
-    expect(host.listSessionTabs()).toEqual([
+    expect(host.listSessionTabs([SESSION])).toEqual([
       { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'codex' }
     ])
     const history = await host.history({ sessionId: SESSION, direction: 'tail' })

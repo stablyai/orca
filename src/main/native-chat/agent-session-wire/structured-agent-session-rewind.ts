@@ -23,6 +23,7 @@ import { conversationCommandBlocked } from './structured-conversation-command-ad
 import { rewindRefusal } from './structured-rewind-refusal'
 import { persistRewindRecord, recoverStructuredRewind } from './structured-rewind-recovery'
 import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
+import { serializeStructuredAgentSessionCommand } from './structured-agent-session-command-entry'
 
 export async function rewindStructuredAgentSession(
   context: StructuredAgentSessionMutationContext,
@@ -32,7 +33,7 @@ export async function rewindStructuredAgentSession(
 ): Promise<AgentSessionMutationResult<AgentSessionRewindResult>> {
   const { sessionId, clientOperationId } = params.envelope
   const store = context.deps.store
-  return context.serialize(sessionId, async () => {
+  return serializeStructuredAgentSessionCommand(context, sessionId, async () => {
     const result = await admitAndRunAgentSessionMutation<AgentSessionRewindResult>({
       store,
       adapter: context.deps.adapter,

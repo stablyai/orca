@@ -306,6 +306,12 @@ async function startOrcadRuntime(
   // Recovery binds terminal and dispatch identities; only now can startup observations be fenced.
   observedStatusCapture.attach(runtime)
 
+  // Why here and not on a client's first listing: a headless host seeds its chats' statuses and
+  // settles crashed ones itself, before any client connects. Chat commands a client sends meanwhile
+  // wait for that settle.
+  runtime.holdStructuredAgentSessionCommandsForStartup()
+  runtime.prepareStructuredAgentSessionStartupRestorationAfter(Promise.resolve())
+
   const bindHost = resolveOrcadBindHost(options.bind)
   rpc = new OrcaRuntimeRpcServer({
     runtime,

@@ -15,11 +15,14 @@ export function applyJournalDispatchRow(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'dispatch' }>
 ): void {
-  const submission = state.submissions.get(row.clientMessageId)
+  const current = state.submissions.get(row.clientMessageId)
   // Shared with the queued-draft returned hook: a row ignored here must not alter a draft.
-  if (!submission || !journalDispatchRowApplies(submission)) {
+  if (!current || !journalDispatchRowApplies(current)) {
     return
   }
+  // Replaced, never changed in place: a holder of the old object keeps what had committed.
+  const submission = { ...current }
+  state.submissions.set(row.clientMessageId, submission)
   submission.fence = row.fence
   submission.dispatchState = row.state
   submission.providerItemId = row.providerItemId

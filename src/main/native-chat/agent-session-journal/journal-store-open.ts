@@ -9,7 +9,6 @@ import {
 } from './journal-file-format-remnant'
 import type { JournalLoad } from './journal-open'
 import { journalRepairDisclosure, type JournalRepairDisclosure } from './journal-repair-disclosure'
-import { staleSubagentRosterRevisions } from './journal-subagent-liveness'
 
 /** What any of this file's disclosures hands the store — a repair's, or the
  *  pre-SQLite notice's. Same shape, and neither is only a repair. */
@@ -69,7 +68,6 @@ export async function openJournalStoreState(input: {
     const disclosure = journalRepairDisclosure()
     await input.appendItem(disclosure.identity, disclosure.body, input.highestFence())
   }
-  await settleStaleSubagentRosters(input, loaded)
   // Founding the epoch and appending the row are two transactions, and a
   // committed epoch sends every later open down this branch instead. Anything
   // that interrupts between them — a quit during startup restore, a failed
@@ -109,31 +107,4 @@ async function discloseFileFormatRemnant(input: {
   }
   const disclosure = journalFileFormatRemnantDisclosure({ transcriptPath, agent: input.agent })
   await input.appendItem(disclosure.identity, disclosure.body, input.highestFence())
-}
-
-/**
- * Retires a `working` subagent roster the previous host never got to settle.
- *
- * Skipped on a corrupt load: that journal is still owed a rebuild from provider
- * history, and content written past the repair's free sequence retires the
- * demand for it.
- */
-async function settleStaleSubagentRosters(
-  input: {
-    appendItem: (
-      identity: AgentJournalItemIdentity,
-      body: AgentJournalItemBody,
-      fence: number
-    ) => Promise<unknown>
-    highestFence: () => number
-    readOnly: () => boolean
-  },
-  loaded: JournalLoad
-): Promise<void> {
-  if (input.readOnly() || loaded.corrupt) {
-    return
-  }
-  for (const revision of staleSubagentRosterRevisions(loaded.state.items.values())) {
-    await input.appendItem(revision.identity, revision.body, input.highestFence())
-  }
 }

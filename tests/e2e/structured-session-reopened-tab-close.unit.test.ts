@@ -128,6 +128,10 @@ async function setup() {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: restore and tab close call only these host members.
     {
       reconcileRestartLeases: async () => undefined,
+      catchUpMissingStatuses: async () => undefined,
+      restoreListedFromPerChatFiles: async () => undefined,
+      seedStoredStatuses: (ids: readonly string[]) => [...ids],
+      settleOwedSessions: async () => undefined,
       restoreReadableSessions: async () => undefined,
       close: async (sessionId: string) => {
         hostSessionCloses.push(sessionId)

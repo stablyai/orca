@@ -645,17 +645,20 @@ describe('a start whose failure the delivery loop settles before the exit is pub
 })
 
 describe('Stop withdraws what is queued', () => {
-  it('withdraws a crash leftover ahead of any delivery step (W17a)', async () => {
+  it('finds a crash leftover already settled by the open Stop reaches it through (W17a)', async () => {
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({ ...earlierSubmission('leftover', 'l', true), fence })
     })
 
-    // Stop's own open wakes the delivery loop, whose first step queues behind this Stop.
+    // Stop's own open appends the chat's settlement plan, which rejects what a gone process left
+    // queued before Stop acts: nothing is handed over, and the reason names the restart.
     expect(await stop()).toMatchObject({ ok: true })
 
     expect(await submission('leftover')).toMatchObject({
       dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
+      reason: agentSessionFailureWords(agentSessionFailureFact('hostRestarted'), {
+        surface: 'rejection'
+      }).reason
     })
     expect(acquire).toHaveBeenCalledTimes(1)
   })

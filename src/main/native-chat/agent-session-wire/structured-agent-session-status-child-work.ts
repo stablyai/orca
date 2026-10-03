@@ -58,8 +58,18 @@ export function structuredStatusChildrenEqual(
  *  never one; a rewind replaces the epoch. */
 export function newestAcceptedSendKey(
   epoch: string,
-  submissions: readonly AgentJournalSubmission[]
+  submissions: Iterable<AgentJournalSubmission>
 ): string {
-  const accepted = submissions.findLast((submission) => submission.dispatchState === 'accepted')
+  // Newest by `submittedAt`, a tie to the later one: what the last accepted send of the journal's
+  // render (sorted by `submittedAt`, stable) is, without rendering the journal.
+  let accepted: AgentJournalSubmission | undefined
+  for (const submission of submissions) {
+    if (
+      submission.dispatchState === 'accepted' &&
+      (!accepted || submission.submittedAt >= accepted.submittedAt)
+    ) {
+      accepted = submission
+    }
+  }
   return `${epoch}:${accepted?.clientMessageId ?? ''}`
 }

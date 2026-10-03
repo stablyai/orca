@@ -1,7 +1,7 @@
 // Which clients get a send answered at acceptance, and which have their reply held until the
 // message is handed over: a client that cannot show a rejection after `pending` must not see one.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
@@ -9,6 +9,7 @@ import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/age
 import {
   call,
   clearStructuredHostStub,
+  envelope,
   hostCalls,
   installStructuredHostStub,
   SESSION,
@@ -61,6 +62,44 @@ describe('agentSession.send reply timing', () => {
       })
     }
     expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
+  })
+})
+
+describe('a send that arrives before the host is built', () => {
+  it('builds the host and is answered by it, rather than refused', async () => {
+    clearStructuredHostStub()
+    hostCalls.send?.mockReset()
+    const ensureStructuredAgentSessionHost = vi.fn(async () => installStructuredHostStub())
+
+    const response = await call('agentSession.send', sendParams(), STRUCTURED_CLIENT, {
+      ensureStructuredAgentSessionHost
+    })
+
+    expect(ensureStructuredAgentSessionHost).toHaveBeenCalledOnce()
+    expect(response).not.toMatchObject({ ok: false })
+    expect(hostCalls.send).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['agentSession.queuedMessageSend', 'queuedMessageSend', { messageId: 'message-1' }],
+    ['agentSession.queuedMessageDelete', 'queuedMessageDelete', { messageId: 'message-1' }],
+    ['agentSession.queuedMessagesResume', 'queuedMessagesResume', {}],
+    ['agentSession.threadGoal', 'changeThreadGoal', { change: { kind: 'clear' } }]
+  ])('builds the host for %s too, and is answered by it', async (method, hostMethod, fields) => {
+    clearStructuredHostStub()
+    const answered = vi.fn(async () => ({ ok: true, replayed: false }))
+    const ensureStructuredAgentSessionHost = vi.fn(async () => {
+      installStructuredHostStub()
+      hostCalls[hostMethod] = answered
+    })
+
+    const response = await call(method, { envelope: envelope(), ...fields }, STRUCTURED_CLIENT, {
+      ensureStructuredAgentSessionHost
+    })
+
+    expect(ensureStructuredAgentSessionHost).toHaveBeenCalledOnce()
+    expect(response).not.toMatchObject({ ok: false })
+    expect(answered).toHaveBeenCalledOnce()
   })
 })
 

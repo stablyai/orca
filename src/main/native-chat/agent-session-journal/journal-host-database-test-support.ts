@@ -7,6 +7,7 @@ import { NO_LEGACY_JOURNAL_RECORDS } from './journal-database'
 import { JournalHostDatabase } from './journal-host-database'
 import { replayJournal, type JournalLoad } from './journal-open'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
+import { readJournalSessionStatuses, type JournalSessionStatus } from './journal-session-state'
 import {
   iterateJournalEpochRows,
   publishJournalSessionEpoch,
@@ -78,6 +79,17 @@ export function createTrackedJournalOpener(): TrackedJournalOpener {
       closeTestJournalHostDatabases()
     }
   }
+}
+
+/** The chat's stored status, or null when it has none. */
+export function readTestJournalSessionStatus(
+  stateDirectory: string,
+  sessionId: string
+): JournalSessionStatus | null {
+  const [stored] = readJournalSessionStatuses(openTestJournalHostDatabase(stateDirectory).db, [
+    sessionId
+  ])
+  return stored?.status ?? null
 }
 
 /** What a fresh open of the chat would replay, read from the test state directory's database. */

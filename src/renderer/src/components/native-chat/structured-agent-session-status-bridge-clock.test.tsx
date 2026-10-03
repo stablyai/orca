@@ -104,11 +104,11 @@ function unread(): number {
   return countActivityUnread(state, ACKNOWLEDGED + 60_000)
 }
 
-async function connect(): Promise<(event: AgentSessionStatusEvent) => void> {
+async function connect(): Promise<(event: AgentSessionStatusEvent) => Promise<void>> {
   render(<StructuredAgentSessionStatusBridge />)
   await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
   const emit: (event: AgentSessionStatusEvent) => void = mocks.subscribeStatus.mock.calls[0]?.[1]
-  return (event) => act(() => emit(event))
+  return (event) => act(async () => emit(event))
 }
 
 describe("the structured row's state clock", () => {
@@ -131,43 +131,43 @@ describe("the structured row's state clock", () => {
 
   it('keeps a settled parent read while its subagent writes, until its own next turn ends', async () => {
     const emit = await connect()
-    emit({ type: 'snapshot', sessions: [summary({ statusStartedAt: SETTLED })] })
+    await emit({ type: 'snapshot', sessions: [summary({ statusStartedAt: SETTLED })] })
     expect(row()).toMatchObject({ state: 'done', stateStartedAt: SETTLED })
     acknowledge(ACKNOWLEDGED)
     expect(unread()).toBe(0)
 
     // The child's rows move the evidence clock, and a host may still republish for them.
     for (const updatedAt of [24_000, 25_000, 26_000]) {
-      emit({ type: 'status', session: summary({ statusStartedAt: SETTLED, updatedAt }) })
+      await emit({ type: 'status', session: summary({ statusStartedAt: SETTLED, updatedAt }) })
     }
     expect(row()).toMatchObject({ state: 'done', updatedAt: 26_000, stateStartedAt: SETTLED })
     expect(unread()).toBe(0)
 
-    emit({
+    await emit({
       type: 'status',
       session: summary({ status: 'working', statusStartedAt: 30_000, updatedAt: 30_000 })
     })
-    emit({ type: 'status', session: summary({ statusStartedAt: 31_000, updatedAt: 31_000 }) })
+    await emit({ type: 'status', session: summary({ statusStartedAt: 31_000, updatedAt: 31_000 }) })
     expect(row()).toMatchObject({ state: 'done', stateStartedAt: 31_000 })
     expect(unread()).toBe(1)
   })
 
   it("keeps the old dating for an older host's summary, which carries no clock", async () => {
     const emit = await connect()
-    emit({ type: 'snapshot', sessions: [summary()] })
+    await emit({ type: 'snapshot', sessions: [summary()] })
     acknowledge(ACKNOWLEDGED)
     expect(unread()).toBe(0)
-    emit({ type: 'status', session: summary({ updatedAt: 26_000 }) })
+    await emit({ type: 'status', session: summary({ updatedAt: 26_000 }) })
     expect(row()).toMatchObject({ state: 'done', stateStartedAt: 26_000 })
     expect(unread()).toBe(1)
   })
 
   it("dates a subagent's approval at the ask and leaves the parent's completion where it was", async () => {
     const emit = await connect()
-    emit({ type: 'snapshot', sessions: [summary({ statusStartedAt: SETTLED })] })
+    await emit({ type: 'snapshot', sessions: [summary({ statusStartedAt: SETTLED })] })
     acknowledge(ACKNOWLEDGED)
 
-    emit({
+    await emit({
       type: 'status',
       session: summary({ status: 'attention', statusStartedAt: 27_000, updatedAt: 27_000 })
     })
@@ -180,7 +180,10 @@ describe("the structured row's state clock", () => {
 
     // Answered: the parent is idle again, still dated by its own last turn.
     acknowledge(28_000)
-    emit({ type: 'status', session: summary({ statusStartedAt: SETTLED, updatedAt: 28_500 }) })
+    await emit({
+      type: 'status',
+      session: summary({ statusStartedAt: SETTLED, updatedAt: 28_500 })
+    })
     expect(row()).toMatchObject({ state: 'done', stateStartedAt: SETTLED })
     expect(agentEntryCompletionAt(row())).toBe(SETTLED)
     expect(unread()).toBe(0)
@@ -189,11 +192,11 @@ describe("the structured row's state clock", () => {
   it('leaves a row child work holds open on its own continuity, and settles it on the parent clock', async () => {
     const emit = await connect()
     const child = { id: 'child-1', kind: 'agent', state: 'working' } as const
-    emit({
+    await emit({
       type: 'snapshot',
       sessions: [summary({ status: 'working', statusStartedAt: 10_000, updatedAt: 10_000 })]
     })
-    emit({
+    await emit({
       type: 'status',
       session: summary({ statusStartedAt: SETTLED, updatedAt: 24_000, backgroundTasks: [child] })
     })
@@ -204,7 +207,7 @@ describe("the structured row's state clock", () => {
       mainAgent: { state: 'done', stateStartedAt: SETTLED }
     })
 
-    emit({
+    await emit({
       type: 'status',
       session: summary({
         statusStartedAt: SETTLED,

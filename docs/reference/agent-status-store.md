@@ -128,11 +128,26 @@ forgot the row would strand a permanently working-looking agent.
 
 Two rules the ingest must keep:
 
-- **Never persist a structured row.** The journal is the durable truth for a
-  structured session and the host republishes on restore. A structured row in
-  `last-status.json` would hydrate as `restoredUnconfirmed` and then fight the
-  live republish. The serializer skips rows carrying `structuredHost`, and
-  hydrate drops any such row found on disk. Applying one therefore also skips
+- **Never persist a structured row in the store.** The chat journal database
+  is the durable truth for a structured session. Each chat's status is stored
+  there beside its journal (`journal_session_state`), written in the same
+  transaction as the journal rows it describes, so it is always current. A
+  chat last written before that table existed, or whose row was derived by
+  other rules, has no row at first: a listed
+  chat gets one at startup, before the tab listing answers, computed from its
+  journal rows without opening it, so the republish and the settle below cover
+  it too; any other chat gets one when it is opened, which also settles it. A
+  listed chat whose history is still in an older build's per-chat file is
+  opened from that file before the tab listing answers, which publishes its
+  status, and gets its row with its first write. A corrupt chat gets no row
+  until its open rebuilds it.
+  At host startup, before the tab listing answers, the host republishes the
+  row of each settled chat that is still listed and not already open, without
+  opening it; after that it settles every chat a gone process left with work.
+  A structured row in `last-status.json` would
+  hydrate as `restoredUnconfirmed` and fight that republish, so the serializer
+  still skips rows carrying `structuredHost`, and hydrate still drops any found
+  on disk. Applying one therefore also skips
   the persist schedule: the walk and stringify could only reproduce the file
   that is already on disk, once per debounce window for every streaming chat.
 - **Never let it fight a hook row.** A structured session has no PTY, so no

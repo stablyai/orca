@@ -12,6 +12,7 @@ import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
 import {
   createStructuredAgentSessionHostStatusFeed,
+  type StructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusSubscriber
 } from './structured-agent-session-status-feed'
 import {
@@ -97,6 +98,10 @@ export class StructuredAgentSessionClientDelivery {
 
   publishRestored = (sessionId: string): void =>
     this.statusFeed.publish(sessionId, undefined, { replay: true })
+
+  /** A row from the state stored beside a journal nobody has opened. */
+  seedStatus: StructuredAgentSessionStatusFeed['seed'] = (record, stored) =>
+    this.statusFeed.seed(record, stored)
 
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.statusFeed.subscribe(subscriber)

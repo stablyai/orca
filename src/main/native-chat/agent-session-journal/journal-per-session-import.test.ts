@@ -23,10 +23,12 @@ import {
   liveTestJournalRows,
   loadTestJournal,
   openTestJournalHostDatabase,
-  readTestJournalRows
+  readTestJournalRows,
+  readTestJournalSessionStatus
 } from './journal-host-database-test-support'
 import { journalDirectoryFor, legacyJournalDatabaseFile } from './journal-paths'
 import { importPerSessionJournal } from './journal-per-session-import'
+import { deriveJournalSessionStatus, JOURNAL_SESSION_STATUS_RULES } from './journal-session-state'
 import { readJournalSessionEpoch, type JournalStoredRow } from './journal-row-table'
 import { createStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
 
@@ -207,6 +209,34 @@ describe('importing a per-chat journal', () => {
     ).toEqual(rows)
     // Verified, then deleted with its WAL files: no copy of it is kept.
     expect(await leftovers()).toEqual([])
+  })
+
+  // T10: the copy's publish writes the chat's status for the rows it publishes, in the same
+  // transaction, replacing whatever described the rows it replaced.
+  it('drops the status of the rows the copy replaced, and the open after it writes the status again', async () => {
+    const { epoch, rows } = await historyRows()
+    await writeLegacyJournal(epoch, rows)
+    const { db } = openTestJournalHostDatabase(root)
+    db.prepare(
+      `INSERT INTO journal_session_state (session_id, lifecycle, active_turn_id, handed_over_sends,
+        queued_sends, live_child_work, summary_json, last_activity_at, rules_version)
+      VALUES (?, 'running', NULL, 3, 0, 0, '{"status":"working","latestPrompt":"stale"}', 1, ?)`
+    ).run(IDENTITY.sessionId, JOURNAL_SESSION_STATUS_RULES)
+
+    await importPerSessionJournal({
+      database: openTestJournalHostDatabase(root),
+      identity: IDENTITY,
+      legacyDirectory: legacyDir()
+    })
+    expect(readTestJournalSessionStatus(root, IDENTITY.sessionId)).toBeNull()
+
+    // As the chat's open does after its replay.
+    ;(await openChat()).backfillSessionStatus()
+
+    const loaded = loadTestJournal(root, IDENTITY.sessionId)!
+    expect(readTestJournalSessionStatus(root, IDENTITY.sessionId)).toEqual(
+      deriveJournalSessionStatus(loaded.state, { settlesRosters: !loaded.corrupt })
+    )
   })
 
   // T-B3: the upgrade restart is the restart that produced the offers. A new epoch or renumbered

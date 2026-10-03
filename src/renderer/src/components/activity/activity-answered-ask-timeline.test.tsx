@@ -129,11 +129,11 @@ function thread(activity: ReturnType<typeof renderActivity>) {
   return only
 }
 
-async function connect(): Promise<(event: AgentSessionStatusEvent) => void> {
+async function connect(): Promise<(event: AgentSessionStatusEvent) => Promise<void>> {
   render(<StructuredAgentSessionStatusBridge />)
   await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
   const emit: (event: AgentSessionStatusEvent) => void = mocks.subscribeStatus.mock.calls[0]?.[1]
-  return (event) => act(() => emit(event))
+  return (event) => act(async () => emit(event))
 }
 
 describe("an answered subagent ask on a settled parent's Activity row", () => {
@@ -163,15 +163,15 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
 
   it('reads done, lists Blocked then done, and leaves the answer read', async () => {
     const emit = await connect()
-    emit({ type: 'snapshot', sessions: [summary()] })
+    await emit({ type: 'snapshot', sessions: [summary()] })
     acknowledge(SETTLED + 1_000)
-    emit({
+    await emit({
       type: 'status',
       session: summary({ status: 'attention', statusStartedAt: ASKED, updatedAt: ASKED })
     })
     // The user reads the ask and answers it; the parent returns to its own turn's end.
     acknowledge(ASKED + 500)
-    emit({ type: 'status', session: summary({ updatedAt: ANSWERED }) })
+    await emit({ type: 'status', session: summary({ updatedAt: ANSWERED }) })
 
     const row = thread(renderActivity())
     expect(activityThreadStatusId(row)).toBe('done')
@@ -190,7 +190,7 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
     expect(countActivityUnread(store().getState())).toBe(0)
 
     // Clearing the answered row must also pass the ask, which is dated after the done.
-    act(() => {
+    await act(async () => {
       expect(clearActivityThread(row)).toBe(true)
     })
     expect(renderActivity().result.current.allThreads).toHaveLength(0)
@@ -199,13 +199,13 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
   it('keeps each answered done between the asks around it', async () => {
     const asks = [ASKED, ASKED + 400, ASKED + 800]
     const emit = await connect()
-    emit({ type: 'snapshot', sessions: [summary()] })
+    await emit({ type: 'snapshot', sessions: [summary()] })
     for (const askedAt of asks) {
-      emit({
+      await emit({
         type: 'status',
         session: summary({ status: 'attention', statusStartedAt: askedAt, updatedAt: askedAt })
       })
-      emit({ type: 'status', session: summary({ updatedAt: askedAt + 200 }) })
+      await emit({ type: 'status', session: summary({ updatedAt: askedAt + 200 }) })
     }
 
     // Every done repeats the turn's end, so only when each was seen keeps them apart and in order;
@@ -223,23 +223,23 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
 
   it('reads done after a clear hid that done, while the later ask stays listed', async () => {
     const emit = await connect()
-    emit({ type: 'snapshot', sessions: [summary()] })
+    await emit({ type: 'snapshot', sessions: [summary()] })
     acknowledge(SETTLED + 1_000)
     const beforeAsk = renderActivity()
     let cleared = false
-    act(() => {
+    await act(async () => {
       cleared = clearActivityThread(thread(beforeAsk))
     })
     expect(cleared).toBe(true)
     beforeAsk.unmount()
     expect(store().getState().activityClearedAtByPaneKey).toEqual({ [paneKey()]: SETTLED })
 
-    emit({
+    await emit({
       type: 'status',
       session: summary({ status: 'attention', statusStartedAt: ASKED, updatedAt: ASKED })
     })
     acknowledge(ASKED + 500)
-    emit({ type: 'status', session: summary({ updatedAt: ANSWERED }) })
+    await emit({ type: 'status', session: summary({ updatedAt: ANSWERED }) })
 
     const row = thread(renderActivity())
     // The cleared done stays cleared; only the ask, seen after the clear, is listed.
@@ -250,7 +250,7 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
     expect(countActivityUnread(store().getState())).toBe(0)
 
     // Once a second ask moves the answered done into history, it stays cleared there too.
-    emit({
+    await emit({
       type: 'status',
       session: summary({
         status: 'attention',

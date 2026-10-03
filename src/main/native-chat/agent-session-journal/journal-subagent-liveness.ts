@@ -52,19 +52,29 @@ export function staleSubagentRosterRevisions(
 ): JournalSubagentLivenessRevision[] {
   const revisions: JournalSubagentLivenessRevision[] = []
   for (const item of items) {
-    const body = item.body
-    if (body.kind !== 'message' || !body.blocks.some(hasStaleLiveWork)) {
-      continue
+    const revision = staleSubagentRosterRevision(item)
+    if (revision) {
+      revisions.push(revision)
     }
-    // A key that will not parse cannot be re-addressed, and appending under a
-    // fresh identity would duplicate the row rather than revise it.
-    const identity = parseAgentJournalItemKey(item.itemId)
-    if (!identity || agentJournalItemKey(identity) !== item.itemId) {
-      continue
-    }
-    revisions.push({ identity, body: { ...body, blocks: settleBlocks(body.blocks) } })
   }
   return revisions
+}
+
+/** One row's revision, or null when it claims no live child. */
+export function staleSubagentRosterRevision(
+  item: Pick<AgentJournalRenderItem, 'itemId' | 'body'>
+): JournalSubagentLivenessRevision | null {
+  const body = item.body
+  if (body.kind !== 'message' || !body.blocks.some(hasStaleLiveWork)) {
+    return null
+  }
+  // A key that will not parse cannot be re-addressed, and appending under a
+  // fresh identity would duplicate the row rather than revise it.
+  const identity = parseAgentJournalItemKey(item.itemId)
+  if (!identity || agentJournalItemKey(identity) !== item.itemId) {
+    return null
+  }
+  return { identity, body: { ...body, blocks: settleBlocks(body.blocks) } }
 }
 
 function hasStaleLiveWork(block: NativeChatBlock): boolean {

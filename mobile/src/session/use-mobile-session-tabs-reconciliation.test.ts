@@ -191,6 +191,33 @@ describe('useMobileSessionTabsReconciliation', () => {
     vi.useRealTimers()
   })
 
+  // A host's first answer waits on its startup work; on the first boot after an upgrade that can
+  // outlast the list's own deadline. The tabs stream, already open, still brings the host's tabs.
+  it("ends with the host's tabs from the stream when a slow host's first list times out", async () => {
+    sendRequest.mockImplementationOnce(() =>
+      Promise.reject(new Error('Request timed out: session.tabs.list'))
+    )
+    await mount()
+    expect(subscribe).toHaveBeenCalledWith(
+      'session.tabs.subscribe',
+      { worktree: 'id:repo::worktree' },
+      expect.any(Function)
+    )
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(applySessionTabs).not.toHaveBeenCalled()
+
+    // The host finishes its startup work: the stream's first frame is the worktree's whole snapshot.
+    await emitStream({ type: 'snapshot', snapshotVersion: 7, tabs: ['chat-1'] })
+
+    expect(consumeAcceptedSessionTabs).toHaveBeenCalledWith(
+      expect.objectContaining({ tabs: ['chat-1'] }),
+      ['chat-1'],
+      'stream'
+    )
+    // The snapshot also re-arms a list, which now answers at once.
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+  })
+
   it('runs one terminal health sweep and zero tab lists in a certified warm minute', async () => {
     await mount()
     await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })

@@ -21,6 +21,10 @@ import {
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { staleSubagentRosterRevisions } from './journal-subagent-liveness'
+import {
+  appendOpenSettlement,
+  planOpenSettlement
+} from '../agent-session-wire/structured-agent-session-open-settlement'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -50,6 +54,20 @@ async function open(overrides: Partial<Parameters<typeof openAgentSessionJournal
     mintEpoch: () => `epoch-${clock}`,
     ...overrides
   })
+}
+
+/** The conversation open's settlement, which now carries the roster step the store open did. */
+async function reopenAfterHostGone() {
+  const journal = await open()
+  await appendOpenSettlement(
+    journal,
+    planOpenSettlement(journal, null, { settlesRosters: true }),
+    0,
+    (error) => {
+      throw error
+    }
+  )
+  return journal
 }
 
 /** The row as the producer writes it: the structured block plus its twin. */
@@ -236,7 +254,7 @@ describe('journal reopen after the writing host is gone', () => {
     // The host dies without ever settling them — no `ended`, so no session sweep.
     await live.close()
 
-    const reopened = await open()
+    const reopened = await reopenAfterHostGone()
     const afterRestart = reopened.snapshot().items.at(-1)!
     expect(afterRestart.itemId).toBe(beforeRestart.itemId)
     expect(rosterOf(afterRestart.body)).toMatchObject([
@@ -256,7 +274,7 @@ describe('journal reopen after the writing host is gone', () => {
     const before = live.snapshot().items.length
     await live.close()
 
-    const reopened = await open()
+    const reopened = await reopenAfterHostGone()
     expect(reopened.snapshot().items).toHaveLength(before)
     expect(reopened.snapshot().items.at(-1)?.revision).toBe(2)
   })
@@ -273,7 +291,7 @@ describe('journal reopen after the writing host is gone', () => {
     expect(twinOf(beforeRestart.body)).toBe('Started background command "sleep 20"')
     await live.close()
 
-    const reopened = await open()
+    const reopened = await reopenAfterHostGone()
     const afterRestart = reopened.snapshot().items.at(-1)!
     expect(afterRestart.itemId).toBe(beforeRestart.itemId)
     expect(taskOf(afterRestart.body)).toMatchObject({ state: 'unverifiable' })
@@ -289,11 +307,11 @@ describe('journal reopen after the writing host is gone', () => {
     })
     await live.close()
 
-    const once = await open()
+    const once = await reopenAfterHostGone()
     const revision = once.snapshot().items.at(-1)?.revision
     await once.close()
 
-    const twice = await open()
+    const twice = await reopenAfterHostGone()
     expect(twice.snapshot().items.at(-1)?.revision).toBe(revision)
   })
 })

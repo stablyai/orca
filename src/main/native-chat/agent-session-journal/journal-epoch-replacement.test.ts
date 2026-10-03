@@ -70,6 +70,7 @@ function replace(input: {
     queuePause: { lifted: false, liveStop: null },
     now,
     mintEpoch: () => `epoch-${clock}`,
+    writeState: () => undefined,
     onPublished: input.onPublished ?? (() => undefined)
   })
 }

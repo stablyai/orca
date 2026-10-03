@@ -6,7 +6,10 @@ import { agentSessionSendSubmission } from '../../../../shared/agent-session-wir
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import type { RpcContext } from '../core'
-import { requireStructuredHost, structuredCallerFor } from './structured-agent-session-gate'
+import {
+  requireInstalledStructuredHost,
+  structuredCallerFor
+} from './structured-agent-session-gate'
 
 /**
  * A send answers once the host accepts it. A client that predates that answer cannot show a
@@ -19,7 +22,9 @@ export async function sendStructuredAgentSessionForClient(
   params: Parameters<StructuredAgentSessionHost['send']>[1],
   context: RpcContext
 ) {
-  const host = requireStructuredHost(context)
+  // Built first when this process has none yet, so a send that arrives during startup is held
+  // for the startup settle instead of refused.
+  const host = await requireInstalledStructuredHost(context)
   // Only a client's own send lifts a Stop's queue pause; host-internal senders never do.
   const result = await host.send(structuredCallerFor(context), { ...params, userSend: true })
   const capabilities = context.clientCapabilities ?? []

@@ -13,7 +13,7 @@
 
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapSettledWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type {
   OpenedStructuredAgentSessionConversation,
@@ -21,7 +21,10 @@ import type {
 } from './structured-agent-session-conversation-open'
 import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
 
-const JOURNAL_RESTORE_CONCURRENCY = 4
+// One chat at a time after the listing: the restore is CPU-bound on the main thread, so more lanes
+// only lengthen each event-loop turn that a user's read or send waits behind. The pass before the
+// listing sets its own.
+const JOURNAL_RESTORE_CONCURRENCY = 1
 
 export type StructuredAgentSessionReadRestoreDeps = {
   openDeps: StructuredAgentSessionConversationOpenDeps & {
@@ -34,6 +37,10 @@ export type StructuredAgentSessionReadRestoreDeps = {
   resolveRecovery: (sessionId: string) => Promise<boolean>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   hasSession: (sessionId: string) => boolean
+  /** Quit has begun: the restore opens nothing more. */
+  isDisposed: () => boolean
+  /** Whether the chat still has its tab: one closed while the restore ran stays closed. */
+  isListed: (sessionId: string) => boolean
   onReadable: (
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
@@ -46,6 +53,9 @@ async function restoreOneStructuredAgentSessionRead(
   sessionId: string,
   settleLeases: (sessionId: string) => Promise<void>
 ): Promise<void> {
+  if (input.isDisposed()) {
+    return
+  }
   await settleLeases(sessionId)
   await input.serialize(sessionId, () =>
     restoreOneStructuredAgentSessionReadUnderSerialize(input, sessionId)
@@ -54,9 +64,16 @@ async function restoreOneStructuredAgentSessionRead(
 
 /** The serialized half of the restore. */
 async function restoreOneStructuredAgentSessionReadUnderSerialize(
-  input: Pick<StructuredAgentSessionReadRestoreDeps, 'openDeps' | 'hasSession' | 'onReadable'>,
+  input: Pick<
+    StructuredAgentSessionReadRestoreDeps,
+    'openDeps' | 'hasSession' | 'isDisposed' | 'isListed' | 'onReadable'
+  >,
   sessionId: string
 ): Promise<void> {
+  // Checked under the chat's serialize, where its close and quit's teardown also run.
+  if (input.isDisposed() || !input.isListed(sessionId)) {
+    return
+  }
   if (input.hasSession(sessionId)) {
     // A read or a send mid-restore already opened this one.
     return
@@ -70,15 +87,18 @@ async function restoreOneStructuredAgentSessionReadUnderSerialize(
 }
 
 export async function restoreStructuredAgentSessionsOnRestart(
-  input: StructuredAgentSessionReadRestoreDeps & { records: AgentSessionRecord[] }
+  input: StructuredAgentSessionReadRestoreDeps & {
+    records: AgentSessionRecord[]
+    concurrency?: number
+  }
 ): Promise<void> {
   const [first] = input.records
   if (!first) {
     return
   }
-  // One check for the pass. Each chat checks again while it holds, since another writer can mark
-  // leases unreconciled mid-pass; after the first failure, retrying per chat only waits on the
-  // same store again, and the next attach or send settles those chats instead.
+  // One check for the pass, and per chat (startup answers both from its lease phase, which checks
+  // once); after the first failure, retrying per chat only waits on the same store again, and the
+  // next attach or send settles those chats instead.
   let settled = await input.reconcile(first.sessionId)
   const settleLeases = async (sessionId: string): Promise<void> => {
     // A session latched in recovery exits here at startup, without waiting for a client.
@@ -89,9 +109,23 @@ export async function restoreStructuredAgentSessionsOnRestart(
       settled = false
     }
   }
-  await mapWithConcurrency(input.records, JOURNAL_RESTORE_CONCURRENCY, async ({ sessionId }) => {
-    // A journal open is synchronous SQLite: without a macrotask per chat the restore is one long task.
-    await yieldToEventLoop()
-    await restoreOneStructuredAgentSessionRead(input, sessionId, settleLeases)
+  const results = await mapSettledWithConcurrency(
+    input.records,
+    input.concurrency ?? JOURNAL_RESTORE_CONCURRENCY,
+    async ({ sessionId }) => {
+      // A journal open is synchronous SQLite: without a macrotask per chat the restore is one long task.
+      await yieldToEventLoop()
+      await restoreOneStructuredAgentSessionRead(input, sessionId, settleLeases)
+    }
+  )
+  // One chat's failure costs only that chat, which opens again when it is read.
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      input.openDeps.logger.warn('restoring a chat for reading failed', {
+        scope: 'history-restore-chat',
+        sessionId: input.records[index]?.sessionId,
+        error: result.reason
+      })
+    }
   })
 }

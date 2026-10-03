@@ -20,6 +20,8 @@ import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireInstalledStructuredHost as requireInstalledHost,
+  // A chat command builds the host when it is this process's first: held for startup, not refused.
+  requireInstalledStructuredHost as commandHost,
   requireStructuredCapability,
   requireStructuredCleanupHost,
   requireStructuredCreateSupportAdmission,
@@ -231,18 +233,18 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.respondToApproval',
     params: RespondParams,
     handler: async (params, ctx) =>
-      requireHost(ctx).respondToPrompt(callerFor(ctx), { ...params, kind: 'approval' })
+      (await commandHost(ctx)).respondToPrompt(callerFor(ctx), { ...params, kind: 'approval' })
   }),
   defineMethod({
     name: 'agentSession.respondToQuestion',
     params: RespondToQuestionParams,
     handler: async (params, ctx) =>
-      requireHost(ctx).respondToPrompt(callerFor(ctx), { ...params, kind: 'question' })
+      (await commandHost(ctx)).respondToPrompt(callerFor(ctx), { ...params, kind: 'question' })
   }),
   defineMethod({
     name: 'agentSession.setOption',
     params: SetOptionParams,
-    handler: async (params, ctx) => requireHost(ctx).setOption(callerFor(ctx), params)
+    handler: async (params, ctx) => (await commandHost(ctx)).setOption(callerFor(ctx), params)
   }),
   defineMethod({
     name: 'agentSession.handoffStatus',

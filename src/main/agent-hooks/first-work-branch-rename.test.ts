@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import { projectStructuredAgentSessionStatusState } from '../../shared/structured-agent-session-projection'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
@@ -104,11 +105,13 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       // A real journal's sequence only ever advances, so the feed's projection
       // cache must miss on every publish here: this test is about the rename.
       let sequence = 0
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a stand-in journal offering only what the status feed reads (submissions, cursor, its projection, activity, read-only).
       const journal = {
-        snapshot: () => ({ items }),
+        submissions: () => [],
         lastActivityAt: () => 1,
         isReadOnly: false,
-        cursor: () => ({ epoch: 1, sequence: (sequence += 1) })
+        cursor: () => ({ epoch: 1, sequence: (sequence += 1) }),
+        statusState: (fence?: number) => projectStructuredAgentSessionStatusState(items, [], fence)
       } as unknown as AgentSessionJournal
       const pending: Promise<void>[] = []
       const observe = vi.fn((summary, options) => {
@@ -192,22 +195,33 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const { deps, setDisplayName, setRenameError } = makeDeps({
       getRepo: () => ({ id: REPO_ID, kind: 'folder', path: '/workspace/platform' }) as Repo
     })
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'user-1',
+        sequence: 1,
+        revision: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] }
+      },
+      {
+        itemId: 'turn-1',
+        sequence: 2,
+        revision: 1,
+        observedAt: 1,
+        body: {
+          kind: 'status',
+          text: 'Working',
+          turnLifecycle: { turnId: 'turn-1', state: 'running' }
+        }
+      }
+    ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a stand-in journal offering only what the status feed reads (submissions, cursor, its projection, activity, read-only).
     const journal = {
       isReadOnly: false,
       lastActivityAt: () => 1,
       cursor: () => ({ epoch: 1, sequence: 1 }),
-      snapshot: () => ({
-        items: [
-          { body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] } },
-          {
-            body: {
-              kind: 'status',
-              text: 'Working',
-              turnLifecycle: { turnId: 'turn-1', state: 'running' }
-            }
-          }
-        ]
-      })
+      statusState: (fence?: number) => projectStructuredAgentSessionStatusState(items, [], fence),
+      submissions: () => []
     } as unknown as AgentSessionJournal
     const location = {
       executionHostId: 'local' as const,

@@ -14,6 +14,10 @@ import {
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import {
+  appendOpenSettlement,
+  planOpenSettlement
+} from '../native-chat/agent-session-wire/structured-agent-session-open-settlement'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { claudeSubagentGroupBody, claudeSubagentGroupIdentity } from './claude-subagent-group-row'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
@@ -454,6 +458,15 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     // contact was lost, not when.
     await crashed.close()
     const journal = await openJournal()
+    // What the conversation's open appends before an acquisition reads the journal.
+    await appendOpenSettlement(
+      journal,
+      planOpenSettlement(journal, null, { acquisition: true, settlesRosters: true }),
+      0,
+      (error) => {
+        throw error
+      }
+    )
     const [lost] = rowsListing(journal, 'agent-a')[0]?.agents ?? []
     expect(lost).toMatchObject({ id: 'agent-a', state: 'unverifiable' })
     expect(lost?.settledAt).toBeUndefined()

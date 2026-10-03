@@ -5,7 +5,7 @@ import type {
 import type { JournalHostDatabase } from './journal-host-database'
 import { replaceJournalEpoch, type JournalReplacementItem } from './journal-epoch-replacement'
 import type { JournalQueuePauseRestatement } from './queued-message-pause'
-import { publishNewEpoch } from './journal-epoch-rollover'
+import { publishNewEpoch, type JournalEpochStateWriter } from './journal-epoch-rollover'
 import type { JournalLoad } from './journal-open'
 import type { AgentJournalEpochReason } from './journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
@@ -26,6 +26,8 @@ export class JournalEpochController {
       queuePauseRestatement: () => JournalQueuePauseRestatement
       cursor: () => AgentJournalCursor
       adopt: (loaded: JournalLoad) => void
+      /** The chat's status for the new epoch, inside its transaction. */
+      writeState: JournalEpochStateWriter
     }
   ) {}
 
@@ -37,6 +39,7 @@ export class JournalEpochController {
       reason,
       fence,
       now: this.deps.now(),
+      writeState: this.deps.writeState,
       onPublished: this.deps.adopt
     })
   }
@@ -74,6 +77,7 @@ export class JournalEpochController {
         queuePause: this.deps.queuePauseRestatement(),
         now: this.deps.now,
         mintEpoch: this.deps.mintEpoch,
+        writeState: this.deps.writeState,
         onPublished: this.deps.adopt
       })
       return this.deps.cursor()

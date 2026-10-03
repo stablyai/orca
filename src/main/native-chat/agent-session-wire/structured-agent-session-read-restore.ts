@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs'
 import { findJournalFileFormatRemnant } from '../agent-session-journal/journal-file-format-remnant'
 import { legacyJournalDatabaseFile } from '../agent-session-journal/journal-paths'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import { readJournalSessionEpoch } from '../agent-session-journal/journal-row-table'
 import {
   openStructuredAgentSessionConversationJournal,
@@ -22,21 +24,29 @@ export async function restoreStructuredAgentSessionRead(
     return null
   }
   const database = deps.journalDatabase
-  if (readJournalSessionEpoch(database.db, sessionId) === null) {
-    // Not in the host's database yet: its history may still sit in a per-chat file the open
-    // imports, or in the pre-SQLite format the open explains.
-    const legacyDirectory = database.legacyDirectoryFor({
-      workspaceId: record.location.workspaceId,
-      sessionId
-    })
-    if (
-      !existsSync(legacyJournalDatabaseFile(legacyDirectory)) &&
-      !findJournalFileFormatRemnant(legacyDirectory)
-    ) {
-      return null
-    }
+  if (
+    readJournalSessionEpoch(database.db, sessionId) === null &&
+    !hasHistoryOutsideJournalDatabase(database, record)
+  ) {
+    return null
   }
   return openStructuredAgentSessionConversationJournal(deps, record, {
     deferPerSessionImport: true
   })
+}
+
+/** Not in the host's database yet, its history may still sit in a per-chat file the open imports,
+ *  or in the pre-SQLite format the open explains. */
+export function hasHistoryOutsideJournalDatabase(
+  database: Pick<JournalHostDatabase, 'legacyDirectoryFor'>,
+  record: Pick<AgentSessionRecord, 'sessionId' | 'location'>
+): boolean {
+  const legacyDirectory = database.legacyDirectoryFor({
+    workspaceId: record.location.workspaceId,
+    sessionId: record.sessionId
+  })
+  return (
+    existsSync(legacyJournalDatabaseFile(legacyDirectory)) ||
+    findJournalFileFormatRemnant(legacyDirectory) !== null
+  )
 }

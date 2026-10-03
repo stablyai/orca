@@ -5,6 +5,7 @@
 import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
+import { projectStructuredAgentSessionStatusState } from '../../../../shared/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
@@ -101,11 +102,14 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
       [
         STATUS_SESSION,
         {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a stand-in journal offering only what the status feed reads (submissions, cursor, its projection, activity, read-only).
           journal: {
             isReadOnly: false,
             cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
-            snapshot: () => ({ items: STATUS_ITEMS })
+            submissions: () => [],
+            statusState: (fence?: number) =>
+              projectStructuredAgentSessionStatusState(STATUS_ITEMS, [], fence)
           } as unknown as AgentSessionJournal,
           params: {
             location: {

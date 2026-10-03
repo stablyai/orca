@@ -8,13 +8,14 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import {
+  journalDatabaseMigratesRecords,
   journalPragmaNumber,
   NO_LEGACY_JOURNAL_RECORDS,
   openJournalDatabase,
   readJournalDatabaseVersion,
   type JournalLegacyRecordImport
 } from './journal-database'
-import { createJournalTablesSql } from './journal-database-schema'
+import { createJournalTablesSql, JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
 
 let root: string
@@ -78,7 +79,7 @@ const hasTable = (db: Database.Database, name: string): boolean =>
     .get(name) !== undefined
 
 describe('the version-4 migration', () => {
-  it('moves a version-3 database to 4 with its rows and the copied records', () => {
+  it('moves a version-3 database to the current version with its rows and the copied records', () => {
     seedVersion3()
     const copy = importOf('session-a')
 
@@ -88,7 +89,7 @@ describe('the version-4 migration', () => {
     expect(opened).toMatchObject({ readOnly: false, legacyRecordImportOwed: false })
     expect(copy.runs).toBe(1)
     inspect((db) => {
-      expect(journalPragmaNumber(db, 'user_version')).toBe(4)
+      expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
       expect(recordIds(db)).toEqual(['session-a'])
       expect(db.prepare('SELECT epoch FROM journal_sessions').get()).toEqual({ epoch: 'e1' })
     })
@@ -113,7 +114,7 @@ describe('the version-4 migration', () => {
       sql: string,
       options?: { simple?: boolean }
     ) {
-      if (sql === 'user_version = 4') {
+      if (sql === `user_version = ${JOURNAL_DB_SCHEMA_VERSION}`) {
         throw new Error('crash before the version is published')
       }
       return original.call(this, sql, options)
@@ -132,7 +133,7 @@ describe('the version-4 migration', () => {
     openJournalDatabase(dbPath, retry).db.close()
     expect(retry.runs).toBe(1)
     inspect((db) => {
-      expect(journalPragmaNumber(db, 'user_version')).toBe(4)
+      expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
       expect(recordIds(db)).toEqual(['session-a'])
     })
   })
@@ -151,7 +152,7 @@ describe('the version-4 migration', () => {
     inspect((db) => expect(journalPragmaNumber(db, 'user_version')).toBe(3))
     openJournalDatabase(dbPath, importOf('session-a')).db.close()
     inspect((db) => {
-      expect(journalPragmaNumber(db, 'user_version')).toBe(4)
+      expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
       expect(recordIds(db)).toEqual(['new', 'session-a'])
     })
   })
@@ -172,11 +173,11 @@ describe('the version-4 migration', () => {
     expect(existsSync(dbPath)).toBe(false)
   })
 
-  it('creates every table on a fresh file at version 4', () => {
+  it('creates every table on a fresh file at the current version', () => {
     openJournalDatabase(dbPath, NO_LEGACY_JOURNAL_RECORDS).db.close()
 
     inspect((db) => {
-      expect(journalPragmaNumber(db, 'user_version')).toBe(4)
+      expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
       for (const table of [
         'journal_rows',
         'agent_session_records',
@@ -206,8 +207,30 @@ function openAsVersion3Build(path: string): { db: Database.Database; readOnly: b
   return { db: probe, readOnly: false }
 }
 
+describe('version 5, each chat status', () => {
+  it('moves a version-4 database to 5 without copying the records again, with an empty status table', () => {
+    seedVersion3()
+    openJournalDatabase(dbPath, importOf('session-a')).db.close()
+    inspect((db) => {
+      db.pragma('user_version = 4')
+      db.exec('DROP TABLE journal_session_state')
+    })
+    expect(journalDatabaseMigratesRecords(4)).toBe(false)
+    const again = importOf('session-b')
+
+    openJournalDatabase(dbPath, again).db.close()
+
+    expect(again.runs).toBe(0)
+    inspect((db) => {
+      expect(journalPragmaNumber(db, 'user_version')).toBe(5)
+      expect(hasTable(db, 'journal_session_state')).toBe(true)
+      expect(recordIds(db)).toEqual(['session-a'])
+    })
+  })
+})
+
 describe('a build from before the move', () => {
-  it('opens a version-4 database read-only, so it never writes beside the records', () => {
+  it('opens a current database read-only, so it never writes beside the records', () => {
     openJournalDatabase(dbPath, importOf('session-a')).db.close()
 
     const older = openAsVersion3Build(dbPath)

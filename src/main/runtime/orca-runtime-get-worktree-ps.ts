@@ -21,6 +21,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
 import { structuredWorkerOwesWork } from './structured-worker-custody'
+import { StructuredAgentSessionStartupGate } from './structured-agent-session-startup-gate'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
@@ -28,6 +29,14 @@ import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-struc
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
+  // Chat commands wait on it while startup settles chats a gone process left with work.
+  protected structuredAgentSessionStartupGate = new StructuredAgentSessionStartupGate()
+
+  /** Before any request is served: chat commands wait until the startup settle ends. */
+  holdStructuredAgentSessionCommandsForStartup(): void {
+    this.structuredAgentSessionStartupGate.hold()
+  }
+
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true
@@ -181,7 +190,8 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       // Read per sweep tick from the orchestration database: a worker whose dispatch is open keeps
       // its agent running. No database answers no.
       hasOpenDispatch: (record) =>
-        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
+        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record),
+      commandsReady: () => this.structuredAgentSessionStartupGate.ready()
     })
   }
 }

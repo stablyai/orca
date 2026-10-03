@@ -46,19 +46,18 @@ export class StructuredAgentSessionJournalProjections {
     ) {
       // A journalled submission bumps `lastSequence`, so the send-time working
       // signal reaches the cache; the lease fence does not, hence the extra key.
-      const snapshot = readOnly ? null : journal.snapshot()
       projection = {
         ...cursor,
         readOnly,
         fence,
-        state: projectStructuredAgentSessionStatusState(
-          snapshot?.items ?? [],
-          snapshot?.submissions ?? [],
-          fence
-        ),
-        acceptedSendKey: snapshot
-          ? newestAcceptedSendKey(cursor.epoch, snapshot.submissions ?? [])
-          : null
+        // The journal's own projection, shared with the status it stores beside each write.
+        state: readOnly
+          ? projectStructuredAgentSessionStatusState([], [], fence)
+          : journal.statusState(fence),
+        // From the submissions alone: rendering the whole journal for one key costs every commit.
+        acceptedSendKey: readOnly
+          ? null
+          : newestAcceptedSendKey(cursor.epoch, journal.submissions())
       }
       this.byJournal.set(journal, projection)
     }

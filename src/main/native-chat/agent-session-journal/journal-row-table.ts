@@ -10,6 +10,7 @@ import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
 
 const SELECT_EPOCH = 'SELECT epoch FROM journal_sessions WHERE session_id = ?'
+const SELECT_TIP = 'SELECT max(seq) AS tip FROM journal_rows WHERE session_id = ? AND epoch = ?'
 const PUBLISH_SESSION_EPOCH = `INSERT INTO journal_sessions (session_id, workspace_id, epoch)
 VALUES (?, ?, ?)
 ON CONFLICT(session_id) DO UPDATE SET
@@ -27,6 +28,12 @@ AND epoch IS NOT (SELECT epoch FROM journal_sessions WHERE session_id = ?)`
 export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
   const epoch = db.prepare(SELECT_EPOCH).get(sessionId)?.epoch
   return typeof epoch === 'string' ? epoch : null
+}
+
+/** The highest sequence stored under `epoch`, or 0 with none. */
+export function readJournalTip(db: Database.Database, sessionId: string, epoch: string): number {
+  const tip = db.prepare(SELECT_TIP).get(sessionId, epoch)?.tip
+  return typeof tip === 'number' ? tip : 0
 }
 
 /** Points the chat at `epoch`. Only an epoch change writes this row. */

@@ -11,8 +11,6 @@
 // republishes them.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -21,7 +19,11 @@ import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
-import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
+import type { StructuredAgentSessionStatusProjection } from '../../../shared/structured-agent-session-projection'
+import {
+  statusSummaryChildWorkFields,
+  structuredAgentSessionStatusSummary
+} from './structured-agent-session-status-summary'
 import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
 import {
   StructuredAgentSessionJournalProjections,
@@ -33,6 +35,10 @@ import {
   type StructuredAgentSessionLogger
 } from './structured-agent-session-logger'
 import {
+  StructuredAgentSessionStatusSubscribers,
+  type StructuredAgentSessionStatusSubscriber
+} from './structured-agent-session-status-subscribers'
+import {
   StructuredAgentSessionStatusOwnership,
   type StructuredAgentSessionStatusSink
 } from './structured-agent-session-status-ownership'
@@ -41,10 +47,7 @@ export type { StructuredAgentSessionStatusSink } from './structured-agent-sessio
 
 export type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
 
-export type StructuredAgentSessionStatusSubscriber = {
-  id: string
-  emit: (event: AgentSessionStatusEvent) => void
-}
+export type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-subscribers'
 
 type StatusFeedSession = {
   journal: AgentSessionJournal
@@ -103,7 +106,7 @@ export class StructuredAgentSessionStatusFeed {
   private readonly ownership = new StructuredAgentSessionStatusOwnership(() =>
     this.deps.statusSink?.()
   )
-  private readonly subscribers = new Map<string, StructuredAgentSessionStatusSubscriber>()
+  private readonly subscribers = new StructuredAgentSessionStatusSubscribers()
   private readonly published = new Map<string, AgentSessionStatusSummary>()
   /** The user's newest accepted send each session was last projected with; a new one retires
    *  settled children. */
@@ -123,8 +126,7 @@ export class StructuredAgentSessionStatusFeed {
     for (const [sessionId] of this.deps.sessions) {
       this.publish(sessionId, undefined, { replay: true })
     }
-    this.subscribers.set(subscriber.id, subscriber)
-    this.emit(subscriber, { type: 'snapshot', sessions: [...this.published.values()] })
+    this.subscribers.add(subscriber, { type: 'snapshot', sessions: [...this.published.values()] })
     return () => this.unsubscribe(subscriber.id)
   }
 
@@ -150,22 +152,14 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     const { children: _children, backgroundTasks: _backgroundTasks, ...rest } = previous
-    const retained = { ...rest, ...this.childWorkFields(sessionId, previous.agent) }
+    const childWork = structuredStatusChildWork(this.readChildWork(sessionId), previous.agent)
+    const retained = { ...rest, ...statusSummaryChildWorkFields(childWork) }
     this.published.set(sessionId, retained)
     this.broadcast({ type: 'status', session: retained })
   }
 
   unsubscribe(id: string): void {
-    const subscriber = this.subscribers.get(id)
-    if (!subscriber) {
-      return
-    }
-    this.subscribers.delete(id)
-    try {
-      subscriber.emit({ type: 'end' })
-    } catch {
-      // The transport is already gone; teardown must remain idempotent.
-    }
+    this.subscribers.remove(id)
   }
 
   /** Revoke live execution authority while retaining the last projection for reload history. */
@@ -208,22 +202,66 @@ export class StructuredAgentSessionStatusFeed {
     const record = this.deps.getRecord(sessionId)
     const projection = this.projections.read(source, record)
     this.retireSettledChildrenOnNewTurn(sessionId, session, projection.acceptedSendKey)
-    const summary = this.summaryFor(sessionId, session, source, record, projection.state)
+    this.publishSummary(
+      this.summaryFor(sessionId, session, source, record, projection.state),
+      session.params.location,
+      options?.replay === true
+    )
+  }
+
+  /**
+   * A chat's row from the status stored beside its journal, for one this host has not opened: the
+   * same builder an open's publish uses, so the open later finds it equal and sends nothing. A
+   * replay, as a restore's publish is.
+   */
+  seed(
+    record: AgentSessionRecord,
+    stored: { projected: StructuredAgentSessionStatusProjection; lastActivityAt: number }
+  ): void {
+    const { sessionId } = record
+    if (this.deps.sessions.has(sessionId)) {
+      return
+    }
+    const params = { location: record.location, provider: record.provider }
+    const childWork = structuredStatusChildWork(this.readChildWork(sessionId), record.provider)
+    const { projected, lastActivityAt } = stored
+    const now = this.deps.now
+    this.publishSummary(
+      structuredAgentSessionStatusSummary({
+        sessionId,
+        params,
+        record,
+        projected,
+        childWork,
+        lastActivityAt,
+        now
+      }),
+      params.location,
+      true
+    )
+  }
+
+  private publishSummary(
+    summary: AgentSessionStatusSummary,
+    location: AgentSessionRecord['location'],
+    replay: boolean
+  ): void {
+    const { sessionId } = summary
     const previous = this.published.get(sessionId)
     if (previous && structuredStatusSummariesEqual(previous, summary)) {
-      if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
-        this.sink(summary, session.params.location)
+      if (!this.ownership.matchesLocation(sessionId, location)) {
+        this.sink(summary, location)
       }
       return
     }
     this.published.set(sessionId, summary)
-    this.sink(summary, session.params.location)
+    this.sink(summary, location)
     this.broadcast({ type: 'status', session: summary })
     if (summary.hostExecutionPhase === 'ready' && previous?.hostExecutionPhase !== 'ready') {
       this.deps.onAgentStarted?.(sessionId)
     }
     try {
-      this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
+      this.deps.onStatusChanged?.(summary, { replay })
     } catch (error) {
       // An observer must never cost the subscribers their status event.
       this.logFailure('status-observer', 'status observer failed', sessionId, error)
@@ -263,50 +301,16 @@ export class StructuredAgentSessionStatusFeed {
     record: AgentSessionRecord | null,
     state: StructuredAgentSessionStatusState
   ): AgentSessionStatusSummary {
-    const projected = state.summary
-    const providerSession = structuredAgentSessionProviderSessionMetadata(record)
-    // The journal has no model: the record's acknowledged options are where a mid-session
-    // switch lands, so the row follows whichever is in force.
-    const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
-    return {
+    return structuredAgentSessionStatusSummary({
       sessionId,
-      workspaceId: session.params.location.workspaceId,
-      agent: session.params.provider,
-      ...(session.child
-        ? {
-            hostExecutionOwned: true as const,
-            hostExecutionPhase: session.child.phase
-          }
-        : {}),
-      ...projected,
-      ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
-        ? { rewindBlockedReason: 'outcome-unknown' as const }
-        : {}),
-      ...(model ? { model } : {}),
-      ...this.childWorkFields(sessionId, session.params.provider),
-      ...(providerSession ? { providerSession } : {}),
-      updatedAt: journal.lastActivityAt() || this.deps.now()
-    }
-  }
-
-  /** The summary's child fields, from the records the store holds for the session. Usage is
-   *  dropped on purpose: a `task_progress` tick would otherwise fail the equality check and
-   *  re-broadcast a full summary to every remote subscriber for a number no session list renders.
-   *  Tokens stay live on the background-task channel. */
-  private childWorkFields(
-    sessionId: string,
-    provider: StatusFeedSession['params']['provider']
-  ): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> {
-    const { children, backgroundTasks } = structuredStatusChildWork(
-      this.readChildWork(sessionId),
-      provider
-    )
-    return {
-      ...(backgroundTasks && backgroundTasks.length > 0
-        ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
-        : {}),
-      ...(children ? { children } : {})
-    }
+      params: session.params,
+      record,
+      child: session.child,
+      projected: state.summary,
+      childWork: structuredStatusChildWork(this.readChildWork(sessionId), session.params.provider),
+      lastActivityAt: journal.lastActivityAt(),
+      now: this.deps.now
+    })
   }
 
   /** Child-work evidence for a session this feed publishes; a failing sink costs nothing else.
@@ -362,18 +366,6 @@ export class StructuredAgentSessionStatusFeed {
   }
 
   private broadcast(event: AgentSessionStatusEvent): void {
-    // A Map skips entries deleted mid-iteration, so a failing subscriber can drop itself here.
-    for (const subscriber of this.subscribers.values()) {
-      this.emit(subscriber, event)
-    }
-  }
-
-  /** A dead transport must not poison every later publication. */
-  private emit(subscriber: StructuredAgentSessionStatusSubscriber, event: AgentSessionStatusEvent) {
-    try {
-      subscriber.emit(event)
-    } catch {
-      this.subscribers.delete(subscriber.id)
-    }
+    this.subscribers.broadcast(event)
   }
 }

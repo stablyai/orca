@@ -78,12 +78,15 @@ export function acceptSubmissionFromProviderItem(
   if (providerItemId === resolvedItemId) {
     return
   }
-  const submission = [...state.submissions.values()].find(
+  const current = [...state.submissions.values()].find(
     (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
   )
-  if (!submission || !journalDispatchRowApplies(submission)) {
+  if (!current || !journalDispatchRowApplies(current)) {
     return
   }
+  // Replaced, never changed in place, as the dispatch reducer does.
+  const submission = { ...current }
+  state.submissions.set(current.clientMessageId, submission)
   submission.fence = row.fence
   submission.dispatchState = 'accepted'
   notePersonTurnAccepted(state, submission)

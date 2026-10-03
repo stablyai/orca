@@ -2,6 +2,7 @@ import type { AgentJournalDispatchRejection } from '../../../shared/agent-sessio
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
+import { owesRecoveredDispatch } from './journal-open-settlement-plan'
 import type { AgentSessionJournal } from './journal-store'
 
 /** Settles every submission a process fact left unanswerable. Doubt is never
@@ -12,14 +13,7 @@ export async function markJournalPendingSubmissionsUnknown(
   fence: number,
   reason: string = DISPATCH_DOUBT_HOST_RESTARTED
 ): Promise<string[]> {
-  const unresolved = journal
-    .submissions()
-    .filter(
-      (entry) =>
-        !isQueuedAgentJournalSubmission(entry) &&
-        (entry.dispatchState === 'pending' ||
-          (entry.dispatchState === 'unknown' && entry.recovered !== true))
-    )
+  const unresolved = journal.submissions().filter(owesRecoveredDispatch)
   for (const entry of unresolved) {
     // An earlier reason already names a sharper fact than "the host restarted".
     const resolvedReason =
@@ -43,14 +37,7 @@ export async function rejectJournalPendingSubmissions(
   fence: number,
   rejection: AgentJournalDispatchRejection
 ): Promise<string[]> {
-  const unwritten = journal
-    .submissions()
-    .filter(
-      (entry) =>
-        !isQueuedAgentJournalSubmission(entry) &&
-        (entry.dispatchState === 'pending' ||
-          (entry.dispatchState === 'unknown' && entry.recovered !== true))
-    )
+  const unwritten = journal.submissions().filter(owesRecoveredDispatch)
   for (const entry of unwritten) {
     await journal.resolveDispatch({
       clientMessageId: entry.clientMessageId,

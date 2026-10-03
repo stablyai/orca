@@ -235,7 +235,7 @@ describe('the switch: both surfaces read the host child records', () => {
     }
     const rendered = render(<Surfaces roster={roster} />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-    act(() => feed()({ type: 'snapshot', sessions: [summary({ children })] }))
+    await act(async () => feed()({ type: 'snapshot', sessions: [summary({ children })] }))
     const header = rendered.container.querySelector('[aria-expanded]')
     if (header) {
       fireEvent.click(header)
@@ -275,9 +275,11 @@ describe('the switch: both surfaces read the host child records', () => {
     const children = [view('a')]
     await mountWith(children)
     const first = row().children
-    act(() => feed()({ type: 'status', session: summary({ children: structuredClone(children) }) }))
+    await act(async () =>
+      feed()({ type: 'status', session: summary({ children: structuredClone(children) }) })
+    )
     expect(row().children).toBe(first)
-    act(() =>
+    await act(async () =>
       feed()({
         type: 'status',
         session: summary({ children: [{ ...children[0]!, lastMessage: 'Found 3 call sites' }] })
@@ -299,7 +301,7 @@ describe('the switch: both surfaces read the host child records', () => {
     expect(stripRows(container)).toEqual([live])
 
     // The status stream drops: the host is not heard from, so neither surface vouches for it.
-    act(() => feed()({ type: 'end' }))
+    await act(async () => feed()({ type: 'end' }))
     const lost = { dot: 'No recent update', lead: 'Audit a', trail: 'No update in 2m' }
     await waitFor(() => expect(sidebarRows()).toEqual([lost]))
     expect(stripRows(container)).toEqual([lost])
@@ -308,7 +310,7 @@ describe('the switch: both surfaces read the host child records', () => {
   it('reads a stale parent row the same way on both surfaces', async () => {
     const { container } = await mountWith([view('a')])
     // The host no longer owns the session, and its last word is older than the freshness window.
-    act(() =>
+    await act(async () =>
       feed()({
         type: 'status',
         session: summary({
@@ -334,7 +336,7 @@ describe('the switch: both surfaces read the host child records', () => {
 
     // The child finishes: the host sends no running children, so no roster and no summary rows.
     rerender(<Surfaces roster={null} />)
-    act(() => feed()({ type: 'status', session: summary({ children: undefined }) }))
+    await act(async () => feed()({ type: 'status', session: summary({ children: undefined }) }))
     expect(strip()).toBeNull()
     expect(sidebarRows()).toEqual([])
 

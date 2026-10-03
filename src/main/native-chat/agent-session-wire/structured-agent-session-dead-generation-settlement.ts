@@ -7,13 +7,11 @@ import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
-import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   agentSessionFailureWords,
@@ -26,17 +24,15 @@ import {
 } from './structured-agent-session-start-failure-row'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import {
-  endedByPersonsStop,
-  provenUnverifiableTurnRevisions,
   runningTurnLifecycleRevisions,
-  stopFoundTurnLiveAt,
-  turnVerdictFromDeathEvidence,
   type StructuredAgentSessionTurnVerdict
 } from './structured-agent-session-stale-turn-verdict'
+import { exitedRootTurnScope } from './structured-agent-session-exit-turn-scope'
+import { openSettlementTerminalBody } from '../agent-session-journal/journal-open-settlement-plan'
 import {
-  exitedRootTurnScope,
-  runningRootTurnScope
-} from './structured-agent-session-exit-turn-scope'
+  appendGoneGenerationSettlement,
+  planGoneGenerationSettlement
+} from './structured-agent-session-open-settlement'
 
 /** Bounds the exit reason the lease keeps as log evidence; a provider diagnostic is held to the
  *  same cap. */
@@ -175,7 +171,7 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     }
     for (const item of items) {
       const identity = parseAgentJournalItemKey(item.itemId)
-      const body = terminalDeadGenerationBody(item)
+      const body = openSettlementTerminalBody(item)
       if (identity && body) {
         mutations.push({
           kind: 'item',
@@ -203,11 +199,9 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
 }
 
 /**
- * Settles whatever a generation with no child in this process left running: found when a new child
- * is acquired, or when a chat is reopened for reading. Derived from the journal and the lease's
- * death evidence each time, so nothing is owed in between. Proven death ends the turn interrupted,
- * and a proof written after an earlier settle revises what that settle left `unverifiable`. Must
- * run before a new child's buffered events land, or a live turn would be judged.
+ * Settles whatever a generation with no child in this process left running, against the
+ * generation an acquisition just took (see `planGoneGenerationSettlement`, the open's own rule).
+ * Must run before a new child's buffered events land, or a live turn would be judged.
  */
 export async function settleStaleStructuredAgentSessionState(input: {
   journal: AgentSessionJournal
@@ -219,88 +213,24 @@ export async function settleStaleStructuredAgentSessionState(input: {
   failureTextContext?: AgentSessionFailureWordsContext
 }): Promise<number> {
   const { journal } = input
-  const items = journal.snapshot().items
-  // Each turn is judged by the evidence only if it names that turn's owner.
-  const verdictFor = (item: AgentJournalRenderItem) =>
-    turnVerdictFromDeathEvidence(
-      input.deathEvidence,
-      journal.itemFence(item.itemId),
-      stopFoundTurnLiveAt(journal, item)
-    )
-  // Per attempt: a retry re-partitions only what is left, and a reused chunk id would skip it.
-  const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
-  const settlementId = `stale-session:${input.sessionId}:${input.fence}:${generation}`
-  const mutations: JournalLifecycleMutationInput[] = []
-  for (const item of items) {
-    const identity = parseAgentJournalItemKey(item.itemId)
-    const body = terminalDeadGenerationBody(item)
-    if (identity && body) {
-      mutations.push({
-        kind: 'item',
-        identity,
-        body,
-        turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
-      })
-    }
-  }
-  const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal)
-  const turnEnds = [
-    ...items.flatMap((item) => runningTurnLifecycleRevisions([item], verdictFor(item))),
-    ...proven
-  ]
-  mutations.push(...turnEnds)
-  const evidence = input.deathEvidence
-  if (
-    evidence &&
-    (proven.length > 0 ||
-      items.some((item) => isInProgressItem(item) && verdictFor(item).state === 'interrupted')) &&
-    !endedByPersonsStop(journal, turnEnds)
-  ) {
-    mutations.unshift({
-      kind: 'item',
-      // Named by the death it explains, so a retry after a partly written settle adds no second row.
-      identity: {
-        provider: 'orca',
-        clientMessageId: `stale-session:${input.sessionId}:death-${evidence.ownerFence ?? 'unowned'}-${evidence.observedAt}`
-      },
-      // The death evidence is Orca's log text, never a sentence for a person: the row says only
-      // that the provider stopped.
-      body: {
-        kind: 'status',
-        ...agentSessionFailureWords(agentSessionFailureFact('providerExited'), {
-          ...input.failureTextContext,
-          surface: 'row'
-        }),
-        tone: 'error'
-      },
-      turnScope: runningRootTurnScope(items)
-    })
-  }
-  for (const chunk of partitionJournalLifecycleMutations(settlementId, mutations)) {
-    await journal.appendLifecycleBatch({
-      settlementId: chunk.settlementId,
-      fence: input.fence,
-      recovered: true,
-      mutations: chunk.mutations
-    })
-  }
-  return mutations.length
-}
-
-function terminalDeadGenerationBody(item: AgentJournalRenderItem): AgentJournalItemBody | null {
-  if (item.body.kind === 'tool-call' && item.body.state === 'running') {
-    return { ...item.body, state: 'failed' }
-  }
-  if (item.body.kind === 'approval' || item.body.kind === 'question') {
-    return item.body.resolution.state === 'pending' ? cancelledJournalPromptBody(item.body) : null
-  }
-  return null
+  const settlement = planGoneGenerationSettlement({
+    items: journal.snapshot().items,
+    journal,
+    sessionId: input.sessionId,
+    fence: input.fence,
+    // Per attempt: a retry re-partitions only what is left, and a reused chunk id would skip it.
+    generation: input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`,
+    deathEvidence: input.deathEvidence,
+    failureTextContext: input.failureTextContext
+  })
+  await appendGoneGenerationSettlement(journal, settlement, input.fence)
+  return settlement.mutations.length
 }
 
 function isUnfinishedItem(item: AgentJournalRenderItem): boolean {
   return (
     readAgentJournalTurn(item.body)?.state === 'running' ||
-    terminalDeadGenerationBody(item) !== null
+    openSettlementTerminalBody(item) !== null
   )
 }
 

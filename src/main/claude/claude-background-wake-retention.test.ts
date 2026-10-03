@@ -7,6 +7,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
 import { structuredRunningChildWork } from '../../shared/agent-child-work-listing'
+import { projectStructuredAgentSessionStatusState } from '../../shared/structured-agent-session-projection'
 import type { AgentHookServer } from '../agent-hooks/server'
 import type { StructuredAgentSessionJournalProjections } from '../native-chat/agent-session-wire/structured-agent-session-status-journal-projection'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
@@ -29,16 +30,22 @@ async function wiredSession() {
   const run = await producer(host)
   const submissions: AgentJournalSubmission[] = []
   let sequence = 0
+  const snapshot = () => ({
+    items: [...run.journalItems.values()]
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((item) => ({ ...item, revision: 1, observedAt: item.sequence })),
+    submissions: submissions.map((submission) => ({ ...submission }))
+  })
   const journal = {
     cursor: () => ({ epoch: 'epoch-1', sequence: ++sequence }),
     isReadOnly: false,
     lastActivityAt: () => 1,
-    snapshot: () => ({
-      items: [...run.journalItems.values()]
-        .sort((a, b) => a.sequence - b.sequence)
-        .map((item) => ({ ...item, revision: 1 })),
-      submissions: submissions.map((submission) => ({ ...submission }))
-    })
+    submissions: () => snapshot().submissions,
+    // The journal's own projection, which the feed shares with the status stored beside it.
+    statusState: (fence?: number) => {
+      const { items, submissions: sent } = snapshot()
+      return projectStructuredAgentSessionStatusState(items, sent, fence)
+    }
   }
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
@@ -46,7 +53,7 @@ async function wiredSession() {
       [
         parent.sessionId,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reads only the cursor, read-only flag, activity clock and snapshot served here.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reads only the cursor, read-only flag, activity clock, submissions and projection served here.
           journal: journal as unknown as Journal,
           params: {
             location: {

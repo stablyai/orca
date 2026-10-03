@@ -127,6 +127,8 @@ describe('StructuredAgentSessionStatusFeed', () => {
     if (firstStatus?.type !== 'status') {
       throw new Error('status publication missing')
     }
+    // Which provider child is starting is not on the wire: nothing reads it.
+    expect(firstStatus.session).not.toHaveProperty('hostExecutionChild')
     const journalTime = firstStatus.session.updatedAt
     sessions.get(SESSION)!.child = null
     feed.publish(SESSION, journal)
@@ -650,19 +652,25 @@ describe('StructuredAgentSessionStatusFeed', () => {
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => [
       statusFeedChildView({ state: taskState })
     ])
+    // The journal's own projection, which the status it stores beside each write reads too.
+    const projected = feed.statusState(SESSION)
+    expect(projected).toBe(journal.statusState(undefined))
     for (let tick = 1; tick <= 100; tick++) {
       taskState = tick % 2 === 1 ? 'waiting' : 'working'
       feed.publish(SESSION)
+      expect(feed.statusState(SESSION)).toBe(projected)
     }
     expect(events).toHaveLength(101)
-    expect(snapshot).toHaveBeenCalledTimes(1)
+    // The row never renders the journal: the projection and the accepted send come without it.
+    expect(snapshot).not.toHaveBeenCalled()
     expect(events.at(-1)).toMatchObject({
       type: 'status',
       session: { status: 'working', backgroundTasks: [{ state: 'working' }] }
     })
     await journal.appendTombstone(TURN_IDENTITY, { fence: 1 })
     feed.publish(SESSION)
-    expect(snapshot).toHaveBeenCalledTimes(2)
+    expect(snapshot).not.toHaveBeenCalled()
+    expect(feed.statusState(SESSION)).not.toBe(projected)
     expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
   })
 

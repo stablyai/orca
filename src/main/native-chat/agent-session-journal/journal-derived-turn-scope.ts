@@ -20,6 +20,13 @@ import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 export class JournalDerivedTurnScope {
   private openTurnItemId: string | null = null
 
+  /** For an append's undo: the scope as it stood before the row. */
+  clone(): JournalDerivedTurnScope {
+    const copy = new JournalDerivedTurnScope()
+    copy.openTurnItemId = this.openTurnItemId
+    return copy
+  }
+
   /** The scope for a row being created now that states none. A turn record belongs to no turn. */
   scopeFor(body: AgentJournalItemBody): AgentJournalTurnScope {
     return this.openTurnItemId === null || readAgentJournalTurn(body)

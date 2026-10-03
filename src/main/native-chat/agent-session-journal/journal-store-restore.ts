@@ -13,6 +13,7 @@ import { createJournalReducerState } from './journal-reducer'
 import type { JournalStoreHost } from './journal-store-collaborators'
 import { openJournalStoreState } from './journal-store-open'
 import { deleteJournalRepairedSuffix } from './journal-repair-marker'
+import { writeJournalSessionStatusFromDisk } from './journal-session-state'
 import { importPerSessionJournal, previewPerSessionJournal } from './journal-per-session-import'
 import { AgentSessionJournalError } from './journal-write-guards'
 
@@ -47,7 +48,7 @@ export async function restoreJournalStore(
     legacyDirectory: host.legacyDirectory,
     replay: () => {
       const loaded = preview ?? replayJournal(host.database().db, host.identity.sessionId)
-      host.setOpenedCorrupt(loaded?.corrupt ?? false)
+      host.setLoadCorrupt(loaded?.corrupt ?? false)
       return loaded
     },
     deleteSuffix: (fromSeq, contentFrom) =>
@@ -57,7 +58,8 @@ export async function restoreJournalStore(
         epoch: host.state().epoch,
         fromSeq,
         contentFrom,
-        now: host.now()
+        now: host.now(),
+        writeStatus: (db) => writeJournalSessionStatusFromDisk(db, host.identity.sessionId)
       }),
     start: () => collaborators.epochController.start('session_created', 0),
     // `unreconcilable_prefix` is the durable statement that this epoch exists
@@ -99,7 +101,7 @@ async function restoreFromNewerDatabase(
       { cause: error }
     )
   }
-  host.setOpenedCorrupt(false)
+  host.setLoadCorrupt(false)
   host.adopt({
     state: loaded?.state ?? createJournalReducerState(sessionId, ''),
     readOnly: true,

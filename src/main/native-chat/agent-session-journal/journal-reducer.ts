@@ -24,6 +24,7 @@ import {
 } from '../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
+import { JournalFoldMap, JournalFoldSet } from './journal-fold-undo'
 import { removeJournalItem, statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import { isJournalStopOrResumeRow, type JournalRow } from './journal-row-schema'
@@ -74,13 +75,14 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     lastActivityAt: 0,
     oldestSequence: 1,
     highestFence: 0,
-    items: new Map(),
-    itemFences: new Map(),
-    tombstones: new Map(),
-    submissions: new Map(),
-    receipts: new Map(),
-    aliases: new Map(),
-    appliedSettlementIds: new Set(),
+    // Recording containers: an append that fails puts back exactly what it changed.
+    items: new JournalFoldMap(),
+    itemFences: new JournalFoldMap(),
+    tombstones: new JournalFoldMap(),
+    submissions: new JournalFoldMap(),
+    receipts: new JournalFoldMap(),
+    aliases: new JournalFoldMap(),
+    appliedSettlementIds: new JournalFoldSet(),
     derivedTurnScope: new JournalDerivedTurnScope(),
     latestPersonTurnSequence: 0,
     queuePauseMarks: createJournalQueuePauseMarks()

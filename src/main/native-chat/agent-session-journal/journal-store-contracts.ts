@@ -21,6 +21,8 @@ export type AgentSessionJournalOptions = {
   mintEpoch?: () => string
   /** A restore's open: see `AgentSessionJournal.whenImported`. */
   deferPerSessionImport?: boolean
+  /** The conversation's fence, which the chat's stored status reads as the status feed does. */
+  currentFence?: () => number | undefined
 }
 
 export type JournalReadSince =

@@ -24,6 +24,7 @@ import {
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
+import { sessionTabListed } from './structured-agent-session-host-tabs'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
 import { deferredStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
@@ -64,11 +65,8 @@ export function createStructuredAgentSessionConversationLifetime(host: {
     closeStructuredAgentSessionConversationUnderSerialize(
       {
         sessions,
-        closeStatus: (id) => {
-          const tabs = deps().store.getVisibleSessionTabIndex()
-          // A legacy store cannot say, so the row stays; restart is the boundary that forgets.
-          host.closeStatus(id, { listed: !tabs.present || tabs.sessionIds.includes(id) })
-        }
+        // A legacy store cannot say, so the row stays; restart is the boundary that forgets.
+        closeStatus: (id) => host.closeStatus(id, { listed: sessionTabListed(deps().store, id) })
       },
       sessionId
     )
@@ -102,6 +100,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   return {
     idleSweep,
     stopAgent,
+    isDisposed: (): boolean => disposed,
     /** Quit has begun: nothing opens a conversation or sweeps one after this. */
     dispose: (): void => {
       disposed = true
@@ -114,6 +113,13 @@ export function createStructuredAgentSessionConversationLifetime(host: {
      * drop it after.
      */
     conversation: async (sessionId: string): Promise<StructuredAgentSessionHostSession> => {
+      // Reads (history, subscribe, snapshot, reveal) wait for startup's settle here, as commands do
+      // at `serializeStructuredAgentSessionCommand`: opening a crash-left chat would settle it ahead
+      // of startup's lease resolution. Before this chat's lock; no caller holds one here.
+      const startup = deps().commandsReady?.()
+      if (startup) {
+        await startup
+      }
       const open = sessions.get(sessionId)
       if (open) {
         // Restore left its per-chat file uncopied; a reader gets the chat from the one database.

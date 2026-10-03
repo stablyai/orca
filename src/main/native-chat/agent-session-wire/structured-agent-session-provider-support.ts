@@ -41,3 +41,15 @@ export function adapterSupportsRecord(
   // Old Codex records stay readable unless the adapter explicitly rejects their location.
   return record.provider === 'codex' && (adapter.supportsLocation?.(record.location) ?? true)
 }
+
+/**
+ * Whether this host can settle a chat: its record is present and this host runs its provider.
+ * Every settle of a closed chat, startup's choice of stored statuses to drop, and any writer of a
+ * missing status use this one rule, so none writes a row another drops on every launch.
+ */
+export function hostCanSettleRecord(
+  adapter: StructuredAgentSessionAdapter,
+  record: AgentSessionRecord | null
+): record is AgentSessionRecord {
+  return record !== null && adapterSupportsRecord(adapter, record)
+}

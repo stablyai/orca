@@ -25,17 +25,14 @@ import {
   newestStructuredAgentSessionTurnBySequence
 } from '../../../shared/structured-agent-session-live-turn'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
-import { readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
-import { journalRowsAfterReader, type JournalLoad } from './journal-open'
+import type { JournalLoad } from './journal-open'
 import {
   markJournalPendingSubmissionsUnknown,
   rejectJournalPendingSubmissions,
   rejectJournalQueuedSubmissions
 } from './journal-pending-submission-recovery'
 import {
-  applyJournalRow,
-  createJournalReducerState,
   renderJournalState,
   resolveJournalItemId,
   type JournalReducerState
@@ -58,6 +55,7 @@ import type {
   ResolveDispatchInput
 } from './journal-store-contracts'
 import { queuedMessageConsumeHook, type JournalQueuedMessages } from './journal-queued-messages'
+import type { JournalStatusProjectionState } from './journal-status-projection'
 import {
   journalQueueResumeRowBuilder,
   journalStopEventRowBuilder
@@ -71,6 +69,7 @@ import { journalStoreLoadedFields } from './journal-store-open'
 import type { JournalItemAppender, JournalResolvedItem } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalStopMarks } from './journal-stop-marks'
+import { JournalFoldHolder } from './journal-fold-holder'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -80,10 +79,11 @@ export class AgentSessionJournal {
   private readonly now: () => number
   private readonly mintEpoch: () => string
 
-  private state: JournalReducerState
+  private readonly fold: JournalFoldHolder
   private readOnly = false
   private malformedRows = 0
-  private openedCorrupt = false
+  /** A fresh replay would report the history corrupt: it is still owed a rebuild. */
+  private loadCorrupt = false
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private onCommitted: (() => void) | null = null
   private readonly queue: JournalWriteQueue
@@ -92,6 +92,12 @@ export class AgentSessionJournal {
   private readonly itemAppender: JournalItemAppender
   private readonly lifecycleBatchAppender: JournalLifecycleBatchAppender
   private readonly restore: () => Promise<void>
+  /** Writes the chat's status if it has none (an older build last wrote it). Bookkeeping: never
+   *  fails the open that calls it. */
+  readonly backfillSessionStatus: () => void
+  readonly readSince: (cursor: AgentJournalCursor, limit?: number) => JournalReadSince
+  /** The status projection at this tip, projected once per commit for every reader. */
+  readonly statusState: (fence: number | undefined) => JournalStatusProjectionState
   /** Draft rows queued while the agent works; never reducer input or owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
@@ -101,7 +107,7 @@ export class AgentSessionJournal {
     this.database = options.database
     this.now = options.now ?? (() => Date.now())
     this.mintEpoch = options.mintEpoch ?? randomUUID
-    this.state = createJournalReducerState(options.identity.sessionId, '')
+    this.fold = new JournalFoldHolder(options.identity.sessionId, options.database)
     // Serializes sequence assignment with the durable write behind it.
     this.queue = new JournalWriteQueue(options.identity.sessionId)
     const collaborators = createJournalStoreCollaborators({
@@ -123,12 +129,12 @@ export class AgentSessionJournal {
         this.adoptLoadedJournal(loaded)
         this.onCommitted?.()
       },
-      commit: (row) => {
-        applyJournalRow(this.state, row)
-        this.onCommitted?.()
-      },
-      setOpenedCorrupt: (corrupt) => {
-        this.openedCorrupt = corrupt
+      markFoldStale: () => this.fold.markStale(),
+      loadCorrupt: () => this.loadCorrupt,
+      currentFence: options.currentFence ?? (() => undefined),
+      importPending: () => this.queue.owing,
+      setLoadCorrupt: (corrupt) => {
+        this.loadCorrupt = corrupt
       },
       notifyCommitted: () => this.onCommitted?.(),
       malformedRows: () => this.malformedRows,
@@ -145,6 +151,17 @@ export class AgentSessionJournal {
     this.queuedMessages = collaborators.queuedMessages
     this.stopMarks = collaborators.stopMarks
     this.restore = collaborators.restore
+    this.backfillSessionStatus = collaborators.backfillSessionStatus
+    this.readSince = collaborators.readSince
+    this.statusState = (fence) => collaborators.statusProjection.at(fence)
+  }
+
+  private get state(): JournalReducerState {
+    return this.fold.get()
+  }
+
+  private set state(state: JournalReducerState) {
+    this.fold.set(state)
   }
 
   get isReadOnly(): boolean {
@@ -172,7 +189,7 @@ export class AgentSessionJournal {
 
   /** The open replayed an unusable prefix: the chat is owed a rebuild from provider history. */
   get needsRebuild(): boolean {
-    return this.openedCorrupt
+    return this.loadCorrupt
   }
 
   async open(): Promise<void> {
@@ -259,6 +276,9 @@ export class AgentSessionJournal {
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
   lastActivityAt = (): number => this.state.lastActivityAt
 
+  /** The highest fence any row carries: a writer that revises what an earlier one left. */
+  highestFence = (): number => this.state.highestFence
+
   /** Fence of the writer that created the item, while it is in the timeline. */
   itemFence = (itemId: string): number | undefined => this.state.itemFences.get(itemId)
 
@@ -278,16 +298,7 @@ export class AgentSessionJournal {
 
   /** Reads the fold with every write issued before this call committed, and none issued after: at
    *  once unless writes still wait behind an owed import or a running write. */
-  readInOrder<T>(read: () => T): Promise<T> {
-    return this.queue.readInOrder(read)
-  }
-
-  readSince(cursor: AgentJournalCursor, limit?: number): JournalReadSince {
-    const { sessionId } = this.identity
-    const rowsAfter = journalRowsAfterReader(this.database.db, sessionId, this.state.epoch, limit)
-    const source = { state: this.state, rowsAfter, readOnly: this.readOnly }
-    return readJournalSince(source, cursor, () => this.cursor())
-  }
+  readInOrder = <T>(read: () => T): Promise<T> => this.queue.readInOrder(read)
 
   /** Upsert by stable identity. The revision is assigned here so a caller
    *  cannot accidentally publish a revision the reducer will drop. */

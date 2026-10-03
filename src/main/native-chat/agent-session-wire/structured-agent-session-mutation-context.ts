@@ -1,5 +1,6 @@
 // The context every client mutation of a session runs with, and the one path each takes: admit the
-// envelope against the lease, then run its plan inside the session's serialize.
+// envelope against the lease, then run its plan inside the session's serialize, entered through
+// the one chat-command entry (startup's settle first).
 
 import type {
   AgentSessionMutationEnvelope,
@@ -12,6 +13,7 @@ import {
   type AgentSessionMutationSessionPreparation
 } from './structured-agent-session-mutation-admission'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
+import { serializeStructuredAgentSessionCommand } from './structured-agent-session-command-entry'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-lifetime'
 import type {
   StructuredAgentSessionCaller,
@@ -55,7 +57,7 @@ export function mutateStructuredAgentSession<TValue>(
   plan: MutationPlan<TValue>,
   prepareSession?: AgentSessionMutationRequest<TValue>['prepareSession']
 ): Promise<AgentSessionMutationResult<TValue>> {
-  return context.serialize(envelope.sessionId, () =>
+  return serializeStructuredAgentSessionCommand(context, envelope.sessionId, () =>
     admitAndRunAgentSessionMutation({
       store: context.deps.store,
       adapter: context.deps.adapter,

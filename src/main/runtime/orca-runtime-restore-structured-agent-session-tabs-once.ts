@@ -4,8 +4,8 @@ import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './orca-ru
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
-import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 import { seedStructuredAgentSessionTabIndex } from './structured-agent-session-tab-index-seed'
+import { listedStructuredAgentSessionIds } from './structured-agent-session-startup-step'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -53,19 +53,10 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
     await this.prepareStructuredAgentSessionStartupRestoration()
     const host = getStructuredAgentSessionHost()
-    const persistedVisibleIndex =
-      typeof host?.getPersistedVisibleSessionTabIndex === 'function'
-        ? host.getPersistedVisibleSessionTabIndex()
-        : { present: false, sessionIds: [] }
-    const profileIds = collectSavedStructuredAgentSessionIds(
+    const listedIds = listedStructuredAgentSessionIds(
+      host,
       this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
     )
-    // Unrecorded, the profile's chats join the tabs chats opened while the import was owed left.
-    // First: after a /clear the profile's chat would take their tab id, so seeds hit tabIdTaken.
-    const targets = persistedVisibleIndex.present
-      ? persistedVisibleIndex.sessionIds
-      : [...new Set([...persistedVisibleIndex.sessionIds, ...profileIds])]
-    await host?.restoreReadableSessions(targets)
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -73,7 +64,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       })
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
-    const restored = (host?.listSessionTabs() ?? []).flatMap((session) => {
+    const restored = (host?.listSessionTabs(listedIds) ?? []).flatMap((session) => {
       if (session.agent !== 'codex' && session.agent !== 'claude') {
         return []
       }
@@ -85,16 +76,34 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     })
     await seedStructuredAgentSessionTabIndex(
       host,
-      targets,
+      listedIds,
       restored.map((session) => session.sessionId)
     )
     // Past the seed, projecting records nothing.
-    for (const replacement of host?.conversationReplacements?.() ?? []) {
+    // Derived once for the loop below, which stores a snapshot per tab; nothing awaits in between.
+    const replacements = host?.conversationReplacements?.() ?? []
+    for (const replacement of replacements) {
       this.replaceStructuredAgentSessionTab(replacement)
     }
+    const quiet = { activate: false, notify: false, replacements }
     for (const session of restored) {
-      this.projectStructuredAgentSessionTab({ ...session, activate: false, notify: false })
+      this.projectStructuredAgentSessionTab({ ...session, ...quiet })
     }
+    // Startup already seeded each settled listed chat not yet open, opened listed chats still in
+    // per-chat files, and is settling the ones a gone process left with work; this opens only what
+    // stored status could not answer (a row this build cannot read, a corrupt history, a per-chat
+    // file whose open failed).
+    // Whoever answers with this list starts it, once that answer is out.
+    const background = this.structuredAgentSessionBackgroundRestoreIds ?? listedIds
+    this.owedStructuredAgentSessionHistoryRestore = host
+      ? () =>
+          void host.restoreReadableSessions(background).catch((error: unknown) => {
+            host.deps.logger.warn('restoring chat history after listing failed', {
+              scope: 'history-restore-after-listing',
+              error
+            })
+          })
+      : null
     const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
     // No host, or one still owed the records file's chats, means no one can say which chats exist;
     // with none on disk, empty is the answer.
@@ -143,6 +152,8 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     activate: boolean
     notify?: boolean
     replacesSessionId?: string
+    /** The /clear replacements, derived once by a caller projecting many tabs in one loop. */
+    replacements?: readonly ConversationReplacement[]
   }): void {
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
@@ -219,7 +230,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+    const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot, input.replacements)
     if (input.notify !== false) {
       this.emitMobileSessionTabsSnapshot(stored)
     }

@@ -1,7 +1,7 @@
-// With native chat on, the renderer's startup also awaits the chat tab restore (`session.tabs.listAll`),
-// which reads every chat whose tab was open at quit. That read must not wait on record-store
-// bookkeeping: with a saved tab index it writes nothing, and a store that cannot be written costs
-// a bounded number of failed writes, not one per chat.
+// With native chat on, the renderer's startup also awaits the chat tab list (`session.tabs.listAll`).
+// The list opens no chat; a restore it does not wait for then reads every chat whose tab was open at
+// quit. Neither may wait on record-store bookkeeping: with a saved tab index they write nothing, and
+// a store that cannot be written costs a bounded number of failed writes, not one per chat.
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -248,6 +248,14 @@ function startupRuntime(options: { afterInstall?: () => void; profileChats?: str
   }
 }
 
+/** Starts the history restore the listing owes, as the caller that answers with it does, and joins
+ *  it. */
+async function historyRestored(runtime: OrcaRuntimeService): Promise<void> {
+  runtime.startStructuredAgentSessionHistoryRestore()
+  await new Promise((resolve) => setImmediate(resolve))
+  await getStructuredAgentSessionHost()!.restoreReadableSessions()
+}
+
 async function expectHistory(sessionId: string): Promise<void> {
   const host = getStructuredAgentSessionHost()
   expect(JSON.stringify((await host!.journalSnapshot(sessionId)).items)).toContain(PROMPT)
@@ -292,6 +300,7 @@ describe('restoring the chat tabs open at quit', () => {
       })
 
       await expect(runtime.restoreStructuredAgentSessionTabs()).resolves.toBeUndefined()
+      await historyRestored(runtime)
 
       expect(published().map((tab) => tab.id)).toEqual([
         `agent-session:${CHAT_A}`,
@@ -322,26 +331,32 @@ describe('restoring the chat tabs open at quit', () => {
     }
   )
 
-  // Each failed write stands for one refused commit.
-  it.each([1, 4, 8])('fails one write per startup step with %i chats open', async (count) => {
-    const chats = Array.from({ length: count }, (_, index) => `chat-${index}-000${index}`)
-    const records = chats.map((sessionId) => chatRecord(sessionId))
-    await seedProfile(records, { visible: chats })
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const { runtime, published } = startupRuntime({
-      afterInstall: () => {
-        writes.failing = true
-      }
-    })
+  // Each failed write stands for one refused commit. The lease check is tried twice, then left to
+  // the next attach or send.
+  it.each([1, 4, 8])(
+    "fails only the lease check's two writes with %i chats open",
+    async (count) => {
+      const chats = Array.from({ length: count }, (_, index) => `chat-${index}-000${index}`)
+      const records = chats.map((sessionId) => chatRecord(sessionId))
+      await seedProfile(records, { visible: chats })
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const { runtime, published } = startupRuntime({
+        afterInstall: () => {
+          writes.failing = true
+        }
+      })
 
-    await runtime.prepareStructuredAgentSessionStartupRestoration()
-    const prepared = writes.refused
-    await runtime.restoreStructuredAgentSessionTabs()
+      await runtime.prepareStructuredAgentSessionStartupRestoration()
+      const prepared = writes.refused
+      await runtime.restoreStructuredAgentSessionTabs()
+      await historyRestored(runtime)
 
-    expect(published()).toHaveLength(count)
-    expect(prepared).toBe(1)
-    expect(writes.refused - prepared).toBe(1)
-  })
+      expect(published()).toHaveLength(count)
+      expect(prepared).toBe(2)
+      // Every chat's stored state answers it, so the background restore opens none and writes nothing.
+      expect(writes.refused - prepared).toBe(0)
+    }
+  )
 
   describe('on a legacy profile, with no tab index yet', () => {
     const legacyChats = () => [
@@ -383,11 +398,12 @@ describe('restoring the chat tabs open at quit', () => {
       await runtime.prepareStructuredAgentSessionStartupRestoration()
       const prepared = writes.refused
       await runtime.restoreStructuredAgentSessionTabs()
+      await historyRestored(runtime)
 
       expect(published()).toHaveLength(2)
-      expect(prepared).toBe(1)
-      // The restore's lease check and the seed.
-      expect(writes.refused - prepared).toBe(2)
+      expect(prepared).toBe(2)
+      // The seed alone: stored state answers both chats, so the background restore writes nothing.
+      expect(writes.refused - prepared).toBe(1)
     })
 
     // The profile never lists a Claude chat, so only the tab row that chat left brings it back.
@@ -418,6 +434,7 @@ describe('restoring the chat tabs open at quit', () => {
       writes.failing = true
 
       await expect(runtime.restoreStructuredAgentSessionTabs()).resolves.toBeUndefined()
+      await historyRestored(runtime)
 
       expect(published()).toHaveLength(2)
       await expectHistory(CHAT_A)

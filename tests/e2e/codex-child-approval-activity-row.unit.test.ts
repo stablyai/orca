@@ -215,8 +215,9 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
     const toRenderer: (event: AgentSessionStatusEvent) => void =
       mocks.subscribeStatus.mock.calls[0]?.[1]
     let forwarded = 0
-    const deliver = (): AgentSessionStatusSummary => {
-      act(() => {
+    // Async, so the bridge's once-per-tick store update lands before the row is read.
+    const deliver = async (): Promise<AgentSessionStatusSummary> => {
+      await act(async () => {
         for (const event of host.events.slice(forwarded)) {
           toRenderer(event)
         }
@@ -248,7 +249,7 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
     host.on(CODEX_CHILD, 'turn/started', { turn: { id: 'child-turn' } })
     host.on(CODEX_THREAD, 'turn/completed', { turn: { id: 'parent-turn', status: 'completed' } })
     await host.drain()
-    const settled = deliver()
+    const settled = await deliver()
     expect(settled).toMatchObject({ status: 'idle', statusStartedAt: expect.any(Number) })
     store().setState({ acknowledgedAgentsByPaneKey: { [paneKey()]: host.tick() } })
 
@@ -262,7 +263,7 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
       promptKey: 'child-approval'
     })
     await host.drain()
-    const asked = deliver()
+    const asked = await deliver()
     expect(asked).toMatchObject({ status: 'attention' })
     expect(asked.statusStartedAt).toBeGreaterThan(settled.statusStartedAt ?? Infinity)
     // The user reads the ask, then answers it.
@@ -271,7 +272,7 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
     await host.answer(approval ?? '')
     host.on(CODEX_CHILD, 'turn/completed', { turn: { id: 'child-turn', status: 'completed' } })
     await host.drain()
-    const answered = deliver()
+    const answered = await deliver()
     // The host rule under test elsewhere: the answer never re-dates the session's done.
     expect(answered).toMatchObject({ status: 'idle', statusStartedAt: settled.statusStartedAt })
     expect(answered.updatedAt).toBeGreaterThan(asked.updatedAt)

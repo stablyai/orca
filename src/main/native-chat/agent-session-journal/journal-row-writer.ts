@@ -19,7 +19,15 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
-  commit: (row: JournalRow) => void
+  /** Folds the row inside the transaction, so the status written with it describes it. */
+  apply: (row: JournalRow) => void
+  /** The chat's status from the fold that now holds the row. A throw fails the append. */
+  writeStatus: (db: Database.Database, row: JournalRow) => void
+  /** After COMMIT: observers learn of the row only once it is durable. */
+  committed: (row: JournalRow) => void
+  /** A transaction that failed after `apply`: the fold is ahead of the disk, so it is folded
+   *  again from what committed. */
+  recoverFold: () => void
   /** Standing hook run for EVERY appended row — the queued-draft returned
    *  transition rides here so no rejection path can bypass it. Bookkeeping: it
    *  runs in its own savepoint, so its failure is reported and never vetoes the row. */
@@ -41,21 +49,26 @@ export class JournalRowWriter {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
       const row = build(this.deps.nextSequence(), this.deps.now())
       assertJournalFence(row.fence, this.deps.highestFence())
+      let applied = false
       try {
-        // One INSERT: the chat's epoch pointer moves only when the epoch does.
+        // One INSERT: the chat's epoch pointer moves only when the epoch does. The hook and the
+        // bookkeeping read the fold before the row; the status reads it after.
         this.deps.database().transaction((db) => {
           insertJournalRow(db, this.deps.sessionId, row)
           hook?.(db, row)
           this.runBookkeeping(db, row)
+          applied = true
+          this.deps.apply(row)
+          this.deps.writeStatus(db, row)
         })
       } catch (error) {
         this.deps.rolledBack?.()
+        if (applied) {
+          this.deps.recoverFold()
+        }
         throw error
       }
-      // COMMIT landed, so the row is durable: adopt it before anything that can
-      // fail. Rejecting here instead would leave the next append reusing a
-      // sequence the table already holds.
-      this.deps.commit(row)
+      this.deps.committed(row)
       return row
     })
   }

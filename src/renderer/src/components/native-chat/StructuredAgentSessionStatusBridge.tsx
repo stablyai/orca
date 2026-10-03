@@ -29,6 +29,7 @@ import {
   structuredAgentSessionRowStateStartedAt
 } from '../../../../shared/structured-agent-session-status-started-at'
 import { useAppStore } from '@/store'
+import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status-contract'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import {
   structuredAgentSessionOwnerForTab,
@@ -93,18 +94,64 @@ function childWorkFor(summary: AgentSessionStatusSummary): {
   return subagents ? { subagents } : {}
 }
 
+type StatusProjection = {
+  tab: StructuredTab
+  summary: AgentSessionStatusSummary
+  observation: 'live' | 'unverifiable'
+}
+
+// Rows projected in one tick, applied as one status publication: a host snapshot reaches every
+// projection at once, and a store write per row re-runs every reader once per row.
+const queuedProjections = new Map<string, StatusProjection>()
+let projectionFlushQueued = false
+
 function projectStatus(
   tab: StructuredTab,
   summary: AgentSessionStatusSummary | null,
   observation: 'live' | 'unverifiable'
 ): void {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-  const store = useAppStore.getState()
   // No persisted turn yet (or nothing known): the row shows no agent status at all.
   if (!summary?.status) {
+    forgetQueuedProjection(paneKey)
+    const store = useAppStore.getState()
     if (store.agentStatusByPaneKey?.[paneKey]) {
       store.removeAgentStatus(paneKey)
     }
+    return
+  }
+  queuedProjections.set(paneKey, { tab, summary, observation })
+  if (!projectionFlushQueued) {
+    projectionFlushQueued = true
+    queueMicrotask(flushQueuedProjections)
+  }
+}
+
+function forgetQueuedProjection(paneKey: string): void {
+  queuedProjections.delete(paneKey)
+}
+
+function flushQueuedProjections(): void {
+  projectionFlushQueued = false
+  const projections = [...queuedProjections.values()]
+  queuedProjections.clear()
+  if (projections.length === 0) {
+    return
+  }
+  useAppStore.getState().transactAgentStatuses((transaction) => {
+    for (const projection of projections) {
+      applyStatusProjection(transaction, projection)
+    }
+  })
+}
+
+function applyStatusProjection(
+  transaction: AgentStatusBatchTransaction,
+  { tab, summary, observation }: StatusProjection
+): void {
+  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const store = transaction.getState()
+  if (!summary.status) {
     return
   }
   const { children, subagents } = childWorkFor(summary)
@@ -169,11 +216,11 @@ function projectStatus(
   ) {
     return
   }
-  store.setAgentStatus(
+  transaction.apply({
     paneKey,
-    desired,
-    tab.label,
-    {
+    payload: desired,
+    terminalTitle: tab.label,
+    timing: {
       updatedAt: summary.updatedAt,
       // This ordered host feed can correct a legacy publication clock after upgrade.
       allowOlderTimestamp: true,
@@ -190,13 +237,13 @@ function projectStatus(
       // row held open by child work alone is dated by when this client saw it instead.
       evidenceObservedAt: isAgentStatusHeldOpenByChildWork(desired) ? Date.now() : summary.updatedAt
     },
-    { tabId: tab.id, worktreeId: tab.worktreeId },
-    {
+    routing: { tabId: tab.id, worktreeId: tab.worktreeId },
+    metadata: {
       ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
       terminalResumeEligible: false,
       ...(summary.hostExecutionOwned ? { structuredHostOwned: true as const } : {})
     }
-  )
+  })
 }
 
 /** Reads the chat's status from the host recorded on its tab; a chat no host can be named for has
@@ -223,8 +270,12 @@ function StructuredAgentSessionOwnedStatusProjection({
     projectStatus(tab, summary, observation)
   }, [summary, observation, tab])
   useEffect(
-    () => () =>
-      useAppStore.getState().removeAgentStatus(structuredAgentSessionPaneKey(tab.id, tab.entityId)),
+    () => () => {
+      const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+      // A row queued before the unmount must not land after it.
+      forgetQueuedProjection(paneKey)
+      useAppStore.getState().removeAgentStatus(paneKey)
+    },
     [tab.entityId, tab.id]
   )
   return null

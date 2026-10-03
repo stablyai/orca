@@ -1,8 +1,9 @@
 // Republishing a live item set into a fresh epoch.
 //
 // One transaction: discard the old epoch's rows, insert the epoch row plus the
-// replacement items, move the session projection, and retire any repair marker
-// — this republished history is exactly what the marker was holding out for.
+// replacement items, move the session projection, retire any repair marker
+// — this republished history is exactly what the marker was holding out for —
+// and write the chat's status for the new epoch.
 
 import type {
   AgentJournalItemBody,
@@ -14,6 +15,7 @@ import type {
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import { clearJournalRepairMarker } from './journal-repair-marker'
+import type { JournalEpochStateWriter } from './journal-epoch-rollover'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { buildJournalItemRow, journalRowBase } from './journal-row-builders'
 import {
@@ -50,6 +52,7 @@ export function replaceJournalEpoch(input: {
   queuePause: JournalQueuePauseRestatement
   now: () => number
   mintEpoch: () => string
+  writeState: JournalEpochStateWriter
   /** Called the instant the transaction commits, before any fallible follow-up. */
   onPublished: (loaded: JournalLoad) => void
 }): void {
@@ -102,6 +105,7 @@ export function replaceJournalEpoch(input: {
       insertJournalRow(db, sessionId, row)
     }
     publishJournalSessionEpoch(db, input.identity, epoch)
+    input.writeState(db, state, false)
   })
 
   // COMMIT landed: on disk the superseded rows are gone and this epoch is the
