@@ -27,6 +27,7 @@ import { withCodexTerminalServerIsolationEnv } from '../../../../shared/codex-te
 import { planCodexNoDaemonLaunch } from '../../../pty/codex-no-daemon-launch-command'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
+import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 
 /** Carries deletions to provider-owned environments, including persistent older daemons. */
 export async function buildPtyIpcSpawnOptions(
@@ -64,6 +65,18 @@ export async function buildPtyIpcSpawnOptions(
     ctx.combinedEnvToDelete = removeCodexHomeDeletionRequests(ctx.combinedEnvToDelete)
   }
   deleteRequestedEnvKeys(ctx.spawnEnv, ctx.combinedEnvToDelete)
+  ctx.spawnEnv = await prepareOpenCodePtyLaunch({
+    command: ctx.launchCommand,
+    agent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+    env: ctx.spawnEnv,
+    envToDelete: (ctx.combinedEnvToDelete ??= []),
+    cwd: ctx.cwd,
+    connectionId: args.connectionId,
+    isFreshLaunch: !ctx.preAdoptedStablePane && ctx.launchCommand !== undefined,
+    ...(ctx.codexSelectionTarget.runtime === 'wsl'
+      ? { wsl: { distro: ctx.expectedWslDistro ?? undefined } }
+      : {})
+  })
   promoteAgentTeamsShimPath(ctx.spawnEnv, ctx.requestedAgentTeamsPath)
   ctx.spawnOptions = {
     cols: args.cols,

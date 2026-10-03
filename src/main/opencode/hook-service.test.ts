@@ -32,6 +32,7 @@ import {
 import { resolveOpenCodeConfigDirectory } from '../../shared/opencode-config-directory'
 
 beforeEach(() => {
+  vi.stubEnv('ORCA_OPENCODE_PLUGIN_API', 'v2')
   setAppEnvironment({
     getPath: getPathMock,
     getAppPath: () => process.cwd(),
@@ -42,6 +43,8 @@ beforeEach(() => {
     getAppMetrics: () => []
   })
 })
+
+afterEach(() => vi.unstubAllEnvs())
 
 const { isUsableId, toSafeDirName } = _internals
 

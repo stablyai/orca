@@ -7,6 +7,8 @@ import {
   writeOverlayOpenCodePluginAtomically
 } from './opencode-plugin-atomic-write'
 
+export class InvalidOpenCodeTuiConfigError extends Error {}
+
 /** Register 1.x's explicit TUI entry without changing other settings or overlay targets. */
 export function registerOpenCodeTuiPlugin(
   configDir: string,
@@ -20,11 +22,13 @@ export function registerOpenCodeTuiPlugin(
   const errors: ParseError[] = []
   const config: unknown = parse(text, errors, { allowTrailingComma: true })
   if (errors.length || typeof config !== 'object' || !config || Array.isArray(config)) {
-    throw new Error('Cannot register OpenCode TUI plugin in invalid config')
+    throw new InvalidOpenCodeTuiConfigError('Cannot register OpenCode TUI plugin in invalid config')
   }
   const previous = 'plugin' in config ? config.plugin : undefined
   if (previous !== undefined && !Array.isArray(previous)) {
-    throw new Error('Cannot register OpenCode TUI plugin in invalid plugin list')
+    throw new InvalidOpenCodeTuiConfigError(
+      'Cannot register OpenCode TUI plugin in invalid plugin list'
+    )
   }
   const sourceDir = existsSync(configPath) ? dirname(realpathSync(configPath)) : configDir
   const entries: unknown[] = previous ?? []

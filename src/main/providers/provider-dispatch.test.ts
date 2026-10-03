@@ -175,6 +175,7 @@ describe('PTY provider dispatch', () => {
         'CLAUDE_CODE_CHILD_SESSION',
         'CLAUDE_CODE_SESSION_ID',
         'CLAUDE_CODE_BRIDGE_SESSION_ID',
+        'ORCA_OPENCODE_PLUGIN_API',
         'ORCA_PI_STATUS_OWNED',
         'ORCA_PRIME_AGENT_STATUS_OWNED',
         'ORCA_PI_TITLE_MARKER_OWNED',
