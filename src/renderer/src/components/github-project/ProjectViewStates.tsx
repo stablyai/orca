@@ -5,6 +5,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { GhAuthErrorHelp } from './GhAuthErrorHelp'
+import { isRenderableProjectViewLayout } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewSummary } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
 
@@ -42,9 +43,7 @@ function ProjectViewTab({
   active: boolean
   onPick: (viewId: string) => void
 }): React.JSX.Element {
-  // Why: allowlist, not denylist — raw.layout is cast unchecked, so a future
-  // GitHub layout value must stay disabled instead of masquerading as a table.
-  const supported = view.layout === 'TABLE_LAYOUT' || view.layout === 'ROADMAP_LAYOUT'
+  const supported = isRenderableProjectViewLayout(view.layout)
   const layoutLabel =
     view.layout === 'BOARD_LAYOUT'
       ? 'Board'
@@ -110,8 +109,8 @@ function ProjectViewTab({
           <p className="text-xs leading-5 text-muted-foreground">
             {message}{' '}
             {translate(
-              'auto.components.github.project.ProjectViewStates.ac83c45672',
-              'Switch to a Table or Roadmap view to work with this project in Orca.'
+              'auto.components.github.project.ProjectViewStates.3b96fb68cf',
+              'Switch to a Table, Board, or Roadmap view to work with this project in Orca.'
             )}
           </p>
           <Button
@@ -161,8 +160,8 @@ export function ProjectViewErrorState({
         ? // Why: an older paired host still reports roadmaps as unsupported, so this
           // copy must not name the layout — the tab strip already does that.
           translate(
-            'auto.components.github.project.ProjectViewStates.e4cc8b14f2',
-            'Orca renders table and roadmap project views. This view uses a layout it cannot render yet.'
+            'auto.components.github.project.ProjectViewStates.f43574ae9e',
+            'Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet.'
           )
         : error.type === 'not_found'
           ? 'Could not find this project or view.'
