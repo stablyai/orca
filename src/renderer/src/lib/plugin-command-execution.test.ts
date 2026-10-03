@@ -5,6 +5,9 @@ import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { registerAppCommandDispatcher } from './app-command-dispatch'
 import { executePluginCommand } from './plugin-command-execution'
 
+vi.mock('@/runtime/runtime-plugin-client', () => ({ invokeRuntimePluginCommand: vi.fn() }))
+import { invokeRuntimePluginCommand } from '@/runtime/runtime-plugin-client'
+
 let unregister: (() => void) | null = null
 
 afterEach(() => {
@@ -51,4 +54,18 @@ describe('plugin command execution', () => {
       commandId: 'open'
     })
   })
+})
+
+it('keeps a failing remote command on its owning server', async () => {
+  const invokeCommand = vi.fn()
+  Object.assign(window, { api: { plugins: { invokeCommand } } })
+  vi.mocked(invokeRuntimePluginCommand).mockRejectedValueOnce(new Error('offline'))
+  await expect(
+    executePluginCommand(
+      { ...command({ type: 'worker' }), runtimeEnvironmentId: 'server-a' },
+      'plugin-palette'
+    )
+  ).rejects.toThrow('offline')
+  expect(invokeRuntimePluginCommand).toHaveBeenCalledWith('server-a', 'orca-samples.tasks', 'open')
+  expect(invokeCommand).not.toHaveBeenCalled()
 })
