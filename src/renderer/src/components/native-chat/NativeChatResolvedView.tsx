@@ -17,6 +17,7 @@ import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send
 import { shouldClearNativeChatWorkingSuppression } from './native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from './native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
+import { compareMessages } from './native-chat-session-assembler'
 import {
   launchPromptAsMessage,
   pendingSendsAsMessages,
@@ -172,13 +173,6 @@ export function NativeChatResolvedView({
     }
     clearNativeChatLaunchPrompt(terminalTabId)
   }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
-  const onOptimisticSend = useCallback(
-    (text: string, imagePaths?: string[]) => {
-      setWorkingInterrupted(false)
-      return record(text, imagePaths)
-    },
-    [record]
-  )
   const onSlashCommand = useCallback(
     (command: string) => {
       setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command))
@@ -221,11 +215,15 @@ export function NativeChatResolvedView({
     transcriptSettled: session.readPhase === 'ready'
   })
 
-  // The streaming preview bubble (if any) sits after the transcript but before
-  // the optimistic user echoes — same order mobile uses.
+  // The optimistic user echoes sit before the streaming preview bubble
+  // so the prompt appears before the agent reply that answers it.
   const pendingMessages = useMemo(
-    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages),
-    [pending, sessionAfterCommandBoundaries.messages]
+    () =>
+      pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, {
+        liveWorking,
+        hookWorkingEpoch
+      }),
+    [pending, sessionAfterCommandBoundaries.messages, liveWorking, hookWorkingEpoch]
   )
   const streamingText = useMemo(() => {
     return deriveNativeChatStreamingText({
@@ -248,13 +246,16 @@ export function NativeChatResolvedView({
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries
     }
+    const tail = [
+      ...pendingMessages,
+      ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : [])
+    ].sort(compareMessages)
     return {
       ...sessionAfterCommandBoundaries,
       messages: [
         ...sessionAfterCommandBoundaries.messages,
         ...commandMarkersAsMessages(commandMarkers),
-        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
-        ...pendingMessages
+        ...tail
       ]
     }
   }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
@@ -289,6 +290,15 @@ export function NativeChatResolvedView({
     interrupted: workingInterrupted,
     hasPromptCard: promptCard !== null
   })
+  const onOptimisticSend = useCallback(
+    (text: string, imagePaths?: string[]) => {
+      setWorkingInterrupted(false)
+      const queued = Boolean(isWorking || liveWorking || streamingText)
+      const queuedBehindWorkingEpoch = queued ? (hookWorkingEpoch ?? null) : null
+      return record(text, imagePaths, { queued, queuedBehindWorkingEpoch })
+    },
+    [record, isWorking, liveWorking, streamingText, hookWorkingEpoch]
+  )
   const turnTiming = useNativeChatTerminalTurnTiming(paneKey, session.messages, turnActive)
 
   const stopAgent = useCallback(() => {

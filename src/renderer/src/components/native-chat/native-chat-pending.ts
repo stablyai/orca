@@ -4,6 +4,7 @@
 // rule (match on normalized user-message content) is unit-testable without React.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { LIFECYCLE_CLOCK_SKEW_SLACK_MS } from './native-chat-live-status'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
@@ -44,6 +45,10 @@ export type NativeChatPendingSend = {
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
   matchingAfterTimestamp?: number
+  /** Queued while the agent was already streaming/working, so it sorts after the streaming preview. */
+  queued?: boolean
+  /** The host working epoch (hookWorkingEpoch) that was active when this prompt was queued. */
+  queuedBehindWorkingEpoch?: number | null
 }
 
 export type NativeChatPendingSendScope = {
@@ -121,18 +126,19 @@ function messageIsAfterPendingTimestamp(
   message: NativeChatMessage,
   pending: NativeChatPendingSend
 ): boolean {
-  // Why: some transcripts (e.g. Grok) never carry timestamps. Excluding their
-  // rows would make the echo unmatchable forever, stranding a rank-pinned
-  // bubble at the list tail — which reads as the conversation reordering.
   if (message.timestamp === null) {
     return true
   }
   const boundary = nativeChatPendingMatchingAfter(pending)
   // A transcript-clock boundary describes an existing message, so exclude ties.
   // Local send time has no existing record and remains inclusive.
-  return pending.afterMessageTimestamp == null
-    ? message.timestamp >= boundary
-    : message.timestamp > boundary
+  if (pending.afterMessageTimestamp != null) {
+    return message.timestamp > boundary
+  }
+  if (pending.afterMessageId === null && message.timestamp > 1e11 && boundary > 1e11) {
+    return message.timestamp + LIFECYCLE_CLOCK_SKEW_SLACK_MS >= boundary
+  }
+  return message.timestamp >= boundary
 }
 
 /**
@@ -223,9 +229,15 @@ export function prunePendingSends(
  * transcript turn always supersedes them if both are briefly present, and the
  * send time as the timestamp so they sort to the end (most recent) of the list.
  */
+export type PendingSendsAsMessagesOptions = {
+  liveWorking?: boolean
+  hookWorkingEpoch?: number | null
+}
+
 export function pendingSendsAsMessages(
   pending: NativeChatPendingSend[],
-  existingMessages: NativeChatMessage[] = []
+  existingMessages: NativeChatMessage[] = [],
+  options?: PendingSendsAsMessagesOptions
 ): NativeChatMessage[] {
   if (pending.length === 0) {
     return []
@@ -250,24 +262,68 @@ export function pendingSendsAsMessages(
     stillVisible,
     gluedCandidateRows(existingMessages, stillVisible, matchingNativeChatUserRows)
   )
+  // Why: determine whether each pending send is still queued behind the current active turn.
+  // 1. Initial/triggering prompts (queued === false/undefined) are never queued.
+  // 2. Queued prompts stay queued while the agent is working in the same epoch or when epoch is unknown.
+  // 3. When epoch advances, if a prior user prompt is actively being executed in the transcript (unanswered user turn),
+  //    subsequent queued sends remain queued behind it.
+  // 4. Otherwise, the earliest queued send becomes the active turn (unqueued), and remaining sends stay queued.
+  const lastMessage = existingMessages.at(-1)
+  const isPriorUserTurnActive = lastMessage?.role === 'user'
+  const activeQueuedSendIndex =
+    options?.liveWorking && options.hookWorkingEpoch != null
+      ? pending.findIndex(
+          (entry) =>
+            entry.queuedBehindWorkingEpoch != null &&
+            entry.queuedBehindWorkingEpoch !== options.hookWorkingEpoch
+        )
+      : -1
   return pending
-    .filter((entry, index) => {
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry, index }) => {
       if (!exactVisible[index]) {
         return false
       }
       const openIndex = stillVisible.indexOf(entry)
       return openIndex === -1 || !gluedRepresented.has(openIndex)
     })
-    .map((entry) => ({
-      id: `pending:${entry.id}`,
-      role: 'user' as const,
-      blocks: [
-        ...(entry.imagePaths ?? []).map((path) => ({ type: 'image-ref' as const, path })),
-        ...(entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [])
-      ],
-      timestamp: entry.sentAt,
-      source: 'scrape' as const
-    }))
+    .map(({ entry, index }) => {
+      const isQueued =
+        !entry.queued && entry.queuedBehindWorkingEpoch == null
+          ? undefined
+          : options === undefined
+            ? entry.queued
+              ? true
+              : undefined
+            : !options.liveWorking
+              ? undefined
+              : options.hookWorkingEpoch == null || entry.queuedBehindWorkingEpoch == null
+                ? entry.queued
+                  ? true
+                  : undefined
+                : options.hookWorkingEpoch === entry.queuedBehindWorkingEpoch
+                  ? true
+                  : isPriorUserTurnActive &&
+                      (entry.queuedBehindWorkingEpoch > 1e11
+                        ? (lastMessage.timestamp ?? 0) + LIFECYCLE_CLOCK_SKEW_SLACK_MS >=
+                          entry.queuedBehindWorkingEpoch
+                        : (lastMessage.timestamp ?? 0) >= entry.queuedBehindWorkingEpoch)
+                    ? true
+                    : index === activeQueuedSendIndex
+                      ? undefined
+                      : true
+      return {
+        id: `pending:${entry.id}`,
+        role: 'user' as const,
+        blocks: [
+          ...(entry.imagePaths ?? []).map((path) => ({ type: 'image-ref' as const, path })),
+          ...(entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [])
+        ],
+        timestamp: entry.sentAt,
+        source: 'scrape' as const,
+        queued: isQueued
+      }
+    })
 }
 
 /** True when a message id was minted for an optimistic pending send. */
@@ -287,9 +343,15 @@ export function launchPromptAsMessage(
   }
   // Why: a launch prompt seeds a brand-new session, so a matching user turn
   // with no timestamp (e.g. Grok transcripts) can only be its own delivery.
+  // Slack accounts for cross-host clock skew between renderer and host.
   const represented = matchingNativeChatUserContentCounts(
     existingMessages.filter(
-      (message) => message.timestamp === null || message.timestamp >= entry.createdAt
+      (m) =>
+        m.timestamp === null ||
+        m.timestamp >= entry.createdAt ||
+        (entry.createdAt > 1e11 &&
+          m.timestamp > 1e11 &&
+          m.timestamp + LIFECYCLE_CLOCK_SKEW_SLACK_MS >= entry.createdAt)
     )
   )
   if ((represented.get(nativeChatPendingContentKey(entry)) ?? 0) > 0) {
@@ -312,7 +374,12 @@ export function shouldPruneLaunchPrompt(
   messages: NativeChatMessage[]
 ): boolean {
   const relevant = messages.filter(
-    (message) => message.timestamp === null || message.timestamp >= entry.createdAt
+    (m) =>
+      m.timestamp === null ||
+      m.timestamp >= entry.createdAt ||
+      (entry.createdAt > 1e11 &&
+        m.timestamp > 1e11 &&
+        m.timestamp + LIFECYCLE_CLOCK_SKEW_SLACK_MS >= entry.createdAt)
   )
   return (
     (advancedNativeChatUserContentCounts(relevant).get(nativeChatPendingContentKey(entry)) ?? 0) > 0
