@@ -1,9 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
+import { useAppStore } from '@/store'
+import { mirrorWebRuntimeTabMove } from '@/components/tab-bar/web-runtime-tab-move-mirror'
 import {
   canRunNativeChatSplitTarget,
-  resolveActiveNativeChatSplitTarget
+  resolveActiveNativeChatSplitTarget,
+  runNativeChatSplitTarget
 } from './native-chat-layout-actions'
+
+vi.mock('@/components/tab-bar/web-runtime-tab-move-mirror', () => ({
+  mirrorWebRuntimeTabMove: vi.fn()
+}))
 
 function stateWithActiveTab(tab: Record<string, unknown>, tabOrder = ['chat', 'other']) {
   return {
@@ -25,6 +32,59 @@ function stateWithActiveTab(tab: Record<string, unknown>, tabOrder = ['chat', 'o
 }
 
 describe('native chat layout actions', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+  })
+
+  it.each(['right', 'down'] as const)(
+    'moves a structured chat %s and mirrors its workspace',
+    (direction) => {
+      const dropUnifiedTab = vi.fn(() => true)
+      vi.spyOn(useAppStore, 'getState').mockReturnValue({
+        ...useAppStore.getState(),
+        ...stateWithActiveTab({ contentType: 'agent-session' }),
+        dropUnifiedTab
+      })
+
+      expect(
+        runNativeChatSplitTarget(
+          { kind: 'workspace-tab', unifiedTabId: 'chat', groupId: 'group' },
+          direction
+        )
+      ).toBe(true)
+      expect(dropUnifiedTab).toHaveBeenCalledWith('chat', {
+        groupId: 'group',
+        splitDirection: direction
+      })
+      expect(mirrorWebRuntimeTabMove).toHaveBeenCalledWith({
+        kind: 'split',
+        worktreeId: 'workspace',
+        tabId: 'chat',
+        targetGroupId: 'group',
+        splitDirection: direction
+      })
+    }
+  )
+
+  it('rejects a stale structured-chat group without moving or mirroring', () => {
+    const dropUnifiedTab = vi.fn(() => true)
+    vi.spyOn(useAppStore, 'getState').mockReturnValue({
+      ...useAppStore.getState(),
+      ...stateWithActiveTab({ contentType: 'agent-session' }),
+      dropUnifiedTab
+    })
+
+    expect(
+      runNativeChatSplitTarget(
+        { kind: 'workspace-tab', unifiedTabId: 'chat', groupId: 'old-group' },
+        'right'
+      )
+    ).toBe(false)
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
+    expect(mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
+  })
+
   it('resolves structured chats to the reusable workspace-tab move path', () => {
     const state = stateWithActiveTab({ contentType: 'agent-session' })
     const target = resolveActiveNativeChatSplitTarget(state, 'workspace', 'group')
