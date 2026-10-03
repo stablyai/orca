@@ -23,6 +23,10 @@ import {
   isDevBundleInUse,
   selectStaleDevBundleDirs
 } from './dev-electron-bundle-cache.mjs'
+import {
+  pruneRemovedWorktreeElectronApps,
+  readDevBundleSourceAppPath
+} from './dev-bundle-worktree-ownership.mjs'
 import { copyPrivateTree } from './space-sharing-copy.mjs'
 import {
   DEV_BUNDLE_ID,
@@ -122,7 +126,7 @@ function sanitizeMacAppBundleName(value) {
   )
 }
 
-function pruneStaleDevBundles(distDir) {
+function pruneStaleDevBundles(distDir, sourceAppPath) {
   const root = path.dirname(distDir)
   let bundles
   try {
@@ -136,6 +140,12 @@ function pruneStaleDevBundles(distDir) {
           mtimeMs: getMtimeMs(dir)
         }
       })
+      // Why: every worktree shares this cache root, so reclaim only this worktree's superseded
+      // bundles; an idle sibling worktree would otherwise pay a full rebuild on its next run.
+      // Markerless dirs cannot be attributed, and their owner would rebuild them anyway.
+      .filter(
+        ({ dir, hasMarker }) => !hasMarker || readDevBundleSourceAppPath(dir) === sourceAppPath
+      )
   } catch {
     return
   }
@@ -186,13 +196,18 @@ function prepareMacDevElectronApp() {
     )
     .digest('hex')
     .slice(0, 12)
-  const distDir = path.join(repoRoot, 'out', 'electron-dev', hash)
+  // Why: Orca can delete a worktree while its dev app is still shutting down.
+  // Keep Electron's helper executables outside that worktree so Chromium can
+  // finish teardown without tripping its missing/unexpected-helper CHECK.
+  const cacheRoot = path.join(getDevUserDataPath(), 'electron-dev-apps')
+  const distDir = path.join(cacheRoot, hash)
   // Why: macOS Dock hover uses the bundle's filesystem display name for electron-vite's direct
   // binary launch path. This is what carries the per-branch name now that Info.plist no longer does,
   // and it sits outside the code signature, so varying it does not disturb the cdhash.
   const appBundleName = `${sanitizeMacAppBundleName(title)}.app`
   const appPath = path.join(distDir, appBundleName)
   const markerPath = path.join(distDir, DEV_BUNDLE_MARKER_FILENAME)
+  pruneRemovedWorktreeElectronApps(cacheRoot, distDir)
   // Why: one stable id for every dev instance. Per-instance ids registered a
   // new macOS Notification Settings entry for each branch × Electron version,
   // piling up "Orca: <branch>" rows forever and breaking the notification
@@ -257,7 +272,7 @@ function prepareMacDevElectronApp() {
   }
 
   if (copiedAppIsUsable()) {
-    pruneStaleDevBundles(distDir)
+    pruneStaleDevBundles(distDir, sourceAppPath)
     process.env.ELECTRON_EXEC_PATH = executablePath
     return
   }
@@ -379,7 +394,7 @@ function prepareMacDevElectronApp() {
   if (signed) {
     writeFileSync(markerPath, expectedMarker, 'utf8')
   }
-  pruneStaleDevBundles(distDir)
+  pruneStaleDevBundles(distDir, sourceAppPath)
   process.env.ELECTRON_EXEC_PATH = executablePath
 }
 
