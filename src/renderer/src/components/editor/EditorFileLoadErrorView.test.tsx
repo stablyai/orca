@@ -3,6 +3,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import {
+  FILE_TOO_LARGE_CODE,
+  FILE_TOO_LARGE_ERROR,
   WORKTREE_HOST_UNRESOLVED_CODE,
   WORKTREE_HOST_UNRESOLVED_ERROR
 } from './editor-panel-content-types'
@@ -36,5 +38,25 @@ describe('EditorFileLoadErrorView', () => {
 
     screen.getByText(WORKTREE_HOST_UNRESOLVED_ERROR)
     expect(screen.queryByText('stored fallback text')).toBeNull()
+  })
+
+  it('localizes file_too_large error message when rendered without code', () => {
+    render(<EditorFileLoadErrorView message={FILE_TOO_LARGE_CODE} onRetry={vi.fn()} />)
+
+    screen.getByText(FILE_TOO_LARGE_ERROR)
+    expect(screen.queryByText(FILE_TOO_LARGE_CODE)).toBeNull()
+  })
+
+  it('localizes file_too_large error by code even if fallback message is raw text', () => {
+    render(
+      <EditorFileLoadErrorView
+        message="raw error message"
+        code={FILE_TOO_LARGE_CODE}
+        onRetry={vi.fn()}
+      />
+    )
+
+    screen.getByText(FILE_TOO_LARGE_ERROR)
+    expect(screen.queryByText('raw error message')).toBeNull()
   })
 })
