@@ -15,6 +15,12 @@ export default defineConfig({
     // silently never collected, so render-level regressions shipped untested.
     // scripts/ too: the CI scripts under it (rpc:diff, the tests-typecheck ratchet) need a runnable
     // test home, and a test vitest never collects is not a gate.
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts']
+    // plugins/ too: Expo config plugins are CommonJS, so their tests are .js.
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'scripts/**/*.test.ts',
+      'plugins/**/*.test.js'
+    ]
   }
 })

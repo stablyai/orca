@@ -459,6 +459,15 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4221 -> 4219   (-2)
  *   local modules  1035 -> 1033   (-2)
+ *
+ * The measured window bounds then joined: `src/layout/window-bounds.tsx`, which the responsive
+ * layout hook, the drawers and the terminal refit read instead of `useWindowDimensions()`, and the
+ * `src/layout/window-bounds-state.ts` it resolves through. Two local modules, nothing vendored; the
+ * page mounts no provider, so both answer with the window's own dimensions there. Main measures
+ * 4,251 / 1,049 at `27b823f934`, and the two lists were diffed against this head's.
+ *
+ *   modules        4251 -> 4253   (+2)
+ *   local modules  1049 -> 1051   (+2)
  */
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [

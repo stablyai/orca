@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, Text, View, useWindowDimensions } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, Save } from 'lucide-react-native'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -29,6 +29,7 @@ import {
 } from './mobile-file-preview-editability'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
+import { useWindowBounds } from '../layout/window-bounds'
 
 type Props = {
   route: MobileFilePreviewRouteState
@@ -49,7 +50,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
   const draftContentRef = useRef(draftContent)
   const savedContentRef = useRef(savedContent)
   const draftSourceKeyRef = useRef<string | null>(null)
-  const { width, height } = useWindowDimensions()
+  const { width, height } = useWindowBounds()
   const routePreviewSource = useMemo(
     () => (previewParams ? previewSourceFromRoute(previewParams) : null),
     [previewParams]

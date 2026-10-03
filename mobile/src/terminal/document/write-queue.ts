@@ -18,6 +18,14 @@ const EMOJI_PRESENTATION_SELECTOR = '\ufe0f'
  */
 const CLAUDE_STATUS_DOT_PATTERN = /\u23fa[\ufe0e\ufe0f]*/g
 
+/**
+ * The most code units one `term.write` receives.
+ *
+ * Why: xterm parses each write as one job, so a large PTY burst or scrollback replay would hold the
+ * WebView thread until all of it parsed. Slices keep order and let input and paint interleave.
+ */
+export const TERMINAL_WRITE_SLICE_UNITS = 4 * 1024
+
 /** How far a split DECSET may be carried before the mode scan gives up. */
 const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
 
@@ -64,7 +72,22 @@ export function normalizeStatusDotPresentation(scope: TerminalDocumentScope, dat
 }
 
 export function enqueueWrite(scope: TerminalDocumentScope, data: string) {
-  scope.writeQueue.push(normalizeStatusDotPresentation(scope, data))
+  const normalized = normalizeStatusDotPresentation(scope, data)
+  if (normalized.length <= TERMINAL_WRITE_SLICE_UNITS) {
+    scope.writeQueue.push(normalized)
+    return
+  }
+  let offset = 0
+  while (offset < normalized.length) {
+    let end = Math.min(normalized.length, offset + TERMINAL_WRITE_SLICE_UNITS)
+    // Why: a slice ending on a high surrogate would hand xterm half of an astral character.
+    const last = normalized.charCodeAt(end - 1)
+    if (end < normalized.length && last >= 0xd800 && last <= 0xdbff) {
+      end--
+    }
+    scope.writeQueue.push(normalized.slice(offset, end))
+    offset = end
+  }
 }
 
 export function enqueueWriteBoundary(scope: TerminalDocumentScope, callback: () => void) {

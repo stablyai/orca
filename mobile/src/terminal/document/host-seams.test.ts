@@ -247,6 +247,11 @@ describe('the document host seams, once the page sets them', () => {
     const unicodeAddon = { dispose() {} }
     const webglAddon = { dispose() {} }
     const posted: Record<string, unknown>[] = []
+    // A laid-out engine's box, which is what a pong must carry when it stands in for a dropped
+    // web-ready: without it the recovered subscribe goes out unmeasured.
+    Object.assign(terminal, {
+      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 16 } } } } }
+    })
     const scope = startedScope({
       createTerminal: (created) => {
         options.push(created)
@@ -264,7 +269,12 @@ describe('the document host seams, once the page sets them', () => {
     expect(terminal.unicode.activeVersion).toBe('11')
     // The other direction: a document-side report reaches the page's sink, not the bridge.
     handleMsg(scope, { type: 'ping', id: 3 })
-    expect(posted).toContainEqual({ type: 'pong', pingId: 3 })
+    expect(posted).toContainEqual({
+      type: 'pong',
+      pingId: 3,
+      terminalAvailable: true,
+      cellBox: { fontScale: 1, cellWidth: 8, cellHeight: 16 }
+    })
   })
 
   it('leaves window.onerror alone when the host installs the reporter its own way', () => {
