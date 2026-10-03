@@ -24,9 +24,6 @@ import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestrati
 import { RuntimeTerminalList } from './runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from './runtime-pty-foreground-agent'
-import { OpenCodeRunLifetimeStatus } from './opencode-run-lifetime-status'
-import { readLocalPtyForegroundCommandLine } from './local-pty-foreground-command-line'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import { RuntimeTerminalAgentStatusQuery } from './runtime-terminal-agent-status-query'
 import type { OrchestrationDb } from './orchestration/db'
 import { OrchestrationMailboxOwner } from './orchestration/mailbox-owner'
@@ -164,33 +161,6 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
         this.touchMobileSessionSnapshotsForPty(ptyId)
       }
     }
-  })
-
-  protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
-    isObservablePty: (ptyId) => {
-      const pty = this.ptysById.get(ptyId)
-      // Why: SSH and WSL foregrounds live on another host or in the guest.
-      return !!pty && !pty.connectionId && !pty.wslDistro && !this.wslDistroByPtyId.has(ptyId)
-    },
-    isStatusEnabled: (agent) =>
-      isAgentStatusHooksEnabledForAgent(this.store?.getSettings?.(), agent),
-    readForegroundProcessName: async (ptyId) => {
-      const read = await this.ptyForegroundAgent.read(ptyId)
-      return read?.available ? read.process : null
-    },
-    readForegroundCommandLine: (ptyId, foregroundProcess) =>
-      readLocalPtyForegroundCommandLine(ptyId, foregroundProcess),
-    // Why after the chunk's facts: the renderer drops an exited agent's row on command-finished
-    // unless the row changed after it, so the run's Done must arrive after that fact.
-    publish: (ptyId, payload, yieldsToHookSince) =>
-      this.runAfterPendingTerminalSideEffectFacts(ptyId, () =>
-        this.emitTerminalAgentStatusEvents(
-          ptyId,
-          { payloads: [payload] },
-          { origin: 'process', yieldsToHookSince }
-        )
-      ),
-    now: () => Date.now()
   })
 
   protected readonly terminalAgentStatus = new RuntimeTerminalAgentStatusQuery({

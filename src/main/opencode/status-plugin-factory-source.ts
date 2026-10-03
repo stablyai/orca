@@ -103,7 +103,6 @@ export function getStatusPluginFactorySource(options: {
           '      const info = event.properties?.info;',
           '      if (!info?.id || info.parentID) return;',
           '      rememberSessionRoot(info.id, info.id);',
-          '      if (isOpenCodeRunProcess()) return; // a `run` goes Busy at once; its start row only blinks idle',
           '      await enqueueLifecycle(() =>',
           '        disposed ? undefined : post("SessionStart", { sessionID: info.id })',
           '      );',

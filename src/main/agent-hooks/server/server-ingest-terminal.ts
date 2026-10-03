@@ -16,10 +16,6 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     connectionId?: string | null
     terminalHandle?: string
     payload: ParsedAgentStatusPayload
-    /** `process`: derived from the pane's foreground process rather than parsed from its bytes. */
-    origin?: 'process'
-    /** Drop this write when a hook has reported the pane since then (the hook owns that command). */
-    yieldsToHookSince?: number
   }): void {
     const physicalPaneKey = event.paneKey.trim()
     let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
@@ -47,18 +43,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       return
     }
     const tabId = paneKey !== physicalPaneKey ? parsedPaneKey?.tabId : reportedTabId
-    // Why: a verified process-lifetime Working proves a new agent run, as a hook new-turn event does.
-    const disposition = this.getAgentStatusDisposition(
-      paneKey,
-      event.origin === 'process' && event.payload.state === 'working'
-        ? { processNewTurn: true }
-        : undefined
-    )
-    if (disposition === 'suppress') {
+    if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
       return
-    }
-    if (disposition === 'restart') {
-      this.observations.rebind(paneKey)
     }
     const worktreeId =
       event.worktreeId !== undefined && event.worktreeId.trim().length > 0
@@ -96,21 +82,15 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    // Why: a hook that reported during this command owns it (OpenCode 1 `run` loads its plugin in-process).
-    const hookOwnsCommand =
-      event.yieldsToHookSince !== undefined &&
-      previous?.observation?.origin === 'hook' &&
-      previous.receivedAt >= event.yieldsToHookSince
     if (
-      hookOwnsCommand ||
-      (previous?.payload.agentType === 'claude' &&
-        event.payload.agentType === 'claude' &&
-        isAgentStatusHeldOpenByChildWork(previous.payload) &&
-        previous.payload.subagents?.some((subagent) => subagent.state === 'working') === true)
+      previous?.payload.agentType === 'claude' &&
+      event.payload.agentType === 'claude' &&
+      isAgentStatusHeldOpenByChildWork(previous.payload) &&
+      previous.payload.subagents?.some((subagent) => subagent.state === 'working') === true
     ) {
       // Why: OSC carries no child identity, so it cannot settle or repaint a row child agents hold open
       // (working, or waiting on a child's prompt); their lifecycle hooks will.
-      if (previous && mutationBefore !== undefined) {
+      if (mutationBefore !== undefined) {
         this.commitStatusRowMutation(mutationBefore, previous)
         this.emitEnrichedStatus(previous)
       }
@@ -175,7 +155,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
           : event.payload
       },
       undefined,
-      event.origin ?? 'osc',
+      'osc',
       undefined,
       mutationBefore
     )

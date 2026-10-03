@@ -50,8 +50,6 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       isReplay?: boolean
       hasExplicitPrompt?: boolean
       launchToken?: string
-      /** A process-lifetime Working: a fresh command whose foreground argv proves a new agent run. */
-      processNewTurn?: boolean
     }
   ): 'accept' | 'restart' | 'suppress' {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
@@ -96,7 +94,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
           return 'accept'
         }
       }
-      if (event && event.processNewTurn !== true && tokenFence) {
+      if (event && tokenFence) {
         const launchToken = event.launchToken?.trim()
         if (!launchToken || createHash('sha256').update(launchToken).digest('hex') !== tokenFence) {
           return 'suppress'
@@ -136,10 +134,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     // Why the token is minted here: a revive proves a live lifecycle, and fencing follow-up
     // status on that launch token stops a stale process reclaiming the pane's row without
     // restoring retired orchestration authority.
-    if (
-      (isNewTurn || freshOpenCodeFamilyPrompt || event?.processNewTurn === true) &&
-      event?.isReplay !== true
-    ) {
+    if ((isNewTurn || freshOpenCodeFamilyPrompt) && event?.isReplay !== true) {
       this.closedAgentStatusPaneKeys.delete(paneKey)
       this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
       const launchToken = event?.launchToken?.trim()

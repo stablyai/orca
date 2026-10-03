@@ -13,10 +13,7 @@ import {
   type AgentForegroundResolutionOptions
 } from './windows-agent-foreground-process'
 import { isShellProcess } from '../../shared/shell-process-detection'
-import {
-  selectForegroundProcessCandidate,
-  type SelectedForegroundProcess
-} from '../../shared/foreground-process-selection'
+import { selectForegroundProcessCandidate } from '../../shared/foreground-process-selection'
 import { isWindowsShellAloneInJob } from './windows-shell-alone-in-job'
 import {
   readWindowsProcessIdentityTableFresh,
@@ -183,35 +180,6 @@ export function resolveAgentForegroundProcessFromPs(
   rows: readonly ProcessTableRow[],
   shellPid: number
 ): string | null {
-  const found = selectAgentForegroundFromPs(rows, shellPid)
-  // Why: return the outer wrapper (omp) rather than the deeper wrapped child
-  // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
-  return found
-    ? resolveOuterWrapperForegroundProcess(
-        found.selected.recognized,
-        found.selected.candidate,
-        found.candidates
-      )
-    : null
-}
-
-/** The full command line of the pane's foreground agent process, for argv-level policy. */
-export async function resolveAgentForegroundCommandLine(shellPid: number): Promise<string | null> {
-  try {
-    const rows = await getFreshShellForegroundSnapshot()
-    return selectAgentForegroundFromPs(rows, shellPid)?.selected.candidate.command ?? null
-  } catch {
-    return null
-  }
-}
-
-function selectAgentForegroundFromPs(
-  rows: readonly ProcessTableRow[],
-  shellPid: number
-): {
-  selected: SelectedForegroundProcess
-  candidates: (ProcessTableRow & { depth: number })[]
-} | null {
   // Memoized per snapshot identity, so the caller's own index build is reused.
   const index = getProcessTableIndex(rows)
   const shellRow = index.byPid.get(shellPid)
@@ -230,5 +198,10 @@ function selectAgentForegroundFromPs(
   // helper is filtered from selection but must remain traversable.
   const ancestryCandidates = shellRow ? [{ ...shellRow, depth: 0 }, ...candidates] : candidates
   const selected = selectForegroundProcessCandidate(foregroundCandidates, ancestryCandidates)
-  return selected ? { selected, candidates } : null
+  if (selected) {
+    // Why: return the outer wrapper (omp) rather than the deeper wrapped child
+    // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
+    return resolveOuterWrapperForegroundProcess(selected.recognized, selected.candidate, candidates)
+  }
+  return null
 }

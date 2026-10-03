@@ -54,22 +54,6 @@ export function getStatusPluginRuntimeStateSource(): string[] {
     'let assistantPartFlushTimer = null;',
     'let messagePartPostInFlight = null;',
     'let deliveredMessagePartFactoryID = null;',
-    'let lastAssistantPartPostAt = 0;',
-    ...getRunProcessSource()
+    'let lastAssistantPartPostAt = 0;'
   ]
-}
-
-// Mirrors isOpenCodeRunCommand (src/shared/opencode-headless-command.ts) over this process's argv.
-function getRunProcessSource(): string[] {
-  return String.raw`
-function isOpenCodeRunProcess() {
-  // Why drop a leading path: a compiled binary reports its embedded entry script as argv[1].
-  const args = process.argv.slice(1);
-  if (args.length > 0 && /[\\/]/.test(args[0])) args.shift();
-  for (let index = 0; index < args.length; index += 1) {
-    if (!args[index].startsWith("-")) return args[index] === "run";
-    if (args[index] === "--log-level") index += 1;
-  }
-  return false;
-}`.split('\n')
 }
