@@ -3,7 +3,7 @@ import { OrcaRuntimeWithPreparePtyExecutionContext } from './orca-runtime-prepar
 import type { TerminalOutputSourceRange } from '../../shared/terminal-output-source-range'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
-import { normalizeTerminalChunk } from './terminal-ansi-normalization'
+import { normalizeTerminalChunk, parseAnsiControlSequence } from './terminal-ansi-normalization'
 import { observeTerminalCommandPaint } from './terminal-command-paint'
 import {
   appendCompletedTerminalTranscript,
@@ -15,6 +15,73 @@ import {
   tailGainedNewerBlockedReason
 } from './terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+
+const CODEX_RECONNECT_FAILURE_BANNER = [
+  'Automatic reconnect could not restore this session',
+  'app-server session could not be restored',
+  'Reconnect failed — check the endpoint, then relaunch'
+]
+export const CODEX_RECONNECT_SCAN_CONTEXT_CHARS = 512
+
+export type CodexReconnectOutputScan = {
+  tail: string
+  dispatchId: string | null
+  pendingDispatchId: string | null
+  handledDispatchId: string | null
+}
+
+export function createCodexReconnectOutputScan(): CodexReconnectOutputScan {
+  return { tail: '', dispatchId: null, pendingDispatchId: null, handledDispatchId: null }
+}
+
+export const codexReconnectOutputScans = new WeakMap<object, CodexReconnectOutputScan>()
+
+export function stripTerminalControlSequences(value: string): string {
+  const visibleParts: string[] = []
+  let textStart = 0
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.charCodeAt(index) !== 0x1b) {
+      continue
+    }
+    visibleParts.push(value.slice(textStart, index))
+    const sequence = parseAnsiControlSequence(value, index)
+    if (sequence) {
+      index = sequence.endIndex
+    }
+    textStart = index + 1
+  }
+  visibleParts.push(value.slice(textStart))
+  return visibleParts.join('')
+}
+
+export function findCodexReconnectFailureBanner(
+  output: string
+): { start: number; end: number } | undefined {
+  const lines: { text: string; start: number; end: number }[] = []
+  let lineStart = 0
+  for (let index = 0; index <= output.length; index += 1) {
+    const character = output[index]
+    if (index !== output.length && character !== '\r' && character !== '\n') {
+      continue
+    }
+    lines.push({ text: output.slice(lineStart, index).trim(), start: lineStart, end: index })
+    if (character === '\r' && output[index + 1] === '\n') {
+      index += 1
+    }
+    lineStart = index + 1
+  }
+  for (let index = 0; index <= lines.length - CODEX_RECONNECT_FAILURE_BANNER.length; index += 1) {
+    const start = lines[index]
+    if (
+      CODEX_RECONNECT_FAILURE_BANNER.every(
+        (expected, offset) => lines[index + offset].text === expected
+      )
+    ) {
+      return { start: start.start, end: lines[index + 2].end }
+    }
+  }
+  return undefined
+}
 
 export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   /** Arrival-order mode scan: the settled tracker plus any in-flight snapshot capture's. */
@@ -115,6 +182,12 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       pty.tailLinesTotal += nextTail.newCompleteLines
       pty.preview = buildPreview(pty.tailBuffer, pty.tailPartialLine)
       this.scheduleWaitBlockedCheck(ptyId, normalized.text, at)
+      const leaf = this.getLeavesForPty(ptyId)[0]
+      const handle = this.handleByPtyId.get(ptyId) ?? this.findHandleForPtyRecord(ptyId)
+      const paneKey = leaf ? this.makeRuntimePaneKey(leaf) : (pty.paneKey ?? null)
+      if (handle) {
+        this.observeCodexReconnectFailureOutput(handle, paneKey, pty, normalized.text)
+      }
     }
 
     for (const leaf of this.getLeavesForPty(ptyId)) {

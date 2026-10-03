@@ -22,6 +22,13 @@ import {
   classifyWorkerTerminalProcessIncarnation,
   parseWorkerTerminalHostScope
 } from './orchestration/worker-terminal-process-liveness'
+import {
+  CODEX_RECONNECT_SCAN_CONTEXT_CHARS,
+  codexReconnectOutputScans,
+  createCodexReconnectOutputScan,
+  findCodexReconnectFailureBanner,
+  stripTerminalControlSequences
+} from './orca-runtime-on-pty-data'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
 
@@ -92,12 +99,122 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
       return
     }
 
-    // Why: create an escalation message so the coordinator is notified about
-    // the unexpected exit on its next check cycle, even if the circuit breaker
-    // hasn't tripped yet.
+    this.notifyWorkerDispatchFailure({
+      dispatch,
+      handle,
+      failureLogLabel: 'worker exit',
+      subject: `Agent exited unexpectedly (${errorContext})`,
+      reason: errorContext,
+      bodyPrefix: `Worker ${handle} stopped while running task`,
+      payload: {
+        taskId: dispatch.task_id,
+        dispatchId: dispatch.id,
+        exitCode,
+        exitCause: cause,
+        handle
+      },
+      settledStatus: settled?.status
+    })
+  }
+
+  protected observeCodexReconnectFailureOutput(
+    handle: string,
+    paneKey: string | null,
+    pty: object,
+    output: string
+  ): void {
+    const db = this._orchestrationDb
+    const scan = codexReconnectOutputScans.get(pty) ?? createCodexReconnectOutputScan()
+    const dispatch = db?.getActiveDispatchForTerminal(handle, paneKey ?? undefined)
+    const dispatchId = dispatch?.id ?? null
+    if (dispatchId !== scan.dispatchId) {
+      scan.dispatchId = dispatchId
+      scan.tail = ''
+      scan.pendingDispatchId = null
+      scan.handledDispatchId = null
+    }
+    const combinedOutput = scan.tail + stripTerminalControlSequences(output)
+    if (
+      dispatch &&
+      scan.pendingDispatchId !== dispatchId &&
+      scan.handledDispatchId !== dispatchId
+    ) {
+      const match = findCodexReconnectFailureBanner(combinedOutput)
+      if (match && match.end > scan.tail.length) {
+        scan.pendingDispatchId = dispatchId
+      }
+    }
+    if (dispatch && scan.pendingDispatchId === dispatchId) {
+      const result = this.failCodexSessionUnrecoverableDispatch(dispatch, handle)
+      if (result === 'settled' || result === 'ignored') {
+        scan.handledDispatchId = dispatchId
+        scan.pendingDispatchId = null
+      }
+    }
+    scan.tail = dispatch ? combinedOutput.slice(-CODEX_RECONNECT_SCAN_CONTEXT_CHARS) : ''
+    codexReconnectOutputScans.set(pty, scan)
+  }
+
+  protected failCodexSessionUnrecoverableDispatch(
+    dispatch: { id: string; run_id: string; task_id: string },
+    handle: string
+  ): 'settled' | 'retry' | 'ignored' {
+    const db = this._orchestrationDb
+    if (!db) {
+      return 'ignored'
+    }
+    const reason = 'Codex could not restore its app-server session'
+    const settledStatus = db.failCodexSessionUnrecoverableDispatch(dispatch.id, reason)
+    if (settledStatus === 'retry') {
+      return 'retry'
+    }
+    if (settledStatus !== 'failed' && settledStatus !== 'circuit_broken') {
+      return 'ignored'
+    }
+    this.notifyWorkerDispatchFailure({
+      dispatch,
+      handle,
+      failureLogLabel: 'worker failure',
+      taskDispositionNote:
+        ' The task was marked failed pending coordinator review and will not be retried automatically.',
+      subject: `Agent session failed (${reason})`,
+      reason,
+      bodyPrefix: `Worker ${handle} could not continue task`,
+      bodySuffix: ' The terminal and worktree were kept for diagnosis.',
+      payload: {
+        taskId: dispatch.task_id,
+        dispatchId: dispatch.id,
+        handle,
+        failureKind: 'codex_session_unrecoverable',
+        terminalPreserved: true,
+        worktreePreserved: true
+      },
+      settledStatus
+    })
+    return 'settled'
+  }
+
+  private notifyWorkerDispatchFailure(params: {
+    dispatch: { id: string; run_id: string; task_id: string }
+    handle: string
+    failureLogLabel: 'worker exit' | 'worker failure'
+    subject: string
+    reason: string
+    bodyPrefix: string
+    bodySuffix?: string
+    taskDispositionNote?: string
+    payload: Record<string, unknown>
+    settledStatus?: string
+  }): void {
+    const db = this._orchestrationDb
+    if (!db) {
+      return
+    }
     try {
-      const owningRun = this._orchestrationDb.getRun?.(dispatch.run_id)
-      const active = this._orchestrationDb.getActiveCoordinatorRun?.()
+      // Why: a lightweight Run owns its own mailbox; legacy dispatches still fall back to the
+      // active coordinator address read by `orchestration check`.
+      const owningRun = db.getRun?.(params.dispatch.run_id)
+      const active = db.getActiveCoordinatorRun?.()
       const recipient =
         owningRun && owningRun.legacy !== 1
           ? { to: `run:${owningRun.id}`, runId: owningRun.id }
@@ -107,7 +224,7 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
       if (!recipient) {
         return
       }
-      const task = this._orchestrationDb.getTask?.(dispatch.task_id, dispatch.run_id)
+      const task = db.getTask?.(params.dispatch.task_id, params.dispatch.run_id)
       // Why: prefer the explicit task title and keep the derived one single-line and bounded;
       // a raw multi-paragraph spec inlined here breaks the coordinator's escalation banner.
       const title =
@@ -118,28 +235,29 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
               displayName: task.display_name
             }).taskTitle
           : ''
-      const named = title ? `"${title}" (${dispatch.task_id})` : dispatch.task_id
-      const escalation = this._orchestrationDb.insertMessage({
-        from: handle,
+      const named = title ? `"${title}" (${params.dispatch.task_id})` : params.dispatch.task_id
+      const settlementNote =
+        params.taskDispositionNote ??
+        (params.settledStatus === 'circuit_broken'
+          ? ' This task has now failed too many times, so it will not be retried automatically.'
+          : params.settledStatus === 'failed'
+            ? ' The task is ready to be dispatched again.'
+            : '')
+      const escalation = db.insertMessage({
+        from: params.handle,
         to: recipient.to,
-        subject: `Agent exited unexpectedly (${errorContext})`,
-        body: `Worker ${handle} stopped while running task ${named}. ${errorContext}.${settled?.status === 'circuit_broken' ? ' This task has now failed too many times, so it will not be retried automatically.' : settled?.status === 'failed' ? ' The task is ready to be dispatched again.' : ''}`,
+        subject: params.subject,
+        body: `${params.bodyPrefix} ${named}. ${params.reason}.${settlementNote}${params.bodySuffix ?? ''}`,
         type: 'escalation',
         priority: 'high',
-        payload: JSON.stringify({
-          taskId: dispatch.task_id,
-          dispatchId: dispatch.id,
-          exitCode,
-          exitCause: cause,
-          handle
-        }),
-        runId: dispatch.run_id
+        payload: JSON.stringify(params.payload),
+        runId: params.dispatch.run_id
       })
       this.notifyMessageArrived(escalation.to_handle, escalation.type)
     } catch (error) {
-      console.warn('[orchestration] failed to escalate worker exit', {
-        dispatchId: dispatch.id,
-        runId: dispatch.run_id,
+      console.warn(`[orchestration] failed to escalate ${params.failureLogLabel}`, {
+        dispatchId: params.dispatch.id,
+        runId: params.dispatch.run_id,
         error
       })
     }
