@@ -128,6 +128,13 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     if (state.incarnationId !== undefined) {
       if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
         this.invalidatePtyIncarnationHandle(ptyId)
+        // Exit evidence belongs to the predecessor, not a proven replacement process.
+        pty.lastExitCode = null
+        pty.lastExitCause = null
+        for (const leaf of this.getLeavesForPty(ptyId)) {
+          leaf.lastExitCode = null
+          leaf.lastExitCause = null
+        }
       }
       pty.incarnationId = state.incarnationId
     }
