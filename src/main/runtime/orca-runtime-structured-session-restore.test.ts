@@ -51,7 +51,7 @@ describe('structured session cold restoration', () => {
     expect(restoreReadableSessions).not.toHaveBeenCalled()
   })
 
-  it('loads records, inventories PTYs, restores ownership, then projects tabs exactly once', async () => {
+  it('loads records, inventories PTYs, restores ownership, projects tabs, then restores history, once', async () => {
     const runtime = new OrcaRuntimeService()
     const hydrate = vi.fn()
     const refresh = vi.fn(async () => new Set<string>())
@@ -83,6 +83,12 @@ describe('structured session cold restoration', () => {
     const second = runtime.restoreStructuredAgentSessionTabs()
     expect(second).toBe(first)
     await Promise.all([first, second])
+    // The history pass is owed, not started: the caller that answers with the list starts it.
+    expect(restoreReadableSessions).not.toHaveBeenCalled()
+    runtime.startStructuredAgentSessionHistoryRestore()
+    runtime.startStructuredAgentSessionHistoryRestore()
+    expect(restoreReadableSessions).not.toHaveBeenCalled()
+    await new Promise((resolve) => setImmediate(resolve))
 
     expect(hydrate).toHaveBeenCalledWith('workspace-1', {
       allowAttachedWindow: true,
@@ -102,8 +108,9 @@ describe('structured session cold restoration', () => {
     expect(reconcileRestartLeases.mock.invocationCallOrder[0]).toBeLessThan(
       restoreReadableSessions.mock.invocationCallOrder[0] ?? Infinity
     )
-    expect(restoreReadableSessions.mock.invocationCallOrder[0]).toBeLessThan(
-      hydrate.mock.invocationCallOrder[0] ?? Infinity
+    // Tabs are projected first; history opens after, so no chat's history holds the list.
+    expect(hydrate.mock.invocationCallOrder[0]).toBeLessThan(
+      restoreReadableSessions.mock.invocationCallOrder[0] ?? Infinity
     )
   })
 
@@ -144,8 +151,11 @@ describe('structured session cold restoration', () => {
     } as never)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    runtime.startStructuredAgentSessionHistoryRestore()
 
-    expect(restoreReadableSessions).toHaveBeenCalledWith(['session-survives-rollback'])
+    await vi.waitFor(() =>
+      expect(restoreReadableSessions).toHaveBeenCalledWith(['session-survives-rollback'])
+    )
   })
 
   it('treats an empty durable visible-session index as authoritative', async () => {
@@ -198,8 +208,9 @@ describe('structured session cold restoration', () => {
     } as never)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    runtime.startStructuredAgentSessionHistoryRestore()
 
-    expect(restoreReadableSessions).toHaveBeenCalledWith([])
+    await vi.waitFor(() => expect(restoreReadableSessions).toHaveBeenCalledWith([]))
   })
 
   it('normalizes a restored tab id and removes it when closed', async () => {
@@ -357,7 +368,9 @@ describe('structured session cold restoration', () => {
       sessionId: 'restored-claude',
       agent: 'claude',
       activate: false,
-      notify: false
+      notify: false,
+      // Derived once by the restore for every tab it projects.
+      replacements: []
     })
 
     const restored = await runtime.listMobileSessionTabs('id:workspace-1')

@@ -15,7 +15,7 @@ import {
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
-import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { answerAfterStructuredTabRestore } from './structured-session-tab-restore'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -24,22 +24,20 @@ export const SESSION_TAB_METHODS = [
   defineMethod({
     name: 'session.tabs.list',
     params: WorktreeTabSelector,
-    handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
-      await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
-      return projectSessionTabsForClient(
-        await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
-        clientKind,
-        clientCapabilities
+    handler: (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) =>
+      answerAfterStructuredTabRestore({ runtime, clientKind, clientCapabilities }, async () =>
+        projectSessionTabsForClient(
+          await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
+          clientKind,
+          clientCapabilities
+        )
       )
-    }
   }),
   defineMethod({
     name: 'session.tabs.listAll',
     params: null,
-    handler: async (_params, context) => {
-      await restoreStructuredTabsIfSupported(context)
-      return listSessionTabsInventory(context)
-    }
+    handler: (_params, context) =>
+      answerAfterStructuredTabRestore(context, () => listSessionTabsInventory(context))
   }),
   ...SESSION_TAB_MUTATION_METHODS,
   ...SESSION_TAB_CLOSE_METHODS,
@@ -142,39 +140,46 @@ export const SESSION_TAB_METHODS = [
         register(explicitWorktreeId)
       }
       try {
-        await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
-        if (released) {
-          return
-        }
-        const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
-        if (released) {
-          return
-        }
-        if (!subscriptionId) {
-          register(initial.worktree)
-          if (released) {
-            return
-          }
-        }
-        const subscribedWorktree = initial.worktree
-        const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
-        emit({
-          type: 'snapshot',
-          ...withProofDelta(projectSessionTabsForClient(initial, clientKind, clientCapabilities))
-        })
-        if (released) {
-          return
-        }
-        stopListening = runtime.onMobileSessionTabsChanged((snapshot) => {
-          if (snapshot.worktree === subscribedWorktree) {
+        // The first snapshot emits inside this, before the history restore it starts.
+        await answerAfterStructuredTabRestore(
+          { runtime, clientKind, clientCapabilities },
+          async () => {
+            if (released) {
+              return
+            }
+            const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+            if (released) {
+              return
+            }
+            if (!subscriptionId) {
+              register(initial.worktree)
+              if (released) {
+                return
+              }
+            }
+            const subscribedWorktree = initial.worktree
+            const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
             emit({
-              type: 'updated',
+              type: 'snapshot',
               ...withProofDelta(
-                projectSessionTabsForClient(snapshot, clientKind, clientCapabilities)
+                projectSessionTabsForClient(initial, clientKind, clientCapabilities)
               )
             })
+            if (released) {
+              return
+            }
+            stopListening = runtime.onMobileSessionTabsChanged((snapshot) => {
+              if (snapshot.worktree === subscribedWorktree) {
+                emit({
+                  type: 'updated',
+                  ...withProofDelta(
+                    projectSessionTabsForClient(snapshot, clientKind, clientCapabilities)
+                  )
+                })
+              }
+            }, pairedDeviceId)
           }
-        }, pairedDeviceId)
+        )
       } catch (error) {
         // A stream already ended by its release must not also report an error.
         if (released) {
