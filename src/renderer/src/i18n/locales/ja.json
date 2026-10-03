@@ -17354,6 +17354,7 @@
         "providerStartFailed": "{{agent}} は起動が完了する前に停止しました。",
         "runCommandAgain": "/{{command}} をもう一度実行してください。",
         "sendToTryAgain": "もう一度試すには、メッセージを送信してください。",
+        "sendAgainToTryOnceMore": "メッセージをもう一度送信して、再度お試しください。",
         "couldNotStart": "{{agent}} を起動できませんでした。",
         "couldNotRestart": "{{agent}} を再起動できませんでした。",
         "notSignedIn": "{{agent}} は選択したアカウントでサインインしていません。",
@@ -17407,7 +17408,7 @@
         "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
         "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
         "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。",
-        "previousExitUnverifiable": "以前の {{agent}} がまだ実行中の可能性があります。停止するとメッセージが送信されます。"
+        "previousExitUnverifiable": "以前の {{agent}} を停止できませんでした。"
       },
       "writeNotice": {
         "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",

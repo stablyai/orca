@@ -48,7 +48,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'hostStopped',
   /** The provider is retrying a request its API refused; not a failure yet. */
   'providerRetrying',
-  /** A message waits on a child a Stop could not prove gone: its exit is unverifiable. */
+  /** A child a Stop could not prove gone: its exit is unverifiable. Kept for rows hosts wrote. */
   'previousExitUnverifiable'
 ] as const
 export type AgentSessionFailureKind = (typeof AGENT_SESSION_FAILURE_KINDS)[number]

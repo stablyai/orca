@@ -17371,6 +17371,7 @@
         "providerStartFailed": "{{agent}} 在完成启动前已停止。",
         "runCommandAgain": "请重新运行 /{{command}}。",
         "sendToTryAgain": "请发送您的消息以重试。",
+        "sendAgainToTryOnceMore": "请重新发送您的消息，再试一次。",
         "couldNotStart": "{{agent}} 无法启动。",
         "couldNotRestart": "{{agent}} 无法重新启动。",
         "notSignedIn": "{{agent}} 未使用所选账户登录。",
@@ -17424,7 +17425,7 @@
         "providerRateLimited": "{{agent}} 已被限流，正在重试。",
         "providerRetrying": "{{agent}} 遇到临时问题，正在重试。",
         "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。",
-        "previousExitUnverifiable": "之前的 {{agent}} 可能仍在运行。它停止后，您的消息就会发送。"
+        "previousExitUnverifiable": "无法停止之前的 {{agent}}。"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录。",

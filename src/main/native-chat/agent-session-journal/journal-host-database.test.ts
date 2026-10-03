@@ -232,8 +232,9 @@ describe('quit', () => {
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
     const database = openTestJournalHostDatabase(root)
     const installed = {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls only `flushAllStreamedEvents` on the host.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls only `stopDelivery` and `flushAllStreamedEvents` on the host.
       host: {
+        stopDelivery: () => {},
         flushAllStreamedEvents: async () => {
           // A child's last row, delivered while quit is draining its sink.
           await new Promise<void>((resolve) => setTimeout(resolve, 10))

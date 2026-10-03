@@ -14,6 +14,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerStartFailed: '{{agent}} stopped before it finished starting.',
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',
+  sendAgainToTryOnceMore: 'Send your message again to try once more.',
   couldNotStart: "{{agent}} couldn't start.",
   couldNotRestart: "{{agent}} couldn't restart.",
   terminalAgentHoldsChat: TERMINAL_AGENT_HOLDS_CHAT,
@@ -81,8 +82,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerRateLimited: '{{agent}} is rate-limited and retrying.',
   providerRetrying: '{{agent}} hit a temporary problem and is retrying.',
   providerRetryingQuoted: '{{agent}} is retrying: {{detail}}.',
-  previousExitUnverifiable:
-    '{{agent}} from before may still be running. Your messages will send once it stops.'
+  previousExitUnverifiable: "Couldn't stop {{agent}} from before."
 } as const
 
 export type AgentSessionFailureCopyId = keyof typeof AGENT_SESSION_FAILURE_COPY

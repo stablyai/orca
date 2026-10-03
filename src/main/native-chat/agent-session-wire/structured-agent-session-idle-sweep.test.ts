@@ -319,7 +319,6 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
       providerHoldsDispatch: () => false,
       stopAgent,
       stopStartingAgent: stopAgent,
-      finishOwedWindDown: vi.fn(async () => true),
       closeConversation,
       // A failed step fails the test.
       logger: {

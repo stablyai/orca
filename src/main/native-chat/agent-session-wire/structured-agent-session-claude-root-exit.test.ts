@@ -15,6 +15,7 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
+import { endExitedStructuredAgentSessionChildUnderSerialize } from './structured-agent-session-child-exit'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -135,7 +136,23 @@ describe('Claude root-exit stop', () => {
           runtimeState,
           sessions,
           now: () => NOW + 30 * 60_000,
-          publishStatus
+          publishStatus,
+          endExitedChild: (sessionId, child, exit) =>
+            endExitedStructuredAgentSessionChildUnderSerialize(
+              {
+                store,
+                sessions,
+                flushLifecycle: (id) => runtimeState.lifecycleBarrier(id),
+                publishFence: () => undefined,
+                publishStatus,
+                serialize: (_sessionId, task) => task(),
+                now: () => NOW + 30 * 60_000,
+                logger: deps.logger
+              },
+              sessionId,
+              child,
+              exit
+            )
         },
         'session-1',
         { cause: 'evict' }

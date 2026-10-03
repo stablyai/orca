@@ -14948,6 +14948,7 @@
         "providerStartFailed": "{{agent}} se detuvo antes de terminar de iniciarse.",
         "runCommandAgain": "Vuelva a ejecutar /{{command}}.",
         "sendToTryAgain": "Envíe su mensaje para volver a intentarlo.",
+        "sendAgainToTryOnceMore": "Vuelva a enviar su mensaje para intentarlo de nuevo.",
         "couldNotStart": "{{agent}} no pudo iniciarse.",
         "couldNotRestart": "{{agent}} no pudo reiniciarse.",
         "notSignedIn": "{{agent}} no tiene la sesión iniciada con la cuenta seleccionada.",
@@ -15001,7 +15002,7 @@
         "providerRateLimited": "{{agent}} alcanzó un límite de solicitudes y está reintentando.",
         "providerRetrying": "{{agent}} tuvo un problema temporal y está reintentando.",
         "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}.",
-        "previousExitUnverifiable": "Es posible que {{agent}} siga en ejecución desde antes. Sus mensajes se enviarán cuando se detenga."
+        "previousExitUnverifiable": "No se pudo detener la ejecución anterior de {{agent}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "No se pudo cargar el historial de este chat.",

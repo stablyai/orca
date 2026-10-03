@@ -130,12 +130,13 @@ function withRetryCause(sentence: string, cause: string | undefined): string {
 /** The next step after a start or restart that failed: the command, or the message, again. */
 function startRetry(
   say: AgentSessionFailureSay,
-  { command, retryControl }: AgentSessionFailureWordsContext
+  { command, retryControl }: AgentSessionFailureWordsContext,
+  sendAgain: 'sendToTryAgain' | 'sendAgainToTryOnceMore' = 'sendToTryAgain'
 ): string[] {
   if (retryControl) {
     return []
   }
-  return [command ? say('runCommandAgain', { command }) : say('sendToTryAgain')]
+  return [command ? say('runCommandAgain', { command }) : say(sendAgain)]
 }
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
@@ -144,6 +145,13 @@ function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
     // Only a terminal agent an older build recorded holds a claim; quitting it frees the chat.
     if (fact.refusal?.details?.reason === 'claimConflicted') {
       return joinSentences([failed, say('terminalAgentHoldsChat'), say('quitTerminalAgent')])
+    }
+    // The previous process may still run, so nothing started: that, never that it exited.
+    if (fact.refusal?.details?.reason === 'previousExitUnverifiable') {
+      return joinSentences([
+        say('previousExitUnverifiable', agent(say, context)),
+        ...startRetry(say, context, 'sendAgainToTryOnceMore')
+      ])
     }
     const code = fact.refusal?.code
     return joinSentences(

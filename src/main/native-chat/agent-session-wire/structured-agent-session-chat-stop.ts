@@ -85,6 +85,21 @@ export function mutateWithChatStop<TValue>(
           )
         )
         const child = context.sessions.get(ctx.sessionId)?.child
+        if (child?.close) {
+          // A close an earlier stop began: this Stop joins it, retrying the exit's proof, rather
+          // than asking a child that takes no input to stop again. Its event, issued ahead of that
+          // retry, records only the withdrawal.
+          const effect = hadQueued ? tookEffect() : Promise.resolve()
+          await stopChild().catch((error: unknown) =>
+            context.deps.logger.warn('ending the agent process on Stop failed', {
+              scope: 'stop-child',
+              sessionId,
+              error
+            })
+          )
+          await effect
+          return { ok: true, value: { ...named, cancelled: await withdrew } }
+        }
         if (child?.phase === 'starting') {
           // A start that may never land is the one thing here Stop has to end; the chat stays.
           // The event is issued first and lands behind the withdrawal, in the journal's queue order.

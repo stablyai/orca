@@ -67,8 +67,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'notResumable',
     'noProviderChild',
     'conversationHeldElsewhere',
-    /** A Stop could not prove its child gone, and a retry could not either: that child takes no
-     *  input and none starts beside it. Sent with `ownerVerdict: 'unverifiable'`. */
+    /** The close a stop began could not prove its child gone: that child takes no input and none
+     *  starts beside it. Sent with `ownerVerdict: 'unverifiable'`. */
     'previousExitUnverifiable'
   ],
   agent_session_conflict: [

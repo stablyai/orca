@@ -50,7 +50,7 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
   routes: Record<string, Route>
 } {
   const connections: FakeConnection[] = []
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -67,15 +67,21 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),
       respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
+      // As the real connection: the root's exit is reported, once, inside the close that ends it.
       close: async () => {
         connection.closeCount += 1
-        connection.closed = true
+        if (!connection.closed) {
+          connection.closed = true
+          handlers.onExit?.(new Error('codex app-server connection ended: killed'), {
+            expected: true
+          })
+        }
         return true
       }
     }
     connections.push(connection)
     return connection
-  }) as typeof openCodexAppServerConnection
+  }
   routes['thread/start'] ??= () => ({
     thread: { id: THREAD_ID, path: '/rollouts/abc.jsonl' },
     model: 'gpt-live',

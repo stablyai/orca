@@ -35,6 +35,9 @@ export async function tearDownRuntime(
   installed: InstalledRuntime,
   trigger: AgentSessionResumeTrigger
 ): Promise<void> {
+  // An exit settled while recovery drains wakes delivery, which would start a fresh child for
+  // teardown to kill; queued messages wait for the next launch instead.
+  installed.host.stopDelivery()
   // Drain an in-flight recovery before stopping children; recovery may still
   // be writing lifecycle rows or acquiring a replacement child.
   await installed.waitForRecovery()

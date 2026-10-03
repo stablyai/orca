@@ -111,7 +111,14 @@ export async function acquireCodexStructuredSession(input: {
       previous: previousAttempt
     })
     acquisitions.assertCurrent(sessionId, attempt)
-    if (!(await closeCodexPublishedSession(sessions, sessionId, deps.onEvent))) {
+    if (
+      !(await closeCodexPublishedSession(
+        sessions,
+        sessionId,
+        deps.onEvent,
+        deps.logger ? { logger: deps.logger } : {}
+      ))
+    ) {
       throw new Error(`codex app-server for session ${sessionId} could not be stopped`)
     }
     acquisitions.assertCurrent(sessionId, attempt)
@@ -163,13 +170,16 @@ export async function acquireCodexStructuredSession(input: {
             Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
           ),
         onSpawned: spawnIdentity.onSpawned,
-        onExit: (error) => {
+        onExit: (error, exit) => {
           try {
             handleCodexSessionExit({
               sessions,
               sessionId,
               connection: acquisition.connection,
               error,
+              // The end of a close Orca began, even one that came back unproven before it.
+              ...(exit?.expected ? { closedByOrca: true as const } : {}),
+              ...(deps.logger ? { logger: deps.logger } : {}),
               prompts: acquisition.prompts,
               ...(deps.onEvent ? { onEvent: deps.onEvent } : {})
             })

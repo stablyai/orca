@@ -14,6 +14,7 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import type { StructuredAgentSessionConversationOpenOptions } from './structured-agent-session-conversation-open'
 
@@ -40,6 +41,9 @@ export type StructuredAgentSessionAttachContext = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   publishStatus: (sessionId: string) => void
+  /** Joining a stop's close ends the child's record through the one exit handler. */
+  endExitedChild: StructuredAgentSessionLifetimeContext['endExitedChild']
+  wakeDelivery?: StructuredAgentSessionLifetimeContext['wakeDelivery']
   /** The conversation's one open journal, opened when closed; see `conversation-open`. */
   openConversation: (
     sessionId: string,

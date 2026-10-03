@@ -126,7 +126,9 @@ describe('Claude published session close lifecycle', () => {
     ).sessions.get('session-1')
     const disposeTranslator = vi.spyOn(session!.translator!, 'dispose')
 
-    await expect(adapter.closeSession('session-1')).rejects.toBe(persistenceError)
+    // The exit is proven; the failed cursor write after it never reads as an unproven exit.
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
+    await vi.waitFor(() => expect(persistHandle).toHaveBeenCalledOnce())
     // The child is provably dead; a failed cursor write may not suppress the end.
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(events.filter((event) => event.type === 'handle')).toHaveLength(0)
@@ -134,10 +136,9 @@ describe('Claude published session close lifecycle', () => {
     // A close Orca asked for stops the child still running, then the host hears the session end.
     expect(childWork).toEqual(['live', 'ended', 'session-ended'])
 
+    // Nothing of the dead child stays indexed for a retry.
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    expect(persistHandle).toHaveBeenCalledTimes(2)
-    // The retry persists the same cursor without a second lifecycle end.
-    expect(events.filter((event) => event.type === 'handle')).toHaveLength(1)
+    expect(persistHandle).toHaveBeenCalledOnce()
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(disposeTranslator).toHaveBeenCalledOnce()
   })
