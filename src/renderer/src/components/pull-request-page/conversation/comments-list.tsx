@@ -1,5 +1,7 @@
-import React from 'react'
-import { MessageSquare } from 'lucide-react'
+import React, { useMemo } from 'react'
+import { Check, Copy, MessageSquare } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import { cn } from '@/lib/utils'
 import {
   getPRCommentAudienceEmptyLabel,
@@ -13,6 +15,7 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import type { MentionOption } from '../page-types'
 import { translate } from '@/i18n/i18n'
 import { ConversationCommentGroup } from './comment-group'
+import { buildPRCommentsResolutionPrompt } from '@/components/pr-comments-resolution-prompt'
 
 export function ConversationCommentsList({
   itemType,
@@ -23,6 +26,8 @@ export function ConversationCommentsList({
   commentCounts,
   repoPath,
   repoId,
+  reviewTitle,
+  reviewUrl,
   sourceContext,
   prNumber,
   prRepo,
@@ -44,6 +49,8 @@ export function ConversationCommentsList({
   commentCounts: Record<PRCommentAudienceFilter, number>
   repoPath: string | null
   repoId: string
+  reviewTitle: string
+  reviewUrl: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
   prRepo: GitHubOwnerRepo | null
@@ -57,6 +64,31 @@ export function ConversationCommentsList({
   onToggleReply: (commentId: number) => void
   onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
 }): React.JSX.Element {
+  const copyText = useMemo(
+    () =>
+      itemType === 'pr' && visibleCommentGroups.length > 0
+        ? buildPRCommentsResolutionPrompt({
+            reviewKind: 'PR',
+            reviewNumber: prNumber,
+            reviewTitle,
+            reviewUrl,
+            groups: visibleCommentGroups,
+            worktreePath: repoPath,
+            acknowledgeOnLaunch: false
+          })
+        : '',
+    [itemType, prNumber, repoPath, reviewTitle, reviewUrl, visibleCommentGroups]
+  )
+  const copyFeedback = useClipboardTextCopyFeedback(copyText)
+  const copyLabel =
+    copyFeedback.status === 'copied'
+      ? translate('auto.components.PullRequestPage.576272291a', 'Copied')
+      : copyFeedback.status === 'failed'
+        ? translate('auto.components.PullRequestPage.b398ff2f60', "Couldn't copy")
+        : copyFeedback.canCopy
+          ? translate('auto.components.PullRequestPage.1d737fe9e4', 'Copy all')
+          : translate('auto.components.PullRequestPage.9758579efc', 'Nothing to copy')
+
   return (
     <>
       <div className="flex items-center gap-2 pt-1">
@@ -69,6 +101,20 @@ export function ConversationCommentsList({
             {comments.length}
           </span>
         )}
+        {itemType === 'pr' ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="ml-auto min-w-28"
+            aria-label={copyLabel}
+            disabled={!copyFeedback.canCopy}
+            onClick={() => void copyFeedback.copyText()}
+          >
+            {copyFeedback.status === 'copied' ? <Check /> : <Copy />}
+            <span>{copyLabel}</span>
+          </Button>
+        ) : null}
       </div>
 
       {itemType === 'pr' && comments.length > 0 && (
