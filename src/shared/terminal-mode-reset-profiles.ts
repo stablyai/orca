@@ -143,11 +143,14 @@ const REPLAY_BASELINE_BUFFER_RESET = '\x1b[r'
 export function buildSnapshotReplayPrologue(args: {
   targetAlternateScreen: boolean
   paneOnAlternateScreen: boolean
+  /** For a normal-buffer payload that carries only its screen, not its history. */
+  keepScrollback?: boolean
 }): string {
   // Why explicit: `?1049h` does not clear the alt buffer (xterm's own
   // `1049 should clear altbuffer` FIXME); `\x1b[3J` is safe only for a
   // normal-buffer payload, which carries its own history.
-  const clear = args.targetAlternateScreen ? '\x1b[2J\x1b[H' : '\x1b[2J\x1b[3J\x1b[H'
+  const clear =
+    args.targetAlternateScreen || args.keepScrollback ? '\x1b[2J\x1b[H' : '\x1b[2J\x1b[3J\x1b[H'
   const ground = `${REPLAY_BASELINE_TERMINAL_RESET}${REPLAY_BASELINE_BUFFER_RESET}`
   if (args.paneOnAlternateScreen === args.targetAlternateScreen) {
     return `${ground}${clear}${SAVE_GROUNDED_CURSOR}`

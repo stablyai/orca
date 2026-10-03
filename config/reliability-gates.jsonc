@@ -16958,15 +16958,27 @@
       "invariant": "Hidden-output restore, snapshot replay, metadata-only replay, and clear-before-replay must preserve order and never overlay stale bytes on newer live terminal output; restoring a snapshot onto an already-dirty pane must yield a buffer exactly equal to the snapshot frame.",
       "oracle": "Apply snapshots onto adversarially dirty pane states (already on the alternate screen, stale content occupying cells the new frame leaves blank, scrollback present, wide glyphs, revived sessions with restarted PTY seq counters) and assert exact buffer equality with the snapshot frame; fault injection interleaves hidden chunks, live output, metadata-only replay, and clear-before-replay, then asserts ordered terminal buffer content, clear decisions, and replay diagnostics. Marker-presence checks are not acceptable evidence on restore paths.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-stalled-hidden-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-stalled-hidden-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-stalled-hidden-restore.test.ts",
-        "src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts"
+        "src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
+          "assertions": [
+            "repaints a pushed image exactly and keeps the history the TUI covers",
+            "replaces history exactly when the host screen has another grid",
+            "replaces history once the host proves the TUI exited",
+            "clears a raw byte replay in place on the alt screen",
+            "paints a requested image exactly over a live alt screen"
+          ]
+        },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
           "assertions": [

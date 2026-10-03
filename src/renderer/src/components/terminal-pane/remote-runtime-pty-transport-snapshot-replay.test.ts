@@ -59,7 +59,9 @@ describe('createRemoteRuntimePtyTransport', () => {
       'before\x1b]9999;{"state":"working","prompt":"old","agentType":"codex"}\x07after\x1b]0;Remote title\x07\x07'
     )
 
-    expect(onReplayData).toHaveBeenCalledWith('beforeafter\x1b]0;Remote title\x07\x07')
+    expect(onReplayData).toHaveBeenCalledWith('beforeafter\x1b]0;Remote title\x07\x07', {
+      carriesNormalBuffer: true
+    })
     await vi.waitFor(() =>
       expect(onTitleChange).toHaveBeenCalledWith('Remote title', 'Remote title')
     )
@@ -89,7 +91,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       'before\x1b]9999;{"state":"working","prompt":"old","agentType":"codex"}\x07after'
     )
 
-    expect(onReplayData).toHaveBeenCalledWith('beforeafter')
+    expect(onReplayData).toHaveBeenCalledWith('beforeafter', { carriesNormalBuffer: true })
     expect(onAgentStatus).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
     expect(onConnect).toHaveBeenCalled()
@@ -157,7 +159,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
     const { streamId } = latestSubscribePayload()
     emitSnapshot(streamId, 'initial')
-    expect(onReplayData).toHaveBeenCalledWith('initial')
+    expect(onReplayData).toHaveBeenCalledWith('initial', { carriesNormalBuffer: true })
     expect(onConnect).toHaveBeenCalled()
 
     const snapshotPromise = transport.serializeBuffer?.({ scrollbackRows: 5000 })
@@ -197,7 +199,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       cols: 132,
       rows: 43,
       seq: 17,
-      source: 'headless'
+      source: 'headless',
+      carriesNormalBuffer: true
     })
     expect(onReplayData).toHaveBeenCalledTimes(1)
     expect(onData).not.toHaveBeenCalledWith('requested snapshot', expect.anything())
@@ -254,7 +257,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)).toBeUndefined()
 
     emitSnapshot(streamId, 'initial replay')
-    expect(onReplayData).toHaveBeenCalledWith('initial replay')
+    expect(onReplayData).toHaveBeenCalledWith('initial replay', { carriesNormalBuffer: true })
     expect(onConnect).toHaveBeenCalled()
 
     await vi.waitFor(() =>
@@ -288,7 +291,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       cols: 100,
       rows: 20,
       seq: undefined,
-      source: undefined
+      source: undefined,
+      carriesNormalBuffer: true
     })
     expect(onReplayData).toHaveBeenCalledTimes(1)
   })
