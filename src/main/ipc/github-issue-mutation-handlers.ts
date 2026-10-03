@@ -28,7 +28,8 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
         args.number,
         args.updates,
         getGitHubRepoConnectionId(repo),
-        ...getGitHubLocalGitOptionArgs(store, repo)
+        getGitHubLocalGitOptionArgs(store, repo)[0],
+        repo.issueSourcePreference
       )
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
@@ -67,7 +68,9 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
         args.body.trim(),
         getGitHubRepoConnectionId(repo),
         args.prRepo ?? null,
-        ...getGitHubLocalGitOptionArgs(store, repo)
+        getGitHubLocalGitOptionArgs(store, repo)[0],
+        // Why: the issue source selector only scopes issues; PR comments keep their resolution.
+        args.type === 'pr' ? undefined : repo.issueSourcePreference
       )
       if (result.ok) {
         broadcastGitHubWorkItemMutation(

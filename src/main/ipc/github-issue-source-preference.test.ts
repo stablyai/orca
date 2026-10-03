@@ -143,4 +143,66 @@ describe('registerGitHubHandlers', () => {
       'origin'
     )
   })
+
+  it('pins the repo origin source preference on issue update and comment IPC', async () => {
+    harness.repos = [
+      {
+        id: 'repo-1',
+        path: '/workspace/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        issueSourcePreference: 'origin'
+      }
+    ]
+    mocks.client.updateIssue.mockResolvedValue({ ok: false, error: 'stub' })
+    mocks.client.addIssueComment.mockResolvedValue({ ok: false, error: 'stub' })
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:updateIssue'](null, {
+      repoPath: '/workspace/repo',
+      number: 5,
+      updates: { body: 'Updated' }
+    })
+    await handlers['gh:addIssueComment'](null, {
+      repoPath: '/workspace/repo',
+      number: 5,
+      body: 'Issue comment'
+    })
+    await handlers['gh:addIssueComment'](null, {
+      repoPath: '/workspace/repo',
+      number: 6,
+      body: 'PR comment',
+      type: 'pr'
+    })
+
+    expect(mocks.client.updateIssue).toHaveBeenCalledWith(
+      '/workspace/repo',
+      5,
+      { body: 'Updated' },
+      null,
+      undefined,
+      'origin'
+    )
+    expect(mocks.client.addIssueComment).toHaveBeenNthCalledWith(
+      1,
+      '/workspace/repo',
+      5,
+      'Issue comment',
+      null,
+      null,
+      undefined,
+      'origin'
+    )
+    expect(mocks.client.addIssueComment).toHaveBeenNthCalledWith(
+      2,
+      '/workspace/repo',
+      6,
+      'PR comment',
+      null,
+      null,
+      undefined,
+      undefined
+    )
+  })
 })

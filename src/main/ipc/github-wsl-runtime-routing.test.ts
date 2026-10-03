@@ -197,7 +197,8 @@ describe('registerGitHubHandlers', () => {
       7,
       { body: 'Updated' },
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(addIssueCommentMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -205,7 +206,8 @@ describe('registerGitHubHandlers', () => {
       'Comment',
       null,
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(listLabelsMock).toHaveBeenCalledWith('/workspace/repo', undefined, null, localGitOptions)
     expect(listAssignableUsersMock).toHaveBeenCalledWith(
